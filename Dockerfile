@@ -40,5 +40,5 @@ USER appuser
 
 EXPOSE 8081
 
-# Railway injects PORT env var
-ENTRYPOINT ["java", "-Dserver.port=${PORT:-8081}", "-jar", "app.jar"]
+# Railway injects PORT env var — use shell form so $PORT expands
+ENTRYPOINT exec java -Dserver.port=${PORT:-8081} -jar app.jar
