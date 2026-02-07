@@ -18,8 +18,7 @@ spring:
     timeout-per-shutdown-phase: 30s
   datasource:
     url: ${DATABASE_URL}
-    username: ${DATABASE_USERNAME:}
-    password: ${DATABASE_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
   jpa:
     show-sql: false
     hibernate:

@@ -8,8 +8,7 @@ spring:
       on-profile: dev
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/hms_dev}
-    username: ${DATABASE_USERNAME:hms_dev}
-    password: ${DATABASE_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
   jpa:
     show-sql: false
     hibernate:
