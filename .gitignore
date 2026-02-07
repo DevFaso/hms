@@ -1,0 +1,41 @@
+# --- Java / Gradle ---
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+bin/
+*.class
+*.jar
+*.war
+*.log
+
+# --- IDE ---
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+.settings/
+*.swp
+*~
+
+# --- Spring Boot ---
+logs/
+uploads/
+*.pid
+
+# --- Node / Angular ---
+hospital-portal/node_modules/
+hospital-portal/dist/
+hospital-portal/.angular/
+hospital-portal/coverage/
+hospital-portal/test-results/
+hospital-portal/playwright-report/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Environment ---
+.env
+.env.*
+!.env.example

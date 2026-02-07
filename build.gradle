@@ -1,0 +1,74 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.4.11' apply false
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'jacoco'
+}
+
+allprojects {
+    group = 'com.example'
+    version = '0.0.1-SNAPSHOT'
+
+    repositories {
+        mavenCentral()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'jacoco'
+
+    java {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.compilerArgs += '-parameters'
+    }
+
+    dependencyManagement {
+        imports {
+            mavenBom "org.springframework.boot:spring-boot-dependencies:3.4.11"
+        }
+        dependencies {
+            dependency 'org.apache.kafka:kafka-clients:3.9.1'
+            dependency 'org.apache.kafka:kafka_2.13:3.9.1'
+            dependency 'org.assertj:assertj-core:3.27.7'
+            dependency 'org.bitbucket.b_c:jose4j:0.9.6'
+            dependency 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
+        }
+    }
+
+    configurations.configureEach {
+        exclude group: 'commons-logging', module: 'commons-logging'
+    }
+
+    dependencies {
+        annotationProcessor 'org.projectlombok:lombok'
+        compileOnly 'org.projectlombok:lombok'
+        testAnnotationProcessor 'org.projectlombok:lombok'
+        testCompileOnly 'org.projectlombok:lombok'
+    }
+
+    tasks.named('test') {
+        useJUnitPlatform()
+        testLogging {
+            events 'failed', 'skipped', 'passed'
+            exceptionFormat 'full'
+            showStandardStreams = true
+        }
+    }
+
+    tasks.named('jacocoTestReport') {
+        dependsOn test
+        reports {
+            xml.required = true
+            html.required = true
+        }
+    }
+}

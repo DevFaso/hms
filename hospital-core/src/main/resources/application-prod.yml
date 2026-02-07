@@ -1,0 +1,44 @@
+# Production profile — Railway / cloud PostgreSQL
+server:
+  port: ${PORT:8081}
+  shutdown: graceful
+  compression:
+    enabled: true
+  http2:
+    enabled: true
+  error:
+    include-message: never
+    include-binding-errors: never
+
+spring:
+  config:
+    activate:
+      on-profile: prod
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME:}
+    password: ${DATABASE_PASSWORD:}
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: none
+  liquibase:
+    enabled: true
+
+logging:
+  level:
+    root: INFO
+    '[org.springframework]': INFO
+    '[org.hibernate]': WARN
+    '[com.example.hms]': INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized

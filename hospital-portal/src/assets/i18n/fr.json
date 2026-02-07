@@ -1,0 +1,23 @@
+{
+  "APP": {
+    "TITLE": "Système de Gestion Hospitalière"
+  },
+  "LOGIN": {
+    "TITLE": "Connexion",
+    "USERNAME": "Nom d'utilisateur",
+    "PASSWORD": "Mot de passe",
+    "SUBMIT": "Se connecter",
+    "ERROR": "Identifiants invalides"
+  },
+  "COMMON": {
+    "SAVE": "Enregistrer",
+    "CANCEL": "Annuler",
+    "DELETE": "Supprimer",
+    "EDIT": "Modifier",
+    "SEARCH": "Rechercher",
+    "LOADING": "Chargement…",
+    "CONFIRM": "Confirmer",
+    "YES": "Oui",
+    "NO": "Non"
+  }
+}

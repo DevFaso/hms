@@ -1,0 +1,23 @@
+{
+  "APP": {
+    "TITLE": "Hospital Management System"
+  },
+  "LOGIN": {
+    "TITLE": "Sign In",
+    "USERNAME": "Username",
+    "PASSWORD": "Password",
+    "SUBMIT": "Log In",
+    "ERROR": "Invalid credentials"
+  },
+  "COMMON": {
+    "SAVE": "Save",
+    "CANCEL": "Cancel",
+    "DELETE": "Delete",
+    "EDIT": "Edit",
+    "SEARCH": "Search",
+    "LOADING": "Loading…",
+    "CONFIRM": "Confirm",
+    "YES": "Yes",
+    "NO": "No"
+  }
+}
