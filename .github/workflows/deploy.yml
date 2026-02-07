@@ -43,6 +43,6 @@ jobs:
           echo "env=$ENV" >> "$GITHUB_OUTPUT"
 
       - name: Deploy to Railway (${{ steps.token.outputs.env }})
-        run: railway up --service ${{ vars.RAILWAY_SERVICE_NAME || 'hms-backend' }}
+        run: railway up --service ${{ vars.RAILWAY_SERVICE_NAME || 'hospital-core' }}
         env:
           RAILWAY_TOKEN: ${{ steps.token.outputs.railway_token }}
