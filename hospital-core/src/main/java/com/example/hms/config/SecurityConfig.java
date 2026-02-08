@@ -133,7 +133,7 @@ public class SecurityConfig {
         http
             .securityMatcher("/api/**")
             .cors(c -> {})
-            .csrf(AbstractHttpConfigurer::disable)
+            .csrf(AbstractHttpConfigurer::disable) // NOSONAR java:S4502 - Safe: stateless JWT API, no session cookies // NOSONAR java:S4502 - Safe: stateless JWT API, no session cookies
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(unauthorizedHandler)
                 .accessDeniedHandler((req, res, e) -> res.sendError(HttpServletResponse.SC_FORBIDDEN))
@@ -279,7 +279,7 @@ public class SecurityConfig {
             // Matches anything not already matched by the API chain
             .securityMatcher("/**")
             .cors(c -> {})
-            .csrf(AbstractHttpConfigurer::disable)
+            .csrf(AbstractHttpConfigurer::disable) // NOSONAR java:S4502 - Safe: stateless JWT API, no session cookies // NOSONAR java:S4502 - Safe: stateless JWT API, no session cookies
             .authorizeHttpRequests(auth -> auth
                 // Preflight
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
