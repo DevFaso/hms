@@ -4,38 +4,21 @@ import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import com.example.hms.repository.PatientRepository;
-import java.util.UUID;
 
 @Component
 public class AuditEventLogMapper {
-    @Autowired
-    private PatientRepository patientRepository;
-
     public AuditEventLogResponseDTO toDto(AuditEventLog event) {
         if (event == null) return null;
 
         User user = event.getUser();
         UserRoleHospitalAssignment assignment = event.getAssignment();
 
-        // Resolve resource name for PATIENT entity type
-        String resourceName = null;
-        if (event.getEntityType() != null && event.getResourceId() != null) {
-            switch (event.getEntityType().toUpperCase()) {
-                case "PATIENT":
-                    try {
-                        resourceName = patientRepository.findById(UUID.fromString(event.getResourceId()))
-                            .map(p -> p.getFullName()).orElse(event.getResourceId());
-                    } catch (Exception e) {
-                        resourceName = event.getResourceId();
-                    }
-                    break;
-                default:
-                    resourceName = event.getResourceId();
-            }
+        // Prefer persisted resourceName snapshot; fall back to resourceId
+        String resourceName = event.getResourceName();
+        if (resourceName == null || resourceName.isBlank()) {
+            resourceName = event.getResourceId();
         }
 
         // Hospital Name

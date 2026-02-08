@@ -8,7 +8,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 
-import static com.example.hms.model.ChatMessage.*;
 
 @Component
 public class ChatMessageMapper {
@@ -64,11 +63,11 @@ public class ChatMessageMapper {
     public ChatMessage toChatMessage(ChatMessageRequestDTO dto, User sender, User recipient) {
         if (dto == null) return null;
 
-        return builder()
+        return ChatMessage.builder()
                 .sender(sender)
                 .recipient(recipient)
                 .content(dto.getContent())
-                .Timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now())
                 .read(false)
                 .build();
     }

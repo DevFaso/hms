@@ -58,6 +58,7 @@ public class InvoiceItem extends BaseEntity {
         foreignKey = @ForeignKey(name = "fk_item_service"))
     private Treatment relatedService;
 
+    @PrePersist
     @PreUpdate
     public void validateAndCalculate() {
         // If linked to a service and unitPrice is not set, default from service

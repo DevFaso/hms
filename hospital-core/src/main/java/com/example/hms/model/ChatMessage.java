@@ -53,7 +53,8 @@ public class ChatMessage extends BaseEntity {
     private boolean read = false;
 
 
-    private LocalDateTime Timestamp;
+    @Column(name = "timestamp")
+    private LocalDateTime timestamp;
 
     /** Context (role@hospital) of the sender at send time. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

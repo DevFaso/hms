@@ -108,8 +108,10 @@ public class LabTestDefinition extends BaseEntity {
         if (category != null) category = category.trim().toUpperCase();
         if (sampleType != null) sampleType = sampleType.trim().toUpperCase();
 
-        // Lab test definitions are nationally scoped, never tied to a single hospital
-        hospital = null;
+        // Align hospital with assignment when available; allow null for global definitions
+        if (assignment != null && assignment.getHospital() != null && hospital == null) {
+            hospital = assignment.getHospital();
+        }
 
         if (referenceRanges == null) {
             referenceRanges = new ArrayList<>();

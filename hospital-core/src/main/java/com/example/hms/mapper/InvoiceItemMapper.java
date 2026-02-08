@@ -11,10 +11,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class InvoiceItemMapper {
 
-    public InvoiceItem toInvoiceItem(InvoiceItemRequestDTO dto, BillingInvoice invoice) {
+    public InvoiceItem toInvoiceItem(InvoiceItemRequestDTO dto,
+                                     BillingInvoice invoice,
+                                     UserRoleHospitalAssignment assignment,
+                                     Treatment relatedService) {
         if (dto == null) return null;
         InvoiceItem item = new InvoiceItem();
         item.setBillingInvoice(invoice);
+        item.setAssignment(assignment);
+        item.setRelatedService(relatedService);
         item.setItemDescription(dto.getItemDescription());
         item.setQuantity(dto.getQuantity());
         item.setUnitPrice(dto.getUnitPrice());
