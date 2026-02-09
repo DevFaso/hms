@@ -11,7 +11,7 @@ public class MessageUtil {
 
 
     @SuppressWarnings("squid:S3010")
-    public MessageUtil(MessageSource messageSource) {
+    MessageUtil(MessageSource messageSource) {
         MessageUtil.messageSource = messageSource;
     }
 

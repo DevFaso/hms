@@ -1,5 +1,5 @@
 ALTER TABLE "security"."user_role_hospital_assignment"
-    ADD COLUMN IF NOT EXISTS confirmation_code VARCHAR(16);
+    ADD COLUMN IF NOT EXISTS confirmation_code VARCHAR2(16);
 
 ALTER TABLE "security"."user_role_hospital_assignment"
     ADD COLUMN IF NOT EXISTS confirmation_sent_at TIMESTAMP;
