@@ -117,8 +117,11 @@ public class UserMapper {
                 .build();
     }
 
-    /** Back-compat (prefer the overload with encoded password). */
-    @Deprecated
+    /**
+     * Back-compat (prefer the overload with encoded password).
+     * @deprecated since 1.0, for removal. Use {@link #toEntity(UserRequestDTO, String)} instead.
+     */
+    @Deprecated(since = "1.0", forRemoval = true)
     public User toEntity(UserRequestDTO dto) {
         if (dto == null)
             return null;

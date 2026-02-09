@@ -10,6 +10,7 @@ public class MessageUtil {
     private static MessageSource messageSource;
 
 
+    @SuppressWarnings("squid:S3010")
     public MessageUtil(MessageSource messageSource) {
         MessageUtil.messageSource = messageSource;
     }

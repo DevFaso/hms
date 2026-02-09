@@ -11,9 +11,9 @@ public final class JwtTokenHolder {
     }
 
     /**
-     * @deprecated Tokens now ride along with the Authentication credentials. Method retained for backward compatibility.
+     * @deprecated since 1.0, for removal. Tokens now ride along with the Authentication credentials.
      */
-    @Deprecated
+    @Deprecated(since = "1.0", forRemoval = true)
     public static void setToken(String token) {
         log.trace("Ignoring legacy JwtTokenHolder#setToken call. tokenLength={}", token == null ? 0 : token.length());
     }
@@ -37,9 +37,9 @@ public final class JwtTokenHolder {
     }
 
     /**
-     * @deprecated Tokens now ride along with the Authentication credentials. Method retained for backward compatibility.
+     * @deprecated since 1.0, for removal. Tokens now ride along with the Authentication credentials.
      */
-    @Deprecated
+    @Deprecated(since = "1.0", forRemoval = true)
     public static void clear() {
         // No-op: token is held by the security context now
     }

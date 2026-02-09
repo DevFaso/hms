@@ -7,6 +7,8 @@ import org.springframework.data.jpa.domain.Specification;
 
 public class PermissionSpecification {
 
+    private PermissionSpecification() { }
+
     public static Specification<Permission> build(PermissionFilterDTO filter) {
         return (root, query, cb) -> {
             // Apply eager fetches only for the main query to avoid LazyInitializationException during DTO mapping.

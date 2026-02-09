@@ -106,8 +106,7 @@ public class AppointmentMapper {
         Appointment appointment,
         Patient patient,
         Staff staff,
-        Hospital hospital,
-        Treatment treatment
+        Hospital hospital
     )
     {
         if (dto == null || appointment == null) return;

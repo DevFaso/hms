@@ -79,10 +79,9 @@ public class InvoiceItem extends BaseEntity {
             throw new IllegalStateException("InvoiceItem.assignment.hospital must match invoice.hospital");
         }
         // If relatedService is set, its hospital must also match invoice hospital
-        if (relatedService != null && relatedService.getHospital() != null) {
-            if (!Objects.equals(relatedService.getHospital().getId(), billingInvoice.getHospital().getId())) {
-                throw new IllegalStateException("InvoiceItem.relatedService.hospital must match invoice.hospital");
-            }
+        if (relatedService != null && relatedService.getHospital() != null
+                && !Objects.equals(relatedService.getHospital().getId(), billingInvoice.getHospital().getId())) {
+            throw new IllegalStateException("InvoiceItem.relatedService.hospital must match invoice.hospital");
         }
     }
 }

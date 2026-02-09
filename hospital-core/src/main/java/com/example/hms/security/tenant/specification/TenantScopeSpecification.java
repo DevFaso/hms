@@ -112,10 +112,6 @@ public class TenantScopeSpecification<T> implements Specification<T> {
         return null;
     }
 
-    private Path<UUID> safePath(Root<T> root, String attribute) {
-        return safePath(root, List.of(attribute));
-    }
-
     private Path<UUID> safePath(Root<T> root, List<String> attributes) {
         try {
             Path<?> current = root;

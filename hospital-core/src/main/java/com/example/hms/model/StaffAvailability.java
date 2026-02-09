@@ -63,10 +63,9 @@ public class StaffAvailability extends BaseEntity {
     @PreUpdate
     private void validate() {
         // Hospital integrity: availability must be for the staff's hospital
-        if (staff != null && staff.getHospital() != null) {
-            if (!Objects.equals(staff.getHospital().getId(), hospital != null ? hospital.getId() : null)) {
-                throw new IllegalStateException("Availability hospital must match staff.hospital");
-            }
+        if (staff != null && staff.getHospital() != null
+                && !Objects.equals(staff.getHospital().getId(), hospital != null ? hospital.getId() : null)) {
+            throw new IllegalStateException("Availability hospital must match staff.hospital");
         }
         // Time rules
         if (dayOff) {

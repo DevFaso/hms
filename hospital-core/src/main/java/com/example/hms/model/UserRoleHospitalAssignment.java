@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.exception.BusinessRuleException;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -87,13 +88,11 @@ public class UserRoleHospitalAssignment extends BaseEntity {
         if (Boolean.TRUE.equals(active)) {
             // 1) Patients cannot have ACTIVE hospital assignments
             if ("ROLE_PATIENT".equals(roleKey) || "PATIENT".equals(roleKey)) {
-                throw new RuntimeException("Patients cannot have active hospital assignments.");
+                throw new BusinessRuleException("Patients cannot have active hospital assignments.");
             }
             // 2) SUPER_ADMIN must be global (no hospital)
-            if ("ROLE_SUPER_ADMIN".equals(roleKey) || "SYSTEM_ADMIN".equals(roleKey)) {
-                if (hospital != null) {
-                    throw new RuntimeException("Super Admins must not be assigned to a hospital (global only).");
-                }
+            if (("ROLE_SUPER_ADMIN".equals(roleKey) || "SYSTEM_ADMIN".equals(roleKey)) && hospital != null) {
+                throw new BusinessRuleException("Super Admins must not be assigned to a hospital (global only).");
             }
         }
     }
