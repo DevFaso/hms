@@ -15,34 +15,10 @@ public class AuditEventLogMapper {
         User user = event.getUser();
         UserRoleHospitalAssignment assignment = event.getAssignment();
 
-        // Prefer persisted resourceName snapshot; fall back to resourceId
-        String resourceName = event.getResourceName();
-        if (resourceName == null || resourceName.isBlank()) {
-            resourceName = event.getResourceId();
-        }
-
-        // Hospital Name
-        String hospitalName = event.getHospitalName();
-        if ((hospitalName == null || hospitalName.isBlank()) && assignment != null && assignment.getHospital() != null) {
-            hospitalName = assignment.getHospital().getName();
-        }
-
-        // Role Name
-        String roleName = event.getRoleName();
-        if ((roleName == null || roleName.isBlank()) && assignment != null && assignment.getRole() != null) {
-            roleName = assignment.getRole().getName();
-        }
-        if ((roleName == null || roleName.isBlank()) && user != null && user.getUserRoles() != null && !user.getUserRoles().isEmpty()) {
-            roleName = user.getUserRoles().iterator().next().getRole().getName();
-        }
-        if (roleName == null || roleName.isBlank()) {
-            roleName = "Unknown Role";
-        }
-
         return AuditEventLogResponseDTO.builder()
             .userName(getUserFullName(user))
-            .hospitalName(hospitalName)
-            .roleName(roleName)
+            .hospitalName(resolveHospitalName(event.getHospitalName(), assignment))
+            .roleName(resolveRoleName(event.getRoleName(), assignment, user))
             .eventType(event.getEventType() != null ? event.getEventType().name() : null)
             .eventDescription(event.getEventDescription())
             .details(event.getDetails())
@@ -50,9 +26,31 @@ public class AuditEventLogMapper {
             .ipAddress(event.getIpAddress())
             .status(event.getStatus() != null ? event.getStatus().name() : null)
             .resourceId(event.getResourceId())
-            .resourceName(resourceName)
+            .resourceName(resolveResourceName(event))
             .entityType(event.getEntityType())
             .build();
+    }
+
+    private String resolveResourceName(AuditEventLog event) {
+        String name = event.getResourceName();
+        return (name != null && !name.isBlank()) ? name : event.getResourceId();
+    }
+
+    private String resolveHospitalName(String hospitalName, UserRoleHospitalAssignment assignment) {
+        if ((hospitalName == null || hospitalName.isBlank()) && assignment != null && assignment.getHospital() != null) {
+            return assignment.getHospital().getName();
+        }
+        return hospitalName;
+    }
+
+    private String resolveRoleName(String roleName, UserRoleHospitalAssignment assignment, User user) {
+        if ((roleName == null || roleName.isBlank()) && assignment != null && assignment.getRole() != null) {
+            roleName = assignment.getRole().getName();
+        }
+        if ((roleName == null || roleName.isBlank()) && user != null && user.getUserRoles() != null && !user.getUserRoles().isEmpty()) {
+            roleName = user.getUserRoles().iterator().next().getRole().getName();
+        }
+        return (roleName == null || roleName.isBlank()) ? "Unknown Role" : roleName;
     }
 
     private String getUserFullName(User user) {

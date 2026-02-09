@@ -25,70 +25,69 @@ public class EncounterMapper {
         dto.setId(e.getId());
         dto.setEncounterType(e.getEncounterType());
         dto.setEncounterDate(e.getEncounterDate());
-    dto.setStatus(e.getStatus());
+        dto.setStatus(e.getStatus());
         dto.setNotes(nullSafe(e.getNotes()));
         dto.setCreatedAt(e.getCreatedAt());
         dto.setUpdatedAt(e.getUpdatedAt());
 
-        // Patient
-        Patient p = e.getPatient();
-        if (p != null) {
-            dto.setPatientId(p.getId());
-            dto.setPatientName(joinName(p.getFirstName(), p.getLastName()));
-            dto.setPatientEmail(nullSafe(p.getEmail()));
-            dto.setPatientPhoneNumber(nullSafe(p.getPhoneNumberPrimary()));
-        }
-
-        // Staff
-        Staff s = e.getStaff();
-        if (s != null) {
-            dto.setStaffId(s.getId());
-            dto.setStaffName(s.getLicenseNumber());
-            String staffDisplay = (s.getUser() != null)
-                ? joinName(s.getUser().getFirstName(), s.getUser().getLastName())
-                : nullSafe(s.getName());
-            dto.setStaffName(staffDisplay);
-            dto.setStaffEmail(s.getUser() != null ? nullSafe(s.getUser().getEmail()) : null);
-            dto.setStaffPhoneNumber(s.getUser() != null ? nullSafe(s.getUser().getPhoneNumber()) : null);
-        }
-
-        // Department
-        Department d = e.getDepartment();
-        if (d != null) {
-            dto.setDepartmentId(d.getId());
-            dto.setDepartmentName(nullSafe(d.getName()));
-        }
-
-        // Hospital
-        Hospital h = e.getHospital();
-        if (h != null) {
-            dto.setHospitalId(h.getId());
-            dto.setHospitalName(nullSafe(h.getName()));
-            dto.setHospitalAddress(nullSafe(h.getAddress()));
-            dto.setHospitalEmail(nullSafe(h.getEmail()));
-            dto.setHospitalPhoneNumber(nullSafe(h.getPhoneNumber()));
-        }
-
-        // Appointment
-        Appointment a = e.getAppointment();
-        if (a != null) {
-            dto.setAppointmentId(a.getId());
-            dto.setAppointmentReason(nullSafe(a.getReason()));
-            dto.setAppointmentNotes(nullSafe(a.getNotes()));
-            dto.setAppointmentStatus(a.getStatus() != null ? a.getStatus().name() : null);
-            // Appointment no longer has treatment; set type to null or derive from other fields if needed
-            dto.setAppointmentType(null);
-
-            LocalDate date = a.getAppointmentDate();
-            LocalTime start = a.getStartTime();
-            dto.setAppointmentDate((date != null && start != null)
-                ? LocalDateTime.of(date, start)
-                : null);
-        }
+        mapPatient(dto, e.getPatient());
+        mapStaff(dto, e.getStaff());
+        mapDepartment(dto, e.getDepartment());
+        mapHospital(dto, e.getHospital());
+        mapAppointment(dto, e.getAppointment());
 
         dto.setNote(toEncounterNoteResponseDTO(e.getEncounterNote()));
 
         return dto;
+    }
+
+    private void mapPatient(EncounterResponseDTO dto, Patient p) {
+        if (p == null) return;
+        dto.setPatientId(p.getId());
+        dto.setPatientName(joinName(p.getFirstName(), p.getLastName()));
+        dto.setPatientEmail(nullSafe(p.getEmail()));
+        dto.setPatientPhoneNumber(nullSafe(p.getPhoneNumberPrimary()));
+    }
+
+    private void mapStaff(EncounterResponseDTO dto, Staff s) {
+        if (s == null) return;
+        dto.setStaffId(s.getId());
+        String staffDisplay = (s.getUser() != null)
+            ? joinName(s.getUser().getFirstName(), s.getUser().getLastName())
+            : nullSafe(s.getName());
+        dto.setStaffName(staffDisplay);
+        dto.setStaffEmail(s.getUser() != null ? nullSafe(s.getUser().getEmail()) : null);
+        dto.setStaffPhoneNumber(s.getUser() != null ? nullSafe(s.getUser().getPhoneNumber()) : null);
+    }
+
+    private void mapDepartment(EncounterResponseDTO dto, Department d) {
+        if (d == null) return;
+        dto.setDepartmentId(d.getId());
+        dto.setDepartmentName(nullSafe(d.getName()));
+    }
+
+    private void mapHospital(EncounterResponseDTO dto, Hospital h) {
+        if (h == null) return;
+        dto.setHospitalId(h.getId());
+        dto.setHospitalName(nullSafe(h.getName()));
+        dto.setHospitalAddress(nullSafe(h.getAddress()));
+        dto.setHospitalEmail(nullSafe(h.getEmail()));
+        dto.setHospitalPhoneNumber(nullSafe(h.getPhoneNumber()));
+    }
+
+    private void mapAppointment(EncounterResponseDTO dto, Appointment a) {
+        if (a == null) return;
+        dto.setAppointmentId(a.getId());
+        dto.setAppointmentReason(nullSafe(a.getReason()));
+        dto.setAppointmentNotes(nullSafe(a.getNotes()));
+        dto.setAppointmentStatus(a.getStatus() != null ? a.getStatus().name() : null);
+        dto.setAppointmentType(null);
+
+        LocalDate date = a.getAppointmentDate();
+        LocalTime start = a.getStartTime();
+        dto.setAppointmentDate((date != null && start != null)
+            ? LocalDateTime.of(date, start)
+            : null);
     }
 
     public EncounterNoteResponseDTO toEncounterNoteResponseDTO(EncounterNote note) {

@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 public class ApplicationContextProvider implements ApplicationContextAware {
     private static ApplicationContext context;
 
+    @SuppressWarnings("squid:S2696")
     @Override
     public void setApplicationContext(@org.springframework.lang.NonNull ApplicationContext ctx) {
         context = ctx;

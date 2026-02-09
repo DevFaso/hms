@@ -21,31 +21,18 @@ public class PrescriptionMapper {
         Staff   staff   = p.getStaff();
         Encounter enc   = p.getEncounter();
 
-        String patientFullName = buildFullName(
-            patient != null ? patient.getFirstName() : null,
-            patient != null ? patient.getLastName()  : null
-        );
-
-        String staffFullName =
-            (staff != null && notBlank(staff.getName()))
-                ? staff.getName()
-                : buildFullName(
-                staff != null && staff.getUser() != null ? staff.getUser().getFirstName() : null,
-                staff != null && staff.getUser() != null ? staff.getUser().getLastName()  : null
-            );
-
         return PrescriptionResponseDTO.builder()
             .id(p.getId())
 
             .patientId(patient != null ? patient.getId() : null)
-            .patientFullName(patientFullName)
+            .patientFullName(resolvePatientName(patient))
             .patientEmail(patient != null ? nullSafe(patient.getEmail()) : "")
 
             .staffId(staff != null ? staff.getId() : null)
-            .staffFullName(staffFullName)
+            .staffFullName(resolveStaffDisplayName(staff))
 
             .encounterId(enc != null ? enc.getId() : null)
-            .hospitalId(enc != null && enc.getHospital() != null ? enc.getHospital().getId() : null)
+            .hospitalId(resolveHospitalId(enc))
 
             .medicationName(p.getMedicationName())
             .medicationDisplayName(p.getMedicationDisplayName())
@@ -60,6 +47,27 @@ public class PrescriptionMapper {
             .createdAt(p.getCreatedAt())
             .updatedAt(p.getUpdatedAt())
             .build();
+    }
+
+    private String resolvePatientName(Patient patient) {
+        if (patient == null) return "";
+        return buildFullName(patient.getFirstName(), patient.getLastName());
+    }
+
+    private String resolveStaffDisplayName(Staff staff) {
+        if (staff == null) return "";
+        if (notBlank(staff.getName())) return staff.getName();
+        if (staff.getUser() != null) {
+            return buildFullName(staff.getUser().getFirstName(), staff.getUser().getLastName());
+        }
+        return "";
+    }
+
+    private java.util.UUID resolveHospitalId(Encounter enc) {
+        if (enc != null && enc.getHospital() != null) {
+            return enc.getHospital().getId();
+        }
+        return null;
     }
 
     /* ============================

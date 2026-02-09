@@ -21,43 +21,44 @@ public class ChatMessageMapper {
         dto.setTimestamp(message.getTimestamp() != null ? message.getTimestamp().toString() : null);
         dto.setRead(message.isRead());
 
-        // Sender Info
-        User sender = message.getSender();
-        if (sender != null) {
-            String senderName = (sender.getFirstName() != null ? sender.getFirstName() : "") +
-                               (sender.getLastName() != null ? " " + sender.getLastName() : "");
-            dto.setSenderName(senderName.trim());
-            // Get primary role from userRoles
-            String senderRole = sender.getUserRoles() != null && !sender.getUserRoles().isEmpty()
-                ? sender.getUserRoles().iterator().next().getRole().getName()
-                : null;
-            dto.setSenderRole(senderRole);
-        }
-
-        // Recipient Info
-        User recipient = message.getRecipient();
-        if (recipient != null) {
-            String recipientName = (recipient.getFirstName() != null ? recipient.getFirstName() : "") +
-                                   (recipient.getLastName() != null ? " " + recipient.getLastName() : "");
-            dto.setRecipientName(recipientName.trim());
-            // Get primary role from userRoles
-            String recipientRole = recipient.getUserRoles() != null && !recipient.getUserRoles().isEmpty()
-                ? recipient.getUserRoles().iterator().next().getRole().getName()
-                : null;
-            dto.setRecipientRole(recipientRole);
-        }
+        populateSenderInfo(dto, message.getSender());
+        populateRecipientInfo(dto, message);
 
         // Hospital Info from assignment
         if (message.getAssignment() != null && message.getAssignment().getHospital() != null) {
             dto.setHospitalName(message.getAssignment().getHospital().getName());
         }
 
-        // Department name for recipient (if available)
-        if (recipient != null && recipient.getStaffProfile() != null && recipient.getStaffProfile().getDepartment() != null) {
+        return dto;
+    }
+
+    private void populateSenderInfo(ChatMessageResponseDTO dto, User sender) {
+        if (sender == null) return;
+        dto.setSenderName(buildUserFullName(sender));
+        dto.setSenderRole(extractPrimaryRole(sender));
+    }
+
+    private void populateRecipientInfo(ChatMessageResponseDTO dto, ChatMessage message) {
+        User recipient = message.getRecipient();
+        if (recipient == null) return;
+        dto.setRecipientName(buildUserFullName(recipient));
+        dto.setRecipientRole(extractPrimaryRole(recipient));
+        if (recipient.getStaffProfile() != null && recipient.getStaffProfile().getDepartment() != null) {
             dto.setRecipientDepartmentName(recipient.getStaffProfile().getDepartment().getName());
         }
+    }
 
-        return dto;
+    private String buildUserFullName(User user) {
+        String first = user.getFirstName() != null ? user.getFirstName() : "";
+        String last = user.getLastName() != null ? " " + user.getLastName() : "";
+        return (first + last).trim();
+    }
+
+    private String extractPrimaryRole(User user) {
+        if (user.getUserRoles() == null || user.getUserRoles().isEmpty()) {
+            return null;
+        }
+        return user.getUserRoles().iterator().next().getRole().getName();
     }
 
     public ChatMessage toChatMessage(ChatMessageRequestDTO dto, User sender, User recipient) {

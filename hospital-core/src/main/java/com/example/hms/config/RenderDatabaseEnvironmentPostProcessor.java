@@ -87,12 +87,23 @@ public class RenderDatabaseEnvironmentPostProcessor implements EnvironmentPostPr
 
         String host = uri.getHost();
         int port = uri.getPort() == -1 ? 5432 : uri.getPort();
-        String database = uri.getPath();
-        if (database != null && database.startsWith("/")) {
-            database = database.substring(1);
-        }
+        String database = stripLeadingSlash(uri.getPath());
 
-        String query = uri.getQuery();
+        String jdbcUrl = buildJdbcUrl(host, port, database, uri.getQuery());
+
+        Map<String, Object> overrides = new LinkedHashMap<>();
+        populateOverrides(overrides, missingState, jdbcUrl, rawUsername, rawPassword, host, port, database);
+        return overrides;
+    }
+
+    private String stripLeadingSlash(String path) {
+        if (path != null && path.startsWith("/")) {
+            return path.substring(1);
+        }
+        return path;
+    }
+
+    private String buildJdbcUrl(String host, int port, String database, String query) {
         StringBuilder queryBuilder = new StringBuilder();
         if (!isBlank(query)) {
             queryBuilder.append(query);
@@ -110,8 +121,12 @@ public class RenderDatabaseEnvironmentPostProcessor implements EnvironmentPostPr
         if (!queryBuilder.isEmpty()) {
             jdbcUrl = jdbcUrl + '?' + queryBuilder;
         }
+        return jdbcUrl;
+    }
 
-        Map<String, Object> overrides = new LinkedHashMap<>();
+    private void populateOverrides(Map<String, Object> overrides, DatabaseRequirementState missingState,
+                                    String jdbcUrl, String rawUsername, String rawPassword,
+                                    String host, int port, String database) {
         if (missingState.urlMissing && !isBlank(jdbcUrl)) {
             overrides.put(DEV_DB_URL, jdbcUrl);
         }
@@ -121,7 +136,6 @@ public class RenderDatabaseEnvironmentPostProcessor implements EnvironmentPostPr
         if (missingState.passwordMissing && !isBlank(rawPassword)) {
             overrides.put(DEV_DB_PASSWORD, rawPassword);
         }
-
         if (missingState.hostMissing && !isBlank(host)) {
             overrides.put(DEV_DB_HOST, host);
         }
@@ -131,8 +145,6 @@ public class RenderDatabaseEnvironmentPostProcessor implements EnvironmentPostPr
         if (missingState.nameMissing && !isBlank(database)) {
             overrides.put(DEV_DB_NAME, database);
         }
-
-        return overrides;
     }
 
     /**

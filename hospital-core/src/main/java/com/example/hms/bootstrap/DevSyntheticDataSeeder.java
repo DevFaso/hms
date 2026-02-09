@@ -57,6 +57,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
     private static final String SUPER_ADMIN_EMAIL = SUPER_ADMIN_USERNAME + SEED_EMAIL_SUFFIX;
     private static final String SUPER_ADMIN_SEED_SECRET = new String(new char[]{'T','e','m','p','P','a','s','s','1','2','3','!'});
     private static final String SAMPLE_TYPE_BLOOD = "BLOOD";
+    private static final BigDecimal LAB_ANALYSIS_PRICE = new BigDecimal("15000.00");
     private static final String DEFAULT_MRN_PREFIX = "MRX";
     private static final String PHONE_PREFIX = "+226";
 
@@ -744,8 +745,8 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .itemDescription("Laboratory analysis")
             .quantity(1)
             .itemCategory(ItemCategory.LAB_TEST)
-            .unitPrice(new BigDecimal("15000.00"))
-            .totalPrice(new BigDecimal("15000.00"))
+            .unitPrice(LAB_ANALYSIS_PRICE)
+            .totalPrice(LAB_ANALYSIS_PRICE)
             .assignment(staffBundle.labScientist().getAssignment())
             .build();
 
@@ -841,34 +842,10 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
                 continue;
             }
 
-            Treatment treatment = existingByName.get(seed.nameEn().toLowerCase(Locale.ROOT));
-            if (treatment == null) {
-                treatment = Treatment.builder()
-                    .name(seed.nameEn())
-                    .description(seed.descriptionEn())
-                    .department(department)
-                    .hospital(hospital)
-                    .price(seed.price())
-                    .durationMinutes(seed.durationMinutes())
-                    .assignment(assignment)
-                    .active(true)
-                    .build();
-                treatment = treatmentRepository.save(treatment);
-                log.info("Seeded treatment '{}' for hospital {}", seed.nameEn(), hospital.getCode());
-            } else {
-                boolean updated = false;
-                if (treatment.getDepartment() != null && !Objects.equals(treatment.getDepartment().getId(), department.getId())) {
-                    treatment.setDepartment(department);
-                    updated = true;
-                }
-                if (treatment.getAssignment() != null && !Objects.equals(treatment.getAssignment().getId(), assignment.getId())) {
-                    treatment.setAssignment(assignment);
-                    updated = true;
-                }
-                if (updated) {
-                    treatment = treatmentRepository.save(treatment);
-                }
-            }
+            Treatment treatment = upsertTreatment(
+                existingByName.get(seed.nameEn().toLowerCase(Locale.ROOT)),
+                seed, department, hospital, assignment
+            );
 
             ensureTranslation(treatment, assignment, "en", seed.nameEn(), seed.descriptionEn());
             ensureTranslation(treatment, assignment, "fr", seed.nameFr(), seed.descriptionFr());
@@ -878,6 +855,40 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         if (!seeded.isEmpty()) {
             hospitalTreatmentsCache.put(hospital.getId(), seeded);
         }
+    }
+
+
+    private Treatment upsertTreatment(Treatment existing, TreatmentSeed seed,
+                                       Department department, Hospital hospital,
+                                       UserRoleHospitalAssignment assignment) {
+        if (existing == null) {
+            Treatment treatment = Treatment.builder()
+                .name(seed.nameEn())
+                .description(seed.descriptionEn())
+                .department(department)
+                .hospital(hospital)
+                .price(seed.price())
+                .durationMinutes(seed.durationMinutes())
+                .assignment(assignment)
+                .active(true)
+                .build();
+            treatment = treatmentRepository.save(treatment);
+            log.info("Seeded treatment '{}' for hospital {}", seed.nameEn(), hospital.getCode());
+            return treatment;
+        }
+        boolean updated = false;
+        if (existing.getDepartment() != null && !Objects.equals(existing.getDepartment().getId(), department.getId())) {
+            existing.setDepartment(department);
+            updated = true;
+        }
+        if (existing.getAssignment() != null && !Objects.equals(existing.getAssignment().getId(), assignment.getId())) {
+            existing.setAssignment(assignment);
+            updated = true;
+        }
+        if (updated) {
+            existing = treatmentRepository.save(existing);
+        }
+        return existing;
     }
 
     private List<TreatmentSeed> buildTreatmentSeeds(StaffBundle staffBundle) {
@@ -935,7 +946,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
                 staffBundle.laboratoryDepartment(),
                 resolveAssignment(lab, staffBundle.adminAssignment()),
                 lab,
-                new BigDecimal("15000.00"),
+                LAB_ANALYSIS_PRICE,
                 25
             ),
             new TreatmentSeed(

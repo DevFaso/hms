@@ -20,6 +20,8 @@ import java.util.List;
 @Order(2) // Run after RoleSeeder
 public class OrganizationSecuritySeeder implements CommandLineRunner {
 
+    private static final String DEFAULT_ORG_CODE = "DEFAULT_ORG";
+
     private final OrganizationRepository organizationRepository;
     private final OrganizationSecurityPolicyRepository securityPolicyRepository;
     private final OrganizationSecurityRuleRepository securityRuleRepository;
@@ -33,10 +35,10 @@ public class OrganizationSecuritySeeder implements CommandLineRunner {
     }
 
     private void seedDefaultOrganization() {
-        organizationRepository.findByCode("DEFAULT_ORG").orElseGet(() -> {
+        organizationRepository.findByCode(DEFAULT_ORG_CODE).orElseGet(() -> {
             Organization defaultOrg = Organization.builder()
                 .name("Default Healthcare Organization")
-                .code("DEFAULT_ORG")
+                .code(DEFAULT_ORG_CODE)
                 .description("Default organization for hospitals without specific organization assignment")
                 .type(OrganizationType.HEALTHCARE_NETWORK)
                 .active(true)
@@ -48,7 +50,7 @@ public class OrganizationSecuritySeeder implements CommandLineRunner {
     }
 
     private void seedDefaultSecurityPolicies() {
-        Organization defaultOrg = organizationRepository.findByCode("DEFAULT_ORG").orElse(null);
+        Organization defaultOrg = organizationRepository.findByCode(DEFAULT_ORG_CODE).orElse(null);
         if (defaultOrg == null) {
             log.error("Default organization not found - cannot seed security policies");
             return;
@@ -314,7 +316,7 @@ public class OrganizationSecuritySeeder implements CommandLineRunner {
     }
 
     private void linkHospitalsToDefaultOrganization() {
-        Organization defaultOrg = organizationRepository.findByCode("DEFAULT_ORG").orElse(null);
+        Organization defaultOrg = organizationRepository.findByCode(DEFAULT_ORG_CODE).orElse(null);
         if (defaultOrg == null) {
             log.error("Default organization not found - cannot link hospitals");
             return;

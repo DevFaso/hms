@@ -16,43 +16,66 @@ public class StaffMapper {
 
         StaffResponseDTO dto = new StaffResponseDTO();
         dto.setId(staff.getId() != null ? staff.getId().toString() : null);
-        dto.setUserId(staff.getUser() != null && staff.getUser().getId() != null ? staff.getUser().getId().toString() : null);
-        dto.setUsername(staff.getUser() != null ? staff.getUser().getUsername() : null);
-        dto.setName(staff.getUser() != null ? staff.getUser().getFirstName() + " " + staff.getUser().getLastName() : null);
-        dto.setEmail(staff.getUser() != null ? staff.getUser().getEmail() : null);
-        dto.setPhoneNumber(staff.getUser() != null ? staff.getUser().getPhoneNumber() : null);
-        dto.setHospitalId(staff.getHospital() != null && staff.getHospital().getId() != null ? staff.getHospital().getId().toString() : null);
-        dto.setHospitalName(staff.getHospital() != null ? staff.getHospital().getName() : null);
-        dto.setHospitalEmail(staff.getHospital() != null ? staff.getHospital().getEmail() : null);
-        dto.setDepartmentId(staff.getDepartment() != null && staff.getDepartment().getId() != null ? staff.getDepartment().getId().toString() : null);
-        dto.setDepartmentName(staff.getDepartment() != null ? staff.getDepartment().getName() : null);
-        dto.setDepartmentEmail(staff.getDepartment() != null ? staff.getDepartment().getEmail() : null);
-        dto.setDepartmentPhoneNumber(staff.getDepartment() != null ? staff.getDepartment().getPhoneNumber() : null);
-        if (staff.getAssignment() != null && staff.getAssignment().getRole() != null) {
-            dto.setRoleCode(staff.getAssignment().getRole().getCode());
-            dto.setRoleName(staff.getAssignment().getRole().getName());
-        }
+
+        mapUserFields(dto, staff.getUser());
+        mapHospitalFields(dto, staff.getHospital());
+        mapDepartmentFields(dto, staff);
+        mapRoleFields(dto, staff.getAssignment());
+
         dto.setJobTitle(staff.getJobTitle());
         dto.setEmploymentType(staff.getEmploymentType());
-        if (staff.getSpecialization() != null) {
-            try {
-                dto.setSpecialization(Specialization.valueOf(staff.getSpecialization()));
-            } catch (IllegalArgumentException e) {
-                // leave null if enum constant not found
-            }
-        }
+        mapSpecialization(dto, staff.getSpecialization());
         dto.setLicenseNumber(staff.getLicenseNumber());
         dto.setStartDate(staff.getStartDate());
         dto.setEndDate(staff.getEndDate());
         dto.setActive(staff.isActive());
-        boolean isHead = staff.getDepartment() != null
-            && staff.getDepartment().getHeadOfDepartment() != null
-            && Objects.equals(staff.getDepartment().getHeadOfDepartment().getId(), staff.getId());
-        dto.setHeadOfDepartment(isHead);
         dto.setCreatedAt(staff.getCreatedAt());
         dto.setUpdatedAt(staff.getUpdatedAt());
 
         return dto;
+    }
+
+    private void mapUserFields(StaffResponseDTO dto, User user) {
+        if (user == null) return;
+        dto.setUserId(user.getId() != null ? user.getId().toString() : null);
+        dto.setUsername(user.getUsername());
+        dto.setName(user.getFirstName() + " " + user.getLastName());
+        dto.setEmail(user.getEmail());
+        dto.setPhoneNumber(user.getPhoneNumber());
+    }
+
+    private void mapHospitalFields(StaffResponseDTO dto, Hospital hospital) {
+        if (hospital == null) return;
+        dto.setHospitalId(hospital.getId() != null ? hospital.getId().toString() : null);
+        dto.setHospitalName(hospital.getName());
+        dto.setHospitalEmail(hospital.getEmail());
+    }
+
+    private void mapDepartmentFields(StaffResponseDTO dto, Staff staff) {
+        Department dept = staff.getDepartment();
+        if (dept == null) return;
+        dto.setDepartmentId(dept.getId() != null ? dept.getId().toString() : null);
+        dto.setDepartmentName(dept.getName());
+        dto.setDepartmentEmail(dept.getEmail());
+        dto.setDepartmentPhoneNumber(dept.getPhoneNumber());
+        boolean isHead = dept.getHeadOfDepartment() != null
+            && Objects.equals(dept.getHeadOfDepartment().getId(), staff.getId());
+        dto.setHeadOfDepartment(isHead);
+    }
+
+    private void mapRoleFields(StaffResponseDTO dto, UserRoleHospitalAssignment assignment) {
+        if (assignment == null || assignment.getRole() == null) return;
+        dto.setRoleCode(assignment.getRole().getCode());
+        dto.setRoleName(assignment.getRole().getName());
+    }
+
+    private void mapSpecialization(StaffResponseDTO dto, String specialization) {
+        if (specialization == null) return;
+        try {
+            dto.setSpecialization(Specialization.valueOf(specialization));
+        } catch (IllegalArgumentException e) {
+            // leave null if enum constant not found
+        }
     }
 
     public Staff toStaff(StaffRequestDTO dto, User user, Hospital hospital, Department department, UserRoleHospitalAssignment assignment) {
