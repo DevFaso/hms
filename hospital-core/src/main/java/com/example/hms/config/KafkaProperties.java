@@ -1,36 +1,31 @@
 package com.example.hms.config;
 
-import jakarta.validation.constraints.NotBlank;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.validation.annotation.Validated;
+import org.springframework.stereotype.Component;
 
 /**
  * Custom Kafka application properties (prefix: app.kafka).
  * Provides metadata so IDEs recognize properties like app.kafka.chat-topic.
  */
+@Component
 @Getter
 @Setter
-@Validated
 @ConfigurationProperties(prefix = "app.kafka")
 public class KafkaProperties {
 
     /** Kafka topic name for chat messages */
-    @NotBlank
-    private String chatTopic;
+    private String chatTopic = "hospital.chat.messages";
 
     /** Kafka topic for EMPI identity command events */
-    @NotBlank
-    private String empiIdentityTopic;
+    private String empiIdentityTopic = "hospital.empi.identity";
 
     /** Kafka topic for patient movement and transfer notifications */
-    @NotBlank
-    private String patientMovementTopic;
+    private String patientMovementTopic = "hospital.patient.movement";
 
     /** Kafka topic for platform registry lifecycle events */
-    @NotBlank
-    private String platformRegistryTopic;
+    private String platformRegistryTopic = "hospital.platform.registry";
 
     /** Whether Kafka integration is enabled (default true). */
     private boolean enabled = true;

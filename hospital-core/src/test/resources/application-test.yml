@@ -1,19 +1,40 @@
-# Test profile — H2 in-memory, fast isolation
+# Test profile - H2 in-memory, fast isolation
 spring:
   config:
     activate:
       on-profile: test
   datasource:
-    url: jdbc:h2:mem:hms_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    url: "jdbc:h2:mem:hms_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;INIT=CREATE SCHEMA IF NOT EXISTS billing\\;CREATE SCHEMA IF NOT EXISTS clinical\\;CREATE SCHEMA IF NOT EXISTS empi\\;CREATE SCHEMA IF NOT EXISTS governance\\;CREATE SCHEMA IF NOT EXISTS hospital\\;CREATE SCHEMA IF NOT EXISTS lab\\;CREATE SCHEMA IF NOT EXISTS platform\\;CREATE SCHEMA IF NOT EXISTS reference\\;CREATE SCHEMA IF NOT EXISTS security\\;CREATE SCHEMA IF NOT EXISTS support"
     username: sa
     password:
     driver-class-name: org.h2.Driver
   jpa:
     hibernate:
-      ddl-auto: none
+      ddl-auto: create-drop
     show-sql: false
+    properties:
+      hibernate:
+        '[format_sql]': false
   liquibase:
-    enabled: true
+    enabled: false
+  sql:
+    init:
+      mode: never
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+  kafka:
+    consumer:
+      group-id: hms-test-group
+
+# Kafka properties (placeholders used in @KafkaListener annotations)
+app:
+  kafka:
+    enabled: false
+    chat-topic: test.chat
+    empi-identity-topic: test.empi
+    patient-movement-topic: test.movement
+    platform-registry-topic: test.registry
 
 logging:
   level:

@@ -5,8 +5,10 @@ import java.util.Locale;
 import java.util.Map;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+@Component
 @Data
 @ConfigurationProperties(prefix = "app.feature-flags")
 public class FeatureFlagProperties {

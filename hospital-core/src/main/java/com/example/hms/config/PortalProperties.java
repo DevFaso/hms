@@ -3,12 +3,14 @@ package com.example.hms.config;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
 
 /**
  * Portal-facing URLs used in notifications so that assignees and assigners land on the
  * appropriate onboarding flows inside the Angular application. These values can be overridden
  * via environment variables in different deployment environments.
  */
+@Component
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "app.portal")
