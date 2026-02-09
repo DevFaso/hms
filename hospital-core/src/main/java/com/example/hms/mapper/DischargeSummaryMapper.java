@@ -6,7 +6,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Mapper for DischargeSummary entities and DTOs
@@ -68,7 +67,7 @@ public class DischargeSummaryMapper {
         }
         return entries.stream()
             .map(this::toMedicationReconciliationDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     public MedicationReconciliationDTO toMedicationReconciliationDTO(MedicationReconciliationEntry entry) {
@@ -119,7 +118,7 @@ public class DischargeSummaryMapper {
         }
         return entries.stream()
             .map(this::toPendingTestResultDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     public PendingTestResultDTO toPendingTestResultDTO(PendingTestResultEntry entry) {
@@ -168,7 +167,7 @@ public class DischargeSummaryMapper {
         }
         return entries.stream()
             .map(this::toFollowUpAppointmentDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     public FollowUpAppointmentDTO toFollowUpAppointmentDTO(FollowUpAppointmentEntry entry) {

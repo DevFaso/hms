@@ -396,38 +396,38 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             adminStaff = staffRepository.save(adminStaff);
         }
 
-        Staff doctor = ensureStaff(staffByJobTitle, JobTitle.DOCTOR, "doctor", hospital, general,
-            roleCache.get("ROLE_DOCTOR"), EmploymentType.FULL_TIME, "General Medicine", adminUser);
+        Staff doctor = ensureStaff(staffByJobTitle, "doctor",
+                new StaffSeedParams(hospital, general, roleCache.get("ROLE_DOCTOR"), JobTitle.DOCTOR, EmploymentType.FULL_TIME, "General Medicine", adminUser));
 
-        Staff physician = ensureStaff(staffByJobTitle, JobTitle.PHYSICIAN, "physician", hospital, general,
-            roleCache.get("ROLE_PHYSICIAN"), EmploymentType.FULL_TIME, "Internal Medicine", adminUser);
+        Staff physician = ensureStaff(staffByJobTitle, "physician",
+                new StaffSeedParams(hospital, general, roleCache.get("ROLE_PHYSICIAN"), JobTitle.PHYSICIAN, EmploymentType.FULL_TIME, "Internal Medicine", adminUser));
 
-        Staff surgeon = ensureStaff(staffByJobTitle, JobTitle.SURGEON, "surgeon", hospital, general,
-            roleCache.get("ROLE_SURGEON"), EmploymentType.FULL_TIME, "Surgical Services", adminUser);
+        Staff surgeon = ensureStaff(staffByJobTitle, "surgeon",
+                new StaffSeedParams(hospital, general, roleCache.get("ROLE_SURGEON"), JobTitle.SURGEON, EmploymentType.FULL_TIME, "Surgical Services", adminUser));
 
-        Staff anesthesiologist = ensureStaff(staffByJobTitle, JobTitle.ANESTHESIOLOGIST, "anesthesia", hospital, general,
-            roleCache.get("ROLE_ANESTHESIOLOGIST"), EmploymentType.FULL_TIME, "Perioperative Care", adminUser);
+        Staff anesthesiologist = ensureStaff(staffByJobTitle, "anesthesia",
+                new StaffSeedParams(hospital, general, roleCache.get("ROLE_ANESTHESIOLOGIST"), JobTitle.ANESTHESIOLOGIST, EmploymentType.FULL_TIME, "Perioperative Care", adminUser));
 
-        Staff nurse = ensureStaff(staffByJobTitle, JobTitle.NURSE, "nurse", hospital, pediatrics,
-            roleCache.get("ROLE_NURSE"), EmploymentType.FULL_TIME, "Pediatric Care", adminUser);
+        Staff nurse = ensureStaff(staffByJobTitle, "nurse",
+                new StaffSeedParams(hospital, pediatrics, roleCache.get("ROLE_NURSE"), JobTitle.NURSE, EmploymentType.FULL_TIME, "Pediatric Care", adminUser));
 
-        Staff midwife = ensureStaff(staffByJobTitle, JobTitle.MIDWIFE, "midwife", hospital, pediatrics,
-            roleCache.get(ROLE_MIDWIFE_CODE), EmploymentType.FULL_TIME, "Maternal Support", adminUser);
+        Staff midwife = ensureStaff(staffByJobTitle, "midwife",
+                new StaffSeedParams(hospital, pediatrics, roleCache.get(ROLE_MIDWIFE_CODE), JobTitle.MIDWIFE, EmploymentType.FULL_TIME, "Maternal Support", adminUser));
 
-        Staff receptionist = ensureStaff(staffByJobTitle, JobTitle.RECEPTIONIST, "reception", hospital, general,
-            roleCache.get("ROLE_RECEPTIONIST"), EmploymentType.FULL_TIME, "Front Desk", adminUser);
+        Staff receptionist = ensureStaff(staffByJobTitle, "reception",
+                new StaffSeedParams(hospital, general, roleCache.get("ROLE_RECEPTIONIST"), JobTitle.RECEPTIONIST, EmploymentType.FULL_TIME, "Front Desk", adminUser));
 
-        Staff billing = ensureStaff(staffByJobTitle, JobTitle.BILLING_SPECIALIST, "billing", hospital, general,
-            roleCache.get("ROLE_BILLING_SPECIALIST"), EmploymentType.PART_TIME, "Billing", adminUser);
+        Staff billing = ensureStaff(staffByJobTitle, "billing",
+                new StaffSeedParams(hospital, general, roleCache.get("ROLE_BILLING_SPECIALIST"), JobTitle.BILLING_SPECIALIST, EmploymentType.PART_TIME, "Billing", adminUser));
 
-        Staff labScientist = ensureStaff(staffByJobTitle, JobTitle.LABORATORY_SCIENTIST, "lab", hospital, laboratory,
-            roleCache.get("ROLE_LAB_SCIENTIST"), EmploymentType.FULL_TIME, "Diagnostics", adminUser);
+        Staff labScientist = ensureStaff(staffByJobTitle, "lab",
+                new StaffSeedParams(hospital, laboratory, roleCache.get("ROLE_LAB_SCIENTIST"), JobTitle.LABORATORY_SCIENTIST, EmploymentType.FULL_TIME, "Diagnostics", adminUser));
 
-        Staff radiologist = ensureStaff(staffByJobTitle, JobTitle.RADIOLOGIST, "radiology", hospital, laboratory,
-            roleCache.get("ROLE_RADIOLOGIST"), EmploymentType.FULL_TIME, "Imaging", adminUser);
+        Staff radiologist = ensureStaff(staffByJobTitle, "radiology",
+                new StaffSeedParams(hospital, laboratory, roleCache.get("ROLE_RADIOLOGIST"), JobTitle.RADIOLOGIST, EmploymentType.FULL_TIME, "Imaging", adminUser));
 
-        Staff physiotherapist = ensureStaff(staffByJobTitle, JobTitle.PHYSIOTHERAPIST, "physio", hospital, general,
-            roleCache.get("ROLE_PHYSIOTHERAPIST"), EmploymentType.FULL_TIME, "Rehabilitation", adminUser);
+        Staff physiotherapist = ensureStaff(staffByJobTitle, "physio",
+                new StaffSeedParams(hospital, general, roleCache.get("ROLE_PHYSIOTHERAPIST"), JobTitle.PHYSIOTHERAPIST, EmploymentType.FULL_TIME, "Rehabilitation", adminUser));
 
         general.setHeadOfDepartment(doctor != null ? doctor : adminStaff);
         pediatrics.setHeadOfDepartment(nurse != null ? nurse : midwife);
@@ -512,9 +512,21 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         return persisted;
     }
 
-    private Staff createStaff(String roleSuffix, Hospital hospital, Department department, Role role,
-                              JobTitle jobTitle, EmploymentType employmentType, String specialization,
-                              User registeredBy) {
+    /**
+     * Bundles common staff-creation parameters to reduce method parameter count.
+     */
+    private record StaffSeedParams(Hospital hospital, Department department, Role role,
+                                   JobTitle jobTitle, EmploymentType employmentType,
+                                   String specialization, User registeredBy) { }
+
+    private Staff createStaff(String roleSuffix, StaffSeedParams params) {
+        Hospital hospital = params.hospital();
+        Department department = params.department();
+        Role role = params.role();
+        JobTitle jobTitle = params.jobTitle();
+        EmploymentType employmentType = params.employmentType();
+        String specialization = params.specialization();
+        User registeredBy = params.registeredBy();
         String firstName = pickName(FIRST_NAMES, roleSuffix);
         String lastName = pickName(LAST_NAMES, roleSuffix + "-" + hospital.getCode());
         User user = createUser(roleSuffix, firstName, lastName);
@@ -539,9 +551,11 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         return persisted;
     }
 
-    private Staff ensureStaff(Map<JobTitle, Staff> staffByJobTitle, JobTitle jobTitle, String roleSuffix,
-                              Hospital hospital, Department department, Role role,
-                              EmploymentType employmentType, String specialization, User registeredBy) {
+    private Staff ensureStaff(Map<JobTitle, Staff> staffByJobTitle, String roleSuffix,
+                              StaffSeedParams params) {
+        JobTitle jobTitle = params.jobTitle();
+        Department department = params.department();
+        Role role = params.role();
         Staff existing = staffByJobTitle.get(jobTitle);
         if (existing != null) {
             if (department != null && (existing.getDepartment() == null
@@ -557,7 +571,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             return null;
         }
 
-        Staff created = createStaff(roleSuffix, hospital, department, role, jobTitle, employmentType, specialization, registeredBy);
+        Staff created = createStaff(roleSuffix, params);
         staffByJobTitle.put(jobTitle, created);
         return created;
     }

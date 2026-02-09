@@ -15,8 +15,7 @@ public class StaffAvailabilityMapper {
 
     public StaffAvailability toEntity(StaffAvailabilityRequestDTO dto,
                                       Staff staff,
-                                      Hospital hospital,
-                                      Department department) {
+                                      Hospital hospital) {
         return StaffAvailability.builder()
             .staff(staff)
             .hospital(hospital)

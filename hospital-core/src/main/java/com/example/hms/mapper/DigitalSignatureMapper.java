@@ -7,7 +7,6 @@ import com.example.hms.payload.dto.signature.SignatureResponseDTO;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Mapper for DigitalSignature entities and DTOs.
@@ -63,7 +62,7 @@ public class DigitalSignatureMapper {
         if (includeAuditLog && entity.getAuditLog() != null && !entity.getAuditLog().isEmpty()) {
             List<SignatureAuditEntryDTO> auditLogDTOs = entity.getAuditLog().stream()
                 .map(this::toAuditEntryDTO)
-                .collect(Collectors.toList());
+                .toList();
             builder.auditLog(auditLogDTOs);
         }
 
@@ -94,12 +93,12 @@ public class DigitalSignatureMapper {
      */
     public List<SignatureAuditEntryDTO> toAuditEntryDTOs(List<SignatureAuditEntry> entries) {
         if (entries == null) {
-            return null;
+            return List.of();
         }
 
         return entries.stream()
             .map(this::toAuditEntryDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     /**

@@ -92,7 +92,7 @@ public class RenderDatabaseEnvironmentPostProcessor implements EnvironmentPostPr
         String jdbcUrl = buildJdbcUrl(host, port, database, uri.getQuery());
 
         Map<String, Object> overrides = new LinkedHashMap<>();
-        populateOverrides(overrides, missingState, jdbcUrl, rawUsername, rawPassword, host, port, database);
+        populateOverrides(overrides, missingState, new ParsedDatabaseCredentials(jdbcUrl, rawUsername, rawPassword, host, port, database));
         return overrides;
     }
 
@@ -124,26 +124,28 @@ public class RenderDatabaseEnvironmentPostProcessor implements EnvironmentPostPr
         return jdbcUrl;
     }
 
+    private record ParsedDatabaseCredentials(String jdbcUrl, String username, String password,
+                                              String host, int port, String database) { }
+
     private void populateOverrides(Map<String, Object> overrides, DatabaseRequirementState missingState,
-                                    String jdbcUrl, String rawUsername, String rawPassword,
-                                    String host, int port, String database) {
-        if (missingState.urlMissing && !isBlank(jdbcUrl)) {
-            overrides.put(DEV_DB_URL, jdbcUrl);
+                                    ParsedDatabaseCredentials creds) {
+        if (missingState.urlMissing && !isBlank(creds.jdbcUrl())) {
+            overrides.put(DEV_DB_URL, creds.jdbcUrl());
         }
-        if (missingState.usernameMissing && !isBlank(rawUsername)) {
-            overrides.put(DEV_DB_USERNAME, rawUsername);
+        if (missingState.usernameMissing && !isBlank(creds.username())) {
+            overrides.put(DEV_DB_USERNAME, creds.username());
         }
-        if (missingState.passwordMissing && !isBlank(rawPassword)) {
-            overrides.put(DEV_DB_PASSWORD, rawPassword);
+        if (missingState.passwordMissing && !isBlank(creds.password())) {
+            overrides.put(DEV_DB_PASSWORD, creds.password());
         }
-        if (missingState.hostMissing && !isBlank(host)) {
-            overrides.put(DEV_DB_HOST, host);
+        if (missingState.hostMissing && !isBlank(creds.host())) {
+            overrides.put(DEV_DB_HOST, creds.host());
         }
         if (missingState.portMissing) {
-            overrides.put(DEV_DB_PORT, String.valueOf(port));
+            overrides.put(DEV_DB_PORT, String.valueOf(creds.port()));
         }
-        if (missingState.nameMissing && !isBlank(database)) {
-            overrides.put(DEV_DB_NAME, database);
+        if (missingState.nameMissing && !isBlank(creds.database())) {
+            overrides.put(DEV_DB_NAME, creds.database());
         }
     }
 

@@ -12,7 +12,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Mapper for converting between ultrasound entities and DTOs.
@@ -68,7 +67,7 @@ public class UltrasoundMapper {
         }
         return orders.stream()
             .map(this::toOrderResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     /**
@@ -223,7 +222,7 @@ public class UltrasoundMapper {
         }
         return reports.stream()
             .map(this::toReportResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     /**

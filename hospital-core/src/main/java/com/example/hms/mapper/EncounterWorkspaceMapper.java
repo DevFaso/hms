@@ -22,7 +22,6 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -68,8 +67,7 @@ public class EncounterWorkspaceMapper {
     }
 
     public EncounterWorkspaceNoteDTO toWorkspaceNote(UUID encounterId,
-                                                     EncounterNoteResponseDTO note,
-                                                     EncounterWorkspaceVisitType visitType) {
+                                                     EncounterNoteResponseDTO note) {
         if (note == null) {
             return null;
         }
@@ -93,8 +91,7 @@ public class EncounterWorkspaceMapper {
                                                   UUID hospitalId,
                                                   UUID departmentId,
                                                   Staff staff,
-                                                  EncounterWorkspaceCreateRequestDTO request,
-                                                  Locale locale) {
+                                                  EncounterWorkspaceCreateRequestDTO request) {
         EncounterNoteRequestDTO note = EncounterNoteRequestDTO.builder()
             .template(request.getNoteTemplate())
             .chiefComplaint(request.getChiefComplaint())
@@ -127,8 +124,7 @@ public class EncounterWorkspaceMapper {
             .build();
     }
 
-    public EncounterNoteRequestDTO toEncounterNoteUpdate(UUID encounterId,
-                                                         Staff staff,
+    public EncounterNoteRequestDTO toEncounterNoteUpdate(Staff staff,
                                                          EncounterWorkspaceNoteUpdateRequestDTO request) {
         EncounterNoteRequestDTO.EncounterNoteRequestDTOBuilder builder = EncounterNoteRequestDTO.builder()
             .template(request.getNoteTemplate())

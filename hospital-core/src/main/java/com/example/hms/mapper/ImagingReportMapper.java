@@ -237,7 +237,7 @@ public class ImagingReportMapper {
         return attachments.stream()
             .filter(Objects::nonNull)
             .map(this::toAttachmentDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private ImagingReportMeasurementDTO toMeasurementDTO(ImagingReportMeasurement measurement) {
@@ -269,7 +269,7 @@ public class ImagingReportMapper {
         return measurements.stream()
             .filter(Objects::nonNull)
             .map(this::toMeasurementDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private ImagingReportStatusDTO toStatusDTO(ImagingReportStatusHistory history) {
@@ -295,7 +295,7 @@ public class ImagingReportMapper {
         return history.stream()
             .filter(Objects::nonNull)
             .map(this::toStatusDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private ImagingReportMeasurement mapMeasurementRequest(ImagingReport report,

@@ -15,7 +15,9 @@ public class TreatmentMapper {
     private final ServiceTranslationMapper translationMapper;
 
     public TreatmentResponseDTO toTreatmentResponseDTO(Treatment treatment, String language) {
-        if (treatment == null) return null;
+        if (treatment == null) {
+            return null;
+        }
 
                 Map<String, ServiceTranslationResponseDTO> translations = Optional.ofNullable(treatment.getTranslations())
                                 .orElse(Collections.emptySet())

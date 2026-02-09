@@ -85,7 +85,7 @@ public class InvoiceItemMapper {
                 if (!full.isEmpty()) return full;
                 if (u.getUsername() != null) return u.getUsername();
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) { /* Fallback to generic "Staff" label when name resolution fails */ }
         return "Staff";
     }
 }

@@ -22,7 +22,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -178,7 +177,7 @@ public class TreatmentPlanMapper {
                 if (b.getDueOn() == null) return -1;
                 return a.getDueOn().compareTo(b.getDueOn());
             })
-            .collect(Collectors.toList());
+            .toList();
     }
 
     public TreatmentPlanFollowUpDTO toFollowUpDTO(TreatmentPlanFollowUp followUp) {
@@ -213,7 +212,7 @@ public class TreatmentPlanMapper {
                 if (b.getCreatedAt() == null) return -1;
                 return a.getCreatedAt().compareTo(b.getCreatedAt());
             })
-            .collect(Collectors.toList());
+            .toList();
     }
 
     public TreatmentPlanReviewDTO toReviewDTO(TreatmentPlanReview review) {
@@ -258,7 +257,7 @@ public class TreatmentPlanMapper {
             .filter(StringUtils::hasText)
             .map(v -> v.trim())
             .filter(v -> !v.isEmpty())
-            .collect(Collectors.toList());
+            .toList();
         if (sanitized.isEmpty()) {
             return null;
         }

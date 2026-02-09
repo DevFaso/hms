@@ -75,7 +75,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Object> handleRuntimeException(RuntimeException ex, WebRequest request) {
     // Log full stack to aid debugging of 500s (safe: message already generic in response)
-    log.error("Unhandled runtime exception at path {}: {}", request.getDescription(false), ex.getMessage(), ex);
+    if (log.isErrorEnabled()) {
+        log.error("Unhandled runtime exception at path {}: {}", request.getDescription(false), ex.getMessage(), ex);
+    }
     return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred: " + ex.getMessage(), request);
     }
 
