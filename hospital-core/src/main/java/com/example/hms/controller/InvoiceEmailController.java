@@ -1,0 +1,71 @@
+package com.example.hms.controller;
+
+import com.example.hms.payload.dto.EmailInvoiceRequest;
+import com.example.hms.service.InvoiceEmailService;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+
+@RestController
+@RequestMapping("/invoices")
+@RequiredArgsConstructor
+public class InvoiceEmailController {
+
+    private final InvoiceEmailService invoiceEmailService;
+
+    // Body-based (recommended)
+    @PostMapping(path = "/{invoiceId}/email", consumes = "application/json")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','BILLING_CLERK')")
+    public ResponseEntity<Map<String,Object>> emailInvoice(
+        @PathVariable UUID invoiceId,
+        @RequestBody @Valid EmailInvoiceRequest req) {
+        invoiceEmailService.emailInvoice(invoiceId, req);
+        return ResponseEntity.ok(Map.of("status","SENT","sentAt", OffsetDateTime.now()));
+    }
+
+    // Quick path, renamed to avoid clashing with "/email"
+    @PostMapping("/{invoiceId}/send-to/{email}")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','BILLING_CLERK')")
+    public ResponseEntity<Map<String,Object>> emailInvoiceQuick(
+        @PathVariable UUID invoiceId,
+        @PathVariable String email) {
+
+        // validate path email (strict)
+        if (!isValidEmail(email)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                "status", 400,
+                "error", "Invalid email",
+                "message", "Invalid email address: " + email
+            ));
+        }
+
+        var req = new EmailInvoiceRequest(
+            List.of(email), List.of(), List.of(),
+            "Invoice attached. Thank you.",
+            "en",
+            true
+        );
+
+        invoiceEmailService.emailInvoice(invoiceId, req);
+        return ResponseEntity.ok(Map.of("status","SENT","sentAt", OffsetDateTime.now()));
+    }
+
+    private static boolean isValidEmail(String addr) {
+        if (addr == null || addr.isBlank()) return false;
+        try {
+            var ia = new jakarta.mail.internet.InternetAddress(addr, true);
+            ia.validate();
+            return true;
+        } catch (jakarta.mail.internet.AddressException e) {
+            return false;
+        }
+    }
+}

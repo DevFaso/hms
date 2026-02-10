@@ -5,6 +5,103 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
-    <!-- Migrations will be added here as we port code from the old repo -->
+    <changeSet id="2026-02-09-01-create-patients" author="copilot">
+        <createTable tableName="patients">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="mrn" type="VARCHAR(64)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="first_name" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_name" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="middle_name" type="VARCHAR(120)"/>
+            <column name="date_of_birth" type="DATE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="gender" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="phone" type="VARCHAR(40)"/>
+            <column name="email" type="VARCHAR(180)"/>
+            <column name="address_line1" type="VARCHAR(180)"/>
+            <column name="address_line2" type="VARCHAR(180)"/>
+            <column name="city" type="VARCHAR(120)"/>
+            <column name="state" type="VARCHAR(120)"/>
+            <column name="postal_code" type="VARCHAR(40)"/>
+            <column name="country" type="VARCHAR(120)"/>
+            <column name="created_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex indexName="idx_patients_last_name" tableName="patients">
+            <column name="last_name"/>
+        </createIndex>
+        <createIndex indexName="idx_patients_phone" tableName="patients">
+            <column name="phone"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="2026-02-09-02-create-patient-insurance" author="copilot">
+        <createTable tableName="patient_insurances">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="patient_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="provider_name" type="VARCHAR(180)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="policy_number" type="VARCHAR(120)"/>
+            <column name="member_id" type="VARCHAR(120)"/>
+            <column name="group_number" type="VARCHAR(120)"/>
+            <column name="coverage_start" type="DATE"/>
+            <column name="coverage_end" type="DATE"/>
+            <column name="primary_plan" type="BOOLEAN">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="patient_insurances"
+            baseColumnNames="patient_id"
+            constraintName="fk_patient_insurance_patient"
+            referencedTableName="patients"
+            referencedColumnNames="id"
+            onDelete="CASCADE"/>
+    </changeSet>
+
+    <changeSet id="2026-02-09-03-create-patient-medical-history" author="copilot">
+        <createTable tableName="patient_medical_histories">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="patient_id" type="UUID">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="allergies" type="CLOB"/>
+            <column name="conditions" type="CLOB"/>
+            <column name="medications" type="CLOB"/>
+            <column name="surgeries" type="CLOB"/>
+            <column name="notes" type="CLOB"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="patient_medical_histories"
+            baseColumnNames="patient_id"
+            constraintName="fk_patient_medical_history_patient"
+            referencedTableName="patients"
+            referencedColumnNames="id"
+            onDelete="CASCADE"/>
+    </changeSet>
 
 </databaseChangeLog>
