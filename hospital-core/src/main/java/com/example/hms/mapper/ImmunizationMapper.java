@@ -9,7 +9,7 @@ import com.example.hms.payload.dto.medicalhistory.ImmunizationRequestDTO;
 import com.example.hms.payload.dto.medicalhistory.ImmunizationResponseDTO;
 import org.springframework.stereotype.Component;
 
-import java.util.Objects;
+import static com.example.hms.mapper.MapperDefaults.booleanOrDefault;
 
 @Component
 public class ImmunizationMapper {
@@ -141,7 +141,7 @@ public class ImmunizationMapper {
                 .registryReported(dto.getRegistryReported())
                 .registryReportedDate(dto.getRegistryReportedDate())
                 .notes(dto.getNotes())
-                .active(Objects.requireNonNullElse(dto.getActive(), Boolean.TRUE))
+                .active(booleanOrDefault(dto.getActive(), true))
                 .build();
     }
 
