@@ -64,14 +64,14 @@ class PatientControllerTest {
         insurance.setPrimaryPlan(true);
         request.setInsurances(List.of(insurance));
 
-        mockMvc.perform(post("/api/patients")
+    mockMvc.perform(post("/api/patients-v2")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.id").exists())
             .andExpect(jsonPath("$.mrn").value("MRN-1001"));
 
-        mockMvc.perform(get("/api/patients")
+    mockMvc.perform(get("/api/patients-v2")
                 .param("q", "john"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[0].firstName").value("John"))
