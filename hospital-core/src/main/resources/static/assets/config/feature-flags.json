@@ -1,0 +1,7 @@
+{
+  "departmentGovernance": true,
+  "hospitalPortfolio": false,
+  "labWorkspace": false,
+  "billingSuite": false,
+  "supportAuditTrail": true
+}

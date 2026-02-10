@@ -11,9 +11,13 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-resource-server'
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
 
     // Liquibase
     implementation 'org.liquibase:liquibase-core'
+
+    // Kafka
+    implementation 'org.springframework.kafka:spring-kafka'
 
     // JWT
     implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
@@ -27,6 +31,30 @@ dependencies {
     // Jackson Hibernate module
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-hibernate6:2.17.3'
 
+    // Hypersistence Utils (Hibernate JSON types)
+    implementation 'io.hypersistence:hypersistence-utils-hibernate-63:3.7.1'
+
+    // PDF generation
+    implementation 'com.itextpdf:kernel:8.0.2'
+    implementation 'com.itextpdf:layout:8.0.2'
+    implementation 'com.itextpdf:barcodes:8.0.2'
+    implementation 'org.apache.pdfbox:pdfbox:2.0.31'
+
+    // QR / Barcode
+    implementation 'com.google.zxing:core:3.5.3'
+    implementation 'com.google.zxing:javase:3.5.3'
+
+    // Twilio SMS
+    implementation 'com.twilio.sdk:twilio:10.8.0'
+
+    // AWS KMS
+    implementation 'com.amazonaws:aws-java-sdk-kms:1.12.780'
+
+    // Apache Commons
+    implementation 'commons-io:commons-io:2.17.0'
+    implementation 'org.apache.commons:commons-csv:1.11.0'
+    implementation 'org.apache.commons:commons-lang3:3.18.0'
+
     // Database
     runtimeOnly 'org.postgresql:postgresql:42.7.7'
     runtimeOnly 'com.h2database:h2'
@@ -38,4 +66,5 @@ dependencies {
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation 'org.springframework.security:spring-security-test'
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
 }
