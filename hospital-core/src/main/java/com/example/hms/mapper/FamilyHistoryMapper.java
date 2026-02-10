@@ -8,6 +8,8 @@ import com.example.hms.payload.dto.medicalhistory.FamilyHistoryRequestDTO;
 import com.example.hms.payload.dto.medicalhistory.FamilyHistoryResponseDTO;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
+
 @Component
 public class FamilyHistoryMapper {
 
@@ -124,7 +126,7 @@ public class FamilyHistoryMapper {
                 .sourceOfInformation(dto.getSourceOfInformation())
                 .verified(dto.getVerified())
                 .verificationDate(dto.getVerificationDate())
-                .active(dto.getActive() != null ? dto.getActive() : true)
+                .active(Objects.requireNonNullElse(dto.getActive(), Boolean.TRUE))
                 // Pedigree
                 .generation(dto.getGeneration())
                 .pedigreeId(dto.getPedigreeId())

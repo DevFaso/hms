@@ -8,6 +8,8 @@ import com.example.hms.payload.dto.medicalhistory.SocialHistoryRequestDTO;
 import com.example.hms.payload.dto.medicalhistory.SocialHistoryResponseDTO;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
+
 @Component
 public class SocialHistoryMapper {
 
@@ -176,7 +178,7 @@ public class SocialHistoryMapper {
                 .safetyConcerns(dto.getSafetyConcerns())
                 // Metadata
                 .versionNumber(dto.getVersionNumber() != null ? dto.getVersionNumber() : 1)
-                .active(dto.getActive() != null ? dto.getActive() : true)
+                .active(Objects.requireNonNullElse(dto.getActive(), Boolean.TRUE))
                 .build();
     }
 

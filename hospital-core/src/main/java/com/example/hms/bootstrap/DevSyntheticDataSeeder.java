@@ -242,7 +242,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         OrganizationType[] types = OrganizationType.values();
         OrganizationType type = types[(index - 1) % types.length];
         String name = "Dev Seed Organization " + index;
-        Organization organization = Organization.builder()
+        return Organization.builder()
             .name(name)
             .code(code)
             .description("Synthetic organization seeded for developer experience")
@@ -253,7 +253,6 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .defaultTimezone("Africa/Ouagadougou")
             .onboardingNotes("Auto-generated organization for local testing")
             .build();
-        return organization;
     }
 
     private void seedHospitalGraph(Organization organization, int orgIndex, int hospitalIndex) {
@@ -344,7 +343,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
 
     private Hospital buildHospital(Organization organization, int orgIndex, int hospitalIndex, String code) {
         String name = String.format("%s Hospital %02d", organization.getName(), hospitalIndex);
-        Hospital hospital = Hospital.builder()
+        return Hospital.builder()
             .name(name)
             .code(code)
             .address(String.format("%d Rue du Faso, Quartier %02d", 100 + hospitalIndex, hospitalIndex))
@@ -359,7 +358,6 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .active(true)
             .organization(organization)
             .build();
-        return hospital;
     }
 
     private StaffBundle createStaffBundle(Hospital hospital, int hospitalIndex) {
@@ -599,7 +597,9 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         User user = createUser("patient", firstName, lastName);
         addGlobalRole(user, roleCache.get("ROLE_PATIENT"));
 
-        LocalDate dob = LocalDate.now().minusYears(20 + (patientSequence.get() % 25)).minusDays(patientOrdinal);
+        LocalDate dob = LocalDate.now()
+            .minusYears(20L + (patientSequence.get() % 25))
+            .minusDays(patientOrdinal);
         String phone = user.getPhoneNumber();
         String email = user.getEmail();
 
