@@ -106,10 +106,8 @@ public class AppointmentMapper {
         Appointment appointment,
         Patient patient,
         Staff staff,
-        Hospital hospital,
-        Treatment treatment
-    )
-    {
+        Hospital hospital
+    ) {
         if (dto == null || appointment == null) return;
 
         appointment.setAppointmentDate(dto.getAppointmentDate());
@@ -122,7 +120,6 @@ public class AppointmentMapper {
         if (patient != null) appointment.setPatient(patient);
         if (staff != null) appointment.setStaff(staff);
         if (hospital != null) appointment.setHospital(hospital);
-    // Treatment removed
     }
 
     private String getFullName(String first, String last) {

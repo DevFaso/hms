@@ -1,6 +1,5 @@
 package com.example.hms.mapper;
 
-import com.example.hms.model.Department;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Staff;
 import com.example.hms.model.StaffAvailability;
@@ -8,15 +7,12 @@ import com.example.hms.payload.dto.StaffAvailabilityRequestDTO;
 import com.example.hms.payload.dto.StaffAvailabilityResponseDTO;
 import org.springframework.stereotype.Component;
 
-import java.time.LocalDateTime;
-
 @Component
 public class StaffAvailabilityMapper {
 
     public StaffAvailability toEntity(StaffAvailabilityRequestDTO dto,
                                       Staff staff,
-                                      Hospital hospital,
-                                      Department department) {
+                                      Hospital hospital) {
         return StaffAvailability.builder()
             .staff(staff)
             .hospital(hospital)

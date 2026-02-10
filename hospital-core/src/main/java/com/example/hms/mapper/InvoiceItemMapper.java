@@ -12,6 +12,13 @@ import org.springframework.stereotype.Component;
 public class InvoiceItemMapper {
 
     public InvoiceItem toInvoiceItem(InvoiceItemRequestDTO dto, BillingInvoice invoice) {
+        return toInvoiceItem(dto, invoice, null, null);
+    }
+
+    public InvoiceItem toInvoiceItem(InvoiceItemRequestDTO dto,
+                                     BillingInvoice invoice,
+                                     UserRoleHospitalAssignment assignment,
+                                     Treatment relatedService) {
         if (dto == null) return null;
         InvoiceItem item = new InvoiceItem();
         item.setBillingInvoice(invoice);
@@ -19,6 +26,8 @@ public class InvoiceItemMapper {
         item.setQuantity(dto.getQuantity());
         item.setUnitPrice(dto.getUnitPrice());
         item.setItemCategory(dto.getItemCategory());
+        item.setAssignment(assignment);
+        item.setRelatedService(relatedService);
         return item;
     }
 
@@ -80,7 +89,9 @@ public class InvoiceItemMapper {
                 if (!full.isEmpty()) return full;
                 if (u.getUsername() != null) return u.getUsername();
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+            // Best-effort display name construction; ignore lookup issues.
+        }
         return "Staff";
     }
 }
