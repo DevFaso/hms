@@ -5,8 +5,8 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
-    <changeSet id="2026-02-09-01-create-patients" author="copilot">
-        <createTable tableName="patients">
+    <changeSet id="2026-02-09-01-create-patients-v2" author="copilot">
+        <createTable tableName="patients_v2">
             <column name="id" type="UUID">
                 <constraints primaryKey="true" nullable="false"/>
             </column>
@@ -42,16 +42,16 @@
             </column>
         </createTable>
 
-        <createIndex indexName="idx_patients_last_name" tableName="patients">
+        <createIndex indexName="idx_patients_v2_last_name" tableName="patients_v2">
             <column name="last_name"/>
         </createIndex>
-        <createIndex indexName="idx_patients_phone" tableName="patients">
+        <createIndex indexName="idx_patients_v2_phone" tableName="patients_v2">
             <column name="phone"/>
         </createIndex>
     </changeSet>
 
-    <changeSet id="2026-02-09-02-create-patient-insurance" author="copilot">
-        <createTable tableName="patient_insurances">
+    <changeSet id="2026-02-09-02-create-patient-insurance-v2" author="copilot">
+        <createTable tableName="patient_insurances_v2">
             <column name="id" type="UUID">
                 <constraints primaryKey="true" nullable="false"/>
             </column>
@@ -72,16 +72,16 @@
         </createTable>
 
         <addForeignKeyConstraint
-            baseTableName="patient_insurances"
+            baseTableName="patient_insurances_v2"
             baseColumnNames="patient_id"
-            constraintName="fk_patient_insurance_patient"
-            referencedTableName="patients"
+            constraintName="fk_patient_insurance_v2_patient"
+            referencedTableName="patients_v2"
             referencedColumnNames="id"
             onDelete="CASCADE"/>
     </changeSet>
 
-    <changeSet id="2026-02-09-03-create-patient-medical-history" author="copilot">
-        <createTable tableName="patient_medical_histories">
+    <changeSet id="2026-02-09-03-create-patient-medical-history-v2" author="copilot">
+        <createTable tableName="patient_medical_histories_v2">
             <column name="id" type="UUID">
                 <constraints primaryKey="true" nullable="false"/>
             </column>
@@ -96,10 +96,10 @@
         </createTable>
 
         <addForeignKeyConstraint
-            baseTableName="patient_medical_histories"
+        baseTableName="patient_medical_histories_v2"
             baseColumnNames="patient_id"
-            constraintName="fk_patient_medical_history_patient"
-            referencedTableName="patients"
+        constraintName="fk_patient_medical_history_v2_patient"
+        referencedTableName="patients_v2"
             referencedColumnNames="id"
             onDelete="CASCADE"/>
     </changeSet>

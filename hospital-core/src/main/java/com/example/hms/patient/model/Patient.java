@@ -20,11 +20,11 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-@Entity
-@Table(name = "patients", indexes = {
-    @Index(name = "idx_patients_mrn", columnList = "mrn"),
-    @Index(name = "idx_patients_last_name", columnList = "last_name"),
-    @Index(name = "idx_patients_phone", columnList = "phone")
+@Entity(name = "PatientV2")
+@Table(name = "patients_v2", indexes = {
+    @Index(name = "idx_patients_v2_mrn", columnList = "mrn"),
+    @Index(name = "idx_patients_v2_last_name", columnList = "last_name"),
+    @Index(name = "idx_patients_v2_phone", columnList = "phone")
 })
 public class Patient {
     @Id
