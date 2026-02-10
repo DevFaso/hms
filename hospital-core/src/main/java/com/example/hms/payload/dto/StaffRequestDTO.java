@@ -11,7 +11,6 @@ import jakarta.validation.constraints.*;
 import lombok.*;
 
 import java.time.LocalDate;
-// import java.util.UUID;
 
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor @Builder
@@ -19,8 +18,6 @@ import java.time.LocalDate;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(name = "StaffRequestDTO", description = "Payload to create or update a staff member")
 public class StaffRequestDTO {
-
-    // private UUID id;
 
     @NotBlank(message = "{staff.user.required}")
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "User email linked to this staff profile")

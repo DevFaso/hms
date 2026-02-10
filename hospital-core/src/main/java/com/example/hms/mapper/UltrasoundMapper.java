@@ -420,7 +420,12 @@ public class UltrasoundMapper {
         if (patient == null || patient.getId() == null) {
             return null;
         }
-        // TODO: If Patient entity has an mrn field, use that instead
+        if (patient.getPrimaryHospital() != null && patient.getPrimaryHospital().getId() != null) {
+            String mrn = patient.getMrnForHospital(patient.getPrimaryHospital().getId());
+            if (mrn != null && !mrn.isBlank()) {
+                return mrn;
+            }
+        }
         return patient.getId().toString();
     }
 

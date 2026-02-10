@@ -22,7 +22,6 @@ public class OneOfValidator implements ConstraintValidator<OneOf, Object> {
         for (String fieldName : fields) {
             try {
                 Field f = value.getClass().getDeclaredField(fieldName);
-                f.setAccessible(true);
                 Object v = f.get(value);
                 if (v != null) {
                     boolean isBlankCharSequence = v instanceof CharSequence s && s.toString().trim().isEmpty();
