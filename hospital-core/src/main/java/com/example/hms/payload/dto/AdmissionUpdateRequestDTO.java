@@ -1,7 +1,6 @@
 package com.example.hms.payload.dto;
 
 import com.example.hms.enums.AcuityLevel;
-import com.example.hms.enums.DischargeDisposition;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

@@ -272,13 +272,8 @@ public class DigitalSignature extends BaseEntity {
      * Check if signature is currently valid
      */
     public boolean isValid() {
-        if (status != SignatureStatus.SIGNED) {
-            return false;
-        }
-        if (expiresAt != null && LocalDateTime.now().isAfter(expiresAt)) {
-            return false;
-        }
-        return true;
+        return status == SignatureStatus.SIGNED
+            && (expiresAt == null || !LocalDateTime.now().isAfter(expiresAt));
     }
 
     /**

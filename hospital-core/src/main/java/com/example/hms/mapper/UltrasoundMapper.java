@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Mapper for converting between ultrasound entities and DTOs.
@@ -89,7 +90,7 @@ public class UltrasoundMapper {
             .scheduledTime(dto.getScheduledTime())
             .appointmentLocation(dto.getAppointmentLocation())
             .priority(dto.getPriority() != null ? dto.getPriority() : "ROUTINE")
-            .isHighRiskPregnancy(dto.getIsHighRiskPregnancy() != null ? dto.getIsHighRiskPregnancy() : false)
+            .isHighRiskPregnancy(Objects.requireNonNullElse(dto.getIsHighRiskPregnancy(), Boolean.FALSE))
             .highRiskNotes(dto.getHighRiskNotes())
             .specialInstructions(dto.getSpecialInstructions())
             .scanCountForPregnancy(dto.getScanCountForPregnancy() != null ? dto.getScanCountForPregnancy() : 1)
@@ -247,7 +248,7 @@ public class UltrasoundMapper {
             .nasalBonePresent(dto.getNasalBonePresent())
             // Due date
             .estimatedDueDate(dto.getEstimatedDueDate())
-            .dueDateConfirmed(dto.getDueDateConfirmed() != null ? dto.getDueDateConfirmed() : false)
+            .dueDateConfirmed(Objects.requireNonNullElse(dto.getDueDateConfirmed(), Boolean.FALSE))
             // Fetal count and position
             .numberOfFetuses(dto.getNumberOfFetuses() != null ? dto.getNumberOfFetuses() : 1)
             .fetalPosition(dto.getFetalPosition())
@@ -269,25 +270,25 @@ public class UltrasoundMapper {
             .uterineArteryDoppler(dto.getUterineArteryDoppler())
             // Fetal well-being
             .fetalHeartRate(dto.getFetalHeartRate())
-            .fetalCardiacActivity(dto.getFetalCardiacActivity() != null ? dto.getFetalCardiacActivity() : true)
-            .fetalMovementObserved(dto.getFetalMovementObserved() != null ? dto.getFetalMovementObserved() : true)
-            .fetalToneNormal(dto.getFetalToneNormal() != null ? dto.getFetalToneNormal() : true)
+            .fetalCardiacActivity(Objects.requireNonNullElse(dto.getFetalCardiacActivity(), Boolean.TRUE))
+            .fetalMovementObserved(Objects.requireNonNullElse(dto.getFetalMovementObserved(), Boolean.TRUE))
+            .fetalToneNormal(Objects.requireNonNullElse(dto.getFetalToneNormal(), Boolean.TRUE))
             // Anatomy
-            .anatomySurveyComplete(dto.getAnatomySurveyComplete() != null ? dto.getAnatomySurveyComplete() : false)
+            .anatomySurveyComplete(Objects.requireNonNullElse(dto.getAnatomySurveyComplete(), Boolean.FALSE))
             .anatomyFindings(dto.getAnatomyFindings())
             // Findings
             .findingCategory(dto.getFindingCategory())
             .findingsSummary(dto.getFindingsSummary())
             .interpretation(dto.getInterpretation())
-            .anomaliesDetected(dto.getAnomaliesDetected() != null ? dto.getAnomaliesDetected() : false)
+            .anomaliesDetected(Objects.requireNonNullElse(dto.getAnomaliesDetected(), Boolean.FALSE))
             .anomalyDescription(dto.getAnomalyDescription())
             // Genetic screening
-            .geneticScreeningRecommended(dto.getGeneticScreeningRecommended() != null ? dto.getGeneticScreeningRecommended() : false)
+            .geneticScreeningRecommended(Objects.requireNonNullElse(dto.getGeneticScreeningRecommended(), Boolean.FALSE))
             .geneticScreeningType(dto.getGeneticScreeningType())
             // Follow-up
-            .followUpRequired(dto.getFollowUpRequired() != null ? dto.getFollowUpRequired() : false)
+            .followUpRequired(Objects.requireNonNullElse(dto.getFollowUpRequired(), Boolean.FALSE))
             .followUpRecommendations(dto.getFollowUpRecommendations())
-            .specialistReferralNeeded(dto.getSpecialistReferralNeeded() != null ? dto.getSpecialistReferralNeeded() : false)
+            .specialistReferralNeeded(Objects.requireNonNullElse(dto.getSpecialistReferralNeeded(), Boolean.FALSE))
             .specialistReferralType(dto.getSpecialistReferralType())
             .nextUltrasoundRecommendedWeeks(dto.getNextUltrasoundRecommendedWeeks())
             .build();

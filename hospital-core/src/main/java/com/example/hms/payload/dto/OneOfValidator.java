@@ -24,13 +24,13 @@ public class OneOfValidator implements ConstraintValidator<OneOf, Object> {
                 Field f = value.getClass().getDeclaredField(fieldName);
                 f.setAccessible(true);
                 Object v = f.get(value);
-                if (v == null) continue;
-
-                if (v instanceof CharSequence s && s.toString().trim().isEmpty()) {
-                    continue;
+                if (v != null) {
+                    boolean isBlankCharSequence = v instanceof CharSequence s && s.toString().trim().isEmpty();
+                    if (!isBlankCharSequence) {
+                        // Non-null (and non-blank for strings) counts as present
+                        present++;
+                    }
                 }
-                // Non-null (and non-blank for strings) counts as present
-                present++;
             } catch (NoSuchFieldException | IllegalAccessException ignored) { /* Field not found or inaccessible — skip gracefully */ }
         }
 

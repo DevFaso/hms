@@ -7,7 +7,6 @@ import lombok.*;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
-import java.util.Map;
 
 @Entity
 @Table(name = "encounter_history", schema = "clinical")

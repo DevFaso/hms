@@ -1,7 +1,5 @@
 package com.example.hms.payload.dto;
 
-import com.example.hms.payload.dto.LabResultReferenceRangeDTO;
-import com.example.hms.payload.dto.LabResultTrendPointDTO;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
