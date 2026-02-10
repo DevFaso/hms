@@ -13,7 +13,7 @@ import jakarta.persistence.Table;
 import java.util.Objects;
 import java.util.UUID;
 
-@Entity
+@Entity(name = "PatientMedicalHistoryV2")
 @Table(name = "patient_medical_histories_v2")
 public class PatientMedicalHistory {
     @Id

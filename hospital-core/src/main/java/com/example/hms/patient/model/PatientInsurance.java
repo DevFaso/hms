@@ -14,7 +14,7 @@ import java.time.LocalDate;
 import java.util.Objects;
 import java.util.UUID;
 
-@Entity
+@Entity(name = "PatientInsuranceV2")
 @Table(name = "patient_insurances_v2")
 public class PatientInsurance {
     @Id
