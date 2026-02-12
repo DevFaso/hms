@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -22,11 +23,19 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc(addFilters = false)
+@ActiveProfiles("test")
 @TestPropertySource(properties = {
     "spring.liquibase.enabled=false",
     "spring.jpa.hibernate.ddl-auto=create-drop",
+    "spring.jpa.properties.hibernate.hbm2ddl.create_namespaces=true",
     "spring.datasource.url=jdbc:h2:mem:hms_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL",
-    "spring.datasource.driver-class-name=org.h2.Driver"
+    "spring.datasource.driver-class-name=org.h2.Driver",
+    "app.seed.enabled=false",
+    "app.kafka.enabled=false",
+    "app.kafka.chat-topic=test-chat-topic",
+    "app.kafka.empi-identity-topic=test-empi-identity-topic",
+    "app.kafka.patient-movement-topic=test-patient-movement-topic",
+    "app.kafka.platform-registry-topic=test-platform-registry-topic"
 })
 class PatientControllerTest {
 
@@ -64,14 +73,14 @@ class PatientControllerTest {
         insurance.setPrimaryPlan(true);
         request.setInsurances(List.of(insurance));
 
-    mockMvc.perform(post("/api/patients-v2")
+        mockMvc.perform(post("/patients-v2")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.id").exists())
             .andExpect(jsonPath("$.mrn").value("MRN-1001"));
 
-    mockMvc.perform(get("/api/patients-v2")
+        mockMvc.perform(get("/patients-v2")
                 .param("q", "john"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[0].firstName").value("John"))
