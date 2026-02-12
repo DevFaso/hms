@@ -44,7 +44,7 @@ public class AuditEventRequestDTO {
     @Schema(description = "Description of the event.", example = "Patient record shared with another hospital.")
     private String eventDescription;
 
-    @Schema(description = "IP address of the user performing the action.", example = "192.168.1.1")
+    @Schema(description = "IP address of the user performing the action.", example = "198.51.100.1")
     private String ipAddress;
 
     @Schema(description = "Status of the event.", example = "SUCCESS")

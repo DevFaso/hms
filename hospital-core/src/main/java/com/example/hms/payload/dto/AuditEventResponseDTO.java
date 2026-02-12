@@ -36,7 +36,7 @@ public class AuditEventResponseDTO {
     @Schema(description = "Timestamp when the event occurred.", example = "2025-05-19T08:30:00")
     private LocalDateTime eventTimestamp;
 
-    @Schema(description = "IP address from where the event was initiated.", example = "192.168.1.1")
+    @Schema(description = "IP address from where the event was initiated.", example = "198.51.100.1")
     private String ipAddress;
 
     @Schema(description = "Status of the event.", example = "SUCCESS")

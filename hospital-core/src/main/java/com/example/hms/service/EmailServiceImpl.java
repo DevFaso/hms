@@ -308,8 +308,8 @@ public class EmailServiceImpl implements EmailService {
             if (addr == null || addr.isBlank()) {
                 throw new IllegalArgumentException("Empty email address");
             }
-            // Simple RFC check
-            if (!addr.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            // Simple RFC check — character-class exclusions prevent backtracking/ReDoS
+            if (!addr.matches("^[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}$")) {
                 throw new IllegalArgumentException("Invalid email format: " + addr);
             }
         }

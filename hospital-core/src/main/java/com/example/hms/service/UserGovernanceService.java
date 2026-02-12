@@ -41,7 +41,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
+import java.security.SecureRandom;
 import java.util.stream.Collectors;
 
 @Service
@@ -50,6 +50,7 @@ import java.util.stream.Collectors;
 public class UserGovernanceService {
 
     private static final int MIN_GENERATED_PASSWORD_LENGTH = 12;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final UserService userService;
     private final PasswordResetService passwordResetService;
@@ -523,9 +524,8 @@ public class UserGovernanceService {
     private String generateRandomPassword() {
         String alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
         StringBuilder sb = new StringBuilder();
-        ThreadLocalRandom random = ThreadLocalRandom.current();
         while (sb.length() < MIN_GENERATED_PASSWORD_LENGTH) {
-            sb.append(alphabet.charAt(random.nextInt(alphabet.length())));
+            sb.append(alphabet.charAt(SECURE_RANDOM.nextInt(alphabet.length())));
         }
         return sb.toString();
     }

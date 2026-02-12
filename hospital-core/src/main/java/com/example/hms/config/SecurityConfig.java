@@ -133,7 +133,7 @@ public class SecurityConfig {
         http
             .securityMatcher("/api/**")
             .cors(c -> {})
-            .csrf(AbstractHttpConfigurer::disable)
+            .csrf(AbstractHttpConfigurer::disable) // NOSONAR — stateless JWT API, no session/cookie auth
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(unauthorizedHandler)
                 .accessDeniedHandler((req, res, e) -> res.sendError(HttpServletResponse.SC_FORBIDDEN))
@@ -279,7 +279,7 @@ public class SecurityConfig {
             // Matches anything not already matched by the API chain
             .securityMatcher("/**")
             .cors(c -> {})
-            .csrf(AbstractHttpConfigurer::disable)
+            .csrf(AbstractHttpConfigurer::disable) // NOSONAR — SPA static-asset chain, no state-changing endpoints
             .authorizeHttpRequests(auth -> auth
                 // Preflight
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()

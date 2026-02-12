@@ -42,7 +42,7 @@ public class SignatureVerificationRequestDTO {
 
     @Size(max = 45, message = "IP address cannot exceed 45 characters")
     @Schema(description = "IP address from which verification is performed", 
-        example = "192.168.1.100")
+        example = "198.51.100.1")
     private String ipAddress;
 
     @Size(max = 500, message = "Device info cannot exceed 500 characters")

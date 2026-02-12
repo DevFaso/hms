@@ -102,7 +102,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ThreadLocalRandom;
+import java.security.SecureRandom;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -118,6 +118,7 @@ public class PatientServiceImpl implements PatientService {
     private static final String MSG_ALLERGY_NOT_FOUND = "Allergy entry not found for the specified context.";
     private static final String DEFAULT_UNKNOWN = "Unknown";
     private static final String DEFAULT_PREFIX = "MRX";
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final int DEFAULT_TIMELINE_LIMIT = 50;
     private static final int MAX_TIMELINE_LIMIT = 200;
     private static final String CATEGORY_ENCOUNTER = "ENCOUNTER";
@@ -2264,7 +2265,7 @@ public class PatientServiceImpl implements PatientService {
         UUID hospitalId = hospital.getId();
 
         for (int attempt = 0; attempt < 10; attempt++) {
-            String candidate = prefix + String.format("%04d", ThreadLocalRandom.current().nextInt(0, 10_000));
+            String candidate = prefix + String.format("%04d", SECURE_RANDOM.nextInt(0, 10_000));
             if (!registrationRepository.existsByMrnAndHospitalId(candidate, hospitalId)) {
                 return candidate;
             }
