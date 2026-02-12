@@ -41,7 +41,12 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
-      - name: Build and analyze
+      - name: Build, test, and generate coverage
+        env:
+          SPRING_PROFILES_ACTIVE: test
+        run: ./gradlew :hospital-core:build :hospital-core:jacocoTestReport
+
+      - name: SonarQube analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./gradlew :hospital-core:build :hospital-core:jacocoTestReport sonar --info
+        run: ./gradlew sonar --info -x test

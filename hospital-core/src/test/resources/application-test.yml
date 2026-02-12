@@ -1,26 +1,74 @@
-# Test profile — H2 in-memory, fast isolation
+# =============================================================
+# Test profile — H2 in-memory with PostgreSQL compatibility
+# =============================================================
+# Strategy:
+#   1. Liquibase / Flyway OFF — schema-h2.sql pre-creates the
+#      custom PostgreSQL schemas (billing, clinical, etc.).
+#   2. Hibernate create-drop builds all @Entity tables from the
+#      JPA model, then tears them down when the context closes.
+#   3. hbm2ddl.create_namespaces is NOT needed because schema-h2.sql
+#      already issues CREATE SCHEMA IF NOT EXISTS for every namespace.
+# =============================================================
+
+server:
+  servlet:
+    context-path: /api
+
 spring:
   config:
     activate:
       on-profile: test
+
+  # ---- DataSource (H2 in-memory, PostgreSQL mode) ----
   datasource:
-    url: jdbc:h2:mem:hms_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    url: jdbc:h2:mem:hms_test;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
     username: sa
     password:
-    driver-class-name: org.h2.Driver
-  jpa:
-    hibernate:
-      ddl-auto: none
-    show-sql: false
-  liquibase:
-    enabled: true
 
+  # ---- JPA / Hibernate ----
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    defer-datasource-initialization: false         # run schema-h2.sql BEFORE Hibernate DDL
+    show-sql: false
+    properties:
+      hibernate:
+        '[format_sql]': false
+
+  # ---- Schema init (runs BEFORE Hibernate DDL, creates custom schemas) ----
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-h2.sql
+      continue-on-error: true
+
+  # ---- Disable migration tools in tests ----
+  liquibase:
+    enabled: false
+  flyway:
+    enabled: false
+
+# ---- Actuator ----
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+# ---- Logging ----
 logging:
   level:
     root: WARN
     '[com.example.hms]': INFO
 
+# ---- Application ----
 app:
+  jwt:
+    secret: "base64:dGVzdC1qd3Qtc2VjcmV0LXNlbGYtZ2VuZXJhdGVkLXN0cmluZy1mb3ItZGV2"
+    access-token-expiration-ms: 3600000
+    refresh-token-expiration-ms: 7200000
   seed:
     enabled: false
   kafka:
