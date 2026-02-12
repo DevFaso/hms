@@ -1,0 +1,204 @@
+### Assign ROLE_RADIOLOGIST to user 06e0fcf7-200c-4f1b-8796-5ff7e9ffeef6 at hospital 06f8a0cf-09ab-4423-8aa8-1804a99f6f6c
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1NjUyNTkxLCJleHAiOjE3NTU3Mzg5OTF9.X93QUsclWvNz5uYOINmayOYtCFSwzAg4-sNpfp3XY84
+
+{
+  "userId": "43df4420-e3a1-45c2-87f0-3aa1b09e02f6",
+  "hospitalId": "8ecdb484-dbfa-4cc7-b622-a4baf942a357",
+  "roleId": "2f8863b9-4d5f-4e18-9b00-740919f79ced"
+}
+
+### assign admin to yalgado hospital
+POST http://localhost:8081/api/assignments
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTQ2MjM0MzAsImV4cCI6MTc1NDcwOTgzMH0.wgFZSgldTkVg3H7cFQtOJBL3UcbN0m2E-aBxszjCqUp77GF7FB4lIO55UO1nYRYyiBVCNerxdXKnX-KdPX_GCw
+Content-Type: application/json
+
+{
+  "userId": "01a63d9c-7c24-431e-8f70-11be867a7717",
+  "hospitalId": "0eac80dd-7ffa-43ed-be8f-a32393dce657",
+  "roleId": "52e65f90-af71-4c02-a2d7-f826e4870686"
+}
+
+### Assign ROLE_NURSE to user 2f35b406-1458-4516-89af-f73317391e36 at hospital 29c97a6f-7eba-4281-a3a1-f5b0dc47a7e3
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+
+{
+  "userId": "2f35b406-1458-4516-89af-f73317391e36",
+  "hospitalId": "29c97a6f-7eba-4281-a3a1-f5b0dc47a7e3",
+  "roleId": "2c95b924-ae4e-4632-addd-a5146be35be5"
+}
+
+
+
+### Assign ROLE_DOCTOR to user c474f07b-7080-4284-8263-c3d7a965c59f at hospital dfa8ef8a-9a18-4685-acdc-f2d6db8cc7f7
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ1MzM4MDMsImV4cCI6MTc1NDYyMDIwM30.zxulzQBrtwBRFRX2sBLLz_2-JM4QllmvA4oMsXT61TARoIP7JZxbj5EOSLSFM_tXJQGxwx_aqrRrgoTlqsXl_w
+
+{
+  "userId": "d9812876-a82c-4348-8cb7-23f7d843597a",
+  "hospitalId": "b7022052-a379-44bf-a171-b7d3f67c5759",
+  "roleId": "4a667796-4eb2-42fb-b20f-12cc033a5eef"
+}
+
+#d9812876-a82c-4348-8cb7-23f7d843597a
+### Assign ROLE_PATIENT to user 3f4b2c1d-5e6f-4a7b-8c9d-0e1f2a3b4c5d at hospital e0473800-2853-4515-b712-2c9fe7221e85
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+
+{
+  "userId": "6127e264-1acc-4273-8208-b0af01d77abf",
+  "hospitalId": "06f8a0cf-09ab-4423-8aa8-1804a99f6f6c",
+  "roleId": "2c95b924-ae4e-4632-addd-a5146be35be5"
+}
+
+### complain "message":   "message": "An unexpected error occurred: Role already assigned to this user for this hospital.",
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+
+{
+  "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
+  "hospitalId": "06f8a0cf-09ab-4423-8aa8-1804a99f6f6c",
+  "roleId": "2c95b924-ae4e-4632-addd-a5146be35be5"
+}
+
+### Assign ROLE_DOCTOR
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+
+{
+  "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
+  "hospitalId": "06f8a0cf-09ab-4423-8aa8-1804a99f6f6c",
+  "roleId": "2c95b924-ae4e-4632-addd-a5146be35be5"
+}
+
+### Assign ROLE_NURSE
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+
+{
+  "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
+  "hospitalId": "06f8a0cf-09ab-4423-8aa8-1804a99f6f6c",
+  "roleId": "5907fce1-7ba4-4df3-8dda-5af0915f9a85"
+}
+
+### Assign ROLE_RECEPTIONIST
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTIzMTgwODgsImV4cCI6MTc1MjQwNDQ4OH0.O-U6yJ5wxda28rSiYounin_zsHydzqqT0FzRrwh3DYeGiyQs8XnQda81k8w_z_GDhtff1y29HuFYQJwTk4YeRQ
+
+{
+  "userId": "10d65215-0721-40f1-8af3-6102171417cb",
+  "hospitalId": "a2af0cff-82cb-443d-bb4b-a616e5f29c28",
+  "roleId": "d29dc890-cc87-4650-a63f-0c11bfb95b9b"
+}
+
+### Assign ROLE_LAB_TECHNICIAN
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+
+{
+  "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
+  "hospitalId": "06f8a0cf-09ab-4423-8aa8-1804a99f6f6c",
+  "roleId": "5907fce1-7ba4-4df3-8dda-5af0915f9a85"
+}
+
+### Assign ROLE_ACCOUNTANT
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+
+{
+  "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
+  "hospitalId": "06f8a0cf-09ab-4423-8aa8-1804a99f6f6c",
+  "roleId": "7d8ee093-0ca1-446c-8898-c8be668fe355"
+}
+
+### Assign ROLE_RADIOLOGIST
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+
+{
+  "userId": "06e0fcf7-200c-4f1b-8796-5ff7e9ffeef6",
+  "hospitalId": "06f8a0cf-09ab-4423-8aa8-1804a99f6f6c",
+  "roleId": "5907fce1-7ba4-4df3-8dda-5af0915f9a85"
+}
+
+### Assign ROLE_SURGEON
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+
+{
+  "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
+  "hospitalId": "06f8a0cf-09ab-4423-8aa8-1804a99f6f6c",
+  "roleId": "2c95b924-ae4e-4632-addd-a5146be35be5"
+}
+
+### Assign ROLE_DENTIST
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+
+{
+  "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
+  "hospitalId": "06f8a0cf-09ab-4423-8aa8-1804a99f6f6c",
+  "roleId": "2c95b924-ae4e-4632-addd-a5146be35be5"
+}
+
+### "roleName": "ROLE_PHYSICIAN" to user 886973fc-0a4c-4389-87a8-64fa81974afe at hospital 06f8a0cf-09ab-4423-8aa8-1804a99f6f6c
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+
+{
+  "userId": "886973fc-0a4c-4389-87a8-64fa81974afe",
+  "hospitalId": "06f8a0cf-09ab-4423-8aa8-1804a99f6f6c",
+  "roleId": "2c95b924-ae4e-4632-addd-a5146be35be5"
+}
+
+### Assign ROLE_NURSE (Existing user)
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJiYXlhcmVhaGVhbHRoIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTE1MDc5OTAsImV4cCI6MTc1MTU5NDM5MH0.9Zgd-1NMCeuW0sUEmd3y1LvjfA6lQlA4VO5RbreCvfoXW2GwnM2vYs8_63WfSxwZUivcVIgzj4zSpNDDc_Z54A
+
+{
+  "userId": "2f35b406-1458-4516-89af-f73317391e36",
+  "hospitalId": "29c97a6f-7eba-4281-a3a1-f5b0dc47a7e3",
+  "roleId": "2c95b924-ae4e-4632-addd-a5146be35be5"
+}
+
+### Assign ROLE_DOCTOR (Existing user)
+POST http://localhost:8081/api/assignments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ1MzM4MDMsImV4cCI6MTc1NDYyMDIwM30.zxulzQBrtwBRFRX2sBLLz_2-JM4QllmvA4oMsXT61TARoIP7JZxbj5EOSLSFM_tXJQGxwx_aqrRrgoTlqsXl_w
+
+{
+  "userId": "5e881a13-5030-4571-a823-7220fdb00d6c",
+  "hospitalId": "0eac80dd-7ffa-43ed-be8f-a32393dce657",
+  "departmentId": "2bb3d7a0-ff64-4520-bad2-927ad0f68bdf",
+  "roleId": "4a667796-4eb2-42fb-b20f-12cc033a5eef",
+  "position": "Nurse",
+  "jobTitle": "Nurse",
+  "employmentType": "FULL_TIME",
+  "startDate": "2025-07-23",
+  "licenseNumber": "NUR-12345",
+  "specialization": "Pediatrics",
+  "isHeadOfDepartment": false
+}
+
+###
+#{
+#  "userId": "5e881a13-5030-4571-a823-7220fdb00d6c",
+#  "hospitalId": "b7022052-a379-44bf-a171-b7d3f67c5759",
+#  "roleId": "753f5641-4133-4555-9f92-e0d0cab2d5d0"
+#}

@@ -1,0 +1,104 @@
+### List Appointments by Patient Email
+GET http://localhost:8081/api/lookup/appointment/patient/email/minor1@example.com
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Content-Type: application/json
+Accept-Language: en
+
+### List Appointments by Patient Phone
+GET http://localhost:8081/api/lookup/appointment/patient/phone/0700000011
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Content-Type: application/json
+Accept-Language: en
+
+### List Appointments by Patient MRI
+GET http://localhost:8081/api/lookup/appointment/patient/mri/{mri}
+Authorization: Bearer <JWT>
+
+### List Appointments by Staff Number
+GET http://localhost:8081/api/lookup/appointment/staff/number/{number}
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Content-Type: application/json
+Accept-Language: en
+
+### List Appointments by Staff Email
+GET http://localhost:8081/api/lookup/appointment/staff/email/sandoff_doctor@hospital.com
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Content-Type: application/json
+Accept-Language: en
+
+### List Appointments by Staff ID
+GET http://localhost:8081/api/lookup/appointment/staff/id/bad141f5-8796-4196-9019-b242d7cbddea
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Content-Type: application/json
+Accept-Language: en
+
+### Book Appointment (by staff or patient, no IDs)
+POST http://localhost:8081/api/appointments
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Content-Type: application/json
+Accept-Language: en
+
+{
+  "patientUsername": "minor_patient1",
+  "staffEmail": "sandoff_doctor@hospital.com",
+  "hospitalCode": "CSX-2F3DE",
+  "departmentName": "Radiology",
+  "appointmentDate": "2025-08-22",
+  "startTime": "15:00:00",
+  "endTime": "15:30:00",
+  "notes": "Initial ultrasound"
+}
+
+### Reschedule Appointment
+PUT http://localhost:8081/api/appointments/39613a7d-7978-4c4a-a7be-4a06a8456c9a
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Content-Type: application/json
+Accept-Language: en
+
+{
+  "patientId": "9bae259d-10ec-439a-8ff4-568a3ebcb1a2",
+  "staffId": "bad141f5-8796-4196-9019-b242d7cbddea",
+  "hospitalId": "8ecdb484-dbfa-4cc7-b622-a4baf942a357",
+  "appointmentDate": "2025-08-22",
+  "startTime": "17:00:00",
+  "endTime": "17:30:00",
+  "notes": "Rescheduled time"
+}
+
+### Cancel Appointment
+PUT http://localhost:8081/api/appointments/39613a7d-7978-4c4a-a7be-4a06a8456c9a/status?action=cancel
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Content-Type: application/json
+Accept-Language: en
+
+### Complete Appointment
+PUT http://localhost:8081/api/appointments/b54fddc8-f98f-4f40-9192-c12f168e295d/status?action=complete
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Content-Type: application/json
+Accept-Language: en
+
+### Mark as No-Show
+PUT http://localhost:8081/api/appointments/{id}/status?action=no_show
+Authorization: Bearer <JWT>
+
+### Get Appointment by ID
+GET http://localhost:8081/api/appointments/{id}
+Authorization: Bearer <JWT>
+
+### List All Appointments for User
+GET http://localhost:8081/api/appointments
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1ODMxOTg4LCJleHAiOjE3NTU5MTgzODh9.AN7XXuxtLfLRMkuEqyw8s7DfG0frUWOoHIKxEb0-S-k
+Content-Type: application/json
+Accept-Language: en
+
+### Delete Appointment
+DELETE http://localhost:8081/api/appointments/{id}
+Authorization: Bearer <JWT>
+
+### List by Patient
+GET http://localhost:8081/api/appointments/patients/{patientUsername}
+Authorization: Bearer <JWT>
+
+### List by Staff
+GET http://localhost:8081/api/appointments/staff/{staffEmail}
+Authorization: Bearer <JWT>

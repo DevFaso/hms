@@ -1,0 +1,202 @@
+### Get all hospitals
+GET http://localhost:8081/api/hospitals
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+
+### Create a new hospital
+POST http://localhost:8081/api/hospitals
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+Accept-Language: en
+
+{
+    "name": "Clinic Sandoff",
+    "address": "Ouagadougou, Burkina Faso",
+    "city": "Kadiogo",
+    "ville": "Ouagadougou",
+    "POBOX": "10001",
+    "country": "Burkina Faso",
+    "phoneNumber": "555-0100",
+    "email": "Sandoff@generalhospital.com",
+    "website": "http://Sandoff.com",
+    "active": true
+}
+
+> {% client.global.set("hospitalId", response.body.id); %}
+
+### Create a new hospital
+POST http://localhost:8081/api/hospitals
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+
+{
+  "name": "Yalgado Ouedraogo Medical Center",
+  "address": "Secteur 30, Ouagadougou",
+  "city": "Ouagadougou",
+  "province": "Kadiogo",
+  "region": "Centre",
+  "poBox": "BP 12 Ouaga",
+  "country": "BF",
+  "sector": "30",
+  "phoneNumber": "+226 555-1001",
+  "email": "contact@yalgadomedical.bf",
+  "website": "https://yalgadomedical.bf",
+  "active": true
+}
+
+### Create Hospital 2
+### Create a new hospital
+POST http://localhost:8081/api/hospitals
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+
+{
+  "name": "Bobo Dioulasso Regional Hospital",
+  "address": "Secteur 15, Bobo",
+  "city": "Bobo Dioulasso",
+  "province": "Houet",
+  "region": "Hauts-Bassins",
+  "poBox": "BP 45 Bobo",
+  "country": "BF",
+  "phoneNumber": "+226 555-1002",
+  "email": "contact@boboregional.bf",
+  "website": "https://boboregional.bf",
+  "active": true
+}
+
+### Create a new hospital
+POST http://localhost:8081/api/hospitals
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+
+{
+  "name": "Koudougou University Hospital",
+  "address": "Secteur 5, Koudougou",
+  "city": "Koudougou",
+  "province": "Boulkiemdé",
+  "region": "Centre-Ouest",
+  "poBox": "BP 23 Koudougou",
+  "country": "BF",
+  "phoneNumber": "+226 555-1003",
+  "email": "contact@koudougouhospital.bf",
+  "website": "https://koudougouhospital.bf",
+  "active": true
+}
+
+### Create a new hospital
+POST http://localhost:8081/api/hospitals
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+
+{
+  "name": "Ziniaré Medical Center",
+  "address": "Secteur 2, Ziniaré",
+  "city": "Ziniaré",
+  "province": "Oubritenga",
+  "region": "Plateau-Central",
+  "poBox": "BP 78 Ziniaré",
+  "country": "BF",
+  "phoneNumber": "+226 555-1004",
+  "email": "contact@ziniaremedical.bf",
+  "website": "https://ziniaremedical.bf",
+  "active": true
+}
+
+### Create a new hospital
+POST http://localhost:8081/api/hospitals
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+
+{
+  "name": "Gaoua General Hospital",
+  "address": "Secteur 7, Gaoua",
+  "city": "Gaoua",
+  "province": "Poni",
+  "region": "Sud-Ouest",
+  "poBox": "BP 90 Gaoua",
+  "country": "BF",
+  "phoneNumber": "+226 555-1005",
+  "email": "contact@gaouahospital.bf",
+  "website": "https://gaouahospital.bf",
+  "active": true
+}
+
+### Create a new hospital
+POST http://localhost:8081/api/hospitals
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+
+{
+  "name": "General Hospital",
+  "address": "123 Main St",
+  "city": "New York",
+  "state": "NY",
+  "zipCode": "10001",
+  "country": "USA",
+  "phoneNumber": "555-0100",
+  "email": "info@generalhospital.com",
+  "website": "http://generalhospital.com",
+  "active": true
+}
+
+### Create a new hospital
+POST http://localhost:8081/api/hospitals
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+
+{
+  "name": "Sunrise Medical Center",
+  "address": "456 Health Ave",
+  "city": "Brooklyn",
+  "state": "NY",
+  "zipCode": "11201",
+  "country": "USA",
+  "phoneNumber": "555-5678",
+  "email": "contact@sunrisemedical.com",
+  "website": "https://sunrisemedical.com",
+  "active": true
+}
+
+### Create a new hospital
+POST http://localhost:8081/api/hospitals
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU0MDI4NzMsImV4cCI6MTc1NTQ4OTI3M30.ttPIzce3NJjOJ-IhUNV1sGrodopGp5glcR3SLmAjecw
+
+{
+  "name": "Bay Area Health",
+  "address": "789 Ocean Drive",
+  "city": "San Francisco",
+  "state": "CA",
+  "zipCode": "94105",
+  "country": "USA",
+  "phoneNumber": "555-8888",
+  "email": "info@bayareahealth.com",
+  "website": "https://bayareahealth.com",
+  "active": true
+}
+
+### Get hospital by ID
+GET http://localhost:8081/api/hospitals/{{hospitalId}}
+Accept: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTIyODYwMTksImV4cCI6MTc1MjM3MjQxOX0.stDqFUFwusfxIfwJaxVt3Xv1hfHkcVM4mARWC9dg7obeUGp8ztxErgJmBH-TUHTJMbY5bUy2ssYNVlDwAYp8zA
+
+### Update hospital
+PUT http://localhost:8081/api/hospitals/{{hospitalId}}
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTEzMzU0MjIsImV4cCI6MTc1MTQyMTgyMn0.7kq9agtFld8pB9S58JLxIAo4PMUv0xUDlWr8PYY5NKomhhr-fA5DWYMI0PnZjrizHD0zQTcB3fa5QlFy_YW3Og
+Accept-Language: en
+
+{
+  "name": "City General Hospital",
+  "address": "100 Health St, Wellness City, USA",
+  "phoneNumber": "555-0101",
+  "email": "contact@citygeneralhospital.com",
+  "website": "http://citygeneralhospital.com"
+}
+
+### Delete hospital
+DELETE http://localhost:8081/api/hospitals/{{hospitalId}}
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTEzMzU0MjIsImV4cCI6MTc1MTQyMTgyMn0.7kq9agtFld8pB9S58JLxIAo4PMUv0xUDlWr8PYY5NKomhhr-fA5DWYMI0PnZjrizHD0zQTcB3fa5QlFy_YW3Og
+Accept-Language: en
+
+###
+

@@ -1,0 +1,99 @@
+### [1] Create availability for John Doe (f96720a8-8596-4d6a-a808-477748998daa)
+POST http://localhost:8081/api/availability
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1NzQzMDgxLCJleHAiOjE3NTU4Mjk0ODF9.SGOZWnxZVD-VhH3Z49Xd9Gw9ac8JLxnpzpMGOKATB1Y
+Content-Type: application/json
+Accept-Language: en
+
+{
+  "staffId": "bad141f5-8796-4196-9019-b242d7cbddea",
+  "hospitalId": "8ecdb484-dbfa-4cc7-b622-a4baf942a357",
+  "departmentId": "c04a13d5-feb9-486e-9597-b8fbaa58e531",
+  "name": "General Treatment",
+  "date": "2025-08-22",
+  "availableFrom": "09:00:00",
+  "availableTo": "17:00:00",
+  "dayOff": false,
+  "note": "General Medicine clinic"
+}
+
+
+###
+GET http://localhost:8081/api/staff/by-user/23c38dc8-a4f4-4166-b026-32bede9ce994
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ2MjEzNzIsImV4cCI6MTc1NDcwNzc3Mn0.GlisdKkktahXynhDpQaGYnRgaT56bezzZIG6FyRlFnTnATSCI6mmoEDTqrkdZrLn8Tz_CMSQg8_Mb9QPkdpmxg
+
+### [2] Create availability for Lab Scientist (c8990de4-2f41-45ab-b0f6-447f4050f015)
+POST http://localhost:8081/api/availability
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDYyMzYzNSwiZXhwIjoxNzU0NzEwMDM1fQ.9yTyhOoEOKzUSOl8SIT9iN-srXtt7yUAMKe92dfxQWb_kLBUHU-KpbLmJLmo6tJC5OlLv_6Hl4xx9pSVJhf0pA
+Content-Type: application/json
+Accept-Language: en
+
+{
+  "staffId": "9794a549-bd9c-4285-9c5f-b4af4fb63c92",
+  "hospitalId": "0eac80dd-7ffa-43ed-be8f-a32393dce657",
+  "departmentId": "e5ca0198-b59b-4395-ac77-92da52c7efc1",
+  "date": "2025-08-08",
+  "availableFrom": "09:00:00",
+  "availableTo": "17:00:00",
+  "dayOff": false,
+  "note": "General Medicine clinic"
+}
+###
+
+### [3] Create availability for Moderator (c6addf24-6a2a-4bbb-b126-22d39662ce16)
+POST http://localhost:8081/api/availability
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IkFETUlOLFVTRVIiLCJpYXQiOjE3NDg3MDc3NDMsImV4cCI6MTc0ODc5NDE0M30.DpV3z0Fz3Vg13JajD2LJSJzwCKkiogu51h4A7oH1J1gtdIKYd0WDayt0SsH7H5CsLAPHVDGX1LZXDJKcU7Lh2g
+Accept-Language: en
+
+{
+  "staffId": "c6addf24-6a2a-4bbb-b126-22d39662ce16",
+  "hospitalId": "66f26d1a-6b05-4a31-a38c-2faa3e3bc928",
+  "date": "2025-06-17",
+  "availableFrom": "09:00:00",
+  "availableTo": "12:00:00",
+  "dayOff": false,
+  "note": "Morning admin duty"
+}
+
+### staff was create without department, so no departmentId is needed which is fine.
+### all we needed to do was to link the staff to the department later
+
+### [4] Create availability for Surgeon (f68e3e2e-61d9-440f-9a55-305c062ad216)
+POST http://localhost:8081/api/availability
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDY1MDEyNSwiZXhwIjoxNzU0NzM2NTI1fQ.1pHj_4ml_3THPpkyAVxvlnIFzIn2cqxXGN-TLq7arfOYzhysFsKWyLWetZdWxT9wCrkBCuR6M4vqLJ8Ld-Tixw
+Accept-Language: en
+
+{
+  "staffId": "9794a549-bd9c-4285-9c5f-b4af4fb63c92",
+  "hospitalId": "0eac80dd-7ffa-43ed-be8f-a32393dce657",
+  "departmentId": "e5ca0198-b59b-4395-ac77-92da52c7efc1",
+  "date": "2025-08-08",
+  "availableFrom": "09:00:00",
+  "availableTo": "17:00:00",
+  "dayOff": false,
+  "note": "General Medicine clinic"
+}
+
+###
+
+### [5] Check availability for John Doe at 2025-06-16T10:00:00
+GET http://localhost:8081/api/availability/check?staffId=f96720a8-8596-4d6a-a808-477748998daa&datetime=2025-06-16T10:00:00
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IkFETUlOLFVTRVIiLCJpYXQiOjE3NDg3MDc3NDMsImV4cCI6MTc0ODc5NDE0M30.DpV3z0Fz3Vg13JajD2LJSJzwCKkiogu51h4A7oH1J1gtdIKYd0WDayt0SsH7H5CsLAPHVDGX1LZXDJKcU7Lh2g
+Accept-Language: en
+
+###
+
+### [6] Check availability for Surgeon at 2025-06-18T14:00:00
+GET http://localhost:8081/api/availability/check?staffId=f68e3e2e-61d9-440f-9a55-305c062ad216&datetime=2025-06-18T14:00:00
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IkFETUlOLFVTRVIiLCJpYXQiOjE3NDg3MDc3NDMsImV4cCI6MTc0ODc5NDE0M30.DpV3z0Fz3Vg13JajD2LJSJzwCKkiogu51h4A7oH1J1gtdIKYd0WDayt0SsH7H5CsLAPHVDGX1LZXDJKcU7Lh2g
+Accept-Language: en
+
+
+###
+GET http://localhost:8081/api/staff/9794a549-bd9c-4285-9c5f-b4af4fb63c92
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDYyMzYzNSwiZXhwIjoxNzU0NzEwMDM1fQ.9yTyhOoEOKzUSOl8SIT9iN-srXtt7yUAMKe92dfxQWb_kLBUHU-KpbLmJLmo6tJC5OlLv_6Hl4xx9pSVJhf0pA
+
+###
+GET http://localhost:8081/api/staff/9794a549-bd9c-4285-9c5f-b4af4fb63c92
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDYyMzYzNSwiZXhwIjoxNzU0NzEwMDM1fQ.9yTyhOoEOKzUSOl8SIT9iN-srXtt7yUAMKe92dfxQWb_kLBUHU-KpbLmJLmo6tJC5OlLv_6Hl4xx9pSVJhf0pA

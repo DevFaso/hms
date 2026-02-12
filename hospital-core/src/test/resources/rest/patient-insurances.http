@@ -1,0 +1,197 @@
+@base = http://localhost:8081/api
+@patientId = 8e2416d9-dd07-471a-b1ca-fabd3b5b5a60
+@hospitalId = 06f8a0cf-09ab-4423-8aa8-1804a99f6f6c
+@staff_username = hadmin3
+@staff_password = SecurePass123!
+@patient_username = minor_patient1
+@patient_password = SecurePassword123!
+
+### ===================================================================
+### 0) AUTH — login as STAFF/ADMIN and PATIENT (tokens)
+### ===================================================================
+
+### STAFF/ADMIN login
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{staff_username}}",
+  "password": "{{staff_password}}"
+}
+
+> {% client.global.set("staff_token", response.body.accessToken); %}
+
+### PATIENT login (must correspond to @patientId)
+POST {{base}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{patient_username}}",
+  "password": "{{patient_password}}"
+}
+
+> {% client.global.set("patient_token", response.body.accessToken); %}
+
+### ===================================================================
+### 1) CREATE insurance — REQUIRED: patientId (no hospital/assignment) staff token
+### ===================================================================
+POST {{base}}/patient-insurances
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg0OTM5MiwiZXhwIjoxNzU0OTM1NzkyfQ.fyGWExI85u1L-CvCmtIPsH6lnMwrV248lWbg0I1a7Rk
+Content-Type: application/json
+Accept: application/json
+Accept-Language: en
+
+{
+  "patientId": "{{patientId}}",
+  "providerName": "BlueCross Health",
+  "policyNumber": "POL-{{$uuid}}",
+  "groupNumber": "GRP-7890",
+  "subscriberName": "John Doe",
+  "subscriberRelationship": "Self",
+  "effectiveDate": "2025-08-08",
+  "expirationDate": "2026-08-08",
+  "primary": true
+}
+
+> {% client.global.set("insuranceId", response.body.id); %}
+
+### ===================================================================
+### 2) GET by ID (owner or staff)
+### ===================================================================
+GET {{base}}/patient-insurances/{{insuranceId}}
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg0OTM5MiwiZXhwIjoxNzU0OTM1NzkyfQ.fyGWExI85u1L-CvCmtIPsH6lnMwrV248lWbg0I1a7Rk
+Accept: application/json
+Accept-Language: en
+
+### ===================================================================
+### 3) LIST all insurances for patient (owner or staff)
+### ===================================================================
+GET {{base}}/patient-insurances/patient/{{patientId}}
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg0OTM5MiwiZXhwIjoxNzU0OTM1NzkyfQ.fyGWExI85u1L-CvCmtIPsH6lnMwrV248lWbg0I1a7Rk
+Accept: application/json
+Accept-Language: en
+
+### ===================================================================
+### 4) UPDATE insurance (staff/admin) — still no hospital stamping here
+### ===================================================================
+PUT {{base}}/patient-insurances/96be690d-3542-45f3-ab89-8d2730906b09
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg0OTM5MiwiZXhwIjoxNzU0OTM1NzkyfQ.fyGWExI85u1L-CvCmtIPsH6lnMwrV248lWbg0I1a7Rk
+Content-Type: application/json
+Accept: application/json
+Accept-Language: en
+
+{
+  "patientId": "{{patientId}}",
+  "providerName": "BlueCross Preferred",
+  "policyNumber": "POL-UPDATED-12345",
+  "groupNumber": "GRP-NEW-123",
+  "subscriberName": "Johnathan Doe",
+  "subscriberRelationship": "Self",
+  "effectiveDate": "2025-08-10",
+  "expirationDate": "2027-08-10",
+  "primary": true
+}
+
+### ===================================================================
+### 5) LINK insurance — STAFF links hospital & sets primary (per-hospital)
+###     REQUIRES: staff has active URHA at @hospitalId
+### ===================================================================
+PUT {{base}}/patient-insurances/96be690d-3542-45f3-ab89-8d2730906b09/link
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg0OTM5MiwiZXhwIjoxNzU0OTM1NzkyfQ.fyGWExI85u1L-CvCmtIPsH6lnMwrV248lWbg0I1a7Rk
+Content-Type: application/json
+Accept: application/json
+Accept-Language: en
+# X-Act-As: STAFF                 # optional; default is STAFF
+# X-Role-Code: RECEPTIONIST       # optional: pin a specific staff role
+# X-Hospital-Id: {{hospitalId}}   # optional since provided in body
+
+{
+  "patientId": "8e2416d9-dd07-471a-b1ca-fabd3b5b5a60",
+  "hospitalId": "d9812876-a82c-4348-8cb7-23f7d843597a",
+  "primary": true
+}
+
+### ===================================================================
+### 6) NEGATIVE — PATIENT tries to link hospital (should be 403)
+### ===================================================================
+PUT {{base}}/patient-insurances/96be690d-3542-45f3-ab89-8d2730906b09/link
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtaW5vcl9wYXRpZW50MSIsInJvbGVzIjpbIlJPTEVfUkVDRVBUSU9OSVNUIiwiUk9MRV9QQVRJRU5UIl0sImlhdCI6MTc1NDg1MjA1MSwiZXhwIjoxNzU0OTM4NDUxfQ.zifmZoHBeH8dP2oESzNvEpmdex0phWd3nNQyY0lAIqw
+Content-Type: application/json
+Accept: application/json
+Accept-Language: en
+X-Act-As: PATIENT
+
+{
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "primary": true
+}
+
+### ===================================================================
+### 7) PATIENT self-link (no hospital) — allowed
+### ===================================================================
+PUT {{base}}/patient-insurances/96be690d-3542-45f3-ab89-8d2730906b09/link
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtaW5vcl9wYXRpZW50MSIsInJvbGVzIjpbIlJPTEVfUkVDRVBUSU9OSVNUIiwiUk9MRV9QQVRJRU5UIl0sImlhdCI6MTc1NDg1MjA1MSwiZXhwIjoxNzU0OTM4NDUxfQ.zifmZoHBeH8dP2oESzNvEpmdex0phWd3nNQyY0lAIqw
+Content-Type: application/json
+Accept: application/json
+Accept-Language: en
+X-Act-As: PATIENT
+
+{
+  "patientId": "{{patientId}}",
+  "primary": true
+}
+
+### ===================================================================
+### 8) CREATE a SECOND insurance (staff) — to test primary uniqueness
+### ===================================================================
+POST {{base}}/patient-insurances
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg0OTM5MiwiZXhwIjoxNzU0OTM1NzkyfQ.fyGWExI85u1L-CvCmtIPsH6lnMwrV248lWbg0I1a7Rk
+Content-Type: application/json
+Accept: application/json
+Accept-Language: en
+
+{
+  "patientId": "{{patientId}}",
+  "providerName": "Aetna Advantage",
+  "policyNumber": "POL-AETNA-{{$uuid}}",
+  "groupNumber": "GRP-2222",
+  "subscriberName": "John Doe",
+  "subscriberRelationship": "Self",
+  "effectiveDate": "2025-08-09",
+  "expirationDate": "2027-08-09",
+  "primary": false
+}
+
+> {% client.global.set("insuranceId2", response.body.id); %}
+
+### ===================================================================
+### 9) Make SECOND insurance primary — should unset the first automatically
+###     If hospital-linked, uniqueness is per (patient + hospital).
+###     If not linked, uniqueness is per patient globally.
+### ===================================================================
+PUT {{base}}/patient-insurances/96be690d-3542-45f3-ab89-8d2730906b09/link
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg0OTM5MiwiZXhwIjoxNzU0OTM1NzkyfQ.fyGWExI85u1L-CvCmtIPsH6lnMwrV248lWbg0I1a7Rk
+Content-Type: application/json
+Accept: application/json
+Accept-Language: en
+# X-Act-As: STAFF
+
+{
+  "patientId": "{{patientId}}",
+  "primary": true
+}
+
+### Verify list — expect exactly one primary in the relevant scope
+GET {{base}}/patient-insurances/patient/{{patientId}}
+Authorization: Bearer {{staff_token}}
+Accept: application/json
+Accept-Language: en
+
+### ===================================================================
+### 10) DELETE second insurance (staff/admin)
+### ===================================================================
+DELETE {{base}}/patient-insurances/{{insuranceId2}}
+Authorization: Bearer {{staff_token}}
+Accept: application/json
+Accept-Language: en

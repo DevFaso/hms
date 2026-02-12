@@ -1,0 +1,144 @@
+### Service Translation API - Create a new translation for a treatment
+POST http://localhost:8081/api/service-translations
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0NTEyNzEsImV4cCI6MTc1NDUzNzY3MX0.uXYNjPxkBsk8HtmcotNGlQ0KPPU8nb5wDSDPu8H8Xlyj5Nmm3LyHJyyWJ2TZdDYQxX-zf0TLc_gsQIMRnY1Bgg
+Content-Type: application/json
+Accept-Language: en
+
+{
+  "treatmentId": "ab4f325a-68de-403e-ba47-287099a159bd",
+  "assignmentId": "f50942da-8c0e-4199-b012-452c481d082f",
+  "languageCode": "en",
+  "name": "Ultrasound",
+  "description": "Imaging exam using ultrasound to visualize internal organs."
+}
+
+###
+POST http://localhost:8081/api/service-translations
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Content-Type: application/json
+Accept-Language: en
+
+{
+  "treatmentId": "c45bd50d-a09a-43ef-a5e2-b327eb24846e",
+  "assignmentId": "4df24ad9-002e-481e-830a-5e8839bbebdf",
+  "languageCode": "en",
+  "name": "Appendectomy",
+  "description": "Surgical removal of the appendix."
+}
+
+###
+POST http://localhost:8081/api/service-translations
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Content-Type: application/json
+Accept-Language: en
+
+{
+  "treatmentId": "7760278b-45d1-426d-bda2-181476f24e9b",
+  "assignmentId": "4df24ad9-002e-481e-830a-5e8839bbebdf",
+  "languageCode": "en",
+  "name": "Appendectomy",
+  "description": "Surgical removal of the appendix."
+}
+
+###
+POST http://localhost:8081/api/service-translations
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Content-Type: application/json
+Accept-Language: en
+
+{
+  "treatmentId": "7819bd6d-5096-40bb-8c4e-ad695244719d",
+  "assignmentId": "4df24ad9-002e-481e-830a-5e8839bbebdf",
+  "languageCode": "en",
+  "name": "Childbirth Delivery",
+  "description": "Assistance and care during childbirth."
+}
+
+###
+POST http://localhost:8081/api/service-translations
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Content-Type: application/json
+Accept-Language: en
+
+{
+  "treatmentId": "a8cf3644-ac47-4efe-b055-7f8dd5c01842",
+  "assignmentId": "4df24ad9-002e-481e-830a-5e8839bbebdf",
+  "languageCode": "en",
+  "name": "General Consultation",
+  "description": "Basic patient consultation service."
+}
+
+###
+POST http://localhost:8081/api/service-translations
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Content-Type: application/json
+Accept-Language: en
+
+{
+  "treatmentId": "4b9ac33f-d111-4d91-8a48-cadb4dcb58e2",
+  "assignmentId": "520dd0ba-0705-4062-8d43-45fe20813391",
+  "languageCode": "en",
+  "name": "Emergency Treatment",
+  "description": "Immediate care for critical patients."
+}
+
+
+
+##### Get translations for a treatment id
+GET http://localhost:8081//api/service-translations/90fd9e4c-d828-4462-aecd-ad692eedf3e6
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Accept-Language: en
+
+### Get all translations for a treatment in a specific language
+GET http://localhost:8081/api/service-translations
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Accept-Language: en
+
+### Update a translation for a treatment
+PUT http://localhost:8080/service-translations/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+Authorization: Bearer {{JWT_TOKEN}}
+Content-Type: application/json
+Accept-Language: es
+
+{
+  "treatmentId": "11111111-2222-3333-4444-555555555555",
+  "languageCode": "es",
+  "name": "Fisioterapia",
+  "description": "Tratamiento físico para aliviar el dolor"
+}
+
+### Delete a translation for a treatment
+DELETE http://localhost:8080/service-translations/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+Authorization: Bearer {{JWT_TOKEN}}
+Accept-Language: en
+
+##### Get all translations for a treatment
+GET http://localhost:8081//api/service-translations/660526cd-786a-4a7d-92a8-e2cdd90ad9d4
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Accept-Language: en
+
+### Get all translations for a treatment in a specific language
+GET http://localhost:8081/api/service-translations
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Accept-Language: en
+
+### Update a translation for a treatment
+PUT http://localhost:8080/service-translations/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+Authorization: Bearer {{JWT_TOKEN}}
+Content-Type: application/json
+Accept-Language: es
+
+{
+  "treatmentId": "11111111-2222-3333-4444-555555555555",
+  "languageCode": "es",
+  "name": "Fisioterapia",
+  "description": "Tratamiento físico para aliviar el dolor"
+}
+
+### Delete a translation for a treatment
+DELETE http://localhost:8080/service-translations/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee
+Authorization: Bearer {{JWT_TOKEN}}
+Accept-Language: en
+
+
+

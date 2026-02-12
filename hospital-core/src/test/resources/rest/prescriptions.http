@@ -1,0 +1,175 @@
+### Prescription API Tests
+@host = http://localhost:8081/api/
+@accept = application/json
+@lang = en
+@ADMIN_TOKEN = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDcwMzMyNywiZXhwIjoxNzU0Nzg5NzI3fQ.0HRqMruJaf5U3jA_5bUwWzCyqz8ShR1xMur3gSHhBpY
+
+###
+POST {{host}}/prescriptions
+Authorization: Bearer {{DOC_TOKEN}}
+Content-Type: application/json
+Accept: {{accept}}
+Accept-Language: {{lang}}
+
+{
+  "encounterId": "48de9d33-a1f2-4486-9b7c-b2b4502607b4",
+  "patientId":   "8e2416d9-dd07-471a-b1ca-fabd3b5b5a60",
+  "staffId":     "23c38dc8-a4f4-4166-b026-32bede9ce994",
+  "assignment_id": "d96fc5f1-fa29-4d88-b3d2-3d305901a26a",
+  "medicationName": "amoxicillin",
+  "medicationDisplayName": "Amoxicillin 500mg cap",
+  "dosage": "500 mg",
+  "frequency": "TID",
+  "duration": "7 days",
+  "notes": "Take after meals",
+  "status": "ACTIVE"
+}
+
+
+### ─────────────────────────────────────────────────────────
+### 0) Login as HOSPITAL_ADMIN (hadmin3) — capture token
+### ─────────────────────────────────────────────────────────
+POST {{host}}/auth/login
+Content-Type: application/json
+Accept: {{accept}}
+
+{
+  "username": "hadmin3",
+  "password": "REPLACE_WITH_ADMIN_PASSWORD"
+}
+
+> {% client.global.set("ADMIN_TOKEN", json.accessToken); %}
+
+### 0b) Login as DOCTOR (optional) — capture token
+POST {{host}}/api/auth/login
+Content-Type: application/json
+Accept: {{accept}}
+
+{
+  "username": "drsmith",
+  "password": "REPLACE_WITH_DOCTOR_PASSWORD"
+}
+
+> {% client.global.set("DOC_TOKEN", json.accessToken); %}
+
+
+### ─────────────────────────────────────────────────────────
+### 1) Create Prescription (as Hospital Admin) ✅ 201
+### ─────────────────────────────────────────────────────────
+POST {{host}}/prescriptions
+Authorization: Bearer {{ADMIN_TOKEN}}
+Content-Type: application/json
+Accept: {{accept}}
+Accept-Language: {{lang}}
+
+{
+  "encounterId": "48de9d33-a1f2-4486-9b7c-b2b4502607b4",
+  "patientId":   "8e2416d9-dd07-471a-b1ca-fabd3b5b5a60",
+  "staffId":     "23c38dc8-a4f4-4166-b026-32bede9ce994",
+  "medicationName": "amoxicillin",
+  "medicationDisplayName": "Amoxicillin 500mg cap",
+  "dosage": "500 mg",
+  "frequency": "TID",
+  "duration": "7 days",
+  "notes": "Take after meals"
+}
+
+> {% client.global.set("RX_ID", json.id); %}
+
+
+### 1b) Create Prescription (as DOCTOR — same encounter doctor) ✅ 201
+### If your policy is “same doctor only”, this should succeed when logged-in doctor matches encounter.staff
+POST {{host}}/prescriptions
+Authorization: Bearer {{DOC_TOKEN}}
+Content-Type: application/json
+Accept: {{accept}}
+Accept-Language: {{lang}}
+
+{
+  "encounterId": "48de9d33-a1f2-4486-9b7c-b2b4502607b4",
+  "patientId":   "8e2416d9-dd07-471a-b1ca-fabd3b5b5a60",
+  "staffId":     "23c38dc8-a4f4-4166-b026-32bede9ce994",
+  "medicationName": "ibuprofen",
+  "medicationDisplayName": "Ibuprofen 400mg",
+  "dosage": "400 mg",
+  "frequency": "BID",
+  "duration": "3 days",
+  "notes": "With water"
+}
+
+
+### ─────────────────────────────────────────────────────────
+### 2) Get by ID ✅ 200
+### ─────────────────────────────────────────────────────────
+GET {{host}}/prescriptions/9127e904-cd6f-4967-948a-c0e712228137
+Authorization: Bearer {{ADMIN_TOKEN}}
+Accept: {{accept}}
+Accept-Language: {{lang}}
+
+
+### ─────────────────────────────────────────────────────────
+### 3) List — no filters (paginated) ✅ 200
+### ─────────────────────────────────────────────────────────
+GET {{host}}/prescriptions?page=0&size=10&sort=createdAt,desc
+Authorization: Bearer {{ADMIN_TOKEN}}
+Accept: {{accept}}
+Accept-Language: {{lang}}
+
+
+### 3a) List by patientId
+GET {{host}}/prescriptions?patientId=8e2416d9-dd07-471a-b1ca-fabd3b5b5a60&page=0&size=10&sort=createdAt,desc
+Authorization: Bearer {{ADMIN_TOKEN}}
+Accept: {{accept}}
+Accept-Language: {{lang}}
+
+### 3b) List by staffId
+GET {{host}}/prescriptions?staffId=23c38dc8-a4f4-4166-b026-32bede9ce994&page=0&size=10&sort=createdAt,desc
+Authorization: Bearer {{ADMIN_TOKEN}}
+Accept: {{accept}}
+Accept-Language: {{lang}}
+
+### 3c) List by encounterId
+GET {{host}}/prescriptions?encounterId=48de9d33-a1f2-4486-9b7c-b2b4502607b4&page=0&size=10&sort=createdAt,desc
+Authorization: Bearer {{ADMIN_TOKEN}}
+Accept: {{accept}}
+Accept-Language: {{lang}}
+
+
+### ─────────────────────────────────────────────────────────
+### 4) Update (as Admin) ✅ 200
+### ─────────────────────────────────────────────────────────
+PUT {{host}}/prescriptions/9127e904-cd6f-4967-948a-c0e712228137
+Authorization: Bearer {{ADMIN_TOKEN}}
+Content-Type: application/json
+Accept: {{accept}}
+Accept-Language: {{lang}}
+
+{
+  "encounterId": "48de9d33-a1f2-4486-9b7c-b2b4502607b4",
+  "patientId":   "8e2416d9-dd07-471a-b1ca-fabd3b5b5a60",
+  "staffId":     "23c38dc8-a4f4-4166-b026-32bede9ce994",
+  "medicationName": "amoxicillin",
+  "medicationDisplayName": "Amoxicillin 500mg cap",
+  "dosage": "500 mg",
+  "frequency": "BID",
+  "duration": "5 days",
+  "notes": "Take with food"
+}
+
+
+### ─────────────────────────────────────────────────────────
+### 5) Delete (SUPER_ADMIN only) ✅ 200
+### ─────────────────────────────────────────────────────────
+# First login as superadmin and capture token
+POST {{host}}/auth/login
+Content-Type: application/json
+Accept: {{accept}}
+
+{
+  "username": "superadmin",
+  "password": "REPLACE_WITH_SUPERADMIN_PASSWORD"
+}
+
+> {% client.global.set("SUPER_TOKEN", json.accessToken); %}
+
+

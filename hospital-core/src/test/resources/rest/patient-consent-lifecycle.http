@@ -1,0 +1,73 @@
+### [1] Grant patient consent
+POST http://localhost:8081/api/patient-consents/grant
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0NTEyNzEsImV4cCI6MTc1NDUzNzY3MX0.uXYNjPxkBsk8HtmcotNGlQ0KPPU8nb5wDSDPu8H8Xlyj5Nmm3LyHJyyWJ2TZdDYQxX-zf0TLc_gsQIMRnY1Bgg
+
+{
+  "patientId": "2eeaf1bd-a2e6-450e-8b8c-9101bc833a1c",
+  "fromHospitalId": "b7022052-a379-44bf-a171-b7d3f67c5759",
+  "toHospitalId": "d9812876-a82c-4348-8cb7-23f7d843597a",
+  "consentExpiration": "2025-12-31T23:59:59",
+  "purpose": "Treatment"
+}
+
+> {%
+    client.global.set("patientId", response.body.patientId);
+    client.global.set("fromHospitalId", response.body.fromHospitalId);
+    client.global.set("toHospitalId", response.body.toHospitalId);
+    client.global.set("consentId", response.body.id);
+%}
+
+### [2] Check if consent is active
+GET http://localhost:8081/api/patient-consents/active?patientId=43b55243-5527-4992-bddb-a0cb9b7fe937&fromHospitalId=d5ff5d57-7414-4f26-801c-f1684dd8809d&toHospitalId=efb20157-7ca9-4dc5-ba1a-2c01f23abbaa
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6WyJST0xFX0FETUlOIl0sImlhdCI6MTc1MDIwOTY5OCwiZXhwIjoxNzUwMjk2MDk4fQ.r4OrOXSUgsgAX8OAkJuGfsnTI_iTJ1YDmCQkk7TGjROUu2hJiqN48zwauhPEFCuZYkJ0bKLvdj6aoQrQ2zHs4Q
+Accept: application/json
+
+> {%
+    client.test("Consent should be active", function() {
+        client.assert(response.status === 200, "Status is 200");
+        client.assert(response.body === true, "Consent is active");
+    });
+%}
+
+### [3] List all consents
+GET http://localhost:8081/api/patient-consents?page=0&size=20
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6WyJST0xFX0FETUlOIl0sImlhdCI6MTc1MDIwOTY5OCwiZXhwIjoxNzUwMjk2MDk4fQ.r4OrOXSUgsgAX8OAkJuGfsnTI_iTJ1YDmCQkk7TGjROUu2hJiqN48zwauhPEFCuZYkJ0bKLvdj6aoQrQ2zHs4Q
+Accept: application/json
+
+### [4] List consents by patient
+GET http://localhost:8081/api/patient-consents/patient/d3f75704-e372-4b90-876b-0a21fcb0562d
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6WyJST0xFX0FETUlOIl0sImlhdCI6MTc1MDIwOTY5OCwiZXhwIjoxNzUwMjk2MDk4fQ.r4OrOXSUgsgAX8OAkJuGfsnTI_iTJ1YDmCQkk7TGjROUu2hJiqN48zwauhPEFCuZYkJ0bKLvdj6aoQrQ2zHs4Q
+Accept: application/json
+
+### [5] List consents by source hospital
+GET http://localhost:8081/api/patient-consents/from-hospital/8e3107e0-0c75-42b6-a73e-1e5850ca3066
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6WyJST0xFX0FETUlOIl0sImlhdCI6MTc1MDIwOTY5OCwiZXhwIjoxNzUwMjk2MDk4fQ.r4OrOXSUgsgAX8OAkJuGfsnTI_iTJ1YDmCQkk7TGjROUu2hJiqN48zwauhPEFCuZYkJ0bKLvdj6aoQrQ2zHs4Q
+Accept: application/json
+
+### [6] List consents by target hospital
+GET http://localhost:8081/api/patient-consents/to-hospital/ed470bb9-347c-448d-8203-f6261d6ad0f1
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6WyJST0xFX0FETUlOIl0sImlhdCI6MTc0OTUzNDc4MiwiZXhwIjoxNzQ5NjIxMTgyfQ.7jhPW2-1FynJDxf76vmy25UicmzqHptI6nZqux94EiA1bjXZzYL-VaKcvYvNngJK6Ky6L-2780OlcmSwiiu6XA
+Accept: application/json
+
+### [7] Revoke consent
+POST http://localhost:8081/api/patient-consents/revoke?patientId={{patientId}}&fromHospitalId={{fromHospitalId}}&toHospitalId={{toHospitalId}}
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6WyJST0xFX0FETUlOIl0sImlhdCI6MTc1MDIwOTY5OCwiZXhwIjoxNzUwMjk2MDk4fQ.r4OrOXSUgsgAX8OAkJuGfsnTI_iTJ1YDmCQkk7TGjROUu2hJiqN48zwauhPEFCuZYkJ0bKLvdj6aoQrQ2zHs4Q
+
+> {%
+    client.test("Consent revoked successfully", function() {
+        client.assert(response.status === 200, "Status is 200");
+    });
+%}
+
+### [8] Check if consent is active (should now be false)
+GET http://localhost:8081/api/patient-consents/active?patientId={{patientId}}&fromHospitalId={{fromHospitalId}}&toHospitalId={{toHospitalId}}
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6WyJST0xFX0FETUlOIl0sImlhdCI6MTc1MDIwOTY5OCwiZXhwIjoxNzUwMjk2MDk4fQ.r4OrOXSUgsgAX8OAkJuGfsnTI_iTJ1YDmCQkk7TGjROUu2hJiqN48zwauhPEFCuZYkJ0bKLvdj6aoQrQ2zHs4Q
+Accept: application/json
+
+> {%
+    client.test("Consent should be inactive after revoke", function() {
+        client.assert(response.status === 200, "Status is 200");
+        client.assert(response.body === false, "Consent is inactive");
+    });
+%}

@@ -1,0 +1,63 @@
+### [1] Create Lab Result
+POST http://localhost:8081/api/lab-results
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJkb2N0b3IiLCJyb2xlcyI6WyJST0xFX1BBVElFTlQiLCJST0xFX0RPQ1RPUiJdLCJpYXQiOjE3NTQ0NDA3MDMsImV4cCI6MTc1NDUyNzEwM30.fPEOU98MR1ZsYdTjjOW6S01SzOPc83r1OXMCtBvr3dtt7ep4i3DfsOCpZljnPW_UKwWM5N4kxgOQchJA8Zgx4w
+
+{
+  "labOrderId": "2a6e00e8-0b96-4cb9-b733-fa57972e757e",
+  "patientId": "8e2416d9-dd07-471a-b1ca-fabd3b5b5a60",
+  "resultValue": "103",
+  "resultUnit": "mg/dL",
+  "resultDate": "2025-07-27T13:00:00",
+  "notes": "First glucose reading by lab scientist",
+  "assignmentId": "a9c37387-fdf4-4395-ba14-0e1c2fe8f169"
+}
+
+
+###
+
+### [2] Get Lab Result by ID
+GET http://localhost:8081/api/lab-results/c4f553c9-5dfd-41f6-af4e-cdc578afac23
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJkb2N0b3IiLCJyb2xlcyI6WyJST0xFX1BBVElFTlQiLCJST0xFX0RPQ1RPUiJdLCJpYXQiOjE3NTQ0NDA3MDMsImV4cCI6MTc1NDUyNzEwM30.fPEOU98MR1ZsYdTjjOW6S01SzOPc83r1OXMCtBvr3dtt7ep4i3DfsOCpZljnPW_UKwWM5N4kxgOQchJA8Zgx4w
+
+###
+
+### [3] List All Lab Results
+GET http://localhost:8081/api/lab-results
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJkb2N0b3IiLCJyb2xlcyI6WyJST0xFX1BBVElFTlQiLCJST0xFX0RPQ1RPUiJdLCJpYXQiOjE3NTQ0NDA3MDMsImV4cCI6MTc1NDUyNzEwM30.fPEOU98MR1ZsYdTjjOW6S01SzOPc83r1OXMCtBvr3dtt7ep4i3DfsOCpZljnPW_UKwWM5N4kxgOQchJA8Zgx4w
+
+###
+
+### [4] Update Lab Result
+PUT http://localhost:8081/api/lab-results/c4f553c9-5dfd-41f6-af4e-cdc578afac23
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJkb2N0b3IiLCJyb2xlcyI6WyJST0xFX1BBVElFTlQiLCJST0xFX0RPQ1RPUiJdLCJpYXQiOjE3NTQ0NDA3MDMsImV4cCI6MTc1NDUyNzEwM30.fPEOU98MR1ZsYdTjjOW6S01SzOPc83r1OXMCtBvr3dtt7ep4i3DfsOCpZljnPW_UKwWM5N4kxgOQchJA8Zgx4w
+
+{
+  "labOrderId": "2a6e00e8-0b96-4cb9-b733-fa57972e757e",
+  "resultValue": "97",
+  "resultUnit": "mg/dL",
+  "resultDate": "2025-07-27T13:00:00",
+  "notes": "Updated after retest",
+  "assignmentId": "a9c37387-fdf4-4395-ba14-0e1c2fe8f169"
+}
+
+###
+
+### [5] Delete Lab Result
+DELETE http://localhost:8081/api/lab-results/{{labResultId}}
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IlJPTEVfVVNFUixST0xFX0FETUlOIiwiaWF0IjoxNzQ4MzQyNzgyLCJleHAiOjE3NDg0MjkxODJ9.autwqJU54KHTUKzPs-qO3u_rXGcyA-5rCpZkukPxd_NUWgH-ycFxrKqP4nKLwuWU9WgaB_Vk9AWb_Ife64Bm_g
+
+###
+
+### [6] Get Lab Results by Lab Order ID
+GET http://localhost:8081/api/lab-results?labOrderId=5881770-6e7c-47e7-8ba2-03895c688cdd
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IlJPTEVfVVNFUixST0xFX0FETUlOIiwiaWF0IjoxNzQ4MzQyNzgyLCJleHAiOjE3NDg0MjkxODJ9.autwqJU54KHTUKzPs-qO3u_rXGcyA-5rCpZkukPxd_NUWgH-ycFxrKqP4nKLwuWU9WgaB_Vk9AWb_Ife64Bm_g
+
+###
+
+### [7] Get Lab Results by Patient ID
+GET http://localhost:8081/api/lab-results?patientId=REPLACE_WITH_PATIENT_ID
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IlJPTEVfVVNFUixST0xFX0FETUlOIiwiaWF0IjoxNzQ4MzQyNzgyLCJleHAiOjE3NDg0MjkxODJ9.autwqJU54KHTUKzPs-qO3u_rXGcyA-5rCpZkukPxd_NUWgH-ycFxrKqP4nKLwuWU9WgaB_Vk9AWb_Ife64Bm_g
+
+###

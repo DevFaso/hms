@@ -1,0 +1,72 @@
+### HTTP request for creating a new user role hospital assignment
+POST http://localhost:8081/api/audit-logs
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1OTc5NDI3LCJleHAiOjE3NTYwNjU4Mjd9.EPAw7rVO7D9UfiV6l-Kp5jQAlia8W6eUzvT_4-WyWXM
+Accept-Language: en
+
+{
+  "userName": "Hospital Admin",
+  "roleName": "Hospital Admin",
+  "hospitalName": "Sandof Hospital",
+  "eventType": "DATA_ACCESS",
+  "eventDescription": "Patient record viewed",
+  "details": "Viewed patient demographics.",
+  "ipAddress": "192.168.0.101",
+  "status": "SUCCESS",
+  "resourceName": "Aicha Nana",
+  "entityType": "PATIENT"
+}
+
+### Get audit logs by event type Only endpoints to only SUPER_ADMIN and HOSPITAL_ADMIN.
+GET http://localhost:8081/api/audit-logs/event-type-status?eventType=DATA_ACCESS&page=0&size=20
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1OTc5NDI3LCJleHAiOjE3NTYwNjU4Mjd9.EPAw7rVO7D9UfiV6l-Kp5jQAlia8W6eUzvT_4-WyWXM
+Accept: application/json
+
+### Get audit logs by target
+GET http://localhost:8081/api/audit-logs/target?entityType=USER&resourceId=e551120e-671f-4785-9ab8-59768c055f8e&page=0&size=20
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1OTc5NDI3LCJleHAiOjE3NTYwNjU4Mjd9.EPAw7rVO7D9UfiV6l-Kp5jQAlia8W6eUzvT_4-WyWXM
+Accept: application/json
+
+
+### Send invalid event type
+POST http://localhost:8081/api/audit-logs
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NTkwOTk4NywiZXhwIjoxNzU1OTk2Mzg3fQ.x6-gu49QmrforAjsJS6SPRT7th-1NXcaPhy6NPhtZO4
+
+{
+  "userName": "Hospital Admin",
+  "hospitalName": "Sandof Hospital",
+  "eventType": "USER_UPDATE",
+  "status": "SUCCESS",
+  "entityType": "USER",
+  "resourceName": "Aicha Nana"
+}
+
+### Missing required userId and eventType
+POST http://localhost:8081/api/audit-logs
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NTkwOTk4NywiZXhwIjoxNzU1OTk2Mzg3fQ.x6-gu49QmrforAjsJS6SPRT7th-1NXcaPhy6NPhtZO4
+
+{
+  "status": "SUCCESS"
+}
+
+### HTTP request for updating an existing audit log
+GET http://localhost:8081/api/audit-logs/user/e551120e-671f-4785-9ab8-59768c055f8e?page=0&size=20
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NTkwOTk4NywiZXhwIjoxNzU1OTk2Mzg3fQ.x6-gu49QmrforAjsJS6SPRT7th-1NXcaPhy6NPhtZO4
+Accept: application/json
+
+### HTTP request for deleting an audit log
+GET http://localhost:8081/api/audit-logs/event-type?eventType=LOGIN_SUCCESS&page=0&size=20
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IlJPTEVfVVNFUixST0xFX0FETUlOIiwiaWF0IjoxNzQ4NDc5Njg4LCJleHAiOjE3NDg1NjYwODh9.vkqwzlsdQ9qhDxtE3RxnjIzKsDbd5-EFKzbkb-AJBrygkFvysdC1JqoAisSDtddzL_rBRr5G6p6hSxSZBfCE1g
+Accept: application/json
+
+### HTTP request for getting all audit logs
+GET http://localhost:8081/api/audit-logs
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQzNTY2ODcsImV4cCI6MTc1NDQ0MzA4N30.kWHL2_ZF4W3JdkVPdL9iWVAGveJCB7GYZ3IUTSMC4uz3wB_CcDcZK0DIo4uBSSznEQtrsyTK-v3thzk6gZxccw
+Accept: application/json
+
+### HTTP request for getting audit logs by user ID
+GET localhost:8081/api/audit-logs/target?entityType=PATIENT&resourceId=96cff0ec-7944-4ea8-b235-68bf32047205
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQzNTY2ODcsImV4cCI6MTc1NDQ0MzA4N30.kWHL2_ZF4W3JdkVPdL9iWVAGveJCB7GYZ3IUTSMC4uz3wB_CcDcZK0DIo4uBSSznEQtrsyTK-v3thzk6gZxccw
+Accept: application/json

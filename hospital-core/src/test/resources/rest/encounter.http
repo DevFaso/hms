@@ -1,0 +1,63 @@
+### Get all encounters
+GET http://localhost:8081/api/encounters
+Accept: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1OTc5NDI3LCJleHAiOjE3NTYwNjU4Mjd9.EPAw7rVO7D9UfiV6l-Kp5jQAlia8W6eUzvT_4-WyWXM
+
+### Create a new encounter
+POST http://localhost:8081/api/encounters
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NTkwOTk4NywiZXhwIjoxNzU1OTk2Mzg3fQ.x6-gu49QmrforAjsJS6SPRT7th-1NXcaPhy6NPhtZO4
+Accept-Language: en
+
+{
+  "patientIdentifier": "minor_patient1",
+  "staffEmail": "sandoff_doctor@hospital.com",
+  "hospitalIdentifier": "CSX-2F3DE",
+  "departmentIdentifier": "Midwifery",
+  "encounterType": "CONSULTATION",
+  "encounterDate": "2025-08-22T14:30:00",
+  "notes": "Routine checkup",
+  "appointmentId": "b54fddc8-f98f-4f40-9192-c12f168e295d"
+}
+
+> {% client.global.set("encounterId", response.body.id); %}
+
+### Get encounter by ID
+GET http://localhost:8081/api/encounters/b6c2adb9-4c0a-433d-a07a-6bd302ca955c
+Accept: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NTkwOTk4NywiZXhwIjoxNzU1OTk2Mzg3fQ.x6-gu49QmrforAjsJS6SPRT7th-1NXcaPhy6NPhtZO4
+
+### Update encounter
+PUT http://localhost:8081/api/encounters/b6c2adb9-4c0a-433d-a07a-6bd302ca955c
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NTkwOTk4NywiZXhwIjoxNzU1OTk2Mzg3fQ.x6-gu49QmrforAjsJS6SPRT7th-1NXcaPhy6NPhtZO4
+Accept-Language: en
+
+{
+  "patientIdentifier": "minor_patient1",
+  "notes": "Updated notes for encounter",
+  "staffEmail": "sandoff_doctor@hospital.com",
+   "hospitalIdentifier": "CSX-2F3DE",
+  "departmentIdentifier": "Midwifery",
+  "encounterType": "EMERGENCY"
+}
+
+### Delete encounter
+DELETE http://localhost:8081/api/encounters/{{encounterId}}
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NTkwOTk4NywiZXhwIjoxNzU1OTk2Mzg3fQ.x6-gu49QmrforAjsJS6SPRT7th-1NXcaPhy6NPhtZO4
+
+### List encounters by patient
+GET http://localhost:8081/api/encounters/patient/minor_patient1
+Accept: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NTkwOTk4NywiZXhwIjoxNzU1OTk2Mzg3fQ.x6-gu49QmrforAjsJS6SPRT7th-1NXcaPhy6NPhtZO4
+
+### List encounters by doctor
+GET http://localhost:8081/api/encounters/doctor/sandoff_doctor
+Accept: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NTkwOTk4NywiZXhwIjoxNzU1OTk2Mzg3fQ.x6-gu49QmrforAjsJS6SPRT7th-1NXcaPhy6NPhtZO4
+
+### Error scenario: Get non-existent encounter
+GET http://localhost:8081/api/encounters/00000000-0000-0000-0000-000000000000
+Accept: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9TIl0sImlhdCI6MTc1NTkwOTk4NywiZXhwIjoxNzU1OTk2Mzg3fQ.x6-gu49QmrforAjsJS6SPRT7th-1NXcaPhy6NPhtZO4
+

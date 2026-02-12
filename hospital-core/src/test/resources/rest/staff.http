@@ -1,0 +1,127 @@
+POST http://localhost:8081/api/staff
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0MzgwMTgsImV4cCI6MTc1NDUyNDQxOH0.TeA65dErd93u8DhHSl_O9P28l7H4O_BSbEH7_uxLvz-3qEFfGcVzGJSXXzL59CEwupT0ZWk_SzgVs3upGwPAEA
+
+{
+  "userEmail": "lab.scientist@example.com",
+  "hospitalName": "General Hospital",
+  "roleName": "ROLE_LAB_SCIENTIST",
+  "jobTitle": "LAB SCIENTIST",
+  "position": "Laboratory Technician",
+  "startDate": "2025-07-23",
+  "licenseNumber": "LAB-2234",
+  "specialization": "Clinical Laboratory Science",
+  "isHeadOfDepartment": false,
+  "employmentType": "FULL_TIME"
+}
+
+###
+POST http://localhost:8081/api/staff
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ1MzM4MDMsImV4cCI6MTc1NDYyMDIwM30.zxulzQBrtwBRFRX2sBLLz_2-JM4QllmvA4oMsXT61TARoIP7JZxbj5EOSLSFM_tXJQGxwx_aqrRrgoTlqsXl_w
+
+{
+  "userEmail": "surgeon@example.com",
+  "hospitalName": "Yalgado Hospital",
+  "roleName": "ROLE_SURGEON",
+  "jobTitle": "SURGEON",
+  "position": "General Surgery",
+  "startDate": "2025-07-23",
+  "licenseNumber": "SUR-2934",
+  "specialization": "General Surgery",
+  "isHeadOfDepartment": false,
+  "employmentType": "FULL_TIME"
+}
+###
+
+
+
+###
+POST http://localhost:8081/api/staff
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0MzgwMTgsImV4cCI6MTc1NDUyNDQxOH0.TeA65dErd93u8DhHSl_O9P28l7H4O_BSbEH7_uxLvz-3qEFfGcVzGJSXXzL59CEwupT0ZWk_SzgVs3upGwPAEA
+
+{
+  "userEmail": "lab.scientist@example.com",
+  "hospitalName": "General Hospital",
+  "roleName": "ROLE_LAB_SCIENTIST",
+  "jobTitle": "LAB SCIENTIST",
+  "position": "Laboratory Technician",
+  "startDate": "2025-07-23",
+  "licenseNumber": "LAB-2234",
+  "specialization": "Clinical Laboratory Science",
+  "isHeadOfDepartment": false,
+  "employmentType": "FULL_TIME"
+}
+
+###
+POST http://localhost:8081/api/staff
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0MzgwMTgsImV4cCI6MTc1NDUyNDQxOH0.TeA65dErd93u8DhHSl_O9P28l7H4O_BSbEH7_uxLvz-3qEFfGcVzGJSXXzL59CEwupT0ZWk_SzgVs3upGwPAEA
+
+{
+  "userEmail": "lab.technician@example.com",
+  "hospitalName": "General Hospital",
+  "roleName": "ROLE_LAB_TECHNICIAN",
+  "jobTitle": "LAB TECHNICIAN",
+  "position": "Microbiology Lab",
+  "startDate": "2025-08-01",
+  "licenseNumber": "LAB-3345",
+  "specialization": "Microbiology",
+  "isHeadOfDepartment": false,
+  "employmentType": "PART_TIME"
+}
+
+###
+POST http://localhost:8081/api/staff
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0MzgwMTgsImV4cCI6MTc1NDUyNDQxOH0.TeA65dErd93u8DhHSl_O9P28l7H4O_BSbEH7_uxLvz-3qEFfGcVzGJSXXzL59CEwupT0ZWk_SzgVs3upGwPAEA
+
+{
+  "userEmail": "lab.manager@example.com",
+  "hospitalName": "General Hospital",
+  "roleName": "ROLE_LAB_MANAGER",
+  "jobTitle": "LAB MANAGER",
+  "position": "Pathology Lab",
+  "startDate": "2025-09-10",
+  "licenseNumber": "LAB-4456",
+  "specialization": "Pathology",
+  "isHeadOfDepartment": true,
+  "employmentType": "FULL_TIME"
+}
+
+###
+POST http://localhost:8081/api/staff
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0MzgwMTgsImV4cCI6MTc1NDUyNDQxOH0.TeA65dErd93u8DhHSl_O9P28l7H4O_BSbEH7_uxLvz-3qEFfGcVzGJSXXzL59CEwupT0ZWk_SzgVs3upGwPAEA
+
+{
+  "userEmail": "lab.assistant@example.com",
+  "hospitalName": "General Hospital",
+  "roleName": "ROLE_LAB_ASSISTANT",
+  "jobTitle": "LAB ASSISTANT",
+  "position": "Hematology Lab",
+  "startDate": "2025-10-05",
+  "licenseNumber": "LAB-5567",
+  "specialization": "Hematology",
+  "isHeadOfDepartment": false,
+  "employmentType": "CONTRACT"
+}
+
+###
+POST http://localhost:8081/api/staff
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0MzgwMTgsImV4cCI6MTc1NDUyNDQxOH0.TeA65dErd93u8DhHSl_O9P28l7H4O_BSbEH7_uxLvz-3qEFfGcVzGJSXXzL59CEwupT0ZWk_SzgVs3upGwPAEA
+
+{
+  "userEmail": "lab.director@example.com",
+  "hospitalName": "General Hospital",
+  "roleName": "ROLE_LAB_DIRECTOR",
+  "jobTitle": "LAB DIRECTOR",
+  "position": "Genetics Lab",
+  "startDate": "2025-11-15",
+  "licenseNumber": "LAB-6678",
+  "specialization": "Genetics",
+  "isHeadOfDepartment": true,
+  "employmentType": "FULL_TIME"
+}

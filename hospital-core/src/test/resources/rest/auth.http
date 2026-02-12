@@ -1,0 +1,831 @@
+### NOTE: All /api/auth/register examples deprecated (web is staff-only). Use /api/users/admin-register.
+
+### login superadmin
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "superadmin",
+  "password": "TempPass123!"
+}
+
+###
+
+# curl -i http://localhost:8081/api/auth/ping
+#curl -i -X POST http://localhost:8081/api/auth/login
+#  -H "Content-Type: application/json"
+#  -d '{"username":"superadmin","password":"SecurePass123!"}
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{"username":"superadmin","password":"SecurePass123!"}
+
+###
+
+
+
+
+### Register a minor
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "minor_patient1",
+  "password": "Minor@123",
+  "email": "minor1@example.com",
+  "firstName": "Aïcha",
+  "lastName": "Nana",
+  "middleName": "Marie",
+  "phoneNumber": "0700000011",
+  "dateOfBirth": "2010-05-14",
+  "gender": "Female",
+  "address": "Quartier Wemtenga, Ouagadougou",
+  "city": "Ouagadougou",
+  "state": "Kadiogo",
+  "zipCode": "22601",
+  "country": "Burkina Faso",
+  "emergencyContactName": "Fatou Nana",
+  "emergencyContactPhone": "0700000022",
+  "emergencyContactRelationship": "Mother",
+  "bloodType": "O+",
+  "allergies": "None",
+  "medicalHistorySummary": "Healthy minor"
+}
+
+### ✅ Register a new PATIENT (public) role id = 652874ce-f65d-4d8e-981d-65a1e202dca2(patient)
+POST http://localhost:8081/api/users/admin-register
+Content-Type: application/json
+
+{
+  "username": "superadmin",
+  "email":    "superadmin@example.com",
+  "password": "TempPass123!123!",
+  "firstName": "Tiego",
+  "lastName": "Ouedraogo",
+  "roleNames": ["SUPER_ADMIN"],
+  "phoneNumber": "+22670000003",
+  "dateOfBirth": "1990-01-01",
+  "gender": "MALE",
+  "address": "123 Main Street, Ouagadougou",
+  "city": "Ouagadougou",
+  "state": "Kadiogo"
+}
+
+### login as PATIENT
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "hadmin3",
+  "password": "securePassword123!"
+}
+
+###
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "minor_patient1",
+  "password": "SecurePassword123!"
+}
+
+###Login user6
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "patient1",
+  "password": "SecurePassword123!"
+}
+
+###login Nurse
+POST localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+"username": "user3",
+"password": "SecurePassword123!"
+}
+
+
+### Register User (PATIENT)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "joshua35",
+  "firstName": "Amanda",
+  "lastName": "Dudley",
+  "phoneNumber": "(184)959-3103x4131",
+  "email": "jamesmichael@munoz-roman.info",
+  "password": "SecurePass123!",
+  "dateOfBirth": "1992-07-13",
+  "gender": "FEMALE",
+  "address": "123 Main Street, Ouagadougou",
+  "city": "Ouagadougou",
+  "state": "Kadiogo",
+  "zipCode": "226",
+  "country": "Burkina Faso",
+  "emergencyContactName": "John Dudley",
+  "emergencyContactPhone": "+22670000000",
+  "emergencyContactRelationship": "Brother"
+}
+
+###Login as PATIENT
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "joshua35",
+  "password": "SecurePass123!"
+}
+
+### Register User (PATIENT)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "oramirez",
+  "firstName": "Jacqueline",
+  "lastName": "Sutton",
+  "phoneNumber": "928-327-6483",
+  "email": "mitchellclark@yahoo.com",
+  "password": "SecurePass123!",
+  "roles": ["PATIENT"]
+}
+
+### Login as PATIENT
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "oramirez",
+  "password": "SecurePass123!"
+}
+
+### Register User (PATIENT)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "megan03",
+  "firstName": "Nicole",
+  "lastName": "Day",
+  "phoneNumber": "(423)884-9696",
+  "email": "richard13@walter.biz",
+  "password": "SecurePass123!",
+  "roles": ["PATIENT"]
+}
+
+### Register User (PATIENT)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "jeffrey28",
+  "firstName": "Courtney",
+  "lastName": "Conner",
+  "phoneNumber": "(916)697-8480x18451",
+  "email": "camposmichelle@gmail.com",
+  "password": "SecurePass123!",
+  "roles": ["PATIENT"]
+}
+
+### Register User (DOCTOR)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "doc_tor2",
+  "firstName": "Tracy",
+  "lastName": "Morgan",
+  "phoneNumber": "202-555-0172",
+  "email": "doc_tor2@example.com",
+  "password": "SecurePass123!",
+  "dateOfBirth": "1985-04-15",
+  "gender": "MALE",
+  "address": "123 Main Street, Ouagadougou"
+}
+
+
+###Login as DOCTOR
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "doc_tor1",
+  "password": "SecurePass123!"
+}
+
+### Register User (DOCTOR)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "lauren99",
+  "firstName": "Lauren",
+  "lastName": "Stone",
+  "phoneNumber": "202-555-0133",
+  "email": "laurenstone@example.com",
+  "password": "SecurePass123!",
+  "roles": ["DOCTOR"]
+}
+
+###Login as DOCTOR
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "lauren99",
+  "password": "SecurePass123!"
+}
+
+### Register User (NURSE)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "angelabrown",
+  "firstName": "Angela",
+  "lastName": "Brown",
+  "phoneNumber": "202-555-0199",
+  "email": "angela.brown@example.com",
+  "password": "SecurePass123!",
+  "dateOfBirth": "1990-06-02",
+  "gender": "F",
+  "address": "123 Main Street, Ouagadougou",
+  "roles": ["NURSE"]
+}
+
+### Login as NURSE
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "angelabrown",
+  "password": "SecurePass123!"
+}
+
+### Register User (NURSE)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "kevinmorris",
+  "firstName": "Kevin",
+  "lastName": "Morris",
+  "phoneNumber": "202-555-0158",
+  "email": "kevin.morris@example.com",
+  "password": "SecurePass123!",
+  "roles": ["NURSE"]
+}
+
+### Register User (PHYSICIAN)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "denisethomas",
+  "firstName": "Denise",
+  "lastName": "Thomas",
+  "phoneNumber": "202-555-0182",
+  "email": "denise.thomas@example.com",
+  "password": "SecurePass123!",
+  "roles": ["PHYSICIAN"]
+}
+
+### Register User (PHYSICIAN)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "craigross",
+  "firstName": "Craig",
+  "lastName": "Ross",
+  "phoneNumber": "202-555-0120",
+  "email": "craig.ross@example.com",
+  "password": "SecurePass123!",
+  "roles": ["PHYSICIAN"]
+}
+
+### Register User (ADMIN)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "adminmax",
+  "firstName": "Max",
+  "lastName": "Hudson",
+  "phoneNumber": "202-555-0171",
+  "email": "max.hudson@example.com",
+  "password": "SecurePass123!",
+  "roles": ["ADMIN"]
+}
+
+### Register User (ADMIN)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "adminella",
+  "firstName": "Ella",
+  "lastName": "Klein",
+  "phoneNumber": "202-555-0115",
+  "email": "ella.klein@example.com",
+  "password": "SecurePass123!",
+  "roles": ["ADMIN"]
+}
+
+### Register User (LAB_SCIENTIST)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "mjames",
+  "firstName": "Harold",
+  "lastName": "Wright",
+  "phoneNumber": "001-146-881-9736x99356",
+  "email": "mjames@example.com",
+  "password": "SecurePass123!",
+  "roles": ["LAB_SCIENTIST"]
+}
+
+### Register User (LAB_SCIENTIST)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "edwinguerrero",
+  "firstName": "Melissa",
+  "lastName": "Morgan",
+  "phoneNumber": "001-817-560-4806x358",
+  "email": "edwinguerrero@example.com",
+  "password": "SecurePass123!",
+  "roles": ["LAB_SCIENTIST"]
+}
+
+### Register User (PHARMACIST)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "murrayrachel",
+  "firstName": "Catherine",
+  "lastName": "Davila",
+  "phoneNumber": "(232)792-8201x027",
+  "email": "murrayrachel@example.com",
+  "password": "SecurePass123!",
+  "roles": ["PHARMACIST"]
+}
+
+### Register User (PHARMACIST)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "bmiller1",
+  "firstName": "Crystal",
+  "lastName": "Thomas",
+  "phoneNumber": "+1-065-286-3037x486",
+  "email": "bmiller1@example.com",
+  "password": "SecurePass123!",
+  "dateOfBirth": "1995-08-20",
+  "gender": "FEMALE",
+  "address": "123 Main Street",
+  "city": "Ouagadougou",
+  "state": "Kadiogo",
+  "zipCode": "226",
+  "country": "Burkina Faso",
+  "emergencyContactName": "John Thomas",
+  "emergencyContactPhone": "+22670000000",
+  "emergencyContactRelationship": "Brother"
+}
+
+
+### Register User
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "nicoleflores",
+  "firstName": "Victor",
+  "lastName": "Young",
+  "phoneNumber": "152-184-0905x366",
+  "email": "nicoleflores@example.com",
+  "password": "SecurePass123!",
+  "address": "123 Main Street",
+  "dateOfBirth": "1990-05-15"
+}
+
+
+### Login as PATIENT
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "nicoleflores",
+  "password": "SecurePass123!"
+}
+
+### Register User (ACCOUNTANT)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "lynn66",
+  "firstName": "Robert",
+  "lastName": "Watson",
+  "phoneNumber": "205-673-4341",
+  "email": "lynn66@example.com",
+  "password": "SecurePass123!",
+  "roles": ["ACCOUNTANT"]
+}
+
+### Register User (ACCOUNTANT)
+## (removed)
+Content-Type: application/json
+
+{
+  "username": "jeffery36",
+  "firstName": "Kenneth",
+  "lastName": "Walton",
+  "phoneNumber": "764-184-5782",
+  "email": "jeffery36@example.com",
+  "password": "SecurePass123!",
+  "roles": ["ACCOUNTANT"]
+}
+
+### Register User (TECHNICIAN)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "ryan46",
+  "firstName": "Tammy",
+  "lastName": "Mckenzie",
+  "phoneNumber": "(469)973-6535",
+  "email": "ryan46@example.com",
+  "password": "SecurePass123!",
+  "roles": ["TECHNICIAN"]
+}
+
+### Register User (TECHNICIAN)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "estradaheather",
+  "firstName": "Tami",
+  "lastName": "Lee",
+  "phoneNumber": "+1-246-365-6018x83084",
+  "email": "estradaheather@example.com",
+  "password": "SecurePass123!",
+  "roles": ["TECHNICIAN"]
+}
+
+### Register User (RADIOLOGIST)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "williamshaffer",
+  "firstName": "Sarah",
+  "lastName": "Baker",
+  "phoneNumber": "001-678-899-4301x4190",
+  "email": "williamshaffer@example.com",
+  "password": "SecurePass123!",
+  "roles": ["RADIOLOGIST"]
+}
+
+### Register User (RADIOLOGIST)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "butlermike",
+  "firstName": "Angela",
+  "lastName": "Vaughan",
+  "phoneNumber": "001-943-166-2475",
+  "email": "butlermike@example.com",
+  "password": "SecurePass123!",
+  "roles": ["RADIOLOGIST"]
+}
+
+### Register User (SURGEON)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "nataliewinters",
+  "firstName": "Miranda",
+  "lastName": "Neal",
+  "phoneNumber": "(682)543-4796x2797",
+  "email": "nataliewinters@example.com",
+  "password": "SecurePass123!",
+  "roles": ["SURGEON"]
+}
+
+### Register User (SURGEON)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "tinaschmidt",
+  "firstName": "Wendy",
+  "lastName": "Mills",
+  "phoneNumber": "571-509-8409",
+  "email": "tinaschmidt@example.com",
+  "password": "SecurePass123!",
+  "roles": ["SURGEON"]
+}
+
+### Register User (CLEANER)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "robert22",
+  "firstName": "Brianna",
+  "lastName": "Williams",
+  "phoneNumber": "0583842706",
+  "email": "robert22@example.com",
+  "password": "SecurePass123!",
+  "roles": ["CLEANER"]
+}
+
+### Register User (CLEANER)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "lindawilson",
+  "firstName": "George",
+  "lastName": "Hill",
+  "phoneNumber": "(183)825-8112x228",
+  "email": "lindawilson@example.com",
+  "password": "SecurePass123!",
+  "roles": ["CLEANER"]
+}
+
+### Register User (SECURITY)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "johnsonwilliam",
+  "firstName": "Nicholas",
+  "lastName": "Gomez",
+  "phoneNumber": "001-399-925-0563x421",
+  "email": "johnsonwilliam@example.com",
+  "password": "SecurePass123!",
+  "roles": ["SECURITY"]
+}
+
+### Register User (SECURITY)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "tylerlevy",
+  "firstName": "Jessica",
+  "lastName": "Smith",
+  "phoneNumber": "(139)791-2275x4590",
+  "email": "tylerlevy@example.com",
+  "password": "SecurePass123!",
+  "roles": ["SECURITY"]
+}
+
+### Register User (SUPPORT)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "ksmith",
+  "firstName": "David",
+  "lastName": "Smith",
+  "phoneNumber": "844-176-1052x9555",
+  "email": "ksmith@example.com",
+  "password": "SecurePass123!",
+  "roles": ["SUPPORT"]
+}
+
+### Register User (SUPPORT)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "bennettjoseph",
+  "firstName": "Jeremy",
+  "lastName": "Hernandez",
+  "phoneNumber": "+1-046-683-2860x33429",
+  "email": "bennettjoseph@example.com",
+  "password": "SecurePass123!",
+  "roles": ["SUPPORT"]
+}
+
+### Register User (MANAGER)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "grahamariana",
+  "firstName": "Anthony",
+  "lastName": "Harris",
+  "phoneNumber": "(404)296-2008",
+  "email": "grahamariana@example.com",
+  "password": "SecurePass123!",
+  "roles": ["MANAGER"]
+}
+
+### Register User (MANAGER)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "cgiles",
+  "firstName": "Charles",
+  "lastName": "Chapman",
+  "phoneNumber": "627-915-8239x73169",
+  "email": "cgiles@example.com",
+  "password": "SecurePass123!",
+  "roles": ["MANAGER"]
+}
+
+### Register User (MODERATOR)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "rebeccathompson",
+  "firstName": "Thomas",
+  "lastName": "Merritt",
+  "phoneNumber": "(428)881-3383",
+  "email": "rebeccathompson@example.com",
+  "password": "SecurePass123!",
+  "roles": ["MODERATOR"]
+}
+
+### Register User (MODERATOR)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "jfoster",
+  "firstName": "Charles",
+  "lastName": "King",
+  "phoneNumber": "001-957-310-0605x30424",
+  "email": "jfoster@example.com",
+  "password": "SecurePass123!",
+  "roles": ["MODERATOR"]
+}
+
+### Register User (USER)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "alejandro84",
+  "firstName": "James",
+  "lastName": "Diaz",
+  "phoneNumber": "(562)484-3700",
+  "email": "alejandro84@example.com",
+  "password": "SecurePass123!",
+  "roles": ["USER"]
+}
+
+### Register User (USER)
+POST http://localhost:8081/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "jesse91",
+  "firstName": "Mary",
+  "lastName": "Gray",
+  "phoneNumber": "(563)821-0023x359",
+  "email": "jesse91@example.com",
+  "password": "SecurePass123!",
+  "roles": ["USER"]
+}
+
+
+
+### Login as Admin
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+    "username": "tchico",
+    "password": "securePassword123!"
+}
+
+### Refresh Token
+POST http://localhost:8081/api/auth/refresh-token?refreshToken=eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJhZG1pbnVzZXIiLCJyb2xlcyI6IlJPTEVfQURNSU4iLCJpYXQiOjE3NDczMDk3MzMsImV4cCI6MTc0NzM5NjEzM30.HtKdCKv8envadPwB7ztvnogqmuKn-SSu4oulsqKK_GFtMVFEiOOJI9RxasP6WKR367JQomakLjQpmYOxXpm_iw
+
+
+### Search Users by Name
+GET http://localhost:8081/api/auth/users/search?name=adminuser
+
+
+### Search Users by Role
+GET http://localhost:8081/api/auth/users/search?role=ROLE_ADMIN
+
+
+### Update User
+PUT http://localhost:8081/api/auth/users/a40a1bf6-c31e-4a45-828f-68d03dde689e
+Content-Type: application/json
+
+{
+    "username": "adminuser1",
+    "email": "adminuser1@example.com",
+    "password": "newSecurePass123!",
+    "firstName": "Updated",
+    "lastName": "User",
+    "phoneNumber": "1234567890",
+    "isActive": true,
+    "roles": ["ADMIN"]
+}
+
+
+### Delete User
+DELETE http://localhost:8081/api/auth/users/{{user_id}}
+
+### Verify Email
+POST http://localhost:8081/api/auth/verify-email
+Content-Type: application/json
+
+{
+    "email": "patientuser@example.com",
+    "token": "{{verification_token}}"
+}
+
+### Get all Users
+GET http://localhost:8081/api/auth/users
+Authorization: Bearer {{access_token}}
+
+##################################################################################################################
+### 1. Self-registration (public = patient with no hospital registration)
+POST http://localhost:8080/auth/register
+Content-Type: application/json
+
+{
+  "username": "john_doe",
+  "password": "P@ssw0rd!",
+  "email": "john.doe@example.com",
+  "firstName": "John",
+  "lastName": "Doe",
+  "middleName": "Paul",
+  "phoneNumber": "+1234567890",
+  "dateOfBirth": "1990-05-01",
+  "gender": "MALE",
+  "address": "123 Main St",
+  "city": "Ouagadougou",
+  "state": "Kadiogo",
+  "zipCode": "1000",
+  "country": "Burkina Faso",
+  "emergencyContactName": "Jane Doe",
+  "emergencyContactPhone": "+1234567899",
+  "emergencyContactRelationship": "Spouse",
+  "bloodType": "O+",
+  "allergies": "Penicillin",
+  "medicalHistorySummary": "No chronic diseases."
+}
+
+###
+
+### 2. Login (public)
+POST http://localhost:8080/auth/login
+Content-Type: application/json
+
+{
+  "username": "john_doe",
+  "password": "P@ssw0rd!"
+}
+
+###
+
+### 3. Email verification (public)
+POST http://localhost:8080/auth/verify-email
+Content-Type: application/json
+
+{
+  "email": "john.doe@example.com",
+  "token": "PASTE_ACTIVATION_TOKEN_FROM_EMAIL_HERE"
+}
+
+###
+### Register RECEPTIONIST for Clinic Sandoff
+POST http://localhost:8081/api/users/admin-register
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTQ2MjA1MzYsImV4cCI6MTc1NDcwNjkzNn0.Gd_8d7QdPLap7mV_lZZ5NOr5VdryjCdnf1QbXT6bSXepCqPiHQfKFKyUXKaDTB9VL5ugX3MoLcwvpQrU7bCbDw
+Content-Type: application/json
+Accept-Language: en
+
+{
+  "username": "receptionist1",
+  "email": "receptionist1@clinicsandoff.com",
+  "password": "StrongPass123!",
+  "firstName": "Reception",
+  "lastName": "One",
+  "phoneNumber": "+22670000001",
+  "hospitalId": "b7022052-a379-44bf-a171-b7d3f67c5759",
+  "roleNames": ["NURSE"]
+}

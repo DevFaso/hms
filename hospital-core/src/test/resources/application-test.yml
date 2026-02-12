@@ -19,3 +19,13 @@ logging:
   level:
     root: WARN
     '[com.example.hms]': INFO
+
+app:
+  seed:
+    enabled: false
+  kafka:
+    enabled: false
+    chat-topic: test-chat-topic
+    empi-identity-topic: test-empi-identity-topic
+    patient-movement-topic: test-patient-movement-topic
+    platform-registry-topic: test-platform-registry-topic

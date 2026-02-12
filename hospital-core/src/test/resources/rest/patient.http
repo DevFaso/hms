@@ -1,0 +1,128 @@
+### ENV / GLOBALS
+@base = http://localhost:8081/api
+@token = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NjA1MzQ0MSwiZXhwIjoxNzU2MTM5ODQxfQ.thryCut9zvVE3-QATUrP2RWzewuHCiVIYUYX83hJB6c
+@patientUsername = doctor1
+@hospitalName = Clinic Sandoff
+
+### Setup (optional): if you already have the patient/hospital, you can skip
+
+### Register Patient to Hospital — SUCCESS (201)
+POST {{base}}/registrations
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "patientUsername": "{{patientUsername}}",
+  "hospitalName": "{{hospitalName}}"
+}
+
+> {%
+
+  client.test("Status is 201", () => client.assert(response.status === 201));
+  client.test("Has registrationCode (MRI)", () => client.assert(!!response.body.registrationCode));
+
+  client.global.set("MRI_CODE", response.body.registrationCode);
+  client.global.set("REG_ID", response.body.id);
+  client.global.set("PATIENT_ID", response.body.patientId);
+%}
+
+### Register Patient to Hospital — DUPLICATE (should be 409)
+POST {{base}}/registrations
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "patientUsername": "{{patientUsername}}",
+  "hospitalName": "{{hospitalName}}"
+}
+
+> {%
+  client.test("Status is 409", () => client.assert(response.status === 409));
+  client.test("Error message present", () => client.assert(!!response.body.message));
+%}
+
+### Get Registrations (Paginated) — by patientId
+GET {{base}}/registrations?patientId=99d2eedc-2f4a-483b-92b9-58f2bef9193d&page=0&size=5
+Authorization: Bearer {{token}}
+
+> {%
+  client.test("Status is 200", () => client.assert(response.status === 200));
+  client.test("Response is array", () => client.assert(Array.isArray(response.body)));
+%}
+
+### Fetch All Patients (if you need to inspect IDs)
+GET {{base}}/patients
+Authorization: Bearer {{token}}
+
+> {%
+  client.test("Status is 200", () => client.assert(response.status === 200));
+  client.test("Response is array", () => client.assert(Array.isArray(response.body)));
+%}
+
+### Update Registration — PUT by registration ID (toggle active=false)
+PUT {{base}}/registrations/{{REG_ID}}
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "active": false
+}
+
+> {%
+  client.test("Status is 200", () => client.assert(response.status === 200));
+  client.test("Active is false", () => client.assert(response.body.active === false));
+%}
+
+### Deregister Patient — DELETE by registration ID
+DELETE {{base}}/registrations/{{REG_ID}}
+Authorization: Bearer {{token}}
+
+> {%
+  client.test("Status is 204", () => client.assert(response.status === 204));
+%}
+
+### Edge Case: Invalid Patient Username — 404
+POST {{base}}/registrations
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "patientUsername": "INVALID_USERNAME",
+  "hospitalName": "{{hospitalName}}"
+}
+
+> {%
+  client.test("Status is 404", () => client.assert(response.status === 404));
+%}
+
+### Edge Case: Inactive/Unknown Hospital
+# If you treat inactive hospitals as not eligible (conflict), expect 409.
+# If your service treats them as not found, change assertion to 404.
+POST {{base}}/registrations
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "patientUsername": "{{patientUsername}}",
+  "hospitalName": "INACTIVE_HOSPITAL"
+}
+
+> {%
+  client.test("Status is 409 or 404", () => client.assert([409,404].includes(response.status)));
+%}
+
+### Edge Case: Permission Error
+# Invalid/expired token usually returns 401 (unauthorized); insufficient role returns 403.
+POST {{base}}/registrations
+Content-Type: application/json
+Authorization: Bearer {{INVALID_TOKEN}}
+
+{
+  "patientUsername": "{{patientUsername}}",
+  "hospitalName": "{{hospitalName}}"
+}
+
+> {%
+  client.test("Status is 401 or 403", () => client.assert([401,403].includes(response.status)));
+%}
+
