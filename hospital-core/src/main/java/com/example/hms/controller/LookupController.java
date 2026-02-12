@@ -15,11 +15,13 @@ import java.util.Optional;
 import java.util.UUID;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/lookup")
 @RequiredArgsConstructor
+@PreAuthorize("isAuthenticated()")
 public class LookupController {
 
     private final PatientRepository patientRepository;

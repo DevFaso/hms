@@ -4,6 +4,7 @@ import com.example.hms.model.Notification;
 import com.example.hms.service.NotificationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.security.Principal;
@@ -36,12 +37,14 @@ public class NotificationController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN')")
     public ResponseEntity<Notification> createNotification(@RequestParam String message, @RequestParam String recipientUsername) {
         Notification notification = notificationService.createNotification(message, recipientUsername);
         return ResponseEntity.ok(notification);
     }
 
     @PostMapping("/{id}/read")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> markAsRead(@PathVariable UUID id) {
         notificationService.markAsRead(id);
         return ResponseEntity.ok().build();

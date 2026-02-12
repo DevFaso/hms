@@ -6,6 +6,10 @@ import com.example.hms.payload.dto.AppointmentRequestDTO;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 @Component
 public class AppointmentMapper {
 
@@ -53,19 +57,22 @@ public class AppointmentMapper {
             dto.setHospitalId(hospital.getId());
             dto.setHospitalName(hospital.getName());
 
-            String fullAddress = String.join(", ",
-                    nonNull(hospital.getAddress()),
-                    nonNull(hospital.getCity()),
-                    nonNull(hospital.getState()),
-                    nonNull(hospital.getZipCode()),
-                    nonNull(hospital.getCountry()),
-                    nonNull(hospital.getProvince()),
-                    nonNull(hospital.getRegion()),
-                    nonNull(hospital.getSector()),
-                    nonNull(hospital.getPoBox())
-            ).replaceAll("(, )+", ", ").replaceAll(", $", "");
+            String fullAddress = Stream.of(
+                    hospital.getAddress(),
+                    hospital.getCity(),
+                    hospital.getState(),
+                    hospital.getZipCode(),
+                    hospital.getCountry(),
+                    hospital.getProvince(),
+                    hospital.getRegion(),
+                    hospital.getSector(),
+                    hospital.getPoBox()
+            )
+            .filter(Objects::nonNull)
+            .filter(s -> !s.isBlank())
+            .collect(Collectors.joining(", "));
 
-            dto.setHospitalAddress(fullAddress.isBlank() ? null : fullAddress);
+            dto.setHospitalAddress(fullAddress.isEmpty() ? null : fullAddress);
         }
 
         User createdBy = appointment.getCreatedBy();
@@ -124,9 +131,5 @@ public class AppointmentMapper {
 
     private String getFullName(String first, String last) {
         return ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
-    }
-
-    private String nonNull(String value) {
-        return value != null ? value : "";
     }
 }

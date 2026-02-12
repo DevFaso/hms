@@ -76,8 +76,9 @@ public class KafkaConfig {
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, JsonDeserializer.class);
-        // Configure JsonDeserializer to trust all packages
-        props.put(JsonDeserializer.TRUSTED_PACKAGES, "*");
+        // Restrict JsonDeserializer to trusted application packages and disable type-info headers
+        props.put(JsonDeserializer.TRUSTED_PACKAGES, "com.example.hms");
+        props.put(JsonDeserializer.USE_TYPE_INFO_HEADERS, false);
         return new DefaultKafkaConsumerFactory<>(props, new StringDeserializer(), new JsonDeserializer<>(ChatMessage.class));
     }
 

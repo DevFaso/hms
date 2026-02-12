@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import com.example.hms.repository.PatientRepository;
+import java.util.Locale;
 import java.util.UUID;
 
 @Component
@@ -24,7 +25,7 @@ public class AuditEventLogMapper {
         // Resolve resource name for PATIENT entity type
         String resourceName = null;
         if (event.getEntityType() != null && event.getResourceId() != null) {
-            switch (event.getEntityType().toUpperCase()) {
+            switch (event.getEntityType().toUpperCase(Locale.ROOT)) {
                 case "PATIENT":
                     try {
                         resourceName = patientRepository.findById(UUID.fromString(event.getResourceId()))

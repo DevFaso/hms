@@ -31,12 +31,12 @@ public class InvoiceEmailController {
         return ResponseEntity.ok(Map.of("status","SENT","sentAt", OffsetDateTime.now()));
     }
 
-    // Quick path, renamed to avoid clashing with "/email"
-    @PostMapping("/{invoiceId}/send-to/{email}")
+    // Quick path — email as query param to avoid URL-encoding issues with @, +, %
+    @PostMapping("/{invoiceId}/send-to")
     @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','BILLING_CLERK')")
     public ResponseEntity<Map<String,Object>> emailInvoiceQuick(
         @PathVariable UUID invoiceId,
-        @PathVariable String email) {
+        @RequestParam String email) {
 
         // validate path email (strict)
         if (!isValidEmail(email)) {

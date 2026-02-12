@@ -4,6 +4,7 @@ import com.example.hms.model.OrganizationSecurityPolicy;
 import com.example.hms.service.OrganizationSecurityPolicyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -12,6 +13,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/security-policies")
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN')")
 public class OrganizationSecurityPolicyController {
     private final OrganizationSecurityPolicyService policyService;
 
