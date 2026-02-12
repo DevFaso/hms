@@ -194,7 +194,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     }
 
     private void applyFollowUps(TreatmentPlan plan, List<TreatmentPlanFollowUpRequestDTO> followUps) {
-        plan.getFollowUps().clear();
+        plan.clearFollowUps();
         if (CollectionUtils.isEmpty(followUps)) {
             return;
         }

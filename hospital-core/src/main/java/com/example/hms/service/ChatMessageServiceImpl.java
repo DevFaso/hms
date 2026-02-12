@@ -1,6 +1,5 @@
 package com.example.hms.service;
 
-import com.amazonaws.services.kms.model.NotFoundException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.ChatMessageMapper;
 import com.example.hms.model.ChatMessage;
@@ -92,7 +91,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     private UserRoleHospitalAssignment getSenderAssignment(UUID userId, UUID hospitalId, String roleCode) {
         return userRoleHospitalAssignmentRepository
             .findByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, hospitalId, roleCode)
-            .orElseThrow(() -> new NotFoundException("No active assignment with role " + roleCode + " found for user in hospital"));
+            .orElseThrow(() -> new ResourceNotFoundException("No active assignment with role " + roleCode + " found for user in hospital"));
     }
 
     protected UUID getCurrentUserId() {

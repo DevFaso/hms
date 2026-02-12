@@ -128,6 +128,10 @@ public class TreatmentPlan extends BaseEntity {
         return Collections.unmodifiableSet(reviews);
     }
 
+    public void clearFollowUps() {
+        followUps.clear();
+    }
+
     public void addFollowUp(TreatmentPlanFollowUp followUp) {
         if (followUp == null) return;
         followUps.add(followUp);

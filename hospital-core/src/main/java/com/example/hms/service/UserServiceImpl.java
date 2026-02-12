@@ -590,11 +590,11 @@ public class UserServiceImpl implements UserService {
             if (jwt == null || jwt.isBlank())
                 return null;
 
-            io.jsonwebtoken.Claims claims = io.jsonwebtoken.Jwts.parserBuilder()
-                    .setSigningKey(jwtTokenProvider.getSecretKey())
+            io.jsonwebtoken.Claims claims = io.jsonwebtoken.Jwts.parser()
+                    .verifyWith(jwtTokenProvider.getSecretKey())
                     .build()
-                    .parseClaimsJws(jwt)
-                    .getBody();
+                    .parseSignedClaims(jwt)
+                    .getPayload();
 
             Object hId = claims.get("hospitalId");
             if (hId instanceof String s && !s.isBlank()) {

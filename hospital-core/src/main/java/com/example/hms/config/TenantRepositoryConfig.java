@@ -9,7 +9,10 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
  */
 @Configuration
 @EnableJpaRepositories(
-    basePackages = "com.example.hms.repository",
+    basePackages = {
+        "com.example.hms.repository",
+        "com.example.hms.patient.repository"
+    },
     repositoryBaseClass = TenantAwareJpaRepository.class
 )
 public class TenantRepositoryConfig {

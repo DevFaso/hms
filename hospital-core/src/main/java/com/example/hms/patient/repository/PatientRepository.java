@@ -6,12 +6,14 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.repository.NoRepositoryBean;
 
+@NoRepositoryBean
 public interface PatientRepository extends JpaRepository<Patient, UUID> {
     boolean existsByMrnIgnoreCase(String mrn);
 
     @Query("""
-        select p from Patient p
+        select p from PatientV2 p
         where lower(p.mrn) like lower(concat('%', :query, '%'))
            or lower(p.firstName) like lower(concat('%', :query, '%'))
            or lower(p.lastName) like lower(concat('%', :query, '%'))

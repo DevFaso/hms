@@ -9,6 +9,7 @@ import com.example.hms.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +19,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 @Order(2) // Run after RoleSeeder
+@ConditionalOnProperty(prefix = "app.seed", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class OrganizationSecuritySeeder implements CommandLineRunner {
 
     private final OrganizationRepository organizationRepository;

@@ -8,12 +8,11 @@ import com.example.hms.patient.dto.PatientResponse;
 import com.example.hms.patient.model.Patient;
 import com.example.hms.patient.model.PatientInsurance;
 import com.example.hms.patient.model.PatientMedicalHistory;
-import com.example.hms.patient.repository.PatientRepository;
+import com.example.hms.patient.repository.PatientV2Repository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,9 +20,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class PatientService {
-    private final PatientRepository patientRepository;
+    private final PatientV2Repository patientRepository;
 
-    public PatientService(PatientRepository patientRepository) {
+    public PatientService(PatientV2Repository patientRepository) {
         this.patientRepository = patientRepository;
     }
 
@@ -67,7 +66,7 @@ public class PatientService {
         } else {
             patients = patientRepository.search(query.trim());
         }
-        return patients.stream().map(this::toResponse).collect(Collectors.toList());
+    return patients.stream().map(this::toResponse).toList();
     }
 
     private void applyRequest(Patient patient, PatientRequest request) {
@@ -127,7 +126,7 @@ public class PatientService {
         return insuranceDtos.stream()
             .filter(Objects::nonNull)
             .map(this::toInsurance)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private PatientInsurance toInsurance(PatientInsuranceDto dto) {
@@ -157,7 +156,7 @@ public class PatientService {
         response.setMedicalHistory(toMedicalHistory(patient.getMedicalHistory()));
         response.setInsurances(patient.getInsurances().stream()
             .map(this::toInsuranceDto)
-            .collect(Collectors.toList()));
+            .toList());
         response.setCreatedAt(patient.getCreatedAt());
         response.setUpdatedAt(patient.getUpdatedAt());
         return response;

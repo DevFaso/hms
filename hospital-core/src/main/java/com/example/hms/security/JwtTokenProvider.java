@@ -111,10 +111,10 @@ public class JwtTokenProvider {
         Map<String, Object> claims = buildTenantClaims(userDetails.getUserId(), roles);
         claims.put(ROLES_CLAIM, roles);
         return Jwts.builder()
-            .setSubject(userDetails.getUsername())
-            .addClaims(claims)
-            .setIssuedAt(now)
-            .setExpiration(expiryDate)
+            .subject(userDetails.getUsername())
+            .claims(claims)
+            .issuedAt(now)
+            .expiration(expiryDate)
             .signWith(secretKey)
             .compact();
     }
@@ -138,10 +138,10 @@ public class JwtTokenProvider {
         Map<String, Object> claims = buildTenantClaims(userId, roles);
         claims.put(ROLES_CLAIM, roles);
         return Jwts.builder()
-            .setSubject(descriptor.username())
-            .addClaims(claims)
-            .setIssuedAt(now)
-            .setExpiration(expiryDate)
+            .subject(descriptor.username())
+            .claims(claims)
+            .issuedAt(now)
+            .expiration(expiryDate)
             .signWith(secretKey)
             .compact();
     }
@@ -157,10 +157,10 @@ public class JwtTokenProvider {
         Date expiryDate = new Date(now.getTime() + refreshTokenExpirationMs);
 
         return Jwts.builder()
-            .setSubject(userDetails.getUsername())
+            .subject(userDetails.getUsername())
             .claim(ROLES_CLAIM, roles)
-            .setIssuedAt(now)
-            .setExpiration(expiryDate)
+            .issuedAt(now)
+            .expiration(expiryDate)
             .signWith(secretKey)
             .compact();
     }
@@ -261,11 +261,11 @@ public class JwtTokenProvider {
 
     private Optional<Claims> parseClaimsSafely(String token) {
         try {
-            Claims claims = Jwts.parserBuilder()
-                .setSigningKey(secretKey)
+            Claims claims = Jwts.parser()
+                .verifyWith(secretKey)
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
             return Optional.of(claims);
         } catch (JwtException | IllegalArgumentException ex) {
             log.warn("Unable to parse JWT claims for tenant context: {}", ex.getMessage());
@@ -376,20 +376,20 @@ public class JwtTokenProvider {
     }
 
     public String getUsernameFromJWT(String token) {
-        Claims claims = Jwts.parserBuilder()
-            .setSigningKey(secretKey)
+        Claims claims = Jwts.parser()
+            .verifyWith(secretKey)
             .build()
-            .parseClaimsJws(token)
-            .getBody();
+            .parseSignedClaims(token)
+            .getPayload();
         return claims.getSubject();
     }
 
     public Authentication getAuthenticationFromJwt(String token) {
-        Claims claims = Jwts.parserBuilder()
-            .setSigningKey(secretKey)
+        Claims claims = Jwts.parser()
+            .verifyWith(secretKey)
             .build()
-            .parseClaimsJws(token)
-            .getBody();
+            .parseSignedClaims(token)
+            .getPayload();
 
         String username = claims.getSubject();
 
@@ -433,10 +433,10 @@ public class JwtTokenProvider {
 
     public boolean validateToken(String authToken) {
         try {
-            Jwts.parserBuilder()
-                .setSigningKey(secretKey)
+            Jwts.parser()
+                .verifyWith(secretKey)
                 .build()
-                .parseClaimsJws(authToken);
+                .parseSignedClaims(authToken);
             return true;
         } catch (JwtException | IllegalArgumentException ex) {
             log.error("❌ JWT validation error: {}", ex.getMessage());
@@ -445,11 +445,11 @@ public class JwtTokenProvider {
     }
 
     public List<String> getRolesFromToken(String token) {
-        Claims claims = Jwts.parserBuilder()
-            .setSigningKey(secretKey)
+        Claims claims = Jwts.parser()
+            .verifyWith(secretKey)
             .build()
-            .parseClaimsJws(token)
-            .getBody();
+            .parseSignedClaims(token)
+            .getPayload();
 
         @SuppressWarnings("unchecked")
         List<String> roles = (List<String>) claims.get(ROLES_CLAIM);
@@ -465,12 +465,12 @@ public class JwtTokenProvider {
     }
 
     public Date getIssuedAt(String token) {
-        return Jwts.parserBuilder().setSigningKey(secretKey).build()
-            .parseClaimsJws(token).getBody().getIssuedAt();
+        return Jwts.parser().verifyWith(secretKey).build()
+            .parseSignedClaims(token).getPayload().getIssuedAt();
     }
 
     public Date getExpiration(String token) {
-        return Jwts.parserBuilder().setSigningKey(secretKey).build()
-            .parseClaimsJws(token).getBody().getExpiration();
+        return Jwts.parser().verifyWith(secretKey).build()
+            .parseSignedClaims(token).getPayload().getExpiration();
     }
 }
