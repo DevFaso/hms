@@ -2,13 +2,13 @@ name: Backend CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, mvp2]
     paths:
       - 'hospital-core/**'
       - 'build.gradle'
       - 'settings.gradle'
   pull_request:
-    branches: [main, develop]
+    branches: [main, develop, mvp2]
     paths:
       - 'hospital-core/**'
       - 'build.gradle'
