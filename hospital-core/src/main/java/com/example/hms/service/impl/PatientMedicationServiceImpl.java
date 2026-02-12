@@ -30,8 +30,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class PatientMedicationServiceImpl implements PatientMedicationService {
 
-    private static final Pattern DAYS_PATTERN = Pattern.compile("(\\d++)\\s*+(day|days)", Pattern.CASE_INSENSITIVE);
-    private static final Pattern WEEKS_PATTERN = Pattern.compile("(\\d++)\\s*+(week|weeks)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern DAYS_PATTERN = Pattern.compile("(\\d++)\\s*+days?", Pattern.CASE_INSENSITIVE);
+    private static final Pattern WEEKS_PATTERN = Pattern.compile("(\\d++)\\s*+weeks?", Pattern.CASE_INSENSITIVE);
     private static final int DEFAULT_LIMIT = 50;
 
     private final PrescriptionRepository prescriptionRepository;
