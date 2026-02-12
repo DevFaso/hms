@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+    <!--
+        Add suppression rules here for false positives reported by OWASP Dependency-Check.
+        Example:
+        <suppress>
+            <notes><![CDATA[ Suppress false positive for H2 test-only dependency ]]></notes>
+            <gav regex="true">com\.h2database:h2:.*</gav>
+            <cve>CVE-YYYY-NNNNN</cve>
+        </suppress>
+    -->
+</suppressions>
