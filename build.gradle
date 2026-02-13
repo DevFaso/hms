@@ -89,13 +89,7 @@ sonar {
             '**/AnnouncementServiceImpl.java',
             '**/PasswordRotationScheduler.java',
             '**/PrescriptionServiceImpl.java',
-            '**/HospitalServiceImpl.java',
-            // Zero-coverage small services
-            '**/NotificationServiceImpl.java',
-            '**/EncounterTreatmentServiceImpl.java',
-            '**/TreatmentValidationService.java',
-            '**/AssignmentLinkService.java',
-            '**/UsernameReminderServiceImpl.java'
+            '**/HospitalServiceImpl.java'
         ].join(',')
     }
 }
@@ -261,13 +255,7 @@ subprojects {
                     '**/AnnouncementServiceImpl*',
                     '**/PasswordRotationScheduler*',
                     '**/PrescriptionServiceImpl*',
-                    '**/HospitalServiceImpl*',
-                    // Zero-coverage small services
-                    '**/NotificationServiceImpl*',
-                    '**/EncounterTreatmentServiceImpl*',
-                    '**/TreatmentValidationService*',
-                    '**/AssignmentLinkService*',
-                    '**/UsernameReminderServiceImpl*'
+                    '**/HospitalServiceImpl*'
                 ])
             }))
         }
