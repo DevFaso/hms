@@ -485,8 +485,7 @@ class EncounterTest {
         void departmentNullPasses() throws Exception {
             Encounter e = validEncounter();
             e.setDepartment(null);
-            invokeValidate(e);
-            // no exception
+            assertThatNoException().isThrownBy(() -> invokeValidate(e));
         }
 
         @Test
@@ -505,8 +504,7 @@ class EncounterTest {
             Department dept = new Department();
             dept.setHospital(null);
             e.setDepartment(dept);
-            invokeValidate(e);
-            // no exception — department.hospital is null, passes the null check
+            assertThatNoException().isThrownBy(() -> invokeValidate(e));
         }
 
         @Test
@@ -540,8 +538,7 @@ class EncounterTest {
             appt.setPatient(patient);
             appt.setStaff(staff);
             e.setAppointment(appt);
-            invokeValidate(e);
-            // no exception
+            assertThatNoException().isThrownBy(() -> invokeValidate(e));
         }
 
         @Test

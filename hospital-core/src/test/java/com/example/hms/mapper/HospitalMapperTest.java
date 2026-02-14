@@ -119,7 +119,8 @@ class HospitalMapperTest {
     void updateHospitalFromDto_nullHospitalNoOp() {
         HospitalRequestDTO dto = new HospitalRequestDTO();
         dto.setName("New");
-        mapper.updateHospitalFromDto(dto, null); // no exception
+        // should not throw — silently returns when hospital is null
+        assertThatNoException().isThrownBy(() -> mapper.updateHospitalFromDto(dto, null));
     }
 
     @Test

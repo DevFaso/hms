@@ -1960,10 +1960,14 @@ class DevSyntheticDataSeederTest {
             Method method = DevSyntheticDataSeeder.class.getDeclaredMethod("syncUserSequenceFromExistingData");
             method.setAccessible(true);
 
+            AtomicInteger seq = (AtomicInteger) getField(seeder, "userSequence");
+            int before = seq.get();
+
             when(userRepository.findUsernamesByPrefix("dev_")).thenReturn(Collections.emptyList());
 
             method.invoke(seeder);
-            // Should not throw, sequence remains unchanged
+
+            assertThat(seq.get()).isEqualTo(before);
         }
     }
 
@@ -1988,10 +1992,14 @@ class DevSyntheticDataSeederTest {
             Method method = DevSyntheticDataSeeder.class.getDeclaredMethod("syncPhoneSequenceFromExistingData");
             method.setAccessible(true);
 
+            AtomicInteger seq = (AtomicInteger) getField(seeder, "phoneSequence");
+            int before = seq.get();
+
             when(userRepository.findMaxPhoneNumberWithPrefix("+226")).thenReturn(Optional.empty());
 
             method.invoke(seeder);
-            // no error
+
+            assertThat(seq.get()).isEqualTo(before);
         }
 
         @Test
@@ -1999,10 +2007,14 @@ class DevSyntheticDataSeederTest {
             Method method = DevSyntheticDataSeeder.class.getDeclaredMethod("syncPhoneSequenceFromExistingData");
             method.setAccessible(true);
 
+            AtomicInteger seq = (AtomicInteger) getField(seeder, "phoneSequence");
+            int before = seq.get();
+
             when(userRepository.findMaxPhoneNumberWithPrefix("+226")).thenReturn(Optional.of("+226abcdefgh"));
 
             method.invoke(seeder);
-            // Should not throw
+
+            assertThat(seq.get()).isEqualTo(before);
         }
     }
 
