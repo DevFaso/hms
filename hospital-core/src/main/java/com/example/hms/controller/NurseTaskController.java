@@ -1,9 +1,8 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
-import com.example.hms.model.Hospital;
-import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.nurse.NurseAnnouncementDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateResponseDTO;
@@ -12,8 +11,6 @@ import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO
 import com.example.hms.payload.dto.nurse.NurseMedicationTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseOrderTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.security.CustomUserDetails;
 import com.example.hms.service.NurseTaskService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,8 +18,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -37,8 +32,6 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -48,7 +41,7 @@ import java.util.UUID;
 public class NurseTaskController {
 
     private final NurseTaskService nurseTaskService;
-    private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final ControllerAuthUtils authUtils;
 
     @GetMapping("/vitals/due")
     @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
@@ -59,7 +52,7 @@ public class NurseTaskController {
         @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
         Authentication auth
     ) {
-        requireAuth(auth);
+        authUtils.requireAuth(auth);
         UUID nurseId = resolveAssignee(auth, assignee);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         Duration duration = parseWindow(window);
@@ -75,7 +68,7 @@ public class NurseTaskController {
         @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
         Authentication auth
     ) {
-        requireAuth(auth);
+        authUtils.requireAuth(auth);
         UUID nurseId = resolveAssignee(auth, assignee);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         return ResponseEntity.ok(nurseTaskService.getMedicationTasks(nurseId, scopedHospital, status));
@@ -91,11 +84,11 @@ public class NurseTaskController {
         @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
         Authentication auth
     ) {
-        requireAuth(auth);
+        authUtils.requireAuth(auth);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         UUID nurseId = resolveAssignee(auth, assignee);
         if (nurseId == null) {
-            nurseId = resolveUserId(auth)
+            nurseId = authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException("Unable to resolve nurse assignment for administration."));
         }
         NurseMedicationTaskResponseDTO response = nurseTaskService.recordMedicationAdministration(taskId, nurseId, scopedHospital, request);
@@ -112,7 +105,7 @@ public class NurseTaskController {
         @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
         Authentication auth
     ) {
-        requireAuth(auth);
+        authUtils.requireAuth(auth);
         UUID nurseId = resolveAssignee(auth, assignee);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         int effectiveLimit = safeLimit(limit, 6, 20);
@@ -128,7 +121,7 @@ public class NurseTaskController {
         @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
         Authentication auth
     ) {
-        requireAuth(auth);
+        authUtils.requireAuth(auth);
         UUID nurseId = resolveAssignee(auth, assignee);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         int effectiveLimit = safeLimit(limit, 6, 20);
@@ -144,7 +137,7 @@ public class NurseTaskController {
         @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
         Authentication auth
     ) {
-        requireAuth(auth);
+        authUtils.requireAuth(auth);
         UUID nurseId = resolveAssignee(auth, assignee);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         try {
@@ -166,7 +159,7 @@ public class NurseTaskController {
         @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
         Authentication auth
     ) {
-        requireAuth(auth);
+        authUtils.requireAuth(auth);
         UUID nurseId = resolveAssignee(auth, assignee);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         boolean completed = Boolean.TRUE.equals(request.getCompleted());
@@ -189,14 +182,14 @@ public class NurseTaskController {
         Authentication auth,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale
     ) {
-        requireAuth(auth);
+        authUtils.requireAuth(auth);
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         int effectiveLimit = safeLimit(limit, 5, 20);
         return ResponseEntity.ok(nurseTaskService.getAnnouncements(scopedHospital, effectiveLimit));
     }
 
     private UUID ensureHospitalScope(Authentication auth, UUID requestedHospital) {
-        UUID resolved = resolveHospitalScope(auth, requestedHospital);
+        UUID resolved = authUtils.resolveHospitalScope(auth, requestedHospital, false);
         if (resolved == null) {
             throw new BusinessException("Hospital context required for nurse workflow data.");
         }
@@ -208,7 +201,7 @@ public class NurseTaskController {
             return null;
         }
         if ("me".equalsIgnoreCase(assignee.trim())) {
-            return resolveUserId(auth)
+            return authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException("Unable to resolve user identity for 'me' filter."));
         }
         return null;
@@ -243,105 +236,6 @@ public class NurseTaskController {
             return defaultValue;
         }
         return clampInt(limit, 1, max);
-    }
-
-    private void requireAuth(Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            throw new BusinessException("Authentication required.");
-        }
-    }
-
-    private Optional<UUID> resolveUserId(Authentication auth) {
-        if (auth == null) {
-            return Optional.empty();
-        }
-        Object principal = auth.getPrincipal();
-        if (principal instanceof CustomUserDetails details) {
-            return Optional.ofNullable(details.getUserId());
-        }
-        if (auth instanceof JwtAuthenticationToken token) {
-            Jwt jwt = token.getToken();
-            for (String claim : List.of("uid", "userId", "id", "sub")) {
-                String raw = jwt.getClaimAsString(claim);
-                if (raw != null && !raw.isBlank()) {
-                    try {
-                        return Optional.of(UUID.fromString(raw));
-                    } catch (IllegalArgumentException ignored) {
-                        // continue to next claim
-                    }
-                }
-            }
-        }
-        return Optional.empty();
-    }
-
-    private UUID resolveHospitalScope(Authentication auth, UUID requestedHospitalId) {
-        UUID jwtHospitalId = extractHospitalIdFromJwt(auth);
-
-        if (hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            return preferHospital(requestedHospitalId, jwtHospitalId)
-                .or(() -> fallbackHospitalFromAssignments(auth))
-                .orElse(null);
-        }
-
-        if (hasAuthority(auth, "ROLE_HOSPITAL_ADMIN")) {
-            return preferHospital(requestedHospitalId, jwtHospitalId)
-                .or(() -> fallbackHospitalFromAssignments(auth))
-                .orElse(null);
-        }
-
-        return preferHospital(requestedHospitalId, jwtHospitalId)
-            .or(() -> fallbackHospitalFromAssignments(auth))
-            .orElse(null);
-    }
-
-    private Optional<UUID> preferHospital(UUID requestedHospitalId, UUID jwtHospitalId) {
-        if (requestedHospitalId != null) {
-            return Optional.of(requestedHospitalId);
-        }
-        if (jwtHospitalId != null) {
-            return Optional.of(jwtHospitalId);
-        }
-        return Optional.empty();
-    }
-
-    private UUID extractHospitalIdFromJwt(Authentication auth) {
-        if (auth instanceof JwtAuthenticationToken token) {
-            Jwt jwt = token.getToken();
-            String claim = jwt.getClaimAsString("hospitalId");
-            if (claim != null && !claim.isBlank()) {
-                try {
-                    return UUID.fromString(claim);
-                } catch (IllegalArgumentException ignored) {
-                    // fall through to other representations
-                }
-            }
-            Object raw = jwt.getClaims().get("hospitalId");
-            if (raw instanceof UUID uuid) {
-                return uuid;
-            }
-            if (raw instanceof String str && !str.isBlank()) {
-                try {
-                    return UUID.fromString(str);
-                } catch (IllegalArgumentException ignored) {
-                    return null;
-                }
-            }
-        }
-        return null;
-    }
-
-    private Optional<UUID> fallbackHospitalFromAssignments(Authentication auth) {
-        return resolveUserId(auth)
-            .flatMap(assignmentRepository::findFirstByUserIdAndActiveTrueOrderByCreatedAtDesc)
-            .map(UserRoleHospitalAssignment::getHospital)
-            .filter(Objects::nonNull)
-            .map(Hospital::getId);
-    }
-
-    private boolean hasAuthority(Authentication auth, String authority) {
-        return auth != null && auth.getAuthorities() != null
-            && auth.getAuthorities().stream().anyMatch(a -> authority.equalsIgnoreCase(a.getAuthority()));
     }
 
     private int clampInt(int value, int min, int max) {

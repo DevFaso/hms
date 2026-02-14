@@ -1,13 +1,9 @@
 package com.example.hms.controller;
 
-import com.example.hms.exception.BusinessException;
-import com.example.hms.model.Hospital;
-import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.payload.dto.clinical.postpartum.PostpartumObservationRequestDTO;
 import com.example.hms.payload.dto.clinical.postpartum.PostpartumObservationResponseDTO;
 import com.example.hms.payload.dto.clinical.postpartum.PostpartumScheduleDTO;
-import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.security.CustomUserDetails;
 import com.example.hms.service.PostpartumCareService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -21,8 +17,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,10 +27,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeParseException;
 import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -51,7 +42,7 @@ public class PostpartumCareController {
     private static final int MAX_PAGE_SIZE = 200;
 
     private final PostpartumCareService postpartumCareService;
-    private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final ControllerAuthUtils authUtils;
 
     @PostMapping("/observations")
     @ResponseStatus(HttpStatus.CREATED)
@@ -71,9 +62,9 @@ public class PostpartumCareController {
         @RequestParam(required = false) UUID carePlanId,
         Authentication auth
     ) {
-        requireAuthentication(auth);
-        UUID recorderUserId = resolveUserId(auth).orElse(null);
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, request.getHospitalId(), true);
+        authUtils.requireAuth(auth);
+        UUID recorderUserId = authUtils.resolveUserId(auth).orElse(null);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, request.getHospitalId(), true);
         if (resolvedHospitalId != null) {
             request.setHospitalId(resolvedHospitalId);
         }
@@ -98,9 +89,9 @@ public class PostpartumCareController {
         @RequestParam(required = false, defaultValue = "10") Integer limit,
         Authentication auth
     ) {
-        requireAuthentication(auth);
-        int effectiveLimit = sanitizeLimit(limit, DEFAULT_RECENT_LIMIT, MAX_RECENT_LIMIT);
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, null, false);
+        authUtils.requireAuth(auth);
+        int effectiveLimit = authUtils.sanitizeLimit(limit, DEFAULT_RECENT_LIMIT, MAX_RECENT_LIMIT);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, null, false);
         List<PostpartumObservationResponseDTO> observations = postpartumCareService.getRecentObservations(
             patientId,
             resolvedHospitalId,
@@ -127,11 +118,11 @@ public class PostpartumCareController {
         @RequestParam(defaultValue = "20") int size,
         Authentication auth
     ) {
-        requireAuthentication(auth);
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, null, false);
-        LocalDateTime fromDate = parseDateTime(from);
-        LocalDateTime toDate = parseDateTime(to);
-        int safeSize = sanitizeLimit(size, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+        authUtils.requireAuth(auth);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, null, false);
+        LocalDateTime fromDate = authUtils.parseDateTime(from);
+        LocalDateTime toDate = authUtils.parseDateTime(to);
+        int safeSize = authUtils.sanitizeLimit(size, DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
         int safePage = Math.max(page, 0);
         List<PostpartumObservationResponseDTO> observations = postpartumCareService.searchObservations(
             patientId,
@@ -158,158 +149,9 @@ public class PostpartumCareController {
         @RequestParam(required = false) UUID carePlanId,
         Authentication auth
     ) {
-        requireAuthentication(auth);
-        UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, null, false);
+        authUtils.requireAuth(auth);
+        UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, null, false);
         PostpartumScheduleDTO schedule = postpartumCareService.getSchedule(patientId, resolvedHospitalId, carePlanId);
         return ResponseEntity.ok(schedule);
-    }
-
-    private void requireAuthentication(Authentication auth) {
-        if (auth == null) {
-            throw new BusinessException("Authentication required.");
-        }
-    }
-
-    private Optional<UUID> resolveUserId(Authentication auth) {
-        if (auth == null) {
-            return Optional.empty();
-        }
-        Object principal = auth.getPrincipal();
-        if (principal instanceof CustomUserDetails details) {
-            return Optional.ofNullable(details.getUserId());
-        }
-        if (auth instanceof JwtAuthenticationToken token) {
-            Jwt jwt = token.getToken();
-            for (String claim : List.of("uid", "userId", "id", "sub")) {
-                String raw = jwt.getClaimAsString(claim);
-                if (raw != null && !raw.isBlank()) {
-                    try {
-                        return Optional.of(UUID.fromString(raw));
-                    } catch (IllegalArgumentException ignored) {
-                        // fall through to next claim
-                    }
-                }
-            }
-        }
-        return Optional.empty();
-    }
-
-    private UUID resolveHospitalScope(Authentication auth,
-                                      UUID queryHospitalId,
-                                      UUID bodyHospitalId,
-                                      boolean requireReceptionistContext) {
-        UUID requested = queryHospitalId != null ? queryHospitalId : bodyHospitalId;
-        UUID tokenHospital = extractHospitalIdFromJwt(auth);
-
-        if (hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            return preferHospital(requested, tokenHospital)
-                .or(() -> fallbackHospitalFromAssignments(auth))
-                .orElse(null);
-        }
-
-        if (hasAuthority(auth, "ROLE_RECEPTIONIST")) {
-            return resolveReceptionistScope(auth, requested, tokenHospital, requireReceptionistContext);
-        }
-
-        if (hasAuthority(auth, "ROLE_HOSPITAL_ADMIN")) {
-            return preferHospital(requested, tokenHospital)
-                .or(() -> fallbackHospitalFromAssignments(auth))
-                .orElse(null);
-        }
-
-        return preferHospital(requested, tokenHospital)
-            .or(() -> fallbackHospitalFromAssignments(auth))
-            .orElse(null);
-    }
-
-    private UUID resolveReceptionistScope(Authentication auth,
-                                           UUID requestedHospitalId,
-                                           UUID tokenHospitalId,
-                                           boolean required) {
-        if (tokenHospitalId != null) {
-            return tokenHospitalId;
-        }
-        if (requestedHospitalId != null) {
-            return requestedHospitalId;
-        }
-        Optional<UUID> assignmentHospital = fallbackHospitalFromAssignments(auth);
-        if (assignmentHospital.isPresent()) {
-            return assignmentHospital.get();
-        }
-        if (required) {
-            throw new BusinessException("Receptionist must be affiliated with a hospital context.");
-        }
-        return null;
-    }
-
-    private Optional<UUID> preferHospital(UUID requestedHospitalId, UUID tokenHospitalId) {
-        if (requestedHospitalId != null) {
-            return Optional.of(requestedHospitalId);
-        }
-        if (tokenHospitalId != null) {
-            return Optional.of(tokenHospitalId);
-        }
-        return Optional.empty();
-    }
-
-    private Optional<UUID> fallbackHospitalFromAssignments(Authentication auth) {
-        return resolveUserId(auth)
-            .flatMap(assignmentRepository::findFirstByUserIdAndActiveTrueOrderByCreatedAtDesc)
-            .map(UserRoleHospitalAssignment::getHospital)
-            .filter(Objects::nonNull)
-            .map(Hospital::getId);
-    }
-
-    private boolean hasAuthority(Authentication auth, String authority) {
-        if (auth == null || auth.getAuthorities() == null) {
-            return false;
-        }
-        return auth.getAuthorities().stream()
-            .anyMatch(granted -> authority.equalsIgnoreCase(granted.getAuthority()));
-    }
-
-    private UUID extractHospitalIdFromJwt(Authentication auth) {
-        if (auth instanceof JwtAuthenticationToken token) {
-            Jwt jwt = token.getToken();
-            String claim = jwt.getClaimAsString("hospitalId");
-            if (claim != null && !claim.isBlank()) {
-                try {
-                    return UUID.fromString(claim);
-                } catch (IllegalArgumentException ignored) {
-                    // fall through to additional parsing below
-                }
-            }
-            Object raw = jwt.getClaims().get("hospitalId");
-            if (raw instanceof UUID uuid) {
-                return uuid;
-            }
-            if (raw instanceof String str && !str.isBlank()) {
-                try {
-                    return UUID.fromString(str);
-                } catch (IllegalArgumentException ignored) {
-                    // ignore invalid string format
-                }
-            }
-        }
-        return null;
-    }
-
-    private LocalDateTime parseDateTime(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        try {
-            return LocalDateTime.parse(raw.trim());
-        } catch (DateTimeParseException ex) {
-            throw new BusinessException("Invalid datetime format; expected ISO-8601.");
-        }
-    }
-
-    private int sanitizeLimit(Integer candidate, int defaultValue, int maxValue) {
-        int value = candidate == null ? defaultValue : candidate;
-        if (value < 1) {
-            value = 1;
-        }
-        return Math.min(value, maxValue);
     }
 }

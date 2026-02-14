@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.EducationCategory;
 import com.example.hms.enums.EducationResourceType;
 import com.example.hms.payload.dto.education.EducationResourceRequestDTO;
@@ -21,8 +22,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -44,6 +43,7 @@ import java.util.UUID;
 public class PatientEducationController {
 
     private final PatientEducationService educationService;
+    private final ControllerAuthUtils authUtils;
 
     // ==================== Education Resource Endpoints ====================
 
@@ -370,7 +370,7 @@ public class PatientEducationController {
     // ==================== Helper Methods ====================
 
     private UUID getRequiredHospitalId(Authentication auth) {
-        UUID hospitalId = extractHospitalIdFromJwt(auth);
+        UUID hospitalId = authUtils.extractHospitalIdFromJwt(auth);
         if (hospitalId == null) {
             throw new AccessDeniedException("Missing hospitalId in authentication token");
         }
@@ -378,49 +378,7 @@ public class PatientEducationController {
     }
 
     private UUID getRequiredUserId(Authentication auth) {
-        UUID userId = extractUserIdFromJwt(auth);
-        if (userId == null) {
-            throw new AccessDeniedException("Missing userId in authentication token");
-        }
-        return userId;
-    }
-
-    private UUID extractHospitalIdFromJwt(Authentication auth) {
-        if (auth instanceof JwtAuthenticationToken jat) {
-            Jwt jwt = jat.getToken();
-            String s = jwt.getClaimAsString("hospitalId");
-            if (s != null && !s.isBlank()) {
-                try {
-                    return UUID.fromString(s);
-                } catch (RuntimeException ignored) {
-                    // ignore invalid UUID format
-                }
-            }
-            Object raw = jwt.getClaims().get("hospitalId");
-            if (raw instanceof UUID u) return u;
-            if (raw instanceof String str && !str.isBlank()) {
-                try {
-                    return UUID.fromString(str);
-                } catch (RuntimeException ignored) {
-                    // ignore invalid UUID format
-                }
-            }
-        }
-        return null;
-    }
-
-    private UUID extractUserIdFromJwt(Authentication auth) {
-        if (auth instanceof JwtAuthenticationToken jat) {
-            Jwt jwt = jat.getToken();
-            String sub = jwt.getSubject();
-            if (sub != null && !sub.isBlank()) {
-                try {
-                    return UUID.fromString(sub);
-                } catch (RuntimeException ignored) {
-                    // ignore invalid UUID format
-                }
-            }
-        }
-        return null;
+        return authUtils.resolveUserId(auth)
+            .orElseThrow(() -> new AccessDeniedException("Missing userId in authentication token"));
     }
 }

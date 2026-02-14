@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Role;
@@ -47,6 +48,8 @@ class PatientControllerTest {
     private MessageSource messageSource;
     @Mock
     private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock
+    private ControllerAuthUtils authUtils;
 
     private PatientController controller;
 
@@ -57,7 +60,8 @@ class PatientControllerTest {
             nurseDashboardService,
             patientChartUpdateService,
             messageSource,
-            assignmentRepository
+            assignmentRepository,
+            authUtils
         );
     }
 
@@ -86,6 +90,12 @@ class PatientControllerTest {
         JwtAuthenticationToken auth = new JwtAuthenticationToken(jwt,
             List.of(new SimpleGrantedAuthority(ROLE_RECEPTIONIST_CODE)));
 
+        // stub authUtils calls used by resolveHospitalScope path
+        when(authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")).thenReturn(false);
+        when(authUtils.hasAuthority(auth, ROLE_RECEPTIONIST_CODE)).thenReturn(true);
+        when(authUtils.extractHospitalIdFromJwt(auth)).thenReturn(null);
+        when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(userId));
+
     ResponseEntity<List<PatientResponseDTO>> response = controller.getAllPatients(null, null, null, null, auth);
 
         assertEquals(expected, response.getBody());
@@ -105,6 +115,12 @@ class PatientControllerTest {
             .build();
         JwtAuthenticationToken auth = new JwtAuthenticationToken(jwt,
             List.of(new SimpleGrantedAuthority(ROLE_RECEPTIONIST_CODE)));
+
+        // stub authUtils calls used by resolveHospitalScope path
+        when(authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")).thenReturn(false);
+        when(authUtils.hasAuthority(auth, ROLE_RECEPTIONIST_CODE)).thenReturn(true);
+        when(authUtils.extractHospitalIdFromJwt(auth)).thenReturn(null);
+        when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(userId));
 
         assertThrows(BusinessException.class, () -> controller.getAllPatients(null, null, null, null, auth));
     }

@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.payload.dto.EncounterRequestDTO;
@@ -24,8 +25,6 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -53,6 +52,7 @@ import java.util.UUID;
 public class EncounterController {
 
     private final EncounterService encounterService;
+    private final ControllerAuthUtils authUtils;
 
     // ----------------------------------------------------------
     // Create (Receptionist can check-in → default ARRIVED)
@@ -66,8 +66,8 @@ public class EncounterController {
         Authentication auth
     ) {
         // Enforce hospital scoping
-        UUID jwtHospitalId = extractHospitalIdFromJwt(auth);
-        boolean isReceptionist = hasAuthority(auth, "ROLE_RECEPTIONIST");
+        UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
+        boolean isReceptionist = authUtils.hasAuthority(auth, "ROLE_RECEPTIONIST");
         if (isReceptionist) {
             if (jwtHospitalId == null) {
                 throw new BusinessException("Receptionist must be affiliated with a hospital (missing hospitalId in token).");
@@ -133,8 +133,8 @@ public class EncounterController {
             return ResponseEntity.badRequest().build();
         }
 
-        boolean isReceptionist = hasAuthority(auth, "ROLE_RECEPTIONIST");
-        UUID jwtHospitalId = extractHospitalIdFromJwt(auth);
+        boolean isReceptionist = authUtils.hasAuthority(auth, "ROLE_RECEPTIONIST");
+        UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
         UUID resolvedHospitalId = hospitalId;
 
         if (isReceptionist) {
@@ -166,7 +166,7 @@ public class EncounterController {
         Authentication auth
     ) {
         // For consistency, honor JWT hospital for receptionist (though receptionist isn't allowed here)
-        UUID jwtHospitalId = extractHospitalIdFromJwt(auth);
+        UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
         if (dto.getHospitalId() == null) {
             dto.setHospitalId(jwtHospitalId);
         }
@@ -244,37 +244,5 @@ public class EncounterController {
         return ResponseEntity.ok(history);
     }
 
-    // ==========================================================
-    // Helpers
-    // ==========================================================
-    private boolean hasAuthority(Authentication auth, String authority) {
-        if (auth == null || auth.getAuthorities() == null) return false;
-        return auth.getAuthorities().stream().anyMatch(a -> authority.equalsIgnoreCase(a.getAuthority()));
-    }
-
-    private UUID extractHospitalIdFromJwt(Authentication auth) {
-        if (auth instanceof JwtAuthenticationToken jat) {
-            Jwt jwt = jat.getToken();
-            // flat claim
-            String s = jwt.getClaimAsString("hospitalId");
-            if (s != null && !s.isBlank()) {
-                try {
-                    return UUID.fromString(s);
-                } catch (IllegalArgumentException e) {
-                    // Invalid UUID format, continue to fallback logic
-                }
-            }
-            // nested/custom if needed
-            Object raw = jwt.getClaims().get("hospitalId");
-            if (raw instanceof UUID u) return u;
-            if (raw instanceof String str && !str.isBlank()) {
-                try {
-                    return UUID.fromString(str);
-                } catch (IllegalArgumentException e) {
-                    // Invalid UUID format, return null
-                }
-            }
-        }
-        return null;
-    }
 }
+

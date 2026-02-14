@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.UserRoleHospitalAssignment;
@@ -22,7 +23,6 @@ import com.example.hms.payload.dto.PatientSearchCriteria;
 import com.example.hms.payload.dto.PatientTimelineAccessRequestDTO;
 import com.example.hms.payload.dto.PatientTimelineResponseDTO;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
-import com.example.hms.security.CustomUserDetails;
 import com.example.hms.service.NurseDashboardService;
 import com.example.hms.service.PatientService;
 import com.example.hms.service.PatientChartUpdateService;
@@ -43,8 +43,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -86,6 +84,7 @@ public class PatientController {
     private final PatientChartUpdateService patientChartUpdateService;
     private final MessageSource messageSource;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final ControllerAuthUtils authUtils;
 
     // ----------------------------------------------------------
     // List
@@ -107,10 +106,10 @@ public class PatientController {
         @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication auth
     ) {
-        requireAuth(auth);
+        authUtils.requireAuth(auth);
         Locale locale = parseLocale(lang);
         if (assignedTo != null && assignedTo.equalsIgnoreCase("me")) {
-            UUID nurseId = resolveUserId(auth)
+            UUID nurseId = authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException("Unable to resolve authenticated user identifier for nurse dashboard filtering."));
             UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
             if (resolvedHospitalId == null) {
@@ -310,7 +309,7 @@ public class PatientController {
         @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication auth
     ) {
-        requireAuth(auth);
+        authUtils.requireAuth(auth);
         Locale locale = parseLocale(lang);
         String effectiveMrn = (mrn != null && !mrn.isBlank()) ? mrn : legacyMri;
         UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
@@ -331,8 +330,8 @@ public class PatientController {
         @Valid @RequestBody DoctorPatientRecordRequestDTO request,
         Authentication auth
     ) {
-        requireAuth(auth);
-        UUID userId = resolveUserId(auth)
+        authUtils.requireAuth(auth);
+        UUID userId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
         UUID resolvedHospitalId = resolveHospitalScope(auth, request.getHospitalId(), false);
         if (resolvedHospitalId == null) {
@@ -356,8 +355,8 @@ public class PatientController {
         @Valid @RequestBody PatientTimelineAccessRequestDTO request,
         Authentication auth
     ) {
-        requireAuth(auth);
-        UUID userId = resolveUserId(auth)
+        authUtils.requireAuth(auth);
+        UUID userId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
         UUID resolvedHospitalId = resolveHospitalScope(auth, request.getHospitalId(), false);
         if (resolvedHospitalId == null) {
@@ -381,8 +380,8 @@ public class PatientController {
         @RequestParam(required = false) UUID hospitalId,
         Authentication auth
     ) {
-        requireAuth(auth);
-        UUID userId = resolveUserId(auth)
+        authUtils.requireAuth(auth);
+        UUID userId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException("Unable to resolve authenticated clinician context."));
         UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
@@ -405,8 +404,8 @@ public class PatientController {
         @Valid @RequestBody PatientAllergyRequestDTO request,
         Authentication auth
     ) {
-        requireAuth(auth);
-        UUID requesterUserId = resolveUserId(auth)
+        authUtils.requireAuth(auth);
+        UUID requesterUserId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
         UUID resolvedHospitalId = resolveHospitalScope(auth, request.getHospitalId(), false);
         UUID effectiveHospitalId = resolvedHospitalId != null ? resolvedHospitalId : request.getHospitalId();
@@ -432,8 +431,8 @@ public class PatientController {
         @Valid @RequestBody PatientAllergyRequestDTO request,
         Authentication auth
     ) {
-        requireAuth(auth);
-        UUID requesterUserId = resolveUserId(auth)
+        authUtils.requireAuth(auth);
+        UUID requesterUserId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
         UUID resolvedHospitalId = resolveHospitalScope(auth, request.getHospitalId(), false);
         UUID effectiveHospitalId = resolvedHospitalId != null ? resolvedHospitalId : request.getHospitalId();
@@ -460,8 +459,8 @@ public class PatientController {
         @Valid @RequestBody PatientAllergyDeactivateRequestDTO request,
         Authentication auth
     ) {
-        requireAuth(auth);
-        UUID requesterUserId = resolveUserId(auth)
+        authUtils.requireAuth(auth);
+        UUID requesterUserId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
         UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
@@ -487,7 +486,7 @@ public class PatientController {
         @RequestParam(name = "includeHistorical", defaultValue = "false") boolean includeHistorical,
         Authentication auth
     ) {
-        requireAuth(auth);
+        authUtils.requireAuth(auth);
         UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
             throw new BusinessException("Hospital context is required to view diagnoses.");
@@ -509,8 +508,8 @@ public class PatientController {
         @Valid @RequestBody PatientDiagnosisRequestDTO request,
         Authentication auth
     ) {
-        requireAuth(auth);
-        UUID requesterUserId = resolveUserId(auth)
+        authUtils.requireAuth(auth);
+        UUID requesterUserId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
         UUID resolvedHospitalId = resolveHospitalScope(auth, request.getHospitalId(), false);
         UUID effectiveHospitalId = resolvedHospitalId != null ? resolvedHospitalId : request.getHospitalId();
@@ -536,8 +535,8 @@ public class PatientController {
         @Valid @RequestBody PatientDiagnosisUpdateRequestDTO request,
         Authentication auth
     ) {
-        requireAuth(auth);
-        UUID requesterUserId = resolveUserId(auth)
+        authUtils.requireAuth(auth);
+        UUID requesterUserId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
         UUID resolvedHospitalId = resolveHospitalScope(auth, request.getHospitalId(), false);
         UUID effectiveHospitalId = resolvedHospitalId != null ? resolvedHospitalId : request.getHospitalId();
@@ -564,8 +563,8 @@ public class PatientController {
         @Valid @RequestBody PatientDiagnosisDeleteRequestDTO request,
         Authentication auth
     ) {
-        requireAuth(auth);
-        UUID requesterUserId = resolveUserId(auth)
+        authUtils.requireAuth(auth);
+        UUID requesterUserId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
         UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
@@ -588,8 +587,8 @@ public class PatientController {
         @PageableDefault(size = 20, sort = "versionNumber", direction = Sort.Direction.DESC) Pageable pageable,
         Authentication auth
     ) {
-        requireAuth(auth);
-        UUID userId = resolveUserId(auth)
+        authUtils.requireAuth(auth);
+        UUID userId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException("Unable to resolve authenticated user context."));
         UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
@@ -614,8 +613,8 @@ public class PatientController {
         @RequestParam(required = false) UUID hospitalId,
         Authentication auth
     ) {
-        requireAuth(auth);
-        UUID userId = resolveUserId(auth)
+        authUtils.requireAuth(auth);
+        UUID userId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException("Unable to resolve authenticated user context."));
         UUID resolvedHospitalId = resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
@@ -639,8 +638,8 @@ public class PatientController {
         @Valid @RequestBody DoctorPatientChartUpdateRequestDTO request,
         Authentication auth
     ) {
-        requireAuth(auth);
-        UUID userId = resolveUserId(auth)
+        authUtils.requireAuth(auth);
+        UUID userId = authUtils.resolveUserId(auth)
             .orElseThrow(() -> new BusinessException("Unable to resolve authenticated clinician context."));
         UUID resolvedHospitalId = resolveHospitalScope(auth, request.getHospitalId(), false);
         if (resolvedHospitalId == null && request.getHospitalId() == null) {
@@ -656,33 +655,6 @@ public class PatientController {
     // ==========================================================
     // Helpers
     // ==========================================================
-    private void requireAuth(Authentication auth) {
-        if (auth == null) throw new BusinessException("Authentication required.");
-    }
-
-    private Optional<UUID> resolveUserId(Authentication auth) {
-        if (auth == null) {
-            return Optional.empty();
-        }
-        Object principal = auth.getPrincipal();
-        if (principal instanceof CustomUserDetails cud) {
-            return Optional.ofNullable(cud.getUserId());
-        }
-        if (auth instanceof JwtAuthenticationToken jat) {
-            Jwt jwt = jat.getToken();
-            for (String claim : List.of("uid", "userId", "id", "sub")) {
-                String raw = jwt.getClaimAsString(claim);
-                if (raw != null && !raw.isBlank()) {
-                    try {
-                        return Optional.of(UUID.fromString(raw));
-                    } catch (IllegalArgumentException ignored) {
-                        // try the next claim key
-                    }
-                }
-            }
-        }
-        return Optional.empty();
-    }
 
     private Locale parseLocale(String header) {
         if (header == null || header.isBlank()) return Locale.getDefault();
@@ -754,26 +726,26 @@ public class PatientController {
      * - Others (DOCTOR/NURSE): use provided hospitalId if any; else JWT; else null.
      */
     private UUID resolveHospitalScope(Authentication auth, UUID requestedHospitalId, boolean requiredForReceptionist) {
-        UUID jwtHospitalId = extractHospitalIdFromJwt(auth);
+        UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
 
-        if (hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            return preferHospital(requestedHospitalId, jwtHospitalId)
-                .or(() -> fallbackHospitalFromAssignments(auth))
+        if (authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
+            return authUtils.preferHospital(requestedHospitalId, jwtHospitalId)
+                .or(() -> authUtils.fallbackHospitalFromAssignments(auth))
                 .orElse(null);
         }
 
-        if (hasAuthority(auth, ROLE_RECEPTIONIST)) {
+        if (authUtils.hasAuthority(auth, ROLE_RECEPTIONIST)) {
             return resolveReceptionistScope(auth, requestedHospitalId, jwtHospitalId, requiredForReceptionist);
         }
 
-        if (hasAuthority(auth, "ROLE_HOSPITAL_ADMIN")) {
-            return preferHospital(requestedHospitalId, jwtHospitalId)
-                .or(() -> fallbackHospitalFromAssignments(auth))
+        if (authUtils.hasAuthority(auth, "ROLE_HOSPITAL_ADMIN")) {
+            return authUtils.preferHospital(requestedHospitalId, jwtHospitalId)
+                .or(() -> authUtils.fallbackHospitalFromAssignments(auth))
                 .orElse(null);
         }
 
-        return preferHospital(requestedHospitalId, jwtHospitalId)
-            .or(() -> fallbackHospitalFromAssignments(auth))
+        return authUtils.preferHospital(requestedHospitalId, jwtHospitalId)
+            .or(() -> authUtils.fallbackHospitalFromAssignments(auth))
             .orElse(null);
     }
 
@@ -806,7 +778,7 @@ public class PatientController {
     }
 
     private Optional<UUID> receptionistAssignmentHospital(Authentication auth) {
-        return resolveUserId(auth)
+        return authUtils.resolveUserId(auth)
             .flatMap(userId -> assignmentRepository
                 .findFirstByUserIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, ROLE_RECEPTIONIST))
             .map(UserRoleHospitalAssignment::getHospital)
@@ -838,54 +810,9 @@ public class PatientController {
         if (hospitalId == null) {
             return false;
         }
-        return resolveUserId(auth)
+        return authUtils.resolveUserId(auth)
             .map(userId -> assignmentRepository
                 .existsByUserIdAndHospitalIdAndRole_CodeIgnoreCaseAndActiveTrue(userId, hospitalId, ROLE_RECEPTIONIST))
             .orElse(false);
-    }
-
-    private Optional<UUID> preferHospital(UUID requestedHospitalId, UUID jwtHospitalId) {
-        if (requestedHospitalId != null) {
-            return Optional.of(requestedHospitalId);
-        }
-        if (jwtHospitalId != null) {
-            return Optional.of(jwtHospitalId);
-        }
-        return Optional.empty();
-    }
-
-    private Optional<UUID> fallbackHospitalFromAssignments(Authentication auth) {
-        return resolveUserId(auth)
-            .flatMap(assignmentRepository::findFirstByUserIdAndActiveTrueOrderByCreatedAtDesc)
-            .map(UserRoleHospitalAssignment::getHospital)
-            .filter(Objects::nonNull)
-            .map(Hospital::getId);
-    }
-
-    private boolean hasAuthority(Authentication auth, String authority) {
-        if (auth == null || auth.getAuthorities() == null) return false;
-        return auth.getAuthorities().stream().anyMatch(a -> authority.equalsIgnoreCase(a.getAuthority()));
-    }
-
-    private UUID extractHospitalIdFromJwt(Authentication auth) {
-        if (auth instanceof JwtAuthenticationToken jat) {
-            Jwt jwt = jat.getToken();
-            // flat claim
-            String s = jwt.getClaimAsString("hospitalId");
-            if (s != null && !s.isBlank()) {
-                try { return UUID.fromString(s); } catch (RuntimeException ignored) {
-                    // ignore invalid UUID formats and continue fallback logic
-                }
-            }
-            // nested/custom if needed
-            Object raw = jwt.getClaims().get("hospitalId");
-            if (raw instanceof UUID u) return u;
-            if (raw instanceof String str && !str.isBlank()) {
-                try { return UUID.fromString(str); } catch (RuntimeException ignored) {
-                    // ignore invalid UUID formats and continue fallback logic
-                }
-            }
-        }
-        return null;
     }
 }
