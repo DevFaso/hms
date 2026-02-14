@@ -83,13 +83,7 @@ sonar {
             '**/PostpartumCareServiceImpl.java',
             '**/PrenatalSchedulingServiceImpl.java',
             '**/ImagingReportServiceImpl.java',
-            '**/LabOrderServiceImpl.java',
-            // Low-coverage / infrastructure / scheduler
-            '**/ServiceTranslationServiceImpl.java',
-            '**/AnnouncementServiceImpl.java',
-            '**/PasswordRotationScheduler.java',
-            '**/PrescriptionServiceImpl.java',
-            '**/HospitalServiceImpl.java'
+            '**/LabOrderServiceImpl.java'
         ].join(',')
     }
 }
@@ -249,13 +243,7 @@ subprojects {
                     '**/PostpartumCareServiceImpl*',
                     '**/PrenatalSchedulingServiceImpl*',
                     '**/ImagingReportServiceImpl*',
-                    '**/LabOrderServiceImpl*',
-                    // Low-coverage / infrastructure / scheduler
-                    '**/ServiceTranslationServiceImpl*',
-                    '**/AnnouncementServiceImpl*',
-                    '**/PasswordRotationScheduler*',
-                    '**/PrescriptionServiceImpl*',
-                    '**/HospitalServiceImpl*'
+                    '**/LabOrderServiceImpl*'
                 ])
             }))
         }
