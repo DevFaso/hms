@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - develop
+      - uat
   workflow_dispatch:
     inputs:
       environment:

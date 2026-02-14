@@ -1,14 +1,13 @@
-name: "MVP2: Backend Quality Gates & Comprehensive Test Suite"
+name: "Backend Quality Gates & Comprehensive Test Suite"
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop, uat]
     paths:
       - 'hospital-core/**'
       - 'build.gradle'
       - 'settings.gradle'
   pull_request:
-    branches: [main, develop, mvp2]
     paths:
       - 'hospital-core/**'
       - 'build.gradle'
