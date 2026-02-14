@@ -321,4 +321,583 @@ class StaffServiceImplTest {
         assertThat(staff.getDepartment()).isEqualTo(dept);
         verify(staffRepository).save(staff);
     }
+
+    @Test
+    void updateStaffDepartment_staffNotFound_throws() {
+        when(userRepository.findByEmail("unknown@test.com")).thenReturn(Optional.empty());
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
+
+        assertThatThrownBy(() -> staffService.updateStaffDepartment("unknown@test.com", "Cardiology", "Test Hospital", locale))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void updateStaffDepartment_hospitalNotFound_throws() {
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId())).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findByName("Unknown Hospital")).thenReturn(Optional.empty());
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
+
+        assertThatThrownBy(() -> staffService.updateStaffDepartment("doctor@test.com", "Cardiology", "Unknown Hospital", locale))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void updateStaffDepartment_departmentNotFound_throws() {
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId())).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(departmentRepository.findByHospitalIdAndNameIgnoreCase(hospitalId, "Unknown")).thenReturn(Optional.empty());
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
+
+        assertThatThrownBy(() -> staffService.updateStaffDepartment("doctor@test.com", "Unknown", "Test Hospital", locale))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void updateStaffDepartment_wrongHospital_throws() {
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        staff.setHospital(otherHospital);
+
+        Department dept = new Department();
+        dept.setId(UUID.randomUUID());
+        dept.setHospital(hospital);
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(user.getId())).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(departmentRepository.findByHospitalIdAndNameIgnoreCase(hospitalId, "Cardiology")).thenReturn(Optional.of(dept));
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Wrong hospital");
+
+        assertThatThrownBy(() -> staffService.updateStaffDepartment("doctor@test.com", "Cardiology", "Test Hospital", locale))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void getAllStaff_nonSuperAdmin_withHospitalScope_returnsFiltered() {
+        HospitalContextHolder.clear();
+        HospitalContext ctx = HospitalContext.builder()
+            .superAdmin(false)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .build();
+        HospitalContextHolder.setContext(ctx);
+
+        when(staffRepository.findByHospital_IdIn(any())).thenReturn(List.of(staff));
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        List<StaffResponseDTO> result = staffService.getAllStaff(locale);
+
+        assertThat(result).hasSize(1);
+        verify(staffRepository).findByHospital_IdIn(any());
+    }
+
+    @Test
+    void getAllStaff_nonSuperAdmin_noHospitalScope_returnsEmpty() {
+        HospitalContextHolder.clear();
+        HospitalContext ctx = HospitalContext.builder()
+            .superAdmin(false)
+            .permittedHospitalIds(Set.of())
+            .build();
+        HospitalContextHolder.setContext(ctx);
+
+        List<StaffResponseDTO> result = staffService.getAllStaff(locale);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void createStaff_success_minimalWithRole() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("Doctor")
+            .licenseNumber("NEW-LIC-001")
+            .roleName("ROLE_DOCTOR")
+            .specialization(com.example.hms.enums.Specialization.CARDIOLOGY)
+            .build();
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode("ROLE_DOCTOR");
+
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(role).build();
+        assignment.setId(UUID.randomUUID());
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(roleRepository.findByCode("ROLE_DOCTOR")).thenReturn(Optional.of(role));
+        when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(user.getId(), hospital.getId(), role.getId()))
+            .thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByLicenseNumber("NEW-LIC-001")).thenReturn(false);
+        when(staffMapper.toStaff(eq(dto), eq(user), eq(hospital), any(), eq(assignment))).thenReturn(staff);
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        StaffResponseDTO result = staffService.createStaff(dto, locale);
+
+        assertThat(result).isNotNull();
+        verify(staffRepository).save(staff);
+    }
+
+    @Test
+    void createStaff_withDepartment() {
+        Department dept = new Department();
+        dept.setId(UUID.randomUUID());
+        dept.setHospital(hospital);
+
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("Doctor")
+            .departmentName("Cardiology")
+            .licenseNumber("LIC-NEW")
+            .roleName("ROLE_DOCTOR")
+            .specialization(com.example.hms.enums.Specialization.CARDIOLOGY)
+            .build();
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(departmentRepository.findByHospitalIdAndNameIgnoreCase(hospital.getId(), "Cardiology")).thenReturn(Optional.of(dept));
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode("ROLE_DOCTOR");
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(role).build();
+        assignment.setId(UUID.randomUUID());
+
+        when(roleRepository.findByCode("ROLE_DOCTOR")).thenReturn(Optional.of(role));
+        when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
+            .thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
+        when(staffMapper.toStaff(eq(dto), eq(user), eq(hospital), eq(dept), eq(assignment))).thenReturn(staff);
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        StaffResponseDTO result = staffService.createStaff(dto, locale);
+        assertThat(result).isNotNull();
+    }
+
+    @Test
+    void createStaff_userNotFound_throws() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("unknown@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("Doctor")
+            .build();
+
+        when(userRepository.findByEmail("unknown@test.com")).thenReturn(Optional.empty());
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void createStaff_hospitalNotFound_throws() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Unknown")
+            .jobTitle("Doctor")
+            .build();
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Unknown")).thenReturn(Optional.empty());
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void createStaff_duplicateLicense_throws() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("Doctor")
+            .licenseNumber("LIC-EXISTING")
+            .roleName("ROLE_DOCTOR")
+            .specialization(com.example.hms.enums.Specialization.CARDIOLOGY)
+            .build();
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode("ROLE_DOCTOR");
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(role).build();
+        assignment.setId(UUID.randomUUID());
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(roleRepository.findByCode("ROLE_DOCTOR")).thenReturn(Optional.of(role));
+        when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
+            .thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByLicenseNumber("LIC-EXISTING")).thenReturn(true);
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Duplicate");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void createStaff_nullLicense_throws() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("Doctor")
+            .licenseNumber(null)
+            .roleName("ROLE_DOCTOR")
+            .specialization(com.example.hms.enums.Specialization.CARDIOLOGY)
+            .build();
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode("ROLE_DOCTOR");
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(role).build();
+        assignment.setId(UUID.randomUUID());
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(roleRepository.findByCode("ROLE_DOCTOR")).thenReturn(Optional.of(role));
+        when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
+            .thenReturn(Optional.of(assignment));
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void createStaff_departmentNotInHospital_throws() {
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(UUID.randomUUID());
+        Department dept = new Department();
+        dept.setId(UUID.randomUUID());
+        dept.setHospital(otherHospital);
+
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("Doctor")
+            .departmentName("Cardiology")
+            .licenseNumber("LIC-NEW")
+            .roleName("ROLE_DOCTOR")
+            .specialization(com.example.hms.enums.Specialization.CARDIOLOGY)
+            .build();
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(departmentRepository.findByHospitalIdAndNameIgnoreCase(hospital.getId(), "Cardiology")).thenReturn(Optional.of(dept));
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Wrong hospital");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void createStaff_nurseRole_validatesEmploymentType() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("Nurse")
+            .licenseNumber("LIC-NEW")
+            .roleName("ROLE_NURSE")
+            .employmentType(null)
+            .build();
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode("ROLE_NURSE");
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(role).build();
+        assignment.setId(UUID.randomUUID());
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(roleRepository.findByCode("ROLE_NURSE")).thenReturn(Optional.of(role));
+        when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
+            .thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void createStaff_doctorRole_validatesSpecialization() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("Doctor")
+            .licenseNumber("LIC-NEW")
+            .roleName("ROLE_DOCTOR")
+            .specialization(null)
+            .build();
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode("ROLE_DOCTOR");
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(role).build();
+        assignment.setId(UUID.randomUUID());
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(roleRepository.findByCode("ROLE_DOCTOR")).thenReturn(Optional.of(role));
+        when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
+            .thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void createStaff_radiologistRole_validatesFields() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("Radiologist")
+            .licenseNumber("LIC-NEW")
+            .roleName("ROLE_RADIOLOGIST")
+            .startDate(null)
+            .build();
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode("ROLE_RADIOLOGIST");
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(role).build();
+        assignment.setId(UUID.randomUUID());
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(roleRepository.findByCode("ROLE_RADIOLOGIST")).thenReturn(Optional.of(role));
+        when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
+            .thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void createStaff_nurseRole_endDateBeforeStart_throws() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("Nurse")
+            .licenseNumber("LIC-NEW")
+            .roleName("ROLE_NURSE")
+            .employmentType(com.example.hms.enums.EmploymentType.FULL_TIME)
+            .startDate(java.time.LocalDate.now())
+            .endDate(java.time.LocalDate.now().minusDays(1))
+            .build();
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode("ROLE_NURSE");
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(role).build();
+        assignment.setId(UUID.randomUUID());
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(roleRepository.findByCode("ROLE_NURSE")).thenReturn(Optional.of(role));
+        when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
+            .thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Invalid");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void createStaff_withHeadOfDepartment_updatesDepartment() {
+        Department dept = new Department();
+        dept.setId(UUID.randomUUID());
+        dept.setHospital(hospital);
+
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("Doctor")
+            .departmentName("Cardiology")
+            .licenseNumber("LIC-NEW")
+            .roleName("ROLE_DOCTOR")
+            .specialization(com.example.hms.enums.Specialization.CARDIOLOGY)
+            .headOfDepartment(true)
+            .build();
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode("ROLE_DOCTOR");
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(role).build();
+        assignment.setId(UUID.randomUUID());
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(departmentRepository.findByHospitalIdAndNameIgnoreCase(hospital.getId(), "Cardiology")).thenReturn(Optional.of(dept));
+        when(roleRepository.findByCode("ROLE_DOCTOR")).thenReturn(Optional.of(role));
+        when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
+            .thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
+        when(staffMapper.toStaff(eq(dto), eq(user), eq(hospital), eq(dept), eq(assignment))).thenReturn(staff);
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        staffService.createStaff(dto, locale);
+
+        verify(departmentRepository).updateHeadOfDepartment(dept.getId(), staff.getId());
+    }
+
+    @Test
+    void createStaff_noRoleName_throwsNPE() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("Doctor")
+            .licenseNumber("LIC-NEW")
+            .roleName(null)
+            .build();
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
+            .isInstanceOf(NullPointerException.class);
+    }
+
+    @Test
+    void getStaffById_notVisible_throws() {
+        HospitalContextHolder.clear();
+        HospitalContext ctx = HospitalContext.builder()
+            .superAdmin(false)
+            .permittedHospitalIds(Set.of(UUID.randomUUID())) // different hospital
+            .build();
+        HospitalContextHolder.setContext(ctx);
+
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("Access denied");
+
+        assertThatThrownBy(() -> staffService.getStaffById(staffId, locale))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    }
+
+    @Test
+    void getStaffByUserEmail_nonSuperAdmin_filtersHospital() {
+        HospitalContextHolder.clear();
+        HospitalContext ctx = HospitalContext.builder()
+            .superAdmin(false)
+            .permittedHospitalIds(Set.of(hospitalId))
+            .build();
+        HospitalContextHolder.setContext(ctx);
+
+        when(staffRepository.findByUserEmail("doctor@test.com")).thenReturn(List.of(staff));
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        List<StaffResponseDTO> result = staffService.getStaffByUserEmail("doctor@test.com", locale);
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void existsByIdAndHospitalIdAndActiveTrue_nonSuperAdmin_noAccess_throws() {
+        HospitalContextHolder.clear();
+        UUID otherHospitalId = UUID.randomUUID();
+        HospitalContext ctx = HospitalContext.builder()
+            .superAdmin(false)
+            .permittedHospitalIds(Set.of(UUID.randomUUID()))
+            .build();
+        HospitalContextHolder.setContext(ctx);
+        when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class))).thenReturn("Access denied");
+
+        assertThatThrownBy(() -> staffService.existsByIdAndHospitalIdAndActiveTrue(staffId, otherHospitalId))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+    }
+
+    @Test
+    void isStaffVisible_nullStaff_returnsTrue() {
+        // toMinimalDTO(null) returns null, but isStaffVisible is also called
+        // Staff with null hospital → hospitalId is null → hasHospitalAccess returns true
+        Staff nullHospitalStaff = new Staff();
+        nullHospitalStaff.setId(UUID.randomUUID());
+
+        when(staffRepository.findByUserEmail("x@test.com")).thenReturn(List.of(nullHospitalStaff));
+        when(staffMapper.toStaffDTO(nullHospitalStaff)).thenReturn(staffDto);
+
+        List<StaffResponseDTO> result = staffService.getStaffByUserEmail("x@test.com", locale);
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void radiologist_endDateBeforeStart_throws() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("Radiologist")
+            .licenseNumber("LIC-NEW")
+            .roleName("ROLE_RADIOLOGIST")
+            .specialization(com.example.hms.enums.Specialization.RADIOLOGY)
+            .startDate(java.time.LocalDate.now())
+            .endDate(java.time.LocalDate.now().minusDays(1))
+            .build();
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode("ROLE_RADIOLOGIST");
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(role).build();
+        assignment.setId(UUID.randomUUID());
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(roleRepository.findByCode("ROLE_RADIOLOGIST")).thenReturn(Optional.of(role));
+        when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
+            .thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Invalid");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
+                .isInstanceOf(BusinessRuleException.class);
+    }
+
+    @Test
+    void radiologist_noSpecialization_throws() {
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("Radiologist")
+            .licenseNumber("LIC-NEW")
+            .roleName("ROLE_RADIOLOGIST")
+            .specialization(null)
+            .startDate(java.time.LocalDate.now())
+            .build();
+
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setCode("ROLE_RADIOLOGIST");
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(role).build();
+        assignment.setId(UUID.randomUUID());
+
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(roleRepository.findByCode("ROLE_RADIOLOGIST")).thenReturn(Optional.of(role));
+        when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
+            .thenReturn(Optional.of(assignment));
+        when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Required");
+
+        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
+                .isInstanceOf(BusinessRuleException.class);
+    }
 }
