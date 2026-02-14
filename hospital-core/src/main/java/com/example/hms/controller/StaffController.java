@@ -169,7 +169,7 @@ public class StaffController {
         String first = header.split(",")[0].trim();
         // Replace underscore with dash and validate basic pattern
         first = first.replace('_','-');
-        if (!first.matches("^[A-Za-z]{2,8}(-[A-Za-z0-9]{2,8})*$")) {
+        if (!first.matches("[A-Za-z]{2,8}(-[A-Za-z0-9]{2,8}){0,3}")) {
             return Locale.getDefault();
         }
         try {

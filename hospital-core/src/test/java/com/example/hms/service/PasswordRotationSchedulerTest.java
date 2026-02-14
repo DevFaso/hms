@@ -17,7 +17,6 @@ import java.util.UUID;
 import java.util.stream.StreamSupport;
 
 import static com.example.hms.config.PasswordRotationPolicy.MAX_PASSWORD_AGE_DAYS;
-import static com.example.hms.config.PasswordRotationPolicy.WARNING_WINDOW_DAYS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;

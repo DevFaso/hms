@@ -91,13 +91,6 @@ class HospitalServiceImplTest {
                 .active(true).build();
     }
 
-    private HospitalRequestDTO buildForeignRequest(String name) {
-        return HospitalRequestDTO.builder()
-                .name(name).address("Rue 123").city("Ouaga").country("BF")
-                .phoneNumber("1234567890").email("h@example.com")
-                .active(true).build();
-    }
-
     private void stubMessage(String key) {
         lenient().when(messageSource.getMessage(eq(key), any(), anyString(), any(Locale.class)))
                 .thenReturn("[" + key + "]");
@@ -349,9 +342,10 @@ class HospitalServiceImplTest {
         void notSuperAdmin() {
             when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
             stubMessage("access.denied");
+            HospitalRequestDTO request = buildUSRequest("Any");
 
             assertThrows(AccessDeniedException.class,
-                    () -> hospitalService.createHospital(buildUSRequest("Any"), Locale.ENGLISH));
+                    () -> hospitalService.createHospital(request, Locale.ENGLISH));
         }
 
         @Test
@@ -420,9 +414,10 @@ class HospitalServiceImplTest {
             UUID id = UUID.randomUUID();
             stubMessage("hospital.notFound");
             when(hospitalRepository.findById(id)).thenReturn(Optional.empty());
+            HospitalRequestDTO request = buildUSRequest("Any");
 
             assertThrows(ResourceNotFoundException.class,
-                    () -> hospitalService.updateHospital(id, buildUSRequest("Any"), Locale.ENGLISH));
+                    () -> hospitalService.updateHospital(id, request, Locale.ENGLISH));
         }
     }
 
@@ -461,9 +456,10 @@ class HospitalServiceImplTest {
         void notSuperAdmin() {
             when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
             stubMessage("access.denied");
+            UUID id = UUID.randomUUID();
 
             assertThrows(AccessDeniedException.class,
-                    () -> hospitalService.deleteHospital(UUID.randomUUID(), Locale.ENGLISH));
+                    () -> hospitalService.deleteHospital(id, Locale.ENGLISH));
         }
     }
 

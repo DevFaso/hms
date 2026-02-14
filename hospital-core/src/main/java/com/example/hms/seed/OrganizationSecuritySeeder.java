@@ -35,7 +35,7 @@ public class OrganizationSecuritySeeder implements CommandLineRunner {
     }
 
     private void seedDefaultOrganization() {
-        organizationRepository.findByCode("DEFAULT_ORG").orElseGet(() -> {
+        if (organizationRepository.findByCode("DEFAULT_ORG").isEmpty()) {
             Organization defaultOrg = Organization.builder()
                 .name("Default Healthcare Organization")
                 .code("DEFAULT_ORG")
@@ -45,8 +45,8 @@ public class OrganizationSecuritySeeder implements CommandLineRunner {
                 .build();
             
             log.info("Seeding default organization: {}", defaultOrg.getCode());
-            return organizationRepository.save(defaultOrg);
-        });
+            organizationRepository.save(defaultOrg);
+        }
     }
 
     private void seedDefaultSecurityPolicies() {
@@ -76,33 +76,32 @@ public class OrganizationSecuritySeeder implements CommandLineRunner {
     }
 
     private void seedAccessControlPolicy(Organization organization) {
-        securityPolicyRepository.findByOrganizationIdAndCode(organization.getId(), 
-            OrganizationSecurityConstants.DEFAULT_ACCESS_CONTROL_POLICY).orElseGet(() -> {
+        if (securityPolicyRepository.findByOrganizationIdAndCode(organization.getId(), 
+            OrganizationSecurityConstants.DEFAULT_ACCESS_CONTROL_POLICY).isPresent()) {
+            return;
+        }
             
-            OrganizationSecurityPolicy policy = OrganizationSecurityPolicy.builder()
-                .name("Default Access Control Policy")
-                .code(OrganizationSecurityConstants.DEFAULT_ACCESS_CONTROL_POLICY)
-                .description("Default access control rules for healthcare organizations")
-                .policyType(SecurityPolicyType.ACCESS_CONTROL)
-                .organization(organization)
-                .priority(100)
-                .active(true)
-                .build();
+        OrganizationSecurityPolicy policy = OrganizationSecurityPolicy.builder()
+            .name("Default Access Control Policy")
+            .code(OrganizationSecurityConstants.DEFAULT_ACCESS_CONTROL_POLICY)
+            .description("Default access control rules for healthcare organizations")
+            .policyType(SecurityPolicyType.ACCESS_CONTROL)
+            .organization(organization)
+            .priority(100)
+            .active(true)
+            .build();
                 
-            OrganizationSecurityPolicy savedPolicy = securityPolicyRepository.save(policy);
-            log.info("Seeded access control policy for organization: {}", organization.getCode());
+        OrganizationSecurityPolicy savedPolicy = securityPolicyRepository.save(policy);
+        log.info("Seeded access control policy for organization: {}", organization.getCode());
             
-            // Add default access control rules
-            seedAccessControlRules(savedPolicy);
-            
-            return savedPolicy;
-        });
+        // Add default access control rules
+        seedAccessControlRules(savedPolicy);
     }
 
     private void seedAccessControlRules(OrganizationSecurityPolicy policy) {
         // Patient Data Access Rule
-        securityRuleRepository.findBySecurityPolicyIdAndCode(policy.getId(),
-            OrganizationSecurityConstants.PATIENT_DATA_ACCESS_RULE).orElseGet(() -> {
+        if (securityRuleRepository.findBySecurityPolicyIdAndCode(policy.getId(),
+            OrganizationSecurityConstants.PATIENT_DATA_ACCESS_RULE).isEmpty()) {
             
             OrganizationSecurityRule rule = OrganizationSecurityRule.builder()
                 .name("Patient Data Access Rule")
@@ -116,12 +115,12 @@ public class OrganizationSecuritySeeder implements CommandLineRunner {
                 .build();
                 
             log.info("Seeded patient data access rule");
-            return securityRuleRepository.save(rule);
-        });
+            securityRuleRepository.save(rule);
+        }
 
         // Admin Endpoint Access Rule
-        securityRuleRepository.findBySecurityPolicyIdAndCode(policy.getId(),
-            OrganizationSecurityConstants.ADMIN_ENDPOINT_ACCESS_RULE).orElseGet(() -> {
+        if (securityRuleRepository.findBySecurityPolicyIdAndCode(policy.getId(),
+            OrganizationSecurityConstants.ADMIN_ENDPOINT_ACCESS_RULE).isEmpty()) {
             
             OrganizationSecurityRule rule = OrganizationSecurityRule.builder()
                 .name("Admin Endpoint Access Rule")
@@ -135,184 +134,182 @@ public class OrganizationSecuritySeeder implements CommandLineRunner {
                 .build();
                 
             log.info("Seeded admin endpoint access rule");
-            return securityRuleRepository.save(rule);
-        });
+            securityRuleRepository.save(rule);
+        }
     }
 
     private void seedDataProtectionPolicy(Organization organization) {
-        securityPolicyRepository.findByOrganizationIdAndCode(organization.getId(), 
-            OrganizationSecurityConstants.DEFAULT_DATA_PROTECTION_POLICY).orElseGet(() -> {
+        if (securityPolicyRepository.findByOrganizationIdAndCode(organization.getId(), 
+            OrganizationSecurityConstants.DEFAULT_DATA_PROTECTION_POLICY).isPresent()) {
+            return;
+        }
             
-            OrganizationSecurityPolicy policy = OrganizationSecurityPolicy.builder()
-                .name("Default Data Protection Policy")
-                .code(OrganizationSecurityConstants.DEFAULT_DATA_PROTECTION_POLICY)
-                .description("Default data protection and privacy rules")
-                .policyType(SecurityPolicyType.DATA_PROTECTION)
-                .organization(organization)
-                .priority(90)
-                .enforceStrict(true)
-                .active(true)
-                .build();
+        OrganizationSecurityPolicy policy = OrganizationSecurityPolicy.builder()
+            .name("Default Data Protection Policy")
+            .code(OrganizationSecurityConstants.DEFAULT_DATA_PROTECTION_POLICY)
+            .description("Default data protection and privacy rules")
+            .policyType(SecurityPolicyType.DATA_PROTECTION)
+            .organization(organization)
+            .priority(90)
+            .enforceStrict(true)
+            .active(true)
+            .build();
                 
-            OrganizationSecurityPolicy savedPolicy = securityPolicyRepository.save(policy);
-            log.info("Seeded data protection policy for organization: {}", organization.getCode());
-            
-            return savedPolicy;
-        });
+        securityPolicyRepository.save(policy);
+        log.info("Seeded data protection policy for organization: {}", organization.getCode());
     }
 
     private void seedAuditLoggingPolicy(Organization organization) {
-        securityPolicyRepository.findByOrganizationIdAndCode(organization.getId(), 
-            OrganizationSecurityConstants.DEFAULT_AUDIT_POLICY).orElseGet(() -> {
+        if (securityPolicyRepository.findByOrganizationIdAndCode(organization.getId(), 
+            OrganizationSecurityConstants.DEFAULT_AUDIT_POLICY).isPresent()) {
+            return;
+        }
             
-            OrganizationSecurityPolicy policy = OrganizationSecurityPolicy.builder()
-                .name("Default Audit Logging Policy")
-                .code(OrganizationSecurityConstants.DEFAULT_AUDIT_POLICY)
-                .description("Default audit logging requirements")
-                .policyType(SecurityPolicyType.AUDIT_LOGGING)
-                .organization(organization)
-                .priority(80)
-                .active(true)
-                .build();
+        OrganizationSecurityPolicy policy = OrganizationSecurityPolicy.builder()
+            .name("Default Audit Logging Policy")
+            .code(OrganizationSecurityConstants.DEFAULT_AUDIT_POLICY)
+            .description("Default audit logging requirements")
+            .policyType(SecurityPolicyType.AUDIT_LOGGING)
+            .organization(organization)
+            .priority(80)
+            .active(true)
+            .build();
                 
-            OrganizationSecurityPolicy savedPolicy = securityPolicyRepository.save(policy);
-            log.info("Seeded audit logging policy for organization: {}", organization.getCode());
+        OrganizationSecurityPolicy savedPolicy = securityPolicyRepository.save(policy);
+        log.info("Seeded audit logging policy for organization: {}", organization.getCode());
             
-            // Add audit rules
-            seedAuditRule(savedPolicy);
-            
-            return savedPolicy;
-        });
+        // Add audit rules
+        seedAuditRule(savedPolicy);
     }
 
     private void seedAuditRule(OrganizationSecurityPolicy policy) {
-        securityRuleRepository.findBySecurityPolicyIdAndCode(policy.getId(),
-            OrganizationSecurityConstants.AUDIT_SENSITIVE_OPERATIONS_RULE).orElseGet(() -> {
+        if (securityRuleRepository.findBySecurityPolicyIdAndCode(policy.getId(),
+            OrganizationSecurityConstants.AUDIT_SENSITIVE_OPERATIONS_RULE).isPresent()) {
+            return;
+        }
             
-            OrganizationSecurityRule rule = OrganizationSecurityRule.builder()
-                .name("Audit Sensitive Operations")
-                .code(OrganizationSecurityConstants.AUDIT_SENSITIVE_OPERATIONS_RULE)
-                .description("Audit all sensitive medical operations")
-                .ruleType(SecurityRuleType.AUDIT_REQUIREMENT)
-                .ruleValue("PATIENT_CREATE,PATIENT_UPDATE,PRESCRIPTION_CREATE,LAB_RESULT_UPDATE")
-                .securityPolicy(policy)
-                .priority(10)
-                .active(true)
-                .build();
+        OrganizationSecurityRule rule = OrganizationSecurityRule.builder()
+            .name("Audit Sensitive Operations")
+            .code(OrganizationSecurityConstants.AUDIT_SENSITIVE_OPERATIONS_RULE)
+            .description("Audit all sensitive medical operations")
+            .ruleType(SecurityRuleType.AUDIT_REQUIREMENT)
+            .ruleValue("PATIENT_CREATE,PATIENT_UPDATE,PRESCRIPTION_CREATE,LAB_RESULT_UPDATE")
+            .securityPolicy(policy)
+            .priority(10)
+            .active(true)
+            .build();
                 
-            log.info("Seeded audit sensitive operations rule");
-            return securityRuleRepository.save(rule);
-        });
+        log.info("Seeded audit sensitive operations rule");
+        securityRuleRepository.save(rule);
     }
 
     private void seedPasswordPolicy(Organization organization) {
-        securityPolicyRepository.findByOrganizationIdAndCode(organization.getId(), 
-            OrganizationSecurityConstants.DEFAULT_PASSWORD_POLICY).orElseGet(() -> {
+        if (securityPolicyRepository.findByOrganizationIdAndCode(organization.getId(), 
+            OrganizationSecurityConstants.DEFAULT_PASSWORD_POLICY).isPresent()) {
+            return;
+        }
             
-            OrganizationSecurityPolicy policy = OrganizationSecurityPolicy.builder()
-                .name("Default Password Policy")
-                .code(OrganizationSecurityConstants.DEFAULT_PASSWORD_POLICY)
-                .description("Default password strength requirements")
-                .policyType(SecurityPolicyType.PASSWORD_POLICY)
-                .organization(organization)
-                .priority(70)
-                .enforceStrict(true)
-                .active(true)
-                .build();
+        OrganizationSecurityPolicy policy = OrganizationSecurityPolicy.builder()
+            .name("Default Password Policy")
+            .code(OrganizationSecurityConstants.DEFAULT_PASSWORD_POLICY)
+            .description("Default password strength requirements")
+            .policyType(SecurityPolicyType.PASSWORD_POLICY)
+            .organization(organization)
+            .priority(70)
+            .enforceStrict(true)
+            .active(true)
+            .build();
                 
-            OrganizationSecurityPolicy savedPolicy = securityPolicyRepository.save(policy);
-            log.info("Seeded password policy for organization: {}", organization.getCode());
+        OrganizationSecurityPolicy savedPolicy = securityPolicyRepository.save(policy);
+        log.info("Seeded password policy for organization: {}", organization.getCode());
             
-            // Add password strength rule
-            seedPasswordRule(savedPolicy);
-            
-            return savedPolicy;
-        });
+        // Add password strength rule
+        seedPasswordRule(savedPolicy);
     }
 
     private void seedPasswordRule(OrganizationSecurityPolicy policy) {
-        securityRuleRepository.findBySecurityPolicyIdAndCode(policy.getId(),
-            OrganizationSecurityConstants.PASSWORD_MIN_LENGTH_RULE).orElseGet(() -> {
+        if (securityRuleRepository.findBySecurityPolicyIdAndCode(policy.getId(),
+            OrganizationSecurityConstants.PASSWORD_MIN_LENGTH_RULE).isPresent()) {
+            return;
+        }
             
-            OrganizationSecurityRule rule = OrganizationSecurityRule.builder()
-                .name("Password Minimum Length")
-                .code(OrganizationSecurityConstants.PASSWORD_MIN_LENGTH_RULE)
-                .description("Minimum password length requirement")
-                .ruleType(SecurityRuleType.PASSWORD_STRENGTH)
-                .ruleValue(OrganizationSecurityConstants.DEFAULT_PASSWORD_MIN_LENGTH)
-                .securityPolicy(policy)
-                .priority(10)
-                .active(true)
-                .build();
+        OrganizationSecurityRule rule = OrganizationSecurityRule.builder()
+            .name("Password Minimum Length")
+            .code(OrganizationSecurityConstants.PASSWORD_MIN_LENGTH_RULE)
+            .description("Minimum password length requirement")
+            .ruleType(SecurityRuleType.PASSWORD_STRENGTH)
+            .ruleValue(OrganizationSecurityConstants.DEFAULT_PASSWORD_MIN_LENGTH)
+            .securityPolicy(policy)
+            .priority(10)
+            .active(true)
+            .build();
                 
-            log.info("Seeded password minimum length rule");
-            return securityRuleRepository.save(rule);
-        });
+        log.info("Seeded password minimum length rule");
+        securityRuleRepository.save(rule);
     }
 
     private void seedSessionManagementPolicy(Organization organization) {
-        securityPolicyRepository.findByOrganizationIdAndCode(organization.getId(), 
-            OrganizationSecurityConstants.DEFAULT_SESSION_POLICY).orElseGet(() -> {
+        if (securityPolicyRepository.findByOrganizationIdAndCode(organization.getId(), 
+            OrganizationSecurityConstants.DEFAULT_SESSION_POLICY).isPresent()) {
+            return;
+        }
             
-            OrganizationSecurityPolicy policy = OrganizationSecurityPolicy.builder()
-                .name("Default Session Management Policy")
-                .code(OrganizationSecurityConstants.DEFAULT_SESSION_POLICY)
-                .description("Default session management and timeout rules")
-                .policyType(SecurityPolicyType.SESSION_MANAGEMENT)
-                .organization(organization)
-                .priority(60)
-                .active(true)
-                .build();
+        OrganizationSecurityPolicy policy = OrganizationSecurityPolicy.builder()
+            .name("Default Session Management Policy")
+            .code(OrganizationSecurityConstants.DEFAULT_SESSION_POLICY)
+            .description("Default session management and timeout rules")
+            .policyType(SecurityPolicyType.SESSION_MANAGEMENT)
+            .organization(organization)
+            .priority(60)
+            .active(true)
+            .build();
                 
-            OrganizationSecurityPolicy savedPolicy = securityPolicyRepository.save(policy);
-            log.info("Seeded session management policy for organization: {}", organization.getCode());
+        OrganizationSecurityPolicy savedPolicy = securityPolicyRepository.save(policy);
+        log.info("Seeded session management policy for organization: {}", organization.getCode());
             
-            // Add session timeout rule
-            seedSessionTimeoutRule(savedPolicy);
-            
-            return savedPolicy;
-        });
+        // Add session timeout rule
+        seedSessionTimeoutRule(savedPolicy);
     }
 
     private void seedSessionTimeoutRule(OrganizationSecurityPolicy policy) {
-        securityRuleRepository.findBySecurityPolicyIdAndCode(policy.getId(),
-            OrganizationSecurityConstants.SESSION_TIMEOUT_RULE).orElseGet(() -> {
+        if (securityRuleRepository.findBySecurityPolicyIdAndCode(policy.getId(),
+            OrganizationSecurityConstants.SESSION_TIMEOUT_RULE).isPresent()) {
+            return;
+        }
             
-            OrganizationSecurityRule rule = OrganizationSecurityRule.builder()
-                .name("Session Timeout")
-                .code(OrganizationSecurityConstants.SESSION_TIMEOUT_RULE)
-                .description("Session timeout in minutes")
-                .ruleType(SecurityRuleType.SESSION_TIMEOUT)
-                .ruleValue(OrganizationSecurityConstants.DEFAULT_SESSION_TIMEOUT_MINUTES)
-                .securityPolicy(policy)
-                .priority(10)
-                .active(true)
-                .build();
+        OrganizationSecurityRule rule = OrganizationSecurityRule.builder()
+            .name("Session Timeout")
+            .code(OrganizationSecurityConstants.SESSION_TIMEOUT_RULE)
+            .description("Session timeout in minutes")
+            .ruleType(SecurityRuleType.SESSION_TIMEOUT)
+            .ruleValue(OrganizationSecurityConstants.DEFAULT_SESSION_TIMEOUT_MINUTES)
+            .securityPolicy(policy)
+            .priority(10)
+            .active(true)
+            .build();
                 
-            log.info("Seeded session timeout rule");
-            return securityRuleRepository.save(rule);
-        });
+        log.info("Seeded session timeout rule");
+        securityRuleRepository.save(rule);
     }
 
     private void seedRoleManagementPolicy(Organization organization) {
-        securityPolicyRepository.findByOrganizationIdAndCode(organization.getId(), 
-            OrganizationSecurityConstants.DEFAULT_ROLE_POLICY).orElseGet(() -> {
+        if (securityPolicyRepository.findByOrganizationIdAndCode(organization.getId(), 
+            OrganizationSecurityConstants.DEFAULT_ROLE_POLICY).isPresent()) {
+            return;
+        }
             
-            OrganizationSecurityPolicy policy = OrganizationSecurityPolicy.builder()
-                .name("Default Role Management Policy")
-                .code(OrganizationSecurityConstants.DEFAULT_ROLE_POLICY)
-                .description("Default role assignment and management rules")
-                .policyType(SecurityPolicyType.ROLE_MANAGEMENT)
-                .organization(organization)
-                .priority(50)
-                .active(true)
-                .build();
+        OrganizationSecurityPolicy policy = OrganizationSecurityPolicy.builder()
+            .name("Default Role Management Policy")
+            .code(OrganizationSecurityConstants.DEFAULT_ROLE_POLICY)
+            .description("Default role assignment and management rules")
+            .policyType(SecurityPolicyType.ROLE_MANAGEMENT)
+            .organization(organization)
+            .priority(50)
+            .active(true)
+            .build();
                 
-            OrganizationSecurityPolicy savedPolicy = securityPolicyRepository.save(policy);
-            log.info("Seeded role management policy for organization: {}", organization.getCode());
-            
-            return savedPolicy;
-        });
+        securityPolicyRepository.save(policy);
+        log.info("Seeded role management policy for organization: {}", organization.getCode());
     }
 
     private void linkHospitalsToDefaultOrganization() {

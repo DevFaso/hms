@@ -58,7 +58,10 @@ public class FileUploadService {
         String extension = getFileExtension(originalFilename);
         String filename = userId + "_profile_" + System.currentTimeMillis() + extension;
 
-        Path filePath = uploadPath.resolve(filename);
+        Path filePath = uploadPath.resolve(filename).normalize();
+        if (!filePath.startsWith(uploadPath)) {
+            throw new IllegalArgumentException("Invalid file path — path traversal attempt detected");
+        }
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
         log.info("Profile image uploaded successfully: {}", filePath);
@@ -81,7 +84,12 @@ public class FileUploadService {
             // Extract filename from URL (e.g., "/api/uploads/profile-images/filename.jpg"
             // -> "filename.jpg")
             String filename = imageUrl.substring(imageUrl.lastIndexOf('/') + 1);
-            Path filePath = Paths.get(uploadDir, "profile-images", filename);
+            Path filePath = Paths.get(uploadDir, "profile-images", filename).normalize();
+            Path expectedParent = Paths.get(uploadDir, "profile-images").normalize();
+            if (!filePath.startsWith(expectedParent)) {
+                log.warn("Path traversal attempt detected in deleteProfileImage: {}", imageUrl);
+                return;
+            }
 
             if (Files.exists(filePath)) {
                 Files.delete(filePath);
@@ -102,7 +110,10 @@ public class FileUploadService {
         String extension = getFileExtension(file.getOriginalFilename());
         String filename = buildAttachmentFilename(sanitizedBaseName, extension, uploaderId, "attachment");
 
-        Path filePath = uploadPath.resolve(filename);
+        Path filePath = uploadPath.resolve(filename).normalize();
+        if (!filePath.startsWith(uploadPath)) {
+            throw new IllegalArgumentException("Invalid file path — path traversal attempt detected");
+        }
         Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
 
         String relativePath = "/uploads/referral-attachments/" + filename;
@@ -126,7 +137,10 @@ public class FileUploadService {
         String extension = getFileExtension(file.getOriginalFilename());
         String filename = buildAttachmentFilename(sanitizedBaseName, extension, uploaderId, "chart_attachment");
 
-        Path filePath = uploadPath.resolve(filename);
+        Path filePath = uploadPath.resolve(filename).normalize();
+        if (!filePath.startsWith(uploadPath)) {
+            throw new IllegalArgumentException("Invalid file path — path traversal attempt detected");
+        }
         MessageDigest digest = createSha256Digest();
         try (DigestInputStream digestStream = new DigestInputStream(file.getInputStream(), digest)) {
             Files.copy(digestStream, filePath, StandardCopyOption.REPLACE_EXISTING);

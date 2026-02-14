@@ -1,5 +1,7 @@
 package com.example.hms.payload.dto;
 
+import java.util.Arrays;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
@@ -14,5 +16,25 @@ public record InvoicePdfResponseDTO(byte[] content, String invoiceNumber, UUID i
 
     private static String sanitize(String candidate) {
         return candidate.replaceAll("[^A-Za-z0-9._-]+", "_");
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof InvoicePdfResponseDTO that)) return false;
+        return Arrays.equals(content, that.content)
+            && Objects.equals(invoiceNumber, that.invoiceNumber)
+            && Objects.equals(invoiceId, that.invoiceId);
+    }
+
+    @Override
+    public int hashCode() {
+        return 31 * Objects.hash(invoiceNumber, invoiceId) + Arrays.hashCode(content);
+    }
+
+    @Override
+    public String toString() {
+        return "InvoicePdfResponseDTO[content=byte[" + (content != null ? content.length : 0)
+            + "], invoiceNumber=" + invoiceNumber + ", invoiceId=" + invoiceId + "]";
     }
 }

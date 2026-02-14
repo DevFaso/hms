@@ -58,9 +58,6 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
                     hospital.getName() + " (" + dto.hospitalId() + ")"}, locale));
         }
 
-        if (dto.departmentId() == null) {
-            throw new BusinessRuleException(getLocalizedMessage("availability.department.required", null, locale));
-        }
         Department department = departmentRepository.findById(dto.departmentId())
             .orElseThrow(() -> new ResourceNotFoundException(
                 getLocalizedMessage("department.not.found", new Object[]{dto.departmentId()}, locale)));

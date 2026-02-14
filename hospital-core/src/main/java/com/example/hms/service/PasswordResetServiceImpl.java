@@ -33,6 +33,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
     private static final int TOKEN_BYTES = 32; // 256-bit entropy
     private static final Pattern HEX_64 = Pattern.compile("^[0-9a-fA-F]{64}$");
+    private static final SecureRandom FALLBACK_RANDOM = new SecureRandom();
 
     /* ===================== ISSUE ===================== */
 
@@ -143,7 +144,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         try {
             SecureRandom.getInstanceStrong().nextBytes(bytes);
         } catch (Exception e) {
-            new SecureRandom().nextBytes(bytes);
+            FALLBACK_RANDOM.nextBytes(bytes);
         }
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }

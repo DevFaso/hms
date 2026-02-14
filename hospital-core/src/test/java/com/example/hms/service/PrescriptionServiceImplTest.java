@@ -1860,8 +1860,6 @@ class PrescriptionServiceImplTest {
 
     @Test
     void createPrescriptionWithAllergenContainingMedication() {
-        PrescriptionRequestDTO request = buildRequest();
-
         // Set encounter assignment so resolvePrescriberAssignmentOrThrow returns immediately
         encounter.setAssignment(assignment);
 
@@ -1887,7 +1885,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionMapper.toResponseDTO(any())).thenReturn(PrescriptionResponseDTO.builder().build());
 
         // MILD + no forceOverride → proceeds (logs warning but doesn't throw)
-        request = PrescriptionRequestDTO.builder()
+        PrescriptionRequestDTO allergenRequest = PrescriptionRequestDTO.builder()
             .patientId(patientId)
             .staffId(staffId)
             .encounterId(encounterId)
@@ -1896,7 +1894,7 @@ class PrescriptionServiceImplTest {
             .frequency(TEST_FREQUENCY)
             .build();
 
-        PrescriptionResponseDTO result = prescriptionService.createPrescription(request, Locale.ENGLISH);
+        PrescriptionResponseDTO result = prescriptionService.createPrescription(allergenRequest, Locale.ENGLISH);
         assertThat(result).isNotNull();
     }
 

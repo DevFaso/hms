@@ -584,7 +584,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         User user = createUser("patient", firstName, lastName);
         addGlobalRole(user, roleCache.get("ROLE_PATIENT"));
 
-        LocalDate dob = LocalDate.now().minusYears(20 + (patientSequence.get() % 25)).minusDays(patientOrdinal);
+        LocalDate dob = LocalDate.now().minusYears(20L + (patientSequence.get() % 25)).minusDays(patientOrdinal);
         String phone = user.getPhoneNumber();
         String email = user.getEmail();
 

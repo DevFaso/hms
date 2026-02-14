@@ -727,7 +727,8 @@ class BillingInvoiceTest {
         void sameRef() {
             BillingInvoice a = new BillingInvoice();
             a.setId(UUID.randomUUID());
-            assertEquals(a, a);
+            BillingInvoice sameRef = a;
+            assertEquals(a, sameRef);
         }
 
         @Test

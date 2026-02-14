@@ -181,10 +181,11 @@ class StaffAvailabilityServiceImplTest {
         );
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(departmentRepository.findById(any())).thenReturn(Optional.empty());
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("required");
 
         assertThatThrownBy(() -> service.create(dto, locale))
-            .isInstanceOf(BusinessRuleException.class);
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
