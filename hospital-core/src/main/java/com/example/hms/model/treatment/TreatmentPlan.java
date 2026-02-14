@@ -52,7 +52,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"patient", "hospital", "encounter", "assignment", "author", "supervisingStaff", "signOffBy", "followUps", "reviews"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class TreatmentPlan extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

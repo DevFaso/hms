@@ -46,7 +46,7 @@ import java.util.Objects;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"user", "assignment"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class AuditEventLog extends BaseEntity {
     @Size(max = 255)
     @Column(name = "role_name", length = 255)

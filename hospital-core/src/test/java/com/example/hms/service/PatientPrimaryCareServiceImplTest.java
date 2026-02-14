@@ -169,7 +169,7 @@ class PatientPrimaryCareServiceImplTest {
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(assignmentId, hospitalId,
+            doNothing().when(roleValidator).validateRoleOrThrow(eq(assignmentId), eq(hospitalId),
                     eq("ROLE_DOCTOR"), any(Locale.class), eq(messageSource));
             when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId))
                     .thenReturn(Optional.of(existing));
@@ -193,7 +193,7 @@ class PatientPrimaryCareServiceImplTest {
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(assignmentId, hospitalId,
+            doNothing().when(roleValidator).validateRoleOrThrow(eq(assignmentId), eq(hospitalId),
                     eq("ROLE_DOCTOR"), any(Locale.class), eq(messageSource));
             when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId))
                     .thenReturn(Optional.empty());
@@ -336,7 +336,7 @@ class PatientPrimaryCareServiceImplTest {
 
             when(pcpRepo.findById(pcpId)).thenReturn(Optional.of(pcpEntity));
             when(assignmentRepo.findById(newAssignmentId)).thenReturn(Optional.of(newAssignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(newAssignmentId, hospitalId,
+            doNothing().when(roleValidator).validateRoleOrThrow(eq(newAssignmentId), eq(hospitalId),
                     eq("ROLE_DOCTOR"), any(Locale.class), eq(messageSource));
             when(pcpRepo.save(pcpEntity)).thenReturn(pcpEntity);
             when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);

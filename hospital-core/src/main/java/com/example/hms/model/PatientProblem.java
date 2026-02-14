@@ -43,7 +43,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class PatientProblem extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

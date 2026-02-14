@@ -39,7 +39,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 @ToString(exclude = {"patient", "registration", "hospital", "nurse", "doctor", "nurseAssignment", "doctorAssignment"})
 public class DischargeApproval extends BaseEntity {
 

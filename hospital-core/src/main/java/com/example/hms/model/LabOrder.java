@@ -47,7 +47,7 @@ import java.util.UUID;
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = {"patient", "orderingStaff", "encounter", "labTestDefinition", "assignment", "hospital"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class LabOrder extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

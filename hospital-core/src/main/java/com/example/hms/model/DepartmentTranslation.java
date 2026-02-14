@@ -41,7 +41,7 @@ import lombok.EqualsAndHashCode;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"department", "assignment"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class DepartmentTranslation extends BaseEntity {
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)

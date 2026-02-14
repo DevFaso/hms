@@ -33,7 +33,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true, of = {"department", "organizationService"})
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class DepartmentPlatformServiceLink extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

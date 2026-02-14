@@ -52,7 +52,7 @@ import java.util.Set;
 @Check(constraints = "amount_paid <= total_amount")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = {"patient", "hospital", "encounter", "invoiceItems"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class BillingInvoice extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

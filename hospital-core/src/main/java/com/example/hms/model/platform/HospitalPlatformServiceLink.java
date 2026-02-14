@@ -37,7 +37,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true, of = {"hospital", "organizationService"})
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class HospitalPlatformServiceLink extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

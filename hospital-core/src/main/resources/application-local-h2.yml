@@ -7,19 +7,32 @@ spring:
     activate:
       on-profile: local-h2
   datasource:
-    url: jdbc:h2:mem:hms_dev;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    url: jdbc:h2:mem:hms_dev;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
     username: sa
     password:
     driver-class-name: org.h2.Driver
   jpa:
     show-sql: true
     hibernate:
-      ddl-auto: none
+      ddl-auto: create-drop
+    defer-datasource-initialization: false
     properties:
       hibernate:
         '[format_sql]': true
+
+  # Schema init — runs BEFORE Hibernate DDL to create custom schemas (hospital, billing, etc.)
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-h2.sql
+      continue-on-error: true
+
+  # Liquibase disabled — H2 uses schema-h2.sql + Hibernate DDL instead
   liquibase:
-    enabled: true
+    enabled: false
+  flyway:
+    enabled: false
+
   h2:
     console:
       enabled: true

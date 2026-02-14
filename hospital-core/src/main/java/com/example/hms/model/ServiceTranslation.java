@@ -37,7 +37,7 @@ import lombok.EqualsAndHashCode;
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = {"treatment", "assignment"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class ServiceTranslation extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

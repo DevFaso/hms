@@ -36,7 +36,7 @@ import java.util.Objects;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class EncounterTreatment extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

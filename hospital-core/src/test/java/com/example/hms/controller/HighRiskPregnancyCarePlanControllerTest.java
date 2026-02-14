@@ -132,7 +132,7 @@ class HighRiskPregnancyCarePlanControllerTest {
             .andExpect(status().isOk());
 
         ArgumentCaptor<LocalDate> captor = ArgumentCaptor.forClass(LocalDate.class);
-    verify(carePlanService).markMilestoneComplete(planId, milestoneId, captor.capture(), AUTH_USER);
+    verify(carePlanService).markMilestoneComplete(eq(planId), eq(milestoneId), captor.capture(), eq(AUTH_USER));
         assertThat(captor.getValue()).isEqualTo(completionDate);
     }
 

@@ -43,7 +43,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"roles"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class Permission extends BaseEntity {
 
     /** Human-readable label (e.g., “Read Patients”). */

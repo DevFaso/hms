@@ -53,7 +53,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"user", "hospital", "department", "assignment", "availabilities"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class Staff extends BaseEntity {
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)

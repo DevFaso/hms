@@ -50,7 +50,7 @@ import java.util.Set;
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = {"patient", "staff", "hospital", "appointment", "department", "assignment", "encounterTreatments", "encounterNote"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class Encounter extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

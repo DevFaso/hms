@@ -39,7 +39,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class AdvanceDirective extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

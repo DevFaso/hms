@@ -68,7 +68,7 @@ import jakarta.persistence.OrderColumn;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 @ToString(exclude = {"signedBy", "hospital"})
 public class DigitalSignature extends BaseEntity {
 

@@ -65,7 +65,7 @@ import java.util.Set;
         @NamedAttributeNode("assignment")
     }
 )
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class Treatment extends BaseEntity {
 
     @NotBlank

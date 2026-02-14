@@ -40,7 +40,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 @ToString(exclude = {"patient", "registration", "hospital", "recordedByStaff", "recordedByAssignment"})
 public class PatientVitalSign extends BaseEntity {
 

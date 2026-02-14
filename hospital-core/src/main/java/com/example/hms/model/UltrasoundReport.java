@@ -48,7 +48,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 @EntityListeners(TenantEntityListener.class)
 @ToString(exclude = {"ultrasoundOrder", "hospital"})
 public class UltrasoundReport extends BaseEntity implements TenantScoped {

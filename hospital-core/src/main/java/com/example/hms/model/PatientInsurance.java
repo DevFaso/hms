@@ -46,7 +46,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"patient", "assignment"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class PatientInsurance extends BaseEntity {
     @Size(max = 50)
     @Column(name = "payer_code", length = 50)

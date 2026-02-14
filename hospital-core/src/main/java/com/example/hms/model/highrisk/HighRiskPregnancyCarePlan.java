@@ -45,7 +45,7 @@ import java.util.Objects;
         @Index(name = "idx_high_risk_plans_created", columnList = "created_at")
     }
 )
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class HighRiskPregnancyCarePlan extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)

@@ -48,7 +48,7 @@ import java.util.UUID;
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 @EntityListeners(TenantEntityListener.class)
 @ToString(exclude = {
     "user", "hospitalRegistrations", "appointments", "encounters",

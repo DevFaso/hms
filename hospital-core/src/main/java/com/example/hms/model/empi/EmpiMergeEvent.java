@@ -42,7 +42,7 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 @EntityListeners(TenantEntityListener.class)
 @ToString(exclude = {"primaryIdentity", "secondaryIdentity"})
 public class EmpiMergeEvent extends BaseEntity implements TenantScoped {

@@ -31,7 +31,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class SecurityPolicyApproval extends BaseEntity {
 
     @Column(name = "policy_name", nullable = false, length = 160)

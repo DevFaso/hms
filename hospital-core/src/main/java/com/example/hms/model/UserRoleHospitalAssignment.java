@@ -30,7 +30,7 @@ import java.time.LocalDateTime;
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = {"user", "hospital", "role", "registeredBy"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class UserRoleHospitalAssignment extends BaseEntity {
 
     @Column(name = "assignment_code", unique = true, length = 50)

@@ -39,7 +39,7 @@ import java.util.Objects;
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = {"billingInvoice", "assignment", "relatedService"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class InvoiceItem extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

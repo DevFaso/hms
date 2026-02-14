@@ -41,7 +41,7 @@ import java.util.Objects;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"sender", "recipient", "assignment"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class ChatMessage extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

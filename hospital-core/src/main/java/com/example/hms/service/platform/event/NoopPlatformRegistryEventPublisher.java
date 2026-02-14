@@ -2,7 +2,7 @@ package com.example.hms.service.platform.event;
 
 import com.example.hms.payload.event.PlatformServiceEventPayload;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 /**
@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@ConditionalOnMissingBean(PlatformRegistryEventPublisher.class)
+@ConditionalOnProperty(prefix = "app.kafka", name = "enabled", havingValue = "false", matchIfMissing = false)
 public class NoopPlatformRegistryEventPublisher implements PlatformRegistryEventPublisher {
 
     @Override

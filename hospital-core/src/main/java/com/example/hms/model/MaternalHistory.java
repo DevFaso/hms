@@ -44,7 +44,7 @@ import java.time.LocalDateTime;
         @Index(name = "idx_maternal_history_version", columnList = "patient_id, version_number")
     }
 )
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class MaternalHistory extends BaseEntity {
 
     @NotNull

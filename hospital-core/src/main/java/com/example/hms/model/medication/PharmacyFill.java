@@ -52,7 +52,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"patient", "hospital", "prescription"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class PharmacyFill extends BaseEntity {
 
     @NotNull

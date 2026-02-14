@@ -60,7 +60,7 @@ import jakarta.persistence.OrderColumn;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 @ToString(exclude = {"patient", "encounter", "hospital", "dischargingProvider", "assignment", "approvalRecord"})
 public class DischargeSummary extends BaseEntity {
 

@@ -39,7 +39,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"treatmentPlan", "assignedStaff"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class TreatmentPlanFollowUp extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

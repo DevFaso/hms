@@ -49,7 +49,7 @@ import java.util.Objects;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"patient", "staff", "hospital", "createdBy", "assignment"})
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class Appointment extends BaseEntity {
     public Department getDepartment() {
         return department;

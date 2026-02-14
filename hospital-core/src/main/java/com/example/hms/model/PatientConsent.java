@@ -38,7 +38,7 @@ import java.time.LocalDateTime;
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = "patient")
-@EqualsAndHashCode(callSuper = true)
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class PatientConsent extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
