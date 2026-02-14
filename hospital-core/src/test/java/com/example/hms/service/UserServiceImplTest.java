@@ -1,9 +1,16 @@
 package com.example.hms.service;
 
 import com.example.hms.mapper.UserMapper;
-import com.example.hms.model.*;
-import com.example.hms.payload.dto.*;
-import com.example.hms.repository.*;
+import com.example.hms.model.Role;
+import com.example.hms.model.User;
+import com.example.hms.payload.dto.BootstrapSignupRequest;
+import com.example.hms.payload.dto.BootstrapSignupResponse;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.RoleRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.config.BootstrapProperties;
 import org.junit.jupiter.api.BeforeEach;
@@ -14,11 +21,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.util.*;
+import java.util.Optional;
+import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceImplTest {

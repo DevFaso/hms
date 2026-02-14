@@ -17,7 +17,7 @@ public class LocaleConfig {
     private static final List<Locale> SUPPORTED_LOCALES = Arrays.asList(
             Locale.ENGLISH,
             Locale.FRENCH,
-            new Locale("es")
+            Locale.of("es")
     );
 
     private static final Locale DEFAULT_LOCALE = Locale.ENGLISH;
@@ -69,11 +69,11 @@ public class LocaleConfig {
         public String getMessage(String code, Object[] args, Locale locale) {
             try {
                 return messageSource.getMessage(code, args, locale);
-            } catch (Exception e) {
+            } catch (RuntimeException e) {
                 if (!locale.equals(Locale.ENGLISH)) {
                     try {
                         return messageSource.getMessage(code, args, Locale.ENGLISH);
-                    } catch (Exception ex) {
+                    } catch (RuntimeException ex) {
                         return code + (args != null && args.length > 0 ?
                                 " " + Arrays.toString(args) : "");
                     }

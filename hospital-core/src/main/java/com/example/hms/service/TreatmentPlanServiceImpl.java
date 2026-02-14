@@ -11,8 +11,20 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.treatment.TreatmentPlan;
 import com.example.hms.model.treatment.TreatmentPlanFollowUp;
 import com.example.hms.model.treatment.TreatmentPlanReview;
-import com.example.hms.payload.dto.clinical.treatment.*;
-import com.example.hms.repository.*;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanFollowUpDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanFollowUpRequestDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanRequestDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanReviewDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanReviewRequestDTO;
+import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.TreatmentPlanFollowUpRepository;
+import com.example.hms.repository.TreatmentPlanRepository;
+import com.example.hms.repository.TreatmentPlanReviewRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -20,7 +32,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -211,7 +228,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
                 .dueOn(req.getDueOn())
                 .assignedStaff(req.getAssignedStaffId() != null ? staffMap.get(req.getAssignedStaffId()) : null)
                 .build())
-            .collect(Collectors.toList());
+            .toList();
         entities.forEach(plan::addFollowUp);
     }
 

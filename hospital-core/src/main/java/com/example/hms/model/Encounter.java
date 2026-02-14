@@ -4,9 +4,32 @@ import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.model.encounter.EncounterNote;
 import com.fasterxml.jackson.annotation.JsonFormat;
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+import jakarta.persistence.Version;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -27,6 +50,7 @@ import java.util.Set;
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = {"patient", "staff", "hospital", "appointment", "department", "assignment", "encounterTreatments", "encounterNote"})
+@EqualsAndHashCode(callSuper = true)
 public class Encounter extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

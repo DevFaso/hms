@@ -3,10 +3,25 @@ package com.example.hms.service;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.DischargeSummaryMapper;
-import com.example.hms.model.*;
-import com.example.hms.model.discharge.*;
-import com.example.hms.payload.dto.discharge.*;
-import com.example.hms.repository.*;
+import com.example.hms.model.DischargeApproval;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.model.discharge.DischargeSummary;
+import com.example.hms.payload.dto.discharge.DischargeSummaryRequestDTO;
+import com.example.hms.payload.dto.discharge.DischargeSummaryResponseDTO;
+import com.example.hms.payload.dto.discharge.FollowUpAppointmentDTO;
+import com.example.hms.payload.dto.discharge.MedicationReconciliationDTO;
+import com.example.hms.payload.dto.discharge.PendingTestResultDTO;
+import com.example.hms.repository.DischargeApprovalRepository;
+import com.example.hms.repository.DischargeSummaryRepository;
+import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -16,7 +31,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Implementation of DischargeSummaryService
@@ -26,6 +40,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class DischargeSummaryServiceImpl implements DischargeSummaryService {
+    private static final String DISCHARGE_SUMMARY_TYPE = "DischargeSummary";
+
 
     private final DischargeSummaryRepository dischargeSummaryRepository;
     private final DischargeSummaryMapper dischargeSummaryMapper;
@@ -94,26 +110,9 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
             .isFinalized(false)
             .build();
 
-        // Add medication reconciliation entries
-        if (request.getMedicationReconciliation() != null && !request.getMedicationReconciliation().isEmpty()) {
-            for (MedicationReconciliationDTO dto : request.getMedicationReconciliation()) {
-                dischargeSummary.addMedicationReconciliation(dischargeSummaryMapper.toMedicationReconciliationEntry(dto));
-            }
-        }
-
-        // Add pending test results
-        if (request.getPendingTestResults() != null && !request.getPendingTestResults().isEmpty()) {
-            for (PendingTestResultDTO dto : request.getPendingTestResults()) {
-                dischargeSummary.addPendingTestResult(dischargeSummaryMapper.toPendingTestResultEntry(dto));
-            }
-        }
-
-        // Add follow-up appointments
-        if (request.getFollowUpAppointments() != null && !request.getFollowUpAppointments().isEmpty()) {
-            for (FollowUpAppointmentDTO dto : request.getFollowUpAppointments()) {
-                dischargeSummary.addFollowUpAppointment(dischargeSummaryMapper.toFollowUpAppointmentEntry(dto));
-            }
-        }
+        addMedications(dischargeSummary, request);
+        addPendingTests(dischargeSummary, request);
+        addFollowUps(dischargeSummary, request);
 
         // Add equipment and supplies
         if (request.getEquipmentAndSupplies() != null && !request.getEquipmentAndSupplies().isEmpty()) {
@@ -127,13 +126,34 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         return dischargeSummaryMapper.toResponseDTO(saved);
     }
 
+    private void addMedications(DischargeSummary summary, DischargeSummaryRequestDTO request) {
+        if (request.getMedicationReconciliation() == null || request.getMedicationReconciliation().isEmpty()) return;
+        for (MedicationReconciliationDTO dto : request.getMedicationReconciliation()) {
+            summary.addMedicationReconciliation(dischargeSummaryMapper.toMedicationReconciliationEntry(dto));
+        }
+    }
+
+    private void addPendingTests(DischargeSummary summary, DischargeSummaryRequestDTO request) {
+        if (request.getPendingTestResults() == null || request.getPendingTestResults().isEmpty()) return;
+        for (PendingTestResultDTO dto : request.getPendingTestResults()) {
+            summary.addPendingTestResult(dischargeSummaryMapper.toPendingTestResultEntry(dto));
+        }
+    }
+
+    private void addFollowUps(DischargeSummary summary, DischargeSummaryRequestDTO request) {
+        if (request.getFollowUpAppointments() == null || request.getFollowUpAppointments().isEmpty()) return;
+        for (FollowUpAppointmentDTO dto : request.getFollowUpAppointments()) {
+            summary.addFollowUpAppointment(dischargeSummaryMapper.toFollowUpAppointmentEntry(dto));
+        }
+    }
+
     @Override
     @Transactional
     public DischargeSummaryResponseDTO updateDischargeSummary(UUID summaryId, DischargeSummaryRequestDTO request, Locale locale) {
         log.info("Updating discharge summary: {}", summaryId);
 
         DischargeSummary existing = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException("DischargeSummary", "id", summaryId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
 
         // Cannot update finalized summaries
         if (Boolean.TRUE.equals(existing.getIsFinalized())) {
@@ -196,7 +216,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         log.info("Finalizing discharge summary: {}", summaryId);
 
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException("DischargeSummary", "id", summaryId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
 
         // Verify provider is authorized
         if (!dischargeSummary.getDischargingProvider().getId().equals(providerId)) {
@@ -221,7 +241,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     @Transactional(readOnly = true)
     public DischargeSummaryResponseDTO getDischargeSummaryById(UUID summaryId, Locale locale) {
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException("DischargeSummary", "id", summaryId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
 
         return dischargeSummaryMapper.toResponseDTO(dischargeSummary);
     }
@@ -230,7 +250,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     @Transactional(readOnly = true)
     public DischargeSummaryResponseDTO getDischargeSummaryByEncounter(UUID encounterId, Locale locale) {
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findByEncounter_Id(encounterId)
-            .orElseThrow(() -> new ResourceNotFoundException("DischargeSummary", "encounter", encounterId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "encounter", encounterId.toString()));
 
         return dischargeSummaryMapper.toResponseDTO(dischargeSummary);
     }
@@ -241,7 +261,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         List<DischargeSummary> summaries = dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId);
         return summaries.stream()
             .map(dischargeSummaryMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -255,7 +275,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         List<DischargeSummary> summaries = dischargeSummaryRepository.findByHospitalAndDateRange(hospitalId, startDate, endDate);
         return summaries.stream()
             .map(dischargeSummaryMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -264,7 +284,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         List<DischargeSummary> summaries = dischargeSummaryRepository.findUnfinalizedByHospital(hospitalId);
         return summaries.stream()
             .map(dischargeSummaryMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -273,7 +293,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         List<DischargeSummary> summaries = dischargeSummaryRepository.findWithPendingTestResults(hospitalId);
         return summaries.stream()
             .map(dischargeSummaryMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -282,7 +302,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         List<DischargeSummary> summaries = dischargeSummaryRepository.findByDischargingProvider_IdOrderByDischargeDateDesc(providerId);
         return summaries.stream()
             .map(dischargeSummaryMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -291,7 +311,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         log.info("Deleting discharge summary: {}", summaryId);
 
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
-            .orElseThrow(() -> new ResourceNotFoundException("DischargeSummary", "id", summaryId.toString()));
+            .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
 
         // Cannot delete finalized summaries
         if (Boolean.TRUE.equals(dischargeSummary.getIsFinalized())) {

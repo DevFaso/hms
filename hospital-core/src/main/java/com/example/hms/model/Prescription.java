@@ -30,6 +30,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -59,6 +60,7 @@ import java.util.Objects;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"patient", "staff", "encounter", "assignment", "hospital", "structuredInstructions", "alerts", "transmissions"})
+@EqualsAndHashCode(callSuper = true)
 public class Prescription extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

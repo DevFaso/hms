@@ -1,9 +1,27 @@
 package com.example.hms.model;
 
 import com.example.hms.enums.AppointmentStatus;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -31,6 +49,7 @@ import java.util.Objects;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"patient", "staff", "hospital", "createdBy", "assignment"})
+@EqualsAndHashCode(callSuper = true)
 public class Appointment extends BaseEntity {
     public Department getDepartment() {
         return department;

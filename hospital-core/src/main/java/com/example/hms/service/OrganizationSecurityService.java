@@ -1,10 +1,12 @@
 package com.example.hms.service;
 
-import com.example.hms.model.*;
-import com.example.hms.enums.*;
+import com.example.hms.model.OrganizationSecurityPolicy;
+import com.example.hms.model.OrganizationSecurityRule;
+import com.example.hms.enums.OrganizationType;
+import com.example.hms.enums.SecurityPolicyType;
+import com.example.hms.enums.SecurityRuleType;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 /**

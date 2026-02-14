@@ -23,9 +23,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class PatientHospitalRegistrationServiceImplTest {
@@ -79,7 +82,7 @@ class PatientHospitalRegistrationServiceImplTest {
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
         when(registrationRepository.existsByMrnAndHospitalId(anyString(), eq(hospitalId))).thenReturn(false);
-        when(mapper.toEntity(eq(dto), eq(patient), eq(hospital))).thenReturn(registration);
+        when(mapper.toEntity(dto, patient, hospital)).thenReturn(registration);
         when(registrationRepository.save(registration)).thenReturn(registration);
         when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
 
@@ -97,7 +100,7 @@ class PatientHospitalRegistrationServiceImplTest {
         when(hospitalRepository.findByName("General Hospital")).thenReturn(Optional.of(hospital));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
         when(registrationRepository.existsByMrnAndHospitalId(anyString(), eq(hospitalId))).thenReturn(false);
-        when(mapper.toEntity(eq(dto), eq(patient), eq(hospital))).thenReturn(registration);
+        when(mapper.toEntity(dto, patient, hospital)).thenReturn(registration);
         when(registrationRepository.save(registration)).thenReturn(registration);
         when(mapper.toResponseDTO(registration)).thenReturn(responseDTO);
 

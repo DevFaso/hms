@@ -16,8 +16,22 @@ import com.example.hms.model.education.EducationResource;
 import com.example.hms.model.education.PatientEducationProgress;
 import com.example.hms.model.education.PatientEducationQuestion;
 import com.example.hms.model.education.VisitEducationDocumentation;
-import com.example.hms.payload.dto.education.*;
-import com.example.hms.repository.*;
+import com.example.hms.payload.dto.education.EducationResourceRequestDTO;
+import com.example.hms.payload.dto.education.EducationResourceResponseDTO;
+import com.example.hms.payload.dto.education.PatientEducationProgressRequestDTO;
+import com.example.hms.payload.dto.education.PatientEducationProgressResponseDTO;
+import com.example.hms.payload.dto.education.PatientEducationQuestionRequestDTO;
+import com.example.hms.payload.dto.education.PatientEducationQuestionResponseDTO;
+import com.example.hms.payload.dto.education.VisitEducationDocumentationRequestDTO;
+import com.example.hms.payload.dto.education.VisitEducationDocumentationResponseDTO;
+import com.example.hms.repository.EducationResourceRepository;
+import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientEducationProgressRepository;
+import com.example.hms.repository.PatientEducationQuestionRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.VisitEducationDocumentationRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -25,13 +39,16 @@ import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SuppressWarnings({"java:S100", "java:S1450", "java:S1192"})
 class PatientEducationServiceImplTest {

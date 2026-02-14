@@ -10,14 +10,6 @@ public final class JwtTokenHolder {
     private JwtTokenHolder() {
     }
 
-    /**
-     * @deprecated Tokens now ride along with the Authentication credentials. Method retained for backward compatibility.
-     */
-    @Deprecated
-    public static void setToken(String token) {
-        log.trace("Ignoring legacy JwtTokenHolder#setToken call. tokenLength={}", token == null ? 0 : token.length());
-    }
-
     public static String getToken() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
@@ -34,14 +26,6 @@ public final class JwtTokenHolder {
             return value.isBlank() ? null : value;
         }
         return null;
-    }
-
-    /**
-     * @deprecated Tokens now ride along with the Authentication credentials. Method retained for backward compatibility.
-     */
-    @Deprecated
-    public static void clear() {
-        // No-op: token is held by the security context now
     }
 
 }

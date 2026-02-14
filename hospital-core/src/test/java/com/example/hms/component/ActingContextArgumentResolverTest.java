@@ -20,9 +20,11 @@ import java.util.Collections;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S5976") // Individual tests preferred over parameterized for clarity
 class ActingContextArgumentResolverTest {
 
     private ActingContextArgumentResolver resolver;

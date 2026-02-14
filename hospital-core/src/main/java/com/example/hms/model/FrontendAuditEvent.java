@@ -10,6 +10,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDateTime;
 
@@ -28,6 +29,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(callSuper = true)
 public class FrontendAuditEvent extends BaseEntity {
 
     @Column(name = "event_type", nullable = false, length = 120)

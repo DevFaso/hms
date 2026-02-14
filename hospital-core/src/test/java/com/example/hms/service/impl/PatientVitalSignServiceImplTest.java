@@ -178,7 +178,8 @@ class PatientVitalSignServiceImplTest {
             .thenReturn(Optional.of(registration));
         when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
 
-        assertThatThrownBy(() -> service.recordVital(patientId, request, UUID.randomUUID()))
+        UUID randomId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Recorder staff is not assigned");
     }
@@ -201,7 +202,8 @@ class PatientVitalSignServiceImplTest {
             .thenReturn(Optional.empty());
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.recordVital(patientId, request, UUID.randomUUID()))
+        UUID randomId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining("Hospital not found");
     }
@@ -256,7 +258,8 @@ class PatientVitalSignServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
 
-        assertThatThrownBy(() -> service.recordVital(patientId, request, UUID.randomUUID()))
+        UUID randomId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Registration does not belong");
     }
@@ -286,7 +289,8 @@ class PatientVitalSignServiceImplTest {
             .thenReturn(Optional.of(minimalStaff(UUID.randomUUID(), hospital, null)));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(inactiveAssignment));
 
-        assertThatThrownBy(() -> service.recordVital(patientId, request, UUID.randomUUID()))
+        UUID randomId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Assignment is not active");
     }
@@ -341,7 +345,8 @@ class PatientVitalSignServiceImplTest {
             .thenReturn(Optional.of(registration));
         when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.recordVital(patientId, request, UUID.randomUUID()))
+        UUID randomId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining("Staff not found or inactive");
     }
@@ -361,7 +366,8 @@ class PatientVitalSignServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.findById(registrationId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.recordVital(patientId, request, UUID.randomUUID()))
+        UUID randomId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.recordVital(patientId, request, randomId))
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining("Registration not found");
     }

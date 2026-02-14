@@ -16,6 +16,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.EqualsAndHashCode;
 
 /**
  * Represents a known drug-drug interaction in the system's knowledge base.
@@ -40,6 +41,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(callSuper = true)
 public class DrugInteraction extends BaseEntity {
 
     // ===== Drug Identification =====

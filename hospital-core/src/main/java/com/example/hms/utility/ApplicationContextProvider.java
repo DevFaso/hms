@@ -9,6 +9,7 @@ public class ApplicationContextProvider implements ApplicationContextAware {
     private static ApplicationContext context;
 
     @Override
+    @SuppressWarnings("java:S2696")
     public void setApplicationContext(@org.springframework.lang.NonNull ApplicationContext ctx) {
         context = ctx;
     }

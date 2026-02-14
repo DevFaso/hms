@@ -10,9 +10,15 @@ import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientConsent;
-import com.example.hms.model.PatientHospitalRegistration;
-import com.example.hms.payload.dto.*;
-import com.example.hms.repository.*;
+import com.example.hms.payload.dto.HospitalResponseDTO;
+import com.example.hms.payload.dto.PatientConsentRequestDTO;
+import com.example.hms.payload.dto.PatientConsentResponseDTO;
+import com.example.hms.payload.dto.PatientResponseDTO;
+import com.example.hms.repository.AuditEventLogRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientConsentRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.repository.PatientRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +34,10 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class PatientConsentServiceImpl implements PatientConsentService {
+    private static final String TO_HOSPITAL_SEPARATOR = " to hospital ";
+    private static final String PATIENT_CONSENT_TYPE = "PATIENT_CONSENT";
+    private static final String AUDIT_LOG_FAILURE_MSG = "❌ Failed to save audit log: {}";
+
 
     private final PatientConsentRepository consentRepository;
     private final PatientRepository patientRepository;
@@ -80,14 +90,14 @@ public class PatientConsentServiceImpl implements PatientConsentService {
             auditRepository.save(AuditEventLog.builder()
                 .user(patient.getUser())
                 .eventType(AuditEventType.CONSENT_GRANTED)
-                .eventDescription("Consent granted from hospital " + fromHospitalId + " to hospital " + toHospitalId)
+                .eventDescription("Consent granted from hospital " + fromHospitalId + TO_HOSPITAL_SEPARATOR + toHospitalId)
                 .resourceId(patient.getId().toString())
-                .entityType("PATIENT_CONSENT")
+                .entityType(PATIENT_CONSENT_TYPE)
                 .status(AuditStatus.SUCCESS)
                 .details("Purpose: " + requestDTO.getPurpose())
                 .build());
-        } catch (Exception e) {
-            log.error("❌ Failed to save audit log: {}", e.getMessage(), e);
+        } catch (RuntimeException e) {
+            log.error(AUDIT_LOG_FAILURE_MSG, e.getMessage(), e);
         }
 
         return mapWithDetails(savedConsent);
@@ -106,13 +116,13 @@ public class PatientConsentServiceImpl implements PatientConsentService {
             auditRepository.save(AuditEventLog.builder()
                 .user(consent.getPatient().getUser())
                 .eventType(AuditEventType.CONSENT_REVOKED)
-                .eventDescription("Consent revoked from hospital " + fromHospitalId + " to hospital " + toHospitalId)
+                .eventDescription("Consent revoked from hospital " + fromHospitalId + TO_HOSPITAL_SEPARATOR + toHospitalId)
                 .resourceId(patientId.toString())
-                .entityType("PATIENT_CONSENT")
+                .entityType(PATIENT_CONSENT_TYPE)
                 .status(AuditStatus.SUCCESS)
                 .build());
-        } catch (Exception e) {
-            log.error("❌ Failed to save audit log: {}", e.getMessage(), e);
+        } catch (RuntimeException e) {
+            log.error(AUDIT_LOG_FAILURE_MSG, e.getMessage(), e);
         }
     }
 
@@ -181,14 +191,14 @@ public class PatientConsentServiceImpl implements PatientConsentService {
             auditRepository.save(AuditEventLog.builder()
                 .user(patient.getUser())
                 .eventType(AuditEventType.CONSENT_GRANTED)
-                .eventDescription("Consent granted (with details) from hospital " + fromHospitalId + " to hospital " + toHospitalId)
+                .eventDescription("Consent granted (with details) from hospital " + fromHospitalId + TO_HOSPITAL_SEPARATOR + toHospitalId)
                 .resourceId(patient.getId().toString())
-                .entityType("PATIENT_CONSENT")
+                .entityType(PATIENT_CONSENT_TYPE)
                 .status(AuditStatus.SUCCESS)
                 .details("Purpose: " + requestDTO.getPurpose())
                 .build());
-        } catch (Exception e) {
-            log.error("❌ Failed to save audit log: {}", e.getMessage(), e);
+        } catch (RuntimeException e) {
+            log.error(AUDIT_LOG_FAILURE_MSG, e.getMessage(), e);
         }
 
         return consentMapper.toDto(savedConsent, patientDTO, fromHospitalDTO, toHospitalDTO);

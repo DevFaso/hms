@@ -46,7 +46,7 @@ public class BillingInvoiceMapper {
         dto.setPatientEmail(patient.getEmail());
         try {
             dto.setPatientPhone(patient.getPhoneNumberPrimary());
-        } catch (Exception ignored) {
+        } catch (RuntimeException ignored) {
             dto.setPatientPhone(null);
         }
 

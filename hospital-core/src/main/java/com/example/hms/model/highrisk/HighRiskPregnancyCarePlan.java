@@ -20,6 +20,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -44,6 +45,7 @@ import java.util.Objects;
         @Index(name = "idx_high_risk_plans_created", columnList = "created_at")
     }
 )
+@EqualsAndHashCode(callSuper = true)
 public class HighRiskPregnancyCarePlan extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)

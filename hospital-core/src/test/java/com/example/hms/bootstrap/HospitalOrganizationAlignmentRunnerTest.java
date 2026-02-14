@@ -20,7 +20,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.ArgumentMatchers.anyList;
 
 @ExtendWith(MockitoExtension.class)
 class HospitalOrganizationAlignmentRunnerTest {
@@ -54,7 +59,7 @@ class HospitalOrganizationAlignmentRunnerTest {
             var idField = Organization.class.getSuperclass().getDeclaredField("id");
             idField.setAccessible(true);
             idField.set(organization, UUID.randomUUID());
-        } catch (Exception ignored) {
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
             // If reflection fails, the organization will just have null id
         }
     }
@@ -101,8 +106,8 @@ class HospitalOrganizationAlignmentRunnerTest {
         verify(hospitalRepository).saveAll(hospitalsCaptor.capture());
         List<Hospital> saved = hospitalsCaptor.getValue();
 
-        assertThat(saved).hasSize(2);
-        assertThat(saved).allSatisfy(h -> assertThat(h.getOrganization()).isEqualTo(organization));
+        assertThat(saved).hasSize(2)
+            .allSatisfy(h -> assertThat(h.getOrganization()).isEqualTo(organization));
     }
 
     // ── run(): single unassigned hospital → links ────────────────

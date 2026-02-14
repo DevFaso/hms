@@ -20,11 +20,11 @@ import java.util.UUID;
 public class SocialHistoryRequestDTO {
 
     @NotNull(message = "Patient ID is required")
-    @Schema(description = "Patient ID", required = true)
+    @Schema(description = "Patient ID", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID patientId;
 
     @NotNull(message = "Hospital ID is required")
-    @Schema(description = "Hospital ID", required = true)
+    @Schema(description = "Hospital ID", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID hospitalId;
 
     @Schema(description = "Staff member recording this history")
@@ -32,7 +32,7 @@ public class SocialHistoryRequestDTO {
 
     @NotNull(message = "Recorded date is required")
     @JsonFormat(pattern = "yyyy-MM-dd")
-    @Schema(description = "Date recorded", required = true)
+    @Schema(description = "Date recorded", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate recordedDate;
 
     // Tobacco Use

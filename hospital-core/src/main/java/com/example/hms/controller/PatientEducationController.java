@@ -23,7 +23,15 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.UUID;
@@ -384,7 +392,7 @@ public class PatientEducationController {
             if (s != null && !s.isBlank()) {
                 try {
                     return UUID.fromString(s);
-                } catch (Exception ignored) {
+                } catch (RuntimeException ignored) {
                     // ignore invalid UUID format
                 }
             }
@@ -393,7 +401,7 @@ public class PatientEducationController {
             if (raw instanceof String str && !str.isBlank()) {
                 try {
                     return UUID.fromString(str);
-                } catch (Exception ignored) {
+                } catch (RuntimeException ignored) {
                     // ignore invalid UUID format
                 }
             }
@@ -408,7 +416,7 @@ public class PatientEducationController {
             if (sub != null && !sub.isBlank()) {
                 try {
                     return UUID.fromString(sub);
-                } catch (Exception ignored) {
+                } catch (RuntimeException ignored) {
                     // ignore invalid UUID format
                 }
             }

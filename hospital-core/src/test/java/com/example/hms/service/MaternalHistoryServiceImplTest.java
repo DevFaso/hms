@@ -283,8 +283,7 @@ class MaternalHistoryServiceImplTest {
 
         MaternalHistoryResponseDTO result = maternalHistoryService.getMaternalHistoryById(historyId, username);
 
-        assertThat(result).isNotNull();
-        assertThat(result).isEqualTo(responseDTO);
+        assertThat(result).isNotNull().isEqualTo(responseDTO);
     }
 
     @Test
@@ -304,8 +303,7 @@ class MaternalHistoryServiceImplTest {
 
         MaternalHistoryResponseDTO result = maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username);
 
-        assertThat(result).isNotNull();
-        assertThat(result).isEqualTo(responseDTO);
+        assertThat(result).isNotNull().isEqualTo(responseDTO);
     }
 
     @Test
@@ -338,8 +336,7 @@ class MaternalHistoryServiceImplTest {
         MaternalHistoryResponseDTO result = maternalHistoryService
                 .getMaternalHistoryByPatientIdAndVersion(patientId, versionNumber, username);
 
-        assertThat(result).isNotNull();
-        assertThat(result).isEqualTo(responseDTO);
+        assertThat(result).isNotNull().isEqualTo(responseDTO);
     }
 
     @Test

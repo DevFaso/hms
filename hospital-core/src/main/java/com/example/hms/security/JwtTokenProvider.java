@@ -22,10 +22,33 @@ import org.springframework.util.StringUtils;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
-import static com.example.hms.config.SecurityConstants.*;
+import static com.example.hms.config.SecurityConstants.CLAIM_IS_HOSPITAL_ADMIN;
+import static com.example.hms.config.SecurityConstants.CLAIM_IS_SUPER_ADMIN;
+import static com.example.hms.config.SecurityConstants.CLAIM_PERMITTED_DEPARTMENT_IDS;
+import static com.example.hms.config.SecurityConstants.CLAIM_PERMITTED_HOSPITAL_IDS;
+import static com.example.hms.config.SecurityConstants.CLAIM_PERMITTED_ORGANIZATION_IDS;
+import static com.example.hms.config.SecurityConstants.CLAIM_PRIMARY_HOSPITAL_ID;
+import static com.example.hms.config.SecurityConstants.CLAIM_PRIMARY_ORGANIZATION_ID;
+import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
+import static com.example.hms.config.SecurityConstants.ROLE_HOSPITAL_ADMIN;
+import static com.example.hms.config.SecurityConstants.ROLE_NURSE;
+import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
+import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
+import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 
 @Slf4j
 @Component

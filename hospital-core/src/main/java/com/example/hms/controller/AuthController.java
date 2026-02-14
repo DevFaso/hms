@@ -1,7 +1,13 @@
 package com.example.hms.controller;
 
 import com.example.hms.exception.ResourceNotFoundException;
-import com.example.hms.payload.dto.*;
+import com.example.hms.payload.dto.BootstrapSignupRequest;
+import com.example.hms.payload.dto.EmailVerificationRequestDTO;
+import com.example.hms.payload.dto.EmailVerificationResponseDTO;
+import com.example.hms.payload.dto.JwtResponse;
+import com.example.hms.payload.dto.LoginRequest;
+import com.example.hms.payload.dto.MessageResponse;
+import com.example.hms.payload.dto.PasswordResetConfirmDTO;
 import com.example.hms.payload.dto.credential.UserCredentialHealthDTO;
 import com.example.hms.payload.dto.credential.UserMfaEnrollmentDTO;
 import com.example.hms.payload.dto.credential.UserMfaEnrollmentRequestDTO;
@@ -32,7 +38,15 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -180,7 +194,7 @@ public class AuthController {
             log.warn("🔐 [LOGIN] Disabled account user='{}'", loginRequest.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("User account is disabled. Please verify your email."));
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
             log.error("🔐 [LOGIN] Unexpected failure user='{}' after {}ms : {} - {}", loginRequest.getUsername(),
                     elapsedMs, ex.getClass().getSimpleName(), ex.getMessage());
@@ -265,7 +279,7 @@ public class AuthController {
                     "length", token.length(),
                     "roles", roles,
                     "subject", valid ? jwtTokenProvider.getUsernameFromJWT(token) : null));
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             return ResponseEntity.status(400).body(java.util.Map.of(
                     "valid", false,
                     "error", ex.getMessage()));

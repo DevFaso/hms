@@ -9,7 +9,14 @@ import com.example.hms.payload.dto.UserRequestDTO;
 import com.example.hms.payload.dto.UserResponseDTO;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Component
@@ -117,8 +124,12 @@ public class UserMapper {
                 .build();
     }
 
-    /** Back-compat (prefer the overload with encoded password). */
-    @Deprecated
+    /**
+     * Back-compat (prefer the overload with encoded password).
+     * @deprecated since 2025, for removal. Use the overload accepting encoded password.
+     */
+    @Deprecated(since = "2025", forRemoval = true)
+    @SuppressWarnings("java:S1133") // Retained for backward compatibility
     public User toEntity(UserRequestDTO dto) {
         if (dto == null)
             return null;

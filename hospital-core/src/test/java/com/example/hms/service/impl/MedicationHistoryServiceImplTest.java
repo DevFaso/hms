@@ -36,7 +36,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class MedicationHistoryServiceImplTest {
@@ -512,7 +513,7 @@ class MedicationHistoryServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
-        when(pharmacyFillMapper.toEntity(eq(req), eq(patient), eq(hospital), eq(rx))).thenReturn(fill);
+        when(pharmacyFillMapper.toEntity(req, patient, hospital, rx)).thenReturn(fill);
         when(pharmacyFillRepository.save(fill)).thenReturn(fill);
         when(pharmacyFillMapper.toResponseDTO(fill)).thenReturn(expected);
 
@@ -532,7 +533,8 @@ class MedicationHistoryServiceImplTest {
     @Test void updatePharmacyFill_notFound() {
         UUID fillId = UUID.randomUUID();
         when(pharmacyFillRepository.findById(fillId)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.updatePharmacyFill(fillId, new PharmacyFillRequestDTO(), Locale.ENGLISH))
+        PharmacyFillRequestDTO request = new PharmacyFillRequestDTO();
+        assertThatThrownBy(() -> service.updatePharmacyFill(fillId, request, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 

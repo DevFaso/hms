@@ -8,14 +8,34 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.UserMapper;
-import com.example.hms.model.*;
-import com.example.hms.payload.dto.*;
-import com.example.hms.repository.*;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Role;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRole;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.model.UserRoleId;
+import com.example.hms.payload.dto.AdminSignupRequest;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.payload.dto.BootstrapSignupRequest;
+import com.example.hms.payload.dto.BootstrapSignupResponse;
+import com.example.hms.payload.dto.UserRequestDTO;
+import com.example.hms.payload.dto.UserResponseDTO;
+import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.RoleRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import com.example.hms.config.BootstrapProperties;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -24,13 +44,32 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class UserServiceImpl implements UserService {
+    private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
+    private static final String ROLE_PATIENT = "ROLE_PATIENT";
+    private static final String HOSPITAL_NOT_FOUND_PREFIX = "Hospital not found with ID: ";
+    private static final String ROLE_NURSE = "ROLE_NURSE";
+    private static final String ROLE_PHARMACIST = "ROLE_PHARMACIST";
+    private static final String ROLE_HOSPITAL_ADMIN = "ROLE_HOSPITAL_ADMIN";
+    private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
+    private static final String ROLE_LAB_SCIENTIST = "ROLE_LAB_SCIENTIST";
+    private static final String USER_NOT_FOUND_PREFIX = "User not found with ID: ";
+
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -65,12 +104,12 @@ public class UserServiceImpl implements UserService {
         User saved = userRepository.save(user);
 
         if (existingUsers == 0) {
-            Role superAdmin = getRoleByCode("ROLE_SUPER_ADMIN");
+            Role superAdmin = getRoleByCode(ROLE_SUPER_ADMIN);
             addUserRoleIfAbsent(saved.getId(), superAdmin.getId());
             createAssignmentIfAbsent(saved.getId(), superAdmin.getId(), null);
             log.info("🎉 First user auto-assigned ROLE_SUPER_ADMIN (global).");
         } else {
-            Role patient = getRoleByCode("ROLE_PATIENT");
+            Role patient = getRoleByCode(ROLE_PATIENT);
             addUserRoleIfAbsent(saved.getId(), patient.getId());
 
             UUID targetHospitalId = dto.getHospitalId();
@@ -78,7 +117,7 @@ public class UserServiceImpl implements UserService {
                 try {
                     Hospital defaultHospital = getDefaultHospital();
                     targetHospitalId = defaultHospital.getId();
-                } catch (Exception e) {
+                } catch (RuntimeException e) {
                     log.warn("⚠️ Default hospital not found. Creating PATIENT without hospital assignment.");
                     targetHospitalId = null;
                 }
@@ -118,15 +157,14 @@ public class UserServiceImpl implements UserService {
 
         // Optional shared secret enforcement (property-based for testability)
         String expectedToken = bootstrapProperties.getToken();
-        if (expectedToken != null && !expectedToken.isBlank()) {
-            if (request.getBootstrapToken() == null || !expectedToken.equals(request.getBootstrapToken())) {
-                return BootstrapSignupResponse.builder()
-                        .success(false)
-                        .message("Invalid bootstrap token")
-                        .username(null)
-                        .email(null)
-                        .build();
-            }
+        if (expectedToken != null && !expectedToken.isBlank()
+                && (request.getBootstrapToken() == null || !expectedToken.equals(request.getBootstrapToken()))) {
+            return BootstrapSignupResponse.builder()
+                    .success(false)
+                    .message("Invalid bootstrap token")
+                    .username(null)
+                    .email(null)
+                    .build();
         }
 
         User user = new User();
@@ -145,7 +183,7 @@ public class UserServiceImpl implements UserService {
         user.setPasswordRotationForcedAt(null);
         user = userRepository.save(user);
 
-        Role superAdmin = getRoleByCode("ROLE_SUPER_ADMIN");
+        Role superAdmin = getRoleByCode(ROLE_SUPER_ADMIN);
         addUserRoleIfAbsent(user.getId(), superAdmin.getId());
         createAssignmentIfAbsent(user.getId(), superAdmin.getId(), null);
 
@@ -192,64 +230,23 @@ public class UserServiceImpl implements UserService {
 
         final boolean isPatient = roleNames.stream()
                 .map(r -> r == null ? "" : r.trim().toUpperCase(Locale.ROOT))
-                .anyMatch(r -> r.equals("PATIENT") || r.equals("ROLE_PATIENT"));
+                .anyMatch(r -> r.equals("PATIENT") || r.equals(ROLE_PATIENT));
 
         // ---- 1) Resolve hospital for this registration ----
-        UUID staffContextHospitalId = null;
-        if (isPatient) {
-            staffContextHospitalId = extractHospitalIdFromJwt();
-            if (staffContextHospitalId == null) {
-                staffContextHospitalId = request.getHospitalId();
-            }
-            log.info("[RECEPTION/ADMIN] Resolved hospitalId for patient registration: {}", staffContextHospitalId);
-            if (staffContextHospitalId == null) {
-                throw new BusinessException("Hospital must be provided when staff registers a patient.");
-            }
-            final UUID resolvedHospitalId = staffContextHospitalId;
-            hospitalRepository.findById(resolvedHospitalId)
-                    .orElseThrow(
-                            () -> new ResourceNotFoundException("Hospital not found with ID: " + resolvedHospitalId));
-        } else {
-            final boolean isSuperAdmin = roleNames.stream()
-                    .map(r -> r == null ? "" : r.trim().toUpperCase(Locale.ROOT))
-                    .anyMatch(r -> r.equals("SUPER_ADMIN") || r.equals("ROLE_SUPER_ADMIN"));
-
-            if (!isSuperAdmin) {
-                UUID provided = request.getHospitalId();
-                if (provided == null) {
-                    throw new BusinessException("Hospital must be provided for non-SUPER_ADMIN staff/admin roles.");
-                }
-                final UUID resolvedHospitalId = provided;
-                staffContextHospitalId = hospitalRepository.findById(resolvedHospitalId)
-                        .orElseThrow(() -> new ResourceNotFoundException(
-                                "Hospital not found with ID: " + resolvedHospitalId))
-                        .getId();
-            } else {
-                staffContextHospitalId = null; // global assignment allowed for SUPER_ADMIN
-            }
-        }
+        UUID staffContextHospitalId = resolveHospitalForRegistration(request, roleNames, isPatient);
 
         // ---- 2) Resolve Roles ----
         final Set<Role> roles = roleNames.stream()
-                .map(name -> {
-                    final String normalized = name == null ? "" : name.trim().toUpperCase(Locale.ROOT);
-                    final String code = normalized.startsWith("ROLE_") ? normalized : "ROLE_" + normalized;
-                    return getRoleByCode(code);
-                })
+                .map(this::resolveRoleByName)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         final boolean requiresStaff = roles.stream().anyMatch(role -> switch (role.getCode()) {
-            case "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_LAB_SCIENTIST", "ROLE_PHARMACIST", "ROLE_HOSPITAL_ADMIN" -> true;
+            case ROLE_DOCTOR, ROLE_NURSE, ROLE_LAB_SCIENTIST, ROLE_PHARMACIST, ROLE_HOSPITAL_ADMIN -> true;
             default -> false;
         });
 
         // ---- 3) Resolve/Create User ----
-        final String lic = requiresStaff
-                ? Optional.ofNullable(request.getLicenseNumber()).map(String::trim).orElse("")
-                : "";
-        if (requiresStaff && lic.isEmpty()) {
-            throw new IllegalArgumentException("licenseNumber is required for medical/admin roles.");
-        }
+        final String lic = resolveLicenseNumber(request, requiresStaff);
 
     Optional<User> existingByIdentity = userRepository
         .findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(username, email, phone);
@@ -260,7 +257,124 @@ public class UserServiceImpl implements UserService {
 
     final boolean newUserCreated = existingByIdentity.isEmpty() && existingByLicense.isEmpty();
 
-    final User user = existingByIdentity.or(() -> existingByLicense).orElseGet(() -> {
+    final User user = existingByIdentity.or(() -> existingByLicense)
+        .orElseGet(() -> createNewUser(request, username, email, phone, roles));
+
+    if ((existingByIdentity.isPresent() || existingByLicense.isPresent())
+            && Boolean.TRUE.equals(request.getForcePasswordChange())) {
+        user.setForcePasswordChange(true);
+        user.setPasswordRotationForcedAt(LocalDateTime.now());
+    }
+
+    // ---- 4) Ensure roles + hospital-scoped assignments ----
+    final List<UserRoleHospitalAssignment> ensuredAssignments =
+        ensureRolesAndAssignments(user, roles, staffContextHospitalId);
+
+    if (newUserCreated) {
+    User actor = resolveCurrentActor().orElse(user);
+    recordUserCreationAudit(actor, user, ensuredAssignments);
+    }
+
+    // ---- 5) Upsert Staff when needed ----
+    if (requiresStaff && staffContextHospitalId != null) {
+        upsertStaff(user, staffContextHospitalId, lic, ensuredAssignments, request, roles);
+    }
+
+    // ---- 6) Reload + map ----
+    final User reloaded = userRepository.findByIdWithRolesAndProfiles(user.getId())
+        .orElseThrow(() -> new IllegalStateException("User disappeared after save"));
+    final Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(reloaded);
+
+    final long roleCount = assignmentRepository.countDistinctRolesByUserId(reloaded.getId());
+    final long activeRoleCount = assignmentRepository.countDistinctActiveRolesByUserId(reloaded.getId());
+    log.info("Registered user {} with {} distinct roles ({} active).", reloaded.getId(), roleCount,
+        activeRoleCount);
+
+    final UserResponseDTO dto = userMapper.toResponseDTO(reloaded, assignments);
+    dto.setRoleCount(Math.toIntExact(roleCount));
+    return dto;
+    }
+
+    private List<UserRoleHospitalAssignment> ensureRolesAndAssignments(
+            User user, Set<Role> roles, UUID staffContextHospitalId) {
+        final List<UserRoleHospitalAssignment> result = new ArrayList<>();
+        for (Role r : roles) {
+            addUserRoleIfAbsent(user.getId(), r.getId());
+
+            boolean isPatientRole = ROLE_PATIENT.equalsIgnoreCase(r.getCode())
+                    || "PATIENT".equalsIgnoreCase(r.getName());
+
+            log.info("[ASSIGN] {} -> user={} hospitalId={} active={}",
+                    r.getCode(), user.getUsername(), staffContextHospitalId, !isPatientRole);
+
+            result.add(ensureAssignmentSmart(user.getId(), r, staffContextHospitalId, !isPatientRole));
+        }
+        return result;
+    }
+
+    private Role resolveRoleByName(String name) {
+        final String normalized = name == null ? "" : name.trim().toUpperCase(Locale.ROOT);
+        final String code = normalized.startsWith("ROLE_") ? normalized : "ROLE_" + normalized;
+        return getRoleByCode(code);
+    }
+
+    private void upsertStaff(User user, UUID hospitalId, String lic,
+                         List<UserRoleHospitalAssignment> assignments, AdminSignupRequest request, Set<Role> roles) {
+        final Hospital hospital = hospitalRepository.findById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_PREFIX + hospitalId));
+
+        staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId())
+            .map(Staff::getLicenseNumber)
+            .ifPresent(existingLic -> {
+                if (!existingLic.equalsIgnoreCase(lic)) {
+                    throw new ConflictException(
+                        "License number mismatch for this user in this hospital; expected " + existingLic);
+                }
+            });
+
+        final UserRoleHospitalAssignment staffAssignment = assignments.stream()
+            .filter(a -> ROLE_HOSPITAL_ADMIN.equalsIgnoreCase(a.getRole().getCode()))
+            .findFirst()
+            .orElse(assignments.get(0));
+
+        final Staff staff = staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId())
+            .orElseGet(() -> {
+                Staff s = new Staff();
+                s.setUser(user);
+                s.setHospital(hospital);
+                return s;
+            });
+
+        staff.setAssignment(staffAssignment);
+        staff.setLicenseNumber(lic);
+        staff.setEmploymentType(
+            request.getEmploymentType() != null ? request.getEmploymentType() : EmploymentType.FULL_TIME);
+        staff.setJobTitle(coerceJobTitle(request.getJobTitle(), roles));
+        if (staff.getStartDate() == null) {
+            staff.setStartDate(LocalDate.now());
+        }
+
+        final String fn = user.getFirstName() == null ? "" : user.getFirstName().trim();
+        final String ln = user.getLastName() == null ? "" : user.getLastName().trim();
+        final String fullName = (fn + " " + ln).trim();
+        if (!fullName.isEmpty()) {
+            staff.setName(fullName);
+        }
+
+        staffRepository.save(staff);
+    }
+
+        private String resolveLicenseNumber(AdminSignupRequest request, boolean requiresStaff) {
+        String lic = requiresStaff
+                ? Optional.ofNullable(request.getLicenseNumber()).map(String::trim).orElse("")
+                : "";
+        if (requiresStaff && lic.isEmpty()) {
+            throw new IllegalArgumentException("licenseNumber is required for medical/admin roles.");
+        }
+        return lic;
+    }
+
+    private User createNewUser(AdminSignupRequest request, String username, String email, String phone, Set<Role> roles) {
         User u = new User();
         u.setUsername(username);
         u.setEmail(email);
@@ -270,7 +384,7 @@ public class UserServiceImpl implements UserService {
         u.setLastName(request.getLastName());
         u.setPhoneNumber(phone);
         u.setActive(true);
-        if (roles.stream().anyMatch(r -> "ROLE_PATIENT".equalsIgnoreCase(r.getCode()))
+        if (roles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.getCode()))
                 || Boolean.TRUE.equals(request.getForcePasswordChange())) {
             u.setForcePasswordChange(true);
         }
@@ -279,100 +393,49 @@ public class UserServiceImpl implements UserService {
         u.setPasswordRotationWarningAt(null);
         u.setPasswordRotationForcedAt(Boolean.TRUE.equals(request.getForcePasswordChange()) ? passwordSetAt : null);
         return userRepository.save(u);
-    });
-
-    if ((existingByIdentity.isPresent() || existingByLicense.isPresent())
-            && Boolean.TRUE.equals(request.getForcePasswordChange())) {
-        user.setForcePasswordChange(true);
-        user.setPasswordRotationForcedAt(LocalDateTime.now());
     }
 
-    // ---- 4) Ensure roles + hospital-scoped assignments ----
-    final List<UserRoleHospitalAssignment> ensuredAssignments = new ArrayList<>();
-    Optional<User> actorOpt = resolveCurrentActor();
-    User actor = actorOpt.orElse(user);
-    for (Role r : roles) {
-    // always ensure legacy user_roles link exists
-    addUserRoleIfAbsent(user.getId(), r.getId());
-
-    // PATIENT assignments must not be active
-    boolean isPatientRole = "ROLE_PATIENT".equalsIgnoreCase(r.getCode()) ||
-        "PATIENT".equalsIgnoreCase(r.getName());
-
-    log.info("[ASSIGN] {} -> user={} hospitalId={} active={}",
-        r.getCode(), user.getUsername(), staffContextHospitalId, !isPatientRole);
-
-    ensuredAssignments.add(
-        ensureAssignmentSmart(user.getId(), r, staffContextHospitalId, !isPatientRole));
+        private UUID resolveHospitalForRegistration(AdminSignupRequest request, Set<String> roleNames, boolean isPatient) {
+        if (isPatient) {
+            return resolveHospitalForPatient(request);
+        }
+        return resolveHospitalForStaff(request, roleNames);
     }
 
-    if (newUserCreated) {
-    recordUserCreationAudit(actor, user, ensuredAssignments);
+    private UUID resolveHospitalForPatient(AdminSignupRequest request) {
+        UUID hospitalId = extractHospitalIdFromJwt();
+        if (hospitalId == null) {
+            hospitalId = request.getHospitalId();
+        }
+        log.info("[RECEPTION/ADMIN] Resolved hospitalId for patient registration: {}", hospitalId);
+        if (hospitalId == null) {
+            throw new BusinessException("Hospital must be provided when staff registers a patient.");
+        }
+        final UUID resolvedHospitalId = hospitalId;
+        hospitalRepository.findById(resolvedHospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_PREFIX + resolvedHospitalId));
+        return hospitalId;
     }
 
-    // ---- 5) Upsert Staff when needed ----
-    if (requiresStaff && staffContextHospitalId != null) {
-    final UUID resolvedHospitalId = staffContextHospitalId;
-    final Hospital hospital = hospitalRepository.findById(resolvedHospitalId)
-        .orElseThrow(
-            () -> new ResourceNotFoundException("Hospital not found with ID: " + resolvedHospitalId));
+    private UUID resolveHospitalForStaff(AdminSignupRequest request, Set<String> roleNames) {
+        final boolean isSuperAdmin = roleNames.stream()
+                .map(r -> r == null ? "" : r.trim().toUpperCase(Locale.ROOT))
+                .anyMatch(r -> r.equals("SUPER_ADMIN") || r.equals(ROLE_SUPER_ADMIN));
 
-    staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId())
-        .map(Staff::getLicenseNumber)
-        .ifPresent(existingLicForHospital -> {
-            if (!existingLicForHospital.equalsIgnoreCase(lic)) {
-            throw new ConflictException(
-                "License number mismatch for this user in this hospital; expected "
-                    + existingLicForHospital);
-            }
-        });
+        if (isSuperAdmin) {
+            return null;
+        }
 
-    final UserRoleHospitalAssignment staffAssignment = ensuredAssignments.stream()
-        .filter(a -> "ROLE_HOSPITAL_ADMIN".equalsIgnoreCase(a.getRole().getCode()))
-        .findFirst()
-        .orElse(ensuredAssignments.get(0));
-
-    final Staff staff = staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId())
-        .orElseGet(() -> {
-            Staff s = new Staff();
-            s.setUser(user);
-            s.setHospital(hospital);
-            return s;
-        });
-
-    staff.setAssignment(staffAssignment);
-    staff.setLicenseNumber(lic);
-    staff.setEmploymentType(
-        request.getEmploymentType() != null ? request.getEmploymentType() : EmploymentType.FULL_TIME);
-    staff.setJobTitle(coerceJobTitle(request.getJobTitle(), roles));
-    if (staff.getStartDate() == null)
-        staff.setStartDate(LocalDate.now());
-
-    final String fn = user.getFirstName() == null ? "" : user.getFirstName().trim();
-    final String ln = user.getLastName() == null ? "" : user.getLastName().trim();
-    final String fullName = (fn + " " + ln).trim();
-    if (!fullName.isEmpty())
-        staff.setName(fullName);
-
-    staffRepository.save(staff);
+        UUID provided = request.getHospitalId();
+        if (provided == null) {
+            throw new BusinessException("Hospital must be provided for non-SUPER_ADMIN staff/admin roles.");
+        }
+        return hospitalRepository.findById(provided)
+                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_PREFIX + provided))
+                .getId();
     }
 
-    // ---- 6) Reload + map ----
-    final User reloaded = userRepository.findByIdWithRolesAndProfiles(user.getId())
-        .orElseThrow(() -> new IllegalStateException("User disappeared after save"));
-    final Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(reloaded);
-
-    final long roleCount = getUserDistinctRoleCount(reloaded.getId());
-    final long activeRoleCount = getUserDistinctActiveRoleCount(reloaded.getId());
-    log.info("Registered user {} with {} distinct roles ({} active).", reloaded.getId(), roleCount,
-        activeRoleCount);
-
-    final UserResponseDTO dto = userMapper.toResponseDTO(reloaded, assignments);
-    dto.setRoleCount(Math.toIntExact(roleCount));
-    return dto;
-    }
-
-    private void recordUserCreationAudit(User actor, User created, List<UserRoleHospitalAssignment> assignments) {
+        private void recordUserCreationAudit(User actor, User created, List<UserRoleHospitalAssignment> assignments) {
         if (created == null) {
             return;
         }
@@ -413,7 +476,7 @@ public class UserServiceImpl implements UserService {
                 .build();
 
             auditEventLogService.logEvent(auditEvent);
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to record user creation audit for user '{}': {}", created.getId(), ex.getMessage());
         }
     }
@@ -450,7 +513,7 @@ public class UserServiceImpl implements UserService {
                 .build();
 
             auditEventLogService.logEvent(auditEvent);
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to record user deletion audit for '{}': {}", deletedUser.getId(), ex.getMessage());
         }
     }
@@ -495,25 +558,6 @@ public class UserServiceImpl implements UserService {
         return "Unknown User";
     }
 
-    private void fillHospitalOnPatientDto(Patient entity, PatientResponseDTO dto) {
-        // If your Patient entity has no hospital relation, derive from URHA
-        UUID userId = entity.getUser() != null ? entity.getUser().getId() : null;
-        if (userId == null)
-            return;
-
-        assignmentRepository.findLatestPatientAssignment(userId).ifPresent(a -> {
-            var h = a.getHospital();
-            if (h != null) {
-                dto.setPrimaryHospitalId(h.getId());
-                dto.setPrimaryHospitalName(h.getName());
-                dto.setPrimaryHospitalAddress(h.getAddress());
-                // for backward-compat if you keep both fields
-                dto.setHospitalId(h.getId());
-                dto.setHospitalName(h.getName());
-            }
-        });
-    }
-
     private UserRoleHospitalAssignment ensureAssignmentSmart(UUID userId, Role role, UUID hospitalId, boolean active) {
         UUID roleId = role.getId();
 
@@ -532,58 +576,6 @@ public class UserServiceImpl implements UserService {
                 .orElseThrow(() -> new IllegalStateException("Assignment was not persisted as expected"));
     }
 
-    private UUID extractHospitalIdFromCurrentUser() {
-        var auth = org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null)
-            return null;
-
-        // principal may be a Spring Security User or a String
-        String principal = auth.getName();
-        var userOpt = userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
-                principal, principal, null);
-        var user = userOpt.orElse(null);
-        if (user == null)
-            return null;
-
-        // Prefer staff-ish roles, then fall back to any active hospital
-        Set<String> staffCodes = Set.of(
-                "ROLE_RECEPTIONIST", "ROLE_HOSPITAL_ADMIN", "ROLE_DOCTOR",
-                "ROLE_NURSE", "ROLE_PHARMACIST", "ROLE_LAB_SCIENTIST");
-
-        return assignmentRepository.findByUser_IdAndActiveTrue(user.getId()).stream()
-                .filter(a -> a.getHospital() != null)
-                .sorted(java.util.Comparator.comparing(UserRoleHospitalAssignment::getCreatedAt).reversed())
-                .filter(a -> a.getRole() != null && staffCodes.contains(a.getRole().getCode()))
-                .map(a -> a.getHospital().getId())
-                .findFirst()
-                .orElseGet(() -> assignmentRepository.findByUser_IdAndActiveTrue(user.getId()).stream()
-                        .filter(a -> a.getHospital() != null)
-                        .findFirst()
-                        .map(a -> a.getHospital().getId())
-                        .orElse(null));
-    }
-
-    private UUID resolveHospitalForPatient(AdminSignupRequest request) {
-        // 1) Try to infer from the current (staff) user’s active hospital assignment
-        UUID fromContext = extractHospitalIdFromCurrentUser();
-        if (fromContext != null)
-            return fromContext;
-
-        // 2) Otherwise honor an explicit ID if provided
-        if (request.getHospitalId() != null)
-            return request.getHospitalId();
-
-        // 3) Or look up by name if provided
-        if (request.getHospitalName() != null && !request.getHospitalName().isBlank()) {
-            return hospitalRepository.findByName(request.getHospitalName())
-                    .map(Hospital::getId)
-                    .orElse(null);
-        }
-
-        // 4) Give up (caller will throw BusinessException)
-        return null;
-    }
-
     private UUID extractHospitalIdFromJwt() {
         try {
             String jwt = resolveCurrentJwt();
@@ -600,7 +592,7 @@ public class UserServiceImpl implements UserService {
             if (hId instanceof String s && !s.isBlank()) {
                 return UUID.fromString(s);
             }
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.warn("[JWT] Failed to extract hospitalId from JWT claims", e);
         }
         return null;
@@ -640,15 +632,15 @@ public class UserServiceImpl implements UserService {
         String code = roleCode.toUpperCase(Locale.ROOT);
 
         switch (code) {
-            case "ROLE_HOSPITAL_ADMIN":
+            case ROLE_HOSPITAL_ADMIN:
                 return JobTitle.HOSPITAL_ADMIN;
-            case "ROLE_DOCTOR":
+            case ROLE_DOCTOR:
                 return JobTitle.DOCTOR;
-            case "ROLE_NURSE":
+            case ROLE_NURSE:
                 return JobTitle.NURSE;
-            case "ROLE_LAB_SCIENTIST":
+            case ROLE_LAB_SCIENTIST:
                 return JobTitle.LAB_TECHNICIAN;
-            case "ROLE_PHARMACIST":
+            case ROLE_PHARMACIST:
                 return JobTitle.PHARMACIST;
             default:
                 return null;
@@ -664,7 +656,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public UserResponseDTO getUserById(UUID id) {
         User user = userRepository.findByIdWithRolesAndProfiles(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
         Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(user);
         return userMapper.toResponseDTO(user, assignments);
     }
@@ -692,7 +684,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public void deleteUser(UUID id) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
 
         user.setDeleted(true);
         user.setActive(false);
@@ -707,7 +699,7 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponseDTO updateUser(UUID id, UserRequestDTO dto) {
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
 
         user.setUsername(dto.getUsername());
         user.setEmail(dto.getEmail());

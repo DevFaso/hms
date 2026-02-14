@@ -21,31 +21,18 @@ public class PrescriptionMapper {
         Staff   staff   = p.getStaff();
         Encounter enc   = p.getEncounter();
 
-        String patientFullName = buildFullName(
-            patient != null ? patient.getFirstName() : null,
-            patient != null ? patient.getLastName()  : null
-        );
-
-        String staffFullName =
-            (staff != null && notBlank(staff.getName()))
-                ? staff.getName()
-                : buildFullName(
-                staff != null && staff.getUser() != null ? staff.getUser().getFirstName() : null,
-                staff != null && staff.getUser() != null ? staff.getUser().getLastName()  : null
-            );
-
         return PrescriptionResponseDTO.builder()
             .id(p.getId())
 
             .patientId(patient != null ? patient.getId() : null)
-            .patientFullName(patientFullName)
+            .patientFullName(resolvePatientFullName(patient))
             .patientEmail(patient != null ? nullSafe(patient.getEmail()) : "")
 
             .staffId(staff != null ? staff.getId() : null)
-            .staffFullName(staffFullName)
+            .staffFullName(resolveStaffFullName(staff))
 
             .encounterId(enc != null ? enc.getId() : null)
-            .hospitalId(enc != null && enc.getHospital() != null ? enc.getHospital().getId() : null)
+            .hospitalId(resolveHospitalId(enc))
 
             .medicationName(p.getMedicationName())
             .medicationDisplayName(p.getMedicationDisplayName())
@@ -119,6 +106,24 @@ public class PrescriptionMapper {
 
     private boolean notBlank(String s) {
         return s != null && !s.isBlank();
+    }
+
+    private String resolveStaffFullName(Staff staff) {
+        if (staff != null && notBlank(staff.getName())) {
+            return staff.getName();
+        }
+        String firstName = (staff != null && staff.getUser() != null) ? staff.getUser().getFirstName() : null;
+        String lastName  = (staff != null && staff.getUser() != null) ? staff.getUser().getLastName()  : null;
+        return buildFullName(firstName, lastName);
+    }
+
+    private String resolvePatientFullName(Patient patient) {
+        if (patient == null) return "";
+        return buildFullName(patient.getFirstName(), patient.getLastName());
+    }
+
+    private java.util.UUID resolveHospitalId(Encounter enc) {
+        return enc != null && enc.getHospital() != null ? enc.getHospital().getId() : null;
     }
 
     private String buildFullName(String first, String last) {

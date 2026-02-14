@@ -64,7 +64,7 @@ public class SuperAdminDashboardController {
                     return b.getCreatedAt().compareTo(a.getCreatedAt());
                 })
                 .limit(limit)
-                .collect(java.util.stream.Collectors.toList())
+                .toList()
         );
     }
 

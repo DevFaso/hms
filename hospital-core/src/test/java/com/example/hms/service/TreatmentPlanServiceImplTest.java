@@ -4,12 +4,28 @@ import com.example.hms.enums.TreatmentPlanReviewAction;
 import com.example.hms.enums.TreatmentPlanStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.TreatmentPlanMapper;
-import com.example.hms.model.*;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.treatment.TreatmentPlan;
 import com.example.hms.model.treatment.TreatmentPlanFollowUp;
 import com.example.hms.model.treatment.TreatmentPlanReview;
-import com.example.hms.payload.dto.clinical.treatment.*;
-import com.example.hms.repository.*;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanFollowUpDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanFollowUpRequestDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanRequestDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanReviewDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanReviewRequestDTO;
+import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.TreatmentPlanFollowUpRepository;
+import com.example.hms.repository.TreatmentPlanRepository;
+import com.example.hms.repository.TreatmentPlanReviewRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -22,12 +38,18 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDate;
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class TreatmentPlanServiceImplTest {
@@ -460,7 +482,8 @@ class TreatmentPlanServiceImplTest {
     void addFollowUp_planNotFound_throws() {
         when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.addFollowUp(planId, new TreatmentPlanFollowUpRequestDTO()))
+        TreatmentPlanFollowUpRequestDTO request = new TreatmentPlanFollowUpRequestDTO();
+        assertThatThrownBy(() -> service.addFollowUp(planId, request))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -525,7 +548,8 @@ class TreatmentPlanServiceImplTest {
         when(treatmentPlanFollowUpRepository.findByIdAndTreatmentPlanId(followUpId, planId))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.updateFollowUp(planId, followUpId, new TreatmentPlanFollowUpRequestDTO()))
+        TreatmentPlanFollowUpRequestDTO request = new TreatmentPlanFollowUpRequestDTO();
+        assertThatThrownBy(() -> service.updateFollowUp(planId, followUpId, request))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessageContaining("follow-up not found");
     }
@@ -583,7 +607,8 @@ class TreatmentPlanServiceImplTest {
     void addReview_planNotFound_throws() {
         when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.addReview(planId, new TreatmentPlanReviewRequestDTO()))
+        TreatmentPlanReviewRequestDTO request = new TreatmentPlanReviewRequestDTO();
+        assertThatThrownBy(() -> service.addReview(planId, request))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 

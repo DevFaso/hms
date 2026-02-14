@@ -2,9 +2,13 @@ package com.example.hms.service.impl;
 
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.ResourceNotFoundException;
-import com.example.hms.model.*;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Prescription;
 import com.example.hms.payload.dto.medication.PatientMedicationResponseDTO;
-import com.example.hms.repository.*;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.PrescriptionRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,10 +17,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class PatientMedicationServiceImplTest {

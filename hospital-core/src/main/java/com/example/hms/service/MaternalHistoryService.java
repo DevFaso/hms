@@ -13,6 +13,7 @@ import java.util.UUID;
  * Service interface for Maternal History operations.
  * Handles comprehensive maternal and reproductive health documentation with version tracking.
  */
+@SuppressWarnings("java:S107") // search methods require multiple filter parameters for controller binding
 public interface MaternalHistoryService {
 
     /**

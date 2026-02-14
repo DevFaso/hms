@@ -5,7 +5,6 @@ import com.example.hms.enums.AllergyVerificationStatus;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.ProblemChangeType;
-import com.example.hms.enums.ProblemSeverity;
 import com.example.hms.enums.ProblemStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -21,6 +20,7 @@ import com.example.hms.mapper.UltrasoundMapper;
 import com.example.hms.model.AdvanceDirective;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientAllergy;
@@ -669,7 +669,7 @@ public class PatientServiceImpl implements PatientService {
         int notesLimit = resolveNotesLimit(request.getNotesLimit(), maxItems);
 
         PatientResponseDTO patientDto = buildPatientDto(patient, resolvedHospitalId);
-        String hospitalMrn = getMrnForHospital(patientId, resolvedHospitalId)
+        String hospitalMrn = patientRepository.findMrnForHospital(patientId, resolvedHospitalId)
             .orElseGet(() -> patient.getMrnForHospital(resolvedHospitalId));
 
         Set<String> sensitiveSections = new LinkedHashSet<>();
@@ -1899,7 +1899,7 @@ public class PatientServiceImpl implements PatientService {
                 .details(details)
                 .build();
             auditEventLogService.logEvent(auditEvent);
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             log.warn("Failed to log doctor record access", ex);
         }
     }
@@ -1967,7 +1967,7 @@ public class PatientServiceImpl implements PatientService {
 
     private String formatLabResultSummary(LabResult result) {
         String testName = Optional.ofNullable(result.getLabOrder())
-            .map(order -> order.getClinicalIndication())
+            .map(LabOrder::getClinicalIndication)
             .filter(s -> s != null && !s.isBlank())
             .orElse("Lab Result");
         StringBuilder summary = new StringBuilder(testName);
@@ -2044,7 +2044,7 @@ public class PatientServiceImpl implements PatientService {
             return false;
         }
         String clinicalContext = Optional.ofNullable(result.getLabOrder())
-            .map(order -> order.getClinicalIndication())
+            .map(LabOrder::getClinicalIndication)
             .orElse(null);
         return containsSensitiveKeyword(clinicalContext) || containsSensitiveKeyword(result.getNotes());
     }
@@ -2160,7 +2160,7 @@ public class PatientServiceImpl implements PatientService {
                 .details(details)
                 .build();
             auditEventLogService.logEvent(auditEvent);
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             log.warn("Failed to log doctor timeline access", ex);
         }
     }

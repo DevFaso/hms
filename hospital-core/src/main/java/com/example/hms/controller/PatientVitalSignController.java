@@ -149,7 +149,8 @@ public class PatientVitalSignController {
                     try {
                         return Optional.of(UUID.fromString(raw));
                     } catch (IllegalArgumentException ignored) {
-                    }
+                    // Argument not valid - skip
+                }
                 }
             }
         }
@@ -237,6 +238,7 @@ public class PatientVitalSignController {
                 try {
                     return UUID.fromString(claim);
                 } catch (IllegalArgumentException ignored) {
+                    // Argument not valid - skip
                 }
             }
             Object raw = jwt.getClaims().get("hospitalId");
@@ -247,6 +249,7 @@ public class PatientVitalSignController {
                 try {
                     return UUID.fromString(str);
                 } catch (IllegalArgumentException ignored) {
+                    // Argument not valid - skip
                 }
             }
         }

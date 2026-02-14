@@ -15,7 +15,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 
 class EncounterTest {
 
@@ -237,8 +239,7 @@ class EncounterTest {
     void generateEncounterCodeFormat() {
         Encounter e = new Encounter();
         String code = e.generateEncounterCode();
-        assertThat(code).startsWith("ENC-");
-        assertThat(code).hasSize(19); // "ENC-" + 8 digit date + "-" + 6 char suffix
+        assertThat(code).startsWith("ENC-").hasSize(19); // "ENC-" + 8 digit date + "-" + 6 char suffix
     }
 
     @Test
@@ -355,10 +356,10 @@ class EncounterTest {
     void toStringExcludesRelations() {
         Encounter e = validEncounter();
         String s = e.toString();
-        assertThat(s).contains("Encounter");
-        assertThat(s).doesNotContain("patient=");
-        assertThat(s).doesNotContain("staff=");
-        assertThat(s).doesNotContain("hospital=");
+        assertThat(s).contains("Encounter")
+            .doesNotContain("patient=")
+            .doesNotContain("staff=")
+            .doesNotContain("hospital=");
     }
 
     // ─── validate (@PrePersist/@PreUpdate) ───────────────────────
@@ -482,24 +483,23 @@ class EncounterTest {
         // ── Department hospital mismatch ─────────────────────────
 
         @Test
-        void departmentNullPasses() throws Exception {
+        void departmentNullPasses() {
             Encounter e = validEncounter();
             e.setDepartment(null);
             assertThatNoException().isThrownBy(() -> invokeValidate(e));
         }
 
         @Test
-        void departmentSameHospitalPasses() throws Exception {
+        void departmentSameHospitalPasses() {
             Encounter e = validEncounter();
             Department dept = new Department();
             dept.setHospital(hospital);
             e.setDepartment(dept);
-            invokeValidate(e);
-            // no exception
+            assertThatNoException().isThrownBy(() -> invokeValidate(e));
         }
 
         @Test
-        void departmentHospitalNullPasses() throws Exception {
+        void departmentHospitalNullPasses() {
             Encounter e = validEncounter();
             Department dept = new Department();
             dept.setHospital(null);
@@ -523,15 +523,14 @@ class EncounterTest {
         // ── Appointment validation ───────────────────────────────
 
         @Test
-        void appointmentNullPasses() throws Exception {
+        void appointmentNullPasses() {
             Encounter e = validEncounter();
             e.setAppointment(null);
-            invokeValidate(e);
-            // no exception
+            assertThatNoException().isThrownBy(() -> invokeValidate(e));
         }
 
         @Test
-        void appointmentMatchesPasses() throws Exception {
+        void appointmentMatchesPasses() {
             Encounter e = validEncounter();
             Appointment appt = new Appointment();
             appt.setHospital(hospital);

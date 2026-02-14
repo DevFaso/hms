@@ -138,7 +138,9 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
             log.warn("Missing translation for code '{}' in locale '{}'", code, locale);
             if (!Locale.ENGLISH.equals(locale)) {
                 try { return messageSource.getMessage(code, args, Locale.ENGLISH); }
-                catch (org.springframework.context.NoSuchMessageException ignored) {}
+                catch (org.springframework.context.NoSuchMessageException ignored) {
+                    // English fallback also missing - will use code as default
+                }
             }
             return code + (args != null && args.length > 0 ? " " + java.util.Arrays.toString(args) : "");
         }

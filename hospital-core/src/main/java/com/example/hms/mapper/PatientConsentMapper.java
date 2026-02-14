@@ -3,7 +3,10 @@ package com.example.hms.mapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientConsent;
-import com.example.hms.payload.dto.*;
+import com.example.hms.payload.dto.HospitalResponseDTO;
+import com.example.hms.payload.dto.PatientConsentRequestDTO;
+import com.example.hms.payload.dto.PatientConsentResponseDTO;
+import com.example.hms.payload.dto.PatientResponseDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 

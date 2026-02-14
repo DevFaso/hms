@@ -6,6 +6,7 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientInsuranceMapper;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientInsurance;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.LinkPatientInsuranceRequestDTO;
 import com.example.hms.payload.dto.PatientInsuranceRequestDTO;
 import com.example.hms.payload.dto.PatientInsuranceResponseDTO;
@@ -22,11 +23,22 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class PatientInsuranceServiceImpl implements PatientInsuranceService {
+    private static final String PATIENT_REQUIRED_KEY = "patientinsurance.patient.required";
+    private static final String PATIENT_REQUIRED_MSG = "Patient is required for insurance";
+    private static final String ROLE_PATIENT = "PATIENT";
+    private static final String ACCESS_DENIED_SELF_KEY = "access.denied.self";
+    private static final String ACCESS_DENIED_SELF_MSG = "You can only access your own insurance details";
+    private static final String HOSPITAL_REQUIRED_KEY = "hospital.required";
+    private static final String HOSPITAL_REQUIRED_MSG = "Hospital context is required";
+    private static final String INSURANCE_LINK_FORBIDDEN_KEY = "insurance.link.forbidden";
+    private static final String INSURANCE_LINK_FORBIDDEN_MSG = "You don't have permission to link insurance in this hospital";
+    private static final String ASSIGNMENT_REQUIRED_KEY = "assignment.required";
+    private static final String ASSIGNMENT_REQUIRED_MSG = "Valid assignment required";
+
 
     private final PatientInsuranceRepository patientInsuranceRepository;
     private final PatientRepository patientRepository;
@@ -40,8 +52,8 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
     public PatientInsuranceResponseDTO addInsuranceToPatient(PatientInsuranceRequestDTO dto, Locale locale) {
         if (dto.getPatientId() == null) {
             throw new BusinessException(
-                messageSource.getMessage("patientinsurance.patient.required",
-                    null, "Patient is required for insurance", locale));
+                messageSource.getMessage(PATIENT_REQUIRED_KEY,
+                    null, PATIENT_REQUIRED_MSG, locale));
         }
 
         Patient patient = getPatientOrThrow(dto.getPatientId(), locale);
@@ -75,7 +87,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         return patientInsuranceRepository.findByPatient_Id(patientId)
             .stream()
             .map(patientInsuranceMapper::toPatientInsuranceResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -89,8 +101,8 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
 
         if (targetPatient == null) {
             throw new BusinessException(
-                messageSource.getMessage("patientinsurance.patient.required",
-                    null, "Patient is required for insurance", locale));
+                messageSource.getMessage(PATIENT_REQUIRED_KEY,
+                    null, PATIENT_REQUIRED_MSG, locale));
         }
 
         enforceSelfAccessIfPatient(targetPatient, locale);
@@ -125,60 +137,17 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         insurance.setPatient(patient);
 
         // Decide acting mode
-        boolean actAsPatient = (ctx != null && ctx.mode() != null && ctx.mode().name().equalsIgnoreCase("PATIENT"));
-        UUID actorUserId = (ctx != null && ctx.userId() != null) ? ctx.userId() : roleValidator.getCurrentUserId();
+        boolean actAsPatient = isActingAsPatient(ctx);
+        UUID actorUserId = resolveActorUserId(ctx);
 
         if (actAsPatient) {
-            // PATIENT path: must be their own record; no hospital linking allowed
-            UUID patientUserId = (patient.getUser() != null ? patient.getUser().getId() : null);
-            if (patientUserId == null || !patientUserId.equals(actorUserId)) {
-                throw new AccessDeniedException(
-                    messageSource.getMessage("access.denied.self", null,
-                        "You can only access your own insurance details", locale));
-            }
-            if (req.getHospitalId() != null) {
-                throw new BusinessException(
-                    messageSource.getMessage("patient.cannot.link.hospital", null,
-                        "Patients cannot link insurance to a hospital", locale));
-            }
-            // Do NOT modify assignment in patient mode
+            enforcePatientSelfAccess(patient, actorUserId, locale);
+            rejectHospitalLinkForPatient(req, locale);
         } else {
-            // STAFF/Admin path
-            UUID hospitalId = (req.getHospitalId() != null) ? req.getHospitalId()
-                : (ctx != null ? ctx.hospitalId() : null);
-            if (hospitalId == null) {
-                throw new BusinessException(
-                    messageSource.getMessage("hospital.required", null,
-                        "Hospital context is required", locale));
-            }
-
-            // Permission gate (same logic as before)
-            final boolean hasChosenRole = ctx != null && ctx.roleCode() != null && !ctx.roleCode().isBlank();
-            final boolean jwtGlobalOverride = roleValidator.isSuperAdminFromAuth()
-                || roleValidator.isHospitalAdminFromAuthGlobalOnly();
-
-            if (hasChosenRole) {
-                roleValidator.validateRoleOrThrow(actorUserId, hospitalId, ctx.roleCode().trim(), locale, messageSource);
-            } else {
-                final boolean hasScopedPermission = roleValidator.canLinkInsurance(actorUserId, hospitalId);
-                if (!hasScopedPermission && !jwtGlobalOverride) {
-                    throw new AccessDeniedException(
-                        messageSource.getMessage("insurance.link.forbidden", null,
-                            "You don't have permission to link insurance in this hospital", locale));
-                }
-            }
-
-            // Assignment stamping (STRICT)
-            var assignment = assignmentRepository
-                .findFirstByUser_IdAndHospital_IdAndActiveTrue(actorUserId, hospitalId)
-                .orElseThrow(() -> new BusinessException(
-                    messageSource.getMessage("assignment.required", null,
-                        "Valid assignment required", locale)));
-
-            insurance.setAssignment(assignment);
+            UUID hospitalId = resolveHospitalId(req, ctx);
+            enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
+            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalId, locale));
         }
-
-        // No primary handling anymore — ignore req.getPrimary()
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
@@ -206,8 +175,8 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             UUID patientUserId = (patient.getUser() != null ? patient.getUser().getId() : null);
             if (patientUserId == null || !patientUserId.equals(currentUserId)) {
                 throw new AccessDeniedException(
-                    messageSource.getMessage("access.denied.self", null,
-                        "You can only access your own insurance details", locale));
+                    messageSource.getMessage(ACCESS_DENIED_SELF_KEY, null,
+                        ACCESS_DENIED_SELF_MSG, locale));
             }
         }
     }
@@ -220,53 +189,25 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         ActingContext ctx,
         Locale locale
     ) {
-        // 1) Load existing insurance; if not found, fail (no creation here)
         PatientInsurance insurance = getInsuranceOrThrow(insuranceId, locale);
 
-        // 2) Attach to patient (required)
         if (req.getPatientId() == null) {
             throw new BusinessException(messageSource.getMessage(
-                "patientinsurance.patient.required", null, "Patient is required for insurance", locale));
+                PATIENT_REQUIRED_KEY, null, PATIENT_REQUIRED_MSG, locale));
         }
         Patient patient = getPatientOrThrow(req.getPatientId(), locale);
         enforceSelfAccessIfPatient(patient, locale);
         insurance.setPatient(patient);
 
-        // 3) Acting mode / hospital assignment (same logic you already have)
-        boolean actAsPatient = (ctx != null && ctx.mode() != null && ctx.mode().name().equalsIgnoreCase("PATIENT"));
-        UUID actorUserId = (ctx != null && ctx.userId() != null) ? ctx.userId() : roleValidator.getCurrentUserId();
+        boolean actAsPatient = isActingAsPatient(ctx);
+        UUID actorUserId = resolveActorUserId(ctx);
 
         if (actAsPatient) {
-            UUID patientUserId = (patient.getUser() != null ? patient.getUser().getId() : null);
-            if (patientUserId == null || !patientUserId.equals(actorUserId)) {
-                throw new AccessDeniedException(messageSource.getMessage(
-                    "access.denied.self", null, "You can only access your own insurance details", locale));
-            }
-            // No hospital assignment stamping in PATIENT mode
+            enforcePatientSelfAccess(patient, actorUserId, locale);
         } else {
-            UUID hospitalId = (req.getHospitalId() != null) ? req.getHospitalId() : (ctx != null ? ctx.hospitalId() : null);
-            if (hospitalId == null) {
-                throw new BusinessException(messageSource.getMessage("hospital.required", null, "Hospital context is required", locale));
-            }
-
-            final boolean hasChosenRole = ctx != null && ctx.roleCode() != null && !ctx.roleCode().isBlank();
-            final boolean jwtGlobalOverride = roleValidator.isSuperAdminFromAuth() || roleValidator.isHospitalAdminFromAuthGlobalOnly();
-
-            if (hasChosenRole) {
-                roleValidator.validateRoleOrThrow(actorUserId, hospitalId, ctx.roleCode().trim(), locale, messageSource);
-            } else {
-                final boolean hasScopedPermission = roleValidator.canLinkInsurance(actorUserId, hospitalId);
-                if (!hasScopedPermission && !jwtGlobalOverride) {
-                    throw new AccessDeniedException(messageSource.getMessage(
-                        "insurance.link.forbidden", null, "You don't have permission to link insurance in this hospital", locale));
-                }
-            }
-
-            var assignment = assignmentRepository
-                .findFirstByUser_IdAndHospital_IdAndActiveTrue(actorUserId, hospitalId)
-                .orElseThrow(() -> new BusinessException(messageSource.getMessage(
-                    "assignment.required", null, "Valid assignment required", locale)));
-            insurance.setAssignment(assignment);
+            UUID hospitalId = resolveHospitalId(req, ctx);
+            enforceStaffAuthorization(hospitalId, actorUserId, ctx, locale);
+            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalId, locale));
         }
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
@@ -280,120 +221,40 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         ActingContext ctx,
         Locale locale
     ) {
-        // ---- 0) Validate required natural key parts
-        if (req == null || req.getPatientId() == null) {
-            throw new BusinessException(messageSource.getMessage(
-                "patientinsurance.patient.required", null, "Patient is required for insurance", locale));
-        }
-        if (req.getPayerCode() == null || req.getPayerCode().isBlank()) {
-            throw new BusinessException(messageSource.getMessage(
-                "patientinsurance.payer.required", null, "Payer code is required", locale));
-        }
-        if (req.getPolicyNumber() == null || req.getPolicyNumber().isBlank()) {
-            throw new BusinessException(messageSource.getMessage(
-                "patientinsurance.policy.required", null, "Policy number is required", locale));
-        }
+        validateNaturalKeyParts(req, locale);
 
         final UUID patientId = req.getPatientId();
         final String payerCode = req.getPayerCode().trim();
         final String policyNumber = req.getPolicyNumber().trim();
 
-        // ---- 1) Load patient & enforce patient-only self access (if caller is PATIENT-only)
         Patient patient = getPatientOrThrow(patientId, locale);
         enforceSelfAccessIfPatient(patient, locale);
 
-        // ---- 2) Determine acting mode and (if STAFF) hospital/assignment + authorization
-        final boolean actAsPatient = (ctx != null && ctx.mode() != null
-            && "PATIENT".equalsIgnoreCase(ctx.mode().name()));
-        final UUID actorUserId = (ctx != null && ctx.userId() != null)
-            ? ctx.userId() : roleValidator.getCurrentUserId();
+        final boolean actAsPatient = isActingAsPatient(ctx);
+        final UUID actorUserId = resolveActorUserId(ctx);
 
         UUID hospitalIdForStaff = null;
-
         if (actAsPatient) {
-            // Patient path: only their own record; cannot set hospital or primary
-            final UUID patientUserId = (patient.getUser() != null ? patient.getUser().getId() : null);
-            if (patientUserId == null || !patientUserId.equals(actorUserId)) {
-                throw new AccessDeniedException(messageSource.getMessage(
-                    "access.denied.self", null, "You can only access your own insurance details", locale));
-            }
-            if (req.getHospitalId() != null) {
-                throw new BusinessException(messageSource.getMessage(
-                    "patient.cannot.link.hospital", null, "Patients cannot link insurance to a hospital", locale));
-            }
-            // FALL THROUGH with hospitalIdForStaff == null
+            enforcePatientSelfAccess(patient, actorUserId, locale);
+            rejectHospitalLinkForPatient(req, locale);
         } else {
-            // Staff/Admin path
-            hospitalIdForStaff = (req.getHospitalId() != null) ? req.getHospitalId()
-                : (ctx != null ? ctx.hospitalId() : null);
-
-            if (hospitalIdForStaff == null) {
-                throw new BusinessException(messageSource.getMessage(
-                    "hospital.required", null, "Hospital context is required", locale));
-            }
-
-            final boolean hasChosenRole = ctx != null && ctx.roleCode() != null && !ctx.roleCode().isBlank();
-            final boolean jwtGlobalOverride = roleValidator.isSuperAdminFromAuth()
-                || roleValidator.isHospitalAdminFromAuthGlobalOnly();
-
-            if (hasChosenRole) {
-                roleValidator.validateRoleOrThrow(actorUserId, hospitalIdForStaff, ctx.roleCode().trim(), locale, messageSource);
-            } else {
-                final boolean hasScopedPermission = roleValidator.canLinkInsurance(actorUserId, hospitalIdForStaff);
-                if (!hasScopedPermission && !jwtGlobalOverride) {
-                    throw new AccessDeniedException(messageSource.getMessage(
-                        "insurance.link.forbidden", null, "You don't have permission to link insurance in this hospital", locale));
-                }
-            }
+            hospitalIdForStaff = resolveHospitalId(req, ctx);
+            enforceStaffAuthorization(hospitalIdForStaff, actorUserId, ctx, locale);
         }
 
-        // ---- 3) Upsert by natural key (patientId + payerCode + policyNumber)
-        PatientInsurance insurance = patientInsuranceRepository
-            .findByPatient_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(patientId, payerCode, policyNumber)
-            .orElse(null);
+        PatientInsurance insurance = findOrCreateInsurance(patientId, payerCode, policyNumber, patient);
 
-        if (insurance == null) {
-            // Create minimal insurance row; natural-key fields come from req
-            insurance = new PatientInsurance();
-            insurance.setPatient(patient);
-            insurance.setPayerCode(payerCode);
-            insurance.setPolicyNumber(policyNumber);
-            // NOTE: Do NOT try to read non-existent fields from Link DTO (e.g., groupNumber)
-        } else {
-            // Ensure correct patient attached (safety, although finder already scoped by patient)
-            insurance.setPatient(patient);
-        }
-
-        // ---- 4) Stamp assignment if STAFF; never in PATIENT mode
         if (!actAsPatient) {
-            final var assignment = assignmentRepository
-                .findFirstByUser_IdAndHospital_IdAndActiveTrue(actorUserId, hospitalIdForStaff)
-                .orElseThrow(() -> new BusinessException(messageSource.getMessage(
-                    "assignment.required", null, "Valid assignment required", locale)));
-            insurance.setAssignment(assignment);
+            insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalIdForStaff, locale));
         }
 
-        // ---- 5) Handle 'primary' only for STAFF + hospital-scoped primary
-        // Patients cannot toggle primary; ignore req.getPrimary() if actAsPatient
-        if (!actAsPatient && req.getPrimary() != null) {
-            final boolean makePrimary = Boolean.TRUE.equals(req.getPrimary());
-            if (makePrimary) {
-                // Unset other primaries for this patient within the same hospital, then set this one to primary
-                patientInsuranceRepository.unsetOtherPrimariesForPatientInHospital(patient.getId(), insurance.getId(), hospitalIdForStaff);
-                insurance.setPrimary(true);
-            } else {
-                insurance.setPrimary(false);
-            }
-        }
+        applyPrimaryFlag(req, actAsPatient, insurance, patient, hospitalIdForStaff);
 
-        // Optionally track linkage meta if your entity has these fields
         insurance.setLinkedByUserId(actorUserId);
-        insurance.setLinkedAs(actAsPatient ? "PATIENT" : "STAFF");
+        insurance.setLinkedAs(actAsPatient ? ROLE_PATIENT : "STAFF");
 
         PatientInsurance saved = patientInsuranceRepository.save(insurance);
 
-        // If we set to primary=true *and* this insurance was just created (no ID in DB before),
-        // you may want to call unsetOtherPrimaries... AFTER save to have a real ID.
         if (!actAsPatient && Boolean.TRUE.equals(req.getPrimary())) {
             patientInsuranceRepository.unsetOtherPrimariesForPatientInHospital(patient.getId(), saved.getId(), hospitalIdForStaff);
             saved.setPrimary(true);
@@ -403,5 +264,109 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         return patientInsuranceMapper.toPatientInsuranceResponseDTO(saved);
     }
 
+    /* ==================== shared helpers ==================== */
+
+    private boolean isActingAsPatient(ActingContext ctx) {
+        return ctx != null && ctx.mode() != null && ROLE_PATIENT.equalsIgnoreCase(ctx.mode().name());
+    }
+
+    private UUID resolveActorUserId(ActingContext ctx) {
+        return (ctx != null && ctx.userId() != null) ? ctx.userId() : roleValidator.getCurrentUserId();
+    }
+
+    private void enforcePatientSelfAccess(Patient patient, UUID actorUserId, Locale locale) {
+        UUID patientUserId = patient.getUser() != null ? patient.getUser().getId() : null;
+        if (patientUserId == null || !patientUserId.equals(actorUserId)) {
+            throw new AccessDeniedException(
+                messageSource.getMessage(ACCESS_DENIED_SELF_KEY, null, ACCESS_DENIED_SELF_MSG, locale));
+        }
+    }
+
+    private void rejectHospitalLinkForPatient(LinkPatientInsuranceRequestDTO req, Locale locale) {
+        if (req.getHospitalId() != null) {
+            throw new BusinessException(
+                messageSource.getMessage("patient.cannot.link.hospital", null,
+                    "Patients cannot link insurance to a hospital", locale));
+        }
+    }
+
+    private void enforceStaffAuthorization(UUID hospitalId, UUID actorUserId, ActingContext ctx, Locale locale) {
+        if (hospitalId == null) {
+            throw new BusinessException(
+                messageSource.getMessage(HOSPITAL_REQUIRED_KEY, null, HOSPITAL_REQUIRED_MSG, locale));
+        }
+        final boolean hasChosenRole = ctx != null && ctx.roleCode() != null && !ctx.roleCode().isBlank();
+        final boolean jwtGlobalOverride = roleValidator.isSuperAdminFromAuth()
+            || roleValidator.isHospitalAdminFromAuthGlobalOnly();
+
+        if (hasChosenRole) {
+            roleValidator.validateRoleOrThrow(actorUserId, hospitalId, ctx.roleCode().trim(), locale, messageSource);
+        } else {
+            final boolean hasScopedPermission = roleValidator.canLinkInsurance(actorUserId, hospitalId);
+            if (!hasScopedPermission && !jwtGlobalOverride) {
+                throw new AccessDeniedException(
+                    messageSource.getMessage(INSURANCE_LINK_FORBIDDEN_KEY, null,
+                        INSURANCE_LINK_FORBIDDEN_MSG, locale));
+            }
+        }
+    }
+
+    private UserRoleHospitalAssignment resolveStaffAssignment(UUID actorUserId, UUID hospitalId, Locale locale) {
+        return assignmentRepository
+            .findFirstByUser_IdAndHospital_IdAndActiveTrue(actorUserId, hospitalId)
+            .orElseThrow(() -> new BusinessException(
+                messageSource.getMessage(ASSIGNMENT_REQUIRED_KEY, null, ASSIGNMENT_REQUIRED_MSG, locale)));
+    }
+
+    private void validateNaturalKeyParts(LinkPatientInsuranceRequestDTO req, Locale locale) {
+        if (req == null || req.getPatientId() == null) {
+            throw new BusinessException(messageSource.getMessage(
+                PATIENT_REQUIRED_KEY, null, PATIENT_REQUIRED_MSG, locale));
+        }
+        if (req.getPayerCode() == null || req.getPayerCode().isBlank()) {
+            throw new BusinessException(messageSource.getMessage(
+                "patientinsurance.payer.required", null, "Payer code is required", locale));
+        }
+        if (req.getPolicyNumber() == null || req.getPolicyNumber().isBlank()) {
+            throw new BusinessException(messageSource.getMessage(
+                "patientinsurance.policy.required", null, "Policy number is required", locale));
+        }
+    }
+
+    private PatientInsurance findOrCreateInsurance(UUID patientId, String payerCode, String policyNumber, Patient patient) {
+        PatientInsurance insurance = patientInsuranceRepository
+            .findByPatient_IdAndPayerCodeIgnoreCaseAndPolicyNumberIgnoreCase(patientId, payerCode, policyNumber)
+            .orElse(null);
+
+        if (insurance == null) {
+            insurance = new PatientInsurance();
+            insurance.setPatient(patient);
+            insurance.setPayerCode(payerCode);
+            insurance.setPolicyNumber(policyNumber);
+        } else {
+            insurance.setPatient(patient);
+        }
+        return insurance;
+    }
+
+    private void applyPrimaryFlag(LinkPatientInsuranceRequestDTO req, boolean actAsPatient,
+                                  PatientInsurance insurance, Patient patient, UUID hospitalId) {
+        if (actAsPatient || req.getPrimary() == null) {
+            return;
+        }
+        if (Boolean.TRUE.equals(req.getPrimary())) {
+            patientInsuranceRepository.unsetOtherPrimariesForPatientInHospital(patient.getId(), insurance.getId(), hospitalId);
+            insurance.setPrimary(true);
+        } else {
+            insurance.setPrimary(false);
+        }
+    }
+
+    private UUID resolveHospitalId(LinkPatientInsuranceRequestDTO req, ActingContext ctx) {
+        if (req.getHospitalId() != null) {
+            return req.getHospitalId();
+        }
+        return ctx != null ? ctx.hospitalId() : null;
+    }
 
 }

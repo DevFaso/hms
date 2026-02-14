@@ -7,7 +7,6 @@ import com.example.hms.enums.ImagingOrderStatus;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.tenant.TenantEntityListener;
 import com.example.hms.security.tenant.TenantScoped;
-import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;

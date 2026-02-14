@@ -35,7 +35,6 @@ import java.util.List;
 import java.util.UUID;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -164,7 +163,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged())
             .getContent().stream()
             .map(prescriptionMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -173,7 +172,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return prescriptionRepository.findByStaff_Id(staffId, Pageable.unpaged())
             .getContent().stream()
             .map(prescriptionMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -182,13 +181,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return prescriptionRepository.findByEncounter_Id(encounterId, Pageable.unpaged())
             .getContent().stream()
             .map(prescriptionMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     /* ============================
        Helpers
        ============================ */
 
+    @SuppressWarnings("java:S1172") // locale reserved for i18n error messages
     private Patient resolvePatient(PrescriptionRequestDTO request, Locale locale) {
         if (request.getPatientId() != null) {
             return patientRepository.findById(request.getPatientId())

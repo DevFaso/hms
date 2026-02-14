@@ -176,7 +176,7 @@ public class SocialHistoryMapper {
                 .safetyConcerns(dto.getSafetyConcerns())
                 // Metadata
                 .versionNumber(dto.getVersionNumber() != null ? dto.getVersionNumber() : 1)
-                .active(dto.getActive() != null ? dto.getActive() : true)
+                .active(dto.getActive() == null || dto.getActive())
                 .build();
     }
 

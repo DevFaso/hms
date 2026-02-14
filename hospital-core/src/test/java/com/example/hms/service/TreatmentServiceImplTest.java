@@ -2,22 +2,36 @@ package com.example.hms.service;
 
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.TreatmentMapper;
-import com.example.hms.model.*;
+import com.example.hms.model.Department;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Treatment;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.TreatmentRequestDTO;
 import com.example.hms.payload.dto.TreatmentResponseDTO;
-import com.example.hms.repository.*;
+import com.example.hms.repository.DepartmentRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.TreatmentRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.JwtTokenProvider;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import java.util.Locale;
 
 @ExtendWith(MockitoExtension.class)
 class TreatmentServiceImplTest {
@@ -69,7 +83,7 @@ class TreatmentServiceImplTest {
         when(jwtTokenProvider.resolvePreferredRole(List.of("DOCTOR"))).thenReturn("DOCTOR");
         when(assignmentRepository.findByUserIdAndHospitalIdAndRole_Name(userId, hospId, "DOCTOR"))
             .thenReturn(Optional.of(assignment));
-        when(treatmentMapper.toTreatment(eq(dto), eq(dept), eq(hospital), eq(assignment))).thenReturn(treatment);
+        when(treatmentMapper.toTreatment(dto, dept, hospital, assignment)).thenReturn(treatment);
         when(treatmentRepository.save(any(Treatment.class))).thenReturn(treatment);
         when(treatmentMapper.toTreatmentResponseDTO(treatment, "en")).thenReturn(responseDTO);
 
@@ -120,7 +134,7 @@ class TreatmentServiceImplTest {
         when(jwtTokenProvider.getRolesFromToken("token")).thenReturn(List.of("ADMIN", "DOCTOR"));
         when(assignmentRepository.findByUserIdAndHospitalIdAndRole_Name(userId, hospId, "ADMIN"))
             .thenReturn(Optional.of(assignment));
-        when(treatmentMapper.toTreatment(eq(dto), eq(dept), eq(hospital), eq(assignment))).thenReturn(treatment);
+        when(treatmentMapper.toTreatment(dto, dept, hospital, assignment)).thenReturn(treatment);
         when(treatmentRepository.save(any(Treatment.class))).thenReturn(treatment);
         when(treatmentMapper.toTreatmentResponseDTO(treatment, "en")).thenReturn(responseDTO);
 

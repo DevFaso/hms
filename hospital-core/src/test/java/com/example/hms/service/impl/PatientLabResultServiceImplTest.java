@@ -2,7 +2,14 @@ package com.example.hms.service.impl;
 
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabResultMapper;
-import com.example.hms.model.*;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.LabOrder;
+import com.example.hms.model.LabResult;
+import com.example.hms.model.LabTestDefinition;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.LabResultReferenceRangeDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
@@ -29,6 +36,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S5976") // Individual tests preferred over parameterized for clarity
 class PatientLabResultServiceImplTest {
 
     @Mock private LabResultRepository labResultRepository;

@@ -1,7 +1,10 @@
 package com.example.hms.payload.dto;
 
 import com.example.hms.enums.JobTitle;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.UUID;
 

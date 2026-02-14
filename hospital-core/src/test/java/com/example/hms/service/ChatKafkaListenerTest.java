@@ -12,8 +12,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.atLeastOnce;
 
 @ExtendWith(MockitoExtension.class)
 class ChatKafkaListenerTest {
@@ -72,9 +76,9 @@ class ChatKafkaListenerTest {
             chatKafkaListener.listen(msg);
 
             verify(messagingTemplate).convertAndSendToUser(
-                eq("john_doe"),
-                eq("/topic/messages"),
-                eq(msg)
+                "john_doe",
+                "/topic/messages",
+                msg
             );
         }
 
@@ -98,9 +102,9 @@ class ChatKafkaListenerTest {
             chatKafkaListener.listen(msg);
 
             verify(messagingTemplate).convertAndSendToUser(
-                eq("alice_wonder"),
-                eq("/topic/messages"),
-                eq(msg)
+                "alice_wonder",
+                "/topic/messages",
+                msg
             );
         }
 

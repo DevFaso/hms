@@ -1,16 +1,27 @@
 package com.example.hms.service;
 
 import com.example.hms.config.OrganizationSecurityConstants;
-import com.example.hms.enums.*;
+import com.example.hms.enums.OrganizationType;
+import com.example.hms.enums.SecurityPolicyType;
+import com.example.hms.enums.SecurityRuleType;
 import com.example.hms.exception.ResourceNotFoundException;
-import com.example.hms.model.*;
-import com.example.hms.repository.*;
+import com.example.hms.model.Organization;
+import com.example.hms.model.OrganizationSecurityPolicy;
+import com.example.hms.model.OrganizationSecurityRule;
+import com.example.hms.repository.OrganizationRepository;
+import com.example.hms.repository.OrganizationSecurityPolicyRepository;
+import com.example.hms.repository.OrganizationSecurityRuleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -302,7 +313,7 @@ public class OrganizationSecurityServiceImpl implements OrganizationSecurityServ
         switch (organizationType) {
             case GOVERNMENT_AGENCY, RESEARCH_INSTITUTION -> applyHighSecurityPolicies(organization);
             case HEALTHCARE_NETWORK, HOSPITAL_CHAIN, ACADEMIC_MEDICAL_CENTER -> applyMediumSecurityPolicies(organization);
-            case PRIVATE_PRACTICE -> applyStandardSecurityPolicies(organization);
+            default -> applyStandardSecurityPolicies(organization);
         }
     }
 

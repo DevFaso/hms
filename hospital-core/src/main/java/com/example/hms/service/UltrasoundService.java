@@ -5,7 +5,6 @@ import com.example.hms.payload.dto.ultrasound.UltrasoundOrderRequestDTO;
 import com.example.hms.payload.dto.ultrasound.UltrasoundOrderResponseDTO;
 import com.example.hms.payload.dto.ultrasound.UltrasoundReportRequestDTO;
 import com.example.hms.payload.dto.ultrasound.UltrasoundReportResponseDTO;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;

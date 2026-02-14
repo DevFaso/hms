@@ -1,9 +1,32 @@
 package com.example.hms.model;
 
 import com.example.hms.enums.InvoiceStatus;
-import jakarta.persistence.*;
-import jakarta.validation.constraints.*;
-import lombok.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 import org.hibernate.annotations.Check;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.LastModifiedBy;
@@ -29,6 +52,7 @@ import java.util.Set;
 @Check(constraints = "amount_paid <= total_amount")
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = {"patient", "hospital", "encounter", "invoiceItems"})
+@EqualsAndHashCode(callSuper = true)
 public class BillingInvoice extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

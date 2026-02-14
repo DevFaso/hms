@@ -26,8 +26,13 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ServiceTranslationServiceImplTest {
@@ -232,7 +237,10 @@ class ServiceTranslationServiceImplTest {
             stubMessage("translation.not.found");
             when(translationRepository.findById(id)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.updateTranslation(id, buildRequest(UUID.randomUUID(), UUID.randomUUID()), LOCALE))
+            UUID randomId = UUID.randomUUID();
+            UUID id2 = UUID.randomUUID();
+            var request = buildRequest(randomId, id2);
+            assertThatThrownBy(() -> service.updateTranslation(id, request, LOCALE))
                     .isInstanceOf(ResourceNotFoundException.class);
         }
     }

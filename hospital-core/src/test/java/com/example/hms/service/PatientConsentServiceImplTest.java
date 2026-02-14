@@ -4,21 +4,43 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.HospitalMapper;
 import com.example.hms.mapper.PatientConsentMapper;
 import com.example.hms.mapper.PatientMapper;
-import com.example.hms.model.*;
-import com.example.hms.payload.dto.*;
-import com.example.hms.repository.*;
+import com.example.hms.model.AuditEventLog;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.PatientConsent;
+import com.example.hms.model.User;
+import com.example.hms.payload.dto.HospitalResponseDTO;
+import com.example.hms.payload.dto.PatientConsentRequestDTO;
+import com.example.hms.payload.dto.PatientConsentResponseDTO;
+import com.example.hms.payload.dto.PatientResponseDTO;
+import com.example.hms.repository.AuditEventLogRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientConsentRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.repository.PatientRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class PatientConsentServiceImplTest {
@@ -67,9 +89,9 @@ class PatientConsentServiceImplTest {
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, fromHospId)).thenReturn(true);
         when(consentRepository.findByPatientIdAndFromHospitalIdAndToHospitalId(patientId, fromHospId, toHospId))
             .thenReturn(Optional.empty());
-        when(consentMapper.toEntity(eq(request), eq(patient), eq(fromHosp), eq(toHosp))).thenReturn(newConsent);
+        when(consentMapper.toEntity(request, patient, fromHosp, toHosp)).thenReturn(newConsent);
         when(consentRepository.save(any(PatientConsent.class))).thenReturn(newConsent);
-        when(patientMapper.toPatientDTO(eq(patient), eq(fromHospId), eq(true), eq(true)))
+        when(patientMapper.toPatientDTO(patient, fromHospId, true, true))
             .thenReturn(new PatientResponseDTO());
         when(hospitalMapper.toHospitalDTO(fromHosp)).thenReturn(HospitalResponseDTO.builder().build());
         when(hospitalMapper.toHospitalDTO(toHosp)).thenReturn(HospitalResponseDTO.builder().build());
@@ -335,7 +357,7 @@ class PatientConsentServiceImplTest {
         when(hospitalRepository.findById(toHospId)).thenReturn(Optional.of(toHosp));
         when(consentRepository.findByPatientIdAndFromHospitalIdAndToHospitalId(patientId, fromHospId, toHospId))
             .thenReturn(Optional.empty());
-        when(consentMapper.toEntity(eq(request), eq(patient), eq(fromHosp), eq(toHosp))).thenReturn(newConsent);
+        when(consentMapper.toEntity(request, patient, fromHosp, toHosp)).thenReturn(newConsent);
         when(consentRepository.save(any(PatientConsent.class))).thenReturn(newConsent);
         when(consentMapper.toDto(any(PatientConsent.class), eq(patientDTO), eq(fromHospDTO), eq(toHospDTO)))
             .thenReturn(PatientConsentResponseDTO.builder().build());
@@ -355,8 +377,9 @@ class PatientConsentServiceImplTest {
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
 
+        PatientConsentRequestDTO request = new PatientConsentRequestDTO();
         assertThatThrownBy(() -> service.grantConsentWithDetails(
-            new PatientConsentRequestDTO(), patientDTO, fromHospDTO, toHospDTO))
+            request, patientDTO, fromHospDTO, toHospDTO))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -592,8 +615,9 @@ class PatientConsentServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(fromHospId)).thenReturn(Optional.empty());
 
+        PatientConsentRequestDTO request = new PatientConsentRequestDTO();
         assertThatThrownBy(() -> service.grantConsentWithDetails(
-            new PatientConsentRequestDTO(), patientDTO, fromHospDTO, toHospDTO))
+            request, patientDTO, fromHospDTO, toHospDTO))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -615,8 +639,9 @@ class PatientConsentServiceImplTest {
         when(hospitalRepository.findById(fromHospId)).thenReturn(Optional.of(Hospital.builder().build()));
         when(hospitalRepository.findById(toHospId)).thenReturn(Optional.empty());
 
+        PatientConsentRequestDTO request = new PatientConsentRequestDTO();
         assertThatThrownBy(() -> service.grantConsentWithDetails(
-            new PatientConsentRequestDTO(), patientDTO, fromHospDTO, toHospDTO))
+            request, patientDTO, fromHospDTO, toHospDTO))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 }

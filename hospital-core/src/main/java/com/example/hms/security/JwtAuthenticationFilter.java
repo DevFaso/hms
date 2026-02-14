@@ -75,7 +75,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             }
 
             filterChain.doFilter(request, response);
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             log.error("Could not set user authentication in security context", ex);
             filterChain.doFilter(request, response);
         } finally {
@@ -224,7 +224,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         try {
             return tokenProvider.getUsernameFromJWT(jwt);
-        } catch (Exception extractionFailure) {
+        } catch (RuntimeException extractionFailure) {
             if (log.isDebugEnabled()) {
                 log.debug("[JWT] Unable to extract subject from token: {}", extractionFailure.getMessage());
             }

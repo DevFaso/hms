@@ -4,8 +4,14 @@ import com.example.hms.enums.JobTitle;
 import com.example.hms.enums.EmploymentType;
 import com.example.hms.enums.Specialization; // <- only if you added this enum
 import com.fasterxml.jackson.annotation.JsonProperty;
-import jakarta.validation.constraints.*;
-import lombok.*;
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.util.Set;
 import java.util.UUID;

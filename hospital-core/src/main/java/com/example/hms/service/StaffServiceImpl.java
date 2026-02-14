@@ -1,10 +1,23 @@
 package com.example.hms.service;
 
-import com.example.hms.exception.*;
+import com.example.hms.exception.BusinessRuleException;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.StaffMapper;
-import com.example.hms.model.*;
-import com.example.hms.payload.dto.*;
-import com.example.hms.repository.*;
+import com.example.hms.model.Department;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Role;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.payload.dto.StaffMinimalDTO;
+import com.example.hms.payload.dto.StaffRequestDTO;
+import com.example.hms.payload.dto.StaffResponseDTO;
+import com.example.hms.repository.DepartmentRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.RoleRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.HospitalScopeUtils;
@@ -17,19 +30,25 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class StaffServiceImpl implements StaffService {
+    private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
+    private static final String DEPARTMENT_NOT_FOUND_KEY = "department.notFound";
+
     // Find staff by user email
     @Transactional(readOnly = true)
     public List<StaffResponseDTO> getStaffByUserEmail(String email, Locale locale) {
         return staffRepository.findByUserEmail(email).stream()
             .filter(this::isStaffVisible)
             .map(staffMapper::toStaffDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     // Find staff by user phone number
@@ -38,7 +57,7 @@ public class StaffServiceImpl implements StaffService {
         return staffRepository.findByUserPhoneNumber(phone).stream()
             .filter(this::isStaffVisible)
             .map(staffMapper::toStaffDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     // Find any license by user ID
@@ -118,7 +137,7 @@ public class StaffServiceImpl implements StaffService {
         if (context.isSuperAdmin()) {
             return staffRepository.findAll().stream()
                 .map(staffMapper::toStaffDTO)
-                .collect(Collectors.toList());
+                .toList();
         }
 
         Set<UUID> hospitalScope = HospitalScopeUtils.resolveScope(context);
@@ -128,7 +147,7 @@ public class StaffServiceImpl implements StaffService {
 
         return staffRepository.findByHospital_IdIn(hospitalScope).stream()
             .map(staffMapper::toStaffDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -147,14 +166,14 @@ public class StaffServiceImpl implements StaffService {
             .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("user.notFound", new Object[]{dto.getUserEmail()}, locale)));
 
         Hospital hospital = hospitalRepository.findByName(dto.getHospitalName())
-            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("hospital.notFound", new Object[]{dto.getHospitalName()}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(HOSPITAL_NOT_FOUND_KEY, new Object[]{dto.getHospitalName()}, locale)));
 
         requireHospitalScope(hospital.getId(), locale);
 
         Department department = null;
         if (dto.getDepartmentName() != null && !dto.getDepartmentName().isBlank()) {
             department = departmentRepository.findByHospitalIdAndNameIgnoreCase(hospital.getId(), dto.getDepartmentName())
-                .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("department.notFound", new Object[]{dto.getDepartmentName()}, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(DEPARTMENT_NOT_FOUND_KEY, new Object[]{dto.getDepartmentName()}, locale)));
         }
 
         validateDepartmentHospitalConsistency(department, hospital, locale);
@@ -193,14 +212,14 @@ public class StaffServiceImpl implements StaffService {
             .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("user.notFound", new Object[]{dto.getUserEmail()}, locale)));
 
         Hospital hospital = hospitalRepository.findByName(dto.getHospitalName())
-            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("hospital.notFound", new Object[]{dto.getHospitalName()}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(HOSPITAL_NOT_FOUND_KEY, new Object[]{dto.getHospitalName()}, locale)));
 
         requireHospitalScope(hospital.getId(), locale);
 
         Department department = null;
         if (dto.getDepartmentName() != null && !dto.getDepartmentName().isBlank()) {
             department = departmentRepository.findByHospitalIdAndNameIgnoreCase(hospital.getId(), dto.getDepartmentName())
-                .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("department.notFound", new Object[]{dto.getDepartmentName()}, locale)));
+                .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(DEPARTMENT_NOT_FOUND_KEY, new Object[]{dto.getDepartmentName()}, locale)));
         }
 
         validateDepartmentHospitalConsistency(department, hospital, locale);
@@ -240,12 +259,12 @@ public class StaffServiceImpl implements StaffService {
             .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("staff.notFound", new Object[]{staffEmail}, locale)));
 
         Hospital hospital = hospitalRepository.findByName(hospitalName)
-            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("hospital.notFound", new Object[]{hospitalName}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(HOSPITAL_NOT_FOUND_KEY, new Object[]{hospitalName}, locale)));
 
         requireHospitalScope(hospital.getId(), locale);
 
         Department department = departmentRepository.findByHospitalIdAndNameIgnoreCase(hospital.getId(), departmentName)
-            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("department.notFound", new Object[]{departmentName}, locale)));
+            .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage(DEPARTMENT_NOT_FOUND_KEY, new Object[]{departmentName}, locale)));
 
         if (!staff.getHospital().getId().equals(department.getHospital().getId())) {
             throw new BusinessRuleException(messageSource.getMessage("staff.department.wrongHospital", null, locale));
@@ -309,7 +328,7 @@ public class StaffServiceImpl implements StaffService {
 
     private void handleHeadOfDepartmentUpdates(StaffRequestDTO dto, Staff existingStaff, Department department, Locale locale) {
         if (dto.getHeadOfDepartment() != null) {
-            if (dto.getHeadOfDepartment()) {
+            if (Boolean.TRUE.equals(dto.getHeadOfDepartment())) {
                 if (department == null) {
                     throw new BusinessRuleException(
                         messageSource.getMessage("staff.head.requiresDepartment", null, locale)
@@ -396,6 +415,8 @@ public class StaffServiceImpl implements StaffService {
                 break;
             case "ROLE_RADIOLOGIST":
                 validateRadiologistFields(dto, locale);
+                break;
+            default:
                 break;
         }
     }

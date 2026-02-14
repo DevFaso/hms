@@ -11,7 +11,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -20,11 +22,20 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S5976") // Individual tests preferred over parameterized for clarity
 class BirthPlanControllerTest {
 
     @Mock
@@ -72,7 +83,7 @@ class BirthPlanControllerTest {
             ResponseEntity<BirthPlanResponseDTO> result = controller.createBirthPlan(request, authentication);
 
             assertEquals(HttpStatus.CREATED, result.getStatusCode());
-            verify(birthPlanService).createBirthPlan(eq(request), eq("admin"));
+            verify(birthPlanService).createBirthPlan(request, "admin");
         }
     }
 
@@ -135,7 +146,7 @@ class BirthPlanControllerTest {
             when(authentication.getName()).thenReturn("user1");
             UUID id = UUID.randomUUID();
             BirthPlanResponseDTO dto = buildResponse();
-            when(birthPlanService.getBirthPlanById(eq(id), eq("user1"))).thenReturn(dto);
+            when(birthPlanService.getBirthPlanById(id, "user1")).thenReturn(dto);
 
             ResponseEntity<BirthPlanResponseDTO> result = controller.getBirthPlanById(id, authentication);
 
@@ -158,7 +169,7 @@ class BirthPlanControllerTest {
             when(authentication.getName()).thenReturn("user1");
             UUID patientId = UUID.randomUUID();
             List<BirthPlanResponseDTO> list = List.of(buildResponse(), buildResponse());
-            when(birthPlanService.getBirthPlansByPatientId(eq(patientId), eq("user1"))).thenReturn(list);
+            when(birthPlanService.getBirthPlansByPatientId(patientId, "user1")).thenReturn(list);
 
             ResponseEntity<List<BirthPlanResponseDTO>> result = controller.getBirthPlansByPatientId(patientId, authentication);
 
@@ -182,7 +193,7 @@ class BirthPlanControllerTest {
             when(authentication.getName()).thenReturn("user1");
             UUID patientId = UUID.randomUUID();
             BirthPlanResponseDTO dto = buildResponse();
-            when(birthPlanService.getActiveBirthPlan(eq(patientId), eq("user1"))).thenReturn(dto);
+            when(birthPlanService.getActiveBirthPlan(patientId, "user1")).thenReturn(dto);
 
             ResponseEntity<BirthPlanResponseDTO> result = controller.getActiveBirthPlan(patientId, authentication);
 
@@ -197,7 +208,7 @@ class BirthPlanControllerTest {
         void noActivePlan() {
             when(authentication.getName()).thenReturn("user1");
             UUID patientId = UUID.randomUUID();
-            when(birthPlanService.getActiveBirthPlan(eq(patientId), eq("user1"))).thenReturn(null);
+            when(birthPlanService.getActiveBirthPlan(patientId, "user1")).thenReturn(null);
 
             ResponseEntity<BirthPlanResponseDTO> result = controller.getActiveBirthPlan(patientId, authentication);
 
@@ -325,7 +336,7 @@ class BirthPlanControllerTest {
         void deletesSuccessfully() {
             when(authentication.getName()).thenReturn("user1");
             UUID id = UUID.randomUUID();
-            doNothing().when(birthPlanService).deleteBirthPlan(eq(id), eq("user1"));
+            doNothing().when(birthPlanService).deleteBirthPlan(id, "user1");
 
             ResponseEntity<Void> result = controller.deleteBirthPlan(id, authentication);
 
@@ -333,7 +344,7 @@ class BirthPlanControllerTest {
                 () -> assertEquals(HttpStatus.NO_CONTENT, result.getStatusCode()),
                 () -> assertNull(result.getBody())
             );
-            verify(birthPlanService).deleteBirthPlan(eq(id), eq("user1"));
+            verify(birthPlanService).deleteBirthPlan(id, "user1");
         }
     }
 

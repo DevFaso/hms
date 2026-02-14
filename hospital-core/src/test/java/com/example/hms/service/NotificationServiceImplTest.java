@@ -23,8 +23,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceImplTest {
@@ -103,7 +106,7 @@ class NotificationServiceImplTest {
         void filtersByReadAndSearch() {
             Page<Notification> page = new PageImpl<>(List.of(sampleNotification));
             when(notificationRepository.findByRecipientUsernameAndReadAndMessageContainingIgnoreCase(
-                    eq(username), eq(true), eq("urgent"), eq(pageable)))
+                    username, true, "urgent", pageable))
                     .thenReturn(page);
 
             Page<Notification> result = service.getNotificationsForUser(username, true, "urgent", pageable);
@@ -118,7 +121,7 @@ class NotificationServiceImplTest {
         void filtersByReadOnly_searchNull() {
             Page<Notification> page = new PageImpl<>(List.of(sampleNotification));
             when(notificationRepository.findByRecipientUsernameAndRead(
-                    eq(username), eq(false), eq(pageable)))
+                    username, false, pageable))
                     .thenReturn(page);
 
             Page<Notification> result = service.getNotificationsForUser(username, false, null, pageable);
@@ -132,7 +135,7 @@ class NotificationServiceImplTest {
         void filtersByReadOnly_searchEmpty() {
             Page<Notification> page = new PageImpl<>(List.of(sampleNotification));
             when(notificationRepository.findByRecipientUsernameAndRead(
-                    eq(username), eq(true), eq(pageable)))
+                    username, true, pageable))
                     .thenReturn(page);
 
             Page<Notification> result = service.getNotificationsForUser(username, true, "", pageable);
@@ -146,7 +149,7 @@ class NotificationServiceImplTest {
         void filtersBySearchOnly() {
             Page<Notification> page = new PageImpl<>(List.of(sampleNotification));
             when(notificationRepository.findByRecipientUsernameAndMessageContainingIgnoreCase(
-                    eq(username), eq("lab"), eq(pageable)))
+                    username, "lab", pageable))
                     .thenReturn(page);
 
             Page<Notification> result = service.getNotificationsForUser(username, null, "lab", pageable);
@@ -160,7 +163,7 @@ class NotificationServiceImplTest {
         @DisplayName("returns all (no filter) when read is null and search is null")
         void noFilter_bothNull() {
             Page<Notification> page = new PageImpl<>(List.of(sampleNotification));
-            when(notificationRepository.findByRecipientUsername(eq(username), eq(pageable)))
+            when(notificationRepository.findByRecipientUsername(username, pageable))
                     .thenReturn(page);
 
             Page<Notification> result = service.getNotificationsForUser(username, null, null, pageable);
@@ -173,7 +176,7 @@ class NotificationServiceImplTest {
         @DisplayName("returns all (no filter) when read is null and search is empty")
         void noFilter_readNull_searchEmpty() {
             Page<Notification> page = new PageImpl<>(List.of(sampleNotification));
-            when(notificationRepository.findByRecipientUsername(eq(username), eq(pageable)))
+            when(notificationRepository.findByRecipientUsername(username, pageable))
                     .thenReturn(page);
 
             Page<Notification> result = service.getNotificationsForUser(username, null, "", pageable);

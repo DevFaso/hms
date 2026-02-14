@@ -5,7 +5,13 @@ import com.example.hms.enums.PatientStayStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.DischargeApprovalMapper;
-import com.example.hms.model.*;
+import com.example.hms.model.DischargeApproval;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.model.Role;
+import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.discharge.DischargeApprovalDecisionDTO;
 import com.example.hms.payload.dto.discharge.DischargeApprovalRequestDTO;
 import com.example.hms.payload.dto.discharge.DischargeApprovalResponseDTO;
@@ -25,9 +31,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class DischargeApprovalServiceImplTest {
@@ -164,7 +173,8 @@ class DischargeApprovalServiceImplTest {
         registration.setActive(false);
         when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
 
-        assertThatThrownBy(() -> service.requestDischarge(buildRequest()))
+        var request = buildRequest();
+        assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("inactive");
     }
@@ -174,7 +184,8 @@ class DischargeApprovalServiceImplTest {
         registration.setStayStatus(PatientStayStatus.DISCHARGED);
         when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
 
-        assertThatThrownBy(() -> service.requestDischarge(buildRequest()))
+        var request = buildRequest();
+        assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already completed");
     }
@@ -186,7 +197,8 @@ class DischargeApprovalServiceImplTest {
         when(dischargeApprovalRepository.findByRegistration_IdAndStatusIn(eq(registrationId), any()))
             .thenReturn(List.of(existing));
 
-        assertThatThrownBy(() -> service.requestDischarge(buildRequest()))
+        var request = buildRequest();
+        assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("pending");
     }
@@ -198,7 +210,8 @@ class DischargeApprovalServiceImplTest {
             .thenReturn(Collections.emptyList());
         when(staffRepository.findByIdAndActiveTrue(nurseStaffId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.requestDischarge(buildRequest()))
+        var request = buildRequest();
+        assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -213,7 +226,8 @@ class DischargeApprovalServiceImplTest {
             .thenReturn(Collections.emptyList());
         when(staffRepository.findByIdAndActiveTrue(nurseStaffId)).thenReturn(Optional.of(nurse));
 
-        assertThatThrownBy(() -> service.requestDischarge(buildRequest()))
+        var request = buildRequest();
+        assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("different hospitals");
     }
@@ -230,7 +244,8 @@ class DischargeApprovalServiceImplTest {
         when(staffRepository.findByIdAndActiveTrue(nurseStaffId)).thenReturn(Optional.of(nurse));
         when(assignmentRepository.findById(nurseAssignmentId)).thenReturn(Optional.of(nurseAssignment));
 
-        assertThatThrownBy(() -> service.requestDischarge(buildRequest()))
+        var request = buildRequest();
+        assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class);
     }
 
@@ -271,7 +286,8 @@ class DischargeApprovalServiceImplTest {
         DischargeApproval approval = buildApproval(DischargeStatus.APPROVED);
         when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
 
-        assertThatThrownBy(() -> service.approve(approvalId, buildDecision()))
+        var decision = buildDecision();
+        assertThatThrownBy(() -> service.approve(approvalId, decision))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("pending");
     }
@@ -280,7 +296,8 @@ class DischargeApprovalServiceImplTest {
     void approve_notFound_throwsNotFound() {
         when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.approve(approvalId, buildDecision()))
+        var decision = buildDecision();
+        assertThatThrownBy(() -> service.approve(approvalId, decision))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -344,7 +361,8 @@ class DischargeApprovalServiceImplTest {
         DischargeApproval approval = buildApproval(DischargeStatus.PENDING);
         when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
 
-        assertThatThrownBy(() -> service.cancel(approvalId, UUID.randomUUID(), "reason"))
+        UUID randomId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.cancel(approvalId, randomId, "reason"))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("requesting nurse");
     }
@@ -441,7 +459,8 @@ class DischargeApprovalServiceImplTest {
         when(staffRepository.findByIdAndActiveTrue(nurseStaffId)).thenReturn(Optional.of(nurse));
         when(assignmentRepository.findById(nurseAssignmentId)).thenReturn(Optional.of(nurseAssignment));
 
-        assertThatThrownBy(() -> service.requestDischarge(buildRequest()))
+        var request = buildRequest();
+        assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("role");
     }
@@ -460,7 +479,8 @@ class DischargeApprovalServiceImplTest {
         when(staffRepository.findByIdAndActiveTrue(nurseStaffId)).thenReturn(Optional.of(nurse));
         when(assignmentRepository.findById(nurseAssignmentId)).thenReturn(Optional.of(nurseAssignment));
 
-        assertThatThrownBy(() -> service.requestDischarge(buildRequest()))
+        var request = buildRequest();
+        assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("not linked");
     }

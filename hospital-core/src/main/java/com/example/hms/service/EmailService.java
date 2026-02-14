@@ -4,6 +4,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 
+@SuppressWarnings("java:S107") // Email API methods require many template parameters by nature
 public interface EmailService {
 
     void sendAppointmentRescheduledEmail(

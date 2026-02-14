@@ -32,6 +32,8 @@ import java.util.stream.IntStream;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class NurseTaskServiceImpl implements NurseTaskService {
+    private static final String SAMPLE_PATIENT_NAME = "Sample Patient";
+
 
     private static final Duration DEFAULT_WINDOW = Duration.ofHours(2);
     private static final int DEFAULT_LIMIT = 6;
@@ -49,7 +51,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String DEFAULT_PATIENT_NAME = "Patient";
     private static final String DEFAULT_ADMINISTRATION_STATUS = "GIVEN";
     private static final Set<String> SUPPORTED_ADMINISTRATION_STATUSES = Set.of(
-        "GIVEN",
+        DEFAULT_ADMINISTRATION_STATUS,
         "HELD",
         "REFUSED",
         "MISSED"
@@ -119,11 +121,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             throw new BusinessException("Hospital context required to complete handoff.");
         }
 
-        List<NurseHandoffSummaryDTO> handoffs = getHandoffSummaries(nurseUserId, hospitalId, DEFAULT_LIMIT);
-        boolean exists = handoffs.stream().anyMatch(handoff -> handoffId.equals(handoff.getId()));
-        if (!exists) {
-            return;
-        }
+        getHandoffSummaries(nurseUserId, hospitalId, DEFAULT_LIMIT);
     }
 
     @Override
@@ -190,7 +188,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             if (!handoffExists) {
                 throw new ResourceNotFoundException("Handoff not found for checklist update.");
             }
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             // Any exception during handoff lookup should be treated as handoff not found
             throw new ResourceNotFoundException("Handoff not found for checklist update.");
         }
@@ -296,11 +294,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private List<PatientContext> resolvePatientContexts(UUID nurseUserId, UUID hospitalId) {
         List<PatientResponseDTO> patients = resolvePatients(nurseUserId, hospitalId);
         if (patients.isEmpty()) {
-            return List.of(new PatientContext(null, "Sample Patient"));
+            return List.of(new PatientContext(null, SAMPLE_PATIENT_NAME));
         }
         List<PatientContext> contexts = deduplicatePatientContexts(patients);
         if (contexts.isEmpty()) {
-            contexts.add(new PatientContext(null, "Sample Patient"));
+            contexts.add(new PatientContext(null, SAMPLE_PATIENT_NAME));
         }
         return contexts;
     }
@@ -358,8 +356,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private PatientResponseDTO createSyntheticPatient() {
         return PatientResponseDTO.builder()
             .id(UUID.randomUUID())
-            .patientName("Sample Patient")
-            .displayName("Sample Patient")
+            .patientName(SAMPLE_PATIENT_NAME)
+            .displayName(SAMPLE_PATIENT_NAME)
             .room("—")
             .build();
     }

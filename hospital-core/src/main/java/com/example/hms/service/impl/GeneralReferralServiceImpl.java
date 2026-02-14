@@ -3,11 +3,20 @@ package com.example.hms.service.impl;
 import com.example.hms.enums.ReferralStatus;
 import com.example.hms.enums.ReferralUrgency;
 import com.example.hms.exception.ResourceNotFoundException;
-import com.example.hms.model.*;
+import com.example.hms.model.Department;
+import com.example.hms.model.GeneralReferral;
+import com.example.hms.model.GeneralReferralAttachment;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.GeneralReferralRequestDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
 import com.example.hms.payload.dto.ReferralAttachmentResponseDTO;
-import com.example.hms.repository.*;
+import com.example.hms.repository.DepartmentRepository;
+import com.example.hms.repository.GeneralReferralRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.GeneralReferralService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,7 +27,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Service implementation for multi-specialty general referrals
@@ -131,7 +139,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         return referralRepository.findByPatientIdOrderByCreatedAtDesc(patientId)
             .stream()
             .map(this::toResponse)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -139,7 +147,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         return referralRepository.findByReferringProviderIdOrderByCreatedAtDesc(providerId)
             .stream()
             .map(this::toResponse)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -147,7 +155,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         return referralRepository.findByReceivingProviderIdOrderByCreatedAtDesc(providerId)
             .stream()
             .map(this::toResponse)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -161,7 +169,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         }
         return referrals.stream()
             .map(this::toResponse)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -169,7 +177,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         return referralRepository.findOverdueReferrals(LocalDateTime.now())
             .stream()
             .map(this::toResponse)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private GeneralReferral findReferral(UUID referralId) {
@@ -218,7 +226,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         dto.setAttachments(referral.getAttachments() == null ? List.of() :
             referral.getAttachments().stream()
                 .map(this::toAttachmentResponse)
-                .collect(Collectors.toList()));
+                .toList());
         dto.setIsOverdue(referral.isOverdue());
         dto.setCreatedAt(referral.getCreatedAt());
         dto.setUpdatedAt(referral.getUpdatedAt());

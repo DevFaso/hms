@@ -45,7 +45,18 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -690,7 +701,7 @@ public class PatientController {
                 b.setVariant(parts[2]);
             }
             return b.build();
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return Locale.getDefault();
         }
     }
@@ -862,7 +873,7 @@ public class PatientController {
             // flat claim
             String s = jwt.getClaimAsString("hospitalId");
             if (s != null && !s.isBlank()) {
-                try { return UUID.fromString(s); } catch (Exception ignored) {
+                try { return UUID.fromString(s); } catch (RuntimeException ignored) {
                     // ignore invalid UUID formats and continue fallback logic
                 }
             }
@@ -870,7 +881,7 @@ public class PatientController {
             Object raw = jwt.getClaims().get("hospitalId");
             if (raw instanceof UUID u) return u;
             if (raw instanceof String str && !str.isBlank()) {
-                try { return UUID.fromString(str); } catch (Exception ignored) {
+                try { return UUID.fromString(str); } catch (RuntimeException ignored) {
                     // ignore invalid UUID formats and continue fallback logic
                 }
             }

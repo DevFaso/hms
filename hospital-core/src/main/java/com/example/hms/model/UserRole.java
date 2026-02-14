@@ -1,7 +1,20 @@
 package com.example.hms.model;
 
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.EmbeddedId;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import jakarta.persistence.MapsId;
 
 @Entity
 @Table(name = "user_roles", schema = "\"security\"",

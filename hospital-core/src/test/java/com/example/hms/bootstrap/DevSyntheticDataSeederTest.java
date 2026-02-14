@@ -1,9 +1,51 @@
 package com.example.hms.bootstrap;
 
-import com.example.hms.enums.*;
-import com.example.hms.model.*;
+import com.example.hms.enums.EmploymentType;
+import com.example.hms.enums.JobTitle;
+import com.example.hms.model.Appointment;
+import com.example.hms.model.BillingInvoice;
+import com.example.hms.model.Department;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.EncounterTreatment;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.LabOrder;
+import com.example.hms.model.LabResult;
+import com.example.hms.model.LabTestDefinition;
+import com.example.hms.model.Organization;
+import com.example.hms.model.Patient;
+import com.example.hms.model.PatientConsent;
+import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.model.PatientInsurance;
+import com.example.hms.model.Permission;
 import com.example.hms.model.Role;
-import com.example.hms.repository.*;
+import com.example.hms.model.ServiceTranslation;
+import com.example.hms.model.Staff;
+import com.example.hms.model.Treatment;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRole;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.BillingInvoiceRepository;
+import com.example.hms.repository.DepartmentRepository;
+import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.EncounterTreatmentRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.LabOrderRepository;
+import com.example.hms.repository.LabResultRepository;
+import com.example.hms.repository.LabTestDefinitionRepository;
+import com.example.hms.repository.OrganizationRepository;
+import com.example.hms.repository.PatientConsentRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.repository.PatientInsuranceRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.PermissionRepository;
+import com.example.hms.repository.RoleRepository;
+import com.example.hms.repository.ServiceTranslationRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.TreatmentRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.permission.PermissionCatalog;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -12,7 +54,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.mockito.*;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -22,14 +64,36 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import java.util.OptionalInt;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.contains;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S5976") // Individual tests preferred over parameterized for clarity
 class DevSyntheticDataSeederTest {
 
     // ── All repository mocks ─────────────────────────────────────
@@ -231,8 +295,7 @@ class DevSyntheticDataSeederTest {
             method.setAccessible(true);
 
             String result = (String) method.invoke(seeder);
-            assertThat(result).startsWith("+226");
-            assertThat(result).hasSize(12); // +226 + 8 digits
+            assertThat(result).startsWith("+226").hasSize(12); // +226 + 8 digits
         }
 
         @Test
@@ -445,8 +508,7 @@ class DevSyntheticDataSeederTest {
             method.setAccessible(true);
 
             String result = (String) method.invoke(seeder, "H01", "ROLE_NURSE");
-            assertThat(result).contains("NURSE");
-            assertThat(result).doesNotContain("ROLE_NURSE");
+            assertThat(result).contains("NURSE").doesNotContain("ROLE_NURSE");
         }
 
         @Test
@@ -626,8 +688,7 @@ class DevSyntheticDataSeederTest {
             method.setAccessible(true);
 
             String result = (String) method.invoke(seeder, "AB");
-            assertThat(result).hasSize(3);
-            assertThat(result).startsWith("AB");
+            assertThat(result).hasSize(3).startsWith("AB");
         }
 
         @Test
@@ -636,8 +697,7 @@ class DevSyntheticDataSeederTest {
             method.setAccessible(true);
 
             String result = (String) method.invoke(seeder, "X");
-            assertThat(result).hasSize(3);
-            assertThat(result).startsWith("X");
+            assertThat(result).hasSize(3).startsWith("X");
         }
 
         @Test
@@ -884,8 +944,7 @@ class DevSyntheticDataSeederTest {
                     "ROLE_PHARMACIST", "ROLE_RADIOLOGIST", "ROLE_ANESTHESIOLOGIST",
                     "ROLE_RECEPTIONIST", "ROLE_BILLING_SPECIALIST", "ROLE_LAB_SCIENTIST",
                     "ROLE_PHYSIOTHERAPIST", "ROLE_PATIENT"
-            );
-            assertThat(roles).hasSize(15);
+            ).hasSize(15);
         }
 
         @Test
@@ -1914,7 +1973,7 @@ class DevSyntheticDataSeederTest {
 
             try {
                 seeder.run(applicationArguments);
-            } catch (Exception e) {
+            } catch (RuntimeException e) {
                 // Complex orchestration may fail deeper, but initialization should complete
             }
 
@@ -2335,7 +2394,7 @@ class DevSyntheticDataSeederTest {
             Staff existing = Staff.builder().jobTitle(JobTitle.DOCTOR).hospital(hospital).department(otherDept).build();
             setId(existing, UUID.randomUUID());
 
-            Map<JobTitle, Staff> staffMap = new java.util.HashMap<>();
+            Map<JobTitle, Staff> staffMap = new EnumMap<>(JobTitle.class);
             staffMap.put(JobTitle.DOCTOR, existing);
 
             when(staffRepository.save(any(Staff.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -2363,7 +2422,7 @@ class DevSyntheticDataSeederTest {
                 hospital, dept, null, JobTitle.DOCTOR, EmploymentType.FULL_TIME,
                 "General Medicine", adminUser);
 
-            Map<JobTitle, Staff> staffMap = new java.util.HashMap<>();
+            Map<JobTitle, Staff> staffMap = new EnumMap<>(JobTitle.class);
 
             Object result = method.invoke(seeder, staffMap, "doctor", input);
 
@@ -2388,7 +2447,7 @@ class DevSyntheticDataSeederTest {
                 hospital, dept, role, JobTitle.DOCTOR, EmploymentType.FULL_TIME,
                 "General Medicine", adminUser);
 
-            Map<JobTitle, Staff> staffMap = new java.util.HashMap<>();
+            Map<JobTitle, Staff> staffMap = new EnumMap<>(JobTitle.class);
 
             // Stub everything createStaff needs
             when(userRepository.save(any(User.class))).thenAnswer(inv -> {
@@ -2768,8 +2827,7 @@ class DevSyntheticDataSeederTest {
 
             Object result = method.invoke(seeder, staffBundle);
 
-            assertThat(result).isNotNull();
-            assertThat(result).isInstanceOf(List.class);
+            assertThat(result).isNotNull().isInstanceOf(List.class);
             assertThat((List<?>) result).hasSize(5);
         }
     }
@@ -2784,8 +2842,7 @@ class DevSyntheticDataSeederTest {
 
             Object result = method.invoke(seeder, "ROLE_DOCTOR");
 
-            assertThat(result).isNotNull();
-            assertThat(result).isInstanceOf(List.class);
+            assertThat(result).isNotNull().isInstanceOf(List.class);
         }
     }
 
@@ -3118,7 +3175,8 @@ class DevSyntheticDataSeederTest {
         Role role = Role.builder().name(code).code(code).description("Test role").build();
         try {
             setId(role, UUID.randomUUID());
-        } catch (Exception ignored) {
+        } catch (RuntimeException ignored) {
+            // Expected in test scenario
         }
         return role;
     }
@@ -3139,7 +3197,8 @@ class DevSyntheticDataSeederTest {
         // Initialize userRoles collection
         try {
             setField(user, "userRoles", new java.util.HashSet<>());
-        } catch (Exception ignored) {
+        } catch (RuntimeException ignored) {
+            // Expected in test scenario
         }
         return user;
     }
@@ -3298,7 +3357,8 @@ class DevSyntheticDataSeederTest {
                     clazz = clazz.getSuperclass();
                 }
             }
-        } catch (Exception ignored) {
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+            // Expected in test scenario
         }
     }
 
@@ -3315,7 +3375,7 @@ class DevSyntheticDataSeederTest {
                     clazz = clazz.getSuperclass();
                 }
             }
-        } catch (Exception e) {
+        } catch (ReflectiveOperationException | RuntimeException e) {
             throw new RuntimeException("Failed to set field: " + fieldName, e);
         }
     }
@@ -3332,8 +3392,8 @@ class DevSyntheticDataSeederTest {
                     clazz = clazz.getSuperclass();
                 }
             }
-            throw new NoSuchFieldException(fieldName);
-        } catch (Exception e) {
+            throw new RuntimeException("Field not found: " + fieldName);
+        } catch (ReflectiveOperationException | RuntimeException e) {
             throw new RuntimeException("Failed to get field: " + fieldName, e);
         }
     }

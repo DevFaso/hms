@@ -17,7 +17,6 @@ import com.example.hms.repository.HighRiskPregnancyCarePlanRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
-import com.example.hms.service.HighRiskPregnancyCarePlanServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

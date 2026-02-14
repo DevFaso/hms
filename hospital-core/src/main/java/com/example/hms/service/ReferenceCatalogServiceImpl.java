@@ -30,12 +30,10 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -97,10 +95,12 @@ public class ReferenceCatalogServiceImpl implements ReferenceCatalogService {
 
         try (BufferedReader reader = new BufferedReader(
             new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8));
-             CSVParser parser = CSVFormat.DEFAULT
-                 .withFirstRecordAsHeader()
-                 .withIgnoreEmptyLines(true)
-                 .withTrim(true)
+             CSVParser parser = CSVFormat.DEFAULT.builder()
+                 .setHeader()
+                 .setSkipHeaderRecord(true)
+                 .setIgnoreEmptyLines(true)
+                 .setTrim(true)
+                 .build()
                  .parse(reader)) {
             CatalogImportStats stats = processCsvRecords(parser, catalog);
             long count = entryRepository.countByCatalogId(catalog.getId());
@@ -186,7 +186,7 @@ public class ReferenceCatalogServiceImpl implements ReferenceCatalogService {
         var words = java.util.Arrays.stream(parts)
             .filter(StringUtils::hasText)
             .map(part -> {
-                if (part.length() == 0) {
+                if (part.isEmpty()) {
                     return part;
                 }
                 return Character.toUpperCase(part.charAt(0)) + part.substring(1);
@@ -225,7 +225,7 @@ public class ReferenceCatalogServiceImpl implements ReferenceCatalogService {
         return !raw.equalsIgnoreCase("false") && !raw.equalsIgnoreCase("0") && !raw.equalsIgnoreCase("no");
     }
 
-    private CatalogImportStats processCsvRecords(CSVParser parser, ReferenceCatalog catalog) throws IOException {
+    private CatalogImportStats processCsvRecords(CSVParser parser, ReferenceCatalog catalog) {
         int processed = 0;
         int created = 0;
         int updated = 0;

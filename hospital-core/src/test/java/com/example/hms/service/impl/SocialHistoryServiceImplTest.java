@@ -2,10 +2,16 @@ package com.example.hms.service.impl;
 
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.SocialHistoryMapper;
-import com.example.hms.model.*;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.PatientSocialHistory;
+import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.medicalhistory.SocialHistoryRequestDTO;
 import com.example.hms.payload.dto.medicalhistory.SocialHistoryResponseDTO;
-import com.example.hms.repository.*;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.SocialHistoryRepository;
+import com.example.hms.repository.StaffRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,11 +19,17 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class SocialHistoryServiceImplTest {

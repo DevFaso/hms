@@ -8,7 +8,10 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.treatment.TreatmentPlan;
 import com.example.hms.model.treatment.TreatmentPlanFollowUp;
 import com.example.hms.model.treatment.TreatmentPlanReview;
-import com.example.hms.payload.dto.clinical.treatment.*;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanFollowUpDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanRequestDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanReviewDTO;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,9 +23,7 @@ import org.springframework.util.StringUtils;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Component
 @RequiredArgsConstructor
@@ -178,7 +179,7 @@ public class TreatmentPlanMapper {
                 if (b.getDueOn() == null) return -1;
                 return a.getDueOn().compareTo(b.getDueOn());
             })
-            .collect(Collectors.toList());
+            .toList();
     }
 
     public TreatmentPlanFollowUpDTO toFollowUpDTO(TreatmentPlanFollowUp followUp) {
@@ -213,7 +214,7 @@ public class TreatmentPlanMapper {
                 if (b.getCreatedAt() == null) return -1;
                 return a.getCreatedAt().compareTo(b.getCreatedAt());
             })
-            .collect(Collectors.toList());
+            .toList();
     }
 
     public TreatmentPlanReviewDTO toReviewDTO(TreatmentPlanReview review) {
@@ -256,9 +257,9 @@ public class TreatmentPlanMapper {
         }
         List<String> sanitized = values.stream()
             .filter(StringUtils::hasText)
-            .map(v -> v.trim())
+            .map(String::trim)
             .filter(v -> !v.isEmpty())
-            .collect(Collectors.toList());
+            .toList();
         if (sanitized.isEmpty()) {
             return null;
         }

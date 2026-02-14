@@ -19,6 +19,7 @@ import java.util.UUID;
  * Repository interface for Maternal History entity with comprehensive query methods.
  * Supports version tracking, temporal queries, and risk-based filtering.
  */
+@SuppressWarnings("java:S107") // JPQL search methods require multiple filter parameters
 @Repository
 public interface MaternalHistoryRepository extends JpaRepository<MaternalHistory, UUID> {
 

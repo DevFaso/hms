@@ -34,7 +34,7 @@ public class AuditEventRequestDTO {
     private UUID userId;
 
     @NotNull
-    @Schema(description = "Assignment ID of the user in the hospital context.", example = "512a9d3b-051f-4139-bfbf-f61c1b8ad2e3", required = true)
+    @Schema(description = "Assignment ID of the user in the hospital context.", example = "512a9d3b-051f-4139-bfbf-f61c1b8ad2e3", requiredMode = Schema.RequiredMode.REQUIRED)
     private UUID assignmentId;
 
     @NotNull

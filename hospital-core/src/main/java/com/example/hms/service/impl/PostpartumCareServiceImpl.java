@@ -104,7 +104,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                                                                         UUID hospitalId,
                                                                         UUID carePlanId,
                                                                         int limit) {
-        int effectiveLimit = Math.max(1, Math.min(limit <= 0 ? 10 : limit, 100));
+        int effectiveLimit = Math.clamp(limit <= 0 ? 10 : limit, 1, 100);
         PostpartumCarePlan plan = resolvePlanForRead(patientId, hospitalId, carePlanId);
         List<PostpartumObservation> observations;
         if (plan != null) {
@@ -134,9 +134,13 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         int safePage = Math.max(page, 0);
         int safeSize = Math.max(size, 1);
         PostpartumCarePlan plan = resolvePlanForRead(patientId, hospitalId, carePlanId);
+        UUID resolvedHospitalId = hospitalId;
+        if (resolvedHospitalId == null && plan != null) {
+            resolvedHospitalId = plan.getHospital().getId();
+        }
         List<PostpartumObservation> observations = observationRepository.findWithinRange(
             patientId,
-            hospitalId != null ? hospitalId : (plan != null ? plan.getHospital().getId() : null),
+            resolvedHospitalId,
             from,
             to,
             PageRequest.of(safePage, safeSize)
@@ -302,6 +306,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             .orElseThrow(() -> new BusinessException("Unable to record correction; original observation not located."));
     }
 
+    @SuppressWarnings("java:S107") // builder method needs all domain objects to construct observation
     private PostpartumObservation buildObservation(Patient patient,
                                                    Hospital hospital,
                                                    PatientHospitalRegistration registration,
@@ -380,6 +385,46 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         boolean hemorrhageAlert = false;
         boolean infectionAlert = false;
 
+        if (hasHemorrhageIndicators(observation)) {
+            alerts.add(buildAlert(PostpartumAlertType.HEMORRHAGE, PostpartumAlertSeverity.URGENT,
+                "postpartum-hemorrhage",
+                "Hemorrhage risk detected. Activate uterotonic protocol and notify provider immediately.",
+                "Bleeding Assessment"));
+            observation.setHemorrhageProtocolActivated(true);
+            escalateMonitoring = true;
+            hemorrhageAlert = true;
+        }
+
+        if (hasInfectionIndicators(observation)) {
+            alerts.add(buildAlert(PostpartumAlertType.INFECTION, PostpartumAlertSeverity.URGENT,
+                "postpartum-infection",
+                "Possible postpartum infection. Initiate sepsis screening and contact provider.",
+                "Infection Screening"));
+            escalateMonitoring = true;
+            infectionAlert = true;
+        }
+
+        if (observation.getPainScore() != null && observation.getPainScore() >= PAIN_ALERT_THRESHOLD) {
+            alerts.add(buildAlert(PostpartumAlertType.PAIN, PostpartumAlertSeverity.CAUTION,
+                "postpartum-pain",
+                "Pain score above comfort threshold. Reassess analgesia plan and comfort interventions.",
+                "Pain Score"));
+            observation.setPainManagementReferralSuggested(true);
+        }
+
+        applyPsychosocialFlags(observation);
+        if (observation.isMentalHealthReferralSuggested()) {
+            alerts.add(buildAlert(PostpartumAlertType.PSYCHOSOCIAL, PostpartumAlertSeverity.CAUTION,
+                "postpartum-psychosocial",
+                "Psychosocial concern identified. Coordinate mental health or social work referral.",
+                "Psychosocial Screening"));
+        }
+
+        alerts.forEach(observation::addAlert);
+        return new AlertEvaluation(alerts, escalateMonitoring, hemorrhageAlert, infectionAlert);
+    }
+
+    private boolean hasHemorrhageIndicators(PostpartumObservation observation) {
         boolean vitalSignInstability = (observation.getSystolicBpMmHg() != null
             && observation.getSystolicBpMmHg() < HYPOTENSION_SYSTOLIC_THRESHOLD)
             || (observation.getPulseBpm() != null && observation.getPulseBpm() > TACHYCARDIA_THRESHOLD);
@@ -393,59 +438,35 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             && (observation.getLochiaAmount() == PostpartumLochiaAmount.HEAVY
             || observation.getLochiaAmount() == PostpartumLochiaAmount.EXCESSIVE);
 
-        boolean hemorrhageIndicators = observation.isExcessiveBleeding()
+        return observation.isExcessiveBleeding()
             || (observation.getEstimatedBloodLossMl() != null
                 && observation.getEstimatedBloodLossMl() >= HEMORRHAGE_BLOOD_LOSS_THRESHOLD_ML)
             || observation.isUterineAtonySuspected()
             || fundusConcern
             || heavyLochia
             || vitalSignInstability;
+    }
 
-        if (hemorrhageIndicators) {
-            PostpartumObservationAlert alert = PostpartumObservationAlert.builder()
-                .type(PostpartumAlertType.HEMORRHAGE)
-                .severity(PostpartumAlertSeverity.URGENT)
-                .code("postpartum-hemorrhage")
-                .message("Hemorrhage risk detected. Activate uterotonic protocol and notify provider immediately.")
-                .triggeredBy("Bleeding Assessment")
-                .build();
-            alerts.add(alert);
-            observation.setHemorrhageProtocolActivated(true);
-            escalateMonitoring = true;
-            hemorrhageAlert = true;
-        }
-
-        boolean infectionIndicators = (observation.getTemperatureCelsius() != null
+    private boolean hasInfectionIndicators(PostpartumObservation observation) {
+        return (observation.getTemperatureCelsius() != null
             && observation.getTemperatureCelsius() >= FEVER_THRESHOLD_C)
             || observation.isFoulLochiaOdor()
             || observation.isUterineTenderness()
             || observation.isChillsOrRigors();
+    }
 
-        if (infectionIndicators) {
-            PostpartumObservationAlert alert = PostpartumObservationAlert.builder()
-                .type(PostpartumAlertType.INFECTION)
-                .severity(PostpartumAlertSeverity.URGENT)
-                .code("postpartum-infection")
-                .message("Possible postpartum infection. Initiate sepsis screening and contact provider.")
-                .triggeredBy("Infection Screening")
-                .build();
-            alerts.add(alert);
-            escalateMonitoring = true;
-            infectionAlert = true;
-        }
+    private PostpartumObservationAlert buildAlert(PostpartumAlertType type, PostpartumAlertSeverity severity,
+                                                  String code, String message, String triggeredBy) {
+        return PostpartumObservationAlert.builder()
+            .type(type)
+            .severity(severity)
+            .code(code)
+            .message(message)
+            .triggeredBy(triggeredBy)
+            .build();
+    }
 
-        if (observation.getPainScore() != null && observation.getPainScore() >= PAIN_ALERT_THRESHOLD) {
-            PostpartumObservationAlert alert = PostpartumObservationAlert.builder()
-                .type(PostpartumAlertType.PAIN)
-                .severity(PostpartumAlertSeverity.CAUTION)
-                .code("postpartum-pain")
-                .message("Pain score above comfort threshold. Reassess analgesia plan and comfort interventions.")
-                .triggeredBy("Pain Score")
-                .build();
-            alerts.add(alert);
-            observation.setPainManagementReferralSuggested(true);
-        }
-
+    private void applyPsychosocialFlags(PostpartumObservation observation) {
         if (observation.getMoodStatus() == PostpartumMoodStatus.DEPRESSED
             || observation.getMoodStatus() == PostpartumMoodStatus.TEARFUL
             || observation.getMoodStatus() == PostpartumMoodStatus.WITHDRAWN) {
@@ -455,20 +476,6 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             || observation.getSupportStatus() == PostpartumSupportStatus.NONE) {
             observation.setSocialSupportReferralSuggested(true);
         }
-        if (observation.isMentalHealthReferralSuggested()) {
-            PostpartumObservationAlert alert = PostpartumObservationAlert.builder()
-                .type(PostpartumAlertType.PSYCHOSOCIAL)
-                .severity(PostpartumAlertSeverity.CAUTION)
-                .code("postpartum-psychosocial")
-                .message("Psychosocial concern identified. Coordinate mental health or social work referral.")
-                .triggeredBy("Psychosocial Screening")
-                .build();
-            alerts.add(alert);
-        }
-
-        // Persist alerts onto the observation aggregate
-        alerts.forEach(observation::addAlert);
-        return new AlertEvaluation(alerts, escalateMonitoring, hemorrhageAlert, infectionAlert);
     }
 
     private ScheduleSnapshot applyObservationToPlan(PostpartumCarePlan plan,
@@ -484,52 +491,75 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         }
 
         if (plan.isImmediatePhase() && !plan.isImmediateWindowCompleted()) {
-            plan.incrementImmediateObservationCount();
-            LocalDateTime windowEnd = plan.getDeliveryOccurredAt()
-                .plusMinutes(PostpartumCarePlan.IMMEDIATE_WINDOW_MINUTES);
-            boolean targetMet = plan.getImmediateObservationsCompleted() >= plan.getImmediateObservationTarget();
-            boolean outsideWindow = observation.getObservationTime().isAfter(windowEnd);
-            boolean stabilization = Boolean.TRUE.equals(request.getStabilizationConfirmed());
-            if (targetMet || outsideWindow || stabilization) {
-                plan.setImmediateWindowCompleted(true);
-                plan.setStabilizationAchievedAt(observation.getObservationTime());
-                plan.markActivePhase(PostpartumSchedulePhase.SHIFT_BASELINE);
-                int frequency = sanitizeFrequency(request.getShiftFrequencyMinutes());
-                plan.setShiftFrequencyMinutes(frequency);
-                plan.setNextDueAt(observation.getObservationTime().plusMinutes(frequency));
-            } else {
-                plan.setNextDueAt(observation.getObservationTime()
-                    .plusMinutes(PostpartumCarePlan.IMMEDIATE_INTERVAL_MINUTES));
-            }
+            applyImmediatePhaseScheduling(plan, observation, request);
         } else {
-            int frequency = sanitizeFrequency(request.getShiftFrequencyMinutes() != null
-                ? request.getShiftFrequencyMinutes()
-                : plan.getShiftFrequencyMinutes());
-            boolean enhancedRequested = Boolean.TRUE.equals(request.getEnhancedMonitoring());
-            boolean resolveEnhanced = Boolean.TRUE.equals(request.getEnhancedMonitoringResolved());
-            if ((enhancedRequested || escalateMonitoring) && plan.getActivePhase() != PostpartumSchedulePhase.DISCHARGE_PLANNING) {
-                plan.markActivePhase(PostpartumSchedulePhase.ENHANCED_MONITORING);
-                int enhancedFrequency = sanitizeFrequency(request.getEnhancedMonitoringFrequencyMinutes() != null
-                    ? request.getEnhancedMonitoringFrequencyMinutes()
-                    : Math.max(PostpartumCarePlan.MIN_SHIFT_FREQUENCY_MINUTES, frequency / 2));
-                plan.setShiftFrequencyMinutes(enhancedFrequency);
-                plan.setEscalationReason("Critical postpartum alert triggered");
-                plan.setNextDueAt(observation.getObservationTime().plusMinutes(enhancedFrequency));
-            } else if (plan.isEnhancedMonitoring() && resolveEnhanced) {
-                plan.markActivePhase(PostpartumSchedulePhase.SHIFT_BASELINE);
-                plan.setShiftFrequencyMinutes(frequency);
-                plan.setEscalationReason(null);
-                plan.setNextDueAt(observation.getObservationTime().plusMinutes(frequency));
-            } else {
-                plan.setShiftFrequencyMinutes(frequency);
-                if (plan.getActivePhase() == PostpartumSchedulePhase.DISCHARGE_PLANNING) {
-                    plan.setNextDueAt(null);
-                } else {
-                    plan.setNextDueAt(observation.getObservationTime().plusMinutes(frequency));
-                }
-            }
+            applyShiftPhaseScheduling(plan, observation, request, escalateMonitoring);
         }
 
+        applyProtocolFlags(plan, observation);
+        applyDischargeFlags(plan, observation);
+        applyReferralFlags(plan, observation);
+        applyOverdueTracking(plan);
+
+        return new ScheduleSnapshot(plan.getActivePhase(), plan.getNextDueAt(), plan.getOverdueSince());
+    }
+
+    private void applyImmediatePhaseScheduling(PostpartumCarePlan plan,
+                                               PostpartumObservation observation,
+                                               PostpartumObservationRequestDTO request) {
+        plan.incrementImmediateObservationCount();
+        LocalDateTime windowEnd = plan.getDeliveryOccurredAt()
+            .plusMinutes(PostpartumCarePlan.IMMEDIATE_WINDOW_MINUTES);
+        boolean targetMet = plan.getImmediateObservationsCompleted() >= plan.getImmediateObservationTarget();
+        boolean outsideWindow = observation.getObservationTime().isAfter(windowEnd);
+        boolean stabilization = Boolean.TRUE.equals(request.getStabilizationConfirmed());
+        if (targetMet || outsideWindow || stabilization) {
+            plan.setImmediateWindowCompleted(true);
+            plan.setStabilizationAchievedAt(observation.getObservationTime());
+            plan.markActivePhase(PostpartumSchedulePhase.SHIFT_BASELINE);
+            int frequency = sanitizeFrequency(request.getShiftFrequencyMinutes());
+            plan.setShiftFrequencyMinutes(frequency);
+            plan.setNextDueAt(observation.getObservationTime().plusMinutes(frequency));
+        } else {
+            plan.setNextDueAt(observation.getObservationTime()
+                .plusMinutes(PostpartumCarePlan.IMMEDIATE_INTERVAL_MINUTES));
+        }
+    }
+
+    private void applyShiftPhaseScheduling(PostpartumCarePlan plan,
+                                           PostpartumObservation observation,
+                                           PostpartumObservationRequestDTO request,
+                                           boolean escalateMonitoring) {
+        int frequency = sanitizeFrequency(request.getShiftFrequencyMinutes() != null
+            ? request.getShiftFrequencyMinutes()
+            : plan.getShiftFrequencyMinutes());
+        boolean enhancedRequested = Boolean.TRUE.equals(request.getEnhancedMonitoring());
+        boolean resolveEnhanced = Boolean.TRUE.equals(request.getEnhancedMonitoringResolved());
+
+        if ((enhancedRequested || escalateMonitoring) && plan.getActivePhase() != PostpartumSchedulePhase.DISCHARGE_PLANNING) {
+            plan.markActivePhase(PostpartumSchedulePhase.ENHANCED_MONITORING);
+            int enhancedFrequency = sanitizeFrequency(request.getEnhancedMonitoringFrequencyMinutes() != null
+                ? request.getEnhancedMonitoringFrequencyMinutes()
+                : Math.max(PostpartumCarePlan.MIN_SHIFT_FREQUENCY_MINUTES, frequency / 2));
+            plan.setShiftFrequencyMinutes(enhancedFrequency);
+            plan.setEscalationReason("Critical postpartum alert triggered");
+            plan.setNextDueAt(observation.getObservationTime().plusMinutes(enhancedFrequency));
+        } else if (plan.isEnhancedMonitoring() && resolveEnhanced) {
+            plan.markActivePhase(PostpartumSchedulePhase.SHIFT_BASELINE);
+            plan.setShiftFrequencyMinutes(frequency);
+            plan.setEscalationReason(null);
+            plan.setNextDueAt(observation.getObservationTime().plusMinutes(frequency));
+        } else {
+            plan.setShiftFrequencyMinutes(frequency);
+            if (plan.getActivePhase() == PostpartumSchedulePhase.DISCHARGE_PLANNING) {
+                plan.setNextDueAt(null);
+            } else {
+                plan.setNextDueAt(observation.getObservationTime().plusMinutes(frequency));
+            }
+        }
+    }
+
+    private void applyProtocolFlags(PostpartumCarePlan plan, PostpartumObservation observation) {
         if (observation.isHemorrhageProtocolConfirmed()) {
             plan.setHemorrhageProtocolConfirmed(true);
         }
@@ -545,6 +575,9 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (observation.isContactInfoVerified()) {
             plan.setContactInfoVerified(true);
         }
+    }
+
+    private void applyDischargeFlags(PostpartumCarePlan plan, PostpartumObservation observation) {
         if (observation.getFollowUpContactMethod() != null) {
             plan.setFollowUpContactMethod(observation.getFollowUpContactMethod());
         }
@@ -559,7 +592,9 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             plan.markActivePhase(PostpartumSchedulePhase.DISCHARGE_PLANNING);
             plan.markClosed(LocalDateTime.now());
         }
+    }
 
+    private void applyReferralFlags(PostpartumCarePlan plan, PostpartumObservation observation) {
         if (observation.isMentalHealthReferralSuggested()) {
             plan.setMentalHealthReferralOutstanding(true);
         }
@@ -569,15 +604,15 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         if (observation.isPainManagementReferralSuggested()) {
             plan.setPainFollowupOutstanding(true);
         }
+    }
 
+    private void applyOverdueTracking(PostpartumCarePlan plan) {
         LocalDateTime nextDue = plan.getNextDueAt();
         if (nextDue != null && nextDue.isBefore(LocalDateTime.now())) {
             plan.setOverdueSince(nextDue);
         } else if (plan.getActivePhase() == PostpartumSchedulePhase.DISCHARGE_PLANNING) {
             plan.setOverdueSince(null);
         }
-
-        return new ScheduleSnapshot(plan.getActivePhase(), plan.getNextDueAt(), plan.getOverdueSince());
     }
 
     private int sanitizeFrequency(Integer candidate) {
@@ -622,7 +657,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
                     alert.getType(), patientName.isBlank() ? "patient" : patientName, alert.getMessage());
                 try {
                     notificationService.createNotification(message, documentedBy.getUsername());
-                } catch (Exception ex) {
+                } catch (RuntimeException ex) {
                     log.warn("Failed to create postpartum alert notification: {}", ex.getMessage());
                 }
             });

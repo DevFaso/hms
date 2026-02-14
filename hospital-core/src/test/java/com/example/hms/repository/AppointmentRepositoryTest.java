@@ -1,7 +1,12 @@
 package com.example.hms.repository;
 
 import com.example.hms.enums.AppointmentStatus;
-import com.example.hms.model.*;
+import com.example.hms.model.Appointment;
+import com.example.hms.model.Department;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -11,7 +16,9 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 
 /**
  * Unit tests for the {@link Appointment} entity's {@code @PrePersist/@PreUpdate}
@@ -75,7 +82,7 @@ class AppointmentRepositoryTest {
     // ─── Happy path ──────────────────────────────────────────────
 
     @Test
-    void happyPath_validatesSuccessfully() throws Exception {
+    void happyPath_validatesSuccessfully() {
         assertThatNoException().isThrownBy(() -> invokeValidate(validAppointment()));
     }
 

@@ -1,11 +1,20 @@
 package com.example.hms.mapper;
 
-import com.example.hms.model.*;
-import com.example.hms.payload.dto.*;
+import com.example.hms.model.Department;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Treatment;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.payload.dto.ServiceTranslationResponseDTO;
+import com.example.hms.payload.dto.TreatmentRequestDTO;
+import com.example.hms.payload.dto.TreatmentResponseDTO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Component
@@ -15,9 +24,11 @@ public class TreatmentMapper {
     private final ServiceTranslationMapper translationMapper;
 
     public TreatmentResponseDTO toTreatmentResponseDTO(Treatment treatment, String language) {
-        if (treatment == null) return null;
+        if (treatment == null) {
+            return null;
+        }
 
-                Map<String, ServiceTranslationResponseDTO> translations = Optional.ofNullable(treatment.getTranslations())
+        Map<String, ServiceTranslationResponseDTO> translations = Optional.ofNullable(treatment.getTranslations())
                                 .orElse(Collections.emptySet())
                                 .stream()
                                 .map(st -> {

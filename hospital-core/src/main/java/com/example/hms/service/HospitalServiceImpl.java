@@ -320,13 +320,11 @@ public class HospitalServiceImpl implements HospitalService {
         List<DepartmentSummaryDTO> departmentSummaries = new ArrayList<>();
         if (hospital.getDepartments() != null) {
             for (Department department : hospital.getDepartments()) {
-                if (department == null) continue;
-                if (!matchesDepartmentQuery(department, departmentQuery)) {
-                    continue;
-                }
-                DepartmentSummaryDTO summary = toDepartmentSummary(department, hospital);
-                if (summary != null) {
-                    departmentSummaries.add(summary);
+                if (department != null && matchesDepartmentQuery(department, departmentQuery)) {
+                    DepartmentSummaryDTO summary = toDepartmentSummary(department, hospital);
+                    if (summary != null) {
+                        departmentSummaries.add(summary);
+                    }
                 }
             }
         }
@@ -446,12 +444,12 @@ public class HospitalServiceImpl implements HospitalService {
             sb.append(firstName.trim());
         }
         if (lastName != null && !lastName.isBlank()) {
-            if (sb.length() > 0) {
+            if (!sb.isEmpty()) {
                 sb.append(' ');
             }
             sb.append(lastName.trim());
         }
-        return sb.length() == 0 ? null : sb.toString();
+        return sb.isEmpty() ? null : sb.toString();
     }
 
     private String normalizeQuery(String value) {

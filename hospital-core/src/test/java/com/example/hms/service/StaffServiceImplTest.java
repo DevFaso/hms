@@ -1,10 +1,23 @@
 package com.example.hms.service;
 
-import com.example.hms.exception.*;
+import com.example.hms.exception.BusinessRuleException;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.StaffMapper;
-import com.example.hms.model.*;
-import com.example.hms.payload.dto.*;
-import com.example.hms.repository.*;
+import com.example.hms.model.Department;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Role;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.payload.dto.StaffMinimalDTO;
+import com.example.hms.payload.dto.StaffRequestDTO;
+import com.example.hms.payload.dto.StaffResponseDTO;
+import com.example.hms.repository.DepartmentRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.RoleRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import org.junit.jupiter.api.AfterEach;
@@ -20,13 +33,23 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import java.util.Locale;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S5976") // Individual tests preferred over parameterized for clarity
 class StaffServiceImplTest {
 
     @Mock private StaffRepository staffRepository;
@@ -472,7 +495,7 @@ class StaffServiceImplTest {
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
         when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
-        when(staffMapper.toStaff(eq(dto), eq(user), eq(hospital), eq(dept), eq(assignment))).thenReturn(staff);
+        when(staffMapper.toStaff(dto, user, hospital, dept, assignment)).thenReturn(staff);
         when(staffRepository.save(staff)).thenReturn(staff);
         when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
 
@@ -750,7 +773,7 @@ class StaffServiceImplTest {
         when(assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(any(), any(), any()))
             .thenReturn(Optional.of(assignment));
         when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
-        when(staffMapper.toStaff(eq(dto), eq(user), eq(hospital), eq(dept), eq(assignment))).thenReturn(staff);
+        when(staffMapper.toStaff(dto, user, hospital, dept, assignment)).thenReturn(staff);
         when(staffRepository.save(staff)).thenReturn(staff);
         when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
 

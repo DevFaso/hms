@@ -281,8 +281,9 @@ class LabResultServiceImplWorkflowTest {
         when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(false);
         when(authService.hasRole("ROLE_SUPER_ADMIN")).thenReturn(false);
 
+        LabResultSignatureRequestDTO request = new LabResultSignatureRequestDTO();
         assertThrows(BusinessException.class,
-            () -> labResultService.signLabResult(labResultId, new LabResultSignatureRequestDTO(), Locale.US));
+            () -> labResultService.signLabResult(labResultId, request, Locale.US));
         verify(labResultRepository, never()).save(any(LabResult.class));
     }
 

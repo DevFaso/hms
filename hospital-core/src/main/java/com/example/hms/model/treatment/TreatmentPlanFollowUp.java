@@ -3,8 +3,23 @@ package com.example.hms.model.treatment;
 import com.example.hms.enums.TreatmentPlanTaskStatus;
 import com.example.hms.model.BaseEntity;
 import com.example.hms.model.Staff;
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -24,6 +39,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"treatmentPlan", "assignedStaff"})
+@EqualsAndHashCode(callSuper = true)
 public class TreatmentPlanFollowUp extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

@@ -5,16 +5,38 @@ import com.example.hms.enums.SignatureType;
 import com.example.hms.model.BaseEntity;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Staff;
-import jakarta.persistence.*;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import jakarta.persistence.OrderColumn;
 
 /**
  * Generic digital signature tracking entity for all types of clinical reports.
@@ -275,10 +297,7 @@ public class DigitalSignature extends BaseEntity {
         if (status != SignatureStatus.SIGNED) {
             return false;
         }
-        if (expiresAt != null && LocalDateTime.now().isAfter(expiresAt)) {
-            return false;
-        }
-        return true;
+        return expiresAt == null || !LocalDateTime.now().isAfter(expiresAt);
     }
 
     /**

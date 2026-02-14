@@ -8,7 +8,12 @@ import com.example.hms.mapper.DigitalSignatureMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Staff;
 import com.example.hms.model.signature.DigitalSignature;
-import com.example.hms.payload.dto.signature.*;
+import com.example.hms.payload.dto.signature.SignatureAuditEntryDTO;
+import com.example.hms.payload.dto.signature.SignatureRequestDTO;
+import com.example.hms.payload.dto.signature.SignatureResponseDTO;
+import com.example.hms.payload.dto.signature.SignatureRevocationRequestDTO;
+import com.example.hms.payload.dto.signature.SignatureVerificationRequestDTO;
+import com.example.hms.payload.dto.signature.SignatureVerificationResponseDTO;
 import com.example.hms.repository.DigitalSignatureRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.StaffRepository;
@@ -25,7 +30,6 @@ import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Implementation of digital signature service.
@@ -207,7 +211,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
 
         return signatures.stream()
             .map(signatureMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -220,7 +224,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
 
         return signatures.stream()
             .map(signatureMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -265,7 +269,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
         return signatures.stream()
             .filter(s -> s.getHospital() != null && s.getHospital().getId().equals(hospitalId))
             .map(signatureMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -327,7 +331,7 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
             UUID userId = authService.getCurrentUserId();
             // In a real implementation, you'd fetch user details here
             return "User-" + userId.toString().substring(0, 8);
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return "System";
         }
     }

@@ -1,6 +1,10 @@
 package com.example.hms.service;
 
-import com.example.hms.payload.dto.clinical.*;
+import com.example.hms.payload.dto.clinical.ClinicalAlertDTO;
+import com.example.hms.payload.dto.clinical.ClinicalDashboardResponseDTO;
+import com.example.hms.payload.dto.clinical.InboxCountsDTO;
+import com.example.hms.payload.dto.clinical.OnCallStatusDTO;
+import com.example.hms.payload.dto.clinical.RoomedPatientDTO;
 
 import java.util.List;
 import java.util.UUID;

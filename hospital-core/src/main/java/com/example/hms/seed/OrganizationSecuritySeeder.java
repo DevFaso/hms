@@ -4,8 +4,16 @@ import com.example.hms.config.OrganizationSecurityConstants;
 import com.example.hms.enums.OrganizationType;
 import com.example.hms.enums.SecurityPolicyType;
 import com.example.hms.enums.SecurityRuleType;
-import com.example.hms.model.*;
-import com.example.hms.repository.*;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Organization;
+import com.example.hms.model.OrganizationSecurityPolicy;
+import com.example.hms.model.OrganizationSecurityRule;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Role;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.OrganizationRepository;
+import com.example.hms.repository.OrganizationSecurityPolicyRepository;
+import com.example.hms.repository.OrganizationSecurityRuleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
@@ -21,6 +29,8 @@ import java.util.List;
 @Order(2) // Run after RoleSeeder
 @ConditionalOnProperty(prefix = "app.seed", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class OrganizationSecuritySeeder implements CommandLineRunner {
+    private static final String DEFAULT_ORG_NAME = "DEFAULT_ORG";
+
 
     private final OrganizationRepository organizationRepository;
     private final OrganizationSecurityPolicyRepository securityPolicyRepository;
@@ -35,10 +45,10 @@ public class OrganizationSecuritySeeder implements CommandLineRunner {
     }
 
     private void seedDefaultOrganization() {
-        if (organizationRepository.findByCode("DEFAULT_ORG").isEmpty()) {
+        if (organizationRepository.findByCode(DEFAULT_ORG_NAME).isEmpty()) {
             Organization defaultOrg = Organization.builder()
                 .name("Default Healthcare Organization")
-                .code("DEFAULT_ORG")
+                .code(DEFAULT_ORG_NAME)
                 .description("Default organization for hospitals without specific organization assignment")
                 .type(OrganizationType.HEALTHCARE_NETWORK)
                 .active(true)
@@ -50,7 +60,7 @@ public class OrganizationSecuritySeeder implements CommandLineRunner {
     }
 
     private void seedDefaultSecurityPolicies() {
-        Organization defaultOrg = organizationRepository.findByCode("DEFAULT_ORG").orElse(null);
+        Organization defaultOrg = organizationRepository.findByCode(DEFAULT_ORG_NAME).orElse(null);
         if (defaultOrg == null) {
             log.error("Default organization not found - cannot seed security policies");
             return;
@@ -313,7 +323,7 @@ public class OrganizationSecuritySeeder implements CommandLineRunner {
     }
 
     private void linkHospitalsToDefaultOrganization() {
-        Organization defaultOrg = organizationRepository.findByCode("DEFAULT_ORG").orElse(null);
+        Organization defaultOrg = organizationRepository.findByCode(DEFAULT_ORG_NAME).orElse(null);
         if (defaultOrg == null) {
             log.error("Default organization not found - cannot link hospitals");
             return;

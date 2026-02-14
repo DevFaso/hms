@@ -1,14 +1,30 @@
 package com.example.hms.model;
 
-import com.example.hms.enums.UltrasoundFindingCategory;
 import com.example.hms.enums.UltrasoundOrderStatus;
 import com.example.hms.enums.UltrasoundScanType;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.tenant.TenantEntityListener;
 import com.example.hms.security.tenant.TenantScoped;
-import jakarta.persistence.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;

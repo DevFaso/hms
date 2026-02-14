@@ -3,22 +3,41 @@ package com.example.hms.service;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientChartUpdateMapper;
-import com.example.hms.model.*;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.chart.PatientChartUpdate;
-import com.example.hms.payload.dto.*;
-import com.example.hms.repository.*;
+import com.example.hms.payload.dto.DoctorPatientChartUpdateRequestDTO;
+import com.example.hms.payload.dto.PatientChartUpdateResponseDTO;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientChartUpdateRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.StaffRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class PatientChartUpdateServiceImplTest {
@@ -78,19 +97,19 @@ class PatientChartUpdateServiceImplTest {
     @Test
     void listPatientChartUpdates_patientNotFound() {
         when(patientRepository.existsById(patientId)).thenReturn(false);
-        assertThatThrownBy(() -> service.listPatientChartUpdates(patientId, hospitalId, PageRequest.of(0, 10)))
-            .isInstanceOf(ResourceNotFoundException.class);
+        Pageable pageable = PageRequest.of(0, 10);
+        assertThatThrownBy(() -> service.listPatientChartUpdates(patientId, hospitalId, pageable))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
     void listPatientChartUpdates_notRegistered() {
         when(patientRepository.existsById(patientId)).thenReturn(true);
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(false);
-        assertThatThrownBy(() -> service.listPatientChartUpdates(patientId, hospitalId, PageRequest.of(0, 10)))
-            .isInstanceOf(BusinessException.class);
-    }
-
-    @Test
+        Pageable pageable = PageRequest.of(0, 10);
+        assertThatThrownBy(() -> service.listPatientChartUpdates(patientId, hospitalId, pageable))
+                .isInstanceOf(BusinessException.class);
+    }    @Test
     void getPatientChartUpdate_success() {
         when(patientRepository.existsById(patientId)).thenReturn(true);
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
@@ -181,13 +200,15 @@ class PatientChartUpdateServiceImplTest {
 
     @Test
     void listPatientChartUpdates_nullPatientId() {
-        assertThatThrownBy(() -> service.listPatientChartUpdates(null, hospitalId, PageRequest.of(0, 10)))
+        Pageable pageable = PageRequest.of(0, 10);
+        assertThatThrownBy(() -> service.listPatientChartUpdates(null, hospitalId, pageable))
             .isInstanceOf(BusinessException.class);
     }
 
     @Test
     void listPatientChartUpdates_nullHospitalId() {
-        assertThatThrownBy(() -> service.listPatientChartUpdates(patientId, null, PageRequest.of(0, 10)))
+        Pageable pageable = PageRequest.of(0, 10);
+        assertThatThrownBy(() -> service.listPatientChartUpdates(patientId, null, pageable))
             .isInstanceOf(BusinessException.class);
     }
 }

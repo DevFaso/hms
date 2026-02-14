@@ -22,7 +22,6 @@ import com.example.hms.payload.dto.nurse.NurseOrderTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
 import com.example.hms.service.NurseDashboardService;
 import java.time.Duration;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -192,9 +191,12 @@ class NurseTaskServiceImplTest {
     void completeHandoffRequiresIdentifiers() {
         UUID hospitalId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.completeHandoff(null, UUID.randomUUID(), hospitalId))
+        UUID randomId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.completeHandoff(null, randomId, hospitalId))
             .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.completeHandoff(UUID.randomUUID(), UUID.randomUUID(), null))
+        UUID id1 = UUID.randomUUID();
+        UUID id2 = UUID.randomUUID();
+        assertThatThrownBy(() -> service.completeHandoff(id1, id2, null))
             .isInstanceOf(BusinessException.class);
     }
 
@@ -273,7 +275,9 @@ class NurseTaskServiceImplTest {
         doReturn(List.of(NurseMedicationTaskResponseDTO.builder().id(UUID.randomUUID()).build()))
             .when(service).getMedicationTasks(any(), any(), any());
 
-        assertThatThrownBy(() -> service.recordMedicationAdministration(taskId, UUID.randomUUID(), UUID.randomUUID(), null))
+        UUID randomId = UUID.randomUUID();
+        UUID id2 = UUID.randomUUID();
+        assertThatThrownBy(() -> service.recordMedicationAdministration(taskId, randomId, id2, null))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -282,9 +286,12 @@ class NurseTaskServiceImplTest {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.updateHandoffChecklistItem(null, UUID.randomUUID(), nurseId, hospitalId, true))
+        UUID randomId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.updateHandoffChecklistItem(null, randomId, nurseId, hospitalId, true))
             .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.updateHandoffChecklistItem(UUID.randomUUID(), UUID.randomUUID(), nurseId, null, true))
+        UUID id1 = UUID.randomUUID();
+        UUID id2 = UUID.randomUUID();
+        assertThatThrownBy(() -> service.updateHandoffChecklistItem(id1, id2, nurseId, null, true))
             .isInstanceOf(BusinessException.class);
     }
 
@@ -320,7 +327,8 @@ class NurseTaskServiceImplTest {
 
         doReturn(List.of()).when(service).getHandoffSummaries(nurseId, hospitalId, 6);
 
-        assertThatThrownBy(() -> service.updateHandoffChecklistItem(handoffId, UUID.randomUUID(), nurseId, hospitalId, false))
+        UUID randomId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.updateHandoffChecklistItem(handoffId, randomId, nurseId, hospitalId, false))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -332,7 +340,8 @@ class NurseTaskServiceImplTest {
 
         doThrow(new RuntimeException("boom")).when(service).getHandoffSummaries(nurseId, hospitalId, 6);
 
-        assertThatThrownBy(() -> service.updateHandoffChecklistItem(handoffId, UUID.randomUUID(), nurseId, hospitalId, false))
+        UUID randomId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.updateHandoffChecklistItem(handoffId, randomId, nurseId, hospitalId, false))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 

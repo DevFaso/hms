@@ -7,7 +7,10 @@ import com.example.hms.service.ContentService;
 import com.example.hms.service.TreatmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Locale;
@@ -38,7 +41,7 @@ public class PublicContentController {
                         locale = null; // invalid tag yields empty language
                     }
                 }
-            } catch (Exception ignored) { /* fallback to null */ }
+            } catch (RuntimeException ignored) { /* fallback to null */ }
         }
         String lang = (locale != null ? locale.getLanguage() : null);
         return ResponseEntity.ok(treatmentService.getAllTreatments(locale, lang));

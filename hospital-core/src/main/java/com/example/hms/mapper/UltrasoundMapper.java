@@ -12,7 +12,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Mapper for converting between ultrasound entities and DTOs.
@@ -68,7 +67,7 @@ public class UltrasoundMapper {
         }
         return orders.stream()
             .map(this::toOrderResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     /**
@@ -90,7 +89,7 @@ public class UltrasoundMapper {
             .scheduledTime(dto.getScheduledTime())
             .appointmentLocation(dto.getAppointmentLocation())
             .priority(dto.getPriority() != null ? dto.getPriority() : "ROUTINE")
-            .isHighRiskPregnancy(dto.getIsHighRiskPregnancy() != null ? dto.getIsHighRiskPregnancy() : false)
+            .isHighRiskPregnancy(Boolean.TRUE.equals(dto.getIsHighRiskPregnancy()))
             .highRiskNotes(dto.getHighRiskNotes())
             .specialInstructions(dto.getSpecialInstructions())
             .scanCountForPregnancy(dto.getScanCountForPregnancy() != null ? dto.getScanCountForPregnancy() : 1)
@@ -223,7 +222,7 @@ public class UltrasoundMapper {
         }
         return reports.stream()
             .map(this::toReportResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     /**
@@ -248,7 +247,7 @@ public class UltrasoundMapper {
             .nasalBonePresent(dto.getNasalBonePresent())
             // Due date
             .estimatedDueDate(dto.getEstimatedDueDate())
-            .dueDateConfirmed(dto.getDueDateConfirmed() != null ? dto.getDueDateConfirmed() : false)
+            .dueDateConfirmed(Boolean.TRUE.equals(dto.getDueDateConfirmed()))
             // Fetal count and position
             .numberOfFetuses(dto.getNumberOfFetuses() != null ? dto.getNumberOfFetuses() : 1)
             .fetalPosition(dto.getFetalPosition())
@@ -270,25 +269,25 @@ public class UltrasoundMapper {
             .uterineArteryDoppler(dto.getUterineArteryDoppler())
             // Fetal well-being
             .fetalHeartRate(dto.getFetalHeartRate())
-            .fetalCardiacActivity(dto.getFetalCardiacActivity() != null ? dto.getFetalCardiacActivity() : true)
-            .fetalMovementObserved(dto.getFetalMovementObserved() != null ? dto.getFetalMovementObserved() : true)
-            .fetalToneNormal(dto.getFetalToneNormal() != null ? dto.getFetalToneNormal() : true)
+            .fetalCardiacActivity(dto.getFetalCardiacActivity() == null || dto.getFetalCardiacActivity())
+            .fetalMovementObserved(dto.getFetalMovementObserved() == null || dto.getFetalMovementObserved())
+            .fetalToneNormal(dto.getFetalToneNormal() == null || dto.getFetalToneNormal())
             // Anatomy
-            .anatomySurveyComplete(dto.getAnatomySurveyComplete() != null ? dto.getAnatomySurveyComplete() : false)
+            .anatomySurveyComplete(Boolean.TRUE.equals(dto.getAnatomySurveyComplete()))
             .anatomyFindings(dto.getAnatomyFindings())
             // Findings
             .findingCategory(dto.getFindingCategory())
             .findingsSummary(dto.getFindingsSummary())
             .interpretation(dto.getInterpretation())
-            .anomaliesDetected(dto.getAnomaliesDetected() != null ? dto.getAnomaliesDetected() : false)
+            .anomaliesDetected(Boolean.TRUE.equals(dto.getAnomaliesDetected()))
             .anomalyDescription(dto.getAnomalyDescription())
             // Genetic screening
-            .geneticScreeningRecommended(dto.getGeneticScreeningRecommended() != null ? dto.getGeneticScreeningRecommended() : false)
+            .geneticScreeningRecommended(Boolean.TRUE.equals(dto.getGeneticScreeningRecommended()))
             .geneticScreeningType(dto.getGeneticScreeningType())
             // Follow-up
-            .followUpRequired(dto.getFollowUpRequired() != null ? dto.getFollowUpRequired() : false)
+            .followUpRequired(Boolean.TRUE.equals(dto.getFollowUpRequired()))
             .followUpRecommendations(dto.getFollowUpRecommendations())
-            .specialistReferralNeeded(dto.getSpecialistReferralNeeded() != null ? dto.getSpecialistReferralNeeded() : false)
+            .specialistReferralNeeded(Boolean.TRUE.equals(dto.getSpecialistReferralNeeded()))
             .specialistReferralType(dto.getSpecialistReferralType())
             .nextUltrasoundRecommendedWeeks(dto.getNextUltrasoundRecommendedWeeks())
             .build();
@@ -420,7 +419,7 @@ public class UltrasoundMapper {
         if (patient == null || patient.getId() == null) {
             return null;
         }
-        // TODO: If Patient entity has an mrn field, use that instead
+        // Future: Use Patient.mrn field if available
         return patient.getId().toString();
     }
 

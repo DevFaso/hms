@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
@@ -24,7 +24,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @AutoConfigureMockMvc(addFilters = false)
 @WebMvcTest(
@@ -39,12 +40,12 @@ class AuthControllerTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
 
-    @MockBean private UserRepository userRepository;
-    @MockBean private AuthenticationManager authenticationManager;
-    @MockBean private JwtTokenProvider jwtTokenProvider;
-    @MockBean private PasswordResetService passwordResetService;
-    @MockBean private UserService userService;
-    @MockBean private UserCredentialLifecycleService userCredentialLifecycleService;
+    @MockitoBean private UserRepository userRepository;
+    @MockitoBean private AuthenticationManager authenticationManager;
+    @MockitoBean private JwtTokenProvider jwtTokenProvider;
+    @MockitoBean private PasswordResetService passwordResetService;
+    @MockitoBean private UserService userService;
+    @MockitoBean private UserCredentialLifecycleService userCredentialLifecycleService;
 
     @Test
     void register_returns410Gone() throws Exception {

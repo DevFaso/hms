@@ -41,7 +41,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -127,7 +126,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public List<EducationResourceResponseDTO> getAllResources(UUID hospitalId) {
         return resourceRepository.findByHospitalIdAndIsActiveTrueOrderByCreatedAtDesc(hospitalId).stream()
             .map(resourceMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -135,7 +134,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public List<EducationResourceResponseDTO> searchResources(String searchTerm, UUID hospitalId) {
         return resourceRepository.searchResources(searchTerm, hospitalId).stream()
             .map(resourceMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -143,7 +142,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public List<EducationResourceResponseDTO> getResourcesByCategory(EducationCategory category, UUID hospitalId) {
         return resourceRepository.findByCategoryAndHospitalIdAndIsActiveTrueOrderByCreatedAtDesc(category, hospitalId).stream()
             .map(resourceMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -151,7 +150,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public List<EducationResourceResponseDTO> getResourcesByType(EducationResourceType type, UUID hospitalId) {
         return resourceRepository.findByResourceTypeAndHospitalIdAndIsActiveTrueOrderByCreatedAtDesc(type, hospitalId).stream()
             .map(resourceMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -159,7 +158,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public List<EducationResourceResponseDTO> getResourcesByLanguage(String languageCode, UUID hospitalId) {
         return resourceRepository.findByPrimaryLanguageAndHospitalIdAndIsActiveTrueOrderByCreatedAtDesc(languageCode, hospitalId).stream()
             .map(resourceMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -167,7 +166,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public List<EducationResourceResponseDTO> getPopularResourcesByCategory(EducationCategory category, UUID hospitalId) {
         return resourceRepository.findPopularResourcesByCategory(category, hospitalId).stream()
             .map(resourceMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -295,7 +294,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public List<PatientEducationProgressResponseDTO> getPatientProgress(UUID patientId) {
         return progressRepository.findByPatientIdOrderByLastAccessedAtDesc(patientId).stream()
             .map(progressMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -303,7 +302,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public List<PatientEducationProgressResponseDTO> getInProgressResources(UUID patientId) {
         return progressRepository.findInProgressResources(patientId).stream()
             .map(progressMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -311,7 +310,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public List<PatientEducationProgressResponseDTO> getCompletedResources(UUID patientId) {
         return progressRepository.findCompletedResources(patientId).stream()
             .map(progressMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -395,7 +394,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public List<VisitEducationDocumentationResponseDTO> getPatientVisitDocumentation(UUID patientId) {
         return documentationRepository.findByPatientIdOrderByCreatedAtDesc(patientId).stream()
             .map(documentationMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -404,7 +403,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
         LocalDateTime since = LocalDateTime.now().minusDays(daysBack);
         return documentationRepository.findRecentByProvider(staffId, since).stream()
             .map(documentationMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -494,7 +493,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public List<PatientEducationQuestionResponseDTO> getPatientQuestions(UUID patientId) {
         return questionRepository.findByPatientIdOrderByCreatedAtDesc(patientId).stream()
             .map(questionMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -502,7 +501,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public List<PatientEducationQuestionResponseDTO> getUnansweredQuestions(UUID hospitalId) {
         return questionRepository.findByIsAnsweredFalseAndHospitalIdOrderByIsUrgentDescCreatedAtDesc(hospitalId).stream()
             .map(questionMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -510,7 +509,7 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public List<PatientEducationQuestionResponseDTO> getUrgentQuestions(UUID hospitalId) {
         return questionRepository.findByHospitalIdAndIsUrgentTrueAndIsAnsweredFalseOrderByCreatedAtAsc(hospitalId).stream()
             .map(questionMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -518,6 +517,6 @@ public class PatientEducationServiceImpl implements PatientEducationService {
     public List<PatientEducationQuestionResponseDTO> getQuestionsRequiringAppointment(UUID hospitalId) {
         return questionRepository.findUnansweredRequiringAppointment(hospitalId).stream()
             .map(questionMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 }

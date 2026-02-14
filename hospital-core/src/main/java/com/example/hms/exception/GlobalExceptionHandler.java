@@ -3,7 +3,8 @@ package com.example.hms.exception;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
@@ -73,6 +74,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(RuntimeException.class)
+    @SuppressWarnings("java:S2629")
     public ResponseEntity<Object> handleRuntimeException(RuntimeException ex, WebRequest request) {
     // Log full stack to aid debugging of 500s (safe: message already generic in response)
     log.error("Unhandled runtime exception at path {}: {}", request.getDescription(false), ex.getMessage(), ex);

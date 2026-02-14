@@ -1,6 +1,9 @@
 package com.example.hms.controller;
 
-import com.example.hms.payload.dto.*;
+import com.example.hms.payload.dto.AdminSignupRequest;
+import com.example.hms.payload.dto.MessageResponse;
+import com.example.hms.payload.dto.UserRequestDTO;
+import com.example.hms.payload.dto.UserResponseDTO;
 import com.example.hms.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -10,10 +13,24 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
-import java.util.*;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @RestController
@@ -21,6 +38,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Tag(name = "User API", description = "Handles User CRUD operations, admin-controlled registration, and search")
 public class UserController {
+    private static final String ROLE_PATIENT = "PATIENT";
+
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(UserController.class);
 
     private final UserService userService;
@@ -36,13 +55,7 @@ public class UserController {
         @Valid @RequestBody AdminSignupRequest request,
         Authentication auth // inject instead of pulling from SecurityContextHolder
     ) {
-        final Set<String> callerAuthorities = Optional.ofNullable(auth)
-            .map(Authentication::getAuthorities)
-            .stream()
-            .flatMap(Collection::stream)
-            .map(grantedAuthority -> grantedAuthority != null ? grantedAuthority.getAuthority() : null)
-            .filter(Objects::nonNull)
-            .collect(Collectors.toSet());
+        final Set<String> callerAuthorities = extractAuthorities(auth);
 
         final boolean callerHasElevatedRole = callerAuthorities.stream().anyMatch(authority ->
             "ROLE_SUPER_ADMIN".equals(authority) ||
@@ -51,40 +64,15 @@ public class UserController {
 
         final boolean callerIsReceptionistOnly = callerAuthorities.contains("ROLE_RECEPTIONIST") && !callerHasElevatedRole;
 
-        // Normalize incoming roles (don’t depend on client prefixing)
-        final Set<String> normalizedIncoming = Optional.ofNullable(request.getRoleNames())
-            .orElseGet(() -> new LinkedHashSet<>(Set.of("PATIENT")))
-            .stream()
-            .filter(Objects::nonNull)
-            .map(r -> r.trim().toUpperCase(Locale.ROOT))
-            .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
-            .collect(Collectors.toCollection(LinkedHashSet::new));
-
-        // Receptionist = PATIENT-only, but DO NOT clear hospitalId/name.
-        final Set<String> effectiveRoles = callerIsReceptionistOnly
-            ? Set.of("PATIENT") // service will re-normalize to ROLE_PATIENT
-            : normalizedIncoming.stream()
-                .map(r -> r.replaceFirst("^ROLE_", "")) // store back without prefix, like your current API
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-
+        Set<String> effectiveRoles = resolveEffectiveRoles(request, callerIsReceptionistOnly);
         request.setRoleNames(effectiveRoles);
 
-        // For non-receptionist staff/admin: if it’s not patient-only, make sure hospital is resolvable here.
         final boolean isPatientOnly = effectiveRoles.size() == 1 &&
-            (effectiveRoles.contains("PATIENT") || effectiveRoles.contains("ROLE_PATIENT"));
+            (effectiveRoles.contains(ROLE_PATIENT) || effectiveRoles.contains("ROLE_PATIENT"));
 
-    if (!callerIsReceptionistOnly && !isPatientOnly && request.getHospitalId() == null) {
-            if (request.getHospitalName() != null && !request.getHospitalName().isBlank()) {
-                var hospital = hospitalRepository.findByName(request.getHospitalName()).orElse(null);
-                if (hospital == null) {
-                    log.warn("[ADMIN REGISTER] Hospital not found for name: {}", request.getHospitalName());
-                    return ResponseEntity.badRequest().build();
-                }
-                request.setHospitalId(hospital.getId());
-            } else {
-                log.warn("[ADMIN REGISTER] Missing hospital for non-patient staff/admin registration.");
-                return ResponseEntity.badRequest().build();
-            }
+        if (!callerIsReceptionistOnly && !isPatientOnly && request.getHospitalId() == null) {
+            ResponseEntity<UserResponseDTO> badRequest = resolveHospitalFromName(request);
+            if (badRequest != null) return badRequest;
         }
 
         log.info("[ADMIN REGISTER] normalized -> username={}, email={}, roles={}, hospitalId={}",
@@ -92,6 +80,46 @@ public class UserController {
 
         UserResponseDTO dto = userService.createUserWithRolesAndHospital(request);
         return ResponseEntity.created(URI.create("/users/" + dto.getId())).body(dto);
+    }
+
+    private Set<String> extractAuthorities(Authentication auth) {
+        return Optional.ofNullable(auth)
+            .map(Authentication::getAuthorities)
+            .stream()
+            .flatMap(Collection::stream)
+            .map(grantedAuthority -> grantedAuthority != null ? grantedAuthority.getAuthority() : null)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toSet());
+    }
+
+    private Set<String> resolveEffectiveRoles(AdminSignupRequest request, boolean callerIsReceptionistOnly) {
+        Set<String> normalizedIncoming = Optional.ofNullable(request.getRoleNames())
+            .orElseGet(() -> new LinkedHashSet<>(Set.of(ROLE_PATIENT)))
+            .stream()
+            .filter(Objects::nonNull)
+            .map(r -> r.trim().toUpperCase(Locale.ROOT))
+            .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
+            .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        return callerIsReceptionistOnly
+            ? Set.of(ROLE_PATIENT)
+            : normalizedIncoming.stream()
+                .map(r -> r.replaceFirst("^ROLE_", ""))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private ResponseEntity<UserResponseDTO> resolveHospitalFromName(AdminSignupRequest request) {
+        if (request.getHospitalName() != null && !request.getHospitalName().isBlank()) {
+            var hospital = hospitalRepository.findByName(request.getHospitalName()).orElse(null);
+            if (hospital == null) {
+                log.warn("[ADMIN REGISTER] Hospital not found for name: {}", request.getHospitalName());
+                return ResponseEntity.badRequest().build();
+            }
+            request.setHospitalId(hospital.getId());
+            return null;
+        }
+        log.warn("[ADMIN REGISTER] Missing hospital for non-patient staff/admin registration.");
+        return ResponseEntity.badRequest().build();
     }
 
     @Operation(summary = "Get user by ID")

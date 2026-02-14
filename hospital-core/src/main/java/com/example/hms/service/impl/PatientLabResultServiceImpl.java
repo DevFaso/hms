@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -67,7 +66,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
 
         return results.stream()
             .map(this::toResponse)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private PatientLabResultResponseDTO toResponse(LabResult result) {

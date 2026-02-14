@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -29,7 +28,7 @@ public class ContentServiceImpl implements ContentService {
                         .author(a.getAuthor())
                         .publishedAt(a.getPublishedAt())
                         .build())
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -46,7 +45,7 @@ public class ContentServiceImpl implements ContentService {
                         .avatar(t.getAvatarUrl())
                         .createdAt(t.getCreatedAt())
                         .build())
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private String excerpt(String content) {

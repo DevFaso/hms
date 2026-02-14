@@ -170,9 +170,9 @@ class PrenatalSchedulingServiceImplTest {
             .map(PrenatalVisitRecommendationDTO::getGestationalWeek)
             .toList();
 
-        assertThat(weeks).isNotEmpty();
-        assertThat(weeks).isSorted();
-        assertThat(weeks).size().isGreaterThanOrEqualTo(8);
+        assertThat(weeks).isNotEmpty()
+            .isSorted()
+            .hasSizeGreaterThanOrEqualTo(8);
         for (int i = 1; i < weeks.size(); i++) {
             assertThat(weeks.get(i) - weeks.get(i - 1)).isEqualTo(1);
         }

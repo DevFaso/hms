@@ -227,7 +227,7 @@ public class UserGovernanceService {
                 .userId(response.getId())
                 .build();
             return new RowOutcome(true, successResult);
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             log.warn("[USER IMPORT] Failed to import row {}: {}", rowNumber, ex.getMessage());
             SuperAdminUserImportResultDTO failure = SuperAdminUserImportResultDTO.builder()
                 .rowNumber(rowNumber)
@@ -328,7 +328,7 @@ public class UserGovernanceService {
                 if (builder != null) {
                     builder.success(true).message("Reset queued");
                 }
-            } catch (Exception ex) {
+            } catch (RuntimeException ex) {
                 log.warn("[USER RESET] Failed to queue reset for {}: {}", user.getId(), ex.getMessage());
                 if (builder != null) {
                     builder.success(false).message(safeMessage(ex));
@@ -344,7 +344,7 @@ public class UserGovernanceService {
         }
         try {
             passwordResetService.requestReset(email, Locale.ENGLISH);
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             log.debug("[USER IMPORT] Failed to queue invitation for {}: {}", email, ex.getMessage());
         }
     }

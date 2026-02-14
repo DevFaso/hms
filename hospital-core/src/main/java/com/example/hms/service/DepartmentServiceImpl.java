@@ -1,10 +1,33 @@
 package com.example.hms.service;
 
-import com.example.hms.exception.*;
+import com.example.hms.exception.BusinessRuleException;
+import com.example.hms.exception.ConflictException;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.DepartmentMapper;
-import com.example.hms.model.*;
-import com.example.hms.payload.dto.*;
-import com.example.hms.repository.*;
+import com.example.hms.model.Department;
+import com.example.hms.model.DepartmentTranslation;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Organization;
+import com.example.hms.model.Role;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRole;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.model.UserRoleId;
+import com.example.hms.payload.dto.DepartmentFilterDTO;
+import com.example.hms.payload.dto.DepartmentMinimalDTO;
+import com.example.hms.payload.dto.DepartmentRequestDTO;
+import com.example.hms.payload.dto.DepartmentResponseDTO;
+import com.example.hms.payload.dto.DepartmentStatsDTO;
+import com.example.hms.payload.dto.DepartmentWithStaffDTO;
+import com.example.hms.payload.dto.StaffMinimalDTO;
+import com.example.hms.payload.dto.StaffResponseDTO;
+import com.example.hms.repository.DepartmentRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.RoleRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.repository.UserRoleRepository;
 import jakarta.persistence.EntityNotFoundException;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.Expression;
@@ -456,7 +479,7 @@ public class DepartmentServiceImpl implements DepartmentService {
             }
             try {
                 results.add(buildLocalizedResponse(d, locale));
-            } catch (Exception e) {
+            } catch (RuntimeException e) {
                 log.error("Failed to map department id={} name={} -> skipping", d.getId(), d.getName(), e);
             }
         }

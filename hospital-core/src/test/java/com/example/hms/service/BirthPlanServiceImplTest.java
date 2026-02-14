@@ -31,12 +31,23 @@ import org.springframework.security.access.AccessDeniedException;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
 
 @ExtendWith(MockitoExtension.class)
 class BirthPlanServiceImplTest {
@@ -232,7 +243,7 @@ class BirthPlanServiceImplTest {
 
         // Then
         assertNotNull(result);
-        verify(birthPlanMapper).updateEntityFromRequest(eq(birthPlan), eq(requestDTO));
+        verify(birthPlanMapper).updateEntityFromRequest(birthPlan, requestDTO);
         verify(birthPlanRepository).save(birthPlan);
     }
 
@@ -303,8 +314,10 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(patient));
 
         // When & Then
+        UUID birthPlanId = birthPlan.getId();
+        String username = patientUser.getUsername();
         assertThrows(AccessDeniedException.class, () ->
-            birthPlanService.getBirthPlanById(birthPlan.getId(), patientUser.getUsername())
+            birthPlanService.getBirthPlanById(birthPlanId, username)
         );
     }
 
@@ -404,9 +417,11 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(patientUser));
 
         // When & Then
+        UUID hospitalId = hospital.getId();
+        String username = patientUser.getUsername();
         assertThrows(AccessDeniedException.class, () ->
             birthPlanService.searchBirthPlans(
-                hospital.getId(), null, null, null, null, pageable, patientUser.getUsername()
+                hospitalId, null, null, null, null, pageable, username
             )
         );
     }
@@ -462,8 +477,10 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(birthPlan));
 
         // When & Then
+        UUID birthPlanId = birthPlan.getId();
+        String nurseUsername = nurseUser.getUsername();
         assertThrows(AccessDeniedException.class, () ->
-            birthPlanService.providerReview(birthPlan.getId(), reviewDTO, nurseUser.getUsername())
+            birthPlanService.providerReview(birthPlanId, reviewDTO, nurseUsername)
         );
     }
 
@@ -516,8 +533,10 @@ class BirthPlanServiceImplTest {
             .thenReturn(Optional.of(patientUser));
 
         // When & Then
+        UUID hospitalId = hospital.getId();
+        String username = patientUser.getUsername();
         assertThrows(AccessDeniedException.class, () ->
-            birthPlanService.getPendingReviews(hospital.getId(), pageable, patientUser.getUsername())
+            birthPlanService.getPendingReviews(hospitalId, pageable, username)
         );
     }
 }

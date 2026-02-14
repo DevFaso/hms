@@ -2,7 +2,9 @@ package com.example.hms.mapper;
 
 import com.example.hms.model.OrganizationSecurityPolicy;
 import com.example.hms.model.OrganizationSecurityRule;
-import com.example.hms.payload.dto.*;
+import com.example.hms.payload.dto.OrganizationSecurityPolicyRequestDTO;
+import com.example.hms.payload.dto.OrganizationSecurityPolicyResponseDTO;
+import com.example.hms.payload.dto.OrganizationSecurityRuleResponseDTO;
 import org.hibernate.Hibernate;
 import org.springframework.stereotype.Component;
 

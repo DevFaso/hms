@@ -34,12 +34,20 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
-import static org.hamcrest.Matchers.*;
+import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(
     controllers = AppointmentController.class,
@@ -50,6 +58,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 )
 @AutoConfigureMockMvc(addFilters = false)
 @Import(AppointmentControllerTest.TestConfig.class)
+@SuppressWarnings("java:S5976") // Individual tests preferred over parameterized for clarity
 class AppointmentControllerTest {
 
     @TestConfiguration
@@ -123,10 +132,6 @@ class AppointmentControllerTest {
                 "testuser", "password",
                 List.of(new SimpleGrantedAuthority("ROLE_SUPER_ADMIN")));
     }
-
-    // ========================================================================
-    // GET /appointments/patients/username/{patientUsername}
-    // ========================================================================
     @Test
     void getAppointmentsByPatientUsername_shouldReturnList() throws Exception {
         when(appointmentService.getAppointmentsByPatientUsername(eq("john"), any(Locale.class), eq("testuser")))
@@ -150,10 +155,6 @@ class AppointmentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(0)));
     }
-
-    // ========================================================================
-    // POST /appointments
-    // ========================================================================
     @Test
     void createAppointment_shouldReturn201() throws Exception {
         when(appointmentService.createAppointment(any(AppointmentRequestDTO.class), any(Locale.class), eq("testuser")))
@@ -167,10 +168,6 @@ class AppointmentControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(appointmentId.toString()));
     }
-
-    // ========================================================================
-    // PUT /appointments/{id}
-    // ========================================================================
     @Test
     void updateAppointment_shouldReturnOk() throws Exception {
         when(appointmentService.updateAppointment(eq(appointmentId), any(AppointmentRequestDTO.class), any(Locale.class), eq("testuser")))
@@ -184,10 +181,6 @@ class AppointmentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(appointmentId.toString()));
     }
-
-    // ========================================================================
-    // PUT /appointments/{id}/status
-    // ========================================================================
     @Test
     void updateAppointmentStatus_shouldReturnOk() throws Exception {
         when(appointmentService.confirmOrCancelAppointment(eq(appointmentId), eq("confirm"), any(Locale.class), eq("testuser")))
@@ -200,10 +193,6 @@ class AppointmentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(appointmentId.toString()));
     }
-
-    // ========================================================================
-    // GET /appointments/{id}
-    // ========================================================================
     @Test
     void getAppointmentById_shouldReturnOk() throws Exception {
         when(appointmentService.getAppointmentById(eq(appointmentId), any(Locale.class), eq("testuser")))
@@ -215,10 +204,6 @@ class AppointmentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reason").value("Checkup"));
     }
-
-    // ========================================================================
-    // POST /appointments/search — multiple branches
-    // ========================================================================
     @Test
     void searchAppointments_defaultSort_shouldReturnPage() throws Exception {
         Page<AppointmentResponseDTO> page = new PageImpl<>(List.of(responseDTO));
@@ -280,10 +265,6 @@ class AppointmentControllerTest {
                         .principal(auth))
                 .andExpect(status().isOk());
     }
-
-    // ========================================================================
-    // GET /appointments
-    // ========================================================================
     @Test
     void getAllAppointments_shouldReturnList() throws Exception {
         when(appointmentService.getAppointmentsForUser(eq("testuser"), any(Locale.class)))
@@ -295,10 +276,6 @@ class AppointmentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)));
     }
-
-    // ========================================================================
-    // DELETE /appointments/{id}
-    // ========================================================================
     @Test
     void deleteAppointment_shouldReturnOkWithMessage() throws Exception {
         doNothing().when(appointmentService).deleteAppointment(eq(appointmentId), any(Locale.class), eq("testuser"));
@@ -311,10 +288,6 @@ class AppointmentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string("Appointment " + appointmentId + " deleted"));
     }
-
-    // ========================================================================
-    // GET /appointments/patients/{patientId}
-    // ========================================================================
     @Test
     void getAppointmentsByPatientId_shouldReturnList() throws Exception {
         when(appointmentService.getAppointmentsByPatientId(eq(patientId), any(Locale.class), eq("testuser")))
@@ -326,10 +299,6 @@ class AppointmentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)));
     }
-
-    // ========================================================================
-    // GET /appointments/staff/{staffId}
-    // ========================================================================
     @Test
     void getAppointmentsByStaffId_shouldReturnList() throws Exception {
         when(appointmentService.getAppointmentsByStaffId(eq(staffId), any(Locale.class), eq("testuser")))
@@ -341,10 +310,6 @@ class AppointmentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)));
     }
-
-    // ========================================================================
-    // GET /appointments/nurse/{staffId} — refineForNurseView branches
-    // ========================================================================
     @Test
     void getAppointmentsByNurseId_shouldReturnFilteredList() throws Exception {
         when(appointmentService.getAppointmentsByStaffId(eq(staffId), any(Locale.class), eq("testuser")))
@@ -392,10 +357,6 @@ class AppointmentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(2)));
     }
-
-    // ========================================================================
-    // GET /appointments/doctor/{staffId}
-    // ========================================================================
     @Test
     void getAppointmentsByDoctorId_shouldReturnList() throws Exception {
         when(appointmentService.getAppointmentsByDoctorId(eq(staffId), any(Locale.class), eq("testuser")))
@@ -407,10 +368,6 @@ class AppointmentControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)));
     }
-
-    // ========================================================================
-    // parseLocale — all branches
-    // ========================================================================
 
     // header == null (no Accept-Language sent)
     @Test
@@ -579,8 +536,10 @@ class AppointmentControllerTest {
                 .andExpect(status().isOk());
     }
 
-    // catch (Exception e) block in parseLocale — region "ABCD" passes isAlphanumericSegment
-    // but Locale.Builder.setRegion("ABCD") throws IllformedLocaleException (region must be 2 alpha or 3 digits)
+    /**
+     * Region "ABCD" passes isAlphanumericSegment but Locale.Builder.setRegion
+     * throws IllformedLocaleException because region must be 2 alpha or 3 digits.
+     */
     @Test
     void parseLocale_validTagButIllformedLocale_shouldFallbackToDefault() throws Exception {
         when(appointmentService.getAppointmentsForUser(eq("testuser"), any(Locale.class)))
@@ -592,7 +551,7 @@ class AppointmentControllerTest {
                 .andExpect(status().isOk());
     }
 
-    // catch (Exception e) block — variant "!!!" passes length check but Locale.Builder.setVariant throws
+    /** Variant "!!!" passes length check but Locale.Builder.setVariant throws. */
     @Test
     void parseLocale_validTagButIllformedVariant_shouldFallbackToDefault() throws Exception {
         when(appointmentService.getAppointmentsForUser(eq("testuser"), any(Locale.class)))
@@ -615,10 +574,6 @@ class AppointmentControllerTest {
                         .principal(auth))
                 .andExpect(status().isOk());
     }
-
-    // ========================================================================
-    // parseSort — all branches
-    // ========================================================================
 
     // sort is blank → default sort
     @Test

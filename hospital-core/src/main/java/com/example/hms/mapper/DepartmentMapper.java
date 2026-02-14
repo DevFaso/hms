@@ -1,10 +1,23 @@
 package com.example.hms.mapper;
 
-import com.example.hms.model.*;
-import com.example.hms.payload.dto.*;
+import com.example.hms.model.Department;
+import com.example.hms.model.DepartmentTranslation;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.payload.dto.DepartmentRequestDTO;
+import com.example.hms.payload.dto.DepartmentResponseDTO;
+import com.example.hms.payload.dto.DepartmentTranslationRequestDTO;
+import com.example.hms.payload.dto.DepartmentTranslationResponseDTO;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Optional;
 
 @Component
 public class DepartmentMapper {

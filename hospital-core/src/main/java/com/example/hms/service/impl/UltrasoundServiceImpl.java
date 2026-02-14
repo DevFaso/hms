@@ -32,6 +32,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class UltrasoundServiceImpl implements UltrasoundService {
+    private static final String ULTRASOUND_ORDER_NOT_FOUND_PREFIX = "Ultrasound order not found with ID: ";
+    private static final String ULTRASOUND_REPORT_NOT_FOUND_PREFIX = "Ultrasound report not found with ID: ";
+
 
     private final UltrasoundOrderRepository orderRepository;
     private final UltrasoundReportRepository reportRepository;
@@ -74,7 +77,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundOrderResponseDTO updateOrder(UUID orderId, UltrasoundOrderRequestDTO request) {
         UltrasoundOrder order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Ultrasound order not found with ID: " + orderId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId));
 
         // Prevent modification of completed orders
         if (order.getStatus() == UltrasoundOrderStatus.COMPLETED) {
@@ -101,7 +104,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundOrderResponseDTO cancelOrder(UUID orderId, String cancellationReason) {
         UltrasoundOrder order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Ultrasound order not found with ID: " + orderId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId));
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
             throw new BusinessException("Order is already cancelled");
@@ -122,7 +125,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Transactional(readOnly = true)
     public UltrasoundOrderResponseDTO getOrderById(UUID orderId) {
         UltrasoundOrder order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Ultrasound order not found with ID: " + orderId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId));
         return ultrasoundMapper.toOrderResponseDTO(order);
     }
 
@@ -169,36 +172,23 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundReportResponseDTO createOrUpdateReport(UUID orderId, UltrasoundReportRequestDTO request, UUID performedByUserId) {
         UltrasoundOrder order = orderRepository.findById(orderId)
-            .orElseThrow(() -> new ResourceNotFoundException("Ultrasound order not found with ID: " + orderId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_ORDER_NOT_FOUND_PREFIX + orderId));
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
             throw new BusinessException("Cannot create report for a cancelled order");
         }
 
-        // Get performer information
-        String performerName = null;
-        if (performedByUserId != null) {
-            Staff performedByStaff = staffRepository.findByUserIdAndHospitalId(performedByUserId, order.getHospital().getId())
-                .orElse(null);
-            if (performedByStaff != null) {
-                performerName = performedByStaff.getName();
-                if (performerName == null && performedByStaff.getUser() != null) {
-                    performerName = performedByStaff.getUser().getFirstName() + " " + performedByStaff.getUser().getLastName();
-                }
-            }
-        }
+        String performerName = resolveStaffName(performedByUserId, order.getHospital().getId());
 
         UltrasoundReport report = reportRepository.findByUltrasoundOrderId(orderId).orElse(null);
 
         if (report == null) {
-            // Create new report using mapper
             report = ultrasoundMapper.toReportEntity(request, order, order.getHospital());
             if (performerName != null && request.getScanPerformedBy() == null) {
                 report.setScanPerformedBy(performerName);
             }
         } else {
-            // Update existing report
-            if (report.getReportReviewedByProvider() != null && report.getReportReviewedByProvider()) {
+            if (Boolean.TRUE.equals(report.getReportReviewedByProvider())) {
                 throw new BusinessException("Cannot modify a reviewed report. Please create an addendum or new order.");
             }
             ultrasoundMapper.updateReportFromRequest(report, request);
@@ -218,24 +208,14 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundReportResponseDTO markReportReviewed(UUID reportId, UUID reviewedByUserId) {
         UltrasoundReport report = reportRepository.findById(reportId)
-            .orElseThrow(() -> new ResourceNotFoundException("Ultrasound report not found with ID: " + reportId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId));
 
         if (report.getReportReviewedByProvider() != null && report.getReportReviewedByProvider()) {
             throw new BusinessException("Report is already reviewed");
         }
 
-        String reviewerName = null;
-        if (reviewedByUserId != null) {
-            UUID hospitalId = report.getUltrasoundOrder().getHospital().getId();
-            Staff reviewedByStaff = staffRepository.findByUserIdAndHospitalId(reviewedByUserId, hospitalId)
-                .orElse(null);
-            if (reviewedByStaff != null) {
-                reviewerName = reviewedByStaff.getName();
-                if (reviewerName == null && reviewedByStaff.getUser() != null) {
-                    reviewerName = reviewedByStaff.getUser().getFirstName() + " " + reviewedByStaff.getUser().getLastName();
-                }
-            }
-        }
+        UUID hospitalId = report.getUltrasoundOrder().getHospital().getId();
+        String reviewerName = resolveStaffName(reviewedByUserId, hospitalId);
 
         report.setReportReviewedByProvider(true);
         if (reviewerName != null) {
@@ -256,7 +236,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundReportResponseDTO markPatientNotified(UUID reportId) {
         UltrasoundReport report = reportRepository.findById(reportId)
-            .orElseThrow(() -> new ResourceNotFoundException("Ultrasound report not found with ID: " + reportId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId));
 
         if (report.getPatientNotifiedAt() != null) {
             throw new BusinessException("Patient has already been notified");
@@ -272,7 +252,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Transactional(readOnly = true)
     public UltrasoundReportResponseDTO getReportById(UUID reportId) {
         UltrasoundReport report = reportRepository.findById(reportId)
-            .orElseThrow(() -> new ResourceNotFoundException("Ultrasound report not found with ID: " + reportId));
+            .orElseThrow(() -> new ResourceNotFoundException(ULTRASOUND_REPORT_NOT_FOUND_PREFIX + reportId));
         return ultrasoundMapper.toReportResponseDTO(report);
     }
 
@@ -360,5 +340,15 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             default:
                 break;
         }
+    }
+
+    private String resolveStaffName(UUID userId, UUID hospitalId) {
+        if (userId == null) return null;
+        Staff staff = staffRepository.findByUserIdAndHospitalId(userId, hospitalId).orElse(null);
+        if (staff == null) return null;
+        if (staff.getName() != null) return staff.getName();
+        return staff.getUser() != null
+            ? staff.getUser().getFirstName() + " " + staff.getUser().getLastName()
+            : null;
     }
 }

@@ -7,6 +7,8 @@ import com.example.hms.payload.dto.referral.ReferralAttachmentUploadResponseDTO;
 import com.example.hms.service.FileUploadService;
 import com.example.hms.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
+
+import java.io.IOException;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,7 +17,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.util.StringUtils;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.Map;
@@ -68,7 +74,7 @@ public class FileUploadController {
             log.warn("Invalid file upload request: {}", e.getMessage());
             return ResponseEntity.badRequest()
                     .body(new MessageResponse(e.getMessage()));
-        } catch (Exception e) {
+        } catch (IOException | RuntimeException e) {
             log.error("Failed to upload profile image", e);
             return ResponseEntity.internalServerError()
                     .body(new MessageResponse("Failed to upload profile image"));
@@ -105,7 +111,7 @@ public class FileUploadController {
 
             return ResponseEntity.ok(new MessageResponse("Profile image deleted successfully"));
 
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("Failed to delete profile image", e);
             return ResponseEntity.internalServerError()
                     .body(new MessageResponse("Failed to delete profile image"));
@@ -146,7 +152,7 @@ public class FileUploadController {
         } catch (IllegalArgumentException ex) {
             log.warn("Invalid referral attachment upload: {}", ex.getMessage());
             return ResponseEntity.badRequest().body(new MessageResponse(ex.getMessage()));
-        } catch (Exception ex) {
+        } catch (IOException | RuntimeException ex) {
             log.error("Failed to upload referral attachment", ex);
             return ResponseEntity.internalServerError()
                 .body(new MessageResponse("Failed to upload referral attachment"));
@@ -189,7 +195,7 @@ public class FileUploadController {
         } catch (IllegalArgumentException ex) {
             log.warn("Invalid chart attachment upload: {}", ex.getMessage());
             return ResponseEntity.badRequest().body(new MessageResponse(ex.getMessage()));
-        } catch (Exception ex) {
+        } catch (IOException | RuntimeException ex) {
             log.error("Failed to upload chart attachment", ex);
             return ResponseEntity.internalServerError()
                 .body(new MessageResponse("Failed to upload chart attachment"));

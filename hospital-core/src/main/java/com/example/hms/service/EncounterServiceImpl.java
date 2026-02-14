@@ -6,14 +6,45 @@ import com.example.hms.enums.EncounterStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.EncounterMapper;
-import com.example.hms.model.*;
+import com.example.hms.model.Appointment;
+import com.example.hms.model.Department;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.EncounterHistory;
+import com.example.hms.model.EncounterTreatment;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.LabOrder;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Prescription;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.referral.ObgynReferral;
 import com.example.hms.model.encounter.EncounterNote;
 import com.example.hms.model.encounter.EncounterNoteAddendum;
 import com.example.hms.model.encounter.EncounterNoteHistory;
 import com.example.hms.model.encounter.EncounterNoteLink;
-import com.example.hms.payload.dto.*;
-import com.example.hms.repository.*;
+import com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO;
+import com.example.hms.payload.dto.EncounterNoteAddendumResponseDTO;
+import com.example.hms.payload.dto.EncounterNoteHistoryResponseDTO;
+import com.example.hms.payload.dto.EncounterNoteRequestDTO;
+import com.example.hms.payload.dto.EncounterNoteResponseDTO;
+import com.example.hms.payload.dto.EncounterRequestDTO;
+import com.example.hms.payload.dto.EncounterResponseDTO;
+import com.example.hms.payload.dto.EncounterTreatmentResponseDTO;
+import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.EncounterHistoryRepository;
+import com.example.hms.repository.EncounterNoteAddendumRepository;
+import com.example.hms.repository.EncounterNoteHistoryRepository;
+import com.example.hms.repository.EncounterNoteRepository;
+import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.LabOrderRepository;
+import com.example.hms.repository.ObgynReferralRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
 import jakarta.persistence.criteria.From;
 import jakarta.persistence.criteria.Path;
@@ -26,7 +57,14 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -96,7 +134,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         return encounterRepository.findByStaff_Id(staffId).stream()
             .map(encounterMapper::toEncounterResponseDTO)
-            .collect(java.util.stream.Collectors.toList());
+            .toList();
     }
 
     /** Accepts UUID | email | username | license/roleCode and returns Staff ID. */
@@ -223,7 +261,7 @@ public class EncounterServiceImpl implements EncounterService {
         private String serializeMap(java.util.Map<String, Object> map) {
             try {
                 return objectMapper.writeValueAsString(map);
-            } catch (Exception e) {
+            } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException e) {
                 return null;
             }
         }
@@ -231,7 +269,7 @@ public class EncounterServiceImpl implements EncounterService {
         private String serializeEncounter(Encounter encounter) {
             try {
                 return objectMapper.writeValueAsString(encounter);
-            } catch (Exception e) {
+            } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException e) {
                 return null;
             }
         }
@@ -397,7 +435,7 @@ public class EncounterServiceImpl implements EncounterService {
         }
         return encounterNoteHistoryRepository.findByEncounterIdOrderByChangedAtDesc(encounterId).stream()
             .map(encounterMapper::toEncounterNoteHistoryResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private EncounterNote upsertEncounterNoteInternal(Encounter encounter,
@@ -889,7 +927,7 @@ public class EncounterServiceImpl implements EncounterService {
         }
         try {
             return objectMapper.writeValueAsString(value);
-        } catch (Exception ex) {
+        } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException ex) {
             return null;
         }
     }
@@ -946,7 +984,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         return encounterRepository.findByStaff_Id(staffId).stream()
             .map(encounterMapper::toEncounterResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -1044,7 +1082,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         return encounters.stream()
             .map(encounterMapper::toEncounterResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -1055,7 +1093,7 @@ public class EncounterServiceImpl implements EncounterService {
         }
         return encounterRepository.findByPatient_Id(patientId).stream()
             .map(encounterMapper::toEncounterResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private void requireAtLeastOne(String label, Object... values) {

@@ -3,12 +3,37 @@ package com.example.hms.model;
 import com.example.hms.model.embedded.PlatformOwnership;
 import com.example.hms.model.embedded.PlatformServiceMetadata;
 import com.example.hms.model.platform.DepartmentPlatformServiceLink;
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 @Entity
 @Table(
@@ -29,6 +54,7 @@ import java.util.*;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"hospital", "staffMembers", "headOfDepartment", "departmentTranslations", "treatments", "assignment"})
+@EqualsAndHashCode(callSuper = true)
 public class Department extends BaseEntity {
 
     @ManyToOne(optional = false, fetch = FetchType.LAZY)

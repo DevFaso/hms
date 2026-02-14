@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class DepartmentMinimalDTOTest {
 
@@ -83,8 +83,7 @@ class DepartmentMinimalDTOTest {
         UUID id = UUID.randomUUID();
         DepartmentMinimalDTO a = new DepartmentMinimalDTO(id, "Lab", "lab@h.com", "111");
         DepartmentMinimalDTO b = new DepartmentMinimalDTO(id, "Lab", "lab@h.com", "111");
-        assertThat(a).isEqualTo(b);
-        assertThat(a.hashCode()).isEqualTo(b.hashCode());
+        assertThat(a).isEqualTo(b).hasSameHashCodeAs(b);
     }
 
     @Test
@@ -143,10 +142,10 @@ class DepartmentMinimalDTOTest {
         UUID id = UUID.randomUUID();
         DepartmentMinimalDTO dto = new DepartmentMinimalDTO(id, "Lab", "lab@h.com", "111");
         String s = dto.toString();
-        assertThat(s).contains("id=" + id);
-        assertThat(s).contains("name=Lab");
-        assertThat(s).contains("email=lab@h.com");
-        assertThat(s).contains("phoneNumber=111");
+        assertThat(s).contains("id=" + id)
+            .contains("name=Lab")
+            .contains("email=lab@h.com")
+            .contains("phoneNumber=111");
     }
 
     // ─── canEqual (Lombok @Data generates this) ─────────────────

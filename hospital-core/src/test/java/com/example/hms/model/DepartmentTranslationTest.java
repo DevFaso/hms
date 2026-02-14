@@ -7,7 +7,8 @@ import org.junit.jupiter.api.Test;
 import java.lang.reflect.Method;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DepartmentTranslationTest {
 
@@ -153,13 +154,13 @@ class DepartmentTranslationTest {
                 .language("English")
                 .build();
         String s = dt.toString();
-        assertThat(s).contains("languageCode=en");
-        assertThat(s).contains("name=Cardiology");
-        assertThat(s).contains("description=Heart");
-        assertThat(s).contains("language=English");
-        // Excluded by @ToString(exclude = {"department", "assignment"})
-        assertThat(s).doesNotContain("department=");
-        assertThat(s).doesNotContain("assignment=");
+        assertThat(s).contains("languageCode=en")
+            .contains("name=Cardiology")
+            .contains("description=Heart")
+            .contains("language=English")
+            // Excluded by @ToString(exclude = {"department", "assignment"})
+            .doesNotContain("department=")
+            .doesNotContain("assignment=");
     }
 
     // ─── normalizeAndValidate (@PrePersist / @PreUpdate) ─────────
@@ -317,8 +318,7 @@ class DepartmentTranslationTest {
         DepartmentTranslation b = new DepartmentTranslation();
         b.setId(id);
 
-        assertThat(a).isEqualTo(b);
-        assertThat(a.hashCode()).isEqualTo(b.hashCode());
+        assertThat(a).isEqualTo(b).hasSameHashCodeAs(b);
     }
 
     @Test

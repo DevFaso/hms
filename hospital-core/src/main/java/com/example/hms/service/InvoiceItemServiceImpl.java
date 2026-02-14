@@ -3,10 +3,16 @@ package com.example.hms.service;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.InvoiceItemMapper;
-import com.example.hms.model.*;
+import com.example.hms.model.BillingInvoice;
+import com.example.hms.model.InvoiceItem;
+import com.example.hms.model.Treatment;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.InvoiceItemRequestDTO;
 import com.example.hms.payload.dto.InvoiceItemResponseDTO;
-import com.example.hms.repository.*;
+import com.example.hms.repository.BillingInvoiceRepository;
+import com.example.hms.repository.InvoiceItemRepository;
+import com.example.hms.repository.TreatmentRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
@@ -15,11 +21,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class InvoiceItemServiceImpl implements InvoiceItemService {
+    private static final String INVOICE_ITEM_NOT_FOUND_KEY = "invoiceitem.notfound";
+
 
     private final InvoiceItemRepository invoiceItemRepository;
     private final BillingInvoiceRepository billingInvoiceRepository;
@@ -63,7 +70,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     @Transactional(readOnly = true)
     public InvoiceItemResponseDTO getInvoiceItemById(UUID id, Locale locale) {
         InvoiceItem item = invoiceItemRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("invoiceitem.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY));
         return invoiceItemMapper.toInvoiceItemResponseDTO(item);
     }
 
@@ -72,14 +79,14 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     public List<InvoiceItemResponseDTO> getItemsByInvoiceId(UUID invoiceId, Locale locale) {
         return invoiceItemRepository.findByBillingInvoice_Id(invoiceId).stream()
             .map(invoiceItemMapper::toInvoiceItemResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
     @Transactional
     public InvoiceItemResponseDTO updateInvoiceItem(UUID id, InvoiceItemRequestDTO dto, Locale locale) {
         InvoiceItem item = invoiceItemRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("invoiceitem.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY));
 
         BillingInvoice invoice = billingInvoiceRepository.findById(dto.getBillingInvoiceId())
             .orElseThrow(() -> new ResourceNotFoundException("billinginvoice.notfound"));
@@ -119,7 +126,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     @Transactional
     public void deleteInvoiceItem(UUID id, Locale locale) {
         InvoiceItem item = invoiceItemRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException("invoiceitem.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY));
         UUID invoiceId = item.getBillingInvoice().getId();
         invoiceItemRepository.delete(item);
 

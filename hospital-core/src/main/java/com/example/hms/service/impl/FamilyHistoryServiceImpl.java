@@ -20,13 +20,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @Transactional
 public class FamilyHistoryServiceImpl implements FamilyHistoryService {
+    private static final String FAMILY_HISTORY_NOT_FOUND_PREFIX = "Family history not found with id: ";
+
 
     private final FamilyHistoryRepository familyHistoryRepository;
     private final PatientRepository patientRepository;
@@ -63,7 +64,7 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         log.debug("Fetching family history with id: {}", id);
         
         PatientFamilyHistory familyHistory = familyHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Family history not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_PREFIX + id));
 
         return familyHistoryMapper.toResponseDTO(familyHistory);
     }
@@ -81,7 +82,7 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         
         return histories.stream()
                 .map(familyHistoryMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -98,7 +99,7 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         
         return geneticConditions.stream()
                 .map(familyHistoryMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -115,7 +116,7 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         
         return screeningNeeded.stream()
                 .map(familyHistoryMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -132,7 +133,7 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         
         return histories.stream()
                 .map(familyHistoryMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -140,7 +141,7 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         log.info("Updating family history with id: {}", id);
 
         PatientFamilyHistory existingHistory = familyHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Family history not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_PREFIX + id));
 
         // Update staff if changed
         if (requestDTO.getRecordedByStaffId() != null && 
@@ -163,7 +164,7 @@ public class FamilyHistoryServiceImpl implements FamilyHistoryService {
         log.info("Deleting family history with id: {}", id);
 
         PatientFamilyHistory familyHistory = familyHistoryRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Family history not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(FAMILY_HISTORY_NOT_FOUND_PREFIX + id));
 
         familyHistory.setActive(false);
         familyHistoryRepository.save(familyHistory);

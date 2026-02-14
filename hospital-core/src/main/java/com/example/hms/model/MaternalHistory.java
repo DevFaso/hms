@@ -10,12 +10,12 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PositiveOrZero;
-import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -44,6 +44,7 @@ import java.time.LocalDateTime;
         @Index(name = "idx_maternal_history_version", columnList = "patient_id, version_number")
     }
 )
+@EqualsAndHashCode(callSuper = true)
 public class MaternalHistory extends BaseEntity {
 
     @NotNull

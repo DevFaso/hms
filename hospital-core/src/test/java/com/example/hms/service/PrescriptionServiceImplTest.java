@@ -47,6 +47,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S5976") // Individual tests preferred over parameterized for clarity
 class PrescriptionServiceImplTest {
 
     private static final String TEST_MEDICATION = "Ibuprofen";
@@ -1173,7 +1174,8 @@ class PrescriptionServiceImplTest {
         UUID prescriptionId = UUID.randomUUID();
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, buildRequest(), Locale.ENGLISH))
+        var request = buildRequest();
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -1877,7 +1879,7 @@ class PrescriptionServiceImplTest {
             .reaction("Rash")
             .active(true)
             .build();
-        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(eq(patientId), eq(hospitalId)))
+        when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(allergy));
 
         when(prescriptionMapper.toEntity(any(), any(), any(), any())).thenReturn(new Prescription());
@@ -1942,7 +1944,7 @@ class PrescriptionServiceImplTest {
         foundEnc.setStaff(noHospStaff);
 
         when(encounterRepository.findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
-            eq(patientId), eq(staffId), eq(hospitalId))).thenReturn(Optional.of(foundEnc));
+            patientId, staffId, hospitalId)).thenReturn(Optional.of(foundEnc));
 
         // staff.getHospital() is null → ensureContextConsistency throws
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
@@ -1987,7 +1989,7 @@ class PrescriptionServiceImplTest {
         foundEnc.setStaff(noHospStaff); // matching staff
 
         when(encounterRepository.findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
-            eq(patientId), eq(staffId), eq(hospitalId))).thenReturn(Optional.of(foundEnc));
+            patientId, staffId, hospitalId)).thenReturn(Optional.of(foundEnc));
 
         // staff.getHospital() is null → ensureContextConsistency throws
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))

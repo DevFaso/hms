@@ -1,7 +1,10 @@
 package com.example.hms.service;
 
-import com.example.hms.payload.dto.*;
-import java.util.*;
+import com.example.hms.payload.dto.PatientPrimaryCareRequestDTO;
+import com.example.hms.payload.dto.PatientPrimaryCareResponseDTO;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 public interface PatientPrimaryCareService {
 

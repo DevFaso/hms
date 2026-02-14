@@ -33,7 +33,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -140,7 +139,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     public List<ImagingReportResponseDTO> getReportsForOrder(UUID imagingOrderId) {
         return imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId).stream()
             .map(imagingReportMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -154,7 +153,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
         return imagingReportRepository.findByHospital_IdAndReportStatusOrderByPerformedAtDesc(hospitalId, status).stream()
             .map(imagingReportMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -168,7 +167,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
         return imagingReportRepository.findByHospital_IdAndModalityOrderByPerformedAtDesc(hospitalId, modality).stream()
             .map(imagingReportMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private void validateCreateRequest(ImagingReportUpsertRequestDTO request) {

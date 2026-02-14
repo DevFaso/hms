@@ -5,12 +5,26 @@ import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AppointmentMapper;
-import com.example.hms.model.*;
+import com.example.hms.model.Appointment;
+import com.example.hms.model.Department;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Role;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRole;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AppointmentFilterDTO;
 import com.example.hms.payload.dto.AppointmentRequestDTO;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.AppointmentSummaryDTO;
-import com.example.hms.repository.*;
+import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.DepartmentRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.support.HospitalScopeUtils;
@@ -30,7 +44,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -778,7 +800,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private LinkedHashSet<UUID> filterPermittedHospitals(HospitalContext context, Set<UUID> actualHospitalIds) {
-        LinkedHashSet<UUID> permitted = HospitalScopeUtils.resolveScope(context);
+        Set<UUID> permitted = HospitalScopeUtils.resolveScope(context);
         if (permitted.isEmpty()) {
             return new LinkedHashSet<>();
         }

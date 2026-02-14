@@ -3,8 +3,27 @@ package com.example.hms.model;
 import com.example.hms.model.embedded.PlatformOwnership;
 import com.example.hms.model.embedded.PlatformServiceMetadata;
 import com.example.hms.model.platform.HospitalPlatformServiceLink;
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.EqualsAndHashCode;
 
 import java.util.HashSet;
 import java.util.Objects;
@@ -31,6 +50,7 @@ import jakarta.validation.constraints.Size;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(callSuper = true)
 public class Hospital extends BaseEntity {
 
     @NotBlank

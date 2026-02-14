@@ -1,7 +1,12 @@
 package com.example.hms.controller;
 
 import com.example.hms.enums.SignatureType;
-import com.example.hms.payload.dto.signature.*;
+import com.example.hms.payload.dto.signature.SignatureAuditEntryDTO;
+import com.example.hms.payload.dto.signature.SignatureRequestDTO;
+import com.example.hms.payload.dto.signature.SignatureResponseDTO;
+import com.example.hms.payload.dto.signature.SignatureRevocationRequestDTO;
+import com.example.hms.payload.dto.signature.SignatureVerificationRequestDTO;
+import com.example.hms.payload.dto.signature.SignatureVerificationResponseDTO;
 import com.example.hms.service.signature.DigitalSignatureService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,7 +22,8 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class DigitalSignatureControllerTest {

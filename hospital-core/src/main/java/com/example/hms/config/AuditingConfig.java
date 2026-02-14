@@ -2,7 +2,6 @@
 package com.example.hms.config;
 
 import com.example.hms.security.CustomUserDetails;
-import com.example.hms.security.SecurityAuditorAware;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.domain.AuditorAware;

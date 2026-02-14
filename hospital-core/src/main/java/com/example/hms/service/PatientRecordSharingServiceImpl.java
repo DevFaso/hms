@@ -88,6 +88,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -114,6 +115,8 @@ import jakarta.persistence.PersistenceException;
 @Slf4j
 @RequiredArgsConstructor
 public class PatientRecordSharingServiceImpl implements PatientRecordSharingService {
+    private static final String CLINICAL_CATEGORY = "clinical";
+
 
     private static final String HEADER_STATUS = "Status";
     private static final String HEADER_NOTES = "Notes";
@@ -196,7 +199,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         Map<UUID, String> mrnByHospital = buildHospitalMrnMap(patient);
 
         List<Encounter> encounters = safeFetchFromTable(
-            "clinical",
+            CLINICAL_CATEGORY,
             "encounters",
             () -> encounterRepository.findByPatient_Id(patientId),
             "Encounter"
@@ -225,7 +228,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             .thenComparing(PatientProblem::getLastReviewedAt, Comparator.nullsLast(Comparator.reverseOrder()));
 
         List<PatientProblemResponseDTO> problemDtos = safeFetchFromTable(
-            "clinical",
+            CLINICAL_CATEGORY,
             "patient_problems",
             () -> patientProblemRepository
                 .findByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
@@ -236,7 +239,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         );
 
         List<PatientSurgicalHistoryResponseDTO> surgicalHistoryDtos = safeFetchFromTable(
-            "clinical",
+            CLINICAL_CATEGORY,
             "patient_surgical_history",
             () -> patientSurgicalHistoryRepository
                 .findByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
@@ -249,7 +252,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         );
 
         List<AdvanceDirectiveResponseDTO> advanceDirectiveDtos = safeFetchFromTable(
-            "clinical",
+            CLINICAL_CATEGORY,
             "advance_directives",
             () -> advanceDirectiveRepository
                 .findByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
@@ -301,7 +304,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             .thenComparing(PatientAllergy::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()));
 
         List<PatientAllergy> allergyEntities = safeFetchFromTable(
-            "clinical",
+            CLINICAL_CATEGORY,
             "patient_allergies",
             () -> fromHospitalId == null
                 ? patientAllergyRepository.findByPatient_Id(patientId)
@@ -315,7 +318,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             .toList();
 
         List<PrescriptionResponseDTO> prescriptionDtos = safeFetchFromTable(
-            "clinical",
+            CLINICAL_CATEGORY,
             "prescriptions",
             () -> prescriptionRepository
                 .findByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
@@ -326,7 +329,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         );
 
         List<PatientInsuranceResponseDTO> insuranceDtos = safeFetchFromTable(
-            "clinical",
+            CLINICAL_CATEGORY,
             "patient_insurances",
             () -> patientInsuranceRepository
                 .findByPatient_Id(patientId).stream()
@@ -416,7 +419,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         }
 
         return safeFetchFromTable(
-            "clinical",
+            CLINICAL_CATEGORY,
             "encounter_history",
             () -> encounterHistoryRepository.findByEncounterIdIn(encounterIds).stream()
                 .filter(history -> history.getEncounterId() != null && encounterById.containsKey(history.getEncounterId()))
@@ -433,7 +436,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         }
 
         return safeFetchFromTable(
-            "clinical",
+            CLINICAL_CATEGORY,
             "encounter_treatments",
             () -> encountersInScope.stream()
                 .flatMap(encounter -> encounterTreatmentRepository.findByEncounter_Id(encounter.getId()).stream())
@@ -834,7 +837,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
                     .setFontSize(10)
                     .setTextAlignment(TextAlignment.RIGHT)
                     .setFontColor(ColorConstants.GRAY));
-        } catch (Exception e) {
+        } catch (IOException | RuntimeException e) {
             throw new RecordExportException("Failed to generate patient record PDF", e);
         }
 
@@ -867,20 +870,14 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         }
 
         allergies.forEach(allergy -> {
-            String allergen = hasText(allergy.getAllergenDisplay())
-                ? allergy.getAllergenDisplay().trim()
-                : (hasText(allergy.getAllergenCode()) ? allergy.getAllergenCode().trim() : null);
-            String reactionDetail;
-            if (hasText(allergy.getReaction()) && hasText(allergy.getReactionNotes())) {
-                reactionDetail = allergy.getReaction().trim() + " — " + allergy.getReactionNotes().trim();
-            } else if (hasText(allergy.getReaction())) {
-                reactionDetail = allergy.getReaction().trim();
-            } else if (hasText(allergy.getReactionNotes())) {
-                reactionDetail = allergy.getReactionNotes().trim();
+            String allergen;
+            if (hasText(allergy.getAllergenDisplay())) {
+                allergen = allergy.getAllergenDisplay().trim();
             } else {
-                reactionDetail = null;
+                allergen = hasText(allergy.getAllergenCode()) ? allergy.getAllergenCode().trim() : null;
             }
-            String activeLabel = allergy.getActive() == null ? null : (allergy.getActive() ? "Active" : "Inactive");
+            String reactionDetail = resolveReactionDetail(allergy);
+            String activeLabel = resolveActiveLabel(allergy.getActive());
             String lastOccurrence = allergy.getLastOccurrenceDate() != null ? allergy.getLastOccurrenceDate().toString() : null;
 
             table.addCell(new Cell().add(new Paragraph(defaultText(allergen))).setBorderBottom(new SolidBorder(borderColor, 0.5f)));
@@ -895,6 +892,26 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
 
         document.add(table);
         document.add(new Paragraph("\n"));
+    }
+
+    private String resolveActiveLabel(Boolean active) {
+        if (active == null) {
+            return null;
+        }
+        return Boolean.TRUE.equals(active) ? "Active" : "Inactive";
+    }
+
+    private String resolveReactionDetail(PatientAllergyResponseDTO allergy) {
+        if (hasText(allergy.getReaction()) && hasText(allergy.getReactionNotes())) {
+            return allergy.getReaction().trim() + " — " + allergy.getReactionNotes().trim();
+        }
+        if (hasText(allergy.getReaction())) {
+            return allergy.getReaction().trim();
+        }
+        if (hasText(allergy.getReactionNotes())) {
+            return allergy.getReactionNotes().trim();
+        }
+        return null;
     }
 
     private void addEncounterHistorySection(Document document, PatientRecordDTO dto, PdfFont font, Color headerColor, Color borderColor) {
@@ -1143,7 +1160,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
                 .scaleToFit(100, 100)
                 .setHorizontalAlignment(HorizontalAlignment.CENTER);
             document.add(logo);
-        } catch (Exception e) {
+        } catch (java.net.MalformedURLException | RuntimeException e) {
             log.warn("Hospital logo not found, skipping logo section.");
         }
     }
@@ -1196,7 +1213,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
 
             auditRepository.save(auditLog);
 
-        } catch (Exception e) {
+        } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException e) {
             log.warn("Failed to serialize audit log details: {}", e.getMessage());
         }
     }

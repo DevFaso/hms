@@ -26,33 +26,22 @@ public class EncounterTreatmentMapper {
     public EncounterTreatmentResponseDTO toDto(EncounterTreatment entity) {
         if (entity == null) return null;
 
-        String staffFullName = null;
-        if (entity.getStaff() != null && entity.getStaff().getUser() != null) {
-            String first = entity.getStaff().getUser().getFirstName();
-            String last  = entity.getStaff().getUser().getLastName();
-            staffFullName = joinName(first, last);
-        } else if (entity.getStaff() != null) {
-            // fallback if Staff has its own name field
-            staffFullName = entity.getStaff().getName();
-        }
+        Encounter enc = entity.getEncounter();
+        Treatment treatment = entity.getTreatment();
+        Staff staff = entity.getStaff();
 
         return EncounterTreatmentResponseDTO.builder()
             .id(entity.getId())
-            .encounterId(entity.getEncounter() != null ? entity.getEncounter().getId() : null)
-            .encounterCode(entity.getEncounter() != null ? entity.getEncounter().getCode() : null)
-            .encounterType(entity.getEncounter() != null ? entity.getEncounter().getEncounterType() : null)
-            .patientId(entity.getEncounter() != null && entity.getEncounter().getPatient() != null
-                ? entity.getEncounter().getPatient().getId() : null)
-            .patientFullName(entity.getEncounter() != null && entity.getEncounter().getPatient() != null
-                ? joinName(entity.getEncounter().getPatient().getFirstName(),
-                entity.getEncounter().getPatient().getLastName())
-                : null)
-            .patientPhoneNumber(entity.getEncounter() != null && entity.getEncounter().getPatient() != null
-                ? entity.getEncounter().getPatient().getPhoneNumberPrimary() : null)
-            .treatmentId(entity.getTreatment() != null ? entity.getTreatment().getId() : null)
-            .treatmentName(entity.getTreatment() != null ? entity.getTreatment().getName() : null)
-            .staffId(entity.getStaff() != null ? entity.getStaff().getId() : null)
-            .staffFullName(staffFullName)
+            .encounterId(enc != null ? enc.getId() : null)
+            .encounterCode(enc != null ? enc.getCode() : null)
+            .encounterType(enc != null ? enc.getEncounterType() : null)
+            .patientId(resolvePatientId(enc))
+            .patientFullName(resolvePatientFullName(enc))
+            .patientPhoneNumber(resolvePatientPhone(enc))
+            .treatmentId(treatment != null ? treatment.getId() : null)
+            .treatmentName(treatment != null ? treatment.getName() : null)
+            .staffId(staff != null ? staff.getId() : null)
+            .staffFullName(resolveStaffFullName(staff))
             .performedAt(entity.getPerformedAt())
             .outcome(entity.getOutcome())
             .notes(entity.getNotes())
@@ -60,6 +49,26 @@ public class EncounterTreatmentMapper {
     }
 
     /* ---------------- helpers ---------------- */
+
+    private java.util.UUID resolvePatientId(Encounter enc) {
+        return enc != null && enc.getPatient() != null ? enc.getPatient().getId() : null;
+    }
+
+    private String resolvePatientFullName(Encounter enc) {
+        if (enc == null || enc.getPatient() == null) return null;
+        return joinName(enc.getPatient().getFirstName(), enc.getPatient().getLastName());
+    }
+
+    private String resolvePatientPhone(Encounter enc) {
+        return enc != null && enc.getPatient() != null ? enc.getPatient().getPhoneNumberPrimary() : null;
+    }
+
+    private String resolveStaffFullName(Staff staff) {
+        if (staff != null && staff.getUser() != null) {
+            return joinName(staff.getUser().getFirstName(), staff.getUser().getLastName());
+        }
+        return staff != null ? staff.getName() : null;
+    }
 
     public String joinName(String first, String last) {
         String f = first == null ? "" : first.trim();

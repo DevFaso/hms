@@ -8,8 +8,8 @@ import com.example.hms.payload.dto.AdmissionResponseDTO;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.util.Objects;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Mapper for Admission entity and DTOs
@@ -73,7 +73,7 @@ public class AdmissionMapper {
             dto.setAppliedOrderSets(
                 admission.getAppliedOrderSets().stream()
                     .map(this::toOrderSetResponseDTO)
-                    .collect(Collectors.toList())
+                    .toList()
             );
         }
 
@@ -167,7 +167,7 @@ public class AdmissionMapper {
             UUID hospitalId = admission.getHospital() != null ? admission.getHospital().getId() : null;
 
             return admission.getPatient().getHospitalRegistrations().stream()
-                .filter(reg -> reg != null)
+                .filter(Objects::nonNull)
                 .filter(reg -> hospitalId == null || (reg.getHospital() != null && hospitalId.equals(reg.getHospital().getId())))
                 .map(PatientHospitalRegistration::getMrn)
                 .filter(StringUtils::hasText)

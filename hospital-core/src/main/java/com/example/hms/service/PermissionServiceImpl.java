@@ -5,7 +5,10 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PermissionMapper;
 import com.example.hms.model.Permission;
 import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.payload.dto.*;
+import com.example.hms.payload.dto.PermissionFilterDTO;
+import com.example.hms.payload.dto.PermissionMinimalDTO;
+import com.example.hms.payload.dto.PermissionRequestDTO;
+import com.example.hms.payload.dto.PermissionResponseDTO;
 import com.example.hms.repository.PermissionRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.specification.PermissionSpecification;
@@ -18,7 +21,6 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -65,7 +67,7 @@ public class PermissionServiceImpl implements PermissionService {
         return permissionRepository.findAllWithAssignmentDetails()
             .stream()
             .map(permissionMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -105,7 +107,7 @@ public class PermissionServiceImpl implements PermissionService {
         return permissionRepository.findAll()
             .stream()
             .map(permissionMapper::toMinimalDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override

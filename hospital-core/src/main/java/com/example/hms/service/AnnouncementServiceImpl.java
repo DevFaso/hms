@@ -10,7 +10,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -24,7 +23,7 @@ public class AnnouncementServiceImpl implements AnnouncementService {
             .sorted((a, b) -> b.getDate().compareTo(a.getDate()))
             .limit(limit)
             .map(this::toDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override

@@ -4,10 +4,28 @@ import com.example.hms.enums.LabOrderChannel;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.model.converter.DiagnosisCodesConverter;
 import com.example.hms.utility.DiagnosisCodeValidator;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -29,6 +47,7 @@ import java.util.UUID;
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = {"patient", "orderingStaff", "encounter", "labTestDefinition", "assignment", "hospital"})
+@EqualsAndHashCode(callSuper = true)
 public class LabOrder extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

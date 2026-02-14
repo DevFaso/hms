@@ -2,7 +2,13 @@ package com.example.hms.mapper;
 
 import com.example.hms.enums.LabOrderChannel;
 import com.example.hms.enums.LabOrderStatus;
-import com.example.hms.model.*;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.LabOrder;
+import com.example.hms.model.LabTestDefinition;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.LabOrderRequestDTO;
 import com.example.hms.payload.dto.LabOrderResponseDTO;
 import org.springframework.stereotype.Component;

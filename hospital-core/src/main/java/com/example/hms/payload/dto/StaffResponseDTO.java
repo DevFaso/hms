@@ -4,7 +4,11 @@ import com.example.hms.enums.EmploymentType;
 import com.example.hms.enums.JobTitle;
 import com.example.hms.enums.Specialization;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;

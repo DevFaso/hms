@@ -15,20 +15,27 @@ import com.example.hms.security.CustomUserDetails;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSource;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class ChatMessageServiceImpl implements ChatMessageService {
+    private static final String USER_NOT_FOUND_KEY = "user.notfound";
+    private static final String TIMESTAMP_FIELD = "timestamp";
+
 
     private final ChatMessageRepository chatMessageRepository;
     private final UserRepository userRepository;
@@ -113,17 +120,17 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     public List<ChatMessageResponseDTO> getChatHistory(UUID user1Id, UUID user2Id, int page, int size, Locale locale) {
         User user1 = userRepository.findById(user1Id)
             .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage("user.notfound", new Object[]{user1Id}, locale)));
+                messageSource.getMessage(USER_NOT_FOUND_KEY, new Object[]{user1Id}, locale)));
         User user2 = userRepository.findById(user2Id)
             .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage("user.notfound", new Object[]{user2Id}, locale)));
+                messageSource.getMessage(USER_NOT_FOUND_KEY, new Object[]{user2Id}, locale)));
 
-        Pageable pageable = PageRequest.of(page, size, Sort.by("timestamp").descending());
+        Pageable pageable = PageRequest.of(page, size, Sort.by(TIMESTAMP_FIELD).descending());
         Page<ChatMessage> messages = chatMessageRepository.findChatBetweenUsers(user1, user2, pageable);
 
         return messages.stream()
             .map(chatMessageMapper::toChatMessageResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -131,10 +138,10 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     public void markMessagesAsRead(UUID senderId, UUID recipientId, Locale locale) {
         User sender = userRepository.findById(senderId)
             .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage("user.notfound", new Object[]{senderId}, locale)));
+                messageSource.getMessage(USER_NOT_FOUND_KEY, new Object[]{senderId}, locale)));
         User recipient = userRepository.findById(recipientId)
             .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage("user.notfound", new Object[]{recipientId}, locale)));
+                messageSource.getMessage(USER_NOT_FOUND_KEY, new Object[]{recipientId}, locale)));
 
         List<ChatMessage> messages = chatMessageRepository.findUnreadMessages(sender, recipient);
         messages.forEach(m -> m.setRead(true));
@@ -144,19 +151,19 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     @Override
     @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> searchMessages(UUID user1Id, UUID user2Id, String keyword, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("timestamp").descending());
+        Pageable pageable = PageRequest.of(page, size, Sort.by(TIMESTAMP_FIELD).descending());
         Page<ChatMessage> messages = chatMessageRepository
             .searchMessagesBetweenUsers(user1Id, user2Id, keyword, pageable);
 
         return messages.stream()
             .map(chatMessageMapper::toChatMessageResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ChatMessageResponseDTO> getAllMessagesForUser(UUID userId, Boolean unread, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size, Sort.by("timestamp").descending());
+        Pageable pageable = PageRequest.of(page, size, Sort.by(TIMESTAMP_FIELD).descending());
         Page<ChatMessage> messages;
         if (Boolean.TRUE.equals(unread)) {
             messages = chatMessageRepository.findAllUnreadMessagesForUser(userId, pageable);
@@ -166,7 +173,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
 
         return messages.stream()
             .map(chatMessageMapper::toChatMessageResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -202,30 +209,30 @@ public class ChatMessageServiceImpl implements ChatMessageService {
                 .lastMessageRead(read)
                 .unreadCount(unreadCount)
                 .build();
-        }).collect(Collectors.toList());
+        }).toList();
     }
 
     @Override
 public List<ChatMessageResponseDTO> getMessagesBySenderEmail(String email) {
     List<ChatMessage> messages = chatMessageRepository.findBySenderEmail(email);
-    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).collect(Collectors.toList());
+    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).toList();
 }
 
 @Override
 public List<ChatMessageResponseDTO> getMessagesByRecipientEmail(String email) {
     List<ChatMessage> messages = chatMessageRepository.findByRecipientEmail(email);
-    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).collect(Collectors.toList());
+    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).toList();
 }
 
 @Override
 public List<ChatMessageResponseDTO> getMessagesBySenderUsername(String username) {
     List<ChatMessage> messages = chatMessageRepository.findBySenderUsername(username);
-    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).collect(Collectors.toList());
+    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).toList();
 }
 
 @Override
 public List<ChatMessageResponseDTO> getMessagesByRecipientUsername(String username) {
     List<ChatMessage> messages = chatMessageRepository.findByRecipientUsername(username);
-    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).collect(Collectors.toList());
+    return messages.stream().map(chatMessageMapper::toChatMessageResponseDTO).toList();
 }
 }

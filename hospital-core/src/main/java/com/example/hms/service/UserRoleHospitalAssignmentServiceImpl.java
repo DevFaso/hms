@@ -6,7 +6,14 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.UserRoleHospitalAssignmentMapper;
-import com.example.hms.model.*;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Organization;
+import com.example.hms.model.Role;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRole;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.model.UserRoleId;
 import com.example.hms.payload.dto.AssignmentMinimalDTO;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
@@ -20,7 +27,12 @@ import com.example.hms.payload.dto.assignment.UserRoleAssignmentFailureDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentMultiRequestDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentPublicViewDTO;
 import com.example.hms.specification.UserRoleHospitalAssignmentSpecification;
-import com.example.hms.repository.*;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.OrganizationRepository;
+import com.example.hms.repository.RoleRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,7 +52,16 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 @Service
@@ -48,6 +69,8 @@ import java.util.regex.Pattern;
 @Slf4j
 @Transactional
 public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAssignmentService {
+    private static final String UNKNOWN_ROLE = "UNKNOWN_ROLE";
+
 
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
@@ -101,7 +124,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         "Verify your preferred communication details"
     );
     private static final Map<String, List<String>> ROLE_PROFILE_CHECKLISTS = Map.ofEntries(
-        Map.entry("ROLE_DOCTOR", List.of(
+        Map.entry(ROLE_DOCTOR, List.of(
             "Upload your medical license and credentials",
             "Set your primary specialties and departments",
             "Publish your consultation availability"
@@ -116,7 +139,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             "Review visitor intake checklist",
             "Confirm escalation procedures"
         )),
-        Map.entry("ROLE_SUPER_ADMIN", List.of(
+        Map.entry(ROLE_SUPER_ADMIN, List.of(
             "Enable multi-factor authentication",
             "Review organization level notification settings",
             "Verify critical incident escalation contacts"
@@ -288,82 +311,105 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     public UserRoleHospitalAssignmentResponseDTO updateAssignment(UUID id, UserRoleHospitalAssignmentRequestDTO dto) {
         final Locale locale = Locale.getDefault();
 
-        // 1) Load current assignment
         UserRoleHospitalAssignment target = assignmentRepository.findById(id).orElseThrow(() ->
             new ResourceNotFoundException(
                 messageSource.getMessage(MSG_ASSIGNMENT_NOT_FOUND,
                     new Object[]{id},
                     DEFAULT_ASSIGNMENT_NOT_FOUND_PREFIX + id, locale)));
 
-        // 2) Resolve proposed tuple (user, role, hospital)
-        User newUser = (dto.getUserId() != null)
-            ? userRepository.findById(dto.getUserId()).orElseThrow(() ->
-            new ResourceNotFoundException(
-                messageSource.getMessage(MSG_USER_NOT_FOUND, new Object[]{dto.getUserId()},
-                    DEFAULT_USER_NOT_FOUND_PREFIX + dto.getUserId(), locale)))
-            : target.getUser();
+        User newUser = resolveUserForUpdate(dto, target, locale);
+        Role newRole = resolveRoleForUpdate(dto, target, locale);
+        Hospital newHospital = resolveHospitalForUpdate(dto, target, newRole, locale);
 
-        Role newRole = (dto.getRoleId() != null || (dto.getRoleName() != null && !dto.getRoleName().isBlank()))
-            ? resolveRole(dto, locale)
-            : target.getRole();
+        enforcePatientInactiveConstraint(dto, newRole, target);
+        checkTupleDuplicateOnUpdate(id, target, newUser, newRole, newHospital, locale);
 
-        Hospital newHospital = (dto.getHospitalId() != null)
-            ? resolveHospital(dto, newRole, locale)
-            : target.getHospital();
-
-        // 3) PATIENT safety: must not be active
-        final String newRoleCode = getRoleCode(newRole);
-        if (isRoleCode(newRoleCode, ROLE_PATIENT)) {
-            if (Boolean.TRUE.equals(dto.getActive())) {
-                throw new BusinessException(DEFAULT_PATIENT_ACTIVE_MESSAGE);
-            }
-            // If caller didn't specify active and the current assignment is active, force it to inactive.
-            if (dto.getActive() == null && Boolean.TRUE.equals(target.getActive())) {
-                dto.setActive(Boolean.FALSE);
-            }
-        }
-
-        // 4) Prevent duplicate tuple
-        boolean tupleChanged =
-            !newUser.getId().equals(target.getUser().getId()) ||
-                (newHospital == null ? target.getHospital() != null
-                    : (target.getHospital() == null || !newHospital.getId().equals(target.getHospital().getId()))) ||
-                !newRole.getId().equals(target.getRole().getId());
-
-        if (tupleChanged) {
-            if (newHospital == null) {
-                assignmentRepository.findByUserIdAndRoleIdAndHospitalIsNull(newUser.getId(), newRole.getId())
-                    .ifPresent(existing -> {
-                        if (!existing.getId().equals(id)) {
-                            throw new ConflictException(
-                                messageSource.getMessage(MSG_ASSIGNMENT_CONFLICT, null,
-                                    DEFAULT_ROLE_ALREADY_ASSIGNED, locale));
-                        }
-                    });
-            } else {
-                assignmentRepository.findByUserIdAndHospitalIdAndRoleId(newUser.getId(), newHospital.getId(), newRole.getId())
-                    .ifPresent(existing -> {
-                        if (!existing.getId().equals(id)) {
-                            throw new ConflictException(
-                                messageSource.getMessage(MSG_ASSIGNMENT_CONFLICT, null,
-                                    DEFAULT_ROLE_ALREADY_ASSIGNED, locale));
-                        }
-                    });
-            }
-        }
-
-        // 5) Other business rules (e.g., active DOCTOR uniqueness per hospital)
         if (Boolean.TRUE.equals(dto.getActive())) {
             checkActiveDoctorConflict(dto, newUser, newRole, newHospital, locale);
         }
 
-        // 6) Apply and save
         mapper.updateEntity(target, dto, newHospital, newRole, null);
         target.setUser(newUser);
 
         UserRoleHospitalAssignment saved = assignmentRepository.save(target);
         log.info("🔄 Updated assignment ID '{}' for user '{}'", id, newUser.getEmail());
         return toDtoWithLinks(saved);
+    }
+
+    private User resolveUserForUpdate(UserRoleHospitalAssignmentRequestDTO dto,
+                                      UserRoleHospitalAssignment target, Locale locale) {
+        if (dto.getUserId() == null) {
+            return target.getUser();
+        }
+        return userRepository.findById(dto.getUserId()).orElseThrow(() ->
+            new ResourceNotFoundException(
+                messageSource.getMessage(MSG_USER_NOT_FOUND, new Object[]{dto.getUserId()},
+                    DEFAULT_USER_NOT_FOUND_PREFIX + dto.getUserId(), locale)));
+    }
+
+    private Role resolveRoleForUpdate(UserRoleHospitalAssignmentRequestDTO dto,
+                                      UserRoleHospitalAssignment target, Locale locale) {
+        if (dto.getRoleId() != null || (dto.getRoleName() != null && !dto.getRoleName().isBlank())) {
+            return resolveRole(dto, locale);
+        }
+        return target.getRole();
+    }
+
+    private Hospital resolveHospitalForUpdate(UserRoleHospitalAssignmentRequestDTO dto,
+                                              UserRoleHospitalAssignment target, Role newRole, Locale locale) {
+        if (dto.getHospitalId() != null) {
+            return resolveHospital(dto, newRole, locale);
+        }
+        return target.getHospital();
+    }
+
+    private void enforcePatientInactiveConstraint(UserRoleHospitalAssignmentRequestDTO dto,
+                                                  Role newRole, UserRoleHospitalAssignment target) {
+        final String newRoleCode = getRoleCode(newRole);
+        if (!isRoleCode(newRoleCode, ROLE_PATIENT)) {
+            return;
+        }
+        if (Boolean.TRUE.equals(dto.getActive())) {
+            throw new BusinessException(DEFAULT_PATIENT_ACTIVE_MESSAGE);
+        }
+        if (dto.getActive() == null && Boolean.TRUE.equals(target.getActive())) {
+            dto.setActive(Boolean.FALSE);
+        }
+    }
+
+    private void checkTupleDuplicateOnUpdate(UUID id, UserRoleHospitalAssignment target,
+                                             User newUser, Role newRole, Hospital newHospital, Locale locale) {
+        boolean tupleChanged =
+            !newUser.getId().equals(target.getUser().getId())
+            || !newRole.getId().equals(target.getRole().getId())
+            || hasDifferentHospital(target.getHospital(), newHospital);
+
+        if (!tupleChanged) {
+            return;
+        }
+
+        if (newHospital == null) {
+            assignmentRepository.findByUserIdAndRoleIdAndHospitalIsNull(newUser.getId(), newRole.getId())
+                .ifPresent(existing -> throwIfDifferentId(existing, id, locale));
+        } else {
+            assignmentRepository.findByUserIdAndHospitalIdAndRoleId(newUser.getId(), newHospital.getId(), newRole.getId())
+                .ifPresent(existing -> throwIfDifferentId(existing, id, locale));
+        }
+    }
+
+    private boolean hasDifferentHospital(Hospital current, Hospital proposed) {
+        if (proposed == null) {
+            return current != null;
+        }
+        return current == null || !proposed.getId().equals(current.getId());
+    }
+
+    private void throwIfDifferentId(UserRoleHospitalAssignment existing, UUID expectedId, Locale locale) {
+        if (!existing.getId().equals(expectedId)) {
+            throw new ConflictException(
+                messageSource.getMessage(MSG_ASSIGNMENT_CONFLICT, null,
+                    DEFAULT_ROLE_ALREADY_ASSIGNED, locale));
+        }
     }
 
     /* ===================== Read ===================== */
@@ -384,49 +430,22 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     @Override
     @Transactional(readOnly = true)
     public Page<UserRoleHospitalAssignmentResponseDTO> getAllAssignments(Pageable pageable) {
-        return getAllAssignments(pageable, AssignmentSearchCriteria.builder().build());
+        log.info("📄 Fetching assignments without filters (page {}, size {})", pageable.getPageNumber(),
+            pageable.getPageSize());
+        return assignmentRepository.findAll(pageable).map(this::toDtoWithLinks);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<UserRoleHospitalAssignmentResponseDTO> getAllAssignments(Pageable pageable,
                                                                          AssignmentSearchCriteria criteria) {
-    UUID hospitalId = criteria != null ? parseUuid(criteria.getHospitalId()) : null;
-    Boolean active = criteria != null ? criteria.getActive() : null;
-    String search = criteria != null ? criteria.getSearch() : null;
-    String assignmentCode = criteria != null ? criteria.getAssignmentCode() : null;
+        UUID hospitalId = criteria != null ? parseUuid(criteria.getHospitalId()) : null;
+        Boolean active = criteria != null ? criteria.getActive() : null;
+        String search = criteria != null ? criteria.getSearch() : null;
+        String assignmentCode = criteria != null ? criteria.getAssignmentCode() : null;
 
-        Specification<UserRoleHospitalAssignment> specification = null;
-
-        Specification<UserRoleHospitalAssignment> hospitalSpec =
-            UserRoleHospitalAssignmentSpecification.belongsToHospital(hospitalId);
-        if (hospitalSpec != null) {
-            specification = specification == null ? hospitalSpec : specification.and(hospitalSpec);
-        }
-
-        Specification<UserRoleHospitalAssignment> activeSpec =
-            UserRoleHospitalAssignmentSpecification.hasActive(active);
-        if (activeSpec != null) {
-            specification = specification == null ? activeSpec : specification.and(activeSpec);
-        }
-
-        String trimmedSearch = search == null ? null : search.trim();
-        if (StringUtils.hasText(trimmedSearch)) {
-            Specification<UserRoleHospitalAssignment> searchSpec =
-                UserRoleHospitalAssignmentSpecification.matchesSearch(trimmedSearch);
-            if (searchSpec != null) {
-                specification = specification == null ? searchSpec : specification.and(searchSpec);
-            }
-        }
-
-        String trimmedAssignmentCode = assignmentCode == null ? null : assignmentCode.trim();
-        if (StringUtils.hasText(trimmedAssignmentCode)) {
-            Specification<UserRoleHospitalAssignment> codeSpec =
-                UserRoleHospitalAssignmentSpecification.hasAssignmentCode(trimmedAssignmentCode);
-            if (codeSpec != null) {
-                specification = specification == null ? codeSpec : specification.and(codeSpec);
-            }
-        }
+        Specification<UserRoleHospitalAssignment> specification = buildAssignmentSpec(
+            hospitalId, active, search, assignmentCode);
 
         if (specification == null) {
             log.info("📄 Fetching assignments without filters (page {}, size {})", pageable.getPageNumber(),
@@ -435,8 +454,35 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
 
         log.info("📄 Fetching assignments with filters hospitalId={}, active={}, search='{}', assignmentCode='{}' (page {}, size {})",
-            hospitalId, active, trimmedSearch, trimmedAssignmentCode, pageable.getPageNumber(), pageable.getPageSize());
+            hospitalId, active, search, assignmentCode, pageable.getPageNumber(), pageable.getPageSize());
         return assignmentRepository.findAll(specification, pageable).map(this::toDtoWithLinks);
+    }
+
+    private Specification<UserRoleHospitalAssignment> buildAssignmentSpec(
+            UUID hospitalId, Boolean active, String search, String assignmentCode) {
+        Specification<UserRoleHospitalAssignment> spec = null;
+        spec = combineSpec(spec, UserRoleHospitalAssignmentSpecification.belongsToHospital(hospitalId));
+        spec = combineSpec(spec, UserRoleHospitalAssignmentSpecification.hasActive(active));
+
+        String trimmedSearch = search == null ? null : search.trim();
+        if (StringUtils.hasText(trimmedSearch)) {
+            spec = combineSpec(spec, UserRoleHospitalAssignmentSpecification.matchesSearch(trimmedSearch));
+        }
+
+        String trimmedCode = assignmentCode == null ? null : assignmentCode.trim();
+        if (StringUtils.hasText(trimmedCode)) {
+            spec = combineSpec(spec, UserRoleHospitalAssignmentSpecification.hasAssignmentCode(trimmedCode));
+        }
+        return spec;
+    }
+
+    private Specification<UserRoleHospitalAssignment> combineSpec(
+            Specification<UserRoleHospitalAssignment> existing,
+            Specification<UserRoleHospitalAssignment> addition) {
+        if (addition == null) {
+            return existing;
+        }
+        return existing == null ? addition : existing.and(addition);
     }
 
     @Override
@@ -1152,7 +1198,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 log.info("🔄 Synced legacy user_roles entry for user '{}' and role '{}'",
                     user.getEmail(), getRoleCode(role));
             }
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             // Best-effort: do not fail primary flow
             log.warn("⚠️ Legacy role sync failed for user '{}' and role '{}': {}",
                 user.getEmail(), getRoleCode(role), e.getMessage());
@@ -1261,14 +1307,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
             String confirmationCode = assignment.getConfirmationCode();
             String assignmentCode = assignment.getAssignmentCode();
-            String roleDisplay = role != null ? getRoleCode(role) : "UNKNOWN_ROLE";
+            String roleDisplay = role != null ? getRoleCode(role) : UNKNOWN_ROLE;
             String hospitalDisplay = resolveHospitalName(hospital);
             String assigneeDisplay = resolveDisplayName(user, user != null ? user.getEmail() : "user");
 
             notifyRegistrarBySms(assignment.getRegisteredBy(), roleDisplay, assigneeDisplay, hospitalDisplay, assignmentCode, confirmationCode);
             notifyHospitalBySms(hospital, assigneeDisplay, roleDisplay, assignmentCode, confirmationCode);
             notifyAssigneeBySms(assignment, user, roleDisplay, hospitalDisplay, confirmationCode, assignmentCode);
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.warn("⚠️ Failed to send SMS notifications for assignment '{}': {}", assignment.getId(), e.getMessage());
         }
     }
@@ -1391,7 +1437,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 assignment.getAssignmentCode(),
                 profileCompletionUrl
             );
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to send assignment confirmation email for assignment '{}': {}", assignment.getId(), ex.getMessage());
         }
     }
@@ -1419,7 +1465,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 details.put("assigneeEmail", assignee.getEmail());
             }
 
-            String roleDisplay = role != null ? getRoleCode(role) : "UNKNOWN_ROLE";
+            String roleDisplay = role != null ? getRoleCode(role) : UNKNOWN_ROLE;
             String assigneeDisplay = resolveDisplayName(assignee, "unknown user");
 
             AuditEventRequestDTO auditEvent = AuditEventRequestDTO.builder()
@@ -1438,7 +1484,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .build();
 
             auditEventLogService.logEvent(auditEvent);
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to record audit log for assignment '{}': {}", assignment.getId(), ex.getMessage());
         }
     }
@@ -1455,7 +1501,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             Role role = assignment.getRole();
 
             String assigneeDisplay = resolveDisplayName(assignee, "unknown user");
-            String roleDisplay = role != null ? getRoleCode(role) : "UNKNOWN_ROLE";
+            String roleDisplay = role != null ? getRoleCode(role) : UNKNOWN_ROLE;
 
             AuditEventRequestDTO auditEvent = AuditEventRequestDTO.builder()
                 .userId(actor != null ? actor.getId() : null)
@@ -1473,7 +1519,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .build();
 
             auditEventLogService.logEvent(auditEvent);
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to record assignment confirmation audit for assignment '{}': {}", assignment.getId(), ex.getMessage());
         }
     }
@@ -1543,8 +1589,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             return "Unknown User";
         }
 
-        String firstName = StringUtils.trimWhitespace(user.getFirstName());
-        String lastName = StringUtils.trimWhitespace(user.getLastName());
+        String firstName = user.getFirstName() != null ? user.getFirstName().strip() : "";
+        String lastName = user.getLastName() != null ? user.getLastName().strip() : "";
 
         if (StringUtils.hasText(firstName) && StringUtils.hasText(lastName)) {
             return firstName + " " + lastName;

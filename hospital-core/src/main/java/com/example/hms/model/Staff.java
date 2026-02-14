@@ -2,8 +2,29 @@ package com.example.hms.model;
 
 import com.example.hms.enums.EmploymentType;
 import com.example.hms.enums.JobTitle;
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashSet;
@@ -32,6 +53,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"user", "hospital", "department", "assignment", "availabilities"})
+@EqualsAndHashCode(callSuper = true)
 public class Staff extends BaseEntity {
 
     @OneToOne(fetch = FetchType.LAZY, optional = false)

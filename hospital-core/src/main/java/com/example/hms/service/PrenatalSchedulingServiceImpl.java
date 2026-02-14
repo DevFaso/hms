@@ -43,6 +43,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -186,7 +187,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         if (context.isSuperAdmin()) {
             return;
         }
-        LinkedHashSet<UUID> scope = HospitalScopeUtils.resolveScope(context);
+        Set<UUID> scope = HospitalScopeUtils.resolveScope(context);
         if (!scope.contains(hospitalId)) {
             if (log.isWarnEnabled()) {
                 log.warn("User {} attempted to access hospital {} outside their scope {}", username, hospitalId, scope);
@@ -422,7 +423,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .collect(Collectors.groupingBy(PrenatalAppointmentSummaryDTO::getGestationalWeek, Collectors.counting()))
             .entrySet().stream()
             .filter(entry -> entry.getValue() > 1)
-            .map(entry -> entry.getKey())
+            .map(Map.Entry::getKey)
             .collect(Collectors.toSet());
         if (!seenWeeks.isEmpty()) {
             alerts.add("Multiple appointments scheduled for weeks: " + seenWeeks);

@@ -3,9 +3,16 @@ package com.example.hms.service;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientPrimaryCareMapper;
-import com.example.hms.model.*;
-import com.example.hms.payload.dto.*;
-import com.example.hms.repository.*;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.PatientPrimaryCare;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.payload.dto.PatientPrimaryCareRequestDTO;
+import com.example.hms.payload.dto.PatientPrimaryCareResponseDTO;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientPrimaryCareRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,7 +21,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.util.*;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor

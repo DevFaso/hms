@@ -18,7 +18,7 @@ public final class HospitalScopeUtils {
     /**
      * Merge permitted hospitals with the active hospital, preserving insertion order and uniqueness.
      */
-    public static LinkedHashSet<UUID> resolveScope(HospitalContext context) {
+    public static Set<UUID> resolveScope(HospitalContext context) {
         LinkedHashSet<UUID> scope = new LinkedHashSet<>(context.getPermittedHospitalIds());
         UUID activeHospitalId = context.getActiveHospitalId();
         if (activeHospitalId != null) {

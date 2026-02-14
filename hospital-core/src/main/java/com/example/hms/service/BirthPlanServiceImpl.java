@@ -27,7 +27,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Service implementation for Birth Plan operations.
@@ -132,7 +131,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
     @Transactional(readOnly = true)
     public List<BirthPlanResponseDTO> getBirthPlansByPatientId(UUID patientId, String username) {
         User user = getUserOrThrow(username);
-        Patient patient = getPatientByIdOrThrow(patientId);
+        getPatientByIdOrThrow(patientId);
 
         // Check access
         if (hasRole(user, ROLE_PATIENT)) {
@@ -147,14 +146,14 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         List<BirthPlan> birthPlans = birthPlanRepository.findByPatientIdOrderByCreatedAtDesc(patientId);
         return birthPlans.stream()
             .map(birthPlanMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
     @Transactional(readOnly = true)
     public BirthPlanResponseDTO getActiveBirthPlan(UUID patientId, String username) {
         User user = getUserOrThrow(username);
-        Patient patient = getPatientByIdOrThrow(patientId);
+        getPatientByIdOrThrow(patientId);
 
         // Check access
         if (hasRole(user, ROLE_PATIENT)) {
@@ -305,8 +304,6 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             }
         } else if (hasRole(user, ROLE_DOCTOR) || hasRole(user, ROLE_MIDWIFE) || hasRole(user, ROLE_NURSE)) {
             // Providers can access birth plans in their hospital
-            // Additional logic could check if provider is assigned to patient
-            return;
         } else {
             throw new AccessDeniedException("You do not have permission to access this birth plan");
         }
@@ -344,6 +341,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         throw new BusinessException("No hospital specified and patient has no hospital registrations");
     }
 
+    @SuppressWarnings("java:S1172") // user will be used when HospitalContext is implemented
     private UUID getUserHospitalId(User user) {
         // This would typically come from HospitalContext or user's assignments
         // For now, returning null to indicate it should be provided

@@ -22,6 +22,8 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class ServiceTranslationServiceImpl implements ServiceTranslationService {
+    private static final String TRANSLATION_NOT_FOUND_KEY = "translation.not.found";
+
 
     private final ServiceTranslationRepository translationRepository;
     private final TreatmentRepository treatmentRepository;
@@ -47,7 +49,7 @@ public class ServiceTranslationServiceImpl implements ServiceTranslationService 
     @Transactional(readOnly = true)
     public ServiceTranslationResponseDTO getTranslationById(UUID id, Locale locale) {
         ServiceTranslation translation = translationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(getMessage("translation.not.found", locale)));
+                .orElseThrow(() -> new ResourceNotFoundException(getMessage(TRANSLATION_NOT_FOUND_KEY, locale)));
         return mapper.toDto(translation);
     }
 
@@ -64,7 +66,7 @@ public class ServiceTranslationServiceImpl implements ServiceTranslationService 
     @Transactional
     public ServiceTranslationResponseDTO updateTranslation(UUID id, ServiceTranslationRequestDTO dto, Locale locale) {
         ServiceTranslation translation = translationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException(getMessage("translation.not.found", locale)));
+                .orElseThrow(() -> new ResourceNotFoundException(getMessage(TRANSLATION_NOT_FOUND_KEY, locale)));
 
         mapper.updateEntity(translation, dto);
         ServiceTranslation updated = translationRepository.save(translation);
@@ -75,7 +77,7 @@ public class ServiceTranslationServiceImpl implements ServiceTranslationService 
     @Transactional
     public void deleteTranslation(UUID id, Locale locale) {
         if (!translationRepository.existsById(id)) {
-            throw new ResourceNotFoundException(getMessage("translation.not.found", locale));
+            throw new ResourceNotFoundException(getMessage(TRANSLATION_NOT_FOUND_KEY, locale));
         }
         translationRepository.deleteById(id);
     }

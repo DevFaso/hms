@@ -26,10 +26,16 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("ActingContextInterceptor")
+@SuppressWarnings("java:S5976") // Individual tests preferred over parameterized for clarity
 class ActingContextInterceptorTest {
 
     private ActingContextInterceptor interceptor;
@@ -475,7 +481,7 @@ class ActingContextInterceptorTest {
 
         @Test
         @DisplayName("returns true (continues chain) when principal is a plain string")
-        void preHandle_stringPrincipal_continuesChain() throws Exception {
+        void preHandle_stringPrincipal_continuesChain() {
             // After refactoring, non-CustomUserDetails principals are handled gracefully
             setAuthentication(
                     new UsernamePasswordAuthenticationToken("plainUser", "password"));

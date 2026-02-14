@@ -1,12 +1,17 @@
 package com.example.hms.mapper;
 
-import com.example.hms.model.discharge.*;
-import com.example.hms.payload.dto.discharge.*;
+import com.example.hms.model.discharge.DischargeSummary;
+import com.example.hms.model.discharge.FollowUpAppointmentEntry;
+import com.example.hms.model.discharge.MedicationReconciliationEntry;
+import com.example.hms.model.discharge.PendingTestResultEntry;
+import com.example.hms.payload.dto.discharge.DischargeSummaryResponseDTO;
+import com.example.hms.payload.dto.discharge.FollowUpAppointmentDTO;
+import com.example.hms.payload.dto.discharge.MedicationReconciliationDTO;
+import com.example.hms.payload.dto.discharge.PendingTestResultDTO;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Mapper for DischargeSummary entities and DTOs
@@ -68,7 +73,7 @@ public class DischargeSummaryMapper {
         }
         return entries.stream()
             .map(this::toMedicationReconciliationDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     public MedicationReconciliationDTO toMedicationReconciliationDTO(MedicationReconciliationEntry entry) {
@@ -119,7 +124,7 @@ public class DischargeSummaryMapper {
         }
         return entries.stream()
             .map(this::toPendingTestResultDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     public PendingTestResultDTO toPendingTestResultDTO(PendingTestResultEntry entry) {
@@ -168,7 +173,7 @@ public class DischargeSummaryMapper {
         }
         return entries.stream()
             .map(this::toFollowUpAppointmentDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     public FollowUpAppointmentDTO toFollowUpAppointmentDTO(FollowUpAppointmentEntry entry) {

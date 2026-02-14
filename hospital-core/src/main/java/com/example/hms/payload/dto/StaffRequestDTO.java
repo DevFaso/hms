@@ -7,11 +7,19 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
-import jakarta.validation.constraints.*;
-import lombok.*;
+import jakarta.validation.constraints.FutureOrPresent;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Size;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 import java.time.LocalDate;
-// import java.util.UUID;
 
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor @Builder
@@ -19,8 +27,6 @@ import java.time.LocalDate;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(name = "StaffRequestDTO", description = "Payload to create or update a staff member")
 public class StaffRequestDTO {
-
-    // private UUID id;
 
     @NotBlank(message = "{staff.user.required}")
     @Schema(requiredMode = Schema.RequiredMode.REQUIRED, description = "User email linked to this staff profile")

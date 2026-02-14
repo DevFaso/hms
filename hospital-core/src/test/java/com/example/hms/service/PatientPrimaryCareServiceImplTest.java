@@ -3,10 +3,16 @@ package com.example.hms.service;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientPrimaryCareMapper;
-import com.example.hms.model.*;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.PatientPrimaryCare;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.PatientPrimaryCareRequestDTO;
 import com.example.hms.payload.dto.PatientPrimaryCareResponseDTO;
-import com.example.hms.repository.*;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientPrimaryCareRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -18,11 +24,21 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
 
 import java.time.LocalDate;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import java.util.Locale;
 
 @ExtendWith(MockitoExtension.class)
 class PatientPrimaryCareServiceImplTest {
@@ -153,12 +169,12 @@ class PatientPrimaryCareServiceImplTest {
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(eq(assignmentId), eq(hospitalId),
+            doNothing().when(roleValidator).validateRoleOrThrow(assignmentId, hospitalId,
                     eq("ROLE_DOCTOR"), any(Locale.class), eq(messageSource));
             when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId))
                     .thenReturn(Optional.of(existing));
             when(pcpRepo.save(existing)).thenReturn(existing);
-            when(mapper.toEntity(eq(requestDTO), eq(patient), eq(hospital), eq(assignment)))
+            when(mapper.toEntity(requestDTO, patient, hospital, assignment))
                     .thenReturn(pcpEntity);
             when(pcpRepo.save(pcpEntity)).thenReturn(pcpEntity);
             when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
@@ -177,11 +193,11 @@ class PatientPrimaryCareServiceImplTest {
             when(patientRepo.findById(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(assignmentRepo.findById(assignmentId)).thenReturn(Optional.of(assignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(eq(assignmentId), eq(hospitalId),
+            doNothing().when(roleValidator).validateRoleOrThrow(assignmentId, hospitalId,
                     eq("ROLE_DOCTOR"), any(Locale.class), eq(messageSource));
             when(pcpRepo.findCurrentByPatientAndHospital(patientId, hospitalId))
                     .thenReturn(Optional.empty());
-            when(mapper.toEntity(eq(requestDTO), eq(patient), eq(hospital), eq(assignment)))
+            when(mapper.toEntity(requestDTO, patient, hospital, assignment))
                     .thenReturn(pcpEntity);
             when(pcpRepo.save(pcpEntity)).thenReturn(pcpEntity);
             when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
@@ -320,7 +336,7 @@ class PatientPrimaryCareServiceImplTest {
 
             when(pcpRepo.findById(pcpId)).thenReturn(Optional.of(pcpEntity));
             when(assignmentRepo.findById(newAssignmentId)).thenReturn(Optional.of(newAssignment));
-            doNothing().when(roleValidator).validateRoleOrThrow(eq(newAssignmentId), eq(hospitalId),
+            doNothing().when(roleValidator).validateRoleOrThrow(newAssignmentId, hospitalId,
                     eq("ROLE_DOCTOR"), any(Locale.class), eq(messageSource));
             when(pcpRepo.save(pcpEntity)).thenReturn(pcpEntity);
             when(mapper.toDto(pcpEntity)).thenReturn(responseDTO);
@@ -394,7 +410,8 @@ class PatientPrimaryCareServiceImplTest {
         void notFound() {
             when(pcpRepo.findById(pcpId)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.endPrimaryCare(pcpId, LocalDate.now()))
+            LocalDate today = LocalDate.now();
+            assertThatThrownBy(() -> service.endPrimaryCare(pcpId, today))
                     .isInstanceOf(ResourceNotFoundException.class);
         }
 
@@ -416,7 +433,8 @@ class PatientPrimaryCareServiceImplTest {
 
             when(pcpRepo.findById(pcpId)).thenReturn(Optional.of(pcpEntity));
 
-            assertThatThrownBy(() -> service.endPrimaryCare(pcpId, LocalDate.of(2025, 5, 1)))
+            LocalDate endDate = LocalDate.of(2025, 5, 1);
+            assertThatThrownBy(() -> service.endPrimaryCare(pcpId, endDate))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("before startDate");
         }

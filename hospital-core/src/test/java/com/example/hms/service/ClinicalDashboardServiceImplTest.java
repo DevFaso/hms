@@ -1,6 +1,11 @@
 package com.example.hms.service;
 
-import com.example.hms.payload.dto.clinical.*;
+import com.example.hms.payload.dto.clinical.ClinicalAlertDTO;
+import com.example.hms.payload.dto.clinical.ClinicalDashboardResponseDTO;
+import com.example.hms.payload.dto.clinical.DashboardKPI;
+import com.example.hms.payload.dto.clinical.InboxCountsDTO;
+import com.example.hms.payload.dto.clinical.OnCallStatusDTO;
+import com.example.hms.payload.dto.clinical.RoomedPatientDTO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,7 +15,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Unit tests for ClinicalDashboardServiceImpl - Phase 1 Day 2

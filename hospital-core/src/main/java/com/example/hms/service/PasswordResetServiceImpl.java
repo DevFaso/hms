@@ -143,7 +143,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         byte[] bytes = new byte[TOKEN_BYTES];
         try {
             SecureRandom.getInstanceStrong().nextBytes(bytes);
-        } catch (Exception e) {
+        } catch (java.security.NoSuchAlgorithmException | RuntimeException e) {
             FALLBACK_RANDOM.nextBytes(bytes);
         }
         return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
@@ -156,7 +156,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
             StringBuilder sb = new StringBuilder(dig.length * 2);
             for (byte b : dig) sb.append(String.format("%02x", b));
             return sb.toString();
-        } catch (Exception e) {
+        } catch (java.security.NoSuchAlgorithmException | RuntimeException e) {
             throw new IllegalStateException("Unable to hash token", e);
         }
     }

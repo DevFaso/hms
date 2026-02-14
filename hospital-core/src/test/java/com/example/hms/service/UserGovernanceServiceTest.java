@@ -74,9 +74,10 @@ class UserGovernanceServiceTest {
 
     @Test
     void importUsersParsesCsvAndQueuesInvitations() {
-        String csv = "username,email,firstName,lastName,phoneNumber,roles\n" +
-            "alice,alice@example.com,Alice,Smith,1111,DOCTOR\n" +
-            "bob,bob@example.com,Bob,Jones,2222,ROLE_NURSE";
+        String csv = """
+            username,email,firstName,lastName,phoneNumber,roles
+            alice,alice@example.com,Alice,Smith,1111,DOCTOR
+            bob,bob@example.com,Bob,Jones,2222,ROLE_NURSE""";
 
         SuperAdminUserBulkImportRequestDTO request = SuperAdminUserBulkImportRequestDTO.builder()
             .csvContent(csv)

@@ -243,14 +243,12 @@ public class UltrasoundController {
             try {
                 // If your User/UserDetails has getId() method
                 Object principal = authentication.getPrincipal();
-                if (principal instanceof org.springframework.security.core.userdetails.UserDetails) {
-                    // You may need to cast to your custom UserDetails implementation
-                    // that has a getId() method, or extract from username
-                    String username = ((org.springframework.security.core.userdetails.UserDetails) principal).getUsername();
+                if (principal instanceof org.springframework.security.core.userdetails.UserDetails userDetails) {
+                    String username = userDetails.getUsername();
                     // If username is UUID string, parse it
                     return UUID.fromString(username);
                 }
-            } catch (Exception e) {
+            } catch (RuntimeException e) {
                 // Fallback: return null and let service layer handle
                 return null;
             }

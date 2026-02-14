@@ -1,9 +1,24 @@
 package com.example.hms.model;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
@@ -26,6 +41,7 @@ import java.util.Objects;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"sender", "recipient", "assignment"})
+@EqualsAndHashCode(callSuper = true)
 public class ChatMessage extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -53,7 +69,7 @@ public class ChatMessage extends BaseEntity {
     private boolean read = false;
 
 
-    private LocalDateTime Timestamp;
+    private LocalDateTime timestamp;
 
     /** Context (role@hospital) of the sender at send time. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

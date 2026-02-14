@@ -1,7 +1,12 @@
 package com.example.hms.mapper;
 
 
-import com.example.hms.model.*;
+import com.example.hms.model.Appointment;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AppointmentRequestDTO;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import org.springframework.stereotype.Component;

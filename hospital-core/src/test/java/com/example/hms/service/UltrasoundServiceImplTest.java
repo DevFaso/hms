@@ -37,8 +37,11 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class UltrasoundServiceImplTest {
@@ -588,7 +591,8 @@ class UltrasoundServiceImplTest {
 
         when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
 
-        assertThatThrownBy(() -> ultrasoundService.updateOrder(orderId, UltrasoundOrderRequestDTO.builder().build()))
+        UltrasoundOrderRequestDTO request = UltrasoundOrderRequestDTO.builder().build();
+        assertThatThrownBy(() -> ultrasoundService.updateOrder(orderId, request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("cancelled");
     }

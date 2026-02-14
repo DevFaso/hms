@@ -9,7 +9,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.ApplicationArguments;
 
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class DevContentDataLoaderTest {
@@ -110,5 +112,7 @@ class DevContentDataLoaderTest {
 
         verify(articleRepository).count();
         verify(testimonialRepository).count();
+        // Both seed methods execute their debug log path
+        verifyNoMoreInteractions(articleRepository);
     }
 }

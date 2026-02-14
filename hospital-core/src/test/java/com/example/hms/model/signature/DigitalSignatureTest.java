@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class DigitalSignatureTest {
 
@@ -127,7 +127,7 @@ class DigitalSignatureTest {
         assertThat(ds.getReportId()).isEqualTo(reportId);
         // @Builder.Default fields
         assertThat(ds.getStatus()).isEqualTo(SignatureStatus.PENDING);
-        assertThat(ds.getVerificationCount()).isEqualTo(0);
+        assertThat(ds.getVerificationCount()).isZero();
         assertThat(ds.getAuditLog()).isNotNull().isEmpty();
     }
 
@@ -135,7 +135,7 @@ class DigitalSignatureTest {
     void builderMinimal() {
         DigitalSignature ds = DigitalSignature.builder().build();
         assertThat(ds.getStatus()).isEqualTo(SignatureStatus.PENDING);
-        assertThat(ds.getVerificationCount()).isEqualTo(0);
+        assertThat(ds.getVerificationCount()).isZero();
         assertThat(ds.getAuditLog()).isNotNull().isEmpty();
     }
 
@@ -205,10 +205,10 @@ class DigitalSignatureTest {
                 .signatureValue("v")
                 .build();
         String s = ds.toString();
-        assertThat(s).contains("reportType");
-        assertThat(s).contains("signatureHash");
-        assertThat(s).doesNotContain("signedBy=");
-        assertThat(s).doesNotContain("hospital=");
+        assertThat(s).contains("reportType")
+            .contains("signatureHash")
+            .doesNotContain("signedBy=")
+            .doesNotContain("hospital=");
     }
 
     // ─── equals / hashCode (callSuper=true, from BaseEntity) ────
@@ -220,8 +220,7 @@ class DigitalSignatureTest {
         a.setId(id);
         DigitalSignature b = DigitalSignature.builder().build();
         b.setId(id);
-        assertThat(a).isEqualTo(b);
-        assertThat(a.hashCode()).isEqualTo(b.hashCode());
+        assertThat(a).isEqualTo(b).hasSameHashCodeAs(b);
     }
 
     @Test

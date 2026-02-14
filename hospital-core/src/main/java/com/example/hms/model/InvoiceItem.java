@@ -1,9 +1,29 @@
 package com.example.hms.model;
 
 import com.example.hms.enums.ItemCategory;
-import jakarta.persistence.*;
-import jakarta.validation.constraints.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -19,6 +39,7 @@ import java.util.Objects;
 )
 @Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = {"billingInvoice", "assignment", "relatedService"})
+@EqualsAndHashCode(callSuper = true)
 public class InvoiceItem extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -78,10 +99,9 @@ public class InvoiceItem extends BaseEntity {
             throw new IllegalStateException("InvoiceItem.assignment.hospital must match invoice.hospital");
         }
         // If relatedService is set, its hospital must also match invoice hospital
-        if (relatedService != null && relatedService.getHospital() != null) {
-            if (!Objects.equals(relatedService.getHospital().getId(), billingInvoice.getHospital().getId())) {
-                throw new IllegalStateException("InvoiceItem.relatedService.hospital must match invoice.hospital");
-            }
+        if (relatedService != null && relatedService.getHospital() != null
+                && !Objects.equals(relatedService.getHospital().getId(), billingInvoice.getHospital().getId())) {
+            throw new IllegalStateException("InvoiceItem.relatedService.hospital must match invoice.hospital");
         }
     }
 }

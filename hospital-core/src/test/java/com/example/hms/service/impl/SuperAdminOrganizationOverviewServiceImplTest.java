@@ -432,9 +432,9 @@ class SuperAdminOrganizationOverviewServiceImplTest {
             .jobTitle(JobTitle.NURSE)
             .active(true)
             .build();
-        when(staffService.getStaffByHospitalIdAndActiveTrue(eq(northCampus.getId()), eq(staffRequest)))
+        when(staffService.getStaffByHospitalIdAndActiveTrue(northCampus.getId(), staffRequest))
             .thenReturn(new PageImpl<>(List.of(staffMember), staffRequest, 2));
-        when(staffService.getStaffByHospitalIdAndActiveTrue(eq(satelliteClinic.getId()), eq(staffRequest)))
+        when(staffService.getStaffByHospitalIdAndActiveTrue(satelliteClinic.getId(), staffRequest))
             .thenReturn(new PageImpl<>(List.of(), staffRequest, 0));
 
         PageRequest patientRequest = PageRequest.of(0, 100);
@@ -461,9 +461,9 @@ class SuperAdminOrganizationOverviewServiceImplTest {
             .email("unknown@example.org")
             .active(false)
             .build();
-        when(patientService.getPatientPageByHospital(eq(northCampus.getId()), eq(Boolean.TRUE), eq(patientRequest)))
+        when(patientService.getPatientPageByHospital(northCampus.getId(), Boolean.TRUE, patientRequest))
             .thenReturn(new PageImpl<>(List.of(patientA, patientB, patientC), patientRequest, 3));
-        when(patientService.getPatientPageByHospital(eq(satelliteClinic.getId()), eq(Boolean.TRUE), eq(patientRequest)))
+        when(patientService.getPatientPageByHospital(satelliteClinic.getId(), Boolean.TRUE, patientRequest))
             .thenReturn(new PageImpl<>(List.of(), patientRequest, 0));
 
         SuperAdminOrganizationHierarchyResponseDTO response = service.getOrganizationHierarchy(
@@ -511,8 +511,8 @@ class SuperAdminOrganizationOverviewServiceImplTest {
         assertThat(deltaNode.getHospitals().get(0).getStaff()).isEmpty();
         assertThat(deltaNode.getHospitals().get(0).getPatients()).isEmpty();
 
-        verify(patientService).getPatientPageByHospital(eq(northCampus.getId()), eq(Boolean.TRUE), eq(patientRequest));
-        verify(patientService).getPatientPageByHospital(eq(satelliteClinic.getId()), eq(Boolean.TRUE), eq(patientRequest));
+        verify(patientService).getPatientPageByHospital(northCampus.getId(), Boolean.TRUE, patientRequest);
+        verify(patientService).getPatientPageByHospital(satelliteClinic.getId(), Boolean.TRUE, patientRequest);
     }
 
     @Test

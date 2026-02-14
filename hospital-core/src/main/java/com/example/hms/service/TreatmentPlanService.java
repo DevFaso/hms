@@ -1,7 +1,12 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.TreatmentPlanStatus;
-import com.example.hms.payload.dto.clinical.treatment.*;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanFollowUpDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanFollowUpRequestDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanRequestDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanReviewDTO;
+import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanReviewRequestDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 

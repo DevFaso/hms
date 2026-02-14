@@ -6,11 +6,18 @@ import com.example.hms.model.Role;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRole;
 import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.payload.dto.*;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.payload.dto.HospitalResponseDTO;
+import com.example.hms.payload.dto.PatientConsentRequestDTO;
+import com.example.hms.payload.dto.PatientConsentResponseDTO;
+import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
-import com.example.hms.service.*;
+import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.HospitalService;
+import com.example.hms.service.PatientConsentService;
+import com.example.hms.service.PatientService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -26,7 +33,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Locale;
 import java.util.UUID;
@@ -80,7 +93,7 @@ public class PatientConsentController {
             if (detailsJson.length() > MAX_AUDIT_DETAILS_LENGTH) {
                 detailsJson = detailsJson.substring(0, MAX_AUDIT_DETAILS_LENGTH) + "...";
             }
-        } catch (Exception e) {
+        } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException e) {
             detailsJson = "Could not serialize consent: " + e.getMessage();
         }
 

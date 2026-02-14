@@ -26,6 +26,8 @@ import java.util.UUID;
 @Slf4j
 @Service
 public class FileUploadService {
+    private static final String PROFILE_IMAGES_PATH = "profile-images";
+
 
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
@@ -51,7 +53,7 @@ public class FileUploadService {
         validateImageFile(file);
 
         // Create uploads directory if it doesn't exist
-        Path uploadPath = Paths.get(uploadDir, "profile-images");
+        Path uploadPath = Paths.get(uploadDir, PROFILE_IMAGES_PATH);
         Files.createDirectories(uploadPath);
 
         String originalFilename = file.getOriginalFilename();
@@ -84,8 +86,8 @@ public class FileUploadService {
             // Extract filename from URL (e.g., "/api/uploads/profile-images/filename.jpg"
             // -> "filename.jpg")
             String filename = imageUrl.substring(imageUrl.lastIndexOf('/') + 1);
-            Path filePath = Paths.get(uploadDir, "profile-images", filename).normalize();
-            Path expectedParent = Paths.get(uploadDir, "profile-images").normalize();
+            Path filePath = Paths.get(uploadDir, PROFILE_IMAGES_PATH, filename).normalize();
+            Path expectedParent = Paths.get(uploadDir, PROFILE_IMAGES_PATH).normalize();
             if (!filePath.startsWith(expectedParent)) {
                 log.warn("Path traversal attempt detected in deleteProfileImage: {}", imageUrl);
                 return;
@@ -95,7 +97,7 @@ public class FileUploadService {
                 Files.delete(filePath);
                 log.info("Profile image deleted successfully: {}", filePath);
             }
-        } catch (Exception e) {
+        } catch (IOException | RuntimeException e) {
             log.warn("Failed to delete profile image: {}", imageUrl, e);
         }
     }
@@ -243,7 +245,7 @@ public class FileUploadService {
         String candidate;
         try {
             candidate = Paths.get(originalFilename).getFileName().toString();
-        } catch (Exception invalidPath) {
+        } catch (RuntimeException invalidPath) {
             log.debug("[Upload] Unable to derive filename from '{}' - {}", originalFilename, invalidPath.getMessage());
             candidate = originalFilename;
         }

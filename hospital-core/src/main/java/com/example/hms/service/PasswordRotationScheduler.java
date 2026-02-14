@@ -57,25 +57,10 @@ public class PasswordRotationScheduler {
             countdown.computeIfAbsent(info.daysUntilDue(), key -> new ArrayList<>())
                 .add(user.getEmail().toLowerCase(Locale.ROOT));
 
-            if (info.daysUntilDue() <= 0) {
-                EnforcementResult enforcement = applyEnforcement(user, info, snapshot);
-                if (enforcement.stateChanged()) {
-                    dirtyUsers.add(user);
-                }
-                if (enforcement.notificationSent()) {
-                    forced++;
-                }
-            } else {
-                ReminderResult reminder = maybeSendReminder(user, info, snapshot);
-                if (reminder.stateChanged()) {
-                    dirtyUsers.add(user);
-                }
-                if (reminder.notificationSent()) {
-                    reminders++;
-                } else if (clearStaleWarning(user, info)) {
-                    dirtyUsers.add(user);
-                }
-            }
+            UserRotationResult result = processUserRotation(user, info, snapshot);
+            if (result.stateChanged()) dirtyUsers.add(user);
+            if (result.isForced()) forced++;
+            if (result.isReminder()) reminders++;
         }
 
         if (!dirtyUsers.isEmpty()) {
@@ -83,13 +68,7 @@ public class PasswordRotationScheduler {
         }
 
         if (!countdown.isEmpty()) {
-            countdown.forEach((days, emails) -> {
-                if (days >= 0) {
-                    log.info("[PASSWORD ROTATION] {} day(s) remaining -> {}", days, emails);
-                } else {
-                    log.warn("[PASSWORD ROTATION] {} day(s) overdue -> {}", Math.abs(days), emails);
-                }
-            });
+            logCountdown(countdown);
         }
 
         log.info("[PASSWORD ROTATION] Daily job complete. Reminders sent: {}, forced resets queued: {}", reminders, forced);
@@ -103,7 +82,7 @@ public class PasswordRotationScheduler {
                 daysUntilDue,
                 dueOn
             );
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             log.warn("[PASSWORD ROTATION] Failed to send reminder to {}: {}", user.getEmail(), ex.getMessage());
         }
     }
@@ -116,7 +95,7 @@ public class PasswordRotationScheduler {
                 dueOn,
                 daysOverdue
             );
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             log.warn("[PASSWORD ROTATION] Failed to send enforcement email to {}: {}", user.getEmail(), ex.getMessage());
         }
     }
@@ -210,5 +189,38 @@ public class PasswordRotationScheduler {
     }
 
     private record EnforcementResult(boolean stateChanged, boolean notificationSent) {
+    }
+
+    private record UserRotationResult(boolean stateChanged, boolean isForced, boolean isReminder) {
+    }
+
+    private void logCountdown(Map<Long, List<String>> countdown) {
+        countdown.forEach((days, emails) -> {
+            if (days >= 0) {
+                log.info("[PASSWORD ROTATION] {} day(s) remaining -> {}", days, emails);
+            } else {
+                log.warn("[PASSWORD ROTATION] {} day(s) overdue -> {}", Math.abs(days), emails);
+            }
+        });
+    }
+
+    private UserRotationResult processUserRotation(User user, RotationInfo info, LocalDateTime snapshot) {
+        boolean stateChanged = false;
+        boolean isForced = false;
+        boolean isReminder = false;
+
+        if (info.daysUntilDue() <= 0) {
+            EnforcementResult enforcement = applyEnforcement(user, info, snapshot);
+            stateChanged = enforcement.stateChanged();
+            isForced = enforcement.notificationSent();
+        } else {
+            ReminderResult reminder = maybeSendReminder(user, info, snapshot);
+            stateChanged = reminder.stateChanged();
+            isReminder = reminder.notificationSent();
+            if (!isReminder && clearStaleWarning(user, info)) {
+                stateChanged = true;
+            }
+        }
+        return new UserRotationResult(stateChanged, isForced, isReminder);
     }
 }

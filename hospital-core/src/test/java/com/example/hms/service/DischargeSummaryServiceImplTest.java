@@ -3,11 +3,21 @@ package com.example.hms.service;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.DischargeSummaryMapper;
-import com.example.hms.model.*;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.discharge.DischargeSummary;
 import com.example.hms.payload.dto.discharge.DischargeSummaryRequestDTO;
 import com.example.hms.payload.dto.discharge.DischargeSummaryResponseDTO;
-import com.example.hms.repository.*;
+import com.example.hms.repository.DischargeApprovalRepository;
+import com.example.hms.repository.DischargeSummaryRepository;
+import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -24,7 +34,8 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class DischargeSummaryServiceImplTest {
@@ -152,7 +163,8 @@ class DischargeSummaryServiceImplTest {
 
     @Test void finalizeDischargeSummary_wrongProvider_throws() {
         when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
-        assertThatThrownBy(() -> service.finalizeDischargeSummary(summaryId, "Dr. Sig", UUID.randomUUID(), Locale.ENGLISH))
+        UUID randomId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.finalizeDischargeSummary(summaryId, "Dr. Sig", randomId, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class);
     }
 

@@ -88,7 +88,7 @@ public class PrenatalSchedulingController {
                 builder.setVariant(parts[2]);
             }
             return builder.build();
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             return Locale.getDefault();
         }
     }

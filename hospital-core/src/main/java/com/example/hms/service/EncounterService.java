@@ -1,7 +1,13 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.EncounterStatus;
-import com.example.hms.payload.dto.*;
+import com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO;
+import com.example.hms.payload.dto.EncounterNoteAddendumResponseDTO;
+import com.example.hms.payload.dto.EncounterNoteHistoryResponseDTO;
+import com.example.hms.payload.dto.EncounterNoteRequestDTO;
+import com.example.hms.payload.dto.EncounterNoteResponseDTO;
+import com.example.hms.payload.dto.EncounterRequestDTO;
+import com.example.hms.payload.dto.EncounterResponseDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -10,6 +16,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+@SuppressWarnings("java:S107") // list() method uses individual filter parameters for controller binding
 public interface EncounterService {
 
     EncounterResponseDTO createEncounter(EncounterRequestDTO request, Locale locale);

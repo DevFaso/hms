@@ -124,7 +124,7 @@ public class FamilyHistoryMapper {
                 .sourceOfInformation(dto.getSourceOfInformation())
                 .verified(dto.getVerified())
                 .verificationDate(dto.getVerificationDate())
-                .active(dto.getActive() != null ? dto.getActive() : true)
+                .active(dto.getActive() == null || dto.getActive())
                 // Pedigree
                 .generation(dto.getGeneration())
                 .pedigreeId(dto.getPedigreeId())

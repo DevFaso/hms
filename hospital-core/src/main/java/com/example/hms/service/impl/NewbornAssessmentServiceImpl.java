@@ -342,7 +342,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
                     alert.getType(), patientName.isBlank() ? "patient" : patientName, alert.getMessage());
                 try {
                     notificationService.createNotification(message, documentedBy.getUsername());
-                } catch (Exception ex) {
+                } catch (RuntimeException ex) {
                     log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
                 }
             });

@@ -21,6 +21,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
+import lombok.EqualsAndHashCode;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -51,6 +52,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"patient", "hospital", "prescription"})
+@EqualsAndHashCode(callSuper = true)
 public class PharmacyFill extends BaseEntity {
 
     @NotNull

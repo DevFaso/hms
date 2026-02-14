@@ -7,7 +7,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 
 import static java.util.Collections.emptyList;

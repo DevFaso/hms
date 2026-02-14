@@ -23,13 +23,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 @Transactional
 public class ImmunizationServiceImpl implements ImmunizationService {
+    private static final String IMMUNIZATION_NOT_FOUND_PREFIX = "Immunization not found with id: ";
+
 
     private final ImmunizationRepository immunizationRepository;
     private final PatientRepository patientRepository;
@@ -73,7 +74,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.debug("Fetching immunization with id: {}", id);
         
         PatientImmunization immunization = immunizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Immunization not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_PREFIX + id));
 
         return immunizationMapper.toResponseDTO(immunization);
     }
@@ -92,7 +93,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         
         return immunizations.stream()
                 .map(immunizationMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -109,7 +110,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         
         return immunizations.stream()
                 .map(immunizationMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -125,7 +126,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         
         return overdueImmunizations.stream()
                 .map(immunizationMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -142,7 +143,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         
         return upcomingImmunizations.stream()
                 .map(immunizationMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -159,7 +160,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         
         return needingReminders.stream()
                 .map(immunizationMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -167,7 +168,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.info("Marking reminder sent for immunization: {}", immunizationId);
 
         PatientImmunization immunization = immunizationRepository.findById(immunizationId)
-                .orElseThrow(() -> new ResourceNotFoundException("Immunization not found with id: " + immunizationId));
+                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_PREFIX + immunizationId));
 
         immunization.setReminderSent(true);
         immunization.setReminderSentDate(LocalDate.now());
@@ -181,7 +182,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.info("Updating immunization with id: {}", id);
 
         PatientImmunization existingImmunization = immunizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Immunization not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_PREFIX + id));
 
         // Update staff if changed
         if (requestDTO.getAdministeredByStaffId() != null && 
@@ -213,7 +214,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         log.info("Deleting immunization with id: {}", id);
 
         PatientImmunization immunization = immunizationRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Immunization not found with id: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_PREFIX + id));
 
         immunization.setActive(false);
         immunizationRepository.save(immunization);

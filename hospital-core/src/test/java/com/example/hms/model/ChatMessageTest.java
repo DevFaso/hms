@@ -8,7 +8,16 @@ import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 class ChatMessageTest {
 
@@ -33,10 +42,12 @@ class ChatMessageTest {
             Method m = ChatMessage.class.getDeclaredMethod("validate");
             m.setAccessible(true);
             m.invoke(msg);
-        } catch (Exception e) {
+        } catch (java.lang.reflect.InvocationTargetException e) {
             if (e.getCause() instanceof IllegalStateException ise) {
                 throw ise;
             }
+            throw new RuntimeException(e);
+        } catch (ReflectiveOperationException e) {
             throw new RuntimeException(e);
         }
     }
@@ -113,7 +124,7 @@ class ChatMessageTest {
                 .content("Hi there")
                 .sentAt(sentAt)
                 .read(true)
-                .Timestamp(LocalDateTime.now())
+                .timestamp(LocalDateTime.now())
                 .assignment(assignment)
                 .build();
 

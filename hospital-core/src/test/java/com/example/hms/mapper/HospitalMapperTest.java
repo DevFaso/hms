@@ -1,13 +1,16 @@
 package com.example.hms.mapper;
 
-import com.example.hms.model.*;
-import com.example.hms.payload.dto.*;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Organization;
+import com.example.hms.payload.dto.HospitalRequestDTO;
+import com.example.hms.payload.dto.HospitalResponseDTO;
 import org.junit.jupiter.api.Test;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 
 class HospitalMapperTest {
 

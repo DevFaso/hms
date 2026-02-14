@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
-import com.example.hms.exception.*;
+import com.example.hms.exception.BusinessValidationException;
+import com.example.hms.exception.UnauthorizedAccessException;
 import com.example.hms.model.Treatment;
 import com.example.hms.payload.dto.TreatmentRequestDTO;
 import com.example.hms.repository.DepartmentRepository;

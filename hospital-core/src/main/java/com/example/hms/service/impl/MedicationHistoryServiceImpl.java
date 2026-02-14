@@ -33,12 +33,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class MedicationHistoryServiceImpl implements MedicationHistoryService {
+    private static final String NON_DIGIT_REGEX = "\\D";
+
 
     private final PharmacyFillRepository pharmacyFillRepository;
     private final PrescriptionRepository prescriptionRepository;
@@ -59,9 +60,9 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         log.info("Generating medication timeline for patient: {}, hospital: {}", patientId, hospitalId);
 
         // Validate patient and hospital exist
-        Patient patient = patientRepository.findById(patientId)
+        patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
-        Hospital hospital = hospitalRepository.findById(hospitalId)
+        hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
 
         // Fetch prescriptions and pharmacy fills
@@ -96,7 +97,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         // Convert interactions to DTOs
         List<DrugInteractionDTO> interactionDTOs = interactions.stream()
             .map(this::convertInteractionToDTO)
-            .collect(Collectors.toList());
+            .toList();
 
         // Calculate statistics
         int total = timeline.size();
@@ -168,7 +169,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         List<PharmacyFill> fills = pharmacyFillRepository.findByPatient_IdAndHospital_IdOrderByFillDateDesc(patientId, hospitalId);
         return fills.stream()
             .map(pharmacyFillMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -209,7 +210,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         if (startDate != null || endDate != null) {
             prescriptions = prescriptions.stream()
                 .filter(p -> isWithinDateRange(p.getCreatedAt().toLocalDate(), startDate, endDate))
-                .collect(Collectors.toList());
+                .toList();
         }
         
         return prescriptions;
@@ -227,16 +228,13 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
         if (startDate != null && date.isBefore(startDate)) {
             return false;
         }
-        if (endDate != null && date.isAfter(endDate)) {
-            return false;
-        }
-        return true;
+        return endDate == null || !date.isAfter(endDate);
     }
 
     private List<MedicationTimelineEntryDTO> convertPrescriptionsToTimelineEntries(List<Prescription> prescriptions) {
         return prescriptions.stream()
             .map(this::prescriptionToTimelineEntry)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private MedicationTimelineEntryDTO prescriptionToTimelineEntry(Prescription rx) {
@@ -276,7 +274,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
     private List<MedicationTimelineEntryDTO> convertFillsToTimelineEntries(List<PharmacyFill> fills) {
         return fills.stream()
             .map(this::fillToTimelineEntry)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private MedicationTimelineEntryDTO fillToTimelineEntry(PharmacyFill fill) {
@@ -331,34 +329,32 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             for (int j = i + 1; j < timeline.size(); j++) {
                 MedicationTimelineEntryDTO med2 = timeline.get(j);
                 
-                // Check if date ranges overlap
-                if (datesOverlap(med1.getStartDate(), med1.getEndDate(), med2.getStartDate(), med2.getEndDate())) {
-                    // Check if same/similar medication
-                    if (isSameMedication(med1, med2)) {
-                        int overlapDays = calculateOverlapDays(
-                            med1.getStartDate(), med1.getEndDate(),
-                            med2.getStartDate(), med2.getEndDate()
-                        );
-                        
-                        // Mark overlap for med1
-                        med1.setHasOverlap(true);
-                        med1.getOverlappingWith().add(med2.getEntryId());
-                        if (med1.getOverlapDays() == null || overlapDays > med1.getOverlapDays()) {
-                            med1.setOverlapDays(overlapDays);
-                        }
-                        
-                        // Mark overlap for med2
-                        med2.setHasOverlap(true);
-                        med2.getOverlappingWith().add(med1.getEntryId());
-                        if (med2.getOverlapDays() == null || overlapDays > med2.getOverlapDays()) {
-                            med2.setOverlapDays(overlapDays);
-                        }
-                    }
+                if (datesOverlap(med1.getStartDate(), med1.getEndDate(), med2.getStartDate(), med2.getEndDate())
+                        && isSameMedication(med1, med2)) {
+                        markOverlap(med1, med2);
                 }
             }
         }
     }
 
+    private void markOverlap(MedicationTimelineEntryDTO med1, MedicationTimelineEntryDTO med2) {
+        int overlapDays = calculateOverlapDays(
+            med1.getStartDate(), med1.getEndDate(),
+            med2.getStartDate(), med2.getEndDate()
+        );
+        
+        med1.setHasOverlap(true);
+        med1.getOverlappingWith().add(med2.getEntryId());
+        if (med1.getOverlapDays() == null || overlapDays > med1.getOverlapDays()) {
+            med1.setOverlapDays(overlapDays);
+        }
+        
+        med2.setHasOverlap(true);
+        med2.getOverlappingWith().add(med1.getEntryId());
+        if (med2.getOverlapDays() == null || overlapDays > med2.getOverlapDays()) {
+            med2.setOverlapDays(overlapDays);
+        }
+    }
     private boolean datesOverlap(LocalDate start1, LocalDate end1, LocalDate start2, LocalDate end2) {
         if (start1 == null || start2 == null) {
             return false; // Can't determine overlap without start dates
@@ -405,7 +401,7 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             .map(MedicationTimelineEntryDTO::getMedicationCode)
             .filter(code -> code != null && !code.isEmpty())
             .distinct()
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private void flagInteractions(List<MedicationTimelineEntryDTO> timeline, List<DrugInteraction> interactions) {
@@ -413,7 +409,6 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             return;
         }
         
-        // Build map of drug code -> medication names for quick lookup
         Map<String, Set<String>> codeToNames = new HashMap<>();
         for (MedicationTimelineEntryDTO entry : timeline) {
             if (entry.getMedicationCode() != null) {
@@ -422,35 +417,30 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             }
         }
         
-        // Flag medications with interactions
         for (DrugInteraction interaction : interactions) {
-            String drug1Code = interaction.getDrug1Code();
-            String drug2Code = interaction.getDrug2Code();
-            
-            // Find entries with these codes
             for (MedicationTimelineEntryDTO entry : timeline) {
-                if (entry.getMedicationCode() == null) continue;
-                
-                if (entry.getMedicationCode().equals(drug1Code)) {
-                    entry.setHasInteraction(true);
-                    // Add interacting drug names
-                    Set<String> drug2Names = codeToNames.get(drug2Code);
-                    if (drug2Names != null) {
-                        entry.getInteractingWith().addAll(drug2Names);
-                    } else {
-                        entry.getInteractingWith().add(interaction.getDrug2Name());
-                    }
-                } else if (entry.getMedicationCode().equals(drug2Code)) {
-                    entry.setHasInteraction(true);
-                    // Add interacting drug names
-                    Set<String> drug1Names = codeToNames.get(drug1Code);
-                    if (drug1Names != null) {
-                        entry.getInteractingWith().addAll(drug1Names);
-                    } else {
-                        entry.getInteractingWith().add(interaction.getDrug1Name());
-                    }
-                }
+                flagEntryInteraction(entry, interaction, codeToNames);
             }
+        }
+    }
+
+    private void flagEntryInteraction(MedicationTimelineEntryDTO entry, DrugInteraction interaction, Map<String, Set<String>> codeToNames) {
+        if (entry.getMedicationCode() == null) return;
+        
+        if (entry.getMedicationCode().equals(interaction.getDrug1Code())) {
+            entry.setHasInteraction(true);
+            addInteractingNames(entry, codeToNames.get(interaction.getDrug2Code()), interaction.getDrug2Name());
+        } else if (entry.getMedicationCode().equals(interaction.getDrug2Code())) {
+            entry.setHasInteraction(true);
+            addInteractingNames(entry, codeToNames.get(interaction.getDrug1Code()), interaction.getDrug1Name());
+        }
+    }
+
+    private void addInteractingNames(MedicationTimelineEntryDTO entry, Set<String> names, String fallbackName) {
+        if (names != null) {
+            entry.getInteractingWith().addAll(names);
+        } else {
+            entry.getInteractingWith().add(fallbackName);
         }
     }
 
@@ -498,23 +488,25 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
 
     private int countConcurrentMedications(List<MedicationTimelineEntryDTO> timeline) {
         LocalDate today = LocalDate.now();
-        
-        // Count unique medications that are active today
+
         Set<String> concurrentMeds = new HashSet<>();
         for (MedicationTimelineEntryDTO entry : timeline) {
-            if (entry.getStartDate() == null) continue;
-            if (entry.getStartDate().isAfter(today)) continue;
-            
-            LocalDate endDate = entry.getEndDate() != null ? entry.getEndDate() : today.plusMonths(3);
-            if (endDate.isBefore(today)) continue;
-            
-            // Use medication code if available, otherwise name
-            String identifier = entry.getMedicationCode() != null ? 
-                entry.getMedicationCode() : entry.getMedicationName();
-            concurrentMeds.add(identifier);
+            if (isActiveOnDate(entry, today)) {
+                String identifier = entry.getMedicationCode() != null ?
+                    entry.getMedicationCode() : entry.getMedicationName();
+                concurrentMeds.add(identifier);
+            }
         }
-        
+
         return concurrentMeds.size();
+    }
+
+    private boolean isActiveOnDate(MedicationTimelineEntryDTO entry, LocalDate date) {
+        if (entry.getStartDate() == null || entry.getStartDate().isAfter(date)) {
+            return false;
+        }
+        LocalDate endDate = entry.getEndDate() != null ? entry.getEndDate() : date.plusMonths(3);
+        return !endDate.isBefore(date);
     }
 
     private List<String> buildWarnings(int interactions, int overlaps, boolean polypharmacy, int concurrent) {
@@ -545,16 +537,16 @@ public class MedicationHistoryServiceImpl implements MedicationHistoryService {
             String durationLower = duration.toLowerCase().trim();
             
             if (durationLower.contains("day")) {
-                int days = Integer.parseInt(durationLower.replaceAll("[^0-9]", ""));
+                int days = Integer.parseInt(durationLower.replaceAll(NON_DIGIT_REGEX, ""));
                 return startDate.plusDays(days);
             } else if (durationLower.contains("week")) {
-                int weeks = Integer.parseInt(durationLower.replaceAll("[^0-9]", ""));
+                int weeks = Integer.parseInt(durationLower.replaceAll(NON_DIGIT_REGEX, ""));
                 return startDate.plusWeeks(weeks);
             } else if (durationLower.contains("month")) {
-                int months = Integer.parseInt(durationLower.replaceAll("[^0-9]", ""));
+                int months = Integer.parseInt(durationLower.replaceAll(NON_DIGIT_REGEX, ""));
                 return startDate.plusMonths(months);
             }
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.debug("Could not parse duration '{}'; returning null for end date calculation.", duration);
         }
         

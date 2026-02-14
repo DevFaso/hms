@@ -4,9 +4,25 @@ import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AdmissionMapper;
-import com.example.hms.model.*;
-import com.example.hms.payload.dto.*;
-import com.example.hms.repository.*;
+import com.example.hms.model.Admission;
+import com.example.hms.model.AdmissionOrderSet;
+import com.example.hms.model.Department;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.payload.dto.AdmissionDischargeRequestDTO;
+import com.example.hms.payload.dto.AdmissionOrderExecutionRequestDTO;
+import com.example.hms.payload.dto.AdmissionOrderSetRequestDTO;
+import com.example.hms.payload.dto.AdmissionOrderSetResponseDTO;
+import com.example.hms.payload.dto.AdmissionRequestDTO;
+import com.example.hms.payload.dto.AdmissionResponseDTO;
+import com.example.hms.payload.dto.AdmissionUpdateRequestDTO;
+import com.example.hms.repository.AdmissionOrderSetRepository;
+import com.example.hms.repository.AdmissionRepository;
+import com.example.hms.repository.DepartmentRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.AdmissionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,7 +31,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Implementation of AdmissionService
@@ -23,6 +38,9 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class AdmissionServiceImpl implements AdmissionService {
+    private static final String DEPARTMENT_NOT_FOUND_MSG = "Department not found";
+    private static final String ADMISSION_NOT_FOUND_MSG = "Admission not found";
+
 
     private final AdmissionRepository admissionRepository;
     private final AdmissionOrderSetRepository orderSetRepository;
@@ -51,7 +69,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         
         if (request.getDepartmentId() != null) {
             Department department = departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_MSG));
             admission.setDepartment(department);
         }
         
@@ -90,7 +108,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Override
     public AdmissionResponseDTO getAdmission(UUID admissionId) {
         Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException("Admission not found"));
+            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_MSG));
         return admissionMapper.toResponseDTO(admission);
     }
 
@@ -98,11 +116,11 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Transactional
     public AdmissionResponseDTO updateAdmission(UUID admissionId, AdmissionUpdateRequestDTO request) {
         Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException("Admission not found"));
+            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_MSG));
 
         if (request.getDepartmentId() != null) {
             Department department = departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_MSG));
             admission.setDepartment(department);
         }
 
@@ -133,7 +151,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Transactional
     public AdmissionResponseDTO applyOrderSets(UUID admissionId, AdmissionOrderExecutionRequestDTO request) {
         Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException("Admission not found"));
+            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_MSG));
 
         List<AdmissionOrderSet> orderSets = orderSetRepository.findAllById(request.getOrderSetIds());
         orderSets.forEach(admission::applyOrderSet);
@@ -146,7 +164,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Transactional
     public AdmissionResponseDTO dischargePatient(UUID admissionId, AdmissionDischargeRequestDTO request) {
         Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException("Admission not found"));
+            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_MSG));
 
         Staff dischargingProvider = staffRepository.findById(request.getDischargingProviderId())
             .orElseThrow(() -> new ResourceNotFoundException("Discharging provider not found"));
@@ -170,7 +188,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Transactional
     public void cancelAdmission(UUID admissionId) {
         Admission admission = admissionRepository.findById(admissionId)
-            .orElseThrow(() -> new ResourceNotFoundException("Admission not found"));
+            .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_MSG));
         admission.cancel();
         admissionRepository.save(admission);
     }
@@ -180,7 +198,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         return admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId)
             .stream()
             .map(admissionMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -190,12 +208,12 @@ public class AdmissionServiceImpl implements AdmissionService {
             return admissionRepository.findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(hospitalId, admissionStatus)
                 .stream()
                 .map(admissionMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .toList();
         }
         return admissionRepository.findByHospitalIdOrderByAdmissionDateTimeDesc(hospitalId)
             .stream()
             .map(admissionMapper::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -226,7 +244,7 @@ public class AdmissionServiceImpl implements AdmissionService {
 
         if (request.getDepartmentId() != null) {
             Department department = departmentRepository.findById(request.getDepartmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(DEPARTMENT_NOT_FOUND_MSG));
             orderSet.setDepartment(department);
         }
 
@@ -252,7 +270,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         }
         return orderSets.stream()
             .map(admissionMapper::toOrderSetResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override

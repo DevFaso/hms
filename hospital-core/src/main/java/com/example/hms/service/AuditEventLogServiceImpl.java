@@ -76,91 +76,18 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     @Transactional
     public AuditEventLogResponseDTO logEvent(AuditEventRequestDTO requestDTO) {
         try {
-            // Resolve user by name if userId is null
-            User user = null;
-            if (requestDTO.getUserId() != null) {
-                user = userRepository.findById(requestDTO.getUserId())
-                    .orElseThrow(() -> new ResourceNotFoundException("user.notfound", requestDTO.getUserId().toString()));
-            } else if (requestDTO.getUserName() != null) {
-                user = userRepository.findByUsername(requestDTO.getUserName())
-                    .orElseThrow(() -> new ResourceNotFoundException("user.notfound", requestDTO.getUserName()));
-            }
-
-            // Resolve assignment by name if assignmentId is null
-            UserRoleHospitalAssignment assignment = null;
-            if (requestDTO.getAssignmentId() != null) {
-                assignment = assignmentRepository.findById(requestDTO.getAssignmentId()).orElse(null);
-            } else if (requestDTO.getRoleName() != null && requestDTO.getHospitalName() != null && user != null) {
-                assignment = assignmentRepository.findByUserIdAndRoleNameAndHospitalName(
-                    user.getId(), requestDTO.getRoleName(), requestDTO.getHospitalName()
-                ).orElse(null);
-            }
-
-            if (assignment != null && user != null && assignment.getUser() != null
-                && !assignment.getUser().getId().equals(user.getId())) {
-                log.debug("Audit assignment/user mismatch (assignment user id: {}, actor id: {}). Dropping assignment link.",
-                    assignment.getUser().getId(), user.getId());
-                assignment = null;
-            }
-
+            User user = resolveUser(requestDTO);
+            UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO, user);
             String userName = user != null ? (user.getFirstName() + " " + user.getLastName()) : requestDTO.getUserName();
-
-            // Always try to fetch hospitalName and roleName from assignment if null
-            String hospitalName = requestDTO.getHospitalName();
-            String roleName = requestDTO.getRoleName();
-            if ((hospitalName == null || hospitalName.isBlank()) && assignment != null && assignment.getHospital() != null) {
-                hospitalName = assignment.getHospital().getName();
-            }
-            if ((roleName == null || roleName.isBlank()) && assignment != null && assignment.getRole() != null) {
-                roleName = assignment.getRole().getName();
-            }
-            // If still null, fallback to user role if available
-            if ((roleName == null || roleName.isBlank()) && user != null && user.getUserRoles() != null && !user.getUserRoles().isEmpty()) {
-                roleName = user.getUserRoles().iterator().next().getRole().getName();
-            }
-            // Final fallback
-            if (roleName == null || roleName.isBlank()) {
-                roleName = "Unknown Role";
-            }
-
+            String hospitalName = resolveHospitalName(requestDTO, assignment);
+            String roleName = resolveRoleName(requestDTO, assignment, user);
             String detailsStr = convertDetailsToString(requestDTO.getDetails());
 
-            // Resolve resourceId by resourceName if resourceId is null
             String resourceId = requestDTO.getResourceId();
             String resourceName = requestDTO.getResourceName();
             if ("PATIENT".equalsIgnoreCase(requestDTO.getEntityType())) {
-                // If resourceId is missing, try to fetch by name (full name, email, phone)
-                if ((resourceId == null || resourceId.isBlank()) && resourceName != null && !resourceName.isBlank()) {
-                    Patient patient = null;
-                    // Try full name match
-                    String[] parts = resourceName.trim().split(" ");
-                    if (parts.length >= 2) {
-                        String first = parts[0];
-                        String last = parts[parts.length - 1];
-                        patient = patientRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(first, last)
-                            .stream().findFirst().orElse(null);
-                    }
-                    // Try email match if not found
-                    if (patient == null && resourceName.contains("@")) {
-                        patient = patientRepository.findByEmailContainingIgnoreCase(resourceName)
-                            .stream().findFirst().orElse(null);
-                    }
-                    // Try phone match if not found
-                    if (patient == null && resourceName.matches("\\d{6,}")) {
-                        patient = patientRepository.findByPhoneNumberPrimary(resourceName).orElse(null);
-                        if (patient == null) {
-                            patient = patientRepository.findByPhoneNumberSecondary(resourceName).orElse(null);
-                        }
-                    }
-                    if (patient != null) {
-                        resourceId = patient.getId().toString();
-                    }
-                }
-                // If resourceName is missing, try to fetch by id
-                if ((resourceName == null || resourceName.isBlank()) && resourceId != null && !resourceId.isBlank()) {
-                    resourceName = patientRepository.findById(UUID.fromString(resourceId))
-                        .map(Patient::getFullName).orElse(resourceId);
-                }
+                resourceId = resolvePatientResourceId(resourceId, resourceName);
+                resourceName = resolvePatientResourceName(resourceName, resourceId);
             }
 
             AuditEventLog event = AuditEventLog.builder()
@@ -183,10 +110,104 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
             AuditEventLog saved = auditRepository.save(event);
             return auditMapper.toDto(saved);
 
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.warn("Failed to log audit event for user {}: {}", requestDTO.getUserName(), e.getMessage(), e);
-            throw new RuntimeException("audit.log.failed");
+            throw new IllegalStateException("audit.log.failed");
         }
+    }
+
+    private User resolveUser(AuditEventRequestDTO requestDTO) {
+        if (requestDTO.getUserId() != null) {
+            return userRepository.findById(requestDTO.getUserId())
+                .orElseThrow(() -> new ResourceNotFoundException("user.notfound", requestDTO.getUserId().toString()));
+        }
+        if (requestDTO.getUserName() != null) {
+            return userRepository.findByUsername(requestDTO.getUserName())
+                .orElseThrow(() -> new ResourceNotFoundException("user.notfound", requestDTO.getUserName()));
+        }
+        return null;
+    }
+
+    private UserRoleHospitalAssignment resolveAssignment(AuditEventRequestDTO requestDTO, User user) {
+        UserRoleHospitalAssignment assignment = null;
+        if (requestDTO.getAssignmentId() != null) {
+            assignment = assignmentRepository.findById(requestDTO.getAssignmentId()).orElse(null);
+        } else if (requestDTO.getRoleName() != null && requestDTO.getHospitalName() != null && user != null) {
+            assignment = assignmentRepository.findByUserIdAndRoleNameAndHospitalName(
+                user.getId(), requestDTO.getRoleName(), requestDTO.getHospitalName()
+            ).orElse(null);
+        }
+        if (assignment != null && user != null && assignment.getUser() != null
+            && !assignment.getUser().getId().equals(user.getId())) {
+            log.debug("Audit assignment/user mismatch (assignment user id: {}, actor id: {}). Dropping assignment link.",
+                assignment.getUser().getId(), user.getId());
+            return null;
+        }
+        return assignment;
+    }
+
+    private String resolveHospitalName(AuditEventRequestDTO requestDTO, UserRoleHospitalAssignment assignment) {
+        String hospitalName = requestDTO.getHospitalName();
+        if ((hospitalName == null || hospitalName.isBlank()) && assignment != null && assignment.getHospital() != null) {
+            hospitalName = assignment.getHospital().getName();
+        }
+        return hospitalName;
+    }
+
+    private String resolveRoleName(AuditEventRequestDTO requestDTO, UserRoleHospitalAssignment assignment, User user) {
+        String roleName = requestDTO.getRoleName();
+        if ((roleName == null || roleName.isBlank()) && assignment != null && assignment.getRole() != null) {
+            roleName = assignment.getRole().getName();
+        }
+        if ((roleName == null || roleName.isBlank()) && user != null && user.getUserRoles() != null && !user.getUserRoles().isEmpty()) {
+            roleName = user.getUserRoles().iterator().next().getRole().getName();
+        }
+        if (roleName == null || roleName.isBlank()) {
+            roleName = "Unknown Role";
+        }
+        return roleName;
+    }
+
+    private String resolvePatientResourceId(String resourceId, String resourceName) {
+        if ((resourceId != null && !resourceId.isBlank()) || resourceName == null || resourceName.isBlank()) {
+            return resourceId;
+        }
+        Patient patient = findPatientByName(resourceName);
+        if (patient == null && resourceName.contains("@")) {
+            patient = patientRepository.findByEmailContainingIgnoreCase(resourceName)
+                .stream().findFirst().orElse(null);
+        }
+        if (patient == null && resourceName.matches("\\d{6,}")) {
+            patient = findPatientByPhone(resourceName);
+        }
+        return patient != null ? patient.getId().toString() : resourceId;
+    }
+
+    private Patient findPatientByName(String resourceName) {
+        String[] parts = resourceName.trim().split(" ");
+        if (parts.length < 2) {
+            return null;
+        }
+        String first = parts[0];
+        String last = parts[parts.length - 1];
+        return patientRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(first, last)
+            .stream().findFirst().orElse(null);
+    }
+
+    private Patient findPatientByPhone(String resourceName) {
+        Patient patient = patientRepository.findByPhoneNumberPrimary(resourceName).orElse(null);
+        if (patient == null) {
+            patient = patientRepository.findByPhoneNumberSecondary(resourceName).orElse(null);
+        }
+        return patient;
+    }
+
+    private String resolvePatientResourceName(String resourceName, String resourceId) {
+        if ((resourceName != null && !resourceName.isBlank()) || resourceId == null || resourceId.isBlank()) {
+            return resourceName;
+        }
+        return patientRepository.findById(UUID.fromString(resourceId))
+            .map(Patient::getFullName).orElse(resourceId);
     }
 
     /**
@@ -196,8 +217,8 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         if (details == null) {
             return null;
         }
-        if (details instanceof String) {
-            return (String) details;
+        if (details instanceof String string) {
+            return string;
         }
         try {
             return objectMapper.writeValueAsString(details);

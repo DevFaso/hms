@@ -1,6 +1,5 @@
 package com.example.hms.payload.dto;
 
-import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotNull;
 
 import java.time.LocalDate;

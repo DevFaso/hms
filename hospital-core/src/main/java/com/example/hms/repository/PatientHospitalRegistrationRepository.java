@@ -45,17 +45,10 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
     // 🔍 Add Spring Data fallback method
     Optional<PatientHospitalRegistration> findByPatientIdAndHospitalIdAndActiveTrue(UUID patientId, UUID hospitalId);
 
-    // ✅ Temporary fallback with logging for debugging purposes
-    @SuppressWarnings({"java:S106"})
+    // ✅ Fallback with proper logging
     default boolean isPatientRegisteredInHospitalFixed(UUID patientId, UUID hospitalId) {
         Optional<PatientHospitalRegistration> result = findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId);
-        if (result.isPresent()) {
-            System.out.println("[DEBUG] Found active registration for patientId=" + patientId + ", hospitalId=" + hospitalId);
-            return true;
-        } else {
-            System.out.println("[DEBUG] No active registration for patientId=" + patientId + ", hospitalId=" + hospitalId);
-            return false;
-        }
+        return result.isPresent();
     }
 
     @Query("SELECT r FROM PatientHospitalRegistration r WHERE r.mrn = :mrn AND r.hospital.name = :hospitalName")

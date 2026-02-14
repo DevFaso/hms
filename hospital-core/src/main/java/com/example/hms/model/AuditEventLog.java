@@ -2,11 +2,28 @@ package com.example.hms.model;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
@@ -29,6 +46,7 @@ import java.util.Objects;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"user", "assignment"})
+@EqualsAndHashCode(callSuper = true)
 public class AuditEventLog extends BaseEntity {
     @Size(max = 255)
     @Column(name = "role_name", length = 255)

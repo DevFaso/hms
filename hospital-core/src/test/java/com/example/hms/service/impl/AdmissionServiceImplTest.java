@@ -4,9 +4,22 @@ import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.DischargeDisposition;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AdmissionMapper;
-import com.example.hms.model.*;
-import com.example.hms.payload.dto.*;
-import com.example.hms.repository.*;
+import com.example.hms.model.Admission;
+import com.example.hms.model.AdmissionOrderSet;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.payload.dto.AdmissionDischargeRequestDTO;
+import com.example.hms.payload.dto.AdmissionOrderSetResponseDTO;
+import com.example.hms.payload.dto.AdmissionRequestDTO;
+import com.example.hms.payload.dto.AdmissionResponseDTO;
+import com.example.hms.payload.dto.AdmissionUpdateRequestDTO;
+import com.example.hms.repository.AdmissionOrderSetRepository;
+import com.example.hms.repository.AdmissionRepository;
+import com.example.hms.repository.DepartmentRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.StaffRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,12 +27,15 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.time.LocalDateTime;
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class AdmissionServiceImplTest {

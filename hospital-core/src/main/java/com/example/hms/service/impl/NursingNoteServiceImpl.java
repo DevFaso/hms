@@ -108,7 +108,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
                     note.getEducationSummary()
                 )
                 .filter(Objects::nonNull)
-                .collect(Collectors.toList());
+                .toList();
             note.setReadabilityScore(computeReadabilityScore(readabilitySegments));
         }
 
@@ -176,7 +176,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         return notes.stream()
             .limit(effectiveLimit)
             .map(nursingNoteMapper::toResponse)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -255,7 +255,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
                     .build();
             })
             .filter(Objects::nonNull)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private List<NursingNoteInterventionEntry> mapInterventionEntries(List<NursingNoteInterventionDTO> entries) {
@@ -278,7 +278,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
                     .build();
             })
             .filter(Objects::nonNull)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private void ensurePatientRegistration(UUID patientId, UUID hospitalId, Locale locale) {
@@ -431,7 +431,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         double wordsPerSentence = (double) wordCount / sentenceCount;
         double syllablesPerWord = (double) syllableCount / wordCount;
         double flesch = 206.835 - (1.015 * wordsPerSentence) - (84.6 * syllablesPerWord);
-        double normalized = Math.max(0d, Math.min(100d, flesch));
+        double normalized = Math.clamp(flesch, 0d, 100d);
         return Math.round(normalized * 100.0) / 100.0;
     }
 

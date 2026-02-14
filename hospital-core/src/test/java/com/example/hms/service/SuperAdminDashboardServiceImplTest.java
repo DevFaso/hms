@@ -5,20 +5,34 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.mapper.StaffAvailabilityMapper;
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.StaffAvailability;
-import com.example.hms.payload.dto.*;
-import com.example.hms.repository.*;
-import org.junit.jupiter.api.*;
+import com.example.hms.payload.dto.EncounterResponseDTO;
+import com.example.hms.payload.dto.PatientConsentResponseDTO;
+import com.example.hms.payload.dto.StaffAvailabilityResponseDTO;
+import com.example.hms.payload.dto.SuperAdminSummaryDTO;
+import com.example.hms.repository.AuditEventLogRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.RoleRepository;
+import com.example.hms.repository.StaffAvailabilityRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.*;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.*;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.List;
+import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
+import java.util.Locale;
 
 @ExtendWith(MockitoExtension.class)
 class SuperAdminDashboardServiceImplTest {

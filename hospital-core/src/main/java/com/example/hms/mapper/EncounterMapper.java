@@ -1,12 +1,23 @@
 package com.example.hms.mapper;
 
 import com.example.hms.enums.EncounterType;
-import com.example.hms.model.*;
+import com.example.hms.model.Appointment;
+import com.example.hms.model.Department;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.encounter.EncounterNote;
 import com.example.hms.model.encounter.EncounterNoteAddendum;
 import com.example.hms.model.encounter.EncounterNoteHistory;
 import com.example.hms.model.encounter.EncounterNoteLink;
-import com.example.hms.payload.dto.*;
+import com.example.hms.payload.dto.EncounterLinkedArtifactDTO;
+import com.example.hms.payload.dto.EncounterNoteAddendumResponseDTO;
+import com.example.hms.payload.dto.EncounterNoteHistoryResponseDTO;
+import com.example.hms.payload.dto.EncounterNoteResponseDTO;
+import com.example.hms.payload.dto.EncounterRequestDTO;
+import com.example.hms.payload.dto.EncounterResponseDTO;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -30,27 +41,8 @@ public class EncounterMapper {
         dto.setCreatedAt(e.getCreatedAt());
         dto.setUpdatedAt(e.getUpdatedAt());
 
-        // Patient
-        Patient p = e.getPatient();
-        if (p != null) {
-            dto.setPatientId(p.getId());
-            dto.setPatientName(joinName(p.getFirstName(), p.getLastName()));
-            dto.setPatientEmail(nullSafe(p.getEmail()));
-            dto.setPatientPhoneNumber(nullSafe(p.getPhoneNumberPrimary()));
-        }
-
-        // Staff
-        Staff s = e.getStaff();
-        if (s != null) {
-            dto.setStaffId(s.getId());
-            dto.setStaffName(s.getLicenseNumber());
-            String staffDisplay = (s.getUser() != null)
-                ? joinName(s.getUser().getFirstName(), s.getUser().getLastName())
-                : nullSafe(s.getName());
-            dto.setStaffName(staffDisplay);
-            dto.setStaffEmail(s.getUser() != null ? nullSafe(s.getUser().getEmail()) : null);
-            dto.setStaffPhoneNumber(s.getUser() != null ? nullSafe(s.getUser().getPhoneNumber()) : null);
-        }
+        populatePatient(dto, e.getPatient());
+        populateStaff(dto, e.getStaff());
 
         // Department
         Department d = e.getDepartment();
@@ -69,26 +61,45 @@ public class EncounterMapper {
             dto.setHospitalPhoneNumber(nullSafe(h.getPhoneNumber()));
         }
 
-        // Appointment
-        Appointment a = e.getAppointment();
-        if (a != null) {
-            dto.setAppointmentId(a.getId());
-            dto.setAppointmentReason(nullSafe(a.getReason()));
-            dto.setAppointmentNotes(nullSafe(a.getNotes()));
-            dto.setAppointmentStatus(a.getStatus() != null ? a.getStatus().name() : null);
-            // Appointment no longer has treatment; set type to null or derive from other fields if needed
-            dto.setAppointmentType(null);
-
-            LocalDate date = a.getAppointmentDate();
-            LocalTime start = a.getStartTime();
-            dto.setAppointmentDate((date != null && start != null)
-                ? LocalDateTime.of(date, start)
-                : null);
-        }
+        populateAppointment(dto, e.getAppointment());
 
         dto.setNote(toEncounterNoteResponseDTO(e.getEncounterNote()));
 
         return dto;
+    }
+
+    private void populatePatient(EncounterResponseDTO dto, Patient p) {
+        if (p == null) return;
+        dto.setPatientId(p.getId());
+        dto.setPatientName(joinName(p.getFirstName(), p.getLastName()));
+        dto.setPatientEmail(nullSafe(p.getEmail()));
+        dto.setPatientPhoneNumber(nullSafe(p.getPhoneNumberPrimary()));
+    }
+
+    private void populateStaff(EncounterResponseDTO dto, Staff s) {
+        if (s == null) return;
+        dto.setStaffId(s.getId());
+        String staffDisplay = (s.getUser() != null)
+            ? joinName(s.getUser().getFirstName(), s.getUser().getLastName())
+            : nullSafe(s.getName());
+        dto.setStaffName(staffDisplay);
+        dto.setStaffEmail(s.getUser() != null ? nullSafe(s.getUser().getEmail()) : null);
+        dto.setStaffPhoneNumber(s.getUser() != null ? nullSafe(s.getUser().getPhoneNumber()) : null);
+    }
+
+    private void populateAppointment(EncounterResponseDTO dto, Appointment a) {
+        if (a == null) return;
+        dto.setAppointmentId(a.getId());
+        dto.setAppointmentReason(nullSafe(a.getReason()));
+        dto.setAppointmentNotes(nullSafe(a.getNotes()));
+        dto.setAppointmentStatus(a.getStatus() != null ? a.getStatus().name() : null);
+        dto.setAppointmentType(null);
+
+        LocalDate date = a.getAppointmentDate();
+        LocalTime start = a.getStartTime();
+        dto.setAppointmentDate((date != null && start != null)
+            ? LocalDateTime.of(date, start)
+            : null);
     }
 
     public EncounterNoteResponseDTO toEncounterNoteResponseDTO(EncounterNote note) {

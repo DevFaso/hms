@@ -12,8 +12,10 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import java.util.List;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class AuthServiceImplTest {
 
@@ -38,16 +40,16 @@ class AuthServiceImplTest {
     @Test
     void getCurrentUserId_throwsUnauthorized_whenNoAuth() {
         SecurityContextHolder.clearContext();
-        assertThatThrownBy(() -> authService.getCurrentUserId())
+        assertThatThrownBy(authService::getCurrentUserId)
                 .isInstanceOf(UnauthorizedException.class);
     }
 
     @Test
-    void getCurrentUserId_throwsUnauthorized_whenPrincipalIsNotCustomUserDetails() {
+    void getCurrentUserId_throwsUnauthorized_whenPrincipalNotString() {
         Authentication auth = new UsernamePasswordAuthenticationToken("stringPrincipal", "token", List.of());
         SecurityContextHolder.getContext().setAuthentication(auth);
 
-        assertThatThrownBy(() -> authService.getCurrentUserId())
+        assertThatThrownBy(authService::getCurrentUserId)
                 .isInstanceOf(UnauthorizedException.class);
     }
 
@@ -62,7 +64,7 @@ class AuthServiceImplTest {
     @Test
     void getCurrentUserToken_throwsUnauthorized_whenNoAuth() {
         SecurityContextHolder.clearContext();
-        assertThatThrownBy(() -> authService.getCurrentUserToken())
+        assertThatThrownBy(authService::getCurrentUserToken)
                 .isInstanceOf(UnauthorizedException.class);
     }
 
@@ -71,7 +73,7 @@ class AuthServiceImplTest {
         Authentication auth = new UsernamePasswordAuthenticationToken("user", null, List.of());
         SecurityContextHolder.getContext().setAuthentication(auth);
 
-        assertThatThrownBy(() -> authService.getCurrentUserToken())
+        assertThatThrownBy(authService::getCurrentUserToken)
                 .isInstanceOf(UnauthorizedException.class);
     }
 
@@ -80,7 +82,7 @@ class AuthServiceImplTest {
         Authentication auth = new UsernamePasswordAuthenticationToken("user", "  ", List.of());
         SecurityContextHolder.getContext().setAuthentication(auth);
 
-        assertThatThrownBy(() -> authService.getCurrentUserToken())
+        assertThatThrownBy(authService::getCurrentUserToken)
                 .isInstanceOf(UnauthorizedException.class);
     }
 

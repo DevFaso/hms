@@ -10,7 +10,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.TestingAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -55,10 +55,10 @@ class HighRiskPregnancyCarePlanControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @MockitoBean
     private HighRiskPregnancyCarePlanService carePlanService;
 
-    @MockBean
+    @MockitoBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Test
@@ -96,7 +96,7 @@ class HighRiskPregnancyCarePlanControllerTest {
     @Test
     void getActivePlanReturnsNoContentWhenAbsent() throws Exception {
         UUID patientId = UUID.randomUUID();
-    when(carePlanService.getActivePlan(eq(patientId), eq(AUTH_USER))).thenReturn(null);
+    when(carePlanService.getActivePlan(patientId, AUTH_USER)).thenReturn(null);
 
     Authentication auth = new TestingAuthenticationToken(AUTH_USER, AUTH_PASSWORD);
         auth.setAuthenticated(true);
@@ -118,7 +118,7 @@ class HighRiskPregnancyCarePlanControllerTest {
             .id(planId)
             .milestones(List.of())
             .build();
-        when(carePlanService.markMilestoneComplete(eq(planId), eq(milestoneId), eq(completionDate), eq(AUTH_USER)))
+        when(carePlanService.markMilestoneComplete(planId, milestoneId, completionDate, AUTH_USER))
             .thenReturn(response);
 
         Authentication auth = new TestingAuthenticationToken(AUTH_USER, AUTH_PASSWORD);
@@ -132,7 +132,7 @@ class HighRiskPregnancyCarePlanControllerTest {
             .andExpect(status().isOk());
 
         ArgumentCaptor<LocalDate> captor = ArgumentCaptor.forClass(LocalDate.class);
-    verify(carePlanService).markMilestoneComplete(eq(planId), eq(milestoneId), captor.capture(), eq(AUTH_USER));
+    verify(carePlanService).markMilestoneComplete(planId, milestoneId, captor.capture(), AUTH_USER);
         assertThat(captor.getValue()).isEqualTo(completionDate);
     }
 

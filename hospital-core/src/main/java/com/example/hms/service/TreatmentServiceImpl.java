@@ -1,11 +1,19 @@
 package com.example.hms.service;
 
-import com.example.hms.exception.*;
+import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.exception.UnauthorizedAccessException;
 import com.example.hms.mapper.TreatmentMapper;
-import com.example.hms.model.*;
+import com.example.hms.model.Department;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.ServiceTranslation;
+import com.example.hms.model.Treatment;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.TreatmentRequestDTO;
 import com.example.hms.payload.dto.TreatmentResponseDTO;
-import com.example.hms.repository.*;
+import com.example.hms.repository.DepartmentRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.TreatmentRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
@@ -15,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -121,7 +128,7 @@ public class TreatmentServiceImpl implements TreatmentService {
     public List<TreatmentResponseDTO> getAllTreatments(Locale locale, String language) {
         return treatmentRepository.findAllWithAssignmentAndUser().stream()
                 .map(t -> treatmentMapper.toTreatmentResponseDTO(t, language))
-                .collect(Collectors.toList());
+                .toList();
     }
 }
 

@@ -406,7 +406,7 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
     private List<String> fetchComplianceViolations(UUID organizationId) {
         try {
             return organizationSecurityService.validateSecurityCompliance(organizationId);
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             log.warn("Failed to resolve compliance violations for organization {}: {}", organizationId, ex.getMessage());
             return List.of();
         }

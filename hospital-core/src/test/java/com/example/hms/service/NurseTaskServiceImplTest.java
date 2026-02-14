@@ -3,7 +3,10 @@ package com.example.hms.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -22,6 +25,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.MessageSource;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 class NurseTaskServiceImplTest {
 
@@ -208,9 +214,10 @@ class NurseTaskServiceImplTest {
 
         UUID unknownHandoffId = UUID.randomUUID();
 
+        UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> nurseTaskService.updateHandoffChecklistItem(
             unknownHandoffId,
-            UUID.randomUUID(),
+            randomId,
             nurseId,
             hospitalId,
             true
@@ -228,7 +235,8 @@ class NurseTaskServiceImplTest {
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Handoff identifier is required");
 
-        assertThatThrownBy(() -> nurseTaskService.completeHandoff(UUID.randomUUID(), nurseId, null))
+        UUID randomId = UUID.randomUUID();
+        assertThatThrownBy(() -> nurseTaskService.completeHandoff(randomId, nurseId, null))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Hospital context required");
     }

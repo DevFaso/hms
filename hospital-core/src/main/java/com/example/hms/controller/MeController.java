@@ -7,7 +7,11 @@ import com.example.hms.model.User;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.DashboardConfigResponseDTO;
 import com.example.hms.payload.dto.StaffResponseDTO;
-import com.example.hms.payload.dto.clinical.*;
+import com.example.hms.payload.dto.clinical.ClinicalAlertDTO;
+import com.example.hms.payload.dto.clinical.ClinicalDashboardResponseDTO;
+import com.example.hms.payload.dto.clinical.InboxCountsDTO;
+import com.example.hms.payload.dto.clinical.OnCallStatusDTO;
+import com.example.hms.payload.dto.clinical.RoomedPatientDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -23,7 +27,12 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 import java.util.Optional;
@@ -188,7 +197,7 @@ public class MeController {
             if (str != null && !str.isBlank()) {
                 try {
                     return Optional.of(UUID.fromString(str));
-                } catch (Exception ignored) {
+                } catch (RuntimeException ignored) {
                     // Claim value is not a valid UUID — continue to fallback formats
                 }
             }
@@ -199,7 +208,7 @@ public class MeController {
             if (raw instanceof String s && !s.isBlank()) {
                 try {
                     return Optional.of(UUID.fromString(s));
-                } catch (Exception ignored) {
+                } catch (RuntimeException ignored) {
                     // Raw string claim is not a valid UUID — fall through to empty
                 }
             }
@@ -232,7 +241,7 @@ public class MeController {
                 return Optional.empty();
             try {
                 return Optional.of(sub instanceof UUID uuid ? uuid : UUID.fromString(String.valueOf(sub)));
-            } catch (Exception ignored) {
+            } catch (RuntimeException ignored) {
                 // JWT 'sub' claim is not a valid UUID format — cannot resolve user ID
                 return Optional.empty();
             }

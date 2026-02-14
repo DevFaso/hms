@@ -25,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -107,7 +106,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         List<ProcedureOrder> orders = procedureOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId);
         return orders.stream()
             .map(this::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -119,11 +118,11 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         } else {
             orders = procedureOrderRepository.findAll().stream()
                 .filter(order -> order.getHospital().getId().equals(hospitalId))
-                .collect(Collectors.toList());
+                .toList();
         }
         return orders.stream()
             .map(this::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -132,7 +131,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         List<ProcedureOrder> orders = procedureOrderRepository.findByOrderingProvider_IdOrderByOrderedAtDesc(providerId);
         return orders.stream()
             .map(this::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -141,7 +140,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         List<ProcedureOrder> orders = procedureOrderRepository.findByHospital_IdAndScheduledDatetimeBetween(hospitalId, startDate, endDate);
         return orders.stream()
             .map(this::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -171,16 +170,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         }
 
         if (updateDTO.getConsentObtained() != null) {
-            procedureOrder.setConsentObtained(updateDTO.getConsentObtained());
-            if (updateDTO.getConsentObtainedAt() != null) {
-                procedureOrder.setConsentObtainedAt(updateDTO.getConsentObtainedAt());
-            }
-            if (updateDTO.getConsentObtainedBy() != null) {
-                procedureOrder.setConsentObtainedBy(updateDTO.getConsentObtainedBy());
-            }
-            if (updateDTO.getConsentFormLocation() != null) {
-                procedureOrder.setConsentFormLocation(updateDTO.getConsentFormLocation());
-            }
+            applyConsentUpdate(procedureOrder, updateDTO);
         }
 
         if (updateDTO.getSiteMarked() != null) {
@@ -220,7 +210,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         return orders.stream()
             .filter(order -> order.getHospital().getId().equals(hospitalId))
             .map(this::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     // Helper methods
@@ -277,5 +267,18 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             .createdAt(order.getCreatedAt())
             .updatedAt(order.getUpdatedAt())
             .build();
+    }
+
+    private void applyConsentUpdate(ProcedureOrder order, ProcedureOrderUpdateDTO dto) {
+        order.setConsentObtained(dto.getConsentObtained());
+        if (dto.getConsentObtainedAt() != null) {
+            order.setConsentObtainedAt(dto.getConsentObtainedAt());
+        }
+        if (dto.getConsentObtainedBy() != null) {
+            order.setConsentObtainedBy(dto.getConsentObtainedBy());
+        }
+        if (dto.getConsentFormLocation() != null) {
+            order.setConsentFormLocation(dto.getConsentFormLocation());
+        }
     }
 }

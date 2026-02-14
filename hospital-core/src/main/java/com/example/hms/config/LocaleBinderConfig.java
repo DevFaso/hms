@@ -37,7 +37,7 @@ public class LocaleBinderConfig {
         try {
             Locale locale = Locale.forLanguageTag(first);
             return locale.getLanguage().isEmpty() ? Locale.ENGLISH : locale;
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return Locale.ENGLISH;
         }
     }

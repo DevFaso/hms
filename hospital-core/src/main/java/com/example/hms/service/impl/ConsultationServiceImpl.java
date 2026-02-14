@@ -28,7 +28,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -104,7 +103,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         List<Consultation> consultations = consultationRepository.findByPatient_IdOrderByRequestedAtDesc(patientId);
         return consultations.stream()
             .map(this::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -121,7 +120,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
         return consultations.stream()
             .map(this::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -130,7 +129,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         List<Consultation> consultations = consultationRepository.findByRequestingProvider_IdOrderByRequestedAtDesc(providerId);
         return consultations.stream()
             .map(this::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -144,7 +143,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
         return consultations.stream()
             .map(this::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     @Override
@@ -274,7 +273,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         );
         return consultations.stream()
             .map(this::toResponseDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     // Helper methods

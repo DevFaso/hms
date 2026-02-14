@@ -2,9 +2,21 @@ package com.example.hms.service;
 
 import com.example.hms.enums.EncounterType;
 import com.example.hms.exception.ResourceNotFoundException;
-import com.example.hms.model.*;
+import com.example.hms.model.Department;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.EncounterRequestDTO;
-import com.example.hms.repository.*;
+import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.EncounterHistoryRepository;
+import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -24,7 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 @ExtendWith(MockitoExtension.class)
-public class EncounterServiceImplIdentifierTest {
+class EncounterServiceImplIdentifierTest {
 
     @Mock
     private PatientRepository patientRepository;

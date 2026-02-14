@@ -28,9 +28,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ReferenceCatalogServiceImplTest {
@@ -165,8 +168,8 @@ class ReferenceCatalogServiceImplTest {
         assertThat(result).isNotNull();
         assertThat(result.getProcessed()).isEqualTo(2);
         assertThat(result.getCreated()).isEqualTo(2);
-        assertThat(result.getUpdated()).isEqualTo(0);
-        assertThat(result.getSkipped()).isEqualTo(0);
+        assertThat(result.getUpdated()).isZero();
+        assertThat(result.getSkipped()).isZero();
     }
 
     @Test
@@ -194,7 +197,7 @@ class ReferenceCatalogServiceImplTest {
         CatalogImportResponseDTO result = service.importCatalog(catalogId, file);
 
         assertThat(result.getUpdated()).isEqualTo(1);
-        assertThat(result.getCreated()).isEqualTo(0);
+        assertThat(result.getCreated()).isZero();
     }
 
     @Test
@@ -269,7 +272,7 @@ class ReferenceCatalogServiceImplTest {
         CatalogImportResponseDTO result = service.importCatalog(catalogId, file);
 
         assertThat(result.getSkipped()).isEqualTo(1);
-        assertThat(result.getUpdated()).isEqualTo(0);
+        assertThat(result.getUpdated()).isZero();
     }
 
     @Test

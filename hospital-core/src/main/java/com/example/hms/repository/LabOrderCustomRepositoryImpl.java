@@ -20,6 +20,8 @@ import java.util.UUID;
 
 @Repository
 public class LabOrderCustomRepositoryImpl implements LabOrderCustomRepository {
+    private static final String ORDER_DATETIME = "orderDatetime";
+
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -35,7 +37,7 @@ public class LabOrderCustomRepositoryImpl implements LabOrderCustomRepository {
         if (predicates.length > 0) {
             query.where(cb.and(predicates));
         }
-        query.orderBy(cb.desc(root.get("orderDatetime")));
+        query.orderBy(cb.desc(root.get(ORDER_DATETIME)));
 
         // Fetch paginated results
         TypedQuery<LabOrder> typedQuery = entityManager.createQuery(query);
@@ -64,10 +66,10 @@ public class LabOrderCustomRepositoryImpl implements LabOrderCustomRepository {
             predicates.add(cb.equal(root.get("patient").get("id"), patientId));
         }
         if (from != null) {
-            predicates.add(cb.greaterThanOrEqualTo(root.get("orderDatetime"), from));
+            predicates.add(cb.greaterThanOrEqualTo(root.get(ORDER_DATETIME), from));
         }
         if (to != null) {
-            predicates.add(cb.lessThanOrEqualTo(root.get("orderDatetime"), to));
+            predicates.add(cb.lessThanOrEqualTo(root.get(ORDER_DATETIME), to));
         }
 
         return predicates.toArray(new Predicate[0]);

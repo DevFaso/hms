@@ -2,10 +2,16 @@ package com.example.hms.service.impl;
 
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.FamilyHistoryMapper;
-import com.example.hms.model.*;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.PatientFamilyHistory;
+import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.medicalhistory.FamilyHistoryRequestDTO;
 import com.example.hms.payload.dto.medicalhistory.FamilyHistoryResponseDTO;
-import com.example.hms.repository.*;
+import com.example.hms.repository.FamilyHistoryRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.StaffRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -13,11 +19,16 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class FamilyHistoryServiceImplTest {
@@ -156,7 +167,8 @@ class FamilyHistoryServiceImplTest {
     @Test
     void updateFamilyHistory_notFound() {
         when(familyHistoryRepository.findById(historyId)).thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.updateFamilyHistory(historyId, new FamilyHistoryRequestDTO()))
+        FamilyHistoryRequestDTO request = new FamilyHistoryRequestDTO();
+        assertThatThrownBy(() -> service.updateFamilyHistory(historyId, request))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 

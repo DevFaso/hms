@@ -7,7 +7,12 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.DashboardConfigResponseDTO;
 import com.example.hms.payload.dto.StaffResponseDTO;
-import com.example.hms.payload.dto.clinical.*;
+import com.example.hms.payload.dto.clinical.ClinicalAlertDTO;
+import com.example.hms.payload.dto.clinical.ClinicalDashboardResponseDTO;
+import com.example.hms.payload.dto.clinical.DashboardKPI;
+import com.example.hms.payload.dto.clinical.InboxCountsDTO;
+import com.example.hms.payload.dto.clinical.OnCallStatusDTO;
+import com.example.hms.payload.dto.clinical.RoomedPatientDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -34,10 +39,17 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Unit tests for MeController - Phase 1 Day 2

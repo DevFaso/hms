@@ -1,6 +1,5 @@
 package com.example.hms.payload.dto;
 
-import com.example.hms.payload.dto.PatientTimelineEntryDTO;
 import com.example.hms.payload.dto.nurse.NursingNoteResponseDTO;
 import com.example.hms.payload.dto.ultrasound.UltrasoundOrderResponseDTO;
 import com.example.hms.payload.dto.ultrasound.UltrasoundReportResponseDTO;

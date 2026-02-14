@@ -42,6 +42,10 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class LabResultServiceImpl implements LabResultService {
+    private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
+    private static final String UNKNOWN_CLINICIAN = "Unknown clinician";
+    private static final String CRITICAL_FLAG = "CRITICAL";
+
 
     private static final String DEFAULT_SYNTHETIC_HOSPITAL = "Riverbend Medical Center";
     private static final String LAB_RESULT_NOT_FOUND = "labresult.notfound";
@@ -92,7 +96,7 @@ public class LabResultServiceImpl implements LabResultService {
     public List<LabResultResponseDTO> getAllLabResults(Locale locale) {
         UUID currentUserId = authService.getCurrentUserId();
 
-        if (authService.hasRole("ROLE_SUPER_ADMIN")) {
+        if (authService.hasRole(ROLE_SUPER_ADMIN)) {
             return labResultRepository.findAll().stream()
                 .map(labResultMapper::toResponseDTO)
                 .toList();
@@ -302,7 +306,7 @@ public class LabResultServiceImpl implements LabResultService {
         if (userId == null) {
             throw new BusinessException("Unable to determine current user for release operation.");
         }
-        if (authService.hasRole("ROLE_SUPER_ADMIN")) {
+        if (authService.hasRole(ROLE_SUPER_ADMIN)) {
             return;
         }
         if (hospitalId == null) {
@@ -324,7 +328,7 @@ public class LabResultServiceImpl implements LabResultService {
         if (userId == null) {
             throw new BusinessException("Unable to determine current user for sign operation.");
         }
-        if (authService.hasRole("ROLE_SUPER_ADMIN")) {
+        if (authService.hasRole(ROLE_SUPER_ADMIN)) {
             return;
         }
         if (hospitalId == null) {
@@ -342,7 +346,7 @@ public class LabResultServiceImpl implements LabResultService {
 
     private String resolveActorDisplay(UUID userId, UUID hospitalId) {
         if (userId == null) {
-            return "Unknown clinician";
+            return UNKNOWN_CLINICIAN;
         }
 
         if (hospitalId != null) {
@@ -356,12 +360,12 @@ public class LabResultServiceImpl implements LabResultService {
             .map(UserRoleHospitalAssignment::getUser)
             .map(this::formatUserDisplay)
             .or(() -> userRepository.findById(userId).map(this::formatUserDisplay))
-            .orElse("Unknown clinician");
+            .orElse(UNKNOWN_CLINICIAN);
     }
 
     private String formatUserDisplay(User user) {
         if (user == null) {
-            return "Unknown clinician";
+            return UNKNOWN_CLINICIAN;
         }
         String fullName = (nullToEmpty(user.getFirstName()) + " " + nullToEmpty(user.getLastName())).trim();
         if (StringUtils.hasText(fullName)) {
@@ -373,7 +377,7 @@ public class LabResultServiceImpl implements LabResultService {
         if (StringUtils.hasText(user.getUsername())) {
             return user.getUsername();
         }
-        return "Unknown clinician";
+        return UNKNOWN_CLINICIAN;
     }
 
     private String normalizeSignatureValue(LabResultSignatureRequestDTO request) {
@@ -450,7 +454,7 @@ public class LabResultServiceImpl implements LabResultService {
                 return user.getEmail();
             }
         }
-        return "Unknown clinician";
+        return UNKNOWN_CLINICIAN;
     }
 
     private String nullToEmpty(String value) {
@@ -633,7 +637,7 @@ public class LabResultServiceImpl implements LabResultService {
         return results.stream()
             .filter(r -> r.getResultDate() != null && r.getResultDate().isAfter(since))
             .map(labResultMapper::toResponseDTO)
-            .filter(dto -> "CRITICAL".equalsIgnoreCase(dto.getSeverityFlag()) || "HIGH".equalsIgnoreCase(dto.getSeverityFlag()))
+            .filter(dto -> CRITICAL_FLAG.equalsIgnoreCase(dto.getSeverityFlag()) || "HIGH".equalsIgnoreCase(dto.getSeverityFlag()))
             .sorted(Comparator.comparing(LabResultResponseDTO::getResultDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
             .toList();
     }
@@ -646,7 +650,7 @@ public class LabResultServiceImpl implements LabResultService {
         return results.stream()
             .filter(r -> !r.isAcknowledged())
             .map(labResultMapper::toResponseDTO)
-            .filter(dto -> "CRITICAL".equalsIgnoreCase(dto.getSeverityFlag()) || "HIGH".equalsIgnoreCase(dto.getSeverityFlag()))
+            .filter(dto -> CRITICAL_FLAG.equalsIgnoreCase(dto.getSeverityFlag()) || "HIGH".equalsIgnoreCase(dto.getSeverityFlag()))
             .sorted(Comparator.comparing(LabResultResponseDTO::getResultDate, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
             .toList();
     }
@@ -672,7 +676,7 @@ public class LabResultServiceImpl implements LabResultService {
             double percentageChange = ((currentNum - previousNum) / previousNum) * 100;
 
             LabResultComparisonDTO.TrendDirection direction = determineTrendDirection(trendHistory);
-            String significance = determineSignificance(absoluteChange, percentageChange);
+            String significance = determineSignificance(percentageChange);
             String interpretation = generateInterpretation(currentNum, previousNum, absoluteChange, percentageChange, daysBetween, current.getResultUnit());
 
             return LabResultComparisonDTO.ComparisonMetadata.builder()
@@ -681,7 +685,7 @@ public class LabResultServiceImpl implements LabResultService {
                 .trendDirection(direction)
                 .daysBetween(daysBetween)
                 .significanceLevel(significance)
-                .crossedThreshold(false) // TODO: Implement reference range boundary checking
+                .crossedThreshold(false) // Future: Implement reference range boundary checking
                 .interpretation(interpretation)
                 .build();
         } catch (NumberFormatException e) {
@@ -733,11 +737,11 @@ public class LabResultServiceImpl implements LabResultService {
         }
     }
 
-    private String determineSignificance(double absoluteChange, double percentageChange) {
+    private String determineSignificance(double percentageChange) {
         double absPercent = Math.abs(percentageChange);
 
         if (absPercent > 50) {
-            return "CRITICAL";
+            return CRITICAL_FLAG;
         } else if (absPercent > 25) {
             return "SIGNIFICANT";
         } else if (absPercent > 10) {

@@ -3,7 +3,6 @@ package com.example.hms.service.support;
 import com.example.hms.security.context.HospitalContext;
 import org.junit.jupiter.api.Test;
 
-import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
 
@@ -22,7 +21,7 @@ class HospitalScopeUtilsTest {
             .activeHospitalId(active)
             .build();
 
-        LinkedHashSet<UUID> scope = HospitalScopeUtils.resolveScope(ctx);
+        Set<UUID> scope = HospitalScopeUtils.resolveScope(ctx);
 
         assertThat(scope).contains(h1, h2, active);
     }
@@ -36,7 +35,7 @@ class HospitalScopeUtilsTest {
             .activeHospitalId(null)
             .build();
 
-        LinkedHashSet<UUID> scope = HospitalScopeUtils.resolveScope(ctx);
+        Set<UUID> scope = HospitalScopeUtils.resolveScope(ctx);
 
         assertThat(scope).containsExactly(h1);
     }
@@ -50,7 +49,7 @@ class HospitalScopeUtilsTest {
             .activeHospitalId(active)
             .build();
 
-        LinkedHashSet<UUID> scope = HospitalScopeUtils.resolveScope(ctx);
+        Set<UUID> scope = HospitalScopeUtils.resolveScope(ctx);
 
         assertThat(scope).containsExactly(active);
     }
@@ -63,10 +62,9 @@ class HospitalScopeUtilsTest {
             .activeHospitalId(null)
             .build();
 
-        LinkedHashSet<UUID> scope = HospitalScopeUtils.resolveScope(ctx);
+        Set<UUID> scope = HospitalScopeUtils.resolveScope(ctx);
 
-        assertThat(scope).doesNotContainNull();
-        assertThat(scope).isEmpty();
+        assertThat(scope).doesNotContainNull().isEmpty();
     }
 
     @Test

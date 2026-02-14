@@ -1,9 +1,32 @@
 package com.example.hms.model.treatment;
 
 import com.example.hms.enums.TreatmentPlanStatus;
-import com.example.hms.model.*;
-import jakarta.persistence.*;
-import lombok.*;
+import com.example.hms.model.BaseEntity;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.Table;
+import jakarta.persistence.Version;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -29,6 +52,7 @@ import java.util.Set;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"patient", "hospital", "encounter", "assignment", "author", "supervisingStaff", "signOffBy", "followUps", "reviews"})
+@EqualsAndHashCode(callSuper = true)
 public class TreatmentPlan extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

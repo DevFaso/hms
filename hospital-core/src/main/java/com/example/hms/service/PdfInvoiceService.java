@@ -24,6 +24,7 @@ import java.util.Map;
 @Service
 public class PdfInvoiceService {
 
+    @SuppressWarnings({"java:S1172", "java:S107"}) // locale reserved for i18n; params needed by PDF layout
     public byte[] generateInvoicePdf(BillingInvoice invoice,
                                      List<InvoiceItem> items,
                                      Locale locale) {
@@ -110,6 +111,7 @@ public class PdfInvoiceService {
         writeText(cs, size, width - margin - textWidth, y, text);
     }
 
+    @SuppressWarnings("java:S107") // parameters are all primitive layout values for PDF row rendering
     private static void writeRow(PDPageContentStream cs, float x, float y,
                                  String d, String c, String q, String u, String t) throws IOException {
         writeText(cs, 10, x, y, truncate(d, 42));
@@ -134,7 +136,7 @@ public class PdfInvoiceService {
             var baos = new ByteArrayOutputStream();
             ImageIO.write(img, "PNG", baos);
             return baos.toByteArray();
-        } catch (Exception e) {
+        } catch (com.google.zxing.WriterException | java.io.IOException e) {
             throw new IllegalStateException("QR generation failed", e);
         }
     }

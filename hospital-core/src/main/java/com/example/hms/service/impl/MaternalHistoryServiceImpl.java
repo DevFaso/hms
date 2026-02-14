@@ -26,7 +26,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 /**
  * Service implementation for managing maternal history documentation.
@@ -169,7 +168,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         return histories.stream()
                 .map(maternalHistoryMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -197,7 +196,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         return histories.stream()
                 .map(maternalHistoryMapper::toResponseDTO)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override

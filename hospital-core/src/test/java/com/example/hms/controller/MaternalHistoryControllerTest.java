@@ -199,8 +199,8 @@ class MaternalHistoryControllerTest {
         LocalDateTime dateTo = LocalDateTime.now();
 
         when(maternalHistoryService.searchMaternalHistory(
-                eq(hospitalId), eq(patientId), eq(riskCategory), eq(dataComplete), 
-                eq(reviewedByProvider), eq(dateFrom), eq(dateTo), eq(pageable), eq(username)))
+                hospitalId, patientId, riskCategory, dataComplete, 
+                reviewedByProvider, dateFrom, dateTo, pageable, username))
                 .thenReturn(page);
 
         ResponseEntity<Page<MaternalHistoryResponseDTO>> response = maternalHistoryController

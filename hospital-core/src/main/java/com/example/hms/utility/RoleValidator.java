@@ -9,11 +9,17 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.UUID;
 
 @Component
 @RequiredArgsConstructor
 public class RoleValidator {
+    private static final String HOSPITAL_ADMIN_ROLE = "HOSPITAL_ADMIN";
+
 
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
 
@@ -46,7 +52,7 @@ public class RoleValidator {
     }
 
     public boolean isSuperAdminFromAuth() { return hasAuthority("SUPER_ADMIN"); }
-    public boolean isHospitalAdminFromAuthGlobalOnly() { return hasAuthority("HOSPITAL_ADMIN"); }
+    public boolean isHospitalAdminFromAuthGlobalOnly() { return hasAuthority(HOSPITAL_ADMIN_ROLE); }
     public boolean isPatientFromAuth() { return hasAuthority("PATIENT"); }
 
     /** True iff the caller has PATIENT role and does NOT have any staff/admin role */
@@ -58,7 +64,7 @@ public class RoleValidator {
 
     /** Quick check for “can act as staff/admin” */
     public boolean isStaffOrAdminFromAuth() {
-        return hasAnyAuthority("HOSPITAL_ADMIN","DOCTOR","PHYSICIAN","NURSE_PRACTITIONER","NURSE","MIDWIFE","STAFF","RECEPTIONIST","SUPER_ADMIN");
+        return hasAnyAuthority(HOSPITAL_ADMIN_ROLE,"DOCTOR","PHYSICIAN","NURSE_PRACTITIONER","NURSE","MIDWIFE","STAFF","RECEPTIONIST","SUPER_ADMIN");
     }
 
     /* =========================================
@@ -115,7 +121,7 @@ public class RoleValidator {
     public boolean isNurse(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "NURSE"); }
     public boolean isNursePractitioner(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "NURSE_PRACTITIONER"); }
     public boolean isMidwife(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "MIDWIFE"); }
-    public boolean isHospitalAdmin(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "HOSPITAL_ADMIN"); }
+    public boolean isHospitalAdmin(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, HOSPITAL_ADMIN_ROLE); }
     public boolean isLabScientist(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, "LAB_SCIENTIST"); }
     public boolean hasRole(UUID userId, UUID hospitalId, String roleCode) { return hasAnyCode(userId, hospitalId, roleCode); }
 

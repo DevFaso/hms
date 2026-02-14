@@ -1,7 +1,22 @@
 package com.example.hms.model;
 
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -15,6 +30,7 @@ import java.time.LocalDateTime;
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor @Builder
 @ToString(exclude = {"user", "hospital", "role", "registeredBy"})
+@EqualsAndHashCode(callSuper = true)
 public class UserRoleHospitalAssignment extends BaseEntity {
 
     @Column(name = "assignment_code", unique = true, length = 50)
@@ -87,13 +103,12 @@ public class UserRoleHospitalAssignment extends BaseEntity {
         if (Boolean.TRUE.equals(active)) {
             // 1) Patients cannot have ACTIVE hospital assignments
             if ("ROLE_PATIENT".equals(roleKey) || "PATIENT".equals(roleKey)) {
-                throw new RuntimeException("Patients cannot have active hospital assignments.");
+                throw new IllegalStateException("Patients cannot have active hospital assignments.");
             }
             // 2) SUPER_ADMIN must be global (no hospital)
-            if ("ROLE_SUPER_ADMIN".equals(roleKey) || "SYSTEM_ADMIN".equals(roleKey)) {
-                if (hospital != null) {
-                    throw new RuntimeException("Super Admins must not be assigned to a hospital (global only).");
-                }
+            if (("ROLE_SUPER_ADMIN".equals(roleKey) || "SYSTEM_ADMIN".equals(roleKey))
+                    && hospital != null) {
+                throw new IllegalStateException("Super Admins must not be assigned to a hospital (global only).");
             }
         }
     }

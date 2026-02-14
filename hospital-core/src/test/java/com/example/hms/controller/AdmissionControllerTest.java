@@ -1,7 +1,16 @@
 package com.example.hms.controller;
 
-import com.example.hms.enums.*;
-import com.example.hms.payload.dto.*;
+import com.example.hms.enums.AcuityLevel;
+import com.example.hms.enums.AdmissionStatus;
+import com.example.hms.enums.AdmissionType;
+import com.example.hms.enums.DischargeDisposition;
+import com.example.hms.payload.dto.AdmissionDischargeRequestDTO;
+import com.example.hms.payload.dto.AdmissionOrderExecutionRequestDTO;
+import com.example.hms.payload.dto.AdmissionOrderSetRequestDTO;
+import com.example.hms.payload.dto.AdmissionOrderSetResponseDTO;
+import com.example.hms.payload.dto.AdmissionRequestDTO;
+import com.example.hms.payload.dto.AdmissionResponseDTO;
+import com.example.hms.payload.dto.AdmissionUpdateRequestDTO;
 import com.example.hms.service.AdmissionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
@@ -26,10 +35,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @AutoConfigureMockMvc(addFilters = false)
 @WebMvcTest(
@@ -372,7 +389,7 @@ class AdmissionControllerTest {
             LocalDateTime start = LocalDateTime.of(2026, 1, 1, 0, 0);
             LocalDateTime end = LocalDateTime.of(2026, 1, 31, 23, 59);
 
-            when(admissionService.getAdmissionsByHospital(eq(hospitalId), eq("ACTIVE"), eq(start), eq(end)))
+            when(admissionService.getAdmissionsByHospital(hospitalId, "ACTIVE", start, end))
                 .thenReturn(List.of(buildAdmissionResponse(UUID.randomUUID())));
 
             mockMvc.perform(get(BASE + "/hospital/{hospitalId}", hospitalId)

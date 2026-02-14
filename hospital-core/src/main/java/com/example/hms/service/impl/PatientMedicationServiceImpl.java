@@ -5,6 +5,7 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
+import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.medication.PatientMedicationResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
@@ -23,7 +24,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -61,7 +61,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .sorted(byCreatedAt.reversed())
             .limit(limitToApply)
             .map(this::toResponse)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private PatientMedicationResponseDTO toResponse(Prescription prescription) {
@@ -79,7 +79,7 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .status(resolveStatus(prescription.getStatus(), endDate))
             .startDate(startDate)
             .endDate(endDate)
-            .prescribedBy(Optional.ofNullable(prescription.getStaff()).map(staff -> staff.getFullName()).orElse(null))
+            .prescribedBy(Optional.ofNullable(prescription.getStaff()).map(Staff::getFullName).orElse(null))
             .indication(prescription.getNotes())
             .instructions(prescription.getInstructions())
             .build();

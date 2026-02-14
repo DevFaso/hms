@@ -15,7 +15,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Component
 public class ImagingOrderMapper {
@@ -164,7 +163,7 @@ public class ImagingOrderMapper {
         }
         return duplicates.stream()
             .map(this::toDuplicateMatchDTO)
-            .collect(Collectors.toList());
+            .toList();
     }
 
     public ImagingOrderDuplicateMatchDTO toDuplicateMatchDTO(ImagingOrder order) {

@@ -375,31 +375,25 @@ class PatientControllerDiagnosisIT extends BaseIT {
 		return savedPatient;
 	}
 
-	private PatientProblem createProblem(String display, ProblemStatus status, int chronologyOffsetDays) {
-		LocalDate onsetDate = LocalDate.now().minusDays(chronologyOffsetDays);
-		LocalDateTime reviewedAt = LocalDateTime.now().minusDays(chronologyOffsetDays);
-		PatientProblem problem = PatientProblem.builder()
-			.patient(patient)
-			.hospital(hospital)
-			.recordedBy(doctorStaff)
-			.problemDisplay(display)
-			.problemCode("A" + nextId())
-			.status(status)
-			.severity(ProblemSeverity.MODERATE)
-			.onsetDate(onsetDate)
-			.resolvedDate(status == ProblemStatus.RESOLVED ? onsetDate.plusDays(1) : null)
-			.lastReviewedAt(reviewedAt)
-			.notes("Test note")
-			.diagnosisCodes(new ArrayList<>(List.of("A" + nextId())))
-			.build();
-		return patientProblemRepository.save(problem);
-	}
-
-	private PatientProblem createProblem(String display, ProblemStatus status) {
-		return createProblem(display, status, 5);
-	}
-
-	private RequestPostProcessor doctorAuthentication() {
+        private PatientProblem createProblem(String display, ProblemStatus status, int chronologyOffsetDays) {
+                LocalDate onsetDate = LocalDate.now().minusDays(chronologyOffsetDays);
+                LocalDateTime reviewedAt = LocalDateTime.now().minusDays(chronologyOffsetDays);
+                PatientProblem problem = PatientProblem.builder()
+                        .patient(patient)
+                        .hospital(hospital)
+                        .recordedBy(doctorStaff)
+                        .problemDisplay(display)
+                        .problemCode("A" + nextId())
+                        .status(status)
+                        .severity(ProblemSeverity.MODERATE)
+                        .onsetDate(onsetDate)
+                        .resolvedDate(status == ProblemStatus.RESOLVED ? onsetDate.plusDays(1) : null)
+                        .lastReviewedAt(reviewedAt)
+                        .notes("Test note")
+                        .diagnosisCodes(new ArrayList<>(List.of("A" + nextId())))
+                        .build();
+                return patientProblemRepository.save(problem);
+        }	private RequestPostProcessor doctorAuthentication() {
 		Collection<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(ROLE_DOCTOR));
 		CustomUserDetails principal = new CustomUserDetails(
 			doctorUser.getId(),

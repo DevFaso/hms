@@ -139,7 +139,7 @@ public class ImmunizationMapper {
                 .registryReported(dto.getRegistryReported())
                 .registryReportedDate(dto.getRegistryReportedDate())
                 .notes(dto.getNotes())
-                .active(dto.getActive() != null ? dto.getActive() : true)
+                .active(dto.getActive() == null || dto.getActive())
                 .build();
     }
 

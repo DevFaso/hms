@@ -21,10 +21,10 @@ public record InvoicePdfResponseDTO(byte[] content, String invoiceNumber, UUID i
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof InvoicePdfResponseDTO that)) return false;
-        return Arrays.equals(content, that.content)
-            && Objects.equals(invoiceNumber, that.invoiceNumber)
-            && Objects.equals(invoiceId, that.invoiceId);
+        if (!(o instanceof InvoicePdfResponseDTO(byte[] otherContent, String otherNumber, UUID otherId))) return false;
+        return Arrays.equals(content, otherContent)
+            && Objects.equals(invoiceNumber, otherNumber)
+            && Objects.equals(invoiceId, otherId);
     }
 
     @Override

@@ -133,7 +133,7 @@ class EmailInvoiceRequestTest {
         List<String> to = List.of("a@b.com");
         EmailInvoiceRequest r1 = new EmailInvoiceRequest(to, null, null, "m", "en", true);
         EmailInvoiceRequest r2 = new EmailInvoiceRequest(to, null, null, "m", "en", true);
-        assertThat(r1.hashCode()).isEqualTo(r2.hashCode());
+        assertThat(r1).hasSameHashCodeAs(r2);
     }
 
     @Test
@@ -149,9 +149,9 @@ class EmailInvoiceRequestTest {
     void toStringContainsFieldNames() {
         EmailInvoiceRequest r = new EmailInvoiceRequest(List.of("a@b.com"), null, null, "msg", "en", true);
         String s = r.toString();
-        assertThat(s).contains("a@b.com");
-        assertThat(s).contains("msg");
-        assertThat(s).contains("en");
-        assertThat(s).contains("true");
+        assertThat(s).contains("a@b.com")
+            .contains("msg")
+            .contains("en")
+            .contains("true");
     }
 }

@@ -93,7 +93,7 @@ public class NursingNoteMapper {
                 .reinforcementActions(trim(entry.getReinforcementActions()))
                 .educationSummary(entry.getEducationSummary())
                 .build())
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private List<NursingNoteInterventionDTO> mapInterventionEntries(List<NursingNoteInterventionEntry> entries) {
@@ -108,7 +108,7 @@ public class NursingNoteMapper {
                 .linkedMedicationTaskId(entry.getLinkedMedicationTaskId())
                 .followUpActions(trim(entry.getFollowUpActions()))
                 .build())
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private List<NursingNoteAddendumResponseDTO> mapAddenda(List<NursingNoteAddendum> addenda) {
@@ -131,7 +131,7 @@ public class NursingNoteMapper {
                 .attestAccuracy(addendum.isAttestAccuracy())
                 .attestNoAbbreviations(addendum.isAttestNoAbbreviations())
                 .build())
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private String resolvePatientName(Patient patient) {
@@ -155,7 +155,7 @@ public class NursingNoteMapper {
         }
         try {
             return patient.getMrnForHospital(hospitalId);
-        } catch (Exception ignored) {
+        } catch (RuntimeException ignored) {
             return null;
         }
     }

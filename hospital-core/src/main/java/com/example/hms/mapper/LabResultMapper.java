@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.function.Predicate;
 
 @Component
 @RequiredArgsConstructor
@@ -142,8 +142,11 @@ public class LabResultMapper {
             return new PatientInfo("", "");
         }
         String fullName = Optional.ofNullable(patient.getFullName())
-            .filter(name -> !name.isBlank())
-            .orElseGet(() -> (nullToEmpty(patient.getFirstName()) + " " + nullToEmpty(patient.getLastName())).trim());
+            .filter(Predicate.not(String::isBlank))
+            .orElse(null);
+        if (fullName == null) {
+            fullName = (nullToEmpty(patient.getFirstName()) + " " + nullToEmpty(patient.getLastName())).trim();
+        }
         String email = Optional.ofNullable(patient.getEmail()).orElse("");
         return new PatientInfo(fullName, email);
     }
@@ -185,7 +188,7 @@ public class LabResultMapper {
                 .gender(range.getGender())
                 .notes(range.getNotes())
                 .build())
-            .collect(Collectors.toList());
+            .toList();
     }
 
     private String determineSeverityFlag(String rawResultValue, String resultUnit, List<LabTestReferenceRange> referenceRanges) {

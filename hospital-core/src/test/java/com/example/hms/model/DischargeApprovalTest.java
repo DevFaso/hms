@@ -9,7 +9,7 @@ import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class DischargeApprovalTest {
 
@@ -276,15 +276,15 @@ class DischargeApprovalTest {
                 .build();
 
         String s = da.toString();
-        assertThat(s).contains("status=APPROVED");
-        assertThat(s).contains("nurseSummary=summary");
-        assertThat(s).doesNotContain("patient=");
-        assertThat(s).doesNotContain("registration=");
-        assertThat(s).doesNotContain("hospital=");
-        assertThat(s).doesNotContain("nurse=");
-        assertThat(s).doesNotContain("doctor=");
-        assertThat(s).doesNotContain("nurseAssignment=");
-        assertThat(s).doesNotContain("doctorAssignment=");
+        assertThat(s).contains("status=APPROVED")
+            .contains("nurseSummary=summary")
+            .doesNotContain("patient=")
+            .doesNotContain("registration=")
+            .doesNotContain("hospital=")
+            .doesNotContain("nurse=")
+            .doesNotContain("doctor=")
+            .doesNotContain("nurseAssignment=")
+            .doesNotContain("doctorAssignment=");
     }
 
     // ─── equals / hashCode (@EqualsAndHashCode(callSuper=true)) ─
@@ -296,8 +296,7 @@ class DischargeApprovalTest {
         a.setId(id);
         DischargeApproval b = DischargeApproval.builder().build();
         b.setId(id);
-        assertThat(a).isEqualTo(b);
-        assertThat(a.hashCode()).isEqualTo(b.hashCode());
+        assertThat(a).isEqualTo(b).hasSameHashCodeAs(b);
     }
 
     @Test

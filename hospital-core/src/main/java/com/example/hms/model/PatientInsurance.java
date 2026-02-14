@@ -1,9 +1,25 @@
 package com.example.hms.model;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 import java.time.LocalDate;
 import java.util.UUID;
@@ -30,6 +46,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @ToString(exclude = {"patient", "assignment"})
+@EqualsAndHashCode(callSuper = true)
 public class PatientInsurance extends BaseEntity {
     @Size(max = 50)
     @Column(name = "payer_code", length = 50)

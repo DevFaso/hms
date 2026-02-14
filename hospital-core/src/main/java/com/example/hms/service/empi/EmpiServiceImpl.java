@@ -337,7 +337,7 @@ public class EmpiServiceImpl implements EmpiService {
         }
         try {
             template.send(kafkaProperties.getEmpiIdentityTopic(), payload.getEmpiNumber(), payload);
-        } catch (Exception ex) {
+        } catch (RuntimeException ex) {
             log.warn("Failed to publish EMPI event {}", payload, ex);
         }
     }

@@ -1,8 +1,23 @@
 package com.example.hms.model;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Index;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import jakarta.validation.constraints.NotNull;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -26,6 +41,7 @@ import java.util.Objects;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode(callSuper = true)
 public class StaffAvailability extends BaseEntity {
 
     @NotNull
@@ -63,10 +79,9 @@ public class StaffAvailability extends BaseEntity {
     @PreUpdate
     private void validate() {
         // Hospital integrity: availability must be for the staff's hospital
-        if (staff != null && staff.getHospital() != null) {
-            if (!Objects.equals(staff.getHospital().getId(), hospital != null ? hospital.getId() : null)) {
-                throw new IllegalStateException("Availability hospital must match staff.hospital");
-            }
+        if (staff != null && staff.getHospital() != null
+                && !Objects.equals(staff.getHospital().getId(), hospital != null ? hospital.getId() : null)) {
+            throw new IllegalStateException("Availability hospital must match staff.hospital");
         }
         // Time rules
         if (dayOff) {
