@@ -10,7 +10,6 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,11 +34,9 @@ public class ReferenceCatalogController {
 
     @GetMapping
     @Operation(summary = "List reference catalogs")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Catalogs retrieved successfully",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-                schema = @Schema(implementation = ReferenceCatalogResponseDTO.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "Catalogs retrieved successfully",
+        content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+            schema = @Schema(implementation = ReferenceCatalogResponseDTO.class)))
     @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
     public ResponseEntity<List<ReferenceCatalogResponseDTO>> listCatalogs() {
         return ResponseEntity.ok(catalogService.listCatalogs());
@@ -47,11 +44,9 @@ public class ReferenceCatalogController {
 
     @PostMapping
     @Operation(summary = "Create a reference catalog")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Catalog created successfully",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-                schema = @Schema(implementation = ReferenceCatalogResponseDTO.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "Catalog created successfully",
+        content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+            schema = @Schema(implementation = ReferenceCatalogResponseDTO.class)))
     @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
     public ResponseEntity<ReferenceCatalogResponseDTO> createCatalog(
         @Valid @RequestBody CreateReferenceCatalogRequestDTO requestDTO) {
@@ -61,11 +56,9 @@ public class ReferenceCatalogController {
     @PostMapping(value = "/{catalogId}/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Import catalog entries from CSV",
         description = "Imports entries. CSV must include a 'code' column; optional columns: label, description, metadata (JSON), active")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Catalog entries imported",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-                schema = @Schema(implementation = CatalogImportResponseDTO.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "Catalog entries imported",
+        content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+            schema = @Schema(implementation = CatalogImportResponseDTO.class)))
     @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
     public ResponseEntity<CatalogImportResponseDTO> importCatalog(
         @Parameter(description = "Catalog identifier") @PathVariable UUID catalogId,
@@ -75,11 +68,9 @@ public class ReferenceCatalogController {
 
     @PostMapping("/{catalogId}/schedule")
     @Operation(summary = "Schedule or trigger catalog publish")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Publish scheduled",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-                schema = @Schema(implementation = ReferenceCatalogResponseDTO.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "Publish scheduled",
+        content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+            schema = @Schema(implementation = ReferenceCatalogResponseDTO.class)))
     @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
     public ResponseEntity<ReferenceCatalogResponseDTO> schedulePublish(
         @Parameter(description = "Catalog identifier") @PathVariable UUID catalogId,

@@ -474,15 +474,14 @@ class ActingContextInterceptorTest {
     class NonCustomUserDetailsPrincipalTests {
 
         @Test
-        @DisplayName("throws ClassCastException when principal is a plain string")
-        void preHandle_stringPrincipal_throwsClassCast() {
-            // Interceptor casts directly: (CustomUserDetails) auth.getPrincipal()
-            // If the principal is not a CustomUserDetails, this should throw
+        @DisplayName("returns true (continues chain) when principal is a plain string")
+        void preHandle_stringPrincipal_continuesChain() throws Exception {
+            // After refactoring, non-CustomUserDetails principals are handled gracefully
             setAuthentication(
                     new UsernamePasswordAuthenticationToken("plainUser", "password"));
 
-            assertThatThrownBy(() -> interceptor.preHandle(request, response, handler))
-                    .isInstanceOf(ClassCastException.class);
+            boolean result = interceptor.preHandle(request, response, handler);
+            assertThat(result).isTrue();
         }
     }
 

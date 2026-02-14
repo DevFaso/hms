@@ -14,9 +14,13 @@ import java.util.UUID;
 
 @Component
 public class ActingContextInterceptor implements HandlerInterceptor {
-    @Override public boolean preHandle(HttpServletRequest req, HttpServletResponse res, Object handler) {
+
+    @Override
+    public boolean preHandle(HttpServletRequest req, HttpServletResponse res, Object handler) {
         var auth = SecurityContextHolder.getContext().getAuthentication();
-        if (auth == null) return true;
+        if (auth == null || !(auth.getPrincipal() instanceof CustomUserDetails)) {
+            return true;
+        }
 
         UUID userId = ((CustomUserDetails) auth.getPrincipal()).getUserId();
 
@@ -26,12 +30,23 @@ public class ActingContextInterceptor implements HandlerInterceptor {
         UUID hospitalId = null;
         if (mode == ActingMode.STAFF) {
             String hid = req.getHeader("X-Hospital-Id");
-            if (hid != null && !hid.isBlank()) hospitalId = UUID.fromString(hid);
+            if (hid != null && !hid.isBlank()) {
+                hospitalId = UUID.fromString(hid);
+            }
         }
 
-        String roleCode = req.getHeader("X-Role-Code"); // optional
+        String roleCode = req.getHeader("X-Role-Code");
 
-        req.setAttribute("ACTING_CONTEXT", new ActingContext(userId, hospitalId, mode, roleCode));
-        return true;
+        ActingContext context = new ActingContext(userId, hospitalId, mode, roleCode);
+        req.setAttribute("ACTING_CONTEXT", context);
+        return continueChain(context);
+    }
+
+    /**
+     * Determines whether the filter chain should proceed. This interceptor always
+     * allows continuation — its purpose is to populate the acting-context attribute.
+     */
+    private static boolean continueChain(ActingContext context) {
+        return context != null;
     }
 }

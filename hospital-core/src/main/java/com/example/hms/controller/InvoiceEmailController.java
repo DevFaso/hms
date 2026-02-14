@@ -19,6 +19,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class InvoiceEmailController {
 
+    private static final String STATUS_KEY = "status";
     private final InvoiceEmailService invoiceEmailService;
 
     // Body-based (recommended)
@@ -28,7 +29,7 @@ public class InvoiceEmailController {
         @PathVariable UUID invoiceId,
         @RequestBody @Valid EmailInvoiceRequest req) {
         invoiceEmailService.emailInvoice(invoiceId, req);
-        return ResponseEntity.ok(Map.of("status","SENT","sentAt", OffsetDateTime.now()));
+        return ResponseEntity.ok(Map.of(STATUS_KEY,"SENT","sentAt", OffsetDateTime.now()));
     }
 
     // Quick path — email as query param to avoid URL-encoding issues with @, +, %
@@ -41,7 +42,7 @@ public class InvoiceEmailController {
         // validate path email (strict)
         if (!isValidEmail(email)) {
             return ResponseEntity.badRequest().body(Map.of(
-                "status", 400,
+                STATUS_KEY, 400,
                 "error", "Invalid email",
                 "message", "Invalid email address: " + email
             ));
@@ -55,7 +56,7 @@ public class InvoiceEmailController {
         );
 
         invoiceEmailService.emailInvoice(invoiceId, req);
-        return ResponseEntity.ok(Map.of("status","SENT","sentAt", OffsetDateTime.now()));
+        return ResponseEntity.ok(Map.of(STATUS_KEY,"SENT","sentAt", OffsetDateTime.now()));
     }
 
     private static boolean isValidEmail(String addr) {

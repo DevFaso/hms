@@ -189,6 +189,7 @@ public class MeController {
                 try {
                     return Optional.of(UUID.fromString(str));
                 } catch (Exception ignored) {
+                    // Claim value is not a valid UUID — continue to fallback formats
                 }
             }
             // nested/custom formats
@@ -199,6 +200,7 @@ public class MeController {
                 try {
                     return Optional.of(UUID.fromString(s));
                 } catch (Exception ignored) {
+                    // Raw string claim is not a valid UUID — fall through to empty
                 }
             }
         }
@@ -229,8 +231,9 @@ public class MeController {
             if (sub == null)
                 return Optional.empty();
             try {
-                return Optional.of(sub instanceof UUID ? (UUID) sub : UUID.fromString(String.valueOf(sub)));
+                return Optional.of(sub instanceof UUID uuid ? uuid : UUID.fromString(String.valueOf(sub)));
             } catch (Exception ignored) {
+                // JWT 'sub' claim is not a valid UUID format — cannot resolve user ID
                 return Optional.empty();
             }
         }

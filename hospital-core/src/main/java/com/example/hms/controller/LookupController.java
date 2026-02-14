@@ -5,13 +5,10 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
 import com.example.hms.model.Department;
 import com.example.hms.model.Hospital;
-import com.example.hms.payload.dto.PatientLookupDTO;
-import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.payload.dto.AppointmentSummaryDTO;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
-import java.util.Optional;
 import java.util.UUID;
 
 import lombok.RequiredArgsConstructor;
@@ -24,7 +21,6 @@ import org.springframework.web.bind.annotation.*;
 @PreAuthorize("isAuthenticated()")
 public class LookupController {
 
-    private final PatientRepository patientRepository;
     private final AppointmentRepository appointmentRepository;
 
     // Lookup appointments by patient email
@@ -93,23 +89,32 @@ public class LookupController {
             .appointmentDate(a.getAppointmentDate())
             .startTime(a.getStartTime())
             .endTime(a.getEndTime())
-            .patientId(patient != null ? patient.getId() : null)
+            .patientId(safeId(patient))
             .patientName(patient != null ? patient.getFullName() : null)
             .patientEmail(patient != null ? patient.getEmail() : null)
             .patientPhone(patient != null ? patient.getPhoneNumberPrimary() : null)
-            .staffId(staff != null ? staff.getId() : null)
+            .staffId(safeId(staff))
             .staffName(staff != null ? staff.getFullName() : null)
-            .staffEmail(staff != null && staff.getUser() != null ? staff.getUser().getEmail() : null)
-            .departmentId(department != null ? department.getId() : null)
+            .staffEmail(staffEmail(staff))
+            .departmentId(safeId(department))
             .departmentName(department != null ? department.getName() : null)
             .departmentPhone(department != null ? department.getPhoneNumber() : null)
             .departmentEmail(department != null ? department.getEmail() : null)
-            .hospitalId(hospital != null ? hospital.getId() : null)
+            .hospitalId(safeId(hospital))
             .hospitalName(hospital != null ? hospital.getName() : null)
             .hospitalAddress(hospital != null ? hospital.getAddress() : null)
             .hospitalPhone(hospital != null ? hospital.getPhoneNumber() : null)
             .hospitalEmail(hospital != null ? hospital.getEmail() : null)
             .notes(a.getReason())
             .build();
+    }
+
+    private static UUID safeId(Patient p) { return p != null ? p.getId() : null; }
+    private static UUID safeId(Staff s)   { return s != null ? s.getId() : null; }
+    private static UUID safeId(Department d) { return d != null ? d.getId() : null; }
+    private static UUID safeId(Hospital h) { return h != null ? h.getId() : null; }
+
+    private static String staffEmail(Staff staff) {
+        return staff != null && staff.getUser() != null ? staff.getUser().getEmail() : null;
     }
 }

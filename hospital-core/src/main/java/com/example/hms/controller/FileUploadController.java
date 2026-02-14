@@ -38,7 +38,7 @@ public class FileUploadController {
     @Operation(summary = "Upload profile image", description = "Upload a profile image for the authenticated user")
     @PostMapping(value = "/profile-image", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<?> uploadProfileImage(
+    public ResponseEntity<Object> uploadProfileImage(
             @RequestParam("file") MultipartFile file,
             Authentication authentication) {
 
@@ -78,7 +78,7 @@ public class FileUploadController {
     @Operation(summary = "Delete profile image", description = "Delete the profile image for the authenticated user")
     @DeleteMapping("/profile-image")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<?> deleteProfileImage(Authentication authentication) {
+    public ResponseEntity<Object> deleteProfileImage(Authentication authentication) {
 
         try {
             // Get current user ID from authentication
@@ -118,7 +118,7 @@ public class FileUploadController {
     )
     @PostMapping(value = "/referral-attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyAuthority('ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_NURSE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
-    public ResponseEntity<?> uploadReferralAttachment(
+    public ResponseEntity<Object> uploadReferralAttachment(
         @RequestParam("file") MultipartFile file,
         @RequestParam(value = "category", required = false) ReferralAttachmentCategory category,
         @RequestParam(value = "displayName", required = false) String displayName,
@@ -159,7 +159,7 @@ public class FileUploadController {
     )
     @PostMapping(value = "/chart-attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
-    public ResponseEntity<?> uploadChartAttachment(
+    public ResponseEntity<Object> uploadChartAttachment(
         @RequestParam("file") MultipartFile file,
         @RequestParam(value = "label", required = false) String label,
         @RequestParam(value = "category", required = false) String category,

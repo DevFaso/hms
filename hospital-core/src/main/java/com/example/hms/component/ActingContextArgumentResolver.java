@@ -44,7 +44,11 @@ public class ActingContextArgumentResolver implements HandlerMethodArgumentResol
         UUID hospitalId = null;
         String hid = req.getHeader("X-Hospital-Id");
         if (hid != null && !hid.isBlank()) {
-            try { hospitalId = UUID.fromString(hid); } catch (IllegalArgumentException ignored) { }
+            try {
+                hospitalId = UUID.fromString(hid);
+            } catch (IllegalArgumentException ignored) {
+                // Malformed UUID in X-Hospital-Id header — fall back to null
+            }
         }
 
         String roleCode = req.getHeader("X-Role-Code");

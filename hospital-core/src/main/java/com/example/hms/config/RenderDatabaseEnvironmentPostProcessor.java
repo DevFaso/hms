@@ -87,12 +87,27 @@ public class RenderDatabaseEnvironmentPostProcessor implements EnvironmentPostPr
 
         String host = uri.getHost();
         int port = uri.getPort() == -1 ? 5432 : uri.getPort();
-        String database = uri.getPath();
-        if (database != null && database.startsWith("/")) {
-            database = database.substring(1);
-        }
+        String database = stripLeadingSlash(uri.getPath());
 
-        String query = uri.getQuery();
+        String jdbcUrl = buildJdbcUrl(host, port, database, uri.getQuery());
+
+        return populateOverrides(missingState, jdbcUrl, rawUsername, rawPassword, host, port, database);
+    }
+
+    private static String stripLeadingSlash(String path) {
+        if (path != null && path.startsWith("/")) {
+            return path.substring(1);
+        }
+        return path;
+    }
+
+    private static String buildJdbcUrl(String host, int port, String database, String query) {
+        String queryString = buildQueryString(query);
+        String baseUrl = String.format("jdbc:postgresql://%s:%d/%s", host, port, database);
+        return queryString.isEmpty() ? baseUrl : baseUrl + '?' + queryString;
+    }
+
+    private static String buildQueryString(String query) {
         StringBuilder queryBuilder = new StringBuilder();
         if (!isBlank(query)) {
             queryBuilder.append(query);
@@ -105,34 +120,28 @@ public class RenderDatabaseEnvironmentPostProcessor implements EnvironmentPostPr
         } else if (!queryBuilder.isEmpty() && queryBuilder.charAt(queryBuilder.length() - 1) == '&') {
             queryBuilder.deleteCharAt(queryBuilder.length() - 1);
         }
+        return queryBuilder.toString();
+    }
 
-        String jdbcUrl = String.format("jdbc:postgresql://%s:%d/%s", host, port, database);
-        if (!queryBuilder.isEmpty()) {
-            jdbcUrl = jdbcUrl + '?' + queryBuilder;
-        }
-
+    private Map<String, Object> populateOverrides(DatabaseRequirementState missingState, String jdbcUrl,
+                                                   String rawUsername, String rawPassword,
+                                                   String host, int port, String database) {
         Map<String, Object> overrides = new LinkedHashMap<>();
-        if (missingState.urlMissing && !isBlank(jdbcUrl)) {
-            overrides.put(DEV_DB_URL, jdbcUrl);
-        }
-        if (missingState.usernameMissing && !isBlank(rawUsername)) {
-            overrides.put(DEV_DB_USERNAME, rawUsername);
-        }
-        if (missingState.passwordMissing && !isBlank(rawPassword)) {
-            overrides.put(DEV_DB_PASSWORD, rawPassword);
-        }
-
-        if (missingState.hostMissing && !isBlank(host)) {
-            overrides.put(DEV_DB_HOST, host);
-        }
+        putIfMissing(overrides, missingState.urlMissing, DEV_DB_URL, jdbcUrl);
+        putIfMissing(overrides, missingState.usernameMissing, DEV_DB_USERNAME, rawUsername);
+        putIfMissing(overrides, missingState.passwordMissing, DEV_DB_PASSWORD, rawPassword);
+        putIfMissing(overrides, missingState.hostMissing, DEV_DB_HOST, host);
         if (missingState.portMissing) {
             overrides.put(DEV_DB_PORT, String.valueOf(port));
         }
-        if (missingState.nameMissing && !isBlank(database)) {
-            overrides.put(DEV_DB_NAME, database);
-        }
-
+        putIfMissing(overrides, missingState.nameMissing, DEV_DB_NAME, database);
         return overrides;
+    }
+
+    private static void putIfMissing(Map<String, Object> overrides, boolean missing, String key, String value) {
+        if (missing && !isBlank(value)) {
+            overrides.put(key, value);
+        }
     }
 
     /**

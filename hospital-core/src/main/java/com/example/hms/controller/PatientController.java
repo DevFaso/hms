@@ -30,7 +30,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -85,11 +84,9 @@ public class PatientController {
         description = "Retrieve patients. Receptionists are automatically scoped to their hospital from JWT.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "List of patients retrieved",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = PatientResponseDTO.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "List of patients retrieved",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = PatientResponseDTO.class)))
     @GetMapping
     @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
     public ResponseEntity<List<PatientResponseDTO>> getAllPatients(
@@ -125,14 +122,12 @@ public class PatientController {
     description = "Receptionists and nurses can register a new patient. Hospital is taken from JWT for receptionists.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
-    @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "Patient registered successfully",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = PatientResponseDTO.class))),
-        @ApiResponse(responseCode = "409", description = "Username or email already exists",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = MessageResponse.class)))
-    })
+    @ApiResponse(responseCode = "201", description = "Patient registered successfully",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = PatientResponseDTO.class)))
+    @ApiResponse(responseCode = "409", description = "Username or email already exists",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = MessageResponse.class)))
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
@@ -156,14 +151,12 @@ public class PatientController {
         description = "Retrieve a specific patient. Receptionists are scoped to their hospital.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Patient found",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = PatientResponseDTO.class))),
-        @ApiResponse(responseCode = "404", description = "Patient not found",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = MessageResponse.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "Patient found",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = PatientResponseDTO.class)))
+    @ApiResponse(responseCode = "404", description = "Patient not found",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = MessageResponse.class)))
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<PatientResponseDTO> getPatientById(
@@ -185,14 +178,12 @@ public class PatientController {
         description = "Update a patient's profile. Receptionists are scoped to their hospital.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Patient updated",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = PatientResponseDTO.class))),
-        @ApiResponse(responseCode = "404", description = "Patient not found",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = MessageResponse.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "Patient updated",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = PatientResponseDTO.class)))
+    @ApiResponse(responseCode = "404", description = "Patient not found",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = MessageResponse.class)))
     @PutMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<PatientResponseDTO> updatePatient(
@@ -226,14 +217,12 @@ public class PatientController {
         description = "Deletes a patient profile and corresponding user record.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Patient deleted",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = MessageResponse.class))),
-        @ApiResponse(responseCode = "404", description = "Patient not found",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = MessageResponse.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "Patient deleted",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = MessageResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Patient not found",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = MessageResponse.class)))
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<MessageResponse> deletePatient(
@@ -254,11 +243,9 @@ public class PatientController {
         description = "Search by MRN, name+DOB, phone, email. Receptionists scoped to their hospital.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Patients found",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = PatientResponseDTO.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "Patients found",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = PatientResponseDTO.class)))
     @GetMapping("/search")
     @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<List<PatientResponseDTO>> searchPatients(
@@ -296,11 +283,9 @@ public class PatientController {
         description = "Provide one of: email, phone, username, MRN (param 'mrn'). 'mri' is accepted for backward compatibility.",
         security = @SecurityRequirement(name = "bearerAuth")
     )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Lookup completed",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = PatientResponseDTO.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "Lookup completed",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = PatientResponseDTO.class)))
     @GetMapping("/lookup")
     @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
     public ResponseEntity<List<PatientResponseDTO>> lookupPatients(

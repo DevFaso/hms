@@ -2249,15 +2249,21 @@ class DevSyntheticDataSeederTest {
 
         @Test
         void createStaff_createsUserStaffAndAssignment() throws Exception {
+            Class<?> staffSeedInputClass = findInnerClass("StaffSeedInput");
             Method method = DevSyntheticDataSeeder.class.getDeclaredMethod(
-                "createStaff", String.class, Hospital.class, Department.class, Role.class,
-                JobTitle.class, EmploymentType.class, String.class, User.class);
+                "createStaff", String.class, staffSeedInputClass);
             method.setAccessible(true);
 
             Hospital hospital = buildHospital();
             Department dept = buildDepartment(hospital);
             Role role = buildRole("ROLE_DOCTOR");
             User registeredBy = buildUser("admin");
+
+            var ctor = staffSeedInputClass.getDeclaredConstructors()[0];
+            ctor.setAccessible(true);
+            Object input = ctor.newInstance(
+                hospital, dept, role, JobTitle.DOCTOR, EmploymentType.FULL_TIME,
+                "General Medicine", registeredBy);
 
             // createUser internally
             when(userRepository.save(any(User.class))).thenAnswer(inv -> {
@@ -2284,8 +2290,7 @@ class DevSyntheticDataSeederTest {
                 return s;
             });
 
-            Object result = method.invoke(seeder, "doctor", hospital, dept, role,
-                JobTitle.DOCTOR, EmploymentType.FULL_TIME, "General Medicine", registeredBy);
+            Object result = method.invoke(seeder, "doctor", input);
 
             assertThat(result).isNotNull();
             verify(staffRepository).save(any(Staff.class));
@@ -2297,10 +2302,9 @@ class DevSyntheticDataSeederTest {
 
         @Test
         void ensureStaff_returnsExistingAndUpdatesDepartment() throws Exception {
+            Class<?> staffSeedInputClass = findInnerClass("StaffSeedInput");
             Method method = DevSyntheticDataSeeder.class.getDeclaredMethod(
-                "ensureStaff", Map.class, JobTitle.class, String.class,
-                Hospital.class, Department.class, Role.class,
-                EmploymentType.class, String.class, User.class);
+                "ensureStaff", Map.class, String.class, staffSeedInputClass);
             method.setAccessible(true);
 
             Hospital hospital = buildHospital();
@@ -2310,6 +2314,12 @@ class DevSyntheticDataSeederTest {
             Role role = buildRole("ROLE_DOCTOR");
             User adminUser = buildUser("admin");
 
+            var ctor = staffSeedInputClass.getDeclaredConstructors()[0];
+            ctor.setAccessible(true);
+            Object input = ctor.newInstance(
+                hospital, dept, role, JobTitle.DOCTOR, EmploymentType.FULL_TIME,
+                "General Medicine", adminUser);
+
             Staff existing = Staff.builder().jobTitle(JobTitle.DOCTOR).hospital(hospital).department(otherDept).build();
             setId(existing, UUID.randomUUID());
 
@@ -2318,8 +2328,7 @@ class DevSyntheticDataSeederTest {
 
             when(staffRepository.save(any(Staff.class))).thenAnswer(inv -> inv.getArgument(0));
 
-            Object result = method.invoke(seeder, staffMap, JobTitle.DOCTOR, "doctor",
-                hospital, dept, role, EmploymentType.FULL_TIME, "General Medicine", adminUser);
+            Object result = method.invoke(seeder, staffMap, "doctor", input);
 
             assertThat(result).isNotNull();
             verify(staffRepository).save(any(Staff.class));
@@ -2327,36 +2336,45 @@ class DevSyntheticDataSeederTest {
 
         @Test
         void ensureStaff_returnsNullWhenRoleIsMissing() throws Exception {
+            Class<?> staffSeedInputClass = findInnerClass("StaffSeedInput");
             Method method = DevSyntheticDataSeeder.class.getDeclaredMethod(
-                "ensureStaff", Map.class, JobTitle.class, String.class,
-                Hospital.class, Department.class, Role.class,
-                EmploymentType.class, String.class, User.class);
+                "ensureStaff", Map.class, String.class, staffSeedInputClass);
             method.setAccessible(true);
 
             Hospital hospital = buildHospital();
             Department dept = buildDepartment(hospital);
             User adminUser = buildUser("admin");
 
+            var ctor1 = staffSeedInputClass.getDeclaredConstructors()[0];
+            ctor1.setAccessible(true);
+            Object input = ctor1.newInstance(
+                hospital, dept, null, JobTitle.DOCTOR, EmploymentType.FULL_TIME,
+                "General Medicine", adminUser);
+
             Map<JobTitle, Staff> staffMap = new java.util.HashMap<>();
 
-            Object result = method.invoke(seeder, staffMap, JobTitle.DOCTOR, "doctor",
-                hospital, dept, null, EmploymentType.FULL_TIME, "General Medicine", adminUser);
+            Object result = method.invoke(seeder, staffMap, "doctor", input);
 
             assertThat(result).isNull();
         }
 
         @Test
         void ensureStaff_createsNewWhenNotInMap() throws Exception {
+            Class<?> staffSeedInputClass = findInnerClass("StaffSeedInput");
             Method method = DevSyntheticDataSeeder.class.getDeclaredMethod(
-                "ensureStaff", Map.class, JobTitle.class, String.class,
-                Hospital.class, Department.class, Role.class,
-                EmploymentType.class, String.class, User.class);
+                "ensureStaff", Map.class, String.class, staffSeedInputClass);
             method.setAccessible(true);
 
             Hospital hospital = buildHospital();
             Department dept = buildDepartment(hospital);
             Role role = buildRole("ROLE_DOCTOR");
             User adminUser = buildUser("admin");
+
+            var ctor2 = staffSeedInputClass.getDeclaredConstructors()[0];
+            ctor2.setAccessible(true);
+            Object input = ctor2.newInstance(
+                hospital, dept, role, JobTitle.DOCTOR, EmploymentType.FULL_TIME,
+                "General Medicine", adminUser);
 
             Map<JobTitle, Staff> staffMap = new java.util.HashMap<>();
 
@@ -2385,8 +2403,7 @@ class DevSyntheticDataSeederTest {
                 return s;
             });
 
-            Object result = method.invoke(seeder, staffMap, JobTitle.DOCTOR, "doctor",
-                hospital, dept, role, EmploymentType.FULL_TIME, "General Medicine", adminUser);
+            Object result = method.invoke(seeder, staffMap, "doctor", input);
 
             assertThat(result).isNotNull();
         }

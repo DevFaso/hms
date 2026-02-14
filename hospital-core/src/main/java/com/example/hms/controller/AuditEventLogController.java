@@ -11,7 +11,6 @@ import com.example.hms.service.AuditEventLogService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -39,11 +38,9 @@ public class AuditEventLogController {
 
     @PostMapping
     @Operation(summary = "Log an Audit Event", description = "Creates a new audit log entry and returns it.")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Audit event logged successfully"),
-        @ApiResponse(responseCode = "400", description = "Invalid request body"),
-        @ApiResponse(responseCode = "404", description = "User not found")
-    })
+    @ApiResponse(responseCode = "200", description = "Audit event logged successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid request body")
+    @ApiResponse(responseCode = "404", description = "User not found")
     public ResponseEntity<AuditEventLogResponseDTO> logEvent(
         @Valid @RequestBody AuditEventRequestDTO requestDTO) {
         AuditEventLogResponseDTO response = auditService.logEvent(requestDTO);
@@ -52,9 +49,7 @@ public class AuditEventLogController {
 
     @GetMapping
     @Operation(summary = "Get All Audit Logs", description = "Retrieve all audit logs with pagination.")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
-    })
+    @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getAllAuditLogs(
         @PageableDefault(size = 20) Pageable pageable
     ) {
@@ -64,9 +59,7 @@ public class AuditEventLogController {
 
     @GetMapping("/user/{userId}")
     @Operation(summary = "Get Audit Logs by User", description = "Retrieve audit logs for a specific user based on their UUID.")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
-    })
+    @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getLogsByUser(
         @Parameter(description = "UUID of the user", required = true)
         @PathVariable UUID userId,
@@ -76,10 +69,8 @@ public class AuditEventLogController {
 
     @GetMapping("/event-type-status")
     @Operation(summary = "Get Audit Logs by Event Type (with optional status)", description = "Retrieve audit logs filtered by event type and optionally by status.")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully"),
-        @ApiResponse(responseCode = "400", description = "Invalid audit event type or status")
-    })
+    @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid audit event type or status")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getLogsByEventTypeAndStatus(
         @RequestParam String eventType,
         @RequestParam(required = false) String status,
@@ -106,9 +97,7 @@ public class AuditEventLogController {
 
     @GetMapping("/target")
     @Operation(summary = "Get Audit Logs by Target Resource", description = "Retrieve audit logs based on the affected entity type and resource ID.")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
-    })
+    @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getLogsByTarget(
         @RequestParam String entityType,
         @RequestParam String resourceId,

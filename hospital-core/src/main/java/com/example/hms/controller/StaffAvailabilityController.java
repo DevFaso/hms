@@ -8,7 +8,6 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -32,13 +31,11 @@ public class StaffAvailabilityController {
             summary = "Create availability for a staff member",
             description = "Define an availability time slot for a given staff member. Prevents overlap if implemented in service."
     )
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Availability created successfully.",
-                    content = @Content(schema = @Schema(implementation = StaffAvailabilityResponseDTO.class))),
-            @ApiResponse(responseCode = "400", description = "Invalid input or business rule violation.",
-                    content = @Content),
-            @ApiResponse(responseCode = "404", description = "Staff member not found.", content = @Content)
-    })
+    @ApiResponse(responseCode = "200", description = "Availability created successfully.",
+            content = @Content(schema = @Schema(implementation = StaffAvailabilityResponseDTO.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid input or business rule violation.",
+            content = @Content)
+    @ApiResponse(responseCode = "404", description = "Staff member not found.", content = @Content)
     @PostMapping
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN')")
     public ResponseEntity<StaffAvailabilityResponseDTO> create(
@@ -54,11 +51,9 @@ public class StaffAvailabilityController {
             summary = "Check if staff is available at a specific datetime",
             description = "Returns true if the staff has availability at the specified datetime. Checks for overlapping schedules or day offs."
     )
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Returns true if available, false otherwise."),
-            @ApiResponse(responseCode = "400", description = "Invalid request parameters.", content = @Content),
-            @ApiResponse(responseCode = "404", description = "Staff not found.", content = @Content)
-    })
+    @ApiResponse(responseCode = "200", description = "Returns true if available, false otherwise.")
+    @ApiResponse(responseCode = "400", description = "Invalid request parameters.", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Staff not found.", content = @Content)
     @GetMapping("/check")
     public ResponseEntity<Boolean> checkAvailability(
             @Parameter(description = "UUID of the staff member", required = true)

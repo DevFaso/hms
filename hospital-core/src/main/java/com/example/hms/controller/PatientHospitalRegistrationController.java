@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -42,14 +41,12 @@ public class PatientHospitalRegistrationController {
         description = "Receptionist/admin assigns an existing patient to their hospital. " +
             "If hospitalId is omitted, it is taken from the JWT."
     )
-    @ApiResponses({
-        @ApiResponse(responseCode = "201", description = "Patient assigned to hospital",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = PatientHospitalRegistrationResponseDTO.class))),
-        @ApiResponse(responseCode = "404", description = "Patient or hospital not found",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = MessageResponse.class)))
-    })
+    @ApiResponse(responseCode = "201", description = "Patient assigned to hospital",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = PatientHospitalRegistrationResponseDTO.class)))
+    @ApiResponse(responseCode = "404", description = "Patient or hospital not found",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = MessageResponse.class)))
     public ResponseEntity<PatientHospitalRegistrationResponseDTO> registerPatient(
         @Valid @RequestBody PatientHospitalRegistrationRequestDTO dto,
         Locale locale
@@ -81,11 +78,9 @@ public class PatientHospitalRegistrationController {
         description = "Retrieve all hospitals where a patient is registered. " +
             "If page/size are provided, the service may paginate; otherwise returns a simple list."
     )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "List of patient-hospital registrations",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = PatientHospitalRegistrationResponseDTO.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "List of patient-hospital registrations",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = PatientHospitalRegistrationResponseDTO.class)))
     public ResponseEntity<List<PatientHospitalRegistrationResponseDTO>> getRegistrations(
         @RequestParam(required = false) UUID patientId,
         @RequestParam(required = false) UUID hospitalId,
@@ -110,11 +105,9 @@ public class PatientHospitalRegistrationController {
         summary = "List patients registered across multiple hospitals",
         description = "Returns each patient who has an active registration in more than one hospital along with the associated facilities."
     )
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "Patients with registrations in multiple hospitals",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = PatientMultiHospitalSummaryDTO.class)))
-    })
+    @ApiResponse(responseCode = "200", description = "Patients with registrations in multiple hospitals",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = PatientMultiHospitalSummaryDTO.class)))
     public ResponseEntity<List<PatientMultiHospitalSummaryDTO>> getPatientsRegisteredInMultipleHospitals() {
         List<PatientMultiHospitalSummaryDTO> summaries = registrationService.getPatientsRegisteredInMultipleHospitals();
         return ResponseEntity.ok(summaries);
@@ -143,12 +136,10 @@ public class PatientHospitalRegistrationController {
         summary = "Remove patient from a hospital (staff only)",
         description = "Deregisters a patient from a hospital (removes their assignment)."
     )
-    @ApiResponses({
-        @ApiResponse(responseCode = "204", description = "Patient deregistered from hospital"),
-        @ApiResponse(responseCode = "404", description = "Registration not found",
-            content = @Content(mediaType = "application/json",
-                schema = @Schema(implementation = MessageResponse.class)))
-    })
+    @ApiResponse(responseCode = "204", description = "Patient deregistered from hospital")
+    @ApiResponse(responseCode = "404", description = "Registration not found",
+        content = @Content(mediaType = "application/json",
+            schema = @Schema(implementation = MessageResponse.class)))
     public ResponseEntity<Void> deregisterPatient(@PathVariable UUID id) {
         registrationService.deregisterPatient(id);
         return ResponseEntity.noContent().build();
@@ -171,7 +162,7 @@ public class PatientHospitalRegistrationController {
 
         if (candidate instanceof UUID u) return u;
         if (candidate instanceof String s && !s.isBlank()) {
-            try { return UUID.fromString(s); } catch (Exception ignored) {}
+            try { return UUID.fromString(s); } catch (Exception ignored) { /* non-UUID string — fall through */ }
         }
         return null;
     }

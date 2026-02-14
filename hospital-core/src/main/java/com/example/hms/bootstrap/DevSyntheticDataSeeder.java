@@ -58,6 +58,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
     private static final String SUPER_ADMIN_SEED_SECRET = new String(new char[]{'T','e','m','p','P','a','s','s','1','2','3','!'});
     private static final String SAMPLE_TYPE_BLOOD = "BLOOD";
     private static final String DEFAULT_MRN_PREFIX = "MRX";
+    private static final BigDecimal PRICE_LAB_ANALYSIS = new BigDecimal("15000.00");
     private static final String PHONE_PREFIX = "+226";
 
     private static final String DEFAULT_DEV_SEED_SECRET = new String(new char[]{'P','a','s','s','w','o','r','d','1','2','3','!'});
@@ -241,7 +242,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         OrganizationType[] types = OrganizationType.values();
         OrganizationType type = types[(index - 1) % types.length];
         String name = "Dev Seed Organization " + index;
-        Organization organization = Organization.builder()
+        return Organization.builder()
             .name(name)
             .code(code)
             .description("Synthetic organization seeded for developer experience")
@@ -252,7 +253,6 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .defaultTimezone("Africa/Ouagadougou")
             .onboardingNotes("Auto-generated organization for local testing")
             .build();
-        return organization;
     }
 
     private void seedHospitalGraph(Organization organization, int orgIndex, int hospitalIndex) {
@@ -343,7 +343,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
 
     private Hospital buildHospital(Organization organization, int orgIndex, int hospitalIndex, String code) {
         String name = String.format("%s Hospital %02d", organization.getName(), hospitalIndex);
-        Hospital hospital = Hospital.builder()
+        return Hospital.builder()
             .name(name)
             .code(code)
             .address(String.format("%d Rue du Faso, Quartier %02d", 100 + hospitalIndex, hospitalIndex))
@@ -358,7 +358,6 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .active(true)
             .organization(organization)
             .build();
-        return hospital;
     }
 
     private StaffBundle createStaffBundle(Hospital hospital, int hospitalIndex) {
@@ -395,38 +394,38 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             adminStaff = staffRepository.save(adminStaff);
         }
 
-        Staff doctor = ensureStaff(staffByJobTitle, JobTitle.DOCTOR, "doctor", hospital, general,
-            roleCache.get("ROLE_DOCTOR"), EmploymentType.FULL_TIME, "General Medicine", adminUser);
+        Staff doctor = ensureStaff(staffByJobTitle, "doctor",
+            new StaffSeedInput(hospital, general, roleCache.get("ROLE_DOCTOR"), JobTitle.DOCTOR, EmploymentType.FULL_TIME, "General Medicine", adminUser));
 
-        Staff physician = ensureStaff(staffByJobTitle, JobTitle.PHYSICIAN, "physician", hospital, general,
-            roleCache.get("ROLE_PHYSICIAN"), EmploymentType.FULL_TIME, "Internal Medicine", adminUser);
+        Staff physician = ensureStaff(staffByJobTitle, "physician",
+            new StaffSeedInput(hospital, general, roleCache.get("ROLE_PHYSICIAN"), JobTitle.PHYSICIAN, EmploymentType.FULL_TIME, "Internal Medicine", adminUser));
 
-        Staff surgeon = ensureStaff(staffByJobTitle, JobTitle.SURGEON, "surgeon", hospital, general,
-            roleCache.get("ROLE_SURGEON"), EmploymentType.FULL_TIME, "Surgical Services", adminUser);
+        Staff surgeon = ensureStaff(staffByJobTitle, "surgeon",
+            new StaffSeedInput(hospital, general, roleCache.get("ROLE_SURGEON"), JobTitle.SURGEON, EmploymentType.FULL_TIME, "Surgical Services", adminUser));
 
-        Staff anesthesiologist = ensureStaff(staffByJobTitle, JobTitle.ANESTHESIOLOGIST, "anesthesia", hospital, general,
-            roleCache.get("ROLE_ANESTHESIOLOGIST"), EmploymentType.FULL_TIME, "Perioperative Care", adminUser);
+        Staff anesthesiologist = ensureStaff(staffByJobTitle, "anesthesia",
+            new StaffSeedInput(hospital, general, roleCache.get("ROLE_ANESTHESIOLOGIST"), JobTitle.ANESTHESIOLOGIST, EmploymentType.FULL_TIME, "Perioperative Care", adminUser));
 
-        Staff nurse = ensureStaff(staffByJobTitle, JobTitle.NURSE, "nurse", hospital, pediatrics,
-            roleCache.get("ROLE_NURSE"), EmploymentType.FULL_TIME, "Pediatric Care", adminUser);
+        Staff nurse = ensureStaff(staffByJobTitle, "nurse",
+            new StaffSeedInput(hospital, pediatrics, roleCache.get("ROLE_NURSE"), JobTitle.NURSE, EmploymentType.FULL_TIME, "Pediatric Care", adminUser));
 
-        Staff midwife = ensureStaff(staffByJobTitle, JobTitle.MIDWIFE, "midwife", hospital, pediatrics,
-            roleCache.get(ROLE_MIDWIFE_CODE), EmploymentType.FULL_TIME, "Maternal Support", adminUser);
+        Staff midwife = ensureStaff(staffByJobTitle, "midwife",
+            new StaffSeedInput(hospital, pediatrics, roleCache.get(ROLE_MIDWIFE_CODE), JobTitle.MIDWIFE, EmploymentType.FULL_TIME, "Maternal Support", adminUser));
 
-        Staff receptionist = ensureStaff(staffByJobTitle, JobTitle.RECEPTIONIST, "reception", hospital, general,
-            roleCache.get("ROLE_RECEPTIONIST"), EmploymentType.FULL_TIME, "Front Desk", adminUser);
+        Staff receptionist = ensureStaff(staffByJobTitle, "reception",
+            new StaffSeedInput(hospital, general, roleCache.get("ROLE_RECEPTIONIST"), JobTitle.RECEPTIONIST, EmploymentType.FULL_TIME, "Front Desk", adminUser));
 
-        Staff billing = ensureStaff(staffByJobTitle, JobTitle.BILLING_SPECIALIST, "billing", hospital, general,
-            roleCache.get("ROLE_BILLING_SPECIALIST"), EmploymentType.PART_TIME, "Billing", adminUser);
+        Staff billing = ensureStaff(staffByJobTitle, "billing",
+            new StaffSeedInput(hospital, general, roleCache.get("ROLE_BILLING_SPECIALIST"), JobTitle.BILLING_SPECIALIST, EmploymentType.PART_TIME, "Billing", adminUser));
 
-        Staff labScientist = ensureStaff(staffByJobTitle, JobTitle.LABORATORY_SCIENTIST, "lab", hospital, laboratory,
-            roleCache.get("ROLE_LAB_SCIENTIST"), EmploymentType.FULL_TIME, "Diagnostics", adminUser);
+        Staff labScientist = ensureStaff(staffByJobTitle, "lab",
+            new StaffSeedInput(hospital, laboratory, roleCache.get("ROLE_LAB_SCIENTIST"), JobTitle.LABORATORY_SCIENTIST, EmploymentType.FULL_TIME, "Diagnostics", adminUser));
 
-        Staff radiologist = ensureStaff(staffByJobTitle, JobTitle.RADIOLOGIST, "radiology", hospital, laboratory,
-            roleCache.get("ROLE_RADIOLOGIST"), EmploymentType.FULL_TIME, "Imaging", adminUser);
+        Staff radiologist = ensureStaff(staffByJobTitle, "radiology",
+            new StaffSeedInput(hospital, laboratory, roleCache.get("ROLE_RADIOLOGIST"), JobTitle.RADIOLOGIST, EmploymentType.FULL_TIME, "Imaging", adminUser));
 
-        Staff physiotherapist = ensureStaff(staffByJobTitle, JobTitle.PHYSIOTHERAPIST, "physio", hospital, general,
-            roleCache.get("ROLE_PHYSIOTHERAPIST"), EmploymentType.FULL_TIME, "Rehabilitation", adminUser);
+        Staff physiotherapist = ensureStaff(staffByJobTitle, "physio",
+            new StaffSeedInput(hospital, general, roleCache.get("ROLE_PHYSIOTHERAPIST"), JobTitle.PHYSIOTHERAPIST, EmploymentType.FULL_TIME, "Rehabilitation", adminUser));
 
         general.setHeadOfDepartment(doctor != null ? doctor : adminStaff);
         pediatrics.setHeadOfDepartment(nurse != null ? nurse : midwife);
@@ -511,22 +510,30 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         return persisted;
     }
 
-    private Staff createStaff(String roleSuffix, Hospital hospital, Department department, Role role,
-                              JobTitle jobTitle, EmploymentType employmentType, String specialization,
-                              User registeredBy) {
+    private record StaffSeedInput(
+        Hospital hospital,
+        Department department,
+        Role role,
+        JobTitle jobTitle,
+        EmploymentType employmentType,
+        String specialization,
+        User registeredBy
+    ) {}
+
+    private Staff createStaff(String roleSuffix, StaffSeedInput input) {
         String firstName = pickName(FIRST_NAMES, roleSuffix);
-        String lastName = pickName(LAST_NAMES, roleSuffix + "-" + hospital.getCode());
+        String lastName = pickName(LAST_NAMES, roleSuffix + "-" + input.hospital().getCode());
         User user = createUser(roleSuffix, firstName, lastName);
-        addGlobalRole(user, role);
-        UserRoleHospitalAssignment assignment = createAssignment(user, hospital, role, registeredBy);
+        addGlobalRole(user, input.role());
+        UserRoleHospitalAssignment assignment = createAssignment(user, input.hospital(), input.role(), input.registeredBy());
         Staff staff = Staff.builder()
             .user(user)
-            .hospital(hospital)
-            .department(department)
+            .hospital(input.hospital())
+            .department(input.department())
             .assignment(assignment)
-            .jobTitle(jobTitle)
-            .employmentType(employmentType)
-            .specialization(specialization)
+            .jobTitle(input.jobTitle())
+            .employmentType(input.employmentType())
+            .specialization(input.specialization())
             .licenseNumber(generateLicense(roleSuffix))
             .startDate(LocalDate.now().minusMonths(18))
             .name(user.getFirstName() + " " + user.getLastName())
@@ -538,26 +545,24 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
         return persisted;
     }
 
-    private Staff ensureStaff(Map<JobTitle, Staff> staffByJobTitle, JobTitle jobTitle, String roleSuffix,
-                              Hospital hospital, Department department, Role role,
-                              EmploymentType employmentType, String specialization, User registeredBy) {
-        Staff existing = staffByJobTitle.get(jobTitle);
+    private Staff ensureStaff(Map<JobTitle, Staff> staffByJobTitle, String roleSuffix, StaffSeedInput input) {
+        Staff existing = staffByJobTitle.get(input.jobTitle());
         if (existing != null) {
-            if (department != null && (existing.getDepartment() == null
-                || !Objects.equals(existing.getDepartment().getId(), department.getId()))) {
-                existing.setDepartment(department);
+            if (input.department() != null && (existing.getDepartment() == null
+                || !Objects.equals(existing.getDepartment().getId(), input.department().getId()))) {
+                existing.setDepartment(input.department());
                 existing = staffRepository.save(existing);
             }
             return existing;
         }
 
-        if (role == null) {
-            log.warn("Missing role configuration for {} — skipping staff seed", jobTitle);
+        if (input.role() == null) {
+            log.warn("Missing role configuration for {} — skipping staff seed", input.jobTitle());
             return null;
         }
 
-        Staff created = createStaff(roleSuffix, hospital, department, role, jobTitle, employmentType, specialization, registeredBy);
-        staffByJobTitle.put(jobTitle, created);
+        Staff created = createStaff(roleSuffix, input);
+        staffByJobTitle.put(input.jobTitle(), created);
         return created;
     }
 
@@ -744,8 +749,8 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
             .itemDescription("Laboratory analysis")
             .quantity(1)
             .itemCategory(ItemCategory.LAB_TEST)
-            .unitPrice(new BigDecimal("15000.00"))
-            .totalPrice(new BigDecimal("15000.00"))
+            .unitPrice(PRICE_LAB_ANALYSIS)
+            .totalPrice(PRICE_LAB_ANALYSIS)
             .assignment(staffBundle.labScientist().getAssignment())
             .build();
 
@@ -831,53 +836,73 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
 
         List<SeededTreatment> seeded = new ArrayList<>();
         for (TreatmentSeed seed : buildTreatmentSeeds(staffBundle)) {
-            Department department = seed.department() != null ? seed.department() : staffBundle.generalDepartment();
-            UserRoleHospitalAssignment assignment = seed.assignment() != null
-                ? seed.assignment()
-                : staffBundle.adminAssignment();
-
-            if (department == null || assignment == null) {
-                log.debug("Skipping treatment seed {} due to missing department or assignment", seed.nameEn());
-                continue;
+            SeededTreatment result = processTreatmentSeed(seed, existingByName, hospital, staffBundle);
+            if (result != null) {
+                seeded.add(result);
             }
-
-            Treatment treatment = existingByName.get(seed.nameEn().toLowerCase(Locale.ROOT));
-            if (treatment == null) {
-                treatment = Treatment.builder()
-                    .name(seed.nameEn())
-                    .description(seed.descriptionEn())
-                    .department(department)
-                    .hospital(hospital)
-                    .price(seed.price())
-                    .durationMinutes(seed.durationMinutes())
-                    .assignment(assignment)
-                    .active(true)
-                    .build();
-                treatment = treatmentRepository.save(treatment);
-                log.info("Seeded treatment '{}' for hospital {}", seed.nameEn(), hospital.getCode());
-            } else {
-                boolean updated = false;
-                if (treatment.getDepartment() != null && !Objects.equals(treatment.getDepartment().getId(), department.getId())) {
-                    treatment.setDepartment(department);
-                    updated = true;
-                }
-                if (treatment.getAssignment() != null && !Objects.equals(treatment.getAssignment().getId(), assignment.getId())) {
-                    treatment.setAssignment(assignment);
-                    updated = true;
-                }
-                if (updated) {
-                    treatment = treatmentRepository.save(treatment);
-                }
-            }
-
-            ensureTranslation(treatment, assignment, "en", seed.nameEn(), seed.descriptionEn());
-            ensureTranslation(treatment, assignment, "fr", seed.nameFr(), seed.descriptionFr());
-            seeded.add(new SeededTreatment(treatment, seed.performer()));
         }
 
         if (!seeded.isEmpty()) {
             hospitalTreatmentsCache.put(hospital.getId(), seeded);
         }
+    }
+
+    private SeededTreatment processTreatmentSeed(TreatmentSeed seed, Map<String, Treatment> existingByName,
+                                                  Hospital hospital, StaffBundle staffBundle) {
+        Department department = seed.department() != null ? seed.department() : staffBundle.generalDepartment();
+        UserRoleHospitalAssignment assignment = seed.assignment() != null
+            ? seed.assignment()
+            : staffBundle.adminAssignment();
+
+        if (department == null || assignment == null) {
+            log.debug("Skipping treatment seed {} due to missing department or assignment", seed.nameEn());
+            return null;
+        }
+
+        Treatment treatment = existingByName.get(seed.nameEn().toLowerCase(Locale.ROOT));
+        if (treatment == null) {
+            treatment = createNewTreatment(seed, department, hospital, assignment);
+        } else {
+            treatment = updateExistingTreatment(treatment, department, assignment);
+        }
+
+        ensureTranslation(treatment, assignment, "en", seed.nameEn(), seed.descriptionEn());
+        ensureTranslation(treatment, assignment, "fr", seed.nameFr(), seed.descriptionFr());
+        return new SeededTreatment(treatment, seed.performer());
+    }
+
+    private Treatment createNewTreatment(TreatmentSeed seed, Department department,
+                                          Hospital hospital, UserRoleHospitalAssignment assignment) {
+        Treatment treatment = Treatment.builder()
+            .name(seed.nameEn())
+            .description(seed.descriptionEn())
+            .department(department)
+            .hospital(hospital)
+            .price(seed.price())
+            .durationMinutes(seed.durationMinutes())
+            .assignment(assignment)
+            .active(true)
+            .build();
+        treatment = treatmentRepository.save(treatment);
+        log.info("Seeded treatment '{}' for hospital {}", seed.nameEn(), hospital.getCode());
+        return treatment;
+    }
+
+    private Treatment updateExistingTreatment(Treatment treatment, Department department,
+                                               UserRoleHospitalAssignment assignment) {
+        boolean updated = false;
+        if (treatment.getDepartment() != null && !Objects.equals(treatment.getDepartment().getId(), department.getId())) {
+            treatment.setDepartment(department);
+            updated = true;
+        }
+        if (treatment.getAssignment() != null && !Objects.equals(treatment.getAssignment().getId(), assignment.getId())) {
+            treatment.setAssignment(assignment);
+            updated = true;
+        }
+        if (updated) {
+            treatment = treatmentRepository.save(treatment);
+        }
+        return treatment;
     }
 
     private List<TreatmentSeed> buildTreatmentSeeds(StaffBundle staffBundle) {
@@ -935,7 +960,7 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
                 staffBundle.laboratoryDepartment(),
                 resolveAssignment(lab, staffBundle.adminAssignment()),
                 lab,
-                new BigDecimal("15000.00"),
+                PRICE_LAB_ANALYSIS,
                 25
             ),
             new TreatmentSeed(
