@@ -1,42 +1,14 @@
 package com.example.hms.payload.dto.imaging;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-
-import java.math.BigDecimal;
-import java.util.UUID;
+import lombok.experimental.SuperBuilder;
 
 @Data
-@Builder
+@SuperBuilder
 @NoArgsConstructor
-@AllArgsConstructor
-public class ImagingReportMeasurementRequestDTO {
-
-    private UUID id;
-
-    private Integer sequenceNumber;
-
-    private String label;
-
-    private String region;
-
-    private String plane;
-
-    private String modifier;
-
-    private BigDecimal numericValue;
-
-    private String textValue;
-
-    private String unit;
-
-    private BigDecimal referenceMin;
-
-    private BigDecimal referenceMax;
-
-    private Boolean abnormal;
-
-    private String notes;
+@EqualsAndHashCode(callSuper = true)
+public class ImagingReportMeasurementRequestDTO extends ImagingReportMeasurementBaseDTO {
+    // All fields inherited from base; no request-specific fields needed
 }

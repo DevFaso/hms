@@ -1,30 +1,28 @@
 package com.example.hms.payload.dto.procedure;
 
-import com.example.hms.enums.ProcedureUrgency;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 
-import java.time.LocalDateTime;
+import com.example.hms.enums.ProcedureUrgency;
+
 import java.util.UUID;
 
 @Data
-@Builder
+@SuperBuilder
 @NoArgsConstructor
-@AllArgsConstructor
-public class ProcedureOrderRequestDTO {
+@EqualsAndHashCode(callSuper = true)
+public class ProcedureOrderRequestDTO extends ProcedureOrderBaseDTO {
 
     @NotNull(message = "Patient ID is required")
     private UUID patientId;
 
     @NotNull(message = "Hospital ID is required")
     private UUID hospitalId;
-
-    private UUID encounterId;
 
     @Size(max = 50, message = "Procedure code must not exceed 50 characters")
     private String procedureCode;
@@ -39,40 +37,6 @@ public class ProcedureOrderRequestDTO {
     @NotBlank(message = "Indication is required")
     private String indication;
 
-    private String clinicalNotes;
-
     @NotNull(message = "Urgency level is required")
     private ProcedureUrgency urgency;
-
-    private LocalDateTime scheduledDatetime;
-
-    private Integer estimatedDurationMinutes;
-
-    private Boolean requiresAnesthesia;
-
-    private String anesthesiaType;
-
-    private Boolean requiresSedation;
-
-    private String sedationType;
-
-    private String preProcedureInstructions;
-
-    private Boolean consentObtained;
-
-    private LocalDateTime consentObtainedAt;
-
-    private String consentObtainedBy;
-
-    private String consentFormLocation;
-
-    private String laterality;
-
-    private Boolean siteMarked;
-
-    private String specialEquipmentNeeded;
-
-    private Boolean bloodProductsRequired;
-
-    private Boolean imagingGuidanceRequired;
 }

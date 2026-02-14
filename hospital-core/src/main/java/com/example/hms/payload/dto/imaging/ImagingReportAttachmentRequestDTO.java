@@ -1,35 +1,14 @@
 package com.example.hms.payload.dto.imaging;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 
 @Data
-@Builder
+@SuperBuilder
 @NoArgsConstructor
-@AllArgsConstructor
-public class ImagingReportAttachmentRequestDTO {
-
-    private Integer position;
-
-    private String storageKey;
-
-    private String storageBucket;
-
-    private String fileName;
-
-    private String contentType;
-
-    private Long sizeBytes;
-
-    private String dicomObjectUid;
-
-    private String viewerUrl;
-
-    private String thumbnailKey;
-
-    private String label;
-
-    private String category;
+@EqualsAndHashCode(callSuper = true)
+public class ImagingReportAttachmentRequestDTO extends ImagingReportAttachmentBaseDTO {
+    // All fields inherited from base; no request-specific fields needed
 }

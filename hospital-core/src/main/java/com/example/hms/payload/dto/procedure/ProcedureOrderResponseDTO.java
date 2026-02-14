@@ -1,30 +1,27 @@
 package com.example.hms.payload.dto.procedure;
 
 import com.example.hms.enums.ProcedureOrderStatus;
-import com.example.hms.enums.ProcedureUrgency;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.experimental.SuperBuilder;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Data
-@Builder
+@SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ProcedureOrderResponseDTO {
+@EqualsAndHashCode(callSuper = true)
+public class ProcedureOrderResponseDTO extends ProcedureOrderBaseDTO {
 
     private UUID id;
-
-    private UUID patientId;
 
     private String patientName;
 
     private String patientMrn;
-
-    private UUID hospitalId;
 
     private String hospitalName;
 
@@ -32,53 +29,7 @@ public class ProcedureOrderResponseDTO {
 
     private String orderingProviderName;
 
-    private UUID encounterId;
-
-    private String procedureCode;
-
-    private String procedureName;
-
-    private String procedureCategory;
-
-    private String indication;
-
-    private String clinicalNotes;
-
-    private ProcedureUrgency urgency;
-
     private ProcedureOrderStatus status;
-
-    private LocalDateTime scheduledDatetime;
-
-    private Integer estimatedDurationMinutes;
-
-    private Boolean requiresAnesthesia;
-
-    private String anesthesiaType;
-
-    private Boolean requiresSedation;
-
-    private String sedationType;
-
-    private String preProcedureInstructions;
-
-    private Boolean consentObtained;
-
-    private LocalDateTime consentObtainedAt;
-
-    private String consentObtainedBy;
-
-    private String consentFormLocation;
-
-    private String laterality;
-
-    private Boolean siteMarked;
-
-    private String specialEquipmentNeeded;
-
-    private Boolean bloodProductsRequired;
-
-    private Boolean imagingGuidanceRequired;
 
     private LocalDateTime orderedAt;
 
