@@ -1,8 +1,8 @@
-name: Backend CI
+name: "MVP2: Backend Quality Gates & Comprehensive Test Suite"
 
 on:
   push:
-    branches: [main, develop, mvp2]
+    branches: [main]
     paths:
       - 'hospital-core/**'
       - 'build.gradle'
@@ -16,6 +16,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: backend-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
