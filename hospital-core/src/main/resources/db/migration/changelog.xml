@@ -5,103 +5,35 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
-    <changeSet id="2026-02-09-01-create-patients-v2" author="copilot">
-        <createTable tableName="patients_v2">
-            <column name="id" type="UUID">
-                <constraints primaryKey="true" nullable="false"/>
-            </column>
-            <column name="mrn" type="VARCHAR(64)">
-                <constraints nullable="false" unique="true"/>
-            </column>
-            <column name="first_name" type="VARCHAR(120)">
-                <constraints nullable="false"/>
-            </column>
-            <column name="last_name" type="VARCHAR(120)">
-                <constraints nullable="false"/>
-            </column>
-            <column name="middle_name" type="VARCHAR(120)"/>
-            <column name="date_of_birth" type="DATE">
-                <constraints nullable="false"/>
-            </column>
-            <column name="gender" type="VARCHAR(32)">
-                <constraints nullable="false"/>
-            </column>
-            <column name="phone" type="VARCHAR(40)"/>
-            <column name="email" type="VARCHAR(180)"/>
-            <column name="address_line1" type="VARCHAR(180)"/>
-            <column name="address_line2" type="VARCHAR(180)"/>
-            <column name="city" type="VARCHAR(120)"/>
-            <column name="state" type="VARCHAR(120)"/>
-            <column name="postal_code" type="VARCHAR(40)"/>
-            <column name="country" type="VARCHAR(120)"/>
-            <column name="created_at" type="TIMESTAMP">
-                <constraints nullable="false"/>
-            </column>
-            <column name="updated_at" type="TIMESTAMP">
-                <constraints nullable="false"/>
-            </column>
-        </createTable>
-
-        <createIndex indexName="idx_patients_v2_last_name" tableName="patients_v2">
-            <column name="last_name"/>
-        </createIndex>
-        <createIndex indexName="idx_patients_v2_phone" tableName="patients_v2">
-            <column name="phone"/>
-        </createIndex>
+    <!-- =================================================================
+         V1: Complete schema — all 10 schemas + 153 tables
+         Generated from Hibernate entity model to ensure 1:1 alignment
+         ================================================================= -->
+    <changeSet id="V1-initial-schema" author="hms-team" runOnChange="false">
+        <sqlFile path="V1__Initial_Schema.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
     </changeSet>
 
-    <changeSet id="2026-02-09-02-create-patient-insurance-v2" author="copilot">
-        <createTable tableName="patient_insurances_v2">
-            <column name="id" type="UUID">
-                <constraints primaryKey="true" nullable="false"/>
-            </column>
-            <column name="patient_id" type="UUID">
-                <constraints nullable="false"/>
-            </column>
-            <column name="provider_name" type="VARCHAR(180)">
-                <constraints nullable="false"/>
-            </column>
-            <column name="policy_number" type="VARCHAR(120)"/>
-            <column name="member_id" type="VARCHAR(120)"/>
-            <column name="group_number" type="VARCHAR(120)"/>
-            <column name="coverage_start" type="DATE"/>
-            <column name="coverage_end" type="DATE"/>
-            <column name="primary_plan" type="BOOLEAN">
-                <constraints nullable="false"/>
-            </column>
-        </createTable>
-
-        <addForeignKeyConstraint
-            baseTableName="patient_insurances_v2"
-            baseColumnNames="patient_id"
-            constraintName="fk_patient_insurance_v2_patient"
-            referencedTableName="patients_v2"
-            referencedColumnNames="id"
-            onDelete="CASCADE"/>
+    <!-- =================================================================
+         V2: Seed 24 role codes (reference data required at bootstrap)
+         ================================================================= -->
+    <changeSet id="V2-seed-roles" author="hms-team" runOnChange="false">
+        <sqlFile path="V2__seed_roles.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
     </changeSet>
 
-    <changeSet id="2026-02-09-03-create-patient-medical-history-v2" author="copilot">
-        <createTable tableName="patient_medical_histories_v2">
-            <column name="id" type="UUID">
-                <constraints primaryKey="true" nullable="false"/>
-            </column>
-            <column name="patient_id" type="UUID">
-                <constraints nullable="false" unique="true"/>
-            </column>
-            <column name="allergies" type="CLOB"/>
-            <column name="conditions" type="CLOB"/>
-            <column name="medications" type="CLOB"/>
-            <column name="surgeries" type="CLOB"/>
-            <column name="notes" type="CLOB"/>
-        </createTable>
-
-        <addForeignKeyConstraint
-        baseTableName="patient_medical_histories_v2"
-            baseColumnNames="patient_id"
-        constraintName="fk_patient_medical_history_v2_patient"
-        referencedTableName="patients_v2"
-            referencedColumnNames="id"
-            onDelete="CASCADE"/>
+    <!-- =================================================================
+         V3: Seed DEFAULT_ORG + 6 security policies + security rules
+         ================================================================= -->
+    <changeSet id="V3-seed-default-org-security" author="hms-team" runOnChange="false">
+        <sqlFile path="V3__seed_default_organization_security.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
     </changeSet>
 
 </databaseChangeLog>

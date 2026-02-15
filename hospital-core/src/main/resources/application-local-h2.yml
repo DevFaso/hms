@@ -42,3 +42,12 @@ logging:
   level:
     '[com.example.hms]': DEBUG
     '[org.hibernate.SQL]': DEBUG
+
+# ===================== Seed Data =====================
+# In local-h2 profile, seeders are the ONLY way to populate reference data
+# (Liquibase is disabled, Hibernate create-drop manages DDL).
+app:
+  seed:
+    enabled: true
+    synthetic:
+      enabled: true

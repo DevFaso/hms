@@ -92,8 +92,8 @@ import java.util.function.Function;
 import java.util.OptionalInt;
 
 @Component
-@Profile({"dev", "local"})
-@ConditionalOnProperty(value = "app.seed.synthetic.enabled", havingValue = "true", matchIfMissing = true)
+@Profile({"local", "local-h2"})
+@ConditionalOnProperty(value = "app.seed.synthetic.enabled", havingValue = "true", matchIfMissing = false)
 @RequiredArgsConstructor
 @Slf4j
 @SuppressWarnings("squid:S2068") // Default credentials are dev-only seed values
@@ -119,13 +119,19 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
     private static final String SUPER_ADMIN_USERNAME = "superadmin";
     private static final String SEED_EMAIL_SUFFIX = "@seed.dev";
     private static final String SUPER_ADMIN_EMAIL = SUPER_ADMIN_USERNAME + SEED_EMAIL_SUFFIX;
-    private static final String SUPER_ADMIN_SEED_SECRET = new String(new char[]{'T','e','m','p','P','a','s','s','1','2','3','!'});
+    /** Dev-only super-admin password. Override via DEV_SEED_SUPER_ADMIN_SECRET env var. */
+    private static final String SUPER_ADMIN_SEED_SECRET =
+        System.getenv().getOrDefault("DEV_SEED_SUPER_ADMIN_SECRET",
+            new String(new char[]{'T','e','m','p','P','a','s','s','1','2','3','!'}));
     private static final String SAMPLE_TYPE_BLOOD = "BLOOD";
     private static final String DEFAULT_MRN_PREFIX = "MRX";
     private static final BigDecimal PRICE_LAB_ANALYSIS = new BigDecimal("15000.00");
     private static final String PHONE_PREFIX = "+226";
 
-    private static final String DEFAULT_DEV_SEED_SECRET = new String(new char[]{'P','a','s','s','w','o','r','d','1','2','3','!'});
+    /** Dev-only default user password. Override via DEV_SEED_DEFAULT_SECRET env var. */
+    private static final String DEFAULT_DEV_SEED_SECRET =
+        System.getenv().getOrDefault("DEV_SEED_DEFAULT_SECRET",
+            new String(new char[]{'P','a','s','s','w','o','r','d','1','2','3','!'}));
     private static final String FEATURED_HOSPITAL_CODE = "DEV-ORG-01-H01";
     private static final String ROLE_MIDWIFE_CODE = "ROLE_MIDWIFE";
 
