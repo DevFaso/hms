@@ -14,7 +14,9 @@ import com.example.hms.payload.dto.credential.UserMfaEnrollmentRequestDTO;
 import com.example.hms.payload.dto.credential.UserRecoveryContactDTO;
 import com.example.hms.payload.dto.credential.UserRecoveryContactRequestDTO;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.JwtTokenProvider;
+import com.example.hms.service.EmailService;
 import com.example.hms.service.PasswordResetService;
 import com.example.hms.service.UserCredentialLifecycleService;
 import com.example.hms.service.UserService;
@@ -60,25 +62,31 @@ import java.util.UUID;
 public class AuthController {
 
     private final UserRepository userRepository;
+    private final UserRoleHospitalAssignmentRepository assignmentRepository;
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
     private final PasswordResetService passwordResetService;
+    private final EmailService emailService;
 
     private final UserService userService;
     private final UserCredentialLifecycleService userCredentialLifecycleService;
 
     public AuthController(UserRepository userRepository,
+            UserRoleHospitalAssignmentRepository assignmentRepository,
             UserService userService,
             AuthenticationManager authenticationManager,
             JwtTokenProvider jwtTokenProvider,
             PasswordResetService passwordResetService,
+            EmailService emailService,
             UserCredentialLifecycleService userCredentialLifecycleService) {
         this.userRepository = userRepository;
+        this.assignmentRepository = assignmentRepository;
         this.userService = userService;
         this.authenticationManager = authenticationManager;
         this.jwtTokenProvider = jwtTokenProvider;
         this.passwordResetService = passwordResetService;
+        this.emailService = emailService;
         this.userCredentialLifecycleService = userCredentialLifecycleService;
     }
 
@@ -225,11 +233,77 @@ public class AuthController {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new EmailVerificationResponseDTO("Email verification failed.", false));
         }
+
+        // 1. Activate the user account
         user.setActive(true);
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);
+
+        // 2. Activate all patient role assignments for this user
+        var assignments = assignmentRepository.findByUserId(user.getId());
+        int activated = 0;
+        for (var assignment : assignments) {
+            if ("ROLE_PATIENT".equalsIgnoreCase(assignment.getRole().getCode())
+                    && !Boolean.TRUE.equals(assignment.getActive())) {
+                assignment.setActive(true);
+                assignmentRepository.save(assignment);
+                activated++;
+            }
+        }
+        log.info("✅ Email verified for user '{}'. Activated {} patient assignment(s).",
+                user.getUsername(), activated);
+
         return ResponseEntity.ok(new EmailVerificationResponseDTO("Email verified successfully.", true));
+    }
+
+    @Operation(summary = "Verify email via link",
+               description = "GET version for email verification links. Activates user and patient role assignments.")
+    @GetMapping("/verify-email")
+    public ResponseEntity<Object> verifyEmailViaLink(
+            @RequestParam("email") @Email @NotBlank String email,
+            @RequestParam("token") @NotBlank String token) {
+        var dto = new EmailVerificationRequestDTO();
+        dto.setEmail(email);
+        dto.setToken(token);
+        return verifyEmail(dto);
+    }
+
+    @Operation(summary = "Resend verification email",
+               description = "Generates a new activation token and resends the verification email.")
+    @PostMapping("/resend-verification")
+    public ResponseEntity<Object> resendVerificationEmail(
+            @RequestParam("email") @Email @NotBlank String email) {
+        var userOpt = userRepository.findByEmail(email);
+        if (userOpt.isEmpty()) {
+            // Don't reveal whether email exists
+            return ResponseEntity.ok(new MessageResponse(
+                    "If the email is registered, a new verification link has been sent."));
+        }
+        var user = userOpt.get();
+        if (user.isActive()) {
+            return ResponseEntity.ok(new MessageResponse(
+                    "Account is already verified. You can log in."));
+        }
+
+        // Generate new token
+        user.setActivationToken(java.util.UUID.randomUUID().toString());
+        user.setActivationTokenExpiresAt(LocalDateTime.now().plusDays(1));
+        userRepository.save(user);
+
+        String activationLink = String.format(
+                "https://bitnesttechs.com/verify?email=%s&token=%s",
+                user.getEmail(), user.getActivationToken());
+        try {
+            emailService.sendActivationEmail(user.getEmail(), activationLink);
+            log.info("📧 Resent verification email to '{}'", user.getEmail());
+        } catch (Exception e) {
+            log.warn("⚠️ Failed to resend verification email to '{}': {}",
+                    user.getEmail(), e.getMessage());
+        }
+
+        return ResponseEntity.ok(new MessageResponse(
+                "If the email is registered, a new verification link has been sent."));
     }
 
     @PostMapping("/logout")

@@ -100,7 +100,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String DEFAULT_ROLE_REQUIRED_MESSAGE = "Role must be specified by either ID or name.";
     private static final String DEFAULT_DOCTOR_CONFLICT_MESSAGE = "An active DOCTOR assignment already exists for this user in the given hospital.";
     private static final String DEFAULT_SUPER_ADMIN_SCOPE_MESSAGE = "SUPER_ADMIN assignments are global and must not include a hospital.";
-    private static final String DEFAULT_PATIENT_ACTIVE_MESSAGE = "PATIENT assignments must be inactive.";
     private static final String DEFAULT_HOSPITAL_REQUIRED_MESSAGE = "Hospital must be provided for non-SUPER_ADMIN roles.";
     private static final String DEFAULT_INVALID_UUID_MESSAGE = "Invalid UUID value: ";
     private static final String DEFAULT_INVALID_BOOLEAN_MESSAGE = "Invalid boolean value: ";
@@ -296,8 +295,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
 
         if (isRoleCode(roleCode, ROLE_PATIENT)) {
+            // Patient assignments start inactive — activated after email verification
             if (Boolean.TRUE.equals(dto.getActive())) {
-                throw new BusinessException(DEFAULT_PATIENT_ACTIVE_MESSAGE);
+                throw new BusinessException("PATIENT assignments must be inactive until email verification.");
             }
             if (dto.getActive() == null) {
                 dto.setActive(Boolean.FALSE);
@@ -369,11 +369,12 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (!isRoleCode(newRoleCode, ROLE_PATIENT)) {
             return;
         }
+        // Patient assignments must remain inactive until email verification activates them
         if (Boolean.TRUE.equals(dto.getActive())) {
-            throw new BusinessException(DEFAULT_PATIENT_ACTIVE_MESSAGE);
+            throw new BusinessException("PATIENT assignments cannot be manually activated. Use email verification.");
         }
-        if (dto.getActive() == null && Boolean.TRUE.equals(target.getActive())) {
-            dto.setActive(Boolean.FALSE);
+        if (dto.getActive() == null) {
+            dto.setActive(target.getActive());
         }
     }
 
@@ -817,13 +818,15 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                         DEFAULT_HOSPITAL_NOT_FOUND_NAME_PREFIX + dto.getHospitalName(), locale)));
         }
         final String roleCode = getRoleCode(role);
-        if (!isRoleCode(roleCode, ROLE_SUPER_ADMIN)) {
-            throw new BusinessException(
-                messageSource.getMessage("hospital.required", null,
-                    DEFAULT_HOSPITAL_REQUIRED_MESSAGE, locale));
+        // Super Admin and Patient can have global (null-hospital) assignments
+        if (isRoleCode(roleCode, ROLE_SUPER_ADMIN) || isRoleCode(roleCode, ROLE_PATIENT)) {
+            return null; // global assignment — patients can exist system-wide
         }
 
-        return null; // global assignment
+        // All other staff/admin roles require a hospital
+        throw new BusinessException(
+            messageSource.getMessage("hospital.required", null,
+                DEFAULT_HOSPITAL_REQUIRED_MESSAGE, locale));
     }
 
     private void checkActiveDoctorConflict(UserRoleHospitalAssignmentRequestDTO dto,

@@ -164,6 +164,10 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
 
     Optional<UserRoleHospitalAssignment> findByUserIdAndRoleNameAndHospitalName(UUID id, String roleName, String hospitalName);
 
+    /** Batch-fetch assignments for multiple users (avoids N+1 on paged endpoints). */
+    @EntityGraph(attributePaths = {"role"})
+    @Query("SELECT a FROM UserRoleHospitalAssignment a WHERE a.user.id IN :userIds")
+    List<UserRoleHospitalAssignment> findByUserIdIn(@Param("userIds") Set<UUID> userIds);
 
     /* ------------ Lightweight projection for lists (optional) ------------ */
 

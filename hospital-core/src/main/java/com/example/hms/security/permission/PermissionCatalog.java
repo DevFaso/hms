@@ -98,12 +98,47 @@ public final class PermissionCatalog {
         return template.resolveDisplayNames();
     }
 
+    /**
+     * Returns a human-readable description of the primary permission group for a role.
+     * E.g. "ROLE_SUPER_ADMIN" → "System Global Administration".
+     * Falls back to a formatted version of the role code itself.
+     */
+    public static String permissionGroupDescriptionForRole(String roleCode) {
+        PermissionTemplate template = TEMPLATES.get(roleCode);
+        if (template == null || template.components().isEmpty()) {
+            return humanize(roleCode);
+        }
+        // Use the first component — if it's a PermissionGroup, use its name
+        PermissionComponent primary = template.components().get(0);
+        if (primary instanceof PermissionGroup group) {
+            return humanize(group.name());
+        }
+        return humanize(roleCode);
+    }
+
     public static Set<String> registeredRoleCodes() {
         return TEMPLATES.keySet();
     }
 
     public static boolean isKnownPermissionName(String name) {
         return Permission.isKnownDisplayName(name);
+    }
+
+    /**
+     * Converts UPPER_SNAKE_CASE to Title Case.
+     * E.g. "SYSTEM_GLOBAL_ADMINISTRATION" → "System Global Administration"
+     */
+    private static String humanize(String snakeCase) {
+        if (snakeCase == null || snakeCase.isBlank()) return snakeCase;
+        String cleaned = snakeCase.startsWith("ROLE_") ? snakeCase.substring(5) : snakeCase;
+        String[] words = cleaned.split("_");
+        StringBuilder sb = new StringBuilder();
+        for (String word : words) {
+            if (!sb.isEmpty()) sb.append(' ');
+            sb.append(word.substring(0, 1).toUpperCase())
+              .append(word.substring(1).toLowerCase());
+        }
+        return sb.toString();
     }
 
     private static PermissionTemplate template(PermissionComponent... components) {

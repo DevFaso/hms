@@ -56,8 +56,8 @@ public class UserResponseDTO {
     private LocalDateTime updatedAt;
 
     @Builder.Default
-    @Schema(description = "Assigned roles (never null; empty when none)")
-    private Set<RoleResponseDTO> roles = new LinkedHashSet<>();
+    @Schema(description = "Assigned roles (id, code, name, description — no permissions; use GET /api/me/dashboard-config for permissions)")
+    private Set<RoleSummaryDTO> roles = new LinkedHashSet<>();
 
     @Schema(description = "Derived profile type: STAFF | PATIENT | ADMIN, etc.")
     private String profileType;

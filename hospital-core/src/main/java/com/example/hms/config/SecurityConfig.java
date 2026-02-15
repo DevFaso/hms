@@ -67,6 +67,7 @@ public class SecurityConfig {
     private static final String API_LAB_RESULTS_PATTERN = API_LAB_RESULTS + "/**";
     private static final String API_NURSE = "/api/nurse";
     private static final String API_NURSE_PATTERN = API_NURSE + "/**";
+    private static final String API_ME_PATIENT_PATTERN = "/api/me/patient/**";
 
     private final HospitalUserDetailsService userDetailsService;
     private final JwtAuthenticationEntryPoint unauthorizedHandler;
@@ -212,6 +213,16 @@ public class SecurityConfig {
                 .requestMatchers("/api/chat/send/**")
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_STAFF, ROLE_PATIENT, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE)
 
+                // Patient portal — self-service endpoints (MyChart equivalent)
+                .requestMatchers(HttpMethod.GET, API_ME_PATIENT_PATTERN)
+                .hasAuthority(ROLE_PATIENT)
+                .requestMatchers(HttpMethod.PUT, API_ME_PATIENT_PATTERN)
+                .hasAuthority(ROLE_PATIENT)
+                .requestMatchers(HttpMethod.POST, API_ME_PATIENT_PATTERN)
+                .hasAuthority(ROLE_PATIENT)
+                .requestMatchers(HttpMethod.DELETE, API_ME_PATIENT_PATTERN)
+                .hasAuthority(ROLE_PATIENT)
+
                 // Notifications - allow all authenticated users
                 .requestMatchers("/api/notifications/**")
                 .authenticated()
@@ -307,11 +318,13 @@ public class SecurityConfig {
                     "/auth/bootstrap-signup",
                     "/auth/request-reset",
                     "/auth/reset-password",
-                    "/auth/verify-email"
+                    "/auth/verify-email",
+                    "/auth/resend-verification"
                 ).permitAll()
                 .requestMatchers(HttpMethod.GET,
                     "/auth/bootstrap-status",
-                    "/auth/ping"
+                    "/auth/ping",
+                    "/auth/verify-email"
                 ).permitAll()
                 .requestMatchers(
                     "/auth/logout",

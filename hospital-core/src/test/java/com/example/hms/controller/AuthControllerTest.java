@@ -2,6 +2,7 @@ package com.example.hms.controller;
 
 import com.example.hms.payload.dto.LoginRequest;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.service.PasswordResetService;
 import com.example.hms.service.UserCredentialLifecycleService;
@@ -41,9 +42,11 @@ class AuthControllerTest {
     @Autowired private ObjectMapper objectMapper;
 
     @MockitoBean private UserRepository userRepository;
+    @MockitoBean private UserRoleHospitalAssignmentRepository assignmentRepository;
     @MockitoBean private AuthenticationManager authenticationManager;
     @MockitoBean private JwtTokenProvider jwtTokenProvider;
     @MockitoBean private PasswordResetService passwordResetService;
+    @MockitoBean private com.example.hms.service.EmailService emailService;
     @MockitoBean private UserService userService;
     @MockitoBean private UserCredentialLifecycleService userCredentialLifecycleService;
 

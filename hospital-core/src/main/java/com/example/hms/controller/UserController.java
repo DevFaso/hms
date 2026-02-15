@@ -4,6 +4,7 @@ import com.example.hms.payload.dto.AdminSignupRequest;
 import com.example.hms.payload.dto.MessageResponse;
 import com.example.hms.payload.dto.UserRequestDTO;
 import com.example.hms.payload.dto.UserResponseDTO;
+import com.example.hms.payload.dto.UserSummaryDTO;
 import com.example.hms.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -128,9 +129,9 @@ public class UserController {
         return ResponseEntity.ok(userService.getUserById(id));
     }
 
-    @Operation(summary = "Get all users with pagination")
+    @Operation(summary = "Get all users with pagination (summary view)")
     @GetMapping
-    public ResponseEntity<Page<UserResponseDTO>> getAllUsers(
+    public ResponseEntity<Page<UserSummaryDTO>> getAllUsers(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         return ResponseEntity.ok(userService.getAllUsers(page, size));
@@ -150,9 +151,9 @@ public class UserController {
         return ResponseEntity.ok(new MessageResponse("User deleted successfully."));
     }
 
-    @Operation(summary = "Search users by name, role, or email with pagination")
+    @Operation(summary = "Search users by name, role, or email with pagination (summary view)")
     @GetMapping("/search")
-    public ResponseEntity<Page<UserResponseDTO>> searchUsers(
+    public ResponseEntity<Page<UserSummaryDTO>> searchUsers(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String role,
             @RequestParam(required = false) String email,

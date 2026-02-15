@@ -101,9 +101,10 @@ public class UserRoleHospitalAssignment extends BaseEntity {
         String roleKey = raw == null ? "" : raw.trim().toUpperCase();
 
         if (Boolean.TRUE.equals(active)) {
-            // 1) Patients cannot have ACTIVE hospital assignments
-            if ("ROLE_PATIENT".equals(roleKey) || "PATIENT".equals(roleKey)) {
-                throw new IllegalStateException("Patients cannot have active hospital assignments.");
+            // 1) Patients cannot have ACTIVE *hospital* assignments (they are global)
+            if (("ROLE_PATIENT".equals(roleKey) || "PATIENT".equals(roleKey))
+                    && hospital != null) {
+                throw new IllegalStateException("Patients cannot have active hospital assignments. Patient roles are global (no hospital).");
             }
             // 2) SUPER_ADMIN must be global (no hospital)
             if (("ROLE_SUPER_ADMIN".equals(roleKey) || "SYSTEM_ADMIN".equals(roleKey))

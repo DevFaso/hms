@@ -26,7 +26,7 @@ dependencies {
 
     // OpenAPI / Swagger
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.4'
-    implementation 'io.swagger.core.v3:swagger-annotations:2.2.24'
+    // swagger-annotations-jakarta is provided transitively by springdoc — do NOT add swagger-annotations separately
 
     // Jackson Hibernate module
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-hibernate6'

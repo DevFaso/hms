@@ -22,6 +22,7 @@ import com.example.hms.payload.dto.BootstrapSignupResponse;
 import com.example.hms.payload.dto.UserRequestDTO;
 import com.example.hms.payload.dto.UserResponseDTO;
 import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
+import com.example.hms.payload.dto.UserSummaryDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.StaffRepository;
@@ -128,7 +129,13 @@ public class UserServiceImpl implements UserService {
         final String activationLink = String.format(
                 "https://bitnesttechs.com/verify?email=%s&token=%s",
                 saved.getEmail(), saved.getActivationToken());
-        emailService.sendActivationEmail(saved.getEmail(), activationLink);
+        try {
+            emailService.sendActivationEmail(saved.getEmail(), activationLink);
+        } catch (Exception e) {
+            log.warn("⚠️ Failed to send verification email to '{}': {}. "
+                    + "Patient can request a new verification email later.",
+                    saved.getEmail(), e.getMessage());
+        }
 
         User reloaded = userRepository.findByIdWithRolesAndProfiles(saved.getId())
                 .orElseThrow(() -> new IllegalStateException("User disappeared after save"));
@@ -383,16 +390,43 @@ public class UserServiceImpl implements UserService {
         u.setFirstName(request.getFirstName());
         u.setLastName(request.getLastName());
         u.setPhoneNumber(phone);
-        u.setActive(true);
-        if (roles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.getCode()))
-                || Boolean.TRUE.equals(request.getForcePasswordChange())) {
+
+        boolean isPatient = roles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.getCode()));
+
+        if (isPatient) {
+            // Patient accounts start inactive — must verify email first
+            u.setActive(false);
+            u.setActivationToken(UUID.randomUUID().toString());
+            u.setActivationTokenExpiresAt(LocalDateTime.now().plusDays(1));
+        } else {
+            u.setActive(true);
+        }
+
+        if (isPatient || Boolean.TRUE.equals(request.getForcePasswordChange())) {
             u.setForcePasswordChange(true);
         }
         u.setCreatedAt(passwordSetAt);
         u.setPasswordChangedAt(passwordSetAt);
         u.setPasswordRotationWarningAt(null);
         u.setPasswordRotationForcedAt(Boolean.TRUE.equals(request.getForcePasswordChange()) ? passwordSetAt : null);
-        return userRepository.save(u);
+        User saved = userRepository.save(u);
+
+        // Send verification email for patient accounts
+        if (isPatient && saved.getActivationToken() != null) {
+            final String activationLink = String.format(
+                    "https://bitnesttechs.com/verify?email=%s&token=%s",
+                    saved.getEmail(), saved.getActivationToken());
+            try {
+                emailService.sendActivationEmail(saved.getEmail(), activationLink);
+                log.info("📧 Verification email sent to patient '{}' at '{}'", saved.getUsername(), saved.getEmail());
+            } catch (Exception e) {
+                log.warn("⚠️ Failed to send verification email to '{}': {}. "
+                        + "Patient can request a new verification email later.",
+                        saved.getEmail(), e.getMessage());
+            }
+        }
+
+        return saved;
     }
 
         private UUID resolveHospitalForRegistration(AdminSignupRequest request, Set<String> roleNames, boolean isPatient) {
@@ -403,17 +437,21 @@ public class UserServiceImpl implements UserService {
     }
 
     private UUID resolveHospitalForPatient(AdminSignupRequest request) {
+        // Try JWT first (receptionist registering at their facility)
         UUID hospitalId = extractHospitalIdFromJwt();
         if (hospitalId == null) {
             hospitalId = request.getHospitalId();
         }
         log.info("[RECEPTION/ADMIN] Resolved hospitalId for patient registration: {}", hospitalId);
-        if (hospitalId == null) {
-            throw new BusinessException("Hospital must be provided when staff registers a patient.");
+
+        // Patients can exist system-wide without a hospital — like in Epic/Cerner
+        // models where patients visit multiple facilities. If a hospital IS provided,
+        // we validate it exists; otherwise the patient gets a global (null-hospital) assignment.
+        if (hospitalId != null) {
+            final UUID resolvedHospitalId = hospitalId;
+            hospitalRepository.findById(resolvedHospitalId)
+                    .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_PREFIX + resolvedHospitalId));
         }
-        final UUID resolvedHospitalId = hospitalId;
-        hospitalRepository.findById(resolvedHospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_PREFIX + resolvedHospitalId));
         return hospitalId;
     }
 
@@ -663,16 +701,18 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<UserResponseDTO> getAllUsers(int page, int size) {
+    public Page<UserSummaryDTO> getAllUsers(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return userRepository.findAllActive(pageable).map(userMapper::toDto);
+        Page<User> users = userRepository.findAllActive(pageable);
+        return users.map(userMapper::toSummaryDTO);
     }
 
     @Override
     @Transactional(readOnly = true)
-    public Page<UserResponseDTO> searchUsers(String name, String role, String email, int page, int size) {
+    public Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        return userRepository.searchUsers(name, role, email, pageable).map(userMapper::toDto);
+        Page<User> users = userRepository.searchUsers(name, role, email, pageable);
+        return users.map(userMapper::toSummaryDTO);
     }
 
     /*
@@ -747,7 +787,8 @@ public class UserServiceImpl implements UserService {
 
         auditEventLogService.logEvent(auditEvent);
 
-        return userMapper.toDto(updated);
+        Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(updated);
+        return userMapper.toResponseDTO(updated, assignments);
     }
 
     /*

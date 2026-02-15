@@ -5,6 +5,7 @@ import com.example.hms.payload.dto.BootstrapSignupRequest;
 import com.example.hms.payload.dto.BootstrapSignupResponse;
 import com.example.hms.payload.dto.UserRequestDTO;
 import com.example.hms.payload.dto.UserResponseDTO;
+import com.example.hms.payload.dto.UserSummaryDTO;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 
@@ -19,9 +20,9 @@ public interface UserService {
 
     void deleteUser(UUID id);
 
-    Page<UserResponseDTO> getAllUsers(int page, int size);
+    Page<UserSummaryDTO> getAllUsers(int page, int size);
 
-    Page<UserResponseDTO> searchUsers(String name, String role, String email, int page, int size);
+    Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size);
 
     boolean verifyEmail(String email, String token);
 

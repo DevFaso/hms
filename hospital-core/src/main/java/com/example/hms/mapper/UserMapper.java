@@ -4,9 +4,10 @@ import com.example.hms.model.Role;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRole;
 import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.payload.dto.RoleResponseDTO;
+import com.example.hms.payload.dto.RoleSummaryDTO;
 import com.example.hms.payload.dto.UserRequestDTO;
 import com.example.hms.payload.dto.UserResponseDTO;
+import com.example.hms.payload.dto.UserSummaryDTO;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -31,7 +32,7 @@ public class UserMapper {
 
         // roles from legacy userRoles
         Set<Role> roles = safeRolesFromUserRoles(user);
-        Set<RoleResponseDTO> roleDtos = mapRolesToDTOs(roles);
+        Set<RoleSummaryDTO> roleDtos = mapRolesToSummaryDTOs(roles);
 
         // profile derivation
         String profileType = deriveProfileType(user);
@@ -74,7 +75,7 @@ public class UserMapper {
         // roles from assignments (distinct, ordered)
         Set<Role> rolesFromAssignments = safeRolesFromAssignments(assignments);
         Set<Role> roles = !rolesFromAssignments.isEmpty() ? rolesFromAssignments : safeRolesFromUserRoles(user);
-        Set<RoleResponseDTO> roleDtos = mapRolesToDTOs(roles);
+        Set<RoleSummaryDTO> roleDtos = mapRolesToSummaryDTOs(roles);
 
         // active: any active assignment? fallback to user.isActive()
         boolean active = (assignments != null && assignments.stream().anyMatch(UserRoleHospitalAssignment::getActive))
@@ -194,18 +195,44 @@ public class UserMapper {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    private Set<RoleResponseDTO> mapRolesToDTOs(Set<Role> roles) {
+    private Set<RoleSummaryDTO> mapRolesToSummaryDTOs(Set<Role> roles) {
         if (roles == null || roles.isEmpty())
             return Collections.emptySet();
-        return roles.stream().map(role -> RoleResponseDTO.builder()
+
+        return roles.stream().map(role -> {
+            String roleCode = nonBlankOr(role.getCode(), role.getName());
+            return RoleSummaryDTO.builder()
                 .id(role.getId())
-                .code(nonBlankOr(role.getCode(), role.getName()))
-                .authority(nonBlankOr(role.getCode(), role.getName()))
+                .code(roleCode)
                 .name(nonBlankOr(role.getName(), role.getCode()))
                 .description(role.getDescription())
-                .createdAt(role.getCreatedAt())
-                .updatedAt(role.getUpdatedAt())
-                .build()).collect(Collectors.toCollection(LinkedHashSet::new));
+                .build();
+        }).collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /**
+     * Lightweight summary mapping for list / search endpoints.
+     * Does NOT load roles, permissions, or assignments.
+     */
+    public UserSummaryDTO toSummaryDTO(User user) {
+        if (user == null) return null;
+
+        Set<Role> roles = safeRolesFromUserRoles(user);
+        String roleName = pickPrimaryRole(roles, true);
+        String profileType = deriveProfileType(user);
+
+        return UserSummaryDTO.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .email(user.getEmail())
+                .firstName(user.getFirstName())
+                .lastName(user.getLastName())
+                .profileImageUrl(user.getProfileImageUrl())
+                .active(user.isActive())
+                .roleName(roleName)
+                .profileType(profileType)
+                .roleCount(roles.size())
+                .build();
     }
 
     private String deriveProfileType(User user) {
