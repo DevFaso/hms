@@ -14,8 +14,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
+/**
+ * Links orphan hospitals to the KPL (Kouritenga) organization.
+ * Restricted to dev / local profiles — must not run in production
+ * where organization assignments are managed through the admin API.
+ */
 @Component
-@Profile("!test")
+@Profile({"dev", "local", "local-h2"})
 @RequiredArgsConstructor
 @Slf4j
 public class HospitalOrganizationAlignmentRunner implements ApplicationRunner {

@@ -18,15 +18,23 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
+/**
+ * Seeds the DEFAULT_ORG organization and its security policies for
+ * local-h2 / local profiles where Liquibase is disabled.
+ * In dev / uat / prod the same data is loaded by
+ * Liquibase migration V5__seed_default_organization_security.sql.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 @Order(2) // Run after RoleSeeder
+@Profile({"local-h2", "local"})
 @ConditionalOnProperty(prefix = "app.seed", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class OrganizationSecuritySeeder implements CommandLineRunner {
     private static final String DEFAULT_ORG_NAME = "DEFAULT_ORG";

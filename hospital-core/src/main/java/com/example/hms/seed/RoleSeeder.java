@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
@@ -13,10 +14,16 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
+/**
+ * Seeds the 24 reference roles for local-h2 / local profiles where
+ * Liquibase is disabled. In dev / uat / prod the same data is loaded
+ * by Liquibase migration V4__seed_roles.sql.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 @Order(1) // roles must be seeded before assignments
+@Profile({"local-h2", "local"})
 @ConditionalOnProperty(prefix = "app.seed", name = "enabled", havingValue = "true", matchIfMissing = true)
 public class RoleSeeder implements CommandLineRunner {
 

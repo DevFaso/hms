@@ -43,3 +43,13 @@ management:
   endpoint:
     health:
       show-details: when_authorized
+
+# ===================== Seed Data =====================
+# Roles and org security data are managed by Liquibase migrations
+# (V4__seed_roles.sql, V5__seed_default_organization_security.sql).
+# Java-based seeders are disabled in production.
+app:
+  seed:
+    enabled: false
+    synthetic:
+      enabled: false
