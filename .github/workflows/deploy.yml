@@ -1,11 +1,8 @@
 name: Deploy to Railway
 
 on:
-  push:
-    branches:
-      - main
-      - develop
-      - uat
+  # Railway dev auto-deploys from develop via built-in integration.
+  # Use workflow_dispatch for manual deployments to any environment.
   workflow_dispatch:
     inputs:
       environment:
@@ -24,7 +21,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'prod') || 'dev' }}
+    environment: ${{ github.event.inputs.environment }}
 
     steps:
       - uses: actions/checkout@v4
@@ -35,7 +32,7 @@ jobs:
       - name: Resolve Railway token and service
         id: token
         run: |
-          ENV="${{ github.event.inputs.environment || (github.ref == 'refs/heads/main' && 'prod') || 'dev' }}"
+          ENV="${{ github.event.inputs.environment }}"
           case "$ENV" in
             prod)
               echo "railway_token=${{ secrets.HMS_PROD_TOKEN }}" >> "$GITHUB_OUTPUT"
