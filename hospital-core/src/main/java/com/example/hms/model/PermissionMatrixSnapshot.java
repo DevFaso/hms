@@ -8,7 +8,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
@@ -57,7 +56,6 @@ public class PermissionMatrixSnapshot {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    @Lob
-    @Column(name = "matrix_json", nullable = false)
+    @Column(name = "matrix_json", nullable = false, columnDefinition = "TEXT")
     private String matrixJson;
 }
