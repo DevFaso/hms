@@ -30,10 +30,15 @@ COPY nginx.conf /etc/nginx/nginx.conf.template
 # Copy built Angular app
 COPY --from=build /app/dist/hospital-portal/browser /usr/share/nginx/html
 
-EXPOSE 8080
+EXPOSE 80
 
-# At runtime, substitute PORT into nginx config, then start nginx
-CMD sh -c "export PORT=\${PORT:-8080} && \
-    sed \"s/listen 8080/listen \$PORT/\" /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && \
-    echo 'Starting nginx on port '\$PORT && \
+# At runtime, substitute placeholders in nginx config, then start nginx
+CMD sh -c "export PORT=\${PORT:-80} && \
+    export API_BASE_URL=\${API_BASE_URL:-http://localhost:8081} && \
+    export NGINX_RESOLVER=\${NGINX_RESOLVER:-8.8.8.8} && \
+    sed -e \"s|__PORT__|\$PORT|g\" \
+        -e \"s|__API_BASE_URL__|\$API_BASE_URL|g\" \
+        -e \"s|__NGINX_RESOLVER__|\$NGINX_RESOLVER|g\" \
+        /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && \
+    echo 'Starting nginx on port '\$PORT' → API='\$API_BASE_URL && \
     nginx -g 'daemon off;'"
