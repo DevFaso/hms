@@ -136,6 +136,8 @@ subprojects {
             mavenBom "org.springframework.boot:spring-boot-dependencies:3.4.11"
         }
         dependencies {
+            dependency 'ch.qos.logback:logback-core:1.5.25'
+            dependency 'ch.qos.logback:logback-classic:1.5.25'
             dependency 'org.apache.kafka:kafka-clients:3.9.1'
             dependency 'org.apache.kafka:kafka_2.13:3.9.1'
             dependency 'org.assertj:assertj-core:3.27.7'
