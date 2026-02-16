@@ -24,14 +24,16 @@ FROM nginx:alpine
 # Remove default nginx config
 RUN rm /etc/nginx/conf.d/default.conf
 
-# Copy custom nginx config
-COPY nginx.conf /etc/nginx/nginx.conf
+# Copy custom nginx config as a template
+COPY nginx.conf /etc/nginx/nginx.conf.template
 
 # Copy built Angular app
 COPY --from=build /app/dist/hospital-portal/browser /usr/share/nginx/html
 
 EXPOSE 8080
 
-# Railway injects PORT env var — use sed to substitute at container start
-# Default to 8080 if PORT not set
-CMD sh -c "sed -i 's/listen 8080/listen '\"${PORT:-8080}\"'/' /etc/nginx/nginx.conf && nginx -g 'daemon off;'"
+# At runtime, substitute PORT into nginx config, then start nginx
+CMD sh -c "export PORT=\${PORT:-8080} && \
+    sed \"s/listen 8080/listen \$PORT/\" /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && \
+    echo 'Starting nginx on port '\$PORT && \
+    nginx -g 'daemon off;'"
