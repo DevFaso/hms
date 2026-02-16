@@ -18,7 +18,7 @@ spring:
     timeout-per-shutdown-phase: 30s
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/hospital_db}
-    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    username: ${SPRING_DATASOURCE_USERNAME:hms_app}
     password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: org.postgresql.Driver
   jpa:
@@ -27,6 +27,10 @@ spring:
       ddl-auto: validate
   liquibase:
     enabled: true
+    # Liquibase uses hms_migrator (DDL privileges) — separate from the app user
+    user: ${LIQUIBASE_USERNAME:postgres}
+    password: ${LIQUIBASE_PASSWORD:${SPRING_DATASOURCE_PASSWORD:}}
+    url: ${LIQUIBASE_URL:${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/hospital_db}}
 
 logging:
   level:

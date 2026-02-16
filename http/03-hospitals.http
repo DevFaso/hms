@@ -1,0 +1,77 @@
+### ========================================
+### 03 - Hospital Management
+### ========================================
+@baseUrl = http://localhost:8081/api
+@accessToken = "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpc0hvc3BpdGFsQWRtaW4iOmZhbHNlLCJpc1N1cGVyQWRtaW4iOnRydWUsImRlcGFydG1lbnRJZHMiOltdLCJpYXQiOjE3NzExMzYwMTUsImV4cCI6MTc3MTIyMjQxNX0.gW3R6rwnAU_dm6HKsw8ol6SimepZ3yDBxdzcIIthjUeisn7XYlKO_6m18Tt7qmI5"
+
+### List all hospitals
+GET {{baseUrl}}/hospitals
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### List hospitals with departments
+GET {{baseUrl}}/hospitals/with-departments
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### List hospitals by organization
+GET {{baseUrl}}/hospitals/organization/{{organizationId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Create hospital
+
+POST {{baseUrl}}/hospitals
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "DevFaso General Hospital",
+  "code": "DGH-001",
+  "address": "456 Hospital Road, Medical City, MC 10002",
+  "city": "Medical City",
+  "state": "MC",
+  "zipCode": "10002",
+  "country": "US",
+  "phoneNumber": "+1-555-200-0001",
+  "email": "contact@dgh.local",
+  "website": "https://dgh.local",
+  "organizationId": "{{organizationId}}",
+  "active": true
+}
+
+### Get hospital by ID
+GET {{baseUrl}}/hospitals/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update hospital
+PUT {{baseUrl}}/hospitals/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "DevFaso General Hospital (Updated)",
+  "code": "DGH-001",
+  "address": "456 Hospital Road, Medical City, MC 10002",
+  "phoneNumber": "+1-555-200-0002"
+}
+
+### Assign hospital to organization
+PUT {{baseUrl}}/hospitals/{{hospitalId}}/organization
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "organizationId": "{{organizationId}}"
+}
+
+### Remove hospital from organization
+DELETE {{baseUrl}}/hospitals/{{hospitalId}}/organization
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Delete hospital
+DELETE {{baseUrl}}/hospitals/{{hospitalId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json

@@ -1,0 +1,111 @@
+### ========================================
+### 12 - Clinical Encounters & Notes
+### ========================================
+
+### ----------------------------------------
+### ENCOUNTERS
+### ----------------------------------------
+
+### Create encounter
+POST {{baseUrl}}/encounters
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "doctorId": "{{staffId}}",
+  "hospitalId": "{{hospitalId}}",
+  "departmentId": "{{departmentId}}",
+  "appointmentId": "{{appointmentId}}",
+  "encounterType": "OUTPATIENT",
+  "chiefComplaint": "Persistent headache for 3 days",
+  "presentIllness": "Patient reports throbbing headache, worse in morning",
+  "reviewOfSystems": "Negative for fever, nausea, vision changes",
+  "physicalExam": "Alert, oriented. No focal neurological deficits.",
+  "assessment": "Tension-type headache",
+  "plan": "OTC analgesics, stress management, follow-up in 2 weeks if no improvement",
+  "status": "IN_PROGRESS"
+}
+
+### List all encounters (paginated)
+GET {{baseUrl}}/encounters?page=0&size=20
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get encounter by ID
+GET {{baseUrl}}/encounters/{{encounterId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get encounters by doctor
+GET {{baseUrl}}/encounters/doctor/{{staffId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update encounter
+PUT {{baseUrl}}/encounters/{{encounterId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "assessment": "Tension-type headache, improving",
+  "plan": "Continue OTC analgesics. Resolved.",
+  "status": "COMPLETED"
+}
+
+### Delete encounter
+DELETE {{baseUrl}}/encounters/{{encounterId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### ENCOUNTER NOTES
+### ----------------------------------------
+
+### Add encounter note
+POST {{baseUrl}}/encounters/{{encounterId}}/notes
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "noteType": "PROGRESS",
+  "content": "Patient reports 50% improvement in headache frequency",
+  "authorId": "{{staffId}}"
+}
+
+### Add note addendum
+POST {{baseUrl}}/encounters/{{encounterId}}/notes/addendums
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "noteId": "{{noteId}}",
+  "content": "Addendum: Lab results reviewed - all within normal limits",
+  "authorId": "{{staffId}}"
+}
+
+### Get encounter note history
+GET {{baseUrl}}/encounters/{{encounterId}}/notes/history
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### ENCOUNTER TREATMENTS
+### ----------------------------------------
+
+### Create encounter treatment
+POST {{baseUrl}}/encounter-treatments
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "encounterId": "{{encounterId}}",
+  "treatmentName": "IV Fluids",
+  "description": "Normal saline 1L IV over 2 hours",
+  "status": "IN_PROGRESS"
+}
+
+### Get treatments by encounter
+GET {{baseUrl}}/encounter-treatments/by-encounter/{{encounterId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json

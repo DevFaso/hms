@@ -1,0 +1,90 @@
+### ========================================
+### 04 - Department Management
+### ========================================
+
+### List all departments
+GET {{baseUrl}}/departments
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Search departments
+GET {{baseUrl}}/departments/search?query=cardio
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Filter departments (POST body)
+POST {{baseUrl}}/departments/filter
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "hospitalId": "{{hospitalId}}",
+  "active": true
+}
+
+### List departments by hospital
+GET {{baseUrl}}/departments/by-hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Active minimal departments for hospital
+GET {{baseUrl}}/departments/active-minimal/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Create department
+POST {{baseUrl}}/departments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "hospitalId": "{{hospitalId}}",
+  "name": "Emergency Department",
+  "code": "ED-001",
+  "description": "24/7 emergency and trauma care",
+  "phoneNumber": "+1-555-300-0001",
+  "email": "ed@dgh.local",
+  "active": true
+}
+
+### Get department by ID
+GET {{baseUrl}}/departments/{{departmentId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get department with staff
+GET {{baseUrl}}/departments/{{departmentId}}/with-staff
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get department stats
+GET {{baseUrl}}/departments/{{departmentId}}/stats
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Check if staff is head of department
+GET {{baseUrl}}/departments/is-head/{{staffId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update department
+PUT {{baseUrl}}/departments/{{departmentId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "Emergency Department (Updated)",
+  "code": "ED-001",
+  "description": "Full-service emergency and trauma center",
+  "active": true
+}
+
+### Update head of department
+PUT {{baseUrl}}/departments/{{departmentId}}/update-head/{{staffId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Delete department
+DELETE {{baseUrl}}/departments/{{departmentId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json

@@ -1,0 +1,182 @@
+### ========================================
+### 37 - Patient Portal (MyChart-style Self-Service)
+### ========================================
+### Requires: ROLE_PATIENT with verified email
+### Flow: Register patient → Verify email → Login → Access portal
+### ========================================
+
+@baseUrl = http://localhost:8081/api
+
+### ----------------------------------------
+### PATIENT REGISTRATION & VERIFICATION FLOW
+### ----------------------------------------
+
+### Step 1: Register patient via admin (patient starts inactive)
+# @name registerPatient
+POST {{baseUrl}}/users/admin-register
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "username": "patient.jane",
+  "email": "jane.doe@example.com",
+  "password": "Patient123!",
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "phoneNumber": "+1-555-000-9001",
+  "roleNames": ["PATIENT"]
+}
+
+### Step 2: Patient login attempt (should fail - account disabled)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "patient.jane",
+  "password": "Patient123!"
+}
+
+### Step 3: Verify email (use token from verification email)
+POST {{baseUrl}}/auth/verify-email
+Content-Type: application/json
+
+{
+  "email": "jane.doe@example.com",
+  "token": "paste-activation-token-here"
+}
+
+### Step 3 (alt): Verify email via GET link (simulates clicking email link)
+GET {{baseUrl}}/auth/verify-email?email=jane.doe@example.com&token=paste-activation-token-here
+Accept: application/json
+
+### Step 3 (alt): Resend verification email
+POST {{baseUrl}}/auth/resend-verification?email=jane.doe@example.com
+Accept: application/json
+
+### Step 4: Patient login (should succeed after verification)
+# @name loginPatient
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "patient.jane",
+  "password": "Patient123!"
+}
+
+### ----------------------------------------
+### PATIENT PROFILE
+### ----------------------------------------
+
+### Get my patient profile
+GET {{baseUrl}}/me/patient/profile
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### Update my profile (contact info)
+PUT {{baseUrl}}/me/patient/profile
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "phoneNumber": "+1-555-000-9002",
+  "email": "jane.doe.updated@example.com",
+  "emergencyContactName": "John Doe",
+  "emergencyContactPhone": "+1-555-000-9003"
+}
+
+### ----------------------------------------
+### HEALTH SUMMARY
+### ----------------------------------------
+
+### Get health summary (dashboard overview)
+GET {{baseUrl}}/me/patient/health-summary
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### ----------------------------------------
+### APPOINTMENTS
+### ----------------------------------------
+
+### Get my upcoming appointments
+GET {{baseUrl}}/me/patient/appointments?status=SCHEDULED&page=0&size=10
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### Get my past appointments
+GET {{baseUrl}}/me/patient/appointments?status=COMPLETED&page=0&size=10
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### ----------------------------------------
+### MEDICATIONS & PRESCRIPTIONS
+### ----------------------------------------
+
+### Get my active medications
+GET {{baseUrl}}/me/patient/medications?active=true&page=0&size=10
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### Get all my medications (including past)
+GET {{baseUrl}}/me/patient/medications?page=0&size=20
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### ----------------------------------------
+### LAB RESULTS
+### ----------------------------------------
+
+### Get my lab results
+GET {{baseUrl}}/me/patient/lab-results?page=0&size=10
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### ----------------------------------------
+### MEDICAL RECORDS
+### ----------------------------------------
+
+### Get my visit history (encounters)
+GET {{baseUrl}}/me/patient/visits?page=0&size=10
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### Get my diagnoses
+GET {{baseUrl}}/me/patient/diagnoses?page=0&size=10
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### Get my allergies
+GET {{baseUrl}}/me/patient/allergies
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### Get my immunizations
+GET {{baseUrl}}/me/patient/immunizations?page=0&size=10
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### ----------------------------------------
+### VITAL SIGNS
+### ----------------------------------------
+
+### Get my recent vital signs
+GET {{baseUrl}}/me/patient/vitals?page=0&size=10
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### ----------------------------------------
+### BILLING
+### ----------------------------------------
+
+### Get my billing summary
+GET {{baseUrl}}/me/patient/billing?page=0&size=10
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### ----------------------------------------
+### DOCUMENTS
+### ----------------------------------------
+
+### Get my care documents
+GET {{baseUrl}}/me/patient/documents?page=0&size=10
+Authorization: Bearer {{patientToken}}
+Accept: application/json

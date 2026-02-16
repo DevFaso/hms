@@ -1,6 +1,7 @@
 version: "3.9"
 
 services:
+  # ── Local PostgreSQL (profile: local) ──────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: hms-postgres
@@ -18,5 +19,43 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Dev PostgreSQL (profile: dev) ──────────────────────────
+  postgres-dev:
+    image: postgres:16-alpine
+    container_name: hms-postgres-dev
+    environment:
+      POSTGRES_DB: hms_dev
+      POSTGRES_USER: hms_dev_user
+      POSTGRES_PASSWORD: hms_dev_pass
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hms_dev_user -d hms_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── UAT PostgreSQL (profile: uat) ──────────────────────────
+  postgres-uat:
+    image: postgres:16-alpine
+    container_name: hms-postgres-uat
+    environment:
+      POSTGRES_DB: hms_uat
+      POSTGRES_USER: hms_uat_user
+      POSTGRES_PASSWORD: hms_uat_pass
+    ports:
+      - "5434:5432"
+    volumes:
+      - pgdata_uat:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hms_uat_user -d hms_uat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   pgdata:
+  pgdata_dev:
+  pgdata_uat:

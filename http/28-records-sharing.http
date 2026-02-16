@@ -1,0 +1,117 @@
+### ========================================
+### 28 - Records Sharing & Patient Consent
+### Export, Share, Consent Management
+### ========================================
+
+### ----------------------------------------
+### RECORD SHARING
+### ----------------------------------------
+
+### Share patient records
+POST {{baseUrl}}/records/share
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "fromHospitalId": "{{hospitalId}}",
+  "toHospitalId": "{{hospitalId2}}",
+  "sharedById": "{{staffId}}",
+  "recordTypes": ["LAB_RESULTS", "IMAGING", "MEDICATIONS"],
+  "purpose": "REFERRAL",
+  "expiresAt": "2026-03-14T00:00:00",
+  "notes": "Sharing records for specialist referral"
+}
+
+### Export patient records
+POST {{baseUrl}}/records/export
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "format": "PDF",
+  "recordTypes": ["DEMOGRAPHICS", "DIAGNOSES", "MEDICATIONS", "LAB_RESULTS"],
+  "dateFrom": "2025-01-01",
+  "dateTo": "2026-02-14"
+}
+
+### Get shared records for patient
+GET {{baseUrl}}/records/shared/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get shared records by hospital
+GET {{baseUrl}}/records/shared/hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Revoke record sharing
+DELETE {{baseUrl}}/records/share/{{sharingId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### PATIENT CONSENT
+### ----------------------------------------
+
+### Grant consent
+POST {{baseUrl}}/patient-consents
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "fromHospitalId": "{{hospitalId}}",
+  "toHospitalId": "{{hospitalId2}}",
+  "consentType": "RECORD_SHARING",
+  "scope": ["LAB_RESULTS", "IMAGING", "MEDICATIONS"],
+  "grantedAt": "2026-02-14T10:00:00",
+  "expiresAt": "2027-02-14T10:00:00",
+  "notes": "Patient consented to share records with specialist"
+}
+
+### Revoke consent
+PUT {{baseUrl}}/patient-consents/{{consentId}}/revoke
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "revokedReason": "Patient no longer under care at referral hospital"
+}
+
+### List all consents
+GET {{baseUrl}}/patient-consents?page=0&size=20
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get consent by ID
+GET {{baseUrl}}/patient-consents/{{consentId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get consents by patient
+GET {{baseUrl}}/patient-consents/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get consents from hospital
+GET {{baseUrl}}/patient-consents/from-hospital/{{hospitalId}}
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### Get consents to hospital
+GET {{baseUrl}}/patient-consents/to-hospital/{{hospitalId2}}
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### Get active consents
+GET {{baseUrl}}/patient-consents/active?patientId={{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Delete consent
+DELETE {{baseUrl}}/patient-consents/{{consentId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json

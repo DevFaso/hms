@@ -1,0 +1,107 @@
+### ========================================
+### 26 - Chat / Messaging
+### Conversations, Messages, Search
+### ========================================
+
+### ----------------------------------------
+### SEND MESSAGES
+### ----------------------------------------
+
+### Send a chat message
+POST {{baseUrl}}/chat/send
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "senderEmail": "doctor@example.com",
+  "recipientEmail": "nurse@example.com",
+  "content": "Please prepare Room 201 for the incoming patient transfer.",
+  "priority": "HIGH"
+}
+
+### Send message by username
+POST {{baseUrl}}/chat/send
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "senderUsername": "dr.smith",
+  "recipientUsername": "nurse.jones",
+  "content": "Lab results for patient Smith are ready for review.",
+  "priority": "NORMAL"
+}
+
+### ----------------------------------------
+### CONVERSATIONS
+### ----------------------------------------
+
+### Get conversations by email
+GET {{baseUrl}}/chat/conversations?email=doctor@example.com
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### Get conversations by username
+GET {{baseUrl}}/chat/conversations?username=dr.smith
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### MESSAGE HISTORY
+### ----------------------------------------
+
+### Get chat history between two users by email
+GET {{baseUrl}}/chat/history?senderEmail=doctor@example.com&recipientEmail=nurse@example.com
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### Get chat history between two users by username
+GET {{baseUrl}}/chat/history?senderUsername=dr.smith&recipientUsername=nurse.jones
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### MARK READ
+### ----------------------------------------
+
+### Mark messages as read
+PUT {{baseUrl}}/chat/mark-read
+Authorization: Bearer {{nurseToken}}
+Content-Type: application/json
+
+{
+  "senderEmail": "doctor@example.com",
+  "recipientEmail": "nurse@example.com"
+}
+
+### ----------------------------------------
+### SEARCH
+### ----------------------------------------
+
+### Search messages
+GET {{baseUrl}}/chat/search?query=lab+results&email=doctor@example.com
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### MESSAGES BY SENDER / RECIPIENT
+### ----------------------------------------
+
+### Get messages by sender email
+GET {{baseUrl}}/chat/by-sender?email=doctor@example.com
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get messages by sender username
+GET {{baseUrl}}/chat/by-sender?username=dr.smith
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get messages by recipient email
+GET {{baseUrl}}/chat/by-recipient?email=nurse@example.com
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get messages by recipient username
+GET {{baseUrl}}/chat/by-recipient?username=nurse.jones
+Authorization: Bearer {{accessToken}}
+Accept: application/json

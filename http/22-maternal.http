@@ -1,0 +1,488 @@
+### ========================================
+### 22 - Maternal Care
+### Birth Plans, Prenatal, Ultrasound,
+### Postpartum, High-Risk, Newborn Assessments
+### ========================================
+
+### ----------------------------------------
+### MATERNAL HISTORY
+### ----------------------------------------
+
+### Create maternal history
+POST {{baseUrl}}/maternal-history
+Authorization: Bearer {{midwifeToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "gravida": 2,
+  "para": 1,
+  "abortions": 0,
+  "livingChildren": 1,
+  "lastMenstrualPeriod": "2025-08-01",
+  "estimatedDueDate": "2026-05-08",
+  "bloodType": "A+",
+  "rhFactor": "POSITIVE",
+  "previousDeliveryMethod": "VAGINAL",
+  "riskLevel": "LOW"
+}
+
+### Get maternal history by ID
+GET {{baseUrl}}/maternal-history/{{maternalHistoryId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get current maternal history
+GET {{baseUrl}}/maternal-history/patient/{{patientId}}/current
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get all versions
+GET {{baseUrl}}/maternal-history/patient/{{patientId}}/versions
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get specific version
+GET {{baseUrl}}/maternal-history/patient/{{patientId}}/version/1
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Search by hospital
+GET {{baseUrl}}/maternal-history/hospital/{{hospitalId}}/search?query=smith
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get high-risk patients by hospital
+GET {{baseUrl}}/maternal-history/hospital/{{hospitalId}}/high-risk
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get pending review
+GET {{baseUrl}}/maternal-history/hospital/{{hospitalId}}/pending-review
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get specialist referral needed
+GET {{baseUrl}}/maternal-history/hospital/{{hospitalId}}/specialist-referral
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get psychosocial concerns
+GET {{baseUrl}}/maternal-history/hospital/{{hospitalId}}/psychosocial-concerns
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update maternal history
+PUT {{baseUrl}}/maternal-history/{{maternalHistoryId}}
+Authorization: Bearer {{midwifeToken}}
+Content-Type: application/json
+
+{
+  "riskLevel": "HIGH",
+  "riskFactors": "Gestational diabetes diagnosed at 28 weeks"
+}
+
+### Mark as reviewed
+POST {{baseUrl}}/maternal-history/{{maternalHistoryId}}/mark-reviewed
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### Calculate risk score
+POST {{baseUrl}}/maternal-history/{{maternalHistoryId}}/calculate-risk
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Delete maternal history
+DELETE {{baseUrl}}/maternal-history/{{maternalHistoryId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### BIRTH PLANS
+### ----------------------------------------
+
+### Create birth plan
+POST {{baseUrl}}/api/birth-plans
+Authorization: Bearer {{midwifeToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "preferredDeliveryMethod": "VAGINAL",
+  "painManagementPreference": "EPIDURAL_IF_NEEDED",
+  "birthPartner": "Bob Williams",
+  "skinToSkinContact": true,
+  "breastfeedingPlan": "IMMEDIATE",
+  "cordBloodBanking": false,
+  "specialRequests": "Dim lighting, music allowed",
+  "status": "DRAFT"
+}
+
+### Get birth plan by ID
+GET {{baseUrl}}/api/birth-plans/{{birthPlanId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get birth plans by patient
+GET {{baseUrl}}/api/birth-plans/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get active birth plan
+GET {{baseUrl}}/api/birth-plans/patient/{{patientId}}/active
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Search birth plans
+GET {{baseUrl}}/api/birth-plans/search?hospitalId={{hospitalId}}&status=DRAFT
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get pending review birth plans
+GET {{baseUrl}}/api/birth-plans/pending-review
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update birth plan
+PUT {{baseUrl}}/api/birth-plans/{{birthPlanId}}
+Authorization: Bearer {{midwifeToken}}
+Content-Type: application/json
+
+{
+  "painManagementPreference": "EPIDURAL",
+  "status": "SUBMITTED"
+}
+
+### Review birth plan
+POST {{baseUrl}}/api/birth-plans/{{birthPlanId}}/review
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "reviewedById": "{{staffId}}",
+  "status": "APPROVED",
+  "reviewNotes": "Plan reviewed and approved. Standard precautions apply."
+}
+
+### Delete birth plan
+DELETE {{baseUrl}}/api/birth-plans/{{birthPlanId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### PRENATAL SCHEDULING
+### ----------------------------------------
+
+### Schedule prenatal appointment
+POST {{baseUrl}}/prenatal/schedule
+Authorization: Bearer {{midwifeToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "staffId": "{{staffId}}",
+  "appointmentDate": "2026-03-15",
+  "startTime": "10:00",
+  "visitType": "ROUTINE_PRENATAL",
+  "gestationalWeek": 30
+}
+
+### Reschedule prenatal appointment
+PUT {{baseUrl}}/prenatal/appointments/reschedule
+Authorization: Bearer {{midwifeToken}}
+Content-Type: application/json
+
+{
+  "appointmentId": "{{appointmentId}}",
+  "newDate": "2026-03-17",
+  "newTime": "14:00",
+  "reason": "Patient conflict"
+}
+
+### Send prenatal reminders
+POST {{baseUrl}}/prenatal/reminders
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}"
+}
+
+### ----------------------------------------
+### ULTRASOUND
+### ----------------------------------------
+
+### Create ultrasound order
+POST {{baseUrl}}/ultrasound/orders
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "orderedById": "{{staffId}}",
+  "hospitalId": "{{hospitalId}}",
+  "type": "ANATOMY_SCAN",
+  "indication": "20-week anatomy scan",
+  "urgency": "ROUTINE",
+  "gestationalAge": 20
+}
+
+### Get ultrasound order by ID
+GET {{baseUrl}}/ultrasound/orders/{{orderId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get orders by patient
+GET {{baseUrl}}/ultrasound/orders/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get orders by hospital
+GET {{baseUrl}}/ultrasound/orders/hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get pending orders by hospital
+GET {{baseUrl}}/ultrasound/orders/hospital/{{hospitalId}}/pending
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get high-risk orders by hospital
+GET {{baseUrl}}/ultrasound/orders/hospital/{{hospitalId}}/high-risk
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update ultrasound order
+PUT {{baseUrl}}/ultrasound/orders/{{orderId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "notes": "Please check for placental position"
+}
+
+### Cancel ultrasound order
+POST {{baseUrl}}/ultrasound/orders/{{orderId}}/cancel
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "reason": "Duplicate order"
+}
+
+### Submit ultrasound report
+POST {{baseUrl}}/ultrasound/orders/{{orderId}}/report
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "performedById": "{{staffId}}",
+  "findings": "Normal anatomy scan at 20 weeks. All structures visualized.",
+  "impression": "Normal fetal development",
+  "fetalHeartRate": 145,
+  "estimatedFetalWeight": 350,
+  "amnioticFluidIndex": 14.5,
+  "placentalPosition": "ANTERIOR"
+}
+
+### Review ultrasound report
+POST {{baseUrl}}/ultrasound/reports/{{reportId}}/review
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "reviewedById": "{{staffId}}",
+  "reviewNotes": "Reviewed and approved. Normal findings.",
+  "status": "REVIEWED"
+}
+
+### Notify patient of results
+POST {{baseUrl}}/ultrasound/reports/{{reportId}}/notify-patient
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get report by ID
+GET {{baseUrl}}/ultrasound/reports/{{reportId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get reports by order
+GET {{baseUrl}}/ultrasound/reports/order/{{orderId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get follow-up required reports
+GET {{baseUrl}}/ultrasound/reports/hospital/{{hospitalId}}/follow-up-required
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get anomaly reports
+GET {{baseUrl}}/ultrasound/reports/hospital/{{hospitalId}}/anomalies
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get nuchal translucency template
+GET {{baseUrl}}/ultrasound/templates/nuchal-translucency
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get anatomy scan template
+GET {{baseUrl}}/ultrasound/templates/anatomy-scan
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### HIGH-RISK PREGNANCY CARE PLANS
+### ----------------------------------------
+
+### Create high-risk care plan
+POST {{baseUrl}}/high-risk-care-plans
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "createdById": "{{staffId}}",
+  "riskFactors": ["GESTATIONAL_DIABETES", "ADVANCED_MATERNAL_AGE"],
+  "monitoringPlan": "Weekly NST, biweekly BPP starting at 32 weeks",
+  "medicationPlan": "Insulin per sliding scale",
+  "deliveryPlan": "Planned induction at 39 weeks if no complications"
+}
+
+### Get care plan by ID
+GET {{baseUrl}}/high-risk-care-plans/{{planId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get care plans by patient
+GET {{baseUrl}}/high-risk-care-plans/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get active care plan
+GET {{baseUrl}}/high-risk-care-plans/patient/{{patientId}}/active
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update care plan
+PUT {{baseUrl}}/high-risk-care-plans/{{planId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "medicationPlan": "Increased insulin dosage per endocrinology consult"
+}
+
+### Add blood pressure log
+POST {{baseUrl}}/high-risk-care-plans/{{planId}}/blood-pressure-logs
+Authorization: Bearer {{nurseToken}}
+Content-Type: application/json
+
+{
+  "systolic": 125,
+  "diastolic": 82,
+  "heartRate": 78,
+  "recordedAt": "2026-02-14T10:00:00",
+  "notes": "Taken in sitting position after 5 min rest"
+}
+
+### Add medication log
+POST {{baseUrl}}/high-risk-care-plans/{{planId}}/medication-logs
+Authorization: Bearer {{nurseToken}}
+Content-Type: application/json
+
+{
+  "medication": "Insulin Glargine",
+  "dose": "10 units",
+  "route": "SUBCUTANEOUS",
+  "administeredAt": "2026-02-14T08:00:00"
+}
+
+### Add care team note
+POST {{baseUrl}}/high-risk-care-plans/{{planId}}/care-team-notes
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "authorId": "{{staffId}}",
+  "note": "Blood glucose trending down. Consider adjusting insulin dose."
+}
+
+### Complete milestone
+POST {{baseUrl}}/high-risk-care-plans/{{planId}}/milestones/{{milestoneId}}/complete
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### POSTPARTUM CARE
+### ----------------------------------------
+
+### Create postpartum observation
+POST {{baseUrl}}/patients/{{patientId}}/postpartum/observations
+Authorization: Bearer {{midwifeToken}}
+Content-Type: application/json
+
+{
+  "observationType": "FUNDAL_HEIGHT",
+  "value": "At umbilicus",
+  "uterinePosition": "MIDLINE",
+  "lochiaColor": "RUBRA",
+  "lochiaAmount": "MODERATE",
+  "perinealIntegrity": "INTACT",
+  "breastfeedingStatus": "ESTABLISHED",
+  "painLevel": 3,
+  "notes": "Mother and baby doing well"
+}
+
+### Get recent postpartum observations
+GET {{baseUrl}}/patients/{{patientId}}/postpartum/observations/recent
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get all postpartum observations
+GET {{baseUrl}}/patients/{{patientId}}/postpartum/observations
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get postpartum schedule
+GET {{baseUrl}}/patients/{{patientId}}/postpartum/schedule
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### NEWBORN ASSESSMENTS
+### ----------------------------------------
+
+### Create newborn assessment
+POST {{baseUrl}}/patients/{{patientId}}/postpartum/newborn-assessments
+Authorization: Bearer {{midwifeToken}}
+Content-Type: application/json
+
+{
+  "birthWeight": 3200,
+  "birthLength": 50,
+  "headCircumference": 34,
+  "apgarScore1Min": 8,
+  "apgarScore5Min": 9,
+  "gestationalAgeAtBirth": 39,
+  "deliveryMethod": "VAGINAL",
+  "skinToSkinCompleted": true,
+  "vitaminKAdministered": true,
+  "eyeProphylaxisAdministered": true,
+  "hearingScreenResult": "PASS",
+  "notes": "Healthy term newborn"
+}
+
+### Get recent newborn assessments
+GET {{baseUrl}}/patients/{{patientId}}/postpartum/newborn-assessments/recent
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get all newborn assessments
+GET {{baseUrl}}/patients/{{patientId}}/postpartum/newborn-assessments
+Authorization: Bearer {{accessToken}}
+Accept: application/json

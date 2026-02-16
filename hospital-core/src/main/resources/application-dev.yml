@@ -8,6 +8,8 @@ spring:
       on-profile: dev
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/hms_dev}
+    username: ${SPRING_DATASOURCE_USERNAME:hms_dev_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:hms_dev_pass}
     driver-class-name: org.postgresql.Driver
   jpa:
     show-sql: false

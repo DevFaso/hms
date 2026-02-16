@@ -1,0 +1,111 @@
+### ========================================
+### 15 - Imaging Orders & Results
+### ========================================
+
+### ----------------------------------------
+### IMAGING ORDERS
+### ----------------------------------------
+
+### Create imaging order
+POST {{baseUrl}}/imaging/orders
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "orderedById": "{{staffId}}",
+  "hospitalId": "{{hospitalId}}",
+  "modality": "CT",
+  "bodyPart": "HEAD",
+  "clinicalIndication": "Persistent headache, rule out structural cause",
+  "priority": "ROUTINE",
+  "contrastRequired": false,
+  "specialInstructions": "Patient allergic to Penicillin, no contrast allergies",
+  "status": "ORDERED"
+}
+
+### Get imaging order by ID
+GET {{baseUrl}}/imaging/orders/{{orderId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get imaging orders by patient
+GET {{baseUrl}}/imaging/orders/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get imaging orders by hospital
+GET {{baseUrl}}/imaging/orders/hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Check for duplicate orders
+GET {{baseUrl}}/imaging/orders/patient/{{patientId}}/duplicates
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update imaging order
+PUT {{baseUrl}}/imaging/orders/{{orderId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "specialInstructions": "Updated: Fasting not required",
+  "priority": "STAT"
+}
+
+### Update imaging order status
+PUT {{baseUrl}}/imaging/orders/{{orderId}}/status
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "status": "IN_PROGRESS"
+}
+
+### Sign imaging order
+POST {{baseUrl}}/imaging/orders/{{orderId}}/signature
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "signedById": "{{staffId}}"
+}
+
+### ----------------------------------------
+### IMAGING RESULTS
+### ----------------------------------------
+
+### Get imaging result by report ID
+GET {{baseUrl}}/imaging/results/{{reportId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get imaging result by order
+GET {{baseUrl}}/imaging/results/order/{{orderId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get all results for order
+GET {{baseUrl}}/imaging/results/order/{{orderId}}/all
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get results by hospital
+GET {{baseUrl}}/imaging/results/hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update result status
+PUT {{baseUrl}}/imaging/results/{{reportId}}/status
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "status": "FINAL"
+}
+
+### Acknowledge critical result
+PUT {{baseUrl}}/imaging/results/{{reportId}}/acknowledge-critical
+Authorization: Bearer {{doctorToken}}
+Accept: application/json

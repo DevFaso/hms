@@ -1,0 +1,233 @@
+### ========================================
+### 38 - Patient Portal Phase 2: Actions & Write Endpoints
+### ========================================
+### Requires: ROLE_PATIENT with verified email + linked Patient record
+### Covers: Cancel/Reschedule appointments, Consent management,
+###         Home vitals, Medication refills, After-visit summaries,
+###         Care team, Access log
+### ========================================
+
+@baseUrl = http://localhost:8081/api
+
+### ----------------------------------------
+### PREREQUISITES: Login as patient
+### ----------------------------------------
+
+### Login as the existing patient (adjust credentials as needed)
+# @name loginPatient
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "patient.jane",
+  "password": "Patient123!"
+}
+
+> {%
+    client.global.set("patientToken", response.body.data.accessToken);
+%}
+
+### ========================================
+### CANCEL OWN APPOINTMENT
+### ========================================
+
+### Cancel an appointment (replace appointmentId with a real one)
+# @name cancelAppointment
+PUT {{baseUrl}}/me/patient/appointments/cancel
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "appointmentId": "{{appointmentId}}",
+  "reason": "Schedule conflict — need to reschedule for next week"
+}
+
+### ========================================
+### RESCHEDULE OWN APPOINTMENT
+### ========================================
+
+### Reschedule an appointment to a new date/time
+# @name rescheduleAppointment
+PUT {{baseUrl}}/me/patient/appointments/reschedule
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "appointmentId": "{{appointmentId}}",
+  "newDate": "2025-08-15",
+  "newStartTime": "10:00",
+  "newEndTime": "10:30",
+  "reason": "Need a later time slot"
+}
+
+### ========================================
+### CONSENT MANAGEMENT
+### ========================================
+
+### View my current consents
+GET {{baseUrl}}/me/patient/consents?page=0&size=10
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### Grant data-sharing consent between hospitals
+# @name grantConsent
+POST {{baseUrl}}/me/patient/consents
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "fromHospitalId": "{{hospitalId1}}",
+  "toHospitalId": "{{hospitalId2}}",
+  "purpose": "Treatment",
+  "consentExpiration": "2026-12-31T23:59:59"
+}
+
+### Revoke a previously granted consent
+DELETE {{baseUrl}}/me/patient/consents?fromHospitalId={{hospitalId1}}&toHospitalId={{hospitalId2}}
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### ========================================
+### HOME VITAL SIGNS
+### ========================================
+
+### View my vital signs
+GET {{baseUrl}}/me/patient/vitals?limit=10
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### Record a home blood pressure reading
+# @name recordBpReading
+POST {{baseUrl}}/me/patient/vitals
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "systolicBpMmHg": 120,
+  "diastolicBpMmHg": 78,
+  "heartRateBpm": 72,
+  "bodyPosition": "Sitting",
+  "notes": "Morning reading, after coffee"
+}
+
+### Record a home glucose reading
+# @name recordGlucose
+POST {{baseUrl}}/me/patient/vitals
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "bloodGlucoseMgDl": 95,
+  "notes": "Fasting glucose - before breakfast"
+}
+
+### Record a home weight + temperature
+# @name recordWeightTemp
+POST {{baseUrl}}/me/patient/vitals
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "weightKg": 72.5,
+  "temperatureCelsius": 36.8,
+  "notes": "Morning measurement"
+}
+
+### Record a complete set of vitals
+# @name recordFullVitals
+POST {{baseUrl}}/me/patient/vitals
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "systolicBpMmHg": 118,
+  "diastolicBpMmHg": 76,
+  "heartRateBpm": 68,
+  "respiratoryRateBpm": 16,
+  "spo2Percent": 98,
+  "temperatureCelsius": 36.6,
+  "bloodGlucoseMgDl": 92,
+  "weightKg": 73.0,
+  "bodyPosition": "Sitting",
+  "notes": "Evening vital check, feeling well"
+}
+
+### ========================================
+### MEDICATION REFILLS
+### ========================================
+
+### View my prescriptions (find a prescription ID for refill)
+GET {{baseUrl}}/me/patient/prescriptions
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### Request a medication refill
+# @name requestRefill
+POST {{baseUrl}}/me/patient/refills
+Authorization: Bearer {{patientToken}}
+Content-Type: application/json
+
+{
+  "prescriptionId": "{{prescriptionId}}",
+  "preferredPharmacy": "CVS Pharmacy, 123 Main St",
+  "notes": "Running low, need refill within 3 days"
+}
+
+### View my refill requests
+GET {{baseUrl}}/me/patient/refills?page=0&size=10
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### Cancel a pending refill request
+# @name cancelRefill
+PUT {{baseUrl}}/me/patient/refills/{{refillId}}/cancel
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### ========================================
+### AFTER-VISIT SUMMARIES
+### ========================================
+
+### View my after-visit summaries (discharge instructions)
+GET {{baseUrl}}/me/patient/after-visit-summaries
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### ========================================
+### CARE TEAM
+### ========================================
+
+### View my care team (current & historical providers)
+GET {{baseUrl}}/me/patient/care-team
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### ========================================
+### ACCESS LOG (Who Viewed My Records)
+### ========================================
+
+### View who accessed my records
+GET {{baseUrl}}/me/patient/access-log?page=0&size=20
+Authorization: Bearer {{patientToken}}
+Accept: application/json
+
+### ========================================
+### FULL PHASE 2 SMOKE TEST
+### ========================================
+### Run these in order after creating a patient with appointment + prescription:
+###
+### 1. Login → get patientToken
+### 2. GET /me/patient/appointments → get an appointmentId
+### 3. PUT /me/patient/appointments/cancel → cancel it
+### 4. GET /me/patient/prescriptions → get a prescriptionId
+### 5. POST /me/patient/refills → request a refill
+### 6. GET /me/patient/refills → verify the request appears
+### 7. PUT /me/patient/refills/{id}/cancel → cancel the refill
+### 8. POST /me/patient/vitals → record a home BP reading
+### 9. GET /me/patient/vitals → verify the reading appears
+### 10. POST /me/patient/consents → grant consent
+### 11. GET /me/patient/consents → verify consent appears
+### 12. DELETE /me/patient/consents → revoke consent
+### 13. GET /me/patient/after-visit-summaries → view discharge summaries
+### 14. GET /me/patient/care-team → view care team
+### 15. GET /me/patient/access-log → view audit trail

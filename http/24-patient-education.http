@@ -1,0 +1,219 @@
+### ========================================
+### 24 - Patient Education
+### Resources, Progress, Visit Docs, Q&A
+### ========================================
+
+### ----------------------------------------
+### EDUCATION RESOURCES
+### ----------------------------------------
+
+### Create education resource
+POST {{baseUrl}}/patient-education/resources
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "title": "Understanding Your Diabetes Diagnosis",
+  "description": "A comprehensive guide to managing Type 2 Diabetes",
+  "category": "CHRONIC_DISEASE",
+  "type": "ARTICLE",
+  "language": "en",
+  "content": "Diabetes is a chronic condition that affects how your body processes blood sugar...",
+  "readingTimeMinutes": 15,
+  "targetAudience": "ADULT_PATIENT",
+  "hospitalId": "{{hospitalId}}"
+}
+
+### Get resource by ID
+GET {{baseUrl}}/patient-education/resources/{{resourceId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Search resources
+GET {{baseUrl}}/patient-education/resources/search?query=diabetes&page=0&size=10
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get resources by category
+GET {{baseUrl}}/patient-education/resources/category/CHRONIC_DISEASE
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get resources by type
+GET {{baseUrl}}/patient-education/resources/type/ARTICLE
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get resources by language
+GET {{baseUrl}}/patient-education/resources/language/en
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get popular resources
+GET {{baseUrl}}/patient-education/resources/popular?limit=10
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update resource
+PUT {{baseUrl}}/patient-education/resources/{{resourceId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "content": "Updated content for diabetes management guide..."
+}
+
+### Delete resource
+DELETE {{baseUrl}}/patient-education/resources/{{resourceId}}
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### PATIENT PROGRESS
+### ----------------------------------------
+
+### Create progress entry
+POST {{baseUrl}}/patient-education/progress
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "resourceId": "{{resourceId}}",
+  "status": "IN_PROGRESS",
+  "percentComplete": 50
+}
+
+### Get progress by ID
+GET {{baseUrl}}/patient-education/progress/{{progressId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get in-progress resources
+GET {{baseUrl}}/patient-education/progress/patient/{{patientId}}/in-progress
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get completed resources
+GET {{baseUrl}}/patient-education/progress/patient/{{patientId}}/completed
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get progress count
+GET {{baseUrl}}/patient-education/progress/patient/{{patientId}}/count
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update progress
+PUT {{baseUrl}}/patient-education/progress/{{progressId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "status": "COMPLETED",
+  "percentComplete": 100,
+  "completedAt": "2026-02-14T15:30:00"
+}
+
+### Delete progress
+DELETE {{baseUrl}}/patient-education/progress/{{progressId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### VISIT DOCUMENTATION
+### ----------------------------------------
+
+### Create visit documentation
+POST {{baseUrl}}/patient-education/visit-documentation
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "encounterId": "{{encounterId}}",
+  "providerId": "{{staffId}}",
+  "educationProvided": "Discussed diabetes management, dietary changes, exercise plan",
+  "materialsGiven": ["Diabetes Management Guide", "Meal Planning Chart"],
+  "patientUnderstanding": "GOOD",
+  "followUpNeeded": true,
+  "followUpDate": "2026-03-15"
+}
+
+### Get visit documentation by ID
+GET {{baseUrl}}/patient-education/visit-documentation/{{docId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get visit documentation by encounter
+GET {{baseUrl}}/patient-education/visit-documentation/encounter/{{encounterId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update visit documentation
+PUT {{baseUrl}}/patient-education/visit-documentation/{{docId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientUnderstanding": "EXCELLENT",
+  "additionalNotes": "Patient demonstrated good understanding of carb counting"
+}
+
+### Delete visit documentation
+DELETE {{baseUrl}}/patient-education/visit-documentation/{{docId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### PATIENT QUESTIONS
+### ----------------------------------------
+
+### Submit patient question
+POST {{baseUrl}}/patient-education/questions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "question": "What foods should I avoid with my diabetes?",
+  "category": "DIET_NUTRITION",
+  "priority": "NORMAL"
+}
+
+### Get question by ID
+GET {{baseUrl}}/patient-education/questions/{{questionId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Answer patient question
+PUT {{baseUrl}}/patient-education/questions/{{questionId}}/answer
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "answeredById": "{{staffId}}",
+  "answer": "You should limit refined carbohydrates, sugary beverages, and processed foods. Focus on whole grains, lean proteins, and vegetables.",
+  "resourceLinks": ["{{resourceId}}"]
+}
+
+### Get unanswered questions
+GET {{baseUrl}}/patient-education/questions/unanswered?hospitalId={{hospitalId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### Get urgent questions
+GET {{baseUrl}}/patient-education/questions/urgent?hospitalId={{hospitalId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### Get questions requiring appointment
+GET {{baseUrl}}/patient-education/questions/requiring-appointment?hospitalId={{hospitalId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### Delete question
+DELETE {{baseUrl}}/patient-education/questions/{{questionId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json

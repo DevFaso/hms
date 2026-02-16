@@ -1,0 +1,118 @@
+### ========================================
+### 23 - Nurse Tasks & Nursing Notes
+### Vitals, MAR, Medications, Handoffs
+### ========================================
+
+### ----------------------------------------
+### NURSE TASKS
+### ----------------------------------------
+
+### Get vitals due
+GET {{baseUrl}}/nurse/vitals/due?hospitalId={{hospitalId}}
+Authorization: Bearer {{nurseToken}}
+Accept: application/json
+
+### Get medication administration records (MAR)
+GET {{baseUrl}}/nurse/medications/mar?patientId={{patientId}}&hospitalId={{hospitalId}}
+Authorization: Bearer {{nurseToken}}
+Accept: application/json
+
+### Administer medication
+POST {{baseUrl}}/nurse/medications/administer
+Authorization: Bearer {{nurseToken}}
+Content-Type: application/json
+
+{
+  "prescriptionId": "{{prescriptionId}}",
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "medicationName": "Amoxicillin",
+  "dose": "500mg",
+  "route": "ORAL",
+  "administeredAt": "2026-02-14T08:00:00",
+  "notes": "Patient tolerated well, no adverse reactions"
+}
+
+### Get pending orders
+GET {{baseUrl}}/nurse/orders/pending?hospitalId={{hospitalId}}
+Authorization: Bearer {{nurseToken}}
+Accept: application/json
+
+### Get handoff summary
+GET {{baseUrl}}/nurse/handoffs?hospitalId={{hospitalId}}&shiftDate=2026-02-14
+Authorization: Bearer {{nurseToken}}
+Accept: application/json
+
+### Create handoff
+POST {{baseUrl}}/nurse/handoffs
+Authorization: Bearer {{nurseToken}}
+Content-Type: application/json
+
+{
+  "hospitalId": "{{hospitalId}}",
+  "fromNurseId": "{{staffId}}",
+  "toNurseId": "{{staffId2}}",
+  "shiftDate": "2026-02-14",
+  "shiftType": "DAY_TO_EVENING",
+  "patients": [
+    {
+      "patientId": "{{patientId}}",
+      "summary": "Stable, awaiting lab results",
+      "priorities": "Monitor blood glucose every 4 hours"
+    }
+  ]
+}
+
+### Get announcements for nurses
+GET {{baseUrl}}/nurse/announcements?hospitalId={{hospitalId}}
+Authorization: Bearer {{nurseToken}}
+Accept: application/json
+
+### ----------------------------------------
+### NURSING NOTES
+### ----------------------------------------
+
+### Create nursing note
+POST {{baseUrl}}/nurse/notes
+Authorization: Bearer {{nurseToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "encounterId": "{{encounterId}}",
+  "nurseId": "{{staffId}}",
+  "noteType": "ASSESSMENT",
+  "content": "Patient alert and oriented x3. Vital signs stable. Incision site clean and dry. Pain level 4/10, managed with scheduled analgesics.",
+  "category": "CLINICAL"
+}
+
+### Create addendum to nursing note
+POST {{baseUrl}}/nurse/notes/{{nursingNoteId}}/addenda
+Authorization: Bearer {{nurseToken}}
+Content-Type: application/json
+
+{
+  "content": "Patient reported increased pain at 1400. PRN medication administered. Will reassess in 30 minutes.",
+  "authorId": "{{staffId}}"
+}
+
+### Get nursing note by ID
+GET {{baseUrl}}/nurse/notes/{{nursingNoteId}}
+Authorization: Bearer {{nurseToken}}
+Accept: application/json
+
+### List nursing notes for patient
+GET {{baseUrl}}/nurse/notes?patientId={{patientId}}&hospitalId={{hospitalId}}
+Authorization: Bearer {{nurseToken}}
+Accept: application/json
+
+### List nursing notes by encounter
+GET {{baseUrl}}/nurse/notes?encounterId={{encounterId}}
+Authorization: Bearer {{nurseToken}}
+Accept: application/json
+
+### List nursing notes by category
+GET {{baseUrl}}/nurse/notes?hospitalId={{hospitalId}}&category=CLINICAL
+Authorization: Bearer {{nurseToken}}
+Accept: application/json

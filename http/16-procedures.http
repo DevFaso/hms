@@ -1,0 +1,75 @@
+### ========================================
+### 16 - Procedure Orders
+### ========================================
+
+### Create procedure order
+POST {{baseUrl}}/procedure-orders
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "orderedById": "{{staffId}}",
+  "hospitalId": "{{hospitalId}}",
+  "procedureName": "Lumbar Puncture",
+  "procedureCode": "62270",
+  "indication": "Rule out meningitis",
+  "urgency": "URGENT",
+  "scheduledDate": "2026-02-15",
+  "scheduledTime": "14:00",
+  "estimatedDurationMinutes": 45,
+  "consentObtained": true,
+  "consentDate": "2026-02-14",
+  "preOpInstructions": "NPO after midnight",
+  "notes": "Perform under fluoroscopic guidance"
+}
+
+### Get procedure order by ID
+GET {{baseUrl}}/procedure-orders/{{orderId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get procedure orders by patient
+GET {{baseUrl}}/procedure-orders/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get procedure orders by hospital
+GET {{baseUrl}}/procedure-orders/hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get scheduled procedures by hospital
+GET {{baseUrl}}/procedure-orders/hospital/{{hospitalId}}/scheduled
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get pending consent procedures
+GET {{baseUrl}}/procedure-orders/hospital/{{hospitalId}}/pending-consent
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get procedures ordered by provider
+GET {{baseUrl}}/procedure-orders/ordered-by/{{staffId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update procedure order
+PUT {{baseUrl}}/procedure-orders/{{orderId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "scheduledDate": "2026-02-16",
+  "scheduledTime": "10:00",
+  "notes": "Rescheduled - patient request"
+}
+
+### Cancel procedure order
+POST {{baseUrl}}/procedure-orders/{{orderId}}/cancel
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "reason": "Patient declined procedure after discussion"
+}

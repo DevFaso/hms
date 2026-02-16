@@ -1,0 +1,151 @@
+### ========================================
+### 32 - Platform Registry & Service Catalog
+### Service Definitions, Hospital/Dept Links
+### ========================================
+
+### ----------------------------------------
+### SERVICE CATALOG
+### ----------------------------------------
+
+### Get full service catalog
+GET {{baseUrl}}/platform/catalog
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get services by type
+GET {{baseUrl}}/platform/catalog/type/CLINICAL
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get service by ID
+GET {{baseUrl}}/platform/catalog/{{serviceId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### ORGANIZATION SERVICES
+### ----------------------------------------
+
+### Register service for organization
+POST {{baseUrl}}/platform/organizations/{{organizationId}}/services
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "serviceId": "{{serviceId}}",
+  "enabled": true,
+  "configuration": {
+    "maxConcurrentUsers": 100,
+    "dataRetentionDays": 365
+  }
+}
+
+### Get organization services
+GET {{baseUrl}}/platform/organizations/{{organizationId}}/services
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### Update organization service
+PUT {{baseUrl}}/platform/organizations/{{organizationId}}/services/{{serviceId}}
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "enabled": true,
+  "configuration": {
+    "maxConcurrentUsers": 200
+  }
+}
+
+### Remove organization service
+DELETE {{baseUrl}}/platform/organizations/{{organizationId}}/services/{{serviceId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### HOSPITAL SERVICE LINKS
+### ----------------------------------------
+
+### Link service to hospital
+POST {{baseUrl}}/platform/hospitals/{{hospitalId}}/services
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "serviceId": "{{serviceId}}",
+  "enabled": true
+}
+
+### Get hospital services
+GET {{baseUrl}}/platform/hospitals/{{hospitalId}}/services
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Remove hospital service link
+DELETE {{baseUrl}}/platform/hospitals/{{hospitalId}}/services/{{serviceId}}
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### DEPARTMENT SERVICE LINKS
+### ----------------------------------------
+
+### Link service to department
+POST {{baseUrl}}/platform/departments/{{departmentId}}/services
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "serviceId": "{{serviceId}}",
+  "enabled": true
+}
+
+### Get department services
+GET {{baseUrl}}/platform/departments/{{departmentId}}/services
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Remove department service link
+DELETE {{baseUrl}}/platform/departments/{{departmentId}}/services/{{serviceId}}
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### SERVICE TRANSLATIONS
+### ----------------------------------------
+
+### Create service translation
+POST {{baseUrl}}/service-translations
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "serviceId": "{{serviceId}}",
+  "locale": "fr",
+  "name": "Consultation Générale",
+  "description": "Service de consultation médicale générale"
+}
+
+### Get translations for service
+GET {{baseUrl}}/service-translations/service/{{serviceId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get translation by locale
+GET {{baseUrl}}/service-translations/service/{{serviceId}}/locale/fr
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update translation
+PUT {{baseUrl}}/service-translations/{{translationId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "description": "Service de consultation médicale générale et spécialisée"
+}
+
+### Delete translation
+DELETE {{baseUrl}}/service-translations/{{translationId}}
+Authorization: Bearer {{adminToken}}
+Accept: application/json
