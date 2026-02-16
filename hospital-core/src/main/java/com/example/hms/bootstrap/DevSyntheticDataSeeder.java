@@ -111,10 +111,10 @@ public class DevSyntheticDataSeeder implements ApplicationRunner {
     ) {
     }
 
-    private static final int ORGANIZATION_TARGET = 10;
-    private static final int HOSPITALS_PER_ORG = 10;
-    private static final int STAFF_PER_HOSPITAL = 12;
-    private static final int PATIENTS_PER_HOSPITAL = 10;
+    private static final int ORGANIZATION_TARGET = 2;
+    private static final int HOSPITALS_PER_ORG = 2;
+    private static final int STAFF_PER_HOSPITAL = 5;
+    private static final int PATIENTS_PER_HOSPITAL = 5;
     private static final String ORG_CODE_TEMPLATE = "DEV-ORG-%02d";
     private static final String SUPER_ADMIN_USERNAME = "superadmin";
     private static final String SEED_EMAIL_SUFFIX = "@seed.dev";
