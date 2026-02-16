@@ -43,7 +43,7 @@
     <changeSet id="V3-seed-default-org-security" author="hms-team" runOnChange="false">
         <sqlFile path="V3__seed_default_organization_security.sql"
                  relativeToChangelogFile="true"
-                 splitStatements="true"
+                 splitStatements="false"
                  stripComments="false"/>
     </changeSet>
 
