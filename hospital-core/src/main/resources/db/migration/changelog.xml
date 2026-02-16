@@ -17,6 +17,17 @@
     </changeSet>
 
     <!-- =================================================================
+         V1.1: Unique constraints omitted by Hibernate SchemaExport
+         Required before V2 (ON CONFLICT (code) needs unique index)
+         ================================================================= -->
+    <changeSet id="V1.1-add-unique-constraints" author="hms-team" runOnChange="false">
+        <sqlFile path="V1_1__add_unique_constraints.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
          V2: Seed 24 role codes (reference data required at bootstrap)
          ================================================================= -->
     <changeSet id="V2-seed-roles" author="hms-team" runOnChange="false">
