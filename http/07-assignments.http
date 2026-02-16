@@ -1,0 +1,105 @@
+### ========================================
+### 07 - User↔Role↔Hospital Assignments
+### ========================================
+
+### List all assignments
+GET {{baseUrl}}/assignments
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### List minimal assignments
+GET {{baseUrl}}/assignments/minimal
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Create assignment (user + role + hospital)
+POST {{baseUrl}}/assignments
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "userIdentifier": "dr.smith@hms.local",
+  "roleName": "ROLE_DOCTOR",
+  "hospitalName": "DevFaso General Hospital",
+  "active": true,
+  "startDate": "2026-02-14"
+}
+
+### Create multi-scope assignment
+POST {{baseUrl}}/assignments/multi-scope
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "userIdentifier": "nurse.johnson@hms.local",
+  "roleName": "ROLE_NURSE",
+  "hospitalName": "DevFaso General Hospital",
+  "departmentName": "Emergency Department",
+  "active": true
+}
+
+### Bulk import assignments
+POST {{baseUrl}}/assignments/bulk-import
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+[
+  {
+    "userIdentifier": "dr.smith@hms.local",
+    "roleName": "ROLE_DOCTOR",
+    "hospitalName": "DevFaso General Hospital"
+  },
+  {
+    "userIdentifier": "nurse.johnson@hms.local",
+    "roleName": "ROLE_NURSE",
+    "hospitalName": "DevFaso General Hospital"
+  }
+]
+
+### Get assignment by ID
+GET {{baseUrl}}/assignments/{{assignmentId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get public assignment by code
+GET {{baseUrl}}/assignments/public/ASSIGN-CODE-HERE
+Accept: application/json
+
+### Update assignment
+PUT {{baseUrl}}/assignments/{{assignmentId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "active": true,
+  "startDate": "2026-02-14"
+}
+
+### Confirm assignment
+POST {{baseUrl}}/assignments/{{assignmentId}}/confirm
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "confirmationCode": "CONFIRM-CODE"
+}
+
+### Regenerate assignment code
+POST {{baseUrl}}/assignments/{{assignmentId}}/regenerate-code
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### Delete assignment by ID
+DELETE {{baseUrl}}/assignments/{{assignmentId}}
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### Delete all assignments for a user
+DELETE {{baseUrl}}/assignments/user/{{userId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Delete all assignments for a role
+DELETE {{baseUrl}}/assignments/role/{{roleId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json

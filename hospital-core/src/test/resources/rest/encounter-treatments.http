@@ -1,0 +1,19 @@
+### GET All Encounter Treatments
+GET http://localhost:8081/api/encounter-treatments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IlJPTEVfVVNFUixST0xFX0FETUlOIiwiaWF0IjoxNzQ4MTAzNzU0LCJleHAiOjE3NDgxOTAxNTR9.66n8OvttTrkjHTI6RQ8BNk9rvh4g1LWMrGv0IVXkkuMN4ZW7cBFKMuM7CBznNrkkQw8GzoY2HZQmxLdhK_2ubQ
+
+### Create Encounter Treatment
+POST http://localhost:8081/api/encounter-treatments
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IlJPTEVfVVNFUixST0xFX0FETUlOIiwiaWF0IjoxNzQ4MTAzNzU0LCJleHAiOjE3NDgxOTAxNTR9.66n8OvttTrkjHTI6RQ8BNk9rvh4g1LWMrGv0IVXkkuMN4ZW7cBFKMuM7CBznNrkkQw8GzoY2HZQmxLdhK_2ubQ
+Accept-Language: en
+
+{
+  "encounterId": "68a15b01-fbd7-4ac1-bea8-31216b66583d",
+  "treatmentId": "5a9e43d8-a4eb-40b9-b420-ef5208ffae42",
+  "staffId": "4f5c3aba-ae8f-40ab-9a9b-c4207bf47ba2",
+  "performedAt": "2025-05-24T18:30:00",
+  "outcome": "Completed successfully",
+  "notes": "Patient tolerated the procedure well and follow-up was scheduled."
+}

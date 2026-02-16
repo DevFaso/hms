@@ -2,16 +2,19 @@ name: Frontend CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, uat]
     paths:
       - 'hospital-portal/**'
   pull_request:
-    branches: [main, develop]
     paths:
       - 'hospital-portal/**'
 
 permissions:
   contents: read
+
+concurrency:
+  group: frontend-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 defaults:
   run:

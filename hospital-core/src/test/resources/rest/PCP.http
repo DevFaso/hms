@@ -1,0 +1,37 @@
+### Assign PCP
+POST http://localhost:8081/api/patients/{{patientId}}/primary-care
+Authorization: Bearer {{ADMIN_TOKEN}}
+Content-Type: application/json
+
+{
+  "hospitalId": "{{hospitalId}}",
+  "assignmentId": "{{doctorAssignmentId}}",
+  "startDate": "2025-08-10",
+  "notes": "Initial PCP"
+}
+
+### Get current PCP
+GET http://localhost:8081/api/patients/{{patientId}}/primary-care/current
+Authorization: Bearer {{ADMIN_TOKEN}}
+
+### History
+GET http://localhost:8081/api/patients/{{patientId}}/primary-care/history
+Authorization: Bearer {{ADMIN_TOKEN}}
+
+### Update PCP
+PUT http://localhost:8081/api/primary-care/{{pcpId}}
+Authorization: Bearer {{ADMIN_TOKEN}}
+Content-Type: application/json
+
+{
+  "endDate": "2025-12-31",
+  "notes": "Updated note"
+}
+
+### End PCP
+PATCH http://localhost:8081/api/primary-care/{{pcpId}}/end?endDate=2025-10-01
+Authorization: Bearer {{ADMIN_TOKEN}}
+
+### Delete PCP
+DELETE http://localhost:8081/api/primary-care/{{pcpId}}
+Authorization: Bearer {{ADMIN_TOKEN}}

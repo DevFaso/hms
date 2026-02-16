@@ -1,0 +1,56 @@
+### ========================================
+### 02 - Organization Management
+### ========================================
+
+### List all organizations
+GET {{baseUrl}}/organizations
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get organization types
+GET {{baseUrl}}/organizations/types
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Create organization
+POST {{baseUrl}}/organizations
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "name": "DevFaso Health Network",
+  "type": "HOSPITAL_NETWORK",
+  "description": "Multi-facility healthcare network",
+  "contactEmail": "admin@devfaso-health.com",
+  "contactPhone": "+1-555-100-0001",
+  "address": "123 Health Avenue, Medical City, MC 10001",
+  "country": "US",
+  "active": true
+}
+
+### Get organization by ID
+GET {{baseUrl}}/organizations/{{organizationId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update organization
+PUT {{baseUrl}}/organizations/{{organizationId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "name": "DevFaso Health Network (Updated)",
+  "description": "Updated multi-facility healthcare network",
+  "contactEmail": "admin@devfaso-health.com",
+  "contactPhone": "+1-555-100-0002"
+}
+
+### Apply default security policies to organization
+POST {{baseUrl}}/organizations/{{organizationId}}/apply-default-security
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Delete organization
+DELETE {{baseUrl}}/organizations/{{organizationId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json

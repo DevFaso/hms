@@ -1,0 +1,51 @@
+### Create Yalgado department as hadmin3
+POST http://localhost:8081/api/departments
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1Njg3MDUyLCJleHAiOjE3NTU3NzM0NTJ9.jig2TSgFIBmRnddMsoZXn17qo0_Z6cvW_quREyNj2n0
+Content-Type: application/json
+Accept-Language: en
+
+{
+  "hospitalName": "Sandof Hospital",
+  "name": "Surgeon",
+  "code": "SURGERY",
+  "email": "genmed@yalgado.bf",
+  "phoneNumber": "+22670011223",
+  "description": "Department of surgery",
+  "active": true,
+  "translations": [
+    {
+      "languageCode": "fr",
+      "name": "Chirurgie",
+      "description": "Département de Chirurgie"
+    }
+  ]
+}
+
+### Option A: filter query
+GET http://localhost:8081/api/departments?hospitalName=Yalgado%20Hospital&name=General%20Medicine
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTQ2MTI1NDMsImV4cCI6MTc1NDY5ODk0M30.AmDaQrS2LzIhS7OAFgDHYqRjaBry_CYYLtPoE5ThKSNwl1-U1Fr5B7U1Yvd9fGlHQ8v-TsdWEe8wxlxEgBYQsw
+Accept-Language: en
+###
+GET http://localhost:8081/api/departments/by-hospital/Sandof%20Hospital
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1Njg3MDUyLCJleHAiOjE3NTU3NzM0NTJ9.jig2TSgFIBmRnddMsoZXn17qo0_Z6cvW_quREyNj2n0
+
+### link staff to department
+PUT http://localhost:8081/api/staff/bad141f5-8796-4196-9019-b242d7cbddea/department/c04a13d5-feb9-486e-9597-b8fbaa58e531
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1Njg3MDUyLCJleHAiOjE3NTU3NzM0NTJ9.jig2TSgFIBmRnddMsoZXn17qo0_Z6cvW_quREyNj2n0
+Content-Type: application/json
+Accept-Language: en
+
+{
+  "userEmail": "doctor@yalgado.bf",
+  "hospitalName": "Sandof Hospital",
+  "departmentName": "Surgeon",
+  "assignmentRef": "Doctor-Surgeon-Sandof",
+  "jobTitle": "Doctor",
+  "employmentType": "FULL_TIME",
+  "specialization": "General Medicine",
+  "licenseNumber": "DOC-1234",
+  "startDate": "2025-07-23",
+  "active": true,
+  "name": "DoctorFirst DoctorLast"
+}
+

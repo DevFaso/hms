@@ -1,0 +1,300 @@
+### ========================================
+### 10 - Patient Medical History
+### Social History, Family History, Immunizations,
+### Vital Signs, Medications, Lab Results (patient view)
+### ========================================
+
+### ----------------------------------------
+### SOCIAL HISTORY
+### ----------------------------------------
+
+### Create social history
+POST {{baseUrl}}/medical-history/social
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "tobaccoUse": "NEVER",
+  "alcoholUse": "SOCIAL",
+  "drugUse": "NEVER",
+  "exerciseFrequency": "3-4 times per week",
+  "dietDescription": "Balanced diet, low sodium",
+  "occupation": "Software Engineer",
+  "livingArrangement": "Lives with spouse",
+  "sexuallyActive": true,
+  "travelHistory": "No recent travel"
+}
+
+### Get social history by ID
+GET {{baseUrl}}/medical-history/social/{{socialHistoryId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get all social history for patient
+GET {{baseUrl}}/medical-history/patient/{{patientId}}/social
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get current social history
+GET {{baseUrl}}/medical-history/patient/{{patientId}}/social/current
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update social history
+PUT {{baseUrl}}/medical-history/social/{{socialHistoryId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "tobaccoUse": "FORMER",
+  "tobaccoCessationDate": "2024-06-01"
+}
+
+### Delete social history
+DELETE {{baseUrl}}/medical-history/social/{{socialHistoryId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### FAMILY HISTORY
+### ----------------------------------------
+
+### Create family history entry
+POST {{baseUrl}}/medical-history/family
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "relationship": "FATHER",
+  "condition": "Type 2 Diabetes",
+  "icdCode": "E11.9",
+  "ageOfOnset": 55,
+  "isDeceased": false,
+  "category": "ENDOCRINE",
+  "notes": "Managed with oral medications"
+}
+
+### Get family history by ID
+GET {{baseUrl}}/medical-history/family/{{familyHistoryId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get all family history
+GET {{baseUrl}}/medical-history/patient/{{patientId}}/family
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get genetic family history
+GET {{baseUrl}}/medical-history/patient/{{patientId}}/family/genetic
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Check screening needed
+GET {{baseUrl}}/medical-history/patient/{{patientId}}/family/screening-needed
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get family history by category
+GET {{baseUrl}}/medical-history/patient/{{patientId}}/family/category/ENDOCRINE
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update family history
+PUT {{baseUrl}}/medical-history/family/{{familyHistoryId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "condition": "Type 2 Diabetes",
+  "notes": "Now on insulin therapy"
+}
+
+### Delete family history
+DELETE {{baseUrl}}/medical-history/family/{{familyHistoryId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### IMMUNIZATIONS
+### ----------------------------------------
+
+### Create immunization record
+POST {{baseUrl}}/medical-history/immunizations
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "vaccineCode": "CVX-141",
+  "vaccineName": "Influenza (Flu) Vaccine",
+  "manufacturer": "Sanofi Pasteur",
+  "lotNumber": "FL2026-001",
+  "administrationDate": "2026-10-01",
+  "expirationDate": "2027-06-30",
+  "site": "LEFT_DELTOID",
+  "route": "INTRAMUSCULAR",
+  "doseNumber": 1,
+  "administeredBy": "{{staffId}}",
+  "notes": "Annual flu shot"
+}
+
+### Get immunization by ID
+GET {{baseUrl}}/medical-history/immunizations/{{immunizationId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get all immunizations for patient
+GET {{baseUrl}}/medical-history/patient/{{patientId}}/immunizations
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get immunizations by vaccine code
+GET {{baseUrl}}/medical-history/patient/{{patientId}}/immunizations/vaccine/CVX-141
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get overdue immunizations
+GET {{baseUrl}}/medical-history/patient/{{patientId}}/immunizations/overdue
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get upcoming immunizations
+GET {{baseUrl}}/medical-history/patient/{{patientId}}/immunizations/upcoming
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get immunizations needing reminders
+GET {{baseUrl}}/medical-history/patient/{{patientId}}/immunizations/reminders-needed
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Mark reminder sent
+PATCH {{baseUrl}}/medical-history/immunizations/{{immunizationId}}/mark-reminder-sent
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update immunization
+PUT {{baseUrl}}/medical-history/immunizations/{{immunizationId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "notes": "No adverse reaction observed"
+}
+
+### Delete immunization
+DELETE {{baseUrl}}/medical-history/immunizations/{{immunizationId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### VITAL SIGNS
+### ----------------------------------------
+
+### Record vital signs
+POST {{baseUrl}}/patients/{{patientId}}/vitals
+Authorization: Bearer {{nurseToken}}
+Content-Type: application/json
+
+{
+  "bloodPressureSystolic": 120,
+  "bloodPressureDiastolic": 80,
+  "heartRate": 72,
+  "temperature": 98.6,
+  "temperatureUnit": "F",
+  "respiratoryRate": 16,
+  "oxygenSaturation": 98,
+  "weight": 70.5,
+  "weightUnit": "kg",
+  "height": 170,
+  "heightUnit": "cm",
+  "painLevel": 0,
+  "notes": "Routine vitals check"
+}
+
+### Get recent vitals
+GET {{baseUrl}}/patients/{{patientId}}/vitals/recent
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get all vitals
+GET {{baseUrl}}/patients/{{patientId}}/vitals
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### MEDICATIONS (patient view)
+### ----------------------------------------
+
+### Get patient medications
+GET {{baseUrl}}/patients/{{patientId}}/medications
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### LAB RESULTS (patient view)
+### ----------------------------------------
+
+### Get patient lab results
+GET {{baseUrl}}/patients/{{patientId}}/lab-results
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### MEDICATION HISTORY
+### ----------------------------------------
+
+### Get medication timeline
+GET {{baseUrl}}/medication-history/patient/{{patientId}}/timeline
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Create pharmacy fill record
+POST {{baseUrl}}/medication-history/pharmacy-fills
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "prescriptionId": "{{prescriptionId}}",
+  "patientId": "{{patientId}}",
+  "pharmacyName": "City Pharmacy",
+  "dispensedDate": "2026-02-14",
+  "quantityDispensed": 30,
+  "daysSupply": 30,
+  "pharmacistName": "Dr. Pharma"
+}
+
+### Get pharmacy fill by ID
+GET {{baseUrl}}/medication-history/pharmacy-fills/{{fillId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get patient pharmacy fills
+GET {{baseUrl}}/medication-history/patient/{{patientId}}/pharmacy-fills
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update pharmacy fill
+PUT {{baseUrl}}/medication-history/pharmacy-fills/{{fillId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "notes": "Patient picked up medication"
+}
+
+### Delete pharmacy fill
+DELETE {{baseUrl}}/medication-history/pharmacy-fills/{{fillId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### PHARMACY DIRECTORY
+### ----------------------------------------
+
+### Get pharmacies for patient
+GET {{baseUrl}}/pharmacies/patients/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json

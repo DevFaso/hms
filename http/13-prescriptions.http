@@ -1,0 +1,96 @@
+### ========================================
+### 13 - Prescriptions & Treatments
+### ========================================
+
+### ----------------------------------------
+### PRESCRIPTIONS
+### ----------------------------------------
+
+### Create prescription
+POST {{baseUrl}}/prescriptions
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "encounterId": "{{encounterId}}",
+  "prescribedById": "{{staffId}}",
+  "hospitalId": "{{hospitalId}}",
+  "medication": "Ibuprofen 400mg",
+  "dosage": "400mg",
+  "frequency": "Every 6 hours as needed",
+  "route": "ORAL",
+  "duration": "7 days",
+  "quantity": 28,
+  "refills": 1,
+  "instructions": "Take with food. Do not exceed 4 doses in 24 hours.",
+  "status": "ACTIVE"
+}
+
+### List all prescriptions
+GET {{baseUrl}}/prescriptions?page=0&size=20
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get prescription by ID
+GET {{baseUrl}}/prescriptions/{{prescriptionId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update prescription
+PUT {{baseUrl}}/prescriptions/{{prescriptionId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "status": "DISCONTINUED",
+  "discontinuedReason": "Patient reports GI side effects"
+}
+
+### Delete prescription
+DELETE {{baseUrl}}/prescriptions/{{prescriptionId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### TREATMENTS
+### ----------------------------------------
+
+### Create treatment
+POST {{baseUrl}}/treatments
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "encounterId": "{{encounterId}}",
+  "name": "Physical Therapy",
+  "description": "Cervical spine mobilization and postural correction",
+  "status": "PLANNED",
+  "startDate": "2026-02-17"
+}
+
+### List all treatments
+GET {{baseUrl}}/treatments
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get treatment by ID
+GET {{baseUrl}}/treatments/{{treatmentId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update treatment
+PUT {{baseUrl}}/treatments/{{treatmentId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "status": "IN_PROGRESS",
+  "notes": "Session 1 completed"
+}
+
+### Delete treatment
+DELETE {{baseUrl}}/treatments/{{treatmentId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json

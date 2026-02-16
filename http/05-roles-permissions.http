@@ -1,0 +1,164 @@
+### ========================================
+### 05 - Roles, Permissions & Permission Matrix
+### ========================================
+
+### ----------------------------------------
+### ROLES
+### ----------------------------------------
+
+### List all roles
+GET {{baseUrl}}/roles
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get role blueprints (templates)
+GET {{baseUrl}}/roles/blueprints
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get role by ID
+GET {{baseUrl}}/roles/{{roleId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Export role matrix
+GET {{baseUrl}}/roles/matrix/export
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Create role
+POST {{baseUrl}}/roles
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "name": "ROLE_LAB_TECHNICIAN",
+  "displayName": "Lab Technician",
+  "description": "Processes lab orders and enters results",
+  "permissionIds": []
+}
+
+### Update role
+PUT {{baseUrl}}/roles/{{roleId}}
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "name": "ROLE_LAB_TECHNICIAN",
+  "displayName": "Lab Technician (Updated)",
+  "description": "Processes lab orders, enters and verifies results"
+}
+
+### Update role permissions
+PUT {{baseUrl}}/roles/{{roleId}}/permissions
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "permissionIds": []
+}
+
+### Delete role
+DELETE {{baseUrl}}/roles/{{roleId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### PERMISSIONS
+### ----------------------------------------
+
+### List all permissions
+GET {{baseUrl}}/permissions
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get minimal permissions list
+GET {{baseUrl}}/permissions/minimal
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Search permissions
+GET {{baseUrl}}/permissions/search?query=patient
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get permission by ID
+GET {{baseUrl}}/permissions/{{permissionId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Create permission
+POST {{baseUrl}}/permissions
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "name": "VIEW_LAB_RESULTS",
+  "resource": "LAB_RESULT",
+  "action": "READ",
+  "description": "View lab test results"
+}
+
+### Update permission
+PUT {{baseUrl}}/permissions/{{permissionId}}
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "name": "VIEW_LAB_RESULTS",
+  "description": "View and download lab test results"
+}
+
+### Delete permission
+DELETE {{baseUrl}}/permissions/{{permissionId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### PERMISSION MATRIX
+### ----------------------------------------
+
+### Create permission matrix snapshot
+POST {{baseUrl}}/permissions/matrix/snapshots
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "environment": "PRODUCTION",
+  "notes": "Initial permission matrix snapshot"
+}
+
+### Get latest permission matrix snapshot
+GET {{baseUrl}}/permissions/matrix/snapshots/latest
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### List all snapshots
+GET {{baseUrl}}/permissions/matrix/snapshots
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get snapshot by ID
+GET {{baseUrl}}/permissions/matrix/snapshots/{{snapshotId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get permission matrix by environment
+GET {{baseUrl}}/permissions/matrix/environment/PRODUCTION
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Create permission audit entry
+POST {{baseUrl}}/permissions/matrix/audit
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "action": "ROLE_PERMISSION_CHANGE",
+  "details": "Added VIEW_LAB_RESULTS to ROLE_NURSE"
+}
+
+### Get permission audit log
+GET {{baseUrl}}/permissions/matrix/audit
+Authorization: Bearer {{accessToken}}
+Accept: application/json

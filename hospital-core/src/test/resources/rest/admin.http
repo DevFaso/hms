@@ -1,0 +1,104 @@
+### Register new Staff through HOSPITAL_ADMIN
+### Register a new HOSPITAL_ADMIN (must be authenticated as SUPER_ADMIN)
+POST http://localhost:8081/api/users/admin-register
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTU1MTQyMTMsImV4cCI6MTc1NTYwMDYxM30.GYd5mw0WWJXcXUXGYWWNgGiNRdXO6-5gDGxWMUyvUbs
+Content-Type: application/json
+
+{
+  "username": "sandoff_hadmin",
+  "email": "hadmin@hospital.com",
+  "password": "SecurePass123!",
+  "firstName": "Hospital",
+  "lastName": "Admin",
+  "phoneNumber": "+22670000011",
+  "licenseNumber": "Med-1234",
+  "jobTitle": "HOSPITAL_ADMIN",
+  "specialty": "General Medicine",
+  "hospitalId": "8ecdb484-dbfa-4cc7-b622-a4baf942a357",
+  "roleNames": ["HOSPITAL_ADMIN"]
+}
+
+###Login as SUPER_ADMIN to get token
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "sandoff_hadmin",
+  "password": "SecurePass123!"
+}
+
+### Register a new DOCTOR (must be authenticated as HOSPITAL_ADMIN)
+POST http://localhost:8081/api/users/admin-register
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1NzM2NjM4LCJleHAiOjE3NTU4MjMwMzh9.Y5dYymVwqCfLpQfY9xKnGVGIMi0ZhTWaTeh3bOM7Cs0
+Content-Type: application/json
+
+{
+  "username": "sandoff_doctor",
+  "email": "sandoff_doctor@hospital.com",
+  "password": "SecurePass123!",
+  "firstName": "Hospital",
+  "lastName": "Doctor_One",
+  "phoneNumber": "+22670000023",
+  "licenseNumber": "Med-1239",
+  "jobTitle": "DOCTOR",
+  "specialty": "Cardiology",
+  "hospitalId": "8ecdb484-dbfa-4cc7-b622-a4baf942a357",
+  "roleNames": ["DOCTOR"]
+}
+
+### Login as DOCTOR
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "sandoff_doctor",
+  "password": "SecurePass123!"
+}
+
+### Minor login
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "minor_patient1",
+  "password": "Minor@123"
+}
+
+### ✅ Register a HOSPITAL_ADMIN (must be authenticated as SUPER_ADMIN)
+POST http://localhost:8081/api/users/admin-register
+Authorization: Bearer eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTYzNTA4MTksImV4cCI6MTc1NjQzNzIxOX0.fQUtYvgVqUKU4uBpIigBq8G0bAVi7kwPvQeVcF3m_TKBPO4z4MkTXUJc8H0aJXDd
+Content-Type: application/json
+
+{
+  "username": "sandoff_reception",
+  "email": "reception@hospital.com",
+  "password": "SecurePass123!",
+  "firstName": "ReceptionFirst",
+  "lastName": "ReceptionLast",
+  "phoneNumber": "+22670000212",
+  "emplymentDate": "2023-10-01",
+  "employmentType": "FULL_TIME",
+  "jobTitle": "RECEPTIONIST",
+  "specialty": "Customer Service",
+  "hospitalId": "8ecdb484-dbfa-4cc7-b622-a4baf942a357",
+  "roleNames": ["RECEPTIONIST"]
+}
+
+### Receptionist login
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "sandoff_reception",
+  "password": "SecurePass123!"
+}
+
+###49707e85-c4ca-4b96-9fe7-ba8ed050f08a
+### ✅ Login as HOSPITAL_ADMIN
+POST http://localhost:8081/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "sandoff_hadmin",
+  "password": "SecurePass123!"
+}

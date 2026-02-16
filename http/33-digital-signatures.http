@@ -1,0 +1,88 @@
+### ========================================
+### 33 - Digital Signatures
+### Sign, Verify, Revoke, Audit Trail
+### ========================================
+
+### ----------------------------------------
+### SIGN DOCUMENTS
+### ----------------------------------------
+
+### Sign a report
+POST {{baseUrl}}/api/signatures/sign
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "reportId": "{{reportId}}",
+  "reportType": "LAB_RESULT",
+  "providerId": "{{staffId}}",
+  "hospitalId": "{{hospitalId}}",
+  "signatureData": "base64encodedSignatureData",
+  "reason": "Reviewed and approved lab results",
+  "timestamp": "2026-02-14T14:30:00"
+}
+
+### ----------------------------------------
+### VERIFY SIGNATURES
+### ----------------------------------------
+
+### Verify a signature
+POST {{baseUrl}}/api/signatures/verify
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "signatureId": "{{signatureId}}"
+}
+
+### Check if report is signed
+GET {{baseUrl}}/api/signatures/is-signed?reportId={{reportId}}&reportType=LAB_RESULT
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### GET SIGNATURES
+### ----------------------------------------
+
+### Get signature by ID
+GET {{baseUrl}}/api/signatures/{{signatureId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get signatures by report
+GET {{baseUrl}}/api/signatures/report/{{reportId}}?reportType=LAB_RESULT
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get signatures by provider
+GET {{baseUrl}}/api/signatures/provider/{{staffId}}?page=0&size=20
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### REVOKE SIGNATURES
+### ----------------------------------------
+
+### Revoke a signature
+POST {{baseUrl}}/api/signatures/{{signatureId}}/revoke
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "revokedById": "{{userId}}",
+  "reason": "Report contained errors, needs revision"
+}
+
+### ----------------------------------------
+### AUDIT TRAIL
+### ----------------------------------------
+
+### Get signature audit trail
+GET {{baseUrl}}/api/signatures/{{signatureId}}/audit-trail
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get signature audit trail by report
+GET {{baseUrl}}/api/signatures/audit-trail/report/{{reportId}}?reportType=LAB_RESULT
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json

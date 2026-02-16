@@ -1,0 +1,198 @@
+### ========================================
+### 01 - Authentication & Credential Lifecycle
+### ========================================
+
+### ----------------------------------------
+### BOOTSTRAP (first-time system setup)
+### ----------------------------------------
+@baseUrl = http://localhost:8081/api
+
+### Check if bootstrap is allowed (no users exist)
+GET {{baseUrl}}/auth/bootstrap-status
+Accept: application/json
+
+### Bootstrap first Super Admin (only works if 0 users)
+POST {{baseUrl}}/auth/bootstrap-signup
+Content-Type: application/json
+
+{
+  "username": "superadmin",
+  "email": "tchico1er@gmail.com",
+  "password": "SuperAdmin123!",
+  "firstName": "System",
+  "lastName": "Administrator",
+  "phoneNumber": "+1-555-000-0001"
+}
+
+### ----------------------------------------
+### LOGIN / LOGOUT
+### ----------------------------------------
+
+### Login as Super Admin
+# @name loginSuperAdmin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "superadmin",
+  "password": "SuperAdmin123!"
+}
+
+### Login as Admin
+# @name loginAdmin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "admin",
+  "password": "Admin123!"
+}
+
+### Login as Doctor
+# @name loginDoctor
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "dr.smith",
+  "password": "Doctor123!"
+}
+
+### Login as Nurse
+# @name loginNurse
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "nurse.johnson",
+  "password": "Nurse123!"
+}
+
+### Login as Receptionist
+# @name loginReceptionist
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "reception.davis",
+  "password": "Reception123!"
+}
+
+### Logout current user
+POST {{baseUrl}}/auth/logout
+Authorization: Bearer {{accessToken}}
+
+### ----------------------------------------
+### TOKEN & CREDENTIAL MANAGEMENT
+### ----------------------------------------
+
+### Echo token info (verify JWT claims)
+GET {{baseUrl}}/auth/token/echo
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Register user (deprecated - returns 410 Gone)
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{}
+
+### ----------------------------------------
+### EMAIL VERIFICATION
+### ----------------------------------------
+
+### Verify email with token (POST - programmatic)
+POST {{baseUrl}}/auth/verify-email
+Content-Type: application/json
+
+{
+  "email": "newuser@hms.local",
+  "token": "verification-token-here"
+}
+
+### Verify email via link (GET - clickable from email)
+GET {{baseUrl}}/auth/verify-email?email=newuser@hms.local&token=verification-token-here
+Accept: application/json
+
+### Resend verification email
+POST {{baseUrl}}/auth/resend-verification?email=newuser@hms.local
+Accept: application/json
+
+### ----------------------------------------
+### PASSWORD RESET
+### ----------------------------------------
+
+### Request password reset (via AuthController)
+POST {{baseUrl}}/auth/request-reset
+Content-Type: application/json
+
+{
+  "email": "superadmin@hms.local"
+}
+
+### Confirm password reset (via AuthController)
+POST {{baseUrl}}/auth/reset-password
+Content-Type: application/json
+
+{
+  "token": "reset-token-here",
+  "newPassword": "NewPassword123!"
+}
+
+### Request password reset (via PasswordResetController)
+POST {{baseUrl}}/auth/password/request
+Content-Type: application/json
+
+{
+  "email": "superadmin@hms.local"
+}
+
+### Confirm password reset (via PasswordResetController)
+POST {{baseUrl}}/auth/password/confirm
+Content-Type: application/json
+
+{
+  "token": "reset-token-here",
+  "newPassword": "NewPassword123!"
+}
+
+### ----------------------------------------
+### USERNAME REMINDER
+### ----------------------------------------
+
+### Request username reminder by email
+POST {{baseUrl}}/auth/username/reminder
+Content-Type: application/json
+
+{
+  "email": "superadmin@hms.local"
+}
+
+### ----------------------------------------
+### CREDENTIAL LIFECYCLE (self-service)
+### ----------------------------------------
+
+### Get my credential health status
+GET {{baseUrl}}/auth/credentials/me
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Enroll in MFA
+PUT {{baseUrl}}/auth/credentials/mfa
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "mfaEnabled": true,
+  "mfaMethod": "TOTP"
+}
+
+### Update recovery contact
+PUT {{baseUrl}}/auth/credentials/recovery
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "recoveryEmail": "backup@hms.local",
+  "recoveryPhone": "+1-555-999-0001"
+}

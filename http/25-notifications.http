@@ -1,0 +1,96 @@
+### ========================================
+### 25 - Notifications & Announcements
+### ========================================
+
+### ----------------------------------------
+### NOTIFICATIONS
+### ----------------------------------------
+
+### Create notification
+POST {{baseUrl}}/notifications
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "recipientId": "{{userId}}",
+  "hospitalId": "{{hospitalId}}",
+  "title": "New Lab Results Available",
+  "message": "Your lab results from Feb 14 are now available for review.",
+  "type": "LAB_RESULT",
+  "priority": "NORMAL",
+  "actionUrl": "/lab-results/{{labResultId}}"
+}
+
+### List notifications for current user
+GET {{baseUrl}}/notifications?page=0&size=20
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get unread notifications count
+GET {{baseUrl}}/notifications/unread/count
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get notification by ID
+GET {{baseUrl}}/notifications/{{notificationId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Mark notification as read
+PUT {{baseUrl}}/notifications/{{notificationId}}/read
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Mark all notifications as read
+PUT {{baseUrl}}/notifications/read-all
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Delete notification
+DELETE {{baseUrl}}/notifications/{{notificationId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### ANNOUNCEMENTS
+### ----------------------------------------
+
+### Create announcement
+POST {{baseUrl}}/announcements
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "hospitalId": "{{hospitalId}}",
+  "title": "System Maintenance Scheduled",
+  "content": "The system will undergo maintenance on Feb 20, 2026 from 2:00 AM to 4:00 AM EST.",
+  "priority": "HIGH",
+  "targetRoles": ["DOCTOR", "NURSE", "RECEPTIONIST"],
+  "startDate": "2026-02-18",
+  "endDate": "2026-02-20"
+}
+
+### Get active announcements
+GET {{baseUrl}}/announcements/active?hospitalId={{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get announcement by ID
+GET {{baseUrl}}/announcements/{{announcementId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update announcement
+PUT {{baseUrl}}/announcements/{{announcementId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "content": "Maintenance rescheduled to Feb 21, 2026.",
+  "endDate": "2026-02-21"
+}
+
+### Delete announcement
+DELETE {{baseUrl}}/announcements/{{announcementId}}
+Authorization: Bearer {{adminToken}}
+Accept: application/json

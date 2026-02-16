@@ -1,0 +1,150 @@
+### ========================================
+### 17 - Billing & Invoices
+### ========================================
+
+### ----------------------------------------
+### BILLING INVOICES
+### ----------------------------------------
+
+### Create invoice
+POST {{baseUrl}}/billing-invoices
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "encounterId": "{{encounterId}}",
+  "invoiceDate": "2026-02-14",
+  "dueDate": "2026-03-14",
+  "status": "DRAFT",
+  "notes": "Emergency visit charges"
+}
+
+### Get invoice by ID
+GET {{baseUrl}}/billing-invoices/{{invoiceId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get invoice PDF
+GET {{baseUrl}}/billing-invoices/{{invoiceId}}/pdf
+Authorization: Bearer {{accessToken}}
+Accept: application/pdf
+
+### Get invoices by patient
+GET {{baseUrl}}/billing-invoices/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get invoices by hospital
+GET {{baseUrl}}/billing-invoices/hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get overdue invoices
+GET {{baseUrl}}/billing-invoices/overdue
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Search invoices
+POST {{baseUrl}}/billing-invoices/search
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "hospitalId": "{{hospitalId}}",
+  "status": "PENDING",
+  "startDate": "2026-01-01",
+  "endDate": "2026-12-31"
+}
+
+### Update invoice
+PUT {{baseUrl}}/billing-invoices/{{invoiceId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "status": "SENT",
+  "notes": "Sent to patient"
+}
+
+### Email invoice to patient
+POST {{baseUrl}}/billing-invoices/{{invoiceId}}/email
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "recipientEmail": "alice.williams@hms.local"
+}
+
+### Delete invoice
+DELETE {{baseUrl}}/billing-invoices/{{invoiceId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### INVOICE ITEMS
+### ----------------------------------------
+
+### Create invoice item
+POST {{baseUrl}}/invoice-items
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "invoiceId": "{{invoiceId}}",
+  "description": "Emergency Room Visit",
+  "quantity": 1,
+  "unitPrice": 250.00,
+  "serviceCode": "99283",
+  "category": "PROFESSIONAL_FEE"
+}
+
+### Get invoice item by ID
+GET {{baseUrl}}/invoice-items/{{itemId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get items by invoice
+GET {{baseUrl}}/invoice-items/invoice/{{invoiceId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update invoice item
+PUT {{baseUrl}}/invoice-items/{{itemId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "description": "Emergency Room Visit (Level 3)",
+  "unitPrice": 300.00
+}
+
+### Delete invoice item
+DELETE {{baseUrl}}/invoice-items/{{itemId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### INVOICE EMAIL (separate controller)
+### ----------------------------------------
+
+### Send invoice via email
+POST {{baseUrl}}/invoices/{{invoiceId}}/email
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "recipientEmail": "alice.williams@hms.local"
+}
+
+### Send invoice to specific address
+POST {{baseUrl}}/invoices/{{invoiceId}}/send-to
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "email": "billing@insurance.com",
+  "subject": "Invoice for patient claim",
+  "message": "Please find attached invoice for processing"
+}

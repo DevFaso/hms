@@ -1,0 +1,49 @@
+### Profile Image Management API Examples
+### This file demonstrates the profile image upload and delete functionality
+
+@baseUrl = http://localhost:8081/api
+@token = Bearer your-jwt-token-here
+
+### 1. Upload Profile Image
+POST {{baseUrl}}/files/profile-image
+Authorization: {{token}}
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+------WebKitFormBoundary7MA4YWxkTrZu0gW
+Content-Disposition: form-data; name="file"; filename="profile.jpg"
+Content-Type: image/jpeg
+
+< ./test-images/profile.jpg
+------WebKitFormBoundary7MA4YWxkTrZu0gW--
+
+### Expected Response:
+### {
+###   "message": "Profile image uploaded successfully",
+###   "imageUrl": "/api/uploads/profile-images/uuid-filename.jpg"
+### }
+
+### 2. Delete Profile Image
+DELETE {{baseUrl}}/files/profile-image
+Authorization: {{token}}
+
+### Expected Response:
+### {
+###   "message": "Profile image deleted successfully"
+### }
+
+### 3. Get User Profile (to verify image URL)
+GET {{baseUrl}}/users/me
+Authorization: {{token}}
+
+### Expected Response includes:
+### {
+###   "profileImageUrl": "/api/uploads/profile-images/uuid-filename.jpg" or null
+### }
+
+### Notes:
+### - Only authenticated users can upload/delete profile images
+### - Supported formats: JPG, PNG, GIF, WebP
+### - Maximum file size: 5MB
+### - Images are stored in uploads/profile-images/ directory
+### - Delete operation removes the physical file and sets profileImageUrl to null
+### - Frontend automatically falls back to role-based default avatars after deletion

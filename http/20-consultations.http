@@ -1,0 +1,90 @@
+### ========================================
+### 20 - Consultations
+### ========================================
+
+### Request consultation
+POST {{baseUrl}}/consultations
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "requestedById": "{{staffId}}",
+  "consultantId": "{{consultantStaffId}}",
+  "specialty": "NEUROLOGY",
+  "reason": "Persistent headache with neurological symptoms",
+  "urgency": "ROUTINE",
+  "clinicalQuestion": "Please evaluate for possible migraine vs secondary headache",
+  "relevantHistory": "3-day history of throbbing headache, photophobia"
+}
+
+### Get consultation by ID
+GET {{baseUrl}}/consultations/{{consultationId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get consultations by patient
+GET {{baseUrl}}/consultations/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get consultations by hospital
+GET {{baseUrl}}/consultations/hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get pending consultations by hospital
+GET {{baseUrl}}/consultations/hospital/{{hospitalId}}/pending
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get consultations requested by provider
+GET {{baseUrl}}/consultations/requested-by/{{staffId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get consultations assigned to consultant
+GET {{baseUrl}}/consultations/assigned-to/{{consultantStaffId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Acknowledge consultation
+POST {{baseUrl}}/consultations/{{consultationId}}/acknowledge
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "acknowledgedById": "{{consultantStaffId}}",
+  "notes": "Will see patient today"
+}
+
+### Update consultation
+PUT {{baseUrl}}/consultations/{{consultationId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "findings": "Examination consistent with tension-type headache",
+  "recommendations": "Trial of amitriptyline 25mg QHS, stress reduction"
+}
+
+### Complete consultation
+POST {{baseUrl}}/consultations/{{consultationId}}/complete
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "completedById": "{{consultantStaffId}}",
+  "summary": "Tension-type headache. No red flags. Preventive therapy initiated."
+}
+
+### Cancel consultation
+POST {{baseUrl}}/consultations/{{consultationId}}/cancel
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "cancelledById": "{{staffId}}",
+  "reason": "Patient discharged before consultation"
+}

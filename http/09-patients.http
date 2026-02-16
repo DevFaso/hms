@@ -1,0 +1,349 @@
+### ========================================
+### 09 - Patient Management
+### ========================================
+
+### ----------------------------------------
+### PATIENT CRUD
+### ----------------------------------------
+
+### List all patients (paginated)
+GET {{baseUrl}}/patients?page=0&size=20
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Search patients
+GET {{baseUrl}}/patients/search?query=smith&page=0&size=10
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Lookup patient
+GET {{baseUrl}}/patients/lookup?email=patient@hms.local
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Register new patient
+POST {{baseUrl}}/patients
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "firstName": "Alice",
+  "lastName": "Williams",
+  "middleName": "Marie",
+  "dateOfBirth": "1990-05-15",
+  "gender": "Female",
+  "address": "789 Patient Lane, Medical City, MC 10003",
+  "addressLine1": "789 Patient Lane",
+  "city": "Medical City",
+  "state": "MC",
+  "zipCode": "10003",
+  "country": "US",
+  "phoneNumberPrimary": "+1-555-500-0001",
+  "phoneNumberSecondary": "+1-555-500-0002",
+  "email": "alice.williams@hms.local",
+  "emergencyContactName": "Bob Williams",
+  "emergencyContactPhone": "+1-555-500-0003",
+  "emergencyContactRelationship": "Spouse",
+  "bloodType": "O+",
+  "allergies": "Penicillin",
+  "medicalHistorySummary": "No major conditions",
+  "preferredPharmacy": "City Pharmacy",
+  "userId": "{{userId}}",
+  "hospitalId": "{{hospitalId}}",
+  "isActive": true
+}
+
+### Get patient by ID
+GET {{baseUrl}}/patients/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update patient (full)
+PUT {{baseUrl}}/patients/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "firstName": "Alice",
+  "lastName": "Williams",
+  "dateOfBirth": "1990-05-15",
+  "gender": "Female",
+  "address": "789 Patient Lane, Medical City, MC 10003",
+  "phoneNumberPrimary": "+1-555-500-0001",
+  "email": "alice.williams@hms.local",
+  "bloodType": "O+",
+  "allergies": "Penicillin, Sulfa drugs",
+  "userId": "{{userId}}"
+}
+
+### Patch patient (partial)
+PATCH {{baseUrl}}/patients/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "phoneNumberPrimary": "+1-555-500-9999",
+  "preferredPharmacy": "Downtown Pharmacy"
+}
+
+### Delete patient
+DELETE {{baseUrl}}/patients/{{patientId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### ALLERGIES
+### ----------------------------------------
+
+### List patient allergies
+GET {{baseUrl}}/patients/{{patientId}}/allergies
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Add allergy
+POST {{baseUrl}}/patients/{{patientId}}/allergies
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "allergen": "Penicillin",
+  "reaction": "Anaphylaxis",
+  "severity": "SEVERE",
+  "onsetDate": "2020-01-15",
+  "notes": "Confirmed by allergy test"
+}
+
+### Update allergy
+PUT {{baseUrl}}/patients/{{patientId}}/allergies/{{allergyId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "allergen": "Penicillin",
+  "reaction": "Anaphylaxis",
+  "severity": "SEVERE",
+  "notes": "Updated notes - carry EpiPen"
+}
+
+### Delete allergy
+DELETE {{baseUrl}}/patients/{{patientId}}/allergies/{{allergyId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### DIAGNOSES
+### ----------------------------------------
+
+### List patient diagnoses
+GET {{baseUrl}}/patients/{{patientId}}/diagnoses
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Add diagnosis
+POST {{baseUrl}}/patients/{{patientId}}/diagnoses
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "icdCode": "J06.9",
+  "name": "Upper Respiratory Infection",
+  "status": "ACTIVE",
+  "onsetDate": "2026-02-10",
+  "notes": "Mild symptoms, viral etiology suspected"
+}
+
+### Update diagnosis
+PUT {{baseUrl}}/patients/{{patientId}}/diagnoses/{{diagnosisId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "icdCode": "J06.9",
+  "name": "Upper Respiratory Infection",
+  "status": "RESOLVED",
+  "resolutionDate": "2026-02-20"
+}
+
+### Delete diagnosis
+DELETE {{baseUrl}}/patients/{{patientId}}/diagnoses/{{diagnosisId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### CHART UPDATES
+### ----------------------------------------
+
+### List chart updates
+GET {{baseUrl}}/patients/{{patientId}}/chart-updates
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get specific chart update
+GET {{baseUrl}}/patients/{{patientId}}/chart-updates/{{updateId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Create chart update
+POST {{baseUrl}}/patients/{{patientId}}/chart-updates
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "updateType": "CLINICAL_NOTE",
+  "summary": "Follow-up assessment completed",
+  "details": "Patient reports improvement in symptoms"
+}
+
+### ----------------------------------------
+### DOCTOR RECORD & TIMELINE
+### ----------------------------------------
+
+### Get doctor's patient record
+POST {{baseUrl}}/patients/{{patientId}}/doctor-record
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "doctorId": "{{staffId}}"
+}
+
+### Get doctor's patient timeline
+POST {{baseUrl}}/patients/{{patientId}}/doctor-timeline
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "doctorId": "{{staffId}}"
+}
+
+### ----------------------------------------
+### HOSPITAL REGISTRATION
+### ----------------------------------------
+
+### Register patient at hospital
+POST {{baseUrl}}/registrations
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "registrationType": "OUTPATIENT"
+}
+
+### List all registrations
+GET {{baseUrl}}/registrations
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get registration by ID
+GET {{baseUrl}}/registrations/{{registrationId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get multi-hospital registrations
+GET {{baseUrl}}/registrations/multi-hospital
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update registration
+PUT {{baseUrl}}/registrations/{{registrationId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "registrationType": "INPATIENT"
+}
+
+### Delete registration
+DELETE {{baseUrl}}/registrations/{{registrationId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### PATIENT INSURANCE
+### ----------------------------------------
+
+### Link insurance to patient
+PUT {{baseUrl}}/patient-insurances/link
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "insuranceProvider": "Blue Cross Blue Shield",
+  "policyNumber": "BCBS-2026-001",
+  "groupNumber": "GRP-500",
+  "subscriberName": "Alice Williams",
+  "effectiveDate": "2026-01-01",
+  "expirationDate": "2026-12-31",
+  "isPrimary": true
+}
+
+### Get patient insurances
+GET {{baseUrl}}/patient-insurances/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get insurance by ID
+GET {{baseUrl}}/patient-insurances/{{insuranceId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update insurance
+PUT {{baseUrl}}/patient-insurances/{{insuranceId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "insuranceProvider": "Blue Cross Blue Shield",
+  "policyNumber": "BCBS-2026-002"
+}
+
+### Delete insurance
+DELETE {{baseUrl}}/patient-insurances/{{insuranceId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### PRIMARY CARE
+### ----------------------------------------
+
+### Assign primary care provider
+POST {{baseUrl}}/patients/{{patientId}}/primary-care
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "providerId": "{{staffId}}",
+  "hospitalId": "{{hospitalId}}"
+}
+
+### Get current primary care provider
+GET {{baseUrl}}/patients/{{patientId}}/primary-care/current
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get primary care history
+GET {{baseUrl}}/patients/{{patientId}}/primary-care/history
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update primary care assignment
+PUT {{baseUrl}}/primary-care/{{pcpId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "providerId": "{{staffId}}"
+}
+
+### End primary care assignment
+PATCH {{baseUrl}}/primary-care/{{pcpId}}/end
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Delete primary care assignment
+DELETE {{baseUrl}}/primary-care/{{pcpId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json

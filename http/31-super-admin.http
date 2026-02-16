@@ -1,0 +1,243 @@
+### ========================================
+### 31 - Super Admin
+### Dashboard, Organizations, Users,
+### Governance, Labs, Credentials, Security
+### ========================================
+
+### ----------------------------------------
+### SUPER ADMIN DASHBOARD
+### ----------------------------------------
+
+### Get dashboard summary
+GET {{baseUrl}}/super-admin/dashboard/summary
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get appointments overview
+GET {{baseUrl}}/super-admin/dashboard/appointments?startDate=2026-02-01&endDate=2026-02-14
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get patients overview
+GET {{baseUrl}}/super-admin/dashboard/patients
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get encounters overview
+GET {{baseUrl}}/super-admin/dashboard/encounters?startDate=2026-02-01&endDate=2026-02-14
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get staff availability
+GET {{baseUrl}}/super-admin/dashboard/staff-availability?hospitalId={{hospitalId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get patient consents overview
+GET {{baseUrl}}/super-admin/dashboard/patient-consents
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### SUPER ADMIN — ORGANIZATIONS
+### ----------------------------------------
+
+### List all organizations (super admin view)
+GET {{baseUrl}}/super-admin/organizations?page=0&size=20
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get organization details
+GET {{baseUrl}}/super-admin/organizations/{{organizationId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Suspend organization
+PUT {{baseUrl}}/super-admin/organizations/{{organizationId}}/suspend
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "reason": "Non-compliance with security policies"
+}
+
+### Reactivate organization
+PUT {{baseUrl}}/super-admin/organizations/{{organizationId}}/reactivate
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### SUPER ADMIN — USER GOVERNANCE
+### ----------------------------------------
+
+### List all users (governance)
+GET {{baseUrl}}/super-admin/users?page=0&size=20
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Search users
+GET {{baseUrl}}/super-admin/users/search?query=john&page=0&size=10
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Lock user account
+PUT {{baseUrl}}/super-admin/users/{{userId}}/lock
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "reason": "Suspicious login activity detected"
+}
+
+### Unlock user account
+PUT {{baseUrl}}/super-admin/users/{{userId}}/unlock
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Force password reset
+POST {{baseUrl}}/super-admin/users/{{userId}}/force-password-reset
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get user activity log
+GET {{baseUrl}}/super-admin/users/{{userId}}/activity?page=0&size=20
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### SUPER ADMIN — LAB ORDERS
+### ----------------------------------------
+
+### Get all lab orders (super admin)
+GET {{baseUrl}}/super-admin/lab-orders?page=0&size=20
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get lab order statistics
+GET {{baseUrl}}/super-admin/lab-orders/statistics
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get lab orders by hospital
+GET {{baseUrl}}/super-admin/lab-orders/hospital/{{hospitalId}}?page=0&size=20
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### SUPER ADMIN — CREDENTIAL LIFECYCLE
+### ----------------------------------------
+
+### Get credential policies
+GET {{baseUrl}}/super-admin/credentials/policies
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Update credential policy
+PUT {{baseUrl}}/super-admin/credentials/policies
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "passwordExpirationDays": 60,
+  "mfaRequired": true,
+  "sessionTimeoutMinutes": 30,
+  "maxFailedAttempts": 5,
+  "lockoutDurationMinutes": 15
+}
+
+### Get credential audit
+GET {{baseUrl}}/super-admin/credentials/audit?page=0&size=20
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### SUPER ADMIN — SECURITY RULES
+### ----------------------------------------
+
+### List all security rules (super admin)
+GET {{baseUrl}}/super-admin/security/rules?page=0&size=20
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Create global security rule
+POST {{baseUrl}}/super-admin/security/rules
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "name": "Global MFA Enforcement",
+  "ruleType": "AUTHENTICATION",
+  "scope": "PLATFORM",
+  "parameters": {
+    "mfaRequired": true,
+    "mfaMethods": ["TOTP", "SMS"]
+  },
+  "active": true
+}
+
+### Update security rule
+PUT {{baseUrl}}/super-admin/security/rules/{{ruleId}}
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "active": false
+}
+
+### Delete security rule
+DELETE {{baseUrl}}/super-admin/security/rules/{{ruleId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### SUPER ADMIN — SECURITY POLICIES
+### ----------------------------------------
+
+### List all security policies (super admin)
+GET {{baseUrl}}/super-admin/security/policies?page=0&size=20
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Create global security policy
+POST {{baseUrl}}/super-admin/security/policies
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "name": "Platform Data Encryption Policy",
+  "description": "All data at rest and in transit must be encrypted",
+  "type": "ENCRYPTION",
+  "scope": "PLATFORM",
+  "enforcement": "MANDATORY",
+  "rules": {
+    "encryptAtRest": true,
+    "encryptInTransit": true,
+    "minimumKeyLength": 256,
+    "algorithm": "AES-256-GCM"
+  },
+  "active": true
+}
+
+### ----------------------------------------
+### SUPER ADMIN — PLATFORM REGISTRY
+### ----------------------------------------
+
+### Get platform registry overview
+GET {{baseUrl}}/super-admin/platform/overview
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get registered services
+GET {{baseUrl}}/super-admin/platform/services
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get platform health
+GET {{baseUrl}}/super-admin/platform/health
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get platform metrics
+GET {{baseUrl}}/super-admin/platform/metrics
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json

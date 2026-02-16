@@ -1,0 +1,153 @@
+### ========================================
+### 29 - Security Policies & Rules
+### Organization Security, Compliance
+### ========================================
+
+### ----------------------------------------
+### ORGANIZATION SECURITY POLICIES
+### ----------------------------------------
+
+### Create security policy
+POST {{baseUrl}}/security-policies
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "organizationId": "{{organizationId}}",
+  "name": "Password Complexity Policy",
+  "description": "Enforce strong passwords across all hospitals",
+  "type": "PASSWORD",
+  "rules": {
+    "minLength": 12,
+    "requireUppercase": true,
+    "requireLowercase": true,
+    "requireDigits": true,
+    "requireSpecialChars": true,
+    "maxAge": 90,
+    "preventReuse": 5
+  },
+  "enforcement": "MANDATORY",
+  "active": true
+}
+
+### Get security policy by ID
+GET {{baseUrl}}/security-policies/{{policyId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### List security policies
+GET {{baseUrl}}/security-policies?organizationId={{organizationId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Update security policy
+PUT {{baseUrl}}/security-policies/{{policyId}}
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "rules": {
+    "minLength": 14,
+    "maxAge": 60
+  }
+}
+
+### Delete security policy
+DELETE {{baseUrl}}/security-policies/{{policyId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### ORGANIZATION SECURITY RULES
+### ----------------------------------------
+
+### Create security rule
+POST {{baseUrl}}/security-rules
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "organizationId": "{{organizationId}}",
+  "name": "Session Timeout Rule",
+  "description": "Auto-logout after inactivity",
+  "ruleType": "SESSION_MANAGEMENT",
+  "parameters": {
+    "timeoutMinutes": 30,
+    "warningMinutes": 5,
+    "maxConcurrentSessions": 3
+  },
+  "active": true
+}
+
+### Get security rule by ID
+GET {{baseUrl}}/security-rules/{{ruleId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### List security rules
+GET {{baseUrl}}/security-rules?organizationId={{organizationId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Update security rule
+PUT {{baseUrl}}/security-rules/{{ruleId}}
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "parameters": {
+    "timeoutMinutes": 15
+  }
+}
+
+### Delete security rule
+DELETE {{baseUrl}}/security-rules/{{ruleId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### ORGANIZATION-LEVEL SECURITY
+### ----------------------------------------
+
+### Get compliance status
+GET {{baseUrl}}/organizations/{{organizationId}}/security/compliance
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get organization security policies
+GET {{baseUrl}}/organizations/{{organizationId}}/security/policies
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Create org-level security policy
+POST {{baseUrl}}/organizations/{{organizationId}}/security/policies
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "name": "Data Retention Policy",
+  "description": "Retain patient data for minimum 7 years",
+  "type": "DATA_RETENTION",
+  "retentionPeriodYears": 7,
+  "active": true
+}
+
+### Get organization security rules
+GET {{baseUrl}}/organizations/{{organizationId}}/security/rules
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Create org-level security rule
+POST {{baseUrl}}/organizations/{{organizationId}}/security/rules
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "name": "IP Whitelist Rule",
+  "ruleType": "ACCESS_CONTROL",
+  "parameters": {
+    "allowedIPs": ["10.0.0.0/8", "192.168.1.0/24"],
+    "blockUnknown": false
+  },
+  "active": true
+}

@@ -1,0 +1,115 @@
+### ========================================
+### 06 - User Management
+### ========================================
+@baseUrl = http://localhost:8081/api
+@accessToken = "eyJhbGciOiJIUzM4NCJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpc0hvc3BpdGFsQWRtaW4iOmZhbHNlLCJpc1N1cGVyQWRtaW4iOnRydWUsImRlcGFydG1lbnRJZHMiOltdLCJpYXQiOjE3NzExMzYwMTUsImV4cCI6MTc3MTIyMjQxNX0.gW3R6rwnAU_dm6HKsw8ol6SimepZ3yDBxdzcIIthjUeisn7XYlKO_6m18Tt7qmI5"
+@userId = 39d89406-f028-433f-8d77-375f5c0b57eb
+@hospitalId = 9cdcecc4-c415-4ed4-ad8a-b50f2f80d728
+
+### 0 — Login (run first to populate @accessToken)
+# @name login
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "username": "superadmin",
+  "password": "SuperAdmin123!"
+}
+
+
+
+### List all users
+GET {{baseUrl}}/users
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Search users
+GET {{baseUrl}}/users/search?query=superadmin
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get user by ID
+GET {{baseUrl}}/users/{{userId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Admin-register a doctor (staff role → hospitalId required)
+POST {{baseUrl}}/users/admin-register
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "username": "dr.smith",
+  "email": "dr.smith@hms.local",
+  "password": "Doctor123!",
+  "firstName": "John",
+  "lastName": "Smith",
+  "phoneNumber": "+1-555-400-0001",
+  "roleNames": ["ROLE_DOCTOR"],
+  "licenseNumber": "MD-2026-0001",
+  "hospitalId": "{{hospitalId}}"
+}
+
+### Create a nurse user (staff role → hospitalId required)
+POST {{baseUrl}}/users/admin-register
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "username": "nurse.johnson",
+  "email": "nurse.johnson@hms.local",
+  "password": "Nurse123!",
+  "firstName": "Sarah",
+  "lastName": "Johnson",
+  "phoneNumber": "+1-555-400-0002",
+  "roleNames": ["ROLE_NURSE"],
+  "licenseNumber": "RN-2026-0001",
+  "hospitalId": "{{hospitalId}}"
+}
+
+### Create a receptionist user (staff role → hospitalId required)
+POST {{baseUrl}}/users/admin-register
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "username": "reception.davis",
+  "email": "reception.davis@hms.local",
+  "password": "Reception123!",
+  "firstName": "Emily",
+  "lastName": "Davis",
+  "phoneNumber": "+1-555-400-0003",
+  "roleNames": ["ROLE_RECEPTIONIST"],
+  "hospitalId": "{{hospitalId}}"
+}
+
+### Register a patient (no hospitalId needed)
+POST {{baseUrl}}/users/admin-register
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "username": "patient.doe",
+  "email": "patient.doe@hms.local",
+  "password": "Patient123!",
+  "firstName": "Jane",
+  "lastName": "Doe",
+  "phoneNumber": "+1-555-400-0004",
+  "roleNames": ["ROLE_PATIENT"]
+}
+
+### Update user
+PUT {{baseUrl}}/users/{{userId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "firstName": "John",
+  "lastName": "Smith",
+  "phoneNumber": "+1-555-400-0099"
+}
+
+### Delete user
+DELETE {{baseUrl}}/users/{{userId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json

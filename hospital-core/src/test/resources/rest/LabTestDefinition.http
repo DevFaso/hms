@@ -1,0 +1,185 @@
+### [1] Create Lab Test Definition Have a UserRoleHospitalAssignment
+### row with a role of HOSPITAL_ADMIN, LAB_MANAGER, or LAB_SCIENTIST
+POST http://localhost:8081/api/lab-test-definitions
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJwYXRpZW50MiIsInJvbGVzIjpbIlJPTEVfUEFUSUVOVCIsIlJPTEVfTEFCX1NDSUVOVElTVCJdLCJpYXQiOjE3NTQ0Mzk0NzQsImV4cCI6MTc1NDUyNTg3NH0.zoQxjNM-rZVR63pFU-Sli3DoGXikgeXdJGKdEU4pRcTjtjetzFwjZcIUWvJWn-8cyiDRPtsGdRjg7NYKhWxc3g
+
+  {
+    "assignmentId": "ad691432-5233-40f0-8475-809c5ad31b3e",
+    "name": "Hemoglobin",
+    "description": "Red blood cell protein test",
+    "referenceRange": "13.5-17.5",
+    "unit": "g/dL"
+  }
+
+#{
+#  "assignmentId": "b1a2c3d4-5678-49ab-9cde-123456789abc",
+#  "name": "Glucose",
+#  "description": "Blood sugar test",
+#  "referenceRange": "70-99",
+#  "unit": "mg/dL"
+#}
+#{
+#  "assignmentId": "c2b3a4d5-6789-40bc-8def-23456789abcd",
+#  "name": "Albumin",
+#  "description": "Protein in blood plasma",
+#  "referenceRange": "3.5-5.0",
+#  "unit": "g/dL"
+#}
+#{
+#  "assignmentId": "d3c4b5a6-7890-41cd-7ef0-3456789abcde",
+#  "name": "Bilirubin",
+#  "description": "Liver function test",
+#  "referenceRange": "0.1-1.2",
+#  "unit": "mg/dL"
+#}
+#{
+#  "assignmentId": "e4d5c6b7-8901-42de-6f01-456789abcdef",
+#  "name": "Sodium",
+#  "description": "Electrolyte balance",
+#  "referenceRange": "135-145",
+#  "unit": "mmol/L"
+#}
+#{
+#  "assignmentId": "f5e6d7c8-9012-43ef-5f12-56789abcdef0",
+#  "name": "Phosphorus",
+#  "description": "Mineral in blood",
+#  "referenceRange": "2.5-4.5",
+#  "unit": "mg/dL"
+#}
+
+###
+POST http://localhost:8081/api/lab-test-definitions
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJwYXRpZW50MiIsInJvbGVzIjpbIlJPTEVfUEFUSUVOVCIsIlJPTEVfTEFCX1NDSUVOVElTVCJdLCJpYXQiOjE3NTQ0Mzk0NzQsImV4cCI6MTc1NDUyNTg3NH0.zoQxjNM-rZVR63pFU-Sli3DoGXikgeXdJGKdEU4pRcTjtjetzFwjZcIUWvJWn-8cyiDRPtsGdRjg7NYKhWxc3g
+
+  {
+"assignmentId": "ad691432-5233-40f0-8475-809c5ad31b3e",
+    "name": "Creatinine",
+    "description": "Kidney function test",
+    "referenceRange": "0.6-1.2",
+    "unit": "mg/dL"
+  }
+
+###
+POST http://localhost:8081/api/lab-test-definitions
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJwYXRpZW50MiIsInJvbGVzIjpbIlJPTEVfUEFUSUVOVCIsIlJPTEVfTEFCX1NDSUVOVElTVCJdLCJpYXQiOjE3NTQ0Mzk0NzQsImV4cCI6MTc1NDUyNTg3NH0.zoQxjNM-rZVR63pFU-Sli3DoGXikgeXdJGKdEU4pRcTjtjetzFwjZcIUWvJWn-8cyiDRPtsGdRjg7NYKhWxc3g
+
+  {
+    "assignmentId": "ad691432-5233-40f0-8475-809c5ad31b3e",
+    "name": "Cholesterol",
+    "description": "Total cholesterol level",
+    "referenceRange": "<200",
+    "unit": "mg/dL"
+  }
+###
+POST http://localhost:8081/api/lab-test-definitions
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMyMjcwMjQsImV4cCI6MTc1MzMxMzQyNH0.Yi6HfTOnZSQtHg4WhqB-YOhWbjuiwpTk5AJK9C9NwPNYz57qmNKD-3SwyX6cE73m8nWMNDb1TZLzGX7LrWwrjQ
+
+  {
+    "assignmentId": "015fcfad-7376-46c7-9b9f-c30c1b838054",
+    "name": "Triglycerides",
+    "description": "Fat in blood",
+    "referenceRange": "<150",
+    "unit": "mg/dL"
+  }
+
+###
+POST http://localhost:8081/api/lab-test-definitions
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMyMjcwMjQsImV4cCI6MTc1MzMxMzQyNH0.Yi6HfTOnZSQtHg4WhqB-YOhWbjuiwpTk5AJK9C9NwPNYz57qmNKD-3SwyX6cE73m8nWMNDb1TZLzGX7LrWwrjQ
+
+  {
+    "assignmentId": "015fcfad-7376-46c7-9b9f-c30c1b838054",
+    "name": "ALT",
+    "description": "Liver enzyme test",
+    "referenceRange": "7-56",
+    "unit": "U/L"
+  }
+
+###
+POST http://localhost:8081/api/lab-test-definitions
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMyMjcwMjQsImV4cCI6MTc1MzMxMzQyNH0.Yi6HfTOnZSQtHg4WhqB-YOhWbjuiwpTk5AJK9C9NwPNYz57qmNKD-3SwyX6cE73m8nWMNDb1TZLzGX7LrWwrjQ
+
+  {
+    "assignmentId": "520dd0ba-0705-4062-8d43-45fe20813391",
+    "name": "AST",
+    "description": "Aspartate transaminase level",
+    "referenceRange": "10-40",
+    "unit": "U/L"
+  }
+
+
+###
+POST http://localhost:8081/api/lab-test-definitions
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMyMjcwMjQsImV4cCI6MTc1MzMxMzQyNH0.Yi6HfTOnZSQtHg4WhqB-YOhWbjuiwpTk5AJK9C9NwPNYz57qmNKD-3SwyX6cE73m8nWMNDb1TZLzGX7LrWwrjQ
+
+  {
+    "assignmentId": "520dd0ba-0705-4062-8d43-45fe20813391",
+    "name": "Uric Acid",
+    "description": "Detects gout and kidney stones",
+    "referenceRange": "3.4-7.0",
+    "unit": "mg/dL"
+  }
+
+###
+POST http://localhost:8081/api/lab-test-definitions
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMyMjcwMjQsImV4cCI6MTc1MzMxMzQyNH0.Yi6HfTOnZSQtHg4WhqB-YOhWbjuiwpTk5AJK9C9NwPNYz57qmNKD-3SwyX6cE73m8nWMNDb1TZLzGX7LrWwrjQ
+
+  {
+    "assignmentId": "015fcfad-7376-46c7-9b9f-c30c1b838054",
+    "name": "Calcium",
+    "description": "Measures blood calcium level",
+    "referenceRange": "8.6-10.2",
+    "unit": "mg/dL"
+  }
+###
+POST http://localhost:8081/api/lab-test-definitions
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMyMjcwMjQsImV4cCI6MTc1MzMxMzQyNH0.Yi6HfTOnZSQtHg4WhqB-YOhWbjuiwpTk5AJK9C9NwPNYz57qmNKD-3SwyX6cE73m8nWMNDb1TZLzGX7LrWwrjQ
+
+  {
+    "assignmentId": "ec600151-8abc-419c-bf14-ef00e143f34d",
+    "name": "Potassium",
+    "description": "Measures electrolyte balance",
+    "referenceRange": "3.5-5.0",
+    "unit": "mmol/L"
+  }
+
+
+
+### [2] Get All Lab Test Definitions
+GET http://localhost:8081/api/lab-test-definitions
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ1c2VyMyIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIiwiUk9MRV9MQUJfU0NJRU5USVNUIiwiUk9MRV9OVVJTRSJdLCJpYXQiOjE3NTMyMjgwODYsImV4cCI6MTc1MzMxNDQ4Nn0.esm7o8c2vXA1h81rVZ4xEoCh2N8rlXXEno1EKSs3W1kuVy4OKVeMk0a9gzKIx-xA3PZsJupW7DjeCbQjLmpf8A
+
+### [3] Get Lab Test Definition by ID
+GET http://localhost:8081/api/lab-test-definitions/8b4f7be5-3091-4ff8-8d68-36daaf05363a
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6WyJST0xFX0FETUlOIl0sImlhdCI6MTc1MDYzNzAyNSwiZXhwIjoxNzUwNzIzNDI1fQ.hLDGG6EN-S-fE1xVvvCQBMMb_mMpLU8SjZKwgy7C-wR4OHsgD9aDZ28-8YR9jbodgBPG5s6axfAlyXI_0ajHNw
+
+### [4] Update Lab Test Definition
+PUT http://localhost:8081/api/lab-test-definitions/8b4f7be5-3091-4ff8-8d68-36daaf05363a
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6WyJST0xFX0FETUlOIl0sImlhdCI6MTc1MDYzNzAyNSwiZXhwIjoxNzUwNzIzNDI1fQ.hLDGG6EN-S-fE1xVvvCQBMMb_mMpLU8SjZKwgy7C-wR4OHsgD9aDZ28-8YR9jbodgBPG5s6axfAlyXI_0ajHNw
+
+{
+  "labOrderId": "05881770-6e7c-47e7-8ba2-03895c688cdd",
+  "resultValue": "103",
+  "resultUnit": "mg/dL",
+  "resultDate": "2025-05-27T13:00:00",
+  "notes": "Initial result entry for glucose test",
+  "assignmentId": "2ba1bbf5-b7c8-42fe-9a2e-905efd76e558"
+}
+
+### [5] Delete Lab Test Definition
+DELETE http://localhost:8081/api/lab-test-definitions/{{id}}
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6WyJST0xFX0FETUlOIl0sImlhdCI6MTc1MDYzNzAyNSwiZXhwIjoxNzUwNzIzNDI1fQ.hLDGG6EN-S-fE1xVvvCQBMMb_mMpLU8SjZKwgy7C-wR4OHsgD9aDZ28-8YR9jbodgBPG5s6axfAlyXI_0ajHNw
+
+### [6] Search by keyword and unit with pagination
+GET http://localhost:8081/api/lab-test-definitions/search?keyword=glucose&unit=mg/dL&page=0&size=10
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ1c2VyMyIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIiwiUk9MRV9MQUJfU0NJRU5USVNUIiwiUk9MRV9OVVJTRSJdLCJpYXQiOjE3NTMyMjgwODYsImV4cCI6MTc1MzMxNDQ4Nn0.esm7o8c2vXA1h81rVZ4xEoCh2N8rlXXEno1EKSs3W1kuVy4OKVeMk0a9gzKIx-xA3PZsJupW7DjeCbQjLmpf8A
+

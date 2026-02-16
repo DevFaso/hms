@@ -1,0 +1,69 @@
+### ========================================
+### 34 - Feature Flags
+### List, Update, Delete
+### ========================================
+
+### ----------------------------------------
+### LIST FEATURE FLAGS
+### ----------------------------------------
+
+### Get all feature flags
+GET {{baseUrl}}/feature-flags
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get feature flag by name
+GET {{baseUrl}}/feature-flags/MATERNAL_CARE_MODULE
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get feature flags by scope
+GET {{baseUrl}}/feature-flags?scope=HOSPITAL&scopeId={{hospitalId}}
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### MANAGE FEATURE FLAGS
+### ----------------------------------------
+
+### Create feature flag
+POST {{baseUrl}}/feature-flags
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "name": "TELEHEALTH_ENABLED",
+  "description": "Enable telehealth video consultation feature",
+  "enabled": false,
+  "scope": "PLATFORM",
+  "metadata": {
+    "maxParticipants": 2,
+    "recordingEnabled": false,
+    "provider": "zoom"
+  }
+}
+
+### Update feature flag
+PUT {{baseUrl}}/feature-flags/TELEHEALTH_ENABLED
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "enabled": true,
+  "description": "Telehealth video consultation - now enabled",
+  "metadata": {
+    "maxParticipants": 4,
+    "recordingEnabled": true,
+    "provider": "zoom"
+  }
+}
+
+### Toggle feature flag
+PUT {{baseUrl}}/feature-flags/TELEHEALTH_ENABLED/toggle
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Delete feature flag
+DELETE {{baseUrl}}/feature-flags/TELEHEALTH_ENABLED
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json

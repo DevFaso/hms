@@ -1,0 +1,255 @@
+### ========================================
+### 18 - Admissions, Order Sets & Discharge
+### ========================================
+
+### ----------------------------------------
+### ADMISSIONS
+### ----------------------------------------
+
+### Create admission
+POST {{baseUrl}}/api/admissions
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "departmentId": "{{departmentId}}",
+  "admittingPhysicianId": "{{staffId}}",
+  "admissionDate": "2026-02-14T08:00:00",
+  "admissionType": "EMERGENCY",
+  "chiefComplaint": "Severe abdominal pain",
+  "diagnosis": "Acute appendicitis",
+  "bedNumber": "ED-12",
+  "status": "ADMITTED"
+}
+
+### Get admission by ID
+GET {{baseUrl}}/api/admissions/{{admissionId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update admission
+PUT {{baseUrl}}/api/admissions/{{admissionId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "bedNumber": "SURG-201",
+  "notes": "Transferred to surgical ward"
+}
+
+### Get admissions by patient
+GET {{baseUrl}}/api/admissions/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get current admission for patient
+GET {{baseUrl}}/api/admissions/patient/{{patientId}}/current
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get admissions by hospital
+GET {{baseUrl}}/api/admissions/hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Apply order sets to admission
+POST {{baseUrl}}/api/admissions/{{admissionId}}/apply-order-sets
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "orderSetId": "{{orderSetId}}"
+}
+
+### Discharge patient
+POST {{baseUrl}}/api/admissions/{{admissionId}}/discharge
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "dischargeDate": "2026-02-18T14:00:00",
+  "dischargeDisposition": "HOME",
+  "dischargeSummary": "Appendectomy successful, patient recovering well"
+}
+
+### Delete admission
+DELETE {{baseUrl}}/api/admissions/{{admissionId}}
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### ORDER SETS
+### ----------------------------------------
+
+### Create order set
+POST {{baseUrl}}/api/admissions/order-sets
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Post-Appendectomy Care",
+  "hospitalId": "{{hospitalId}}",
+  "description": "Standard post-operative orders for appendectomy",
+  "orders": [
+    {"type": "MEDICATION", "name": "Acetaminophen 500mg Q6H PRN"},
+    {"type": "NURSING", "name": "Vital signs Q4H"},
+    {"type": "DIET", "name": "Clear liquids, advance as tolerated"}
+  ]
+}
+
+### Get order set by ID
+GET {{baseUrl}}/api/admissions/order-sets/{{orderSetId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get order sets by hospital
+GET {{baseUrl}}/api/admissions/order-sets/hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Deactivate order set
+POST {{baseUrl}}/api/admissions/order-sets/{{orderSetId}}/deactivate
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### DISCHARGE APPROVALS
+### ----------------------------------------
+
+### Request discharge approval
+POST {{baseUrl}}/discharge-approvals
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "admissionId": "{{admissionId}}",
+  "hospitalId": "{{hospitalId}}",
+  "requestedById": "{{staffId}}",
+  "reason": "Patient stable, criteria met"
+}
+
+### Approve discharge
+POST {{baseUrl}}/discharge-approvals/{{approvalId}}/approve
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "approvedById": "{{staffId}}",
+  "notes": "Approved - all discharge criteria met"
+}
+
+### Reject discharge
+POST {{baseUrl}}/discharge-approvals/{{approvalId}}/reject
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "rejectedById": "{{staffId}}",
+  "reason": "Pending lab results"
+}
+
+### Cancel discharge request
+POST {{baseUrl}}/discharge-approvals/{{approvalId}}/cancel
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### Get discharge approval by ID
+GET {{baseUrl}}/discharge-approvals/{{approvalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get approvals by patient
+GET {{baseUrl}}/discharge-approvals/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get pending approvals by hospital
+GET {{baseUrl}}/discharge-approvals/hospital/{{hospitalId}}/pending
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get all approvals by hospital
+GET {{baseUrl}}/discharge-approvals/hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### DISCHARGE SUMMARIES
+### ----------------------------------------
+
+### Create discharge summary
+POST {{baseUrl}}/discharge-summaries
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "encounterId": "{{encounterId}}",
+  "hospitalId": "{{hospitalId}}",
+  "providerId": "{{staffId}}",
+  "admissionDate": "2026-02-14",
+  "dischargeDate": "2026-02-18",
+  "primaryDiagnosis": "Acute appendicitis",
+  "proceduresPerformed": "Laparoscopic appendectomy",
+  "hospitalCourse": "Uneventful post-operative recovery",
+  "medicationsAtDischarge": "Acetaminophen 500mg PRN, Amoxicillin 500mg TID x7 days",
+  "followUpInstructions": "Follow up with surgeon in 2 weeks",
+  "patientConditionAtDischarge": "Stable, ambulating independently"
+}
+
+### Update discharge summary
+PUT {{baseUrl}}/discharge-summaries/{{summaryId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "followUpInstructions": "Follow up in 1 week; wound care instructions provided"
+}
+
+### Finalize discharge summary
+POST {{baseUrl}}/discharge-summaries/{{summaryId}}/finalize
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### Get discharge summary by ID
+GET {{baseUrl}}/discharge-summaries/{{summaryId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get by encounter
+GET {{baseUrl}}/discharge-summaries/encounter/{{encounterId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get by patient
+GET {{baseUrl}}/discharge-summaries/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get by hospital
+GET {{baseUrl}}/discharge-summaries/hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get unfinalized summaries
+GET {{baseUrl}}/discharge-summaries/hospital/{{hospitalId}}/unfinalized
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get summaries pending results
+GET {{baseUrl}}/discharge-summaries/hospital/{{hospitalId}}/pending-results
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get by provider
+GET {{baseUrl}}/discharge-summaries/provider/{{staffId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Delete discharge summary
+DELETE {{baseUrl}}/discharge-summaries/{{summaryId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json

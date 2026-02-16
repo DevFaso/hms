@@ -1,0 +1,85 @@
+### ========================================
+### 35 - Lookup & Reference Data
+### Lookup Controller, Service Translations
+### ========================================
+
+### ----------------------------------------
+### PATIENT LOOKUP
+### ----------------------------------------
+
+### Lookup patient by email
+GET {{baseUrl}}/lookup/patient/by-email?email=patient@example.com
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Lookup patient by phone
+GET {{baseUrl}}/lookup/patient/by-phone?phone=+15551234567
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Lookup patient by MRI
+GET {{baseUrl}}/lookup/patient/by-mri?mri=MRI-001
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### STAFF LOOKUP
+### ----------------------------------------
+
+### Lookup staff by staff number
+GET {{baseUrl}}/lookup/staff/by-number?staffNumber=STF-001
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Lookup staff by email
+GET {{baseUrl}}/lookup/staff/by-email?email=doctor@example.com
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Lookup staff by user ID
+GET {{baseUrl}}/lookup/staff/by-user-id?userId={{userId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### DEPARTMENT & HOSPITAL LOOKUP
+### ----------------------------------------
+
+### Lookup department by code
+GET {{baseUrl}}/lookup/department/by-code?code=CARD-001
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Lookup hospital by code
+GET {{baseUrl}}/lookup/hospital/by-code?code=HOSP-001
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### ENUM / REFERENCE VALUES
+### ----------------------------------------
+
+### Get all appointment statuses
+GET {{baseUrl}}/lookup/enum/appointment-statuses
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get all employment types
+GET {{baseUrl}}/lookup/enum/employment-types
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get all gender options
+GET {{baseUrl}}/lookup/enum/genders
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get all blood types
+GET {{baseUrl}}/lookup/enum/blood-types
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get all specializations
+GET {{baseUrl}}/lookup/enum/specializations
+Authorization: Bearer {{accessToken}}
+Accept: application/json

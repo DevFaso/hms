@@ -1,0 +1,38 @@
+### ========================================
+### 00 - Health Check & Public Endpoints
+### ========================================
+@baseUrl = http://localhost:8081/api
+
+### Ping - verify server is alive
+
+GET {{baseUrl}}/auth/ping
+Accept: application/json
+
+### Health endpoint (Actuator)
+# Note: Actuator runs at root context, not under /api
+GET http://localhost:8081/actuator/health
+Accept: application/json
+
+### API Docs (OpenAPI JSON)
+GET {{baseUrl}}/api-docs
+Accept: application/json
+
+### Swagger UI (redirects to full UI page)
+GET {{baseUrl}}/swagger-ui.html
+Accept: text/html
+
+### ========================================
+### Public Content
+### ========================================
+
+### List public services
+GET {{baseUrl}}/services
+Accept: application/json
+
+### List public articles
+GET {{baseUrl}}/articles
+Accept: application/json
+
+### List public testimonials
+GET {{baseUrl}}/testimonials
+Accept: application/json

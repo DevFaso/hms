@@ -1,0 +1,53 @@
+# UAT profile — PostgreSQL, mirrors production settings with UAT-specific data
+# Local:    ./gradlew :hospital-core:bootRun --args='--spring.profiles.active=uat'
+# Railway:  Set SPRING_PROFILES_ACTIVE=uat on the UAT service
+server:
+  port: ${PORT:8081}
+  shutdown: graceful
+
+spring:
+  config:
+    activate:
+      on-profile: uat
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/hms_uat}
+    username: ${SPRING_DATASOURCE_USERNAME:hms_uat_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:hms_uat_pass}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        '[format_sql]': false
+  liquibase:
+    enabled: true
+    contexts: uat
+
+logging:
+  level:
+    root: INFO
+    '[org.springframework]': INFO
+    '[org.hibernate]': WARN
+    '[com.example.hms]': DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when_authorized
+
+# ===================== Seed Data =====================
+# Roles and org security data are managed by Liquibase migrations.
+# Java-based seeders are disabled in UAT.
+app:
+  seed:
+    enabled: false
+    synthetic:
+      enabled: false

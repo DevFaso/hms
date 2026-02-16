@@ -1,0 +1,190 @@
+### ========================================
+### 08 - Staff Management, Availability & Scheduling
+### ========================================
+
+### ----------------------------------------
+### STAFF PROFILES
+### ----------------------------------------
+
+### List all staff
+GET {{baseUrl}}/staff
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Search staff by email
+GET {{baseUrl}}/staff/search/by-email?email=dr.smith@hms.local
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Search staff by phone
+GET {{baseUrl}}/staff/search/by-phone?phone=555-400
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get staff by hospital
+GET {{baseUrl}}/staff/hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get active staff by hospital
+GET {{baseUrl}}/staff/hospital/{{hospitalId}}/active
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get staff active status
+GET {{baseUrl}}/staff/{{staffId}}/active
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Check if staff exists in hospital
+GET {{baseUrl}}/staff/{{staffId}}/exists-in-hospital?hospitalId={{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Check if license exists
+GET {{baseUrl}}/staff/license/exists?licenseNumber=MED-12345
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get first staff for user
+GET {{baseUrl}}/staff/users/{{userId}}/first
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get user license info
+GET {{baseUrl}}/staff/users/{{userId}}/license
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Create staff profile
+POST {{baseUrl}}/staff
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "userEmail": "dr.smith@hms.local",
+  "hospitalName": "DevFaso General Hospital",
+  "departmentName": "Emergency Department",
+  "jobTitle": "Emergency Physician",
+  "employmentType": "FULL_TIME",
+  "specialization": "EMERGENCY_MEDICINE",
+  "licenseNumber": "MED-12345",
+  "licenseExpiryDate": "2027-12-31",
+  "hireDate": "2026-01-15",
+  "qualification": "MD, Board Certified Emergency Medicine"
+}
+
+### Update staff profile
+PUT {{baseUrl}}/staff/{{staffId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "userEmail": "dr.smith@hms.local",
+  "hospitalName": "DevFaso General Hospital",
+  "jobTitle": "Senior Emergency Physician",
+  "employmentType": "FULL_TIME",
+  "specialization": "EMERGENCY_MEDICINE",
+  "licenseNumber": "MED-12345"
+}
+
+### Delete staff profile
+DELETE {{baseUrl}}/staff/{{staffId}}
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### AVAILABILITY
+### ----------------------------------------
+
+### Set staff availability
+POST {{baseUrl}}/availability
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "staffId": "{{staffId}}",
+  "dayOfWeek": "MONDAY",
+  "startTime": "08:00",
+  "endTime": "17:00"
+}
+
+### Check staff availability
+GET {{baseUrl}}/availability/check?staffId={{staffId}}&date=2026-02-16
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### SCHEDULING (Shifts & Leaves)
+### ----------------------------------------
+
+### Create shift
+POST {{baseUrl}}/staff/scheduling/shifts
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "staffId": "{{staffId}}",
+  "hospitalId": "{{hospitalId}}",
+  "shiftDate": "2026-02-16",
+  "startTime": "08:00",
+  "endTime": "16:00",
+  "shiftType": "DAY"
+}
+
+### List shifts
+GET {{baseUrl}}/staff/scheduling/shifts?staffId={{staffId}}&startDate=2026-02-14&endDate=2026-02-28
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update shift
+PUT {{baseUrl}}/staff/scheduling/shifts/{{shiftId}}
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "startTime": "07:00",
+  "endTime": "15:00"
+}
+
+### Update shift status
+PATCH {{baseUrl}}/staff/scheduling/shifts/{{shiftId}}/status
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "status": "CONFIRMED"
+}
+
+### Request leave
+POST {{baseUrl}}/staff/scheduling/leaves
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "staffId": "{{staffId}}",
+  "leaveType": "ANNUAL",
+  "startDate": "2026-03-01",
+  "endDate": "2026-03-05",
+  "reason": "Family vacation"
+}
+
+### List leaves
+GET {{baseUrl}}/staff/scheduling/leaves?staffId={{staffId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Approve/reject leave
+PATCH {{baseUrl}}/staff/scheduling/leaves/{{leaveId}}/decision
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "approved": true,
+  "notes": "Approved, coverage arranged"
+}
+
+### Cancel leave
+PATCH {{baseUrl}}/staff/scheduling/leaves/{{leaveId}}/cancel
+Authorization: Bearer {{accessToken}}
+Accept: application/json

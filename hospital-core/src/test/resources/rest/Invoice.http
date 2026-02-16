@@ -1,0 +1,70 @@
+# set the right invoice id
+@invoiceId = e65fdced-df9c-4f41-9f0f-556858778e0f
+@assignmentId = 6431583a-bcd5-4bc3-8d6c-1cdb5caedda1
+@treatmentId = ab4f325a-68de-403e-ba47-287099a159bd
+@token = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDk2NDU1NCwiZXhwIjoxNzU1MDUwOTU0fQ.2io471XlIunZKD0Qj0pgLtOmvCmUnqoxSQfyCqheqYA
+@lang = en
+
+POST http://localhost:8081/api/invoice-items
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "billingInvoiceId": "{{invoiceId}}",
+  "itemDescription": "CBC Lab Test",
+  "quantity": 1,
+  "unitPrice": 50.00,
+  "itemCategory": "LAB_TEST",
+  "assignmentId": "{{assignmentId}}",
+  "relatedServiceId": "{{treatmentId}}"
+}
+
+
+### Get Invoice Item by ID
+GET http://localhost:8081/api/invoice-items/6d2f8028-aab7-4b39-8b79-f6ca41362a02
+Authorization: Bearer {{token}}
+Accept-Language: {{lang}}
+
+### List Items by Invoice
+GET {{baseUrl}}/invoice-items/invoice/{{invoiceId}}
+Authorization: Bearer {{token}}
+Accept-Language: {{lang}}
+
+### Update Invoice Item
+PUT {{baseUrl}}/invoice-items/{{invoiceItemId}}
+Authorization: Bearer {{token}}
+Accept-Language: {{lang}}
+Content-Type: application/json
+
+{
+  "billingInvoiceId": "{{invoiceId}}",
+  "itemDescription": "Consultation Fee (Follow-up)",
+  "quantity": 1,
+  "unitPrice": 180.00,
+  "itemCategory": "CONSULTATION",
+  "assignmentId": "23c38dc8-a4f4-4166-baaa-111122223333"
+}
+
+### Delete Invoice Item
+DELETE {{baseUrl}}/invoice-items/{{invoiceItemId}}
+Authorization: Bearer {{token}}
+Accept-Language: {{lang}}
+
+###
+GET /billing-invoices/051a85ac-7fbb-42ab-b84a-aa268212b800
+Authorization: Bearer {{token}}
+Accept-Language: {{lang}}
+
+### Email Invoice
+POST http://localhost:8081/api/invoices/e65fdced-df9c-4f41-9f0f-556858778e0f/email
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "to": ["tchico1er@gmail.com"],
+  "cc": [],
+  "bcc": [],
+  "message": "Invoice attached. Thank you.",
+  "locale": "en",
+  "attachPdf": true
+}

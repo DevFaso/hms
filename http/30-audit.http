@@ -1,0 +1,93 @@
+### ========================================
+### 30 - Audit Logs
+### Backend & Frontend Audit Events
+### ========================================
+
+### ----------------------------------------
+### AUDIT EVENT LOGS
+### ----------------------------------------
+
+### Create audit event
+POST {{baseUrl}}/audit-logs
+Authorization: Bearer {{superAdminToken}}
+Content-Type: application/json
+
+{
+  "userId": "{{userId}}",
+  "hospitalId": "{{hospitalId}}",
+  "eventType": "PATIENT_RECORD_ACCESS",
+  "status": "SUCCESS",
+  "targetType": "PATIENT",
+  "targetId": "{{patientId}}",
+  "description": "Viewed patient medical records",
+  "ipAddress": "192.168.1.100",
+  "userAgent": "Mozilla/5.0"
+}
+
+### List audit logs
+GET {{baseUrl}}/audit-logs?page=0&size=20
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get audit logs by user
+GET {{baseUrl}}/audit-logs/user/{{userId}}?page=0&size=20
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get audit logs by event type and status
+GET {{baseUrl}}/audit-logs/filter?eventType=PATIENT_RECORD_ACCESS&status=SUCCESS&page=0&size=20
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get audit logs by target
+GET {{baseUrl}}/audit-logs/target?targetType=PATIENT&targetId={{patientId}}&page=0&size=20
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get audit logs by date range
+GET {{baseUrl}}/audit-logs?startDate=2026-02-01&endDate=2026-02-14&page=0&size=20
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### FRONTEND AUDIT
+### ----------------------------------------
+
+### Log frontend audit event
+POST {{baseUrl}}/frontend-audit
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "userId": "{{userId}}",
+  "eventType": "PAGE_VIEW",
+  "page": "/patients/{{patientId}}/chart",
+  "action": "VIEW_PATIENT_CHART",
+  "details": {
+    "patientId": "{{patientId}}",
+    "tabViewed": "medications"
+  },
+  "timestamp": "2026-02-14T10:30:00",
+  "sessionId": "sess_abc123",
+  "browserInfo": "Chrome 120.0"
+}
+
+### Log frontend error event
+POST {{baseUrl}}/frontend-audit
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "userId": "{{userId}}",
+  "eventType": "ERROR",
+  "page": "/appointments/new",
+  "action": "FORM_SUBMIT_ERROR",
+  "details": {
+    "errorMessage": "Network timeout while saving appointment",
+    "errorCode": "TIMEOUT",
+    "stackTrace": "Error: Network timeout at submit()"
+  },
+  "timestamp": "2026-02-14T11:00:00",
+  "sessionId": "sess_abc123",
+  "browserInfo": "Chrome 120.0"
+}

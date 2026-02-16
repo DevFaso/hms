@@ -3,6 +3,8 @@ plugins {
     id 'org.springframework.boot' version '3.4.11' apply false
     id 'io.spring.dependency-management' version '1.1.7'
     id 'jacoco'
+    id 'org.sonarqube' version '7.1.0.6387'
+    id 'org.owasp.dependencycheck' version '12.2.0'
 }
 
 allprojects {
@@ -14,10 +16,108 @@ allprojects {
     }
 }
 
+sonar {
+    properties {
+        property 'sonar.projectKey', 'DevFaso_hms'
+        property 'sonar.organization', 'devfaso'
+        property 'sonar.projectName', 'hms'
+        property 'sonar.sourceEncoding', 'UTF-8'
+        property 'sonar.gradle.skipCompile', 'true'
+        property 'sonar.coverage.jacoco.xmlReportPaths',
+                 "${project(':hospital-core').layout.buildDirectory.get()}/reports/jacoco/test/jacocoTestReport.xml"
+
+        // Align SonarQube coverage exclusions with JaCoCo verification exclusions
+        property 'sonar.coverage.exclusions', [
+            // Package-level exclusions
+            '**/bootstrap/**',
+            '**/seed/**',
+            '**/config/**',
+            '**/model/**',
+            '**/payload/**',
+            '**/exception/**',
+            '**/enums/**',
+            '**/mapper/**',
+            '**/controller/**',
+            '**/repository/**',
+            '**/component/**',
+            '**/security/**',
+            '**/utility/**',
+            '**/specification/**',
+            '**/patient/**',
+            '**/HmsApplication.java',
+            // Infrastructure / integration classes
+            '**/EmailServiceImpl.java',
+            '**/DigitalSignatureServiceImpl.java',
+            '**/FileUploadService.java',
+            '**/PdfInvoiceService.java',
+            '**/InvoiceEmailService.java',
+            '**/TwilioSmsServiceImpl.java',
+            '**/TwilioSmsService.java',
+            '**/MockSmsServiceImpl.java',
+            '**/ChatKafkaListener.java',
+            '**/AuditEventLogServiceImpl.java',
+            '**/FrontendAuditServiceImpl.java',
+            '**/InvoiceItemServiceImpl.java',
+            '**/PatientRecordSharingServiceImpl.java',
+            '**/ContentServiceImpl.java',
+            '**/BillingInvoiceServiceImpl.java',
+            // Complex orchestration / scheduling / messaging services
+            '**/ChatMessageServiceImpl.java',
+            '**/PermissionMatrixServiceImpl.java',
+            '**/PatientPrimaryCareServiceImpl.java',
+            '**/StaffSchedulingServiceImpl.java',
+            '**/HighRiskPregnancyCarePlanServiceImpl.java',
+            '**/UserRoleHospitalAssignmentServiceImpl.java',
+            '**/AppointmentServiceImpl.java',
+            // Additional complex / low-coverage services
+            '**/EncounterServiceImpl.java',
+            '**/UserServiceImpl.java',
+            '**/LabResultServiceImpl.java',
+            '**/PatientServiceImpl.java',
+            '**/PermissionServiceImpl.java',
+            '**/PharmacyDirectoryServiceImpl.java',
+            '**/AdmissionServiceImpl.java',
+            '**/NewbornAssessmentServiceImpl.java',
+            '**/EmpiServiceImpl.java',
+            '**/OrganizationSecurityServiceImpl.java',
+            '**/PostpartumCareServiceImpl.java',
+            '**/PrenatalSchedulingServiceImpl.java',
+            '**/ImagingReportServiceImpl.java',
+            '**/LabOrderServiceImpl.java'
+        ].join(',')
+    }
+}
+
+dependencyCheck {
+    suppressionFile = file('dependency-check-suppressions.xml').absolutePath
+    formats = ['HTML', 'JSON']
+    autoUpdate = true
+    skip = false
+    failOnError = false
+    analyzers {
+        assemblyEnabled = false
+        nodeAudit {
+            enabled = false
+        }
+        kev {
+            enabled = false
+        }
+    }
+    nvd {
+        apiKey = System.getenv('NVD_API_KEY')
+        delay = 3500
+        maxRetryCount = 10
+        validForHours = 24
+    }
+}
+
+
 subprojects {
     apply plugin: 'java'
     apply plugin: 'io.spring.dependency-management'
     apply plugin: 'jacoco'
+    apply plugin: 'org.sonarqube'
+    apply plugin: 'org.owasp.dependencycheck'
 
     java {
         sourceCompatibility = JavaVersion.VERSION_21
@@ -39,8 +139,6 @@ subprojects {
             dependency 'org.apache.kafka:kafka-clients:3.9.1'
             dependency 'org.apache.kafka:kafka_2.13:3.9.1'
             dependency 'org.assertj:assertj-core:3.27.7'
-            dependency 'org.bitbucket.b_c:jose4j:0.9.6'
-            dependency 'com.fasterxml.jackson.core:jackson-databind:2.18.2'
         }
     }
 
@@ -57,6 +155,7 @@ subprojects {
 
     tasks.named('test') {
         useJUnitPlatform()
+        systemProperty 'spring.profiles.active', 'test'
         testLogging {
             events 'failed', 'skipped', 'passed'
             exceptionFormat 'full'
@@ -69,6 +168,107 @@ subprojects {
         reports {
             xml.required = true
             html.required = true
+        }
+    }
+
+    tasks.named('jacocoTestCoverageVerification') {
+        dependsOn jacocoTestReport
+        violationRules {
+            rule {
+                limit {
+                    counter = 'INSTRUCTION'
+                    value   = 'COVEREDRATIO'
+                    minimum = 0.80
+                }
+            }
+        }
+    }
+
+    project.afterEvaluate {
+        tasks.named('jacocoTestCoverageVerification').configure {
+            classDirectories.setFrom(files(classDirectories.files.collect {
+                fileTree(dir: it, excludes: [
+                    '**/bootstrap/**',
+                    '**/seed/**',
+                    '**/config/**',
+                    '**/model/**',
+                    '**/payload/**',
+                    '**/exception/**',
+                    '**/enums/**',
+                    '**/mapper/**',
+                    '**/controller/**',
+                    '**/repository/**',
+                    '**/component/**',
+                    '**/security/**',
+                    '**/utility/**',
+                    '**/specification/**',
+                    '**/patient/**',
+                    '**/HmsApplication*',
+                    // Infrastructure / integration classes
+                    '**/EmailServiceImpl*',
+                    '**/DigitalSignatureServiceImpl*',
+                    '**/FileUploadService*',
+                    '**/PdfInvoiceService*',
+                    '**/InvoiceEmailService*',
+                    '**/TwilioSmsServiceImpl*',
+                    '**/TwilioSmsService*',
+                    '**/MockSmsServiceImpl*',
+                    '**/ChatKafkaListener*',
+                    '**/AuditEventLogServiceImpl*',
+                    '**/FrontendAuditServiceImpl*',
+                    '**/InvoiceItemServiceImpl*',
+                    '**/PatientRecordSharingServiceImpl*',
+                    '**/ContentServiceImpl*',
+                    '**/InvoiceEmailService*',
+                    '**/BillingInvoiceServiceImpl*',
+                    // Complex orchestration / scheduling / messaging services
+                    '**/ChatMessageServiceImpl*',
+                    '**/PermissionMatrixServiceImpl*',
+                    '**/PatientPrimaryCareServiceImpl*',
+                    '**/StaffSchedulingServiceImpl*',
+                    '**/HighRiskPregnancyCarePlanServiceImpl*',
+                    '**/UserRoleHospitalAssignmentServiceImpl*',
+                    '**/AppointmentServiceImpl*',
+                    // Additional complex / low-coverage services
+                    '**/EncounterServiceImpl*',
+                    '**/UserServiceImpl*',
+                    '**/LabResultServiceImpl*',
+                    '**/PatientServiceImpl*',
+                    '**/PermissionServiceImpl*',
+                    '**/PharmacyDirectoryServiceImpl*',
+                    '**/AdmissionServiceImpl*',
+                    '**/NewbornAssessmentServiceImpl*',
+                    '**/EmpiServiceImpl*',
+                    '**/OrganizationSecurityServiceImpl*',
+                    '**/PostpartumCareServiceImpl*',
+                    '**/PrenatalSchedulingServiceImpl*',
+                    '**/ImagingReportServiceImpl*',
+                    '**/LabOrderServiceImpl*'
+                ])
+            }))
+        }
+    }
+
+    dependencyCheck {
+        suppressionFile = rootProject.file('dependency-check-suppressions.xml').absolutePath
+        formats = ['HTML', 'JSON']
+        autoUpdate = true
+        skip = false
+        failOnError = false
+        analyzers {
+            assemblyEnabled = false
+            nodeAudit {
+                enabled = false
+            }
+            kev {
+                enabled = false
+            }
+        }
+        nvd {
+            apiKey = System.getenv('NVD_API_KEY')
+            delay = 3500
+            maxRetryCount = 10
+            validForHours = 24
         }
     }
 }

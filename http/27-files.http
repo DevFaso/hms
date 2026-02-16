@@ -1,0 +1,77 @@
+### ========================================
+### 27 - File Uploads
+### Profile Images, Referral & Chart Attachments
+### ========================================
+
+### ----------------------------------------
+### PROFILE IMAGE
+### ----------------------------------------
+
+### Upload profile image
+POST {{baseUrl}}/files/profile-image/{{userId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: multipart/form-data; boundary=----ProfileBoundary
+
+------ProfileBoundary
+Content-Disposition: form-data; name="file"; filename="avatar.jpg"
+Content-Type: image/jpeg
+
+< ./test-files/avatar.jpg
+------ProfileBoundary--
+
+### Delete profile image
+DELETE {{baseUrl}}/files/profile-image/{{userId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### REFERRAL ATTACHMENTS
+### ----------------------------------------
+
+### Upload referral attachment
+POST {{baseUrl}}/files/referral-attachments/{{referralId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: multipart/form-data; boundary=----ReferralBoundary
+
+------ReferralBoundary
+Content-Disposition: form-data; name="file"; filename="referral-doc.pdf"
+Content-Type: application/pdf
+
+< ./test-files/referral-doc.pdf
+------ReferralBoundary--
+
+### Get referral attachments
+GET {{baseUrl}}/files/referral-attachments/{{referralId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Delete referral attachment
+DELETE {{baseUrl}}/files/referral-attachments/{{referralId}}/{{attachmentId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### CHART ATTACHMENTS
+### ----------------------------------------
+
+### Upload chart attachment
+POST {{baseUrl}}/files/chart-attachments/{{patientId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: multipart/form-data; boundary=----ChartBoundary
+
+------ChartBoundary
+Content-Disposition: form-data; name="file"; filename="ecg-result.pdf"
+Content-Type: application/pdf
+
+< ./test-files/ecg-result.pdf
+------ChartBoundary--
+
+### Get chart attachments
+GET {{baseUrl}}/files/chart-attachments/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Delete chart attachment
+DELETE {{baseUrl}}/files/chart-attachments/{{patientId}}/{{attachmentId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json

@@ -1,0 +1,249 @@
+### Variables
+@host = http://localhost:8081/api
+@contentType = application/json
+@adminToken = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2hhZG1pbiIsInJvbGVzIjpbIlJPTEVfSE9TUElUQUxfQURNSU4iXSwiaWF0IjoxNzU1NzM2NjM4LCJleHAiOjE3NTU4MjMwMzh9.Y5dYymVwqCfLpQfY9xKnGVGIMi0ZhTWaTeh3bOM7Cs0
+@doctorToken = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX2RvY3RvciIsInJvbGVzIjpbIlJPTEVfRE9DVE9SIl0sImlhdCI6MTc1NTczOTI4NCwiZXhwIjoxNzU1ODI1Njg0fQ._YJOj6RYO-hEqN6RxzgtSSfHo9BQX4U07-JaoiAbuOE
+#@nurseToken = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJzYW5kb2ZmX251cnNlIiwicm9sZXMiOlsiUk9MRV9SRUNFUFRJT05JU1QiLCJST0xFX05VUlNFIl0sImlhdCI6MTc1NTczOTM1MSwiZXhwIjoxNzU1ODI1NzUxfQ.GidtPam3IQPMVUeiyJBrE1FPw6cz8VFDCw5t-keL8FE
+@patientToken = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtaW5vcl9wYXRpZW50MSIsInJvbGVzIjpbIlJPTEVfUEFUSUVOVCJdLCJpYXQiOjE3NTU3Mzk2NDQsImV4cCI6MTc1NTgyNjA0NH0.HPqoY6runESsj1ifGZUlyFIk80HWNgSA275KeBABoSk
+
+### Create a new treatment (Admin or Doctor)
+# @name createTreatment
+### Cardiology Treatment - Clinic Sandoff
+POST {{host}}/treatments
+Content-Type: {{contentType}}
+Authorization: Bearer {{doctorToken}}
+Accept-Language: en-US
+
+{
+  "departmentId": "a064f337-70ec-4daf-94fd-ce72b44369b9",
+  "hospitalId": "8ecdb484-dbfa-4cc7-b622-a4baf942a357",
+  "name": "Malaria Test",
+  "description": "Test for malaria infection",
+  "price": 100.00,
+  "durationMinutes": 30
+}
+
+### 1. Login endpoints (get tokens first)
+# Admin login
+# @name adminLogin
+POST {{host}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "username": "admin@hospital.com",
+  "password": "admin123"
+}
+
+###
+
+# Doctor login
+# @name doctorLogin
+POST {{host}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "username": "doc_tor1",
+  "password": "SecurePass123!"
+}
+
+###
+
+# Nurse login
+# @name nurseLogin
+POST {{host}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "username": "user3",
+  "password": "SecurePassword123!"
+}
+
+###
+
+# Patient login
+# @name patientLogin
+POST {{host}}/auth/login
+Content-Type: {{contentType}}
+
+{
+  "username": "doc_tor2",
+  "password": "SecurePass123!"
+}
+
+### Emergency Treatment - Clinic Sandoff
+POST {{host}}/treatments
+Content-Type: {{contentType}}
+Authorization: Bearer {{doctorToken}}
+Accept-Language: en-US
+
+{
+  "departmentId": "ade443d6-37dc-4847-bf37-87187a1d78d3",
+  "hospitalId": "b24481e5-9996-45c9-a918-c67ec0baf7c5",
+  "name": "Appendectomy",
+  "description": "Surgical removal of the appendix.",
+  "price": 500.00,
+  "durationMinutes": 60,
+  "active": true
+}
+###
+POST {{host}}/treatments
+Content-Type: {{contentType}}
+Authorization: Bearer {{doctorToken}}
+Accept-Language: en-US
+
+{
+  "departmentId": "ade443d6-37dc-4847-bf37-87187a1d78d3",
+  "hospitalId": "b24481e5-9996-45c9-a918-c67ec0baf7c5",
+  "name": "Appendectomy",
+  "description": "Surgical removal of the appendix.",
+  "price": 500.00,
+  "durationMinutes": 60,
+  "active": true
+}
+
+###
+POST {{host}}/treatments
+Content-Type: {{contentType}}
+Authorization: Bearer {{doctorToken}}
+Accept-Language: en-US
+
+{
+  "departmentId": "c7ac158e-cc36-40b1-ba70-35ad50bf95be",
+  "hospitalId": "b24481e5-9996-45c9-a918-c67ec0baf7c5",
+  "name": "Childbirth Delivery",
+  "description": "Assistance and care during childbirth.",
+  "price": 350.00,
+  "durationMinutes": 90,
+  "active": true
+}
+
+###
+POST {{host}}/treatments
+Content-Type: {{contentType}}
+Authorization: Bearer {{doctorToken}}
+Accept-Language: en-US
+
+{
+  "departmentId": "bc9b74b7-1025-4571-aa85-4eab33e2fd1a",
+  "hospitalId": "b24481e5-9996-45c9-a918-c67ec0baf7c5",
+  "name": "General Consultation",
+  "description": "Basic patient consultation service.",
+  "price": 50.00,
+  "durationMinutes": 20,
+  "active": true
+}
+
+###
+POST {{host}}/treatments
+Content-Type: {{contentType}}
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4yIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTMxNTE1MDYsImV4cCI6MTc1MzIzNzkwNn0.CJ9TLezokw3sMpRlpBSYoG8hnE0p2JI9A5J8MyWQMipYxKUmSf7YkxIynPSLxQGawxR0GYlOCY_2i4aMdm4GGA
+Accept-Language: en-US
+
+{
+  "departmentId": "f8026cde-336e-494a-bcde-d83a8be783dc",
+  "hospitalId": "29c97a6f-7eba-4281-a3a1-f5b0dc47a7e3",
+  "name": "Emergency Treatment",
+  "description": "Immediate care for critical patients.",
+  "price": 150.00,
+  "durationMinutes": 45,
+  "active": true
+}
+
+### Radiology Treatment - Clinic Sandoff
+POST {{host}}/treatments
+Content-Type: {{contentType}}
+Authorization: Bearer {{doctorToken}}
+Accept-Language: en-US
+
+{
+  "departmentId": "bfae7620-3433-48fd-945f-f4302d2d4ce0",
+  "hospitalId": "06f8a0cf-09ab-4423-8aa8-1804a99f6f6c",
+  "name": "MRI Scan",
+  "description": "Magnetic Resonance Imaging scan",
+  "price": 500.00,
+  "durationMinutes": 75
+}
+
+### Diagnostics - Clinic Sandoff
+POST {{host}}/treatments
+Content-Type: {{contentType}}
+Authorization: Bearer {{doctorToken}}
+Accept-Language: en-US
+
+{
+  "departmentId": "0f9eaebf-c465-4f02-ad51-ed316775e3ff",
+  "hospitalId": "06f8a0cf-09ab-4423-8aa8-1804a99f6f6c",
+  "name": "Blood Test Panel",
+  "description": "Comprehensive diagnostic blood test",
+  "price": 120.00,
+  "durationMinutes": 20
+}
+
+
+###
+
+### Get all treatments (Admin, Staff, Patient)
+GET {{host}}/treatments
+Authorization: Bearer {{patientToken}}
+Accept-Language: en-US
+
+###
+
+### Get all treatments with language filter
+GET {{host}}/treatments?language=es
+Authorization: Bearer {{nurseToken}}
+Accept-Language: en-US
+
+###
+
+### Get treatment by ID (Admin, Staff, Patient)
+GET {{host}}/treatments/{{createTreatment.response.body.id}}
+Authorization: Bearer {{nurseToken}}
+Accept-Language: en-US
+
+###
+
+### Update treatment (Admin or creator Doctor)
+PUT {{host}}/treatments/{{createTreatment.response.body.id}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{doctorToken}}
+Accept-Language: en-US
+
+{
+  "departmentId": "a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8",
+  "hospitalId": "b2c3d4e5-f6g7-8901-h2i3-j4k5l6m7n8o9",
+  "name": "Physical Therapy Session (Extended)",
+  "description": "90-minute extended physical therapy session",
+  "price": 150.75,
+  "durationMinutes": 90,
+  "active": true
+}
+
+###
+
+### Try to update treatment with nurse token (should fail)
+PUT {{host}}/api/v1/treatments/{{createTreatment.response.body.id}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{nurseToken}}
+Accept-Language: en-US
+
+{
+  "departmentId": "a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8",
+  "hospitalId": "b2c3d4e5-f6g7-8901-h2i3-j4k5l6m7n8o9",
+  "name": "Should Not Work",
+  "description": "This update should fail",
+  "price": 0,
+  "durationMinutes": 0
+}
+
+###
+
+### Delete treatment (Admin only)
+DELETE {{host}}/api/v1/treatments/{{createTreatment.response.body.id}}
+Authorization: Bearer {{adminToken}}
+
+###
+
+### Try to delete treatment with doctor token (should fail)
+DELETE {{host}}/api/v1/treatments/{{createTreatment.response.body.id}}
+Authorization: Bearer {{doctorToken}}

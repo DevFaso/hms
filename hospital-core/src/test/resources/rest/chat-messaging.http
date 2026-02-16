@@ -1,0 +1,45 @@
+### Send Chat Message
+POST http://localhost:8081/api/chat/send
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJtaW5vcl9wYXRpZW50MSIsInJvbGVzIjpbIlJPTEVfUkVDRVBUSU9OSVNUIiwiUk9MRV9QQVRJRU5UIl0sImlhdCI6MTc1NDQ0OTE1MCwiZXhwIjoxNzU0NTM1NTUwfQ.ej8daVZ8M5hOysLaNaesRjOnVRleuUWlj7VBW3DOSUaf0J3mgNYXu5JrDbGFGan7qjBUSV4S8_idMFKMSAI9NQ
+Content-Type: application/json
+
+{
+  "recipientName": "Receptionist",
+  "hospitalName": "General Hospital",
+  "roleCode": "ROLE_RECEPTIONIST",
+  "content": "Hello! Can you review the patient's record?"
+}
+
+
+### Mark messages as read
+PUT http://localhost:8081/api/chat/mark-read/f0bf57a2-fa04-40bf-ad72-f0b4cb610d90/10d65215-0721-40f1-8af3-6102171417cb
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ1c2VyNiIsInJvbGVzIjpbIlJPTEVfUkVDRVBUSU9OSVNUIl0sImlhdCI6MTc1MjU1MTMzOCwiZXhwIjoxNzUyNjM3NzM4fQ.lPducVP9Q1ClBV4XN7ncLjLI9ebGuxtCLgIS2kFlxw3_9NSZLFuNVNjqGgyLiGUdLPOZul6oFYdZkZVPhVbAFw
+Accept: application/json
+
+
+### Get all conversations for user6 (Receptionist)
+GET http://localhost:8081/api/chat/conversations/f0bf57a2-fa04-40bf-ad72-f0b4cb610d90?page=0&size=10
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ1c2VyNiIsInJvbGVzIjpbIlJPTEVfUkVDRVBUSU9OSVNUIl0sImlhdCI6MTc1MjU1MTMzOCwiZXhwIjoxNzUyNjM3NzM4fQ.lPducVP9Q1ClBV4XN7ncLjLI9ebGuxtCLgIS2kFlxw3_9NSZLFuNVNjqGgyLiGUdLPOZul6oFYdZkZVPhVbAFw
+Accept: application/json
+
+###
+
+### Get paginated chat history between receptionist and hospital admin
+GET http://localhost:8081/api/chat/history/f0bf57a2-fa04-40bf-ad72-f0b4cb610d90/10d65215-0721-40f1-8af3-6102171417cb?page=0&size=10
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ1c2VyNiIsInJvbGVzIjpbIlJPTEVfUkVDRVBUSU9OSVNUIl0sImlhdCI6MTc1MjU1MTMzOCwiZXhwIjoxNzUyNjM3NzM4fQ.lPducVP9Q1ClBV4XN7ncLjLI9ebGuxtCLgIS2kFlxw3_9NSZLFuNVNjqGgyLiGUdLPOZul6oFYdZkZVPhVbAFw
+Accept: application/json
+
+###
+
+### Search messages in chat history (keyword: "review")
+GET http://localhost:8081/api/chat/history/f0bf57a2-fa04-40bf-ad72-f0b4cb610d90/10d65215-0721-40f1-8af3-6102171417cb/search?keyword=review&page=0&size=10
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ1c2VyNiIsInJvbGVzIjpbIlJPTEVfUkVDRVBUSU9OSVNUIl0sImlhdCI6MTc1MjU1MTMzOCwiZXhwIjoxNzUyNjM3NzM4fQ.lPducVP9Q1ClBV4XN7ncLjLI9ebGuxtCLgIS2kFlxw3_9NSZLFuNVNjqGgyLiGUdLPOZul6oFYdZkZVPhVbAFw
+Accept: application/json
+
+###
+
+### Get all messages for user6 (Receptionist inbox)
+GET http://localhost:8081/api/chat/messages/f0bf57a2-fa04-40bf-ad72-f0b4cb610d90?unread=false&page=0&size=10
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ1c2VyNiIsInJvbGVzIjpbIlJPTEVfUkVDRVBUSU9OSVNUIl0sImlhdCI6MTc1MjU1MTMzOCwiZXhwIjoxNzUyNjM3NzM4fQ.lPducVP9Q1ClBV4XN7ncLjLI9ebGuxtCLgIS2kFlxw3_9NSZLFuNVNjqGgyLiGUdLPOZul6oFYdZkZVPhVbAFw
+Accept: application/json
+

@@ -1,0 +1,40 @@
+### File Upload API Tests
+
+# Variables
+@baseUrl = http://localhost:8081/api
+@authToken = Bearer your_jwt_token_here
+
+### Upload Profile Image
+POST {{baseUrl}}/files/profile-image
+Authorization: {{authToken}}
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="profile.jpg"
+Content-Type: image/jpeg
+
+< path/to/your/test/image.jpg
+--boundary--
+
+### Delete Profile Image
+DELETE {{baseUrl}}/files/profile-image
+Authorization: {{authToken}}
+
+### Example response for successful upload:
+# {
+#   "message": "Profile image uploaded successfully",
+#   "imageUrl": "/api/uploads/profile-images/filename.jpg"
+# }
+
+### Example response for successful delete:
+# {
+#   "message": "Profile image deleted successfully"
+# }
+
+### Notes:
+# 1. Replace 'your_jwt_token_here' with a valid JWT token from login
+# 2. Replace 'path/to/your/test/image.jpg' with an actual image file path
+# 3. Supported formats: JPG, PNG, GIF, WebP (max 5MB)
+# 4. The uploaded image will be stored in uploads/profile-images/ directory
+# 5. The image URL returned includes the API context path (/api)
+# 6. Deleting an image will reset the user's profile image to default role-based avatar

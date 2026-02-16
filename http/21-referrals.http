@@ -1,0 +1,170 @@
+### ========================================
+### 21 - Referrals (General & OB/GYN)
+### ========================================
+
+### ----------------------------------------
+### GENERAL REFERRALS
+### ----------------------------------------
+
+### Create general referral
+POST {{baseUrl}}/api/referrals
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "referringProviderId": "{{staffId}}",
+  "receivingProviderId": "{{receivingStaffId}}",
+  "hospitalId": "{{hospitalId}}",
+  "specialty": "CARDIOLOGY",
+  "reason": "Evaluation of chest pain on exertion",
+  "priority": "URGENT",
+  "clinicalNotes": "Patient with new onset exertional chest pain, ECG normal",
+  "relevantDiagnosis": "R07.9 - Chest pain, unspecified"
+}
+
+### Get referral by ID
+GET {{baseUrl}}/api/referrals/{{referralId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Submit referral
+POST {{baseUrl}}/api/referrals/{{referralId}}/submit
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### Acknowledge referral
+POST {{baseUrl}}/api/referrals/{{referralId}}/acknowledge
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Complete referral
+POST {{baseUrl}}/api/referrals/{{referralId}}/complete
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "completionNotes": "Stress test negative. Reassurance provided."
+}
+
+### Cancel referral
+POST {{baseUrl}}/api/referrals/{{referralId}}/cancel
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "reason": "Patient declined referral"
+}
+
+### Get referrals by patient
+GET {{baseUrl}}/api/referrals/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get referrals by referring provider
+GET {{baseUrl}}/api/referrals/provider/{{staffId}}/referring
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get referrals by receiving provider
+GET {{baseUrl}}/api/referrals/provider/{{receivingStaffId}}/receiving
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get referrals by hospital
+GET {{baseUrl}}/api/referrals/hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get overdue referrals
+GET {{baseUrl}}/api/referrals/overdue
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### OB/GYN REFERRALS
+### ----------------------------------------
+
+### Create OB/GYN referral
+POST {{baseUrl}}/referrals/obgyn
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "referringProviderId": "{{staffId}}",
+  "obgynUserId": "{{obgynUserId}}",
+  "hospitalId": "{{hospitalId}}",
+  "reason": "High-risk pregnancy - gestational diabetes",
+  "gestationalAge": 28,
+  "urgency": "URGENT",
+  "clinicalNotes": "Elevated glucose on screening test"
+}
+
+### Get OB/GYN referral by ID
+GET {{baseUrl}}/referrals/obgyn/{{referralId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get OB/GYN referrals by patient
+GET {{baseUrl}}/referrals/obgyn/patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get OB/GYN referrals by hospital
+GET {{baseUrl}}/referrals/obgyn/hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get OB/GYN referrals assigned to specialist
+GET {{baseUrl}}/referrals/obgyn/assigned/{{obgynUserId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Acknowledge OB/GYN referral
+POST {{baseUrl}}/referrals/obgyn/{{referralId}}/acknowledge
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "acknowledgedById": "{{obgynUserId}}",
+  "notes": "Will schedule appointment within 48 hours"
+}
+
+### Complete OB/GYN referral
+POST {{baseUrl}}/referrals/obgyn/{{referralId}}/complete
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "outcome": "Patient started on insulin therapy, glucose monitoring plan initiated",
+  "followUpPlan": "Weekly monitoring until delivery"
+}
+
+### Cancel OB/GYN referral
+POST {{baseUrl}}/referrals/obgyn/{{referralId}}/cancel
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "reason": "Patient transferred to different facility"
+}
+
+### Add message to referral
+POST {{baseUrl}}/referrals/obgyn/{{referralId}}/messages
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "message": "Latest glucose results attached. Fasting glucose 135 mg/dL."
+}
+
+### Get referral messages
+GET {{baseUrl}}/referrals/obgyn/{{referralId}}/messages
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get referral summary report
+GET {{baseUrl}}/referrals/obgyn/reports/summary?hospitalId={{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json

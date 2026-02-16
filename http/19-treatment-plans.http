@@ -1,0 +1,79 @@
+### ========================================
+### 19 - Treatment Plans & Follow-ups
+### ========================================
+
+### Create treatment plan
+POST {{baseUrl}}/treatment-plans
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "createdById": "{{staffId}}",
+  "title": "Post-Appendectomy Recovery Plan",
+  "description": "Comprehensive recovery plan following laparoscopic appendectomy",
+  "goals": "Full recovery within 4-6 weeks",
+  "startDate": "2026-02-18",
+  "targetEndDate": "2026-04-01",
+  "status": "ACTIVE"
+}
+
+### Get treatment plan by ID
+GET {{baseUrl}}/treatment-plans/{{planId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get plans by patient
+GET {{baseUrl}}/treatment-plans/by-patient/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get plans by hospital
+GET {{baseUrl}}/treatment-plans/by-hospital/{{hospitalId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update treatment plan
+PUT {{baseUrl}}/treatment-plans/{{planId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "status": "IN_PROGRESS",
+  "notes": "Patient progressing well"
+}
+
+### Add follow-up to treatment plan
+POST {{baseUrl}}/treatment-plans/{{planId}}/follow-ups
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "followUpDate": "2026-03-04",
+  "type": "POST_OPERATIVE",
+  "description": "2-week post-op wound check",
+  "assignedToId": "{{staffId}}"
+}
+
+### Update follow-up
+PUT {{baseUrl}}/treatment-plans/{{planId}}/follow-ups/{{followUpId}}
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "status": "COMPLETED",
+  "notes": "Wound healing well, no signs of infection"
+}
+
+### Add clinical review to treatment plan
+POST {{baseUrl}}/treatment-plans/{{planId}}/reviews
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "reviewDate": "2026-03-04",
+  "reviewerId": "{{staffId}}",
+  "findings": "Patient recovering as expected",
+  "recommendations": "Continue current plan, resume normal activity in 2 weeks"
+}

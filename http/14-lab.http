@@ -1,0 +1,174 @@
+### ========================================
+### 14 - Lab Orders & Results
+### ========================================
+
+### ----------------------------------------
+### LAB ORDERS
+### ----------------------------------------
+
+### Create lab order
+POST {{baseUrl}}/lab-orders
+Authorization: Bearer {{doctorToken}}
+Content-Type: application/json
+
+{
+  "patientId": "{{patientId}}",
+  "encounterId": "{{encounterId}}",
+  "orderedById": "{{staffId}}",
+  "hospitalId": "{{hospitalId}}",
+  "testDefinitionId": "{{testDefinitionId}}",
+  "priority": "ROUTINE",
+  "clinicalNotes": "Rule out infection - patient with persistent headache",
+  "fasting": false,
+  "status": "ORDERED"
+}
+
+### List all lab orders
+GET {{baseUrl}}/lab-orders?page=0&size=20
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get lab order by ID
+GET {{baseUrl}}/lab-orders/{{labOrderId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update lab order
+PUT {{baseUrl}}/lab-orders/{{labOrderId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "status": "IN_PROGRESS",
+  "notes": "Sample collected"
+}
+
+### Delete lab order
+DELETE {{baseUrl}}/lab-orders/{{labOrderId}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### LAB RESULTS
+### ----------------------------------------
+
+### Create lab result
+POST {{baseUrl}}/lab-results
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "labOrderId": "{{labOrderId}}",
+  "patientId": "{{patientId}}",
+  "hospitalId": "{{hospitalId}}",
+  "performedById": "{{staffId}}",
+  "value": "12.5",
+  "unit": "g/dL",
+  "referenceRange": "12.0-16.0",
+  "interpretation": "NORMAL",
+  "status": "PRELIMINARY",
+  "notes": "No abnormalities detected"
+}
+
+### List all lab results
+GET {{baseUrl}}/lab-results?page=0&size=20
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get lab result by ID
+GET {{baseUrl}}/lab-results/{{labResultId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get pending review results
+GET {{baseUrl}}/lab-results/pending-review
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update lab result
+PUT {{baseUrl}}/lab-results/{{labResultId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "status": "FINAL",
+  "notes": "Verified and finalized"
+}
+
+### Release lab result
+POST {{baseUrl}}/lab-results/{{labResultId}}/release
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Sign lab result
+POST {{baseUrl}}/lab-results/{{labResultId}}/sign
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### Acknowledge lab result
+POST {{baseUrl}}/lab-results/{{labResultId}}/acknowledge
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### Compare lab result (get trends)
+GET {{baseUrl}}/lab-results/{{labResultId}}/compare
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Compare sequential results for patient/test
+GET {{baseUrl}}/lab-results/patient/{{patientId}}/test/{{testDefinitionId}}/compare-sequential
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get critical results by hospital
+GET {{baseUrl}}/lab-results/hospital/{{hospitalId}}/critical
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get unacknowledged critical results
+GET {{baseUrl}}/lab-results/hospital/{{hospitalId}}/critical/unacknowledged
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Delete lab result
+DELETE {{baseUrl}}/lab-results/{{labResultId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### LAB TEST DEFINITIONS (Reference Data)
+### ----------------------------------------
+
+### List lab test definitions
+GET {{baseUrl}}/lab-test-definitions?page=0&size=20
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### REFERENCE CATALOGS
+### ----------------------------------------
+
+### List reference catalogs
+GET {{baseUrl}}/reference/catalogs
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Create reference catalog
+POST {{baseUrl}}/reference/catalogs
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "name": "Standard Lab Tests",
+  "description": "Common laboratory test definitions",
+  "type": "LAB_TEST"
+}
+
+### Schedule catalog update
+POST {{baseUrl}}/reference/catalogs/{{catalogId}}/schedule
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "scheduledDate": "2026-03-01"
+}

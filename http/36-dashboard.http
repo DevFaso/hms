@@ -1,0 +1,119 @@
+### ========================================
+### 36 - Dashboard & Me
+### Current User Dashboard, Config,
+### Clinical Dashboard, Assignments, Alerts
+### ========================================
+
+### ----------------------------------------
+### DASHBOARD CONTROLLER (/api/dashboard)
+### ----------------------------------------
+
+### Get current user dashboard
+GET {{baseUrl}}/api/dashboard/me
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### ME CONTROLLER
+### ----------------------------------------
+
+### Get dashboard config
+GET {{baseUrl}}/me/dashboard-config
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get current user hospital
+GET {{baseUrl}}/me/hospital
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get clinical dashboard
+GET {{baseUrl}}/me/clinical-dashboard
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### Get my assignments
+GET {{baseUrl}}/me/assignments
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get critical alerts
+GET {{baseUrl}}/me/critical-alerts
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Acknowledge critical alert
+POST {{baseUrl}}/me/critical-alerts/{{alertId}}/acknowledge
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get inbox counts
+GET {{baseUrl}}/me/inbox-counts
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get roomed patients
+GET {{baseUrl}}/me/roomed-patients
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### Get on-call status
+GET {{baseUrl}}/me/on-call-status
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### Get active staff
+GET {{baseUrl}}/me/staff/active
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### DOCTOR-SPECIFIC DASHBOARD
+### ----------------------------------------
+
+### Get doctor clinical dashboard
+GET {{baseUrl}}/me/clinical-dashboard
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
+
+### ----------------------------------------
+### NURSE-SPECIFIC DASHBOARD
+### ----------------------------------------
+
+### Get nurse clinical dashboard
+GET {{baseUrl}}/me/clinical-dashboard
+Authorization: Bearer {{nurseToken}}
+Accept: application/json
+
+### ----------------------------------------
+### ADMIN DASHBOARD
+### ----------------------------------------
+
+### Get admin dashboard config
+GET {{baseUrl}}/me/dashboard-config
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### Get admin hospital info
+GET {{baseUrl}}/me/hospital
+Authorization: Bearer {{adminToken}}
+Accept: application/json
+
+### ----------------------------------------
+### SUPER ADMIN DASHBOARD (ME)
+### ----------------------------------------
+
+### Get super admin dashboard config
+GET {{baseUrl}}/me/dashboard-config
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get super admin critical alerts
+GET {{baseUrl}}/me/critical-alerts
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json
+
+### Get super admin inbox counts
+GET {{baseUrl}}/me/inbox-counts
+Authorization: Bearer {{superAdminToken}}
+Accept: application/json

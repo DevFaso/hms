@@ -1,0 +1,34 @@
+### Create Permission (Super Admin only)
+POST http://localhost:8081/api/permissions
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTQ1MzExMjksImV4cCI6MTc1NDYxNzUyOX0.GAIWMelogA6dGpKX3ATpNZgrpz9qdUd9rB4JWePJC5Ba9rcuN9Pzyuu4GZZMmS-jsK6dK0Og8iNLgWh1lGPKFw
+Content-Type: application/json
+Accept-Language: en
+
+{
+  "name": "MANAGE_LAB_RESULTS",
+  "assignmentId": "ac12859a-f858-4515-b576-c185de12b92c"
+}
+
+### Get Permission by ID
+GET http://localhost:8081/api/permissions/ece20549-c3fa-4108-962a-cbacb6e24902
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTQ1MzExMjksImV4cCI6MTc1NDYxNzUyOX0.GAIWMelogA6dGpKX3ATpNZgrpz9qdUd9rB4JWePJC5Ba9rcuN9Pzyuu4GZZMmS-jsK6dK0Og8iNLgWh1lGPKFw
+Content-Type: application/json
+Accept-Language: en
+
+### Get All Permissions
+GET http://localhost:8081/api/permissions
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTQ1MzExMjksImV4cCI6MTc1NDYxNzUyOX0.GAIWMelogA6dGpKX3ATpNZgrpz9qdUd9rB4JWePJC5Ba9rcuN9Pzyuu4GZZMmS-jsK6dK0Og8iNLgWh1lGPKFw
+Content-Type: application/json
+Accept-Language: en
+
+### Search Permissions by Assignment ID and Name
+GET http://localhost:8081/api/permissions/search?assignmentId=ac12859a-f858-4515-b576-c185de12b92c&name=LAB&page=0&size=10
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTQ1MzExMjksImV4cCI6MTc1NDYxNzUyOX0.GAIWMelogA6dGpKX3ATpNZgrpz9qdUd9rB4JWePJC5Ba9rcuN9Pzyuu4GZZMmS-jsK6dK0Og8iNLgWh1lGPKFw
+Content-Type: application/json
+Accept-Language: en
+
+### Get Minimal Permissions
+GET http://localhost:8081/api/permissions/minimal
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3NTQ1MzExMjksImV4cCI6MTc1NDYxNzUyOX0.GAIWMelogA6dGpKX3ATpNZgrpz9qdUd9rB4JWePJC5Ba9rcuN9Pzyuu4GZZMmS-jsK6dK0Og8iNLgWh1lGPKFw
+Content-Type: application/json
+Accept-Language: en

@@ -1,0 +1,73 @@
+@baseUrl = http://localhost:8081/api
+@token = eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiSE9TUElUQUxfQURNSU4iLCJST0xFX0hPU1BJVEFMX0FETUlOIl0sImlhdCI6MTc1NDg2MzgyNywiZXhwIjoxNzU0OTUwMjI3fQ.8nENkIWnZocWtw4wwQLQ5F2-iLzd37L18ptzaz8Qg5U
+@lang = en
+
+### =========================
+### BILLING INVOICES
+### =========================
+
+### Create Billing Invoice
+POST {{baseUrl}}/billing-invoices
+Authorization: Bearer {{token}}
+Accept-Language: {{lang}}
+Content-Type: application/json
+
+{
+  "patientName": "Aicha Nana",
+  "hospitalName": "General Hospital",
+  "encounterRef": "2025-08-10-ENCOUNTER-45",
+  "invoiceNumber": "INV-2025-00045",
+  "invoiceDate": "2025-08-10",
+  "dueDate": "2025-08-25",
+  "totalAmount": 0,
+  "amountPaid": 0,
+  "status": "DRAFT",
+  "notes": "Initial draft invoice"
+}
+
+### Get Invoice by ID
+GET {{baseUrl}}/billing-invoices/e65fdced-df9c-4f41-9f0f-556858778e0f
+Authorization: Bearer {{token}}
+Accept-Language: {{lang}}
+
+### List Invoices by Patient (paginated)
+# Spring Pageable params: page (0-based), size, sort=field,dir
+GET {{baseUrl}}/billing-invoices/patient/Aicha%20Nana?page=0&size=10&sort=invoiceDate,desc
+Authorization: Bearer {{token}}
+Accept-Language: {{lang}}
+
+### List Invoices by Hospital (paginated)
+GET {{baseUrl}}/billing-invoices/hospital/General%20Hospital?page=0&size=10&sort=invoiceNumber,asc
+Authorization: Bearer {{token}}
+Accept-Language: {{lang}}
+
+### Get Overdue Invoices (sent or partially paid with past dueDate)
+# referenceDate optional; defaults to today if omitted
+GET {{baseUrl}}/billing-invoices/overdue?referenceDate=2025-08-10
+Authorization: Bearer {{token}}
+Accept-Language: {{lang}}
+
+### Update Invoice
+PUT {{baseUrl}}/billing-invoices/{{invoiceId}}
+Authorization: Bearer {{token}}
+Accept-Language: {{lang}}
+Content-Type: application/json
+
+{
+  "patientId": "8e2416d9-dd07-471a-b1ca-fabd3b5b5a60",
+  "hospitalId": "0eac80dd-7ffa-43ed-be8f-a32393dce657",
+  "encounterId": "48de9d33-a1f2-4486-9b7c-b2b4502607b4",
+  "invoiceNumber": "INV-2025-00045",
+  "invoiceDate": "2025-08-10",
+  "dueDate": "2025-08-20",
+  "totalAmount": 250.00,
+  "amountPaid": 100.00,
+  "status": "PARTIALLY_PAID",
+  "notes": "Updated after adding two items"
+}
+
+### Delete Invoice
+DELETE {{baseUrl}}/billing-invoices/{{invoiceId}}
+Authorization: Bearer {{token}}
+Accept-Language: {{lang}}
+

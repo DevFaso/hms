@@ -1,0 +1,35 @@
+### Deprecated: self-registration removed; use /api/users/admin-register instead
+
+
+### Update staff member
+PUT http://localhost:8081/api/users/f5ec5898-ae29-4052-bfd5-b9a9079cd494
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IlJPTEVfQURNSU4sUk9MRV9VU0VSIiwiaWF0IjoxNzQ3ODY3NDI3LCJleHAiOjE3NDc5NTM4Mjd9.jibTnC_6CUVfPWXjq-6Y4dBIhdpqK6f23K8DaHco_6cTCrtOOx3bGh2E90AfkLc6bmSwYDeVHb-sXntuxBg-7Q
+Accept-Language: en
+
+{
+  "firstName": "John",
+  "lastName": "Doe",
+  "email": "dr.john@example.com",
+  "username": "dr.john",
+  "phoneNumber": "+1234567890",
+  "isActive": true
+}
+
+
+### Create a new staff member
+POST http://localhost:8081/api/staff
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IlJPTEVfQURNSU4sUk9MRV9VU0VSIiwiaWF0IjoxNzQ3ODY3NDI3LCJleHAiOjE3NDc5NTM4Mjd9.jibTnC_6CUVfPWXjq-6Y4dBIhdpqK6f23K8DaHco_6cTCrtOOx3bGh2E90AfkLc6bmSwYDeVHb-sXntuxBg-7Q
+
+{
+  "userId": "f5ec5898-ae29-4052-bfd5-b9a9079cd494",
+  "hospitalId": "05724583-4e82-4d29-a046-e4bf9e77d885",
+  "departmentId": "REPLACE_WITH_DEPARTMENT_ID",
+  "jobTitle": "Doctor",
+  "specialization": "General Medicine",
+  "phoneNumber": "+123456789",
+  "email": "dr.john@example.com",
+  "licenseNumber": "MD-2025-001",
+  "active": true
+}

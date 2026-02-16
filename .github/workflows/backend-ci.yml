@@ -1,14 +1,13 @@
-name: Backend CI
+name: "Backend Quality Gates & Comprehensive Test Suite"
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, develop, uat]
     paths:
       - 'hospital-core/**'
       - 'build.gradle'
       - 'settings.gradle'
   pull_request:
-    branches: [main, develop]
     paths:
       - 'hospital-core/**'
       - 'build.gradle'
@@ -16,6 +15,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: backend-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:

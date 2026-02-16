@@ -8,11 +8,13 @@ spring:
       on-profile: dev
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/hms_dev}
+    username: ${SPRING_DATASOURCE_USERNAME:hms_dev_user}
+    password: ${SPRING_DATASOURCE_PASSWORD:hms_dev_pass}
     driver-class-name: org.postgresql.Driver
   jpa:
     show-sql: false
     hibernate:
-      ddl-auto: none
+      ddl-auto: validate
   liquibase:
     enabled: true
     contexts: dev
@@ -21,3 +23,13 @@ logging:
   level:
     '[com.example.hms]': DEBUG
     '[org.springframework.web]': INFO
+
+# ===================== Seed Data =====================
+# Roles and org security data are managed by Liquibase migrations
+# (V4__seed_roles.sql, V5__seed_default_organization_security.sql).
+# Java-based seeders are disabled — Liquibase handles reference data.
+app:
+  seed:
+    enabled: false
+    synthetic:
+      enabled: false

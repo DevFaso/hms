@@ -1,0 +1,58 @@
+### Lab Orders API Endpoints
+POST localhost:8081/api/lab-orders
+Content-Type: application/json
+Accept-Language: en
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJkb2N0b3IiLCJyb2xlcyI6WyJST0xFX1BBVElFTlQiLCJST0xFX0RPQ1RPUiJdLCJpYXQiOjE3NTQ0NDA3MDMsImV4cCI6MTc1NDUyNzEwM30.fPEOU98MR1ZsYdTjjOW6S01SzOPc83r1OXMCtBvr3dtt7ep4i3DfsOCpZljnPW_UKwWM5N4kxgOQchJA8Zgx4w
+
+{
+  "patientId": "8e2416d9-dd07-471a-b1ca-fabd3b5b5a60",
+  "hospitalId": "b7022052-a379-44bf-a171-b7d3f67c5759",
+  "orderingStaffId": "9794a549-bd9c-4285-9c5f-b4af4fb63c92",
+  "encounterId": "48de9d33-a1f2-4486-9b7c-b2b4502607b4",
+  "labTestDefinitionId": "456c47ee-e579-40bb-b53f-8b825e592a1e",
+  "orderDatetime": "2025-07-26T14:30:00",
+  "status": "PENDING",
+  "notes": "Urgent test",
+  "assignmentId": "a9c37387-fdf4-4395-ba14-0e1c2fe8f169"
+}
+
+
+### List Lab Orders
+GET localhost:8081/api/lab-orders
+Accept: application/json
+Accept-Language: en
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJkb2N0b3IiLCJyb2xlcyI6WyJST0xFX1BBVElFTlQiLCJST0xFX0RPQ1RPUiJdLCJpYXQiOjE3NTQ0NDA3MDMsImV4cCI6MTc1NDUyNzEwM30.fPEOU98MR1ZsYdTjjOW6S01SzOPc83r1OXMCtBvr3dtt7ep4i3DfsOCpZljnPW_UKwWM5N4kxgOQchJA8Zgx4w
+
+### Get Lab Order by ID
+GET localhost:8081/api/lab-orders/2a6e00e8-0b96-4cb9-b733-fa57972e757e
+Accept: application/json
+Accept-Language: en
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJkb2N0b3IiLCJyb2xlcyI6WyJST0xFX1BBVElFTlQiLCJST0xFX0RPQ1RPUiJdLCJpYXQiOjE3NTQ0NDA3MDMsImV4cCI6MTc1NDUyNzEwM30.fPEOU98MR1ZsYdTjjOW6S01SzOPc83r1OXMCtBvr3dtt7ep4i3DfsOCpZljnPW_UKwWM5N4kxgOQchJA8Zgx4w
+
+### Update Lab Order
+PUT localhost:8081/api/lab-orders/2a6e00e8-0b96-4cb9-b733-fa57972e757e
+Content-Type: application/json
+Accept-Language: en
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJkb2N0b3IiLCJyb2xlcyI6WyJST0xFX1BBVElFTlQiLCJST0xFX0RPQ1RPUiJdLCJpYXQiOjE3NTQ0NDA3MDMsImV4cCI6MTc1NDUyNzEwM30.fPEOU98MR1ZsYdTjjOW6S01SzOPc83r1OXMCtBvr3dtt7ep4i3DfsOCpZljnPW_UKwWM5N4kxgOQchJA8Zgx4w
+
+{
+  "patientId": "8e2416d9-dd07-471a-b1ca-fabd3b5b5a60",
+  "orderingStaffId": "9794a549-bd9c-4285-9c5f-b4af4fb63c92",
+  "encounterId": "48de9d33-a1f2-4486-9b7c-b2b4502607b4",
+  "labTestDefinitionId": "456c47ee-e579-40bb-b53f-8b825e592a1e",
+  "assignmentId": "a9c37387-fdf4-4395-ba14-0e1c2fe8f169",
+  "orderDatetime": "2025-07-26T14:30:00",
+  "status": "COMPLETED",
+  "notes": "Updated test result info"
+}
+
+### List Lab Orders
+GET /lab-orders?page=0&size=10&patientId={UUID}&fromDate=2025-05-01T00:00:00&toDate=2025-05-26T23:59:59
+Accept: application/json
+Accept-Language: en
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IlJPTEVfVVNFUixST0xFX0FETUlOIiwiaWF0IjoxNzQ4NDMyMDA2LCJleHAiOjE3NDg1MTg0MDZ9.dFJo0WS4LXQ_B2JScWsgEViJbPNUbTfshDaUBit4LOQ8kx8tIYVfWPBFfIEURPkAPhkM_AiTNPU9xAH7j-_qWw
+
+### Delete Lab Order
+DELETE /lab-orders/{id}
+Accept-Language: en
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6IlJPTEVfVVNFUixST0xFX0FETUlOIiwiaWF0IjoxNzQ4NDMyMDA2LCJleHAiOjE3NDg1MTg0MDZ9.dFJo0WS4LXQ_B2JScWsgEViJbPNUbTfshDaUBit4LOQ8kx8tIYVfWPBFfIEURPkAPhkM_AiTNPU9xAH7j-_qWw

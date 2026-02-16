@@ -1,0 +1,147 @@
+### ========================================
+### 11 - Appointment Management
+### ========================================
+
+### List all appointments (paginated)
+GET {{baseUrl}}/appointments?page=0&size=20
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Search appointments (POST with filters)
+POST {{baseUrl}}/appointments/search
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "hospitalId": "{{hospitalId}}",
+  "startDate": "2026-02-14",
+  "endDate": "2026-02-28",
+  "status": "SCHEDULED"
+}
+
+### Create appointment
+POST {{baseUrl}}/appointments
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "patientEmail": "alice.williams@hms.local",
+  "staffEmail": "dr.smith@hms.local",
+  "hospitalName": "DevFaso General Hospital",
+  "departmentName": "Emergency Department",
+  "appointmentDate": "2026-03-01",
+  "startTime": "09:00",
+  "endTime": "09:30",
+  "status": "SCHEDULED",
+  "reason": "Annual check-up",
+  "notes": "Patient requested morning slot"
+}
+
+### Get appointment by ID
+GET {{baseUrl}}/appointments/{{appointmentId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Update appointment
+PUT {{baseUrl}}/appointments/{{appointmentId}}
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "appointmentDate": "2026-03-02",
+  "startTime": "10:00",
+  "endTime": "10:30",
+  "status": "SCHEDULED",
+  "notes": "Rescheduled to March 2"
+}
+
+### Update appointment status only
+PUT {{baseUrl}}/appointments/{{appointmentId}}/status
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "status": "CHECKED_IN"
+}
+
+### Cancel appointment (set status to CANCELLED)
+PUT {{baseUrl}}/appointments/{{appointmentId}}/status
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "status": "CANCELLED"
+}
+
+### Complete appointment
+PUT {{baseUrl}}/appointments/{{appointmentId}}/status
+Authorization: Bearer {{accessToken}}
+Content-Type: application/json
+
+{
+  "status": "COMPLETED"
+}
+
+### Get appointments by patient
+GET {{baseUrl}}/appointments/patients/{{patientId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get appointments by patient username
+GET {{baseUrl}}/appointments/patients/username/alice.williams
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get appointments by staff
+GET {{baseUrl}}/appointments/staff/{{staffId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get nurse appointments
+GET {{baseUrl}}/appointments/nurse/{{staffId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Get doctor appointments
+GET {{baseUrl}}/appointments/doctor/{{staffId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Delete appointment
+DELETE {{baseUrl}}/appointments/{{appointmentId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### ----------------------------------------
+### LOOKUP (for appointment forms)
+### ----------------------------------------
+
+### Lookup patient by email (for scheduling)
+GET {{baseUrl}}/lookup/appointment/patient/email/alice.williams@hms.local
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Lookup patient by phone
+GET {{baseUrl}}/lookup/appointment/patient/phone/555-500-0001
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Lookup patient by MRI
+GET {{baseUrl}}/lookup/appointment/patient/mri/MRN-001
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Lookup staff by number
+GET {{baseUrl}}/lookup/appointment/staff/number/MED-12345
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Lookup staff by email
+GET {{baseUrl}}/lookup/appointment/staff/email/dr.smith@hms.local
+Authorization: Bearer {{accessToken}}
+Accept: application/json
+
+### Lookup staff by ID
+GET {{baseUrl}}/lookup/appointment/staff/id/{{staffId}}
+Authorization: Bearer {{accessToken}}
+Accept: application/json

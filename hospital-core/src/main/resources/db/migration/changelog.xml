@@ -5,6 +5,35 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
         https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
-    <!-- Migrations will be added here as we port code from the old repo -->
+    <!-- =================================================================
+         V1: Complete schema — all 10 schemas + 153 tables
+         Generated from Hibernate entity model to ensure 1:1 alignment
+         ================================================================= -->
+    <changeSet id="V1-initial-schema" author="hms-team" runOnChange="false">
+        <sqlFile path="V1__Initial_Schema.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V2: Seed 24 role codes (reference data required at bootstrap)
+         ================================================================= -->
+    <changeSet id="V2-seed-roles" author="hms-team" runOnChange="false">
+        <sqlFile path="V2__seed_roles.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V3: Seed DEFAULT_ORG + 6 security policies + security rules
+         ================================================================= -->
+    <changeSet id="V3-seed-default-org-security" author="hms-team" runOnChange="false">
+        <sqlFile path="V3__seed_default_organization_security.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
 
 </databaseChangeLog>

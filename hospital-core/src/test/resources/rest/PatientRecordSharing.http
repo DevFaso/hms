@@ -1,0 +1,88 @@
+### [1] Share patient record (expect 200 OK)
+POST http://localhost:8081/api/records/share
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0NTEyNzEsImV4cCI6MTc1NDUzNzY3MX0.uXYNjPxkBsk8HtmcotNGlQ0KPPU8nb5wDSDPu8H8Xlyj5Nmm3LyHJyyWJ2TZdDYQxX-zf0TLc_gsQIMRnY1Bgg
+Content-Type: application/json
+
+{
+  "patientId": "2eeaf1bd-a2e6-450e-8b8c-9101bc833a1c",
+  "fromHospitalId": "b7022052-a379-44bf-a171-b7d3f67c5759",
+  "toHospitalId": "d9812876-a82c-4348-8cb7-23f7d843597a"
+}
+
+
+> {%
+    client.test("Share Patient Records - 200 OK", function() {
+        client.assert(response.status === 200, "Status is 200");
+        client.assert(response.body.patientId, "Patient ID exists in response");
+        client.assert(response.body.hospitalMRIs, "Hospital MRIs present");
+    });
+%}
+
+### [2] Share patient record with missing consent (expect 403 or 500 with error)
+POST http://localhost:8081/api/records/share
+Content-Type: application/x-www-form-urlencoded
+Accept: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6WyJST0xFX0FETUlOIl0sImlhdCI6MTc1MDIwOTY5OCwiZXhwIjoxNzUwMjk2MDk4fQ.r4OrOXSUgsgAX8OAkJuGfsnTI_iTJ1YDmCQkk7TGjROUu2hJiqN48zwauhPEFCuZYkJ0bKLvdj6aoQrQ2zHs4Q
+
+patientId=d3f75704-e372-4b90-876b-0a21fcb0562d&
+fromHospitalId=8e3107e0-0c75-42b6-a73e-1e5850ca3066&
+toHospitalId=ed470bb9-347c-448d-8203-f6261d6ad0f1
+
+> {%
+    client.test("Consent not granted or expired", function() {
+        client.assert(response.status === 403 || response.status === 500, "Should fail with 403 or 500");
+        client.assert(response.body.message && response.body.message.includes("Consent"), "Error message contains 'Consent'");
+    });
+%}
+
+### [3] Export patient record as CSV (download)
+GET http://localhost:8081/api/records/export
+    ?patientId=2eeaf1bd-a2e6-450e-8b8c-9101bc833a1c
+    &fromHospitalId=b7022052-a379-44bf-a171-b7d3f67c5759
+    &toHospitalId=d9812876-a82c-4348-8cb7-23f7d843597a
+    &format=csv
+Accept: text/csv
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0NTEyNzEsImV4cCI6MTc1NDUzNzY3MX0.uXYNjPxkBsk8HtmcotNGlQ0KPPU8nb5wDSDPu8H8Xlyj5Nmm3LyHJyyWJ2TZdDYQxX-zf0TLc_gsQIMRnY1Bgg
+
+> {%
+    client.test("Export Patient Records - CSV", function() {
+        client.assert(response.status === 200, "Status is 200");
+        client.assert(response.headers.valueOf("content-type").includes("csv"), "CSV content type");
+        client.assert(response.body.includes("Patient ID"), "CSV contains header");
+    });
+%}
+
+### [4] Export patient record as PDF (download)
+GET http://localhost:8081/api/records/export
+    ?patientId=2eeaf1bd-a2e6-450e-8b8c-9101bc833a1c
+    &fromHospitalId=b7022052-a379-44bf-a171-b7d3f67c5759
+    &toHospitalId=d9812876-a82c-4348-8cb7-23f7d843597a
+    &format=pdf
+Accept: application/pdf
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJoYWRtaW4zIiwicm9sZXMiOlsiUk9MRV9IT1NQSVRBTF9BRE1JTiJdLCJpYXQiOjE3NTQ0NTEyNzEsImV4cCI6MTc1NDUzNzY3MX0.uXYNjPxkBsk8HtmcotNGlQ0KPPU8nb5wDSDPu8H8Xlyj5Nmm3LyHJyyWJ2TZdDYQxX-zf0TLc_gsQIMRnY1Bgg
+
+> {%
+    client.test("Export Patient Records - PDF", function() {
+        client.assert(response.status === 200, "Status is 200");
+        client.assert(response.headers.valueOf("content-type").includes("pdf"), "PDF content type");
+        client.assert(response.headers.valueOf("content-disposition").includes(".pdf"), "Attachment has PDF filename");
+        client.assert(response.body.length > 100, "PDF file has content");
+    });
+%}
+
+### [5] Export patient record with invalid format (expect 400)
+GET http://localhost:8081/api/records/export
+    ?patientId=d3f75704-e372-4b90-876b-0a21fcb0562d
+    &fromHospitalId=8e3107e0-0c75-42b6-a73e-1e5850ca3066
+    &toHospitalId=ed470bb9-347c-448d-8203-f6261d6ad0f1
+    &format=exe
+Accept: application/json
+Authorization: Bearer eyJhbGciOiJIUzUxMiJ9.eyJzdWIiOiJ0Y2hpY28iLCJyb2xlcyI6WyJST0xFX0FETUlOIl0sImlhdCI6MTc1MDIwOTY5OCwiZXhwIjoxNzUwMjk2MDk4fQ.r4OrOXSUgsgAX8OAkJuGfsnTI_iTJ1YDmCQkk7TGjROUu2hJiqN48zwauhPEFCuZYkJ0bKLvdj6aoQrQ2zHs4Q
+
+> {%
+    client.test("Export Patient Records - Invalid Format", function() {
+        client.assert(response.status === 400 || response.status === 500, "Should fail with 400 or 500");
+        client.assert(response.body.message && response.body.message.includes("Unsupported"), "Error message contains 'Unsupported'");
+    });
+%}
+

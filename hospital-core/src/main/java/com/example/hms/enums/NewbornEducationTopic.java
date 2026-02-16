@@ -1,0 +1,14 @@
+package com.example.hms.enums;
+
+public enum NewbornEducationTopic {
+    SAFE_SLEEP,
+    FEEDING_CUES,
+    BREASTFEEDING_SUPPORT,
+    FORMULA_FEEDING_GUIDANCE,
+    THERMOREGULATION,
+    JAUNDICE_MONITORING,
+    WHEN_TO_SEEK_CARE,
+    CORD_CARE,
+    NEWBORN_SAFETY_CHECKS,
+    FOLLOW_UP_APPOINTMENTS
+}
