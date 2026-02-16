@@ -333,6 +333,71 @@ feature-flags.json
 
 ---
 
+## Rollback Procedures
+
+### Release Tags
+
+| Tag | Commit | Description |
+|-----|--------|-------------|
+| `v0.1.0` | `1c9304f` | First successful Railway dev deployment (current) |
+| `v0.1.0-rc1` | `df3d2ee` | MVP2 merge — pre-deployment baseline |
+
+### Code Rollback (Railway Dev)
+
+Railway auto-deploys from the `develop` branch. To roll back:
+
+```bash
+# 1. Roll back develop to a known-good tag
+git checkout develop
+git reset --hard v0.1.0          # or any tagged version
+git push origin develop --force  # Railway will auto-redeploy
+
+# 2. Or roll back to a specific commit
+git reset --hard <commit-sha>
+git push origin develop --force
+```
+
+### Database Rollback (Liquibase)
+
+⚠️ **Liquibase migrations are forward-only by default.** Rolled-back code will
+skip already-applied changesets, but **will NOT undo DDL/DML changes**.
+
+For a true DB rollback you must:
+
+```bash
+# Option 1: Liquibase rollback (if rollback SQL was generated)
+# Connect to the Railway DB and run:
+liquibase rollbackCount 1
+
+# Option 2: Manual — remove the changeset record and reverse the SQL
+DELETE FROM public.databasechangelog WHERE id = '<changeset-id>';
+-- Then manually run the reverse DDL/DML
+
+# Option 3: Nuclear — drop and recreate (DEV ONLY)
+# Railway dashboard → Postgres plugin → Delete → Re-create
+# Redeploy app — Liquibase will re-run all migrations from V1
+```
+
+### Current Migration State (Railway Dev)
+
+| Changeset | Status | Description |
+|-----------|--------|-------------|
+| V1-initial-schema | ✅ Applied | 153 tables, 10 schemas |
+| V1.1-add-unique-constraints | ✅ Applied | Unique indexes on roles, orgs, users |
+| V2-seed-roles | ✅ Applied | 24 security roles |
+| V3-seed-default-org-security | ✅ Applied | DEFAULT_ORG + security policies |
+
+### Emergency Rollback Checklist
+
+1. **Identify the last known-good tag**: `git tag -l`
+2. **Reset develop**: `git reset --hard <tag> && git push origin develop --force`
+3. **Wait for Railway redeploy** (~90s build + ~30s startup)
+4. **Verify healthcheck**: `curl <railway-url>/api/actuator/health`
+5. **If DB migration caused the issue**: see Database Rollback above
+6. **Post-mortem**: document what went wrong, create a hotfix branch
+
+---
+
 ## Key Principle
 
 > **Each MVP must compile and boot on its own.**
