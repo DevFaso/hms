@@ -32,12 +32,14 @@ public class ChatMessageMapper {
 
     private void populateSenderInfo(ChatMessageResponseDTO dto, User sender) {
         if (sender == null) return;
+        dto.setSenderId(sender.getId() != null ? sender.getId().toString() : null);
         dto.setSenderName(resolveFullName(sender));
         dto.setSenderRole(resolvePrimaryRole(sender));
     }
 
     private void populateRecipientInfo(ChatMessageResponseDTO dto, User recipient) {
         if (recipient == null) return;
+        dto.setRecipientId(recipient.getId() != null ? recipient.getId().toString() : null);
         dto.setRecipientName(resolveFullName(recipient));
         dto.setRecipientRole(resolvePrimaryRole(recipient));
         if (recipient.getStaffProfile() != null && recipient.getStaffProfile().getDepartment() != null) {

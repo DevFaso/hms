@@ -1,0 +1,185 @@
+<div class="shell" [class.collapsed]="sidebarCollapsed()">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo-area">
+        <span class="material-symbols-outlined logo-icon">local_hospital</span>
+        @if (!sidebarCollapsed()) {
+          <span class="logo-text">HMS</span>
+        }
+      </div>
+      <button class="toggle-btn" (click)="toggleSidebar()" aria-label="Toggle sidebar">
+        <span class="material-symbols-outlined">
+          {{ sidebarCollapsed() ? 'chevron_right' : 'chevron_left' }}
+        </span>
+      </button>
+    </div>
+
+    <nav class="sidebar-nav">
+      @for (item of navItems(); track item.route) {
+        <a
+          class="nav-item"
+          [routerLink]="item.route"
+          routerLinkActive="active"
+          [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' }"
+          (click)="closeOverlays()"
+        >
+          <span class="material-symbols-outlined nav-icon">{{ item.icon }}</span>
+          @if (!sidebarCollapsed()) {
+            <span class="nav-label">{{ item.label }}</span>
+          }
+        </a>
+      }
+    </nav>
+
+    <div class="sidebar-footer">
+      @if (!sidebarCollapsed()) {
+        <div class="user-mini">
+          <div class="avatar-sm">
+            @if (userAvatarUrl()) {
+              <img [src]="userAvatarUrl()" alt="Avatar" class="avatar-img" />
+            } @else {
+              {{ userInitials() }}
+            }
+          </div>
+          <div class="user-info-mini">
+            <span class="user-name-mini">{{ userName() }}</span>
+            <span class="user-role-mini">{{ userRole() }}</span>
+          </div>
+        </div>
+      }
+    </div>
+  </aside>
+
+  <!-- Main Content -->
+  <div class="main-area">
+    <!-- Header -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="mobile-toggle" (click)="toggleSidebar()" aria-label="Menu">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <h2 class="page-title">Hospital Management System</h2>
+      </div>
+
+      <div class="topbar-right">
+        <!-- Notifications -->
+        <button
+          class="icon-btn"
+          (click)="toggleNotifications()"
+          [attr.aria-label]="'Notifications (' + unreadCount() + ' unread)'"
+        >
+          <span class="material-symbols-outlined">notifications</span>
+          @if (unreadCount() > 0) {
+            <span class="badge">{{ unreadCount() > 99 ? '99+' : unreadCount() }}</span>
+          }
+        </button>
+
+        <!-- Profile -->
+        <button class="profile-btn" (click)="toggleProfileMenu()">
+          <div class="avatar">
+            @if (userAvatarUrl()) {
+              <img [src]="userAvatarUrl()" alt="Avatar" class="avatar-img" />
+            } @else {
+              {{ userInitials() }}
+            }
+          </div>
+          @if (userName()) {
+            <span class="profile-name">{{ userName() }}</span>
+          }
+          <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Notification Panel -->
+    @if (notifPanelOpen()) {
+      <div
+        class="overlay-backdrop"
+        aria-hidden="true"
+        (click)="closeOverlays()"
+        (keydown.escape)="closeOverlays()"
+      ></div>
+      <div class="notif-panel">
+        <div class="panel-header">
+          <h3>Notifications</h3>
+          <button class="close-panel" (click)="toggleNotifications()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="panel-body">
+          @if (recentNotifications().length === 0) {
+            <p class="empty-msg">No notifications</p>
+          }
+          @for (n of recentNotifications(); track n.id) {
+            <div class="notif-item" [class.unread]="!n.read">
+              <span class="material-symbols-outlined notif-icon">
+                {{ n.type === 'ALERT' ? 'warning' : 'info' }}
+              </span>
+              <div class="notif-content">
+                <p class="notif-msg">{{ n.message }}</p>
+                <span class="notif-time">{{ n.createdAt }}</span>
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Profile Menu -->
+    @if (profileMenuOpen()) {
+      <div
+        class="overlay-backdrop"
+        aria-hidden="true"
+        (click)="closeOverlays()"
+        (keydown.escape)="closeOverlays()"
+      ></div>
+      <div class="profile-menu">
+        <div class="profile-menu-header">
+          <div class="avatar-lg">
+            @if (userAvatarUrl()) {
+              <img [src]="userAvatarUrl()" alt="Avatar" class="avatar-img" />
+            } @else {
+              {{ userInitials() }}
+            }
+          </div>
+          <div>
+            <p class="pm-name">{{ userName() }}</p>
+            <p class="pm-role">{{ userRole() }}</p>
+          </div>
+        </div>
+        <hr />
+        <a class="pm-item" routerLink="/profile" (click)="closeOverlays()">
+          <span class="material-symbols-outlined">person</span> My Profile
+        </a>
+        <a class="pm-item" routerLink="/settings" (click)="closeOverlays()">
+          <span class="material-symbols-outlined">settings</span> Settings
+        </a>
+        <hr />
+        <button class="pm-item logout" (click)="logout()">
+          <span class="material-symbols-outlined">logout</span> Sign Out
+        </button>
+      </div>
+    }
+
+    <!-- Page Content -->
+    <main class="content">
+      <router-outlet />
+    </main>
+  </div>
+</div>
+
+<!-- Toast Notifications -->
+<div class="toast-container">
+  @for (t of toast.toasts(); track t.id) {
+    <div class="toast" [class]="'toast toast-' + t.type">
+      <span class="material-symbols-outlined toast-icon">
+        {{ t.type === 'success' ? 'check_circle' : t.type === 'error' ? 'error' : 'info' }}
+      </span>
+      <span class="toast-msg">{{ t.message }}</span>
+      <button class="toast-close" (click)="dismissToast(t.id)">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+  }
+</div>

@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingOrderPriority;
 import com.example.hms.enums.ImagingOrderStatus;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.ImagingOrderMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.ImagingOrder;
@@ -251,5 +252,213 @@ class ImagingOrderServiceImplTest {
         assertThat(order.getAttestationConfirmed()).isTrue();
         assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
         assertThat(result).isSameAs(responseDTO);
+    }
+
+    @Test
+    void getOrderReturnsResponseDTO() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        ImagingOrderResponseDTO dto = ImagingOrderResponseDTO.builder().id(orderId).build();
+
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(dto);
+
+        ImagingOrderResponseDTO result = imagingOrderService.getOrder(orderId);
+
+        assertThat(result.getId()).isEqualTo(orderId);
+    }
+
+    @Test
+    void getOrderThrowsWhenNotFound() {
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.empty());
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+            ResourceNotFoundException.class,
+            () -> imagingOrderService.getOrder(orderId)
+        );
+    }
+
+    @Test
+    void getOrdersByPatientFiltersByStatusWhenProvided() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        ImagingOrderResponseDTO dto = ImagingOrderResponseDTO.builder().id(orderId).build();
+
+        when(imagingOrderRepository.findByPatient_IdAndStatusOrderByOrderedAtDesc(patientId, ImagingOrderStatus.ORDERED))
+            .thenReturn(List.of(order));
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(dto);
+
+        List<ImagingOrderResponseDTO> result = imagingOrderService.getOrdersByPatient(patientId, ImagingOrderStatus.ORDERED);
+
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void getOrdersByPatientReturnsAllWhenStatusNull() {
+        when(imagingOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId)).thenReturn(List.of());
+
+        List<ImagingOrderResponseDTO> result = imagingOrderService.getOrdersByPatient(patientId, null);
+
+        assertThat(result).isEmpty();
+        verify(imagingOrderRepository).findByPatient_IdOrderByOrderedAtDesc(patientId);
+    }
+
+    @Test
+    void getOrdersByHospitalFiltersByStatusWhenProvided() {
+        when(imagingOrderRepository.findByHospital_IdAndStatusInOrderByOrderedAtDesc(hospitalId, List.of(ImagingOrderStatus.DRAFT)))
+            .thenReturn(List.of());
+
+        List<ImagingOrderResponseDTO> result = imagingOrderService.getOrdersByHospital(hospitalId, ImagingOrderStatus.DRAFT);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getOrdersByHospitalReturnsAllWhenStatusNull() {
+        when(imagingOrderRepository.findByHospital_IdOrderByOrderedAtDesc(hospitalId)).thenReturn(List.of());
+
+        List<ImagingOrderResponseDTO> result = imagingOrderService.getOrdersByHospital(hospitalId, null);
+
+        assertThat(result).isEmpty();
+        verify(imagingOrderRepository).findByHospital_IdOrderByOrderedAtDesc(hospitalId);
+    }
+
+    @Test
+    void getAllOrdersFiltersByStatusWhenProvided() {
+        when(imagingOrderRepository.findByStatusOrderByOrderedAtDesc(ImagingOrderStatus.COMPLETED))
+            .thenReturn(List.of());
+
+        List<ImagingOrderResponseDTO> result = imagingOrderService.getAllOrders(ImagingOrderStatus.COMPLETED);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getAllOrdersReturnsAllWhenStatusNull() {
+        when(imagingOrderRepository.findAllByOrderByOrderedAtDesc()).thenReturn(List.of());
+
+        List<ImagingOrderResponseDTO> result = imagingOrderService.getAllOrders(null);
+
+        assertThat(result).isEmpty();
+        verify(imagingOrderRepository).findAllByOrderByOrderedAtDesc();
+    }
+
+    @Test
+    void previewDuplicatesReturnsEmptyWhenPatientIdNull() {
+        List<ImagingOrderDuplicateMatchDTO> result = imagingOrderService.previewDuplicates(null, ImagingModality.CT, "Chest", 30);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void previewDuplicatesReturnsEmptyWhenModalityNull() {
+        List<ImagingOrderDuplicateMatchDTO> result = imagingOrderService.previewDuplicates(patientId, null, "Chest", 30);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void captureProviderSignatureUsesCurrentTimeWhenSignedAtNull() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+
+        ImagingOrderSignatureRequestDTO request = ImagingOrderSignatureRequestDTO.builder()
+            .providerName("Dr. House")
+            .providerUserId(UUID.randomUUID())
+            .signatureStatement("Signed")
+            .signedAt(null)
+            .build();
+
+        ImagingOrderResponseDTO responseDTO = ImagingOrderResponseDTO.builder().id(orderId).build();
+
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(responseDTO);
+
+        imagingOrderService.captureProviderSignature(orderId, request);
+
+        assertThat(order.getProviderSignedAt()).isNotNull();
+    }
+
+    @Test
+    void createOrderNoDuplicatesClearsDuplicateFlags() {
+        ImagingOrderRequestDTO request = ImagingOrderRequestDTO.builder()
+            .patientId(patientId)
+            .hospitalId(hospitalId)
+            .modality(ImagingModality.CT)
+            .studyType("CT Head")
+            .bodyRegion(null)
+            .priority(ImagingOrderPriority.ROUTINE)
+            .build();
+
+        ImagingOrder order = new ImagingOrder();
+        order.setPatient(patient);
+        order.setHospital(hospital);
+        order.setModality(ImagingModality.CT);
+
+        ImagingOrderResponseDTO responseDTO = ImagingOrderResponseDTO.builder().id(UUID.randomUUID()).build();
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(imagingOrderMapper.toEntity(request, patient, hospital)).thenReturn(order);
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class)))
+            .thenReturn(Collections.emptyList());
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        when(imagingOrderMapper.toResponseDTO(order, Collections.emptyList())).thenReturn(responseDTO);
+
+        imagingOrderService.createOrder(request, null);
+
+        assertThat(order.getDuplicateOfRecentOrder()).isFalse();
+        assertThat(order.getDuplicateReferenceOrderId()).isNull();
+        assertThat(order.getOrderingProviderUserId()).isNull();
+    }
+
+    @Test
+    void updateOrderStatusNonCancelledDoesNotSetCancellationFields() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(ImagingOrderStatus.DRAFT);
+
+        ImagingOrderStatusUpdateRequestDTO request = ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.SCHEDULED)
+            .scheduledDate(LocalDate.now().plusDays(3))
+            .scheduledTime("09:00")
+            .appointmentLocation("Wing A")
+            .build();
+
+        ImagingOrderResponseDTO responseDTO = ImagingOrderResponseDTO.builder().id(orderId).build();
+
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(responseDTO);
+
+        imagingOrderService.updateOrderStatus(orderId, request);
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.SCHEDULED);
+        assertThat(order.getCancellationReason()).isNull();
+        assertThat(order.getCancelledAt()).isNull();
+    }
+
+    @Test
+    void normalizeBodyRegionReturnsNullForNull() {
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class)))
+            .thenReturn(Collections.emptyList());
+
+        List<ImagingOrderDuplicateMatchDTO> result = imagingOrderService.previewDuplicates(patientId, ImagingModality.CT, null, 30);
+
+        assertThat(result).isEmpty();
+        verify(imagingOrderRepository).findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class));
+    }
+
+    @Test
+    void normalizeBodyRegionReturnsNullForEmptyString() {
+        when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class)))
+            .thenReturn(Collections.emptyList());
+
+        List<ImagingOrderDuplicateMatchDTO> result = imagingOrderService.previewDuplicates(patientId, ImagingModality.CT, "", 30);
+
+        assertThat(result).isEmpty();
+        verify(imagingOrderRepository).findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class));
     }
 }

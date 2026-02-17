@@ -1,0 +1,63 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Departments</h1>
+      <p class="page-subtitle">Manage hospital departments and divisions</p>
+    </div>
+  </div>
+
+  <div class="search-bar">
+    <span class="material-symbols-outlined search-icon">search</span>
+    <input
+      type="text"
+      placeholder="Search departments..."
+      [(ngModel)]="searchTerm"
+      (ngModelChange)="applyFilter()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading departments...</p>
+    </div>
+  }
+
+  @if (!loading() && filtered().length > 0) {
+    <div class="dept-grid">
+      @for (dept of filtered(); track dept.id) {
+        <a class="dept-card" [routerLink]="['/departments', dept.id]">
+          <div class="dept-icon-wrap">
+            <span class="material-symbols-outlined">domain</span>
+          </div>
+          <div class="dept-info">
+            <h4>{{ dept.name }}</h4>
+            <span class="dept-code">{{ dept.code }}</span>
+            @if (dept.description) {
+              <p class="dept-desc">{{ dept.description }}</p>
+            }
+          </div>
+          <div class="dept-meta">
+            @if (dept.staffCount !== null && dept.staffCount !== undefined) {
+              <span class="meta-chip">
+                <span class="material-symbols-outlined">group</span>
+                {{ dept.staffCount }}
+              </span>
+            }
+            <span class="status-badge" [class.active]="dept.active">
+              {{ dept.active ? 'Active' : 'Inactive' }}
+            </span>
+          </div>
+        </a>
+      }
+    </div>
+  }
+
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">domain</span>
+      <h3>No departments found</h3>
+      <p>{{ searchTerm ? 'Try adjusting your search.' : 'No departments created yet.' }}</p>
+    </div>
+  }
+</div>

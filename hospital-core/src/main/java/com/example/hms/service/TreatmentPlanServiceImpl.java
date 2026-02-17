@@ -125,6 +125,15 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public Page<TreatmentPlanResponseDTO> listAll(TreatmentPlanStatus status, Pageable pageable) {
+        Page<TreatmentPlan> page = (status != null)
+            ? treatmentPlanRepository.findAllByStatus(status, pageable)
+            : treatmentPlanRepository.findAll(pageable);
+        return page.map(treatmentPlanMapper::toResponseDTO);
+    }
+
+    @Override
     public TreatmentPlanFollowUpDTO addFollowUp(UUID planId, TreatmentPlanFollowUpRequestDTO requestDTO) {
         TreatmentPlan plan = getPlanOrThrow(planId);
         TreatmentPlanFollowUp followUp = TreatmentPlanFollowUp.builder()

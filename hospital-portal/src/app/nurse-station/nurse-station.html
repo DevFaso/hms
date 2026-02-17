@@ -1,0 +1,239 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Nurse Station</h1>
+      <p class="page-subtitle">Clinical tasks, medications, and patient care</p>
+    </div>
+  </div>
+  <div class="summary-cards">
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon vitals">monitor_heart</span>
+      <div class="card-info">
+        <span class="card-value">{{ vitals().length }}</span
+        ><span class="card-label">Vitals Due</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon meds">medication</span>
+      <div class="card-info">
+        <span class="card-value">{{ medications().length }}</span
+        ><span class="card-label">Medications</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon orders">assignment</span>
+      <div class="card-info">
+        <span class="card-value">{{ orders().length }}</span
+        ><span class="card-label">Orders</span>
+      </div>
+    </div>
+    <div class="summary-card overdue">
+      <span class="material-symbols-outlined card-icon overdue-icon">warning</span>
+      <div class="card-info">
+        <span class="card-value">{{ overdueCount() }}</span
+        ><span class="card-label">Overdue</span>
+      </div>
+    </div>
+  </div>
+  <div class="station-layout">
+    <div class="main-content">
+      <div class="section-tabs">
+        <button
+          class="tab-btn"
+          [class.active]="activeSection() === 'vitals'"
+          (click)="setSection('vitals')"
+          title="View vitals due"
+        >
+          Vitals Due
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeSection() === 'medications'"
+          (click)="setSection('medications')"
+          title="View medication MAR"
+        >
+          Medication MAR
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeSection() === 'orders'"
+          (click)="setSection('orders')"
+          title="View orders"
+        >
+          Orders
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeSection() === 'handoffs'"
+          (click)="setSection('handoffs')"
+          title="View handoffs"
+        >
+          Handoffs
+        </button>
+      </div>
+      @if (loading()) {
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Loading tasks...</p>
+        </div>
+      }
+      @if (!loading() && activeSection() === 'vitals') {
+        @if (vitals().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">monitor_heart</span>
+            <h3>No vitals due</h3>
+          </div>
+        }
+        @if (vitals().length > 0) {
+          <div class="data-table">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Patient</th>
+                  <th scope="col">Type</th>
+                  <th scope="col">Due Time</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (v of vitals(); track v.id) {
+                  <tr class="data-row" [class.overdue-row]="v.overdue">
+                    <td>
+                      <div class="cell-primary">{{ v.patientName }}</div>
+                    </td>
+                    <td>{{ v.type }}</td>
+                    <td>{{ v.dueTime | date: 'shortTime' }}</td>
+                    <td>
+                      @if (v.overdue) {
+                        <span class="badge-overdue">Overdue</span>
+                      } @else {
+                        <span class="badge-pending">Pending</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+      @if (!loading() && activeSection() === 'medications') {
+        @if (medications().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">medication</span>
+            <h3>No medications scheduled</h3>
+          </div>
+        }
+        @if (medications().length > 0) {
+          <div class="data-table">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Patient</th>
+                  <th scope="col">Medication</th>
+                  <th scope="col">Dose</th>
+                  <th scope="col">Route</th>
+                  <th scope="col">Due</th>
+                  <th scope="col">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (m of medications(); track m.id) {
+                  <tr class="data-row">
+                    <td>
+                      <div class="cell-primary">{{ m.patientName }}</div>
+                    </td>
+                    <td>
+                      <strong>{{ m.medication }}</strong>
+                    </td>
+                    <td>{{ m.dose }}</td>
+                    <td>{{ m.route }}</td>
+                    <td>{{ m.dueTime | date: 'shortTime' }}</td>
+                    <td>
+                      <span class="status-badge status-{{ m.status | lowercase }}">{{
+                        m.status
+                      }}</span>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+      @if (!loading() && activeSection() === 'orders') {
+        @if (orders().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">assignment</span>
+            <h3>No orders pending</h3>
+          </div>
+        }
+        @if (orders().length > 0) {
+          <div class="data-table">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Patient</th>
+                  <th scope="col">Order Type</th>
+                  <th scope="col">Priority</th>
+                  <th scope="col">Due</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (o of orders(); track o.id) {
+                  <tr class="data-row">
+                    <td>
+                      <div class="cell-primary">{{ o.patientName }}</div>
+                    </td>
+                    <td>{{ o.orderType }}</td>
+                    <td>
+                      <span class="priority-badge priority-{{ o.priority | lowercase }}">{{
+                        o.priority
+                      }}</span>
+                    </td>
+                    <td>{{ o.dueTime | date: 'shortTime' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+      @if (!loading() && activeSection() === 'handoffs') {
+        @if (handoffs().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">swap_horiz</span>
+            <h3>No handoffs</h3>
+          </div>
+        }
+        @if (handoffs().length > 0) {
+          <div class="handoff-list">
+            @for (h of handoffs(); track h.id) {
+              <div class="handoff-card">
+                <div class="handoff-header">
+                  <span class="cell-primary">{{ h.patientName }}</span
+                  ><span class="handoff-dir">{{ h.direction }}</span>
+                </div>
+                <p class="handoff-note">{{ h.note || 'No notes' }}</p>
+                <span class="handoff-time">{{ h.updatedAt | date: 'medium' }}</span>
+              </div>
+            }
+          </div>
+        }
+      }
+    </div>
+    <aside class="announcements-sidebar">
+      <h3><span class="material-symbols-outlined">campaign</span> Announcements</h3>
+      @if (announcements().length === 0) {
+        <p class="no-announcements">No announcements</p>
+      }
+      @for (a of announcements(); track a.id) {
+        <div class="announcement-card">
+          <span class="announcement-category">{{ a.category }}</span>
+          <p>{{ a.text }}</p>
+          <span class="announcement-time">{{ a.createdAt | date: 'short' }}</span>
+        </div>
+      }
+    </aside>
+  </div>
+</div>

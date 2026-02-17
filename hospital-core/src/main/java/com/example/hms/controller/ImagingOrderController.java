@@ -102,6 +102,16 @@ public class ImagingOrderController {
 		return ResponseEntity.ok(results);
 	}
 
+	@GetMapping("/orders")
+	@PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
+	@Operation(summary = "List all imaging orders across all hospitals (super admin)")
+	public ResponseEntity<List<ImagingOrderResponseDTO>> getAllOrders(
+		@RequestParam(required = false) ImagingOrderStatus status
+	) {
+		List<ImagingOrderResponseDTO> results = imagingOrderService.getAllOrders(status);
+		return ResponseEntity.ok(results);
+	}
+
 	@GetMapping("/orders/hospital/{hospitalId}")
 	@PreAuthorize("hasAuthority('VIEW_IMAGING_ORDERS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RADIOLOGIST')")
 	@Operation(summary = "List imaging orders for a hospital")

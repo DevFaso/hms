@@ -6,7 +6,12 @@
     "TITLE": "Iniciar Sesión",
     "USERNAME": "Nombre de usuario",
     "PASSWORD": "Contraseña",
+    "REMEMBER_ME": "Recordarme",
+    "SIGN_IN": "Iniciar sesión",
+    "SIGNING_IN": "Iniciando sesión",
     "SUBMIT": "Entrar",
+    "FORGOT_PASSWORD": "¿Olvidaste tu contraseña?",
+    "FORGOT_USERNAME": "¿Olvidaste tu nombre de usuario?",
     "ERROR": "Credenciales inválidas"
   },
   "COMMON": {

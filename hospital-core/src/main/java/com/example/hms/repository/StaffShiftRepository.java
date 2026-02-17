@@ -66,4 +66,9 @@ public interface StaffShiftRepository extends JpaRepository<StaffShift, UUID> {
         Collection<LocalDate> dates,
         Collection<StaffShiftStatus> statuses
     );
+
+    List<StaffShift> findByShiftDateBetweenOrderByShiftDateAscStartTimeAsc(
+        LocalDate startDate,
+        LocalDate endDate
+    );
 }

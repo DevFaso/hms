@@ -1,0 +1,198 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Prescriptions</h1>
+      <p class="page-subtitle">Medication orders and prescription management</p>
+    </div>
+  </div>
+  <div class="summary-cards">
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon active">medication</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByStatus('ACTIVE') }}</span
+        ><span class="card-label">Active</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon completed">check_circle</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByStatus('COMPLETED') }}</span
+        ><span class="card-label">Completed</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon cancelled">cancel</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByStatus('CANCELLED') }}</span
+        ><span class="card-label">Cancelled</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon total">bar_chart</span>
+      <div class="card-info">
+        <span class="card-value">{{ prescriptions().length }}</span
+        ><span class="card-label">Total</span>
+      </div>
+    </div>
+  </div>
+  <div class="filter-bar">
+    <div class="tabs">
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'all'"
+        (click)="setTab('all')"
+        title="Show all"
+      >
+        All
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'active'"
+        (click)="setTab('active')"
+        title="Show active"
+      >
+        Active
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'completed'"
+        (click)="setTab('completed')"
+        title="Show completed"
+      >
+        Completed
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'cancelled'"
+        (click)="setTab('cancelled')"
+        title="Show cancelled"
+      >
+        Cancelled
+      </button>
+    </div>
+    <div class="search-box">
+      <span class="material-symbols-outlined">search</span
+      ><input
+        type="text"
+        placeholder="Search prescriptions..."
+        [(ngModel)]="searchTerm"
+        (input)="applyFilter()"
+      />
+    </div>
+  </div>
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading prescriptions...</p>
+    </div>
+  }
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">medication</span>
+      <h3>No prescriptions found</h3>
+      <p>Prescriptions will appear here.</p>
+    </div>
+  }
+  @if (!loading() && filtered().length > 0) {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Patient</th>
+            <th scope="col">Medication</th>
+            <th scope="col">Dosage</th>
+            <th scope="col">Frequency</th>
+            <th scope="col">Duration</th>
+            <th scope="col">Prescribed By</th>
+            <th scope="col">Status</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (p of filtered(); track p.id) {
+            <tr class="data-row">
+              <td>
+                <div class="cell-primary">{{ p.patientFullName || 'Unknown' }}</div>
+              </td>
+              <td>
+                <strong>{{ p.medicationDisplayName || p.medicationName }}</strong>
+              </td>
+              <td>{{ p.dosage || '—' }}</td>
+              <td>{{ p.frequency || '—' }}</td>
+              <td>{{ p.duration || '—' }}</td>
+              <td>{{ p.staffFullName || '—' }}</td>
+              <td>
+                <span class="status-badge {{ getStatusClass(p.status) }}">{{ p.status }}</span>
+              </td>
+              <td>
+                <button class="btn-icon" (click)="viewDetail(p)" title="View prescription details">
+                  <span class="material-symbols-outlined">visibility</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+  @if (selectedPrescription(); as rx) {
+    <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
+      <div class="detail-panel">
+        <div class="detail-header">
+          <h2>Prescription Details</h2>
+          <button class="btn-close" (click)="closeDetail()" title="Close detail panel">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="detail-body">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <span class="field-label">Patient</span
+              ><span class="field-value">{{ rx.patientFullName }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Medication</span
+              ><span class="field-value">{{ rx.medicationDisplayName || rx.medicationName }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Dosage</span
+              ><span class="field-value">{{ rx.dosage || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Frequency</span
+              ><span class="field-value">{{ rx.frequency || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Duration</span
+              ><span class="field-value">{{ rx.duration || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Status</span
+              ><span class="field-value"
+                ><span class="status-badge {{ getStatusClass(rx.status) }}">{{
+                  rx.status
+                }}</span></span
+              >
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Prescribed By</span
+              ><span class="field-value">{{ rx.staffFullName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Created</span
+              ><span class="field-value">{{
+                rx.createdAt ? (rx.createdAt | date: 'medium') : '—'
+              }}</span>
+            </div>
+          </div>
+          @if (rx.notes) {
+            <div class="detail-notes">
+              <span class="field-label">Notes</span>
+              <p>{{ rx.notes }}</p>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

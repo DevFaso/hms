@@ -1,9 +1,64 @@
 /* Global styles */
 @use '@angular/material' as mat;
 
+/* ── Design tokens (CSS custom properties) ── */
+:root {
+  --primary: #2563eb;
+  --primary-dark: #1d4ed8;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 html,
 body {
   height: 100%;
   margin: 0;
-  font-family: Roboto, 'Helvetica Neue', sans-serif;
+  font-family:
+    'Inter',
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #f1f5f9;
+  color: #1e293b;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+a {
+  color: inherit;
+}
+
+button {
+  font-family: inherit;
+}
+
+// Scrollbar styling
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
 }

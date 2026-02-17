@@ -179,6 +179,20 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<ImagingOrderResponseDTO> getAllOrders(ImagingOrderStatus status) {
+        List<ImagingOrder> orders;
+        if (status != null) {
+            orders = imagingOrderRepository.findByStatusOrderByOrderedAtDesc(status);
+        } else {
+            orders = imagingOrderRepository.findAllByOrderByOrderedAtDesc();
+        }
+        return orders.stream()
+            .map(imagingOrderMapper::toResponseDTO)
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<ImagingOrderDuplicateMatchDTO> previewDuplicates(UUID patientId, ImagingModality modality, String bodyRegion, Integer lookbackDays) {
         if (patientId == null || modality == null) {
             return Collections.emptyList();

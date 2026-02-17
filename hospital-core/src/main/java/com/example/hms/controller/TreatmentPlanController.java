@@ -64,6 +64,16 @@ public class TreatmentPlanController {
         return ResponseEntity.ok(treatmentPlanService.listByPatient(patientId, pageable));
     }
 
+    @GetMapping
+    @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
+    @Operation(summary = "List all treatment plans across all hospitals (super admin)")
+    public ResponseEntity<Page<TreatmentPlanResponseDTO>> listAll(
+        @RequestParam(required = false) TreatmentPlanStatus status,
+        Pageable pageable
+    ) {
+        return ResponseEntity.ok(treatmentPlanService.listAll(status, pageable));
+    }
+
     @GetMapping("/by-hospital/{hospitalId}")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "List treatment plans for a hospital", description = "Optional status filter")

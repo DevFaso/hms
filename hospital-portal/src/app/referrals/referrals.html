@@ -1,0 +1,225 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Referrals</h1>
+      <p class="page-subtitle">Patient referral tracking and management</p>
+    </div>
+  </div>
+  <div class="summary-cards">
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon pending">pending_actions</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByGroup('pending') }}</span
+        ><span class="card-label">Pending</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon active">sync</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByGroup('active') }}</span
+        ><span class="card-label">Active</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon completed">check_circle</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByGroup('completed') }}</span
+        ><span class="card-label">Completed</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon total">bar_chart</span>
+      <div class="card-info">
+        <span class="card-value">{{ referrals().length }}</span
+        ><span class="card-label">Total</span>
+      </div>
+    </div>
+  </div>
+  <div class="filter-bar">
+    <div class="tabs">
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'all'"
+        (click)="setTab('all')"
+        title="Show all"
+      >
+        All
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'pending'"
+        (click)="setTab('pending')"
+        title="Show pending"
+      >
+        Pending
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'active'"
+        (click)="setTab('active')"
+        title="Show active"
+      >
+        Active
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'completed'"
+        (click)="setTab('completed')"
+        title="Show completed"
+      >
+        Completed
+      </button>
+    </div>
+    <div class="search-box">
+      <span class="material-symbols-outlined">search</span
+      ><input
+        type="text"
+        placeholder="Search referrals..."
+        [(ngModel)]="searchTerm"
+        (input)="applyFilter()"
+      />
+    </div>
+  </div>
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading referrals...</p>
+    </div>
+  }
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">send</span>
+      <h3>No referrals found</h3>
+      <p>Referrals will appear here.</p>
+    </div>
+  }
+  @if (!loading() && filtered().length > 0) {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Patient</th>
+            <th scope="col">Specialty</th>
+            <th scope="col">Referring</th>
+            <th scope="col">Receiving</th>
+            <th scope="col">Urgency</th>
+            <th scope="col">Status</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of filtered(); track r.id) {
+            <tr class="data-row">
+              <td>
+                <div class="cell-primary">{{ r.patientName || 'Unknown' }}</div>
+                <div class="cell-secondary">{{ r.patientMrn }}</div>
+              </td>
+              <td>{{ r.targetSpecialty || '—' }}</td>
+              <td>{{ r.referringProviderName || '—' }}</td>
+              <td>{{ r.receivingProviderName || 'Unassigned' }}</td>
+              <td>
+                <span class="urgency-badge {{ getUrgencyClass(r.urgency) }}">{{ r.urgency }}</span>
+              </td>
+              <td>
+                <span class="status-badge {{ getStatusClass(r.status) }}">{{ r.status }}</span>
+              </td>
+              <td>
+                <button class="btn-icon" (click)="viewDetail(r)" title="View referral details">
+                  <span class="material-symbols-outlined">visibility</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+  @if (selectedReferral(); as ref) {
+    <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
+      <div class="detail-panel">
+        <div class="detail-header">
+          <h2>Referral Details</h2>
+          <button class="btn-close" (click)="closeDetail()" title="Close">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="detail-body">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <span class="field-label">Patient</span
+              ><span class="field-value">{{ ref.patientName }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">MRN</span
+              ><span class="field-value">{{ ref.patientMrn }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Specialty</span
+              ><span class="field-value">{{ ref.targetSpecialty }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Urgency</span
+              ><span class="field-value"
+                ><span class="urgency-badge {{ getUrgencyClass(ref.urgency) }}">{{
+                  ref.urgency
+                }}</span></span
+              >
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Referring Provider</span
+              ><span class="field-value">{{ ref.referringProviderName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Receiving Provider</span
+              ><span class="field-value">{{ ref.receivingProviderName || 'Unassigned' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Status</span
+              ><span class="field-value"
+                ><span class="status-badge {{ getStatusClass(ref.status) }}">{{
+                  ref.status
+                }}</span></span
+              >
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Submitted</span
+              ><span class="field-value">{{
+                ref.submittedAt ? (ref.submittedAt | date: 'medium') : '—'
+              }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Completed</span
+              ><span class="field-value">{{
+                ref.completedAt ? (ref.completedAt | date: 'medium') : '—'
+              }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Created</span
+              ><span class="field-value">{{
+                ref.createdAt ? (ref.createdAt | date: 'medium') : '—'
+              }}</span>
+            </div>
+          </div>
+          @if (ref.referralReason) {
+            <div class="detail-notes">
+              <span class="field-label">Reason</span>
+              <p>{{ ref.referralReason }}</p>
+            </div>
+          }
+          @if (ref.clinicalSummary) {
+            <div class="detail-notes">
+              <span class="field-label">Clinical Summary</span>
+              <p>{{ ref.clinicalSummary }}</p>
+            </div>
+          }
+          @if (ref.clinicalIndication) {
+            <div class="detail-notes">
+              <span class="field-label">Clinical Indication</span>
+              <p>{{ ref.clinicalIndication }}</p>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

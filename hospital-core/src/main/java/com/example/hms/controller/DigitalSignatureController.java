@@ -30,7 +30,7 @@ import java.util.UUID;
  * Story #17: Generic Report Signing API
  */
 @RestController
-@RequestMapping("/api/signatures")
+@RequestMapping("/signatures")
 @RequiredArgsConstructor
 @Tag(name = "Digital Signatures", description = "APIs for signing and verifying clinical reports")
 public class DigitalSignatureController {

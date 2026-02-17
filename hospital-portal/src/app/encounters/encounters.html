@@ -1,0 +1,221 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Encounters</h1>
+      <p class="page-subtitle">Clinical encounters and visit management</p>
+    </div>
+  </div>
+
+  <div class="summary-cards">
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon open">meeting_room</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByStatus('OPEN') }}</span>
+        <span class="card-label">Open</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon progress">pending</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByStatus('IN_PROGRESS') }}</span>
+        <span class="card-label">In Progress</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon completed">check_circle</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByStatus('COMPLETED') }}</span>
+        <span class="card-label">Completed</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon total">bar_chart</span>
+      <div class="card-info">
+        <span class="card-value">{{ encounters().length }}</span>
+        <span class="card-label">Total</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="tabs">
+      <button class="tab-btn" [class.active]="activeTab() === 'all'" (click)="setTab('all')">
+        All
+      </button>
+      <button class="tab-btn" [class.active]="activeTab() === 'open'" (click)="setTab('open')">
+        Active
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'completed'"
+        (click)="setTab('completed')"
+      >
+        Completed
+      </button>
+    </div>
+    <div class="search-box">
+      <span class="material-symbols-outlined">search</span>
+      <input
+        type="text"
+        placeholder="Search encounters..."
+        [(ngModel)]="searchTerm"
+        (input)="applyFilter()"
+      />
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading encounters...</p>
+    </div>
+  }
+
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">medical_services</span>
+      <h3>No encounters found</h3>
+      <p>Clinical encounters will appear here.</p>
+    </div>
+  }
+
+  @if (!loading() && filtered().length > 0) {
+    <div class="encounter-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Patient</th>
+            <th scope="col">Provider</th>
+            <th scope="col">Department</th>
+            <th scope="col">Type</th>
+            <th scope="col">Date</th>
+            <th scope="col">Status</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (enc of filtered(); track enc.id) {
+            <tr class="data-row">
+              <td>
+                <div class="cell-primary">{{ enc.patientName || 'Unknown' }}</div>
+              </td>
+              <td>{{ enc.staffName || '—' }}</td>
+              <td>{{ enc.departmentName || '—' }}</td>
+              <td>
+                <span class="type-badge">
+                  <span class="material-symbols-outlined type-icon">{{
+                    getTypeIcon(enc.encounterType)
+                  }}</span>
+                  {{ enc.encounterType || '—' }}
+                </span>
+              </td>
+              <td>{{ enc.encounterDate ? (enc.encounterDate | date: 'mediumDate') : '—' }}</td>
+              <td>
+                <span class="status-badge {{ getStatusClass(enc.status) }}">{{ enc.status }}</span>
+              </td>
+              <td>
+                <button class="btn-icon" title="View details" (click)="selectEncounter(enc)">
+                  <span class="material-symbols-outlined">visibility</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  @if (selectedEncounter(); as enc) {
+    <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
+      <div class="detail-panel">
+        <div class="detail-header">
+          <h2>Encounter Details</h2>
+          <button class="btn-icon" title="Close" (click)="closeDetail()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="detail-body">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <span class="field-label">Patient</span
+              ><span class="field-value">{{ enc.patientName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Provider</span
+              ><span class="field-value">{{ enc.staffName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Department</span
+              ><span class="field-value">{{ enc.departmentName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Hospital</span
+              ><span class="field-value">{{ enc.hospitalName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Type</span
+              ><span class="field-value">{{ enc.encounterType || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Status</span
+              ><span class="status-badge {{ getStatusClass(enc.status) }}">{{ enc.status }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Date</span
+              ><span class="field-value">{{
+                enc.encounterDate ? (enc.encounterDate | date: 'medium') : '—'
+              }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Created</span
+              ><span class="field-value">{{
+                enc.createdAt ? (enc.createdAt | date: 'medium') : '—'
+              }}</span>
+            </div>
+          </div>
+
+          @if (enc.notes) {
+            <div class="detail-section">
+              <h3>Notes</h3>
+              <p class="notes-content">{{ enc.notes }}</p>
+            </div>
+          }
+
+          @if (enc.appointmentReason) {
+            <div class="detail-section">
+              <h3>Appointment</h3>
+              <p>{{ enc.appointmentReason }}</p>
+            </div>
+          }
+
+          <div class="detail-section">
+            @if (!showNoteForm()) {
+              <button
+                class="btn-secondary"
+                title="Add clinical note"
+                (click)="showNoteForm.set(true)"
+              >
+                <span class="material-symbols-outlined">add</span> Add Note
+              </button>
+            } @else {
+              <h3>Add Note</h3>
+              <textarea
+                class="note-input"
+                [(ngModel)]="noteContent"
+                rows="4"
+                placeholder="Enter clinical note..."
+                aria-label="Clinical note"
+              ></textarea>
+              <div class="note-actions">
+                <button class="btn-primary" (click)="addNote()" [disabled]="!noteContent.trim()">
+                  Save Note
+                </button>
+                <button class="btn-secondary" (click)="showNoteForm.set(false)">Cancel</button>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+</div>

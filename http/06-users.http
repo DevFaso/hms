@@ -16,8 +16,6 @@ Content-Type: application/json
   "password": "SuperAdmin123!"
 }
 
-
-
 ### List all users
 GET {{baseUrl}}/users
 Authorization: Bearer {{accessToken}}

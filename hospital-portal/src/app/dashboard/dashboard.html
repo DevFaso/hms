@@ -1,0 +1,375 @@
+<div class="dashboard">
+  <!-- Welcome Banner -->
+  <section class="welcome-banner">
+    <div class="welcome-text">
+      <h1>{{ greeting() }}, {{ userName() }}!</h1>
+      <p>Here's an overview of your hospital management system.</p>
+    </div>
+    <div class="welcome-date">
+      <span class="material-symbols-outlined">calendar_today</span>
+      <span>{{ today }}</span>
+    </div>
+  </section>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading dashboard...</p>
+    </div>
+  }
+
+  <!-- ══════ SUPER-ADMIN METRICS ══════ -->
+  @if (adminSummary(); as s) {
+    <section class="metrics-grid">
+      <a class="metric-card" routerLink="/patients">
+        <span class="material-symbols-outlined metric-icon patients">people</span>
+        <div class="metric-body">
+          <span class="metric-value">{{ s.totalPatients }}</span
+          ><span class="metric-label">Total Patients</span>
+        </div>
+      </a>
+      <a class="metric-card" routerLink="/users">
+        <span class="material-symbols-outlined metric-icon users">group</span>
+        <div class="metric-body">
+          <span class="metric-value">{{ s.activeUsers }}</span
+          ><span class="metric-label">Active Users</span
+          ><span class="metric-sub">of {{ s.totalUsers }} total</span>
+        </div>
+      </a>
+      <a class="metric-card" routerLink="/hospitals">
+        <span class="material-symbols-outlined metric-icon hospitals">local_hospital</span>
+        <div class="metric-body">
+          <span class="metric-value">{{ s.activeHospitals }}</span
+          ><span class="metric-label">Active Hospitals</span
+          ><span class="metric-sub">of {{ s.totalHospitals }} total</span>
+        </div>
+      </a>
+      <div class="metric-card">
+        <span class="material-symbols-outlined metric-icon roles">verified_user</span>
+        <div class="metric-body">
+          <span class="metric-value">{{ s.totalRoles }}</span
+          ><span class="metric-label">Roles</span>
+        </div>
+      </div>
+      <div class="metric-card">
+        <span class="material-symbols-outlined metric-icon assignments">assignment_ind</span>
+        <div class="metric-body">
+          <span class="metric-value">{{ s.activeAssignments }}</span
+          ><span class="metric-label">Active Assignments</span
+          ><span class="metric-sub">of {{ s.totalAssignments }} total</span>
+        </div>
+      </div>
+      <a class="metric-card" routerLink="/appointments">
+        <span class="material-symbols-outlined metric-icon appointments">calendar_month</span>
+        <div class="metric-body">
+          <span class="metric-value">{{ todayAppointments().length }}</span
+          ><span class="metric-label">Today's Appointments</span>
+        </div>
+      </a>
+    </section>
+  }
+
+  <!-- ══════ CLINICAL KPIs ══════ -->
+  @if (kpis().length > 0) {
+    <section class="kpi-section">
+      <h2 class="section-title">
+        <span class="material-symbols-outlined">monitoring</span> Clinical KPIs
+      </h2>
+      <div class="kpi-grid">
+        @for (kpi of kpis(); track kpi.key) {
+          <div class="kpi-card">
+            <div class="kpi-top">
+              <span class="kpi-value"
+                >{{ kpi.value }}<small class="kpi-unit">{{ kpi.unit }}</small></span
+              >
+              @if (kpi.trend) {
+                <span class="kpi-trend" [class]="getTrendClass(kpi.trend)">
+                  <span class="material-symbols-outlined">{{ getTrendIcon(kpi.trend) }}</span>
+                  @if (kpi.deltaNum) {
+                    <span>{{ kpi.deltaNum > 0 ? '+' : '' }}{{ kpi.deltaNum }}</span>
+                  }
+                </span>
+              }
+            </div>
+            <span class="kpi-label">{{ kpi.label }}</span>
+          </div>
+        }
+      </div>
+    </section>
+  }
+
+  <!-- ══════ INBOX + ON-CALL ══════ -->
+  @if (inboxCounts() || onCallStatus()) {
+    <div class="status-row">
+      @if (inboxCounts(); as ic) {
+        <div class="inbox-card">
+          <h3 class="card-title"><span class="material-symbols-outlined">inbox</span> Inbox</h3>
+          <div class="inbox-grid">
+            <div class="inbox-item">
+              <span class="inbox-count">{{ ic.unreadMessages }}</span
+              ><span class="inbox-label">Messages</span>
+            </div>
+            <div class="inbox-item">
+              <span class="inbox-count">{{ ic.pendingResults }}</span
+              ><span class="inbox-label">Pending Results</span>
+            </div>
+            <div class="inbox-item">
+              <span class="inbox-count">{{ ic.pendingRefills }}</span
+              ><span class="inbox-label">Refill Requests</span>
+            </div>
+            <div class="inbox-item">
+              <span class="inbox-count">{{ ic.tasksToComplete }}</span
+              ><span class="inbox-label">Tasks</span>
+            </div>
+            <div class="inbox-item">
+              <span class="inbox-count">{{ ic.documentsToSign }}</span
+              ><span class="inbox-label">Documents to Sign</span>
+            </div>
+          </div>
+        </div>
+      }
+      @if (onCallStatus(); as oc) {
+        <div class="oncall-card" [class.on-call]="oc.isOnCall">
+          <h3 class="card-title">
+            <span class="material-symbols-outlined">phone_in_talk</span> On-Call Status
+          </h3>
+          <div class="oncall-status">
+            <span class="oncall-badge" [class.active]="oc.isOnCall">{{
+              oc.isOnCall ? 'On Call' : 'Off Duty'
+            }}</span>
+          </div>
+          @if (oc.isOnCall) {
+            <div class="oncall-details">
+              <div class="oncall-field">
+                <span class="oncall-label">Shift</span
+                ><span
+                  >{{ oc.shiftStart | date: 'shortTime' }} –
+                  {{ oc.shiftEnd | date: 'shortTime' }}</span
+                >
+              </div>
+              @if (oc.backupProvider) {
+                <div class="oncall-field">
+                  <span class="oncall-label">Backup</span><span>{{ oc.backupProvider }}</span>
+                </div>
+              }
+              @if (oc.coveringFor && oc.coveringFor.length > 0) {
+                <div class="oncall-field">
+                  <span class="oncall-label">Covering for</span
+                  ><span>{{ oc.coveringFor.join(', ') }}</span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ══════ CLINICAL ALERTS ══════ -->
+  @if (alerts().length > 0) {
+    <section class="alerts-section">
+      <h2 class="section-title">
+        <span class="material-symbols-outlined">notification_important</span> Clinical Alerts
+      </h2>
+      <div class="alerts-list">
+        @for (alert of alerts(); track alert.id) {
+          <div
+            class="alert-item"
+            [class]="getAlertSeverityClass(alert.severity)"
+            [class.acknowledged]="alert.acknowledged"
+          >
+            <div class="alert-icon">
+              <span class="material-symbols-outlined">{{ alert.icon || 'warning' }}</span>
+            </div>
+            <div class="alert-body">
+              <div class="alert-top">
+                <span class="alert-severity">{{ alert.severity }}</span>
+                <span class="alert-time">{{ alert.timestamp | date: 'short' }}</span>
+              </div>
+              <strong class="alert-title">{{ alert.title }}</strong>
+              <p class="alert-message">{{ alert.message }}</p>
+              @if (alert.patientName) {
+                <span class="alert-patient">Patient: {{ alert.patientName }}</span>
+              }
+            </div>
+            @if (alert.actionRequired && !alert.acknowledged) {
+              <button
+                class="alert-ack-btn"
+                title="Acknowledge alert"
+                (click)="acknowledgeAlert(alert.id)"
+              >
+                <span class="material-symbols-outlined">check_circle</span>
+              </button>
+            }
+          </div>
+        }
+      </div>
+    </section>
+  }
+
+  <!-- ══════ ROOMED PATIENTS ══════ -->
+  @if (roomedPatients().length > 0) {
+    <section class="roomed-section">
+      <h2 class="section-title">
+        <span class="material-symbols-outlined">hotel</span> Roomed Patients
+      </h2>
+      <div class="roomed-grid">
+        @for (pt of roomedPatients(); track pt.id) {
+          <div class="roomed-card">
+            <div class="roomed-header">
+              <div>
+                <strong>{{ pt.patientName }}</strong>
+                <span class="roomed-mrn">MRN {{ pt.mrn }}</span>
+              </div>
+              <span class="triage-badge" [class]="getTriageClass(pt.triageStatus)">{{
+                pt.triageStatus | titlecase
+              }}</span>
+            </div>
+            <div class="roomed-meta">
+              <span><span class="material-symbols-outlined">meeting_room</span> {{ pt.room }}</span>
+              <span>{{ pt.age }}{{ pt.sex ? '/' + pt.sex.charAt(0) : '' }}</span>
+              <span
+                ><span class="material-symbols-outlined">schedule</span> {{ pt.waitTimeMinutes }}m
+                wait</span
+              >
+            </div>
+            @if (pt.chiefComplaint) {
+              <div class="roomed-complaint">{{ pt.chiefComplaint }}</div>
+            }
+            @if (pt.prepStatus) {
+              <div class="prep-badges">
+                <span class="prep-badge" [class.done]="pt.prepStatus.labsDrawn">Labs</span>
+                <span class="prep-badge" [class.done]="pt.prepStatus.imagingOrdered">Imaging</span>
+                <span class="prep-badge" [class.done]="pt.prepStatus.consentSigned">Consent</span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </section>
+  }
+
+  <!-- Quick Actions -->
+  @if (quickActions().length > 0) {
+    <section class="quick-actions">
+      <h2 class="section-title">Quick Actions</h2>
+      <div class="actions-row">
+        @for (action of quickActions(); track action.label) {
+          <a class="action-btn" [routerLink]="action.route">
+            <span class="material-symbols-outlined" [style.color]="action.color">{{
+              action.icon
+            }}</span>
+            <span>{{ action.label }}</span>
+          </a>
+        }
+      </div>
+    </section>
+  }
+
+  <!-- ══════ RECENT AUDIT EVENTS (super-admin) ══════ -->
+  @if (recentAuditEvents().length > 0) {
+    <section class="audit-section">
+      <div class="audit-header">
+        <h2 class="section-title">
+          <span class="material-symbols-outlined">history</span> Recent Audit Events
+        </h2>
+        <a routerLink="/audit-logs" class="view-all">View All →</a>
+      </div>
+      <div class="audit-table-wrap">
+        <table class="audit-table">
+          <thead>
+            <tr>
+              <th scope="col">Event</th>
+              <th scope="col">User</th>
+              <th scope="col">Resource</th>
+              <th scope="col">Hospital</th>
+              <th scope="col">Time</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (evt of recentAuditEvents(); track evt.id) {
+              <tr>
+                <td>
+                  <span class="event-type">{{ evt.eventType }}</span>
+                </td>
+                <td>{{ evt.userName || '—' }}</td>
+                <td>
+                  <div class="cell-primary">{{ evt.resourceName || '—' }}</div>
+                  <div class="cell-secondary">{{ evt.entityType }}</div>
+                </td>
+                <td>{{ evt.hospitalName || '—' }}</td>
+                <td class="date-cell">{{ evt.eventTimestamp | date: 'short' }}</td>
+                <td>
+                  <span
+                    [class]="
+                      evt.status === 'SUCCESS'
+                        ? 'audit-status audit-success'
+                        : 'audit-status audit-failure'
+                    "
+                    >{{ evt.status }}</span
+                  >
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  <!-- ══════ FALLBACK: Today's Appointments & Patients ══════ -->
+  @if (!isSuperAdmin() && !isClinician() && !loading()) {
+    <div class="dashboard-grid">
+      @if (todayAppointments().length > 0) {
+        <section class="dashboard-card">
+          <div class="card-header">
+            <h3>
+              <span class="material-symbols-outlined">calendar_month</span> Today's Appointments
+            </h3>
+            <a routerLink="/appointments" class="view-all">View All →</a>
+          </div>
+          <div class="card-body">
+            @for (appt of todayAppointments(); track $index) {
+              <div class="list-item">
+                <div class="item-avatar"><span class="material-symbols-outlined">event</span></div>
+                <div class="item-info">
+                  <span class="item-primary">Appointment</span
+                  ><span class="item-secondary">Scheduled</span>
+                </div>
+              </div>
+            }
+          </div>
+        </section>
+      }
+      @if (recentPatients().length > 0) {
+        <section class="dashboard-card">
+          <div class="card-header">
+            <h3><span class="material-symbols-outlined">people</span> Recent Patients</h3>
+            <a routerLink="/patients" class="view-all">View All →</a>
+          </div>
+          <div class="card-body">
+            @for (patient of recentPatients(); track $index) {
+              <div class="list-item">
+                <div class="item-avatar"><span class="material-symbols-outlined">person</span></div>
+                <div class="item-info">
+                  <span class="item-primary">Patient Record</span
+                  ><span class="item-secondary">Registered</span>
+                </div>
+              </div>
+            }
+          </div>
+        </section>
+      }
+      @if (todayAppointments().length === 0 && recentPatients().length === 0) {
+        <section class="dashboard-card empty-card">
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">dashboard</span>
+            <h3>Welcome to HMS</h3>
+            <p>Your dashboard will populate as you start using the system.</p>
+          </div>
+        </section>
+      }
+    </div>
+  }
+</div>

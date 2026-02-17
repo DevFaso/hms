@@ -24,6 +24,10 @@ public interface ConsultationRepository extends JpaRepository<Consultation, UUID
 
     List<Consultation> findByConsultant_IdOrderByRequestedAtDesc(UUID consultantId);
 
+    List<Consultation> findByStatusOrderByRequestedAtDesc(ConsultationStatus status);
+
+    List<Consultation> findAllByOrderByRequestedAtDesc();
+
     @Query("SELECT c FROM Consultation c WHERE c.hospital.id = :hospitalId " +
            "AND c.status IN :statuses ORDER BY c.urgency DESC, c.requestedAt ASC")
     List<Consultation> findByHospitalAndStatuses(

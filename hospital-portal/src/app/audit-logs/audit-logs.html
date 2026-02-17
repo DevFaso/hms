@@ -1,0 +1,100 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Audit Logs</h1>
+      <p class="page-subtitle">System activity trail and security events</p>
+    </div>
+  </div>
+  <div class="summary-cards">
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon total">receipt_long</span>
+      <div class="card-info">
+        <span class="card-value">{{ logs().length }}</span
+        ><span class="card-label">Total Events</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon types">category</span>
+      <div class="card-info">
+        <span class="card-value">{{ eventTypes().length }}</span
+        ><span class="card-label">Event Types</span>
+      </div>
+    </div>
+  </div>
+  <div class="filter-bar">
+    <div class="filter-controls">
+      <select
+        [(ngModel)]="selectedEventType"
+        (change)="onEventTypeChange()"
+        class="filter-select"
+        aria-label="Filter by event type"
+      >
+        <option value="">All Event Types</option>
+        @for (et of eventTypes(); track et.eventType) {
+          <option [value]="et.eventType">{{ et.eventType }} ({{ et.count }})</option>
+        }
+      </select>
+    </div>
+    <div class="search-box">
+      <span class="material-symbols-outlined">search</span
+      ><input
+        type="text"
+        placeholder="Search audit logs..."
+        [(ngModel)]="searchTerm"
+        (input)="applyFilter()"
+      />
+    </div>
+  </div>
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading audit logs...</p>
+    </div>
+  }
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">receipt_long</span>
+      <h3>No audit logs found</h3>
+      <p>Activity logs will appear here.</p>
+    </div>
+  }
+  @if (!loading() && filtered().length > 0) {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Timestamp</th>
+            <th scope="col">User</th>
+            <th scope="col">Event Type</th>
+            <th scope="col">Description</th>
+            <th scope="col">Entity</th>
+            <th scope="col">Status</th>
+            <th scope="col">IP</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (l of filtered(); track l.eventTimestamp + l.userName) {
+            <tr class="data-row">
+              <td class="time-cell">
+                {{ l.eventTimestamp ? (l.eventTimestamp | date: 'medium') : '—' }}
+              </td>
+              <td>
+                <div class="cell-primary">{{ l.userName || '—' }}</div>
+                <div class="cell-secondary">{{ l.roleName || '' }}</div>
+              </td>
+              <td>
+                <span class="event-type-badge">{{ l.eventType }}</span>
+              </td>
+              <td class="desc-cell">{{ l.eventDescription || '—' }}</td>
+              <td>{{ l.entityType || '—' }}</td>
+              <td>
+                <span class="status-badge {{ getStatusClass(l.status) }}">{{ l.status }}</span>
+              </td>
+              <td class="ip-cell">{{ l.ipAddress || '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

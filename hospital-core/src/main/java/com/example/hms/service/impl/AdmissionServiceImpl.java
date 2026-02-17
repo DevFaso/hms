@@ -217,6 +217,26 @@ public class AdmissionServiceImpl implements AdmissionService {
     }
 
     @Override
+    public List<AdmissionResponseDTO> getAllAdmissions(String status, LocalDateTime startDate, LocalDateTime endDate) {
+        if (status != null && !status.isEmpty()) {
+            AdmissionStatus admissionStatus = AdmissionStatus.valueOf(status.toUpperCase());
+            return admissionRepository.findByStatusOrderByAdmissionDateTimeDesc(admissionStatus)
+                .stream()
+                .map(admissionMapper::toResponseDTO)
+                .toList();
+        }
+        return admissionRepository.findAll()
+            .stream()
+            .sorted((a, b) -> {
+                if (b.getAdmissionDateTime() == null) return -1;
+                if (a.getAdmissionDateTime() == null) return 1;
+                return b.getAdmissionDateTime().compareTo(a.getAdmissionDateTime());
+            })
+            .map(admissionMapper::toResponseDTO)
+            .toList();
+    }
+
+    @Override
     public AdmissionResponseDTO getCurrentAdmissionForPatient(UUID patientId) {
         return admissionRepository.findCurrentAdmissionByPatient(patientId)
             .map(admissionMapper::toResponseDTO)

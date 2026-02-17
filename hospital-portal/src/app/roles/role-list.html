@@ -1,0 +1,196 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Roles & Permissions</h1>
+      <p class="page-subtitle">Manage user roles and permission assignments</p>
+    </div>
+    <button class="btn-primary" (click)="openCreate()">
+      <span class="material-symbols-outlined">add</span>
+      New Role
+    </button>
+  </div>
+
+  <div class="search-bar">
+    <span class="material-symbols-outlined search-icon">search</span>
+    <input
+      type="text"
+      placeholder="Search roles..."
+      [(ngModel)]="searchTerm"
+      (ngModelChange)="applyFilter()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading roles...</p>
+    </div>
+  }
+
+  @if (!loading() && filtered().length > 0) {
+    <div class="role-grid">
+      @for (role of filtered(); track role.id) {
+        <div class="role-card">
+          <div class="role-header">
+            <div class="role-icon">
+              <span class="material-symbols-outlined">shield</span>
+            </div>
+            <div>
+              <h4>{{ role.name }}</h4>
+              <span class="role-authority">{{ role.authority }}</span>
+            </div>
+          </div>
+          @if (role.description) {
+            <p class="role-desc">{{ role.description }}</p>
+          }
+          <div class="role-footer">
+            <span class="perm-count">
+              <span class="material-symbols-outlined">lock</span>
+              {{ role.permissions.length }} permissions
+            </span>
+            <button class="btn-sm" (click)="openPermissions(role)">
+              <span class="material-symbols-outlined">settings</span>
+              Manage
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">shield</span>
+      <h3>No roles found</h3>
+      <p>{{ searchTerm ? 'Try adjusting your search.' : 'Create your first role.' }}</p>
+    </div>
+  }
+
+  <!-- Create Modal -->
+  @if (showCreate()) {
+    <div
+      class="modal-backdrop"
+      (click)="closeCreate()"
+      (keydown.escape)="closeCreate()"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal"
+        [open]="showCreate()"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeCreate()"
+        tabindex="-1"
+      >
+        <div class="modal-header">
+          <h2>Create Role</h2>
+          <button class="modal-close" (click)="closeCreate()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <form (ngSubmit)="submitCreate()">
+          <div class="modal-body">
+            <div class="field">
+              <label for="roleName">Role Name *</label>
+              <input
+                id="roleName"
+                type="text"
+                [(ngModel)]="createForm.name"
+                name="name"
+                placeholder="e.g., ROLE_PHARMACIST"
+                required
+              />
+            </div>
+            <div class="field">
+              <label for="roleDesc">Description</label>
+              <textarea
+                id="roleDesc"
+                rows="3"
+                [(ngModel)]="createForm.description"
+                name="description"
+                placeholder="Role description..."
+              ></textarea>
+            </div>
+            <div class="field">
+              <label for="roleCode">Code</label>
+              <input
+                id="roleCode"
+                type="text"
+                [(ngModel)]="createForm.code"
+                name="code"
+                placeholder="Optional code"
+              />
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeCreate()">Cancel</button>
+            <button type="submit" class="btn-primary" [disabled]="saving()">
+              {{ saving() ? 'Creating...' : 'Create' }}
+            </button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+  }
+
+  <!-- Permissions Modal -->
+  @if (showPermissions()) {
+    <div
+      class="modal-backdrop"
+      (click)="closePermissions()"
+      (keydown.escape)="closePermissions()"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal modal-lg"
+        [open]="showPermissions()"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closePermissions()"
+        tabindex="-1"
+      >
+        <div class="modal-header">
+          <h2>Manage Permissions — {{ selectedRole()?.name }}</h2>
+          <button class="modal-close" (click)="closePermissions()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body perms-body">
+          @if (permissionsLoading()) {
+            <div class="loading-state compact">
+              <div class="spinner"></div>
+              <p>Loading permissions...</p>
+            </div>
+          } @else {
+            <div class="perm-list">
+              @for (perm of allPermissions(); track perm.id) {
+                <label class="perm-item">
+                  <input
+                    type="checkbox"
+                    [checked]="selectedPermissionIds().has(perm.id)"
+                    (change)="togglePermission(perm.id)"
+                  />
+                  <div>
+                    <span class="perm-name">{{ perm.name }}</span>
+                    @if (perm.description) {
+                      <span class="perm-desc">{{ perm.description }}</span>
+                    }
+                  </div>
+                </label>
+              }
+            </div>
+          }
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closePermissions()">Cancel</button>
+          <button
+            type="button"
+            class="btn-primary"
+            [disabled]="saving()"
+            (click)="savePermissions()"
+          >
+            {{ saving() ? 'Saving...' : 'Save Permissions' }}
+          </button>
+        </div>
+      </dialog>
+    </div>
+  }
+</div>

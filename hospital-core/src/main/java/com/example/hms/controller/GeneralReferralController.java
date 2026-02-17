@@ -25,7 +25,7 @@ import java.util.UUID;
  * REST Controller for general referral management (multi-specialty)
  */
 @RestController
-@RequestMapping("/api/referrals")
+@RequestMapping("/referrals")
 @RequiredArgsConstructor
 @Tag(name = "General Referral Management", description = "Multi-specialty referral system")
 public class GeneralReferralController {
@@ -108,7 +108,7 @@ public class GeneralReferralController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get referrals by hospital", description = "Retrieve referrals for hospital with optional status filter")
     public ResponseEntity<List<GeneralReferralResponseDTO>> getReferralsByHospital(
         @PathVariable UUID hospitalId,
@@ -117,8 +117,17 @@ public class GeneralReferralController {
         return ResponseEntity.ok(referralService.getReferralsByHospital(hospitalId, status));
     }
 
+    @GetMapping
+    @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
+    @Operation(summary = "List all referrals across all hospitals (super admin)")
+    public ResponseEntity<List<GeneralReferralResponseDTO>> getAllReferrals(
+        @RequestParam(required = false) String status
+    ) {
+        return ResponseEntity.ok(referralService.getAllReferrals(status));
+    }
+
     @GetMapping("/overdue")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get overdue referrals", description = "Retrieve all overdue referrals")
     public ResponseEntity<List<GeneralReferralResponseDTO>> getOverdueReferrals() {
         return ResponseEntity.ok(referralService.getOverdueReferrals());

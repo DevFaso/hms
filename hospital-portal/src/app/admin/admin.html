@@ -1,0 +1,44 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Administration</h1>
+      <p class="page-subtitle">System management and configuration</p>
+    </div>
+  </div>
+
+  <!-- Stats Row -->
+  <div class="stats-row">
+    @for (stat of stats(); track stat.label) {
+      <div class="stat-card">
+        <div class="stat-icon" [style.background]="stat.color + '14'" [style.color]="stat.color">
+          <span class="material-symbols-outlined">{{ stat.icon }}</span>
+        </div>
+        <div class="stat-info">
+          <span class="stat-value">{{ stat.value }}</span>
+          <span class="stat-label">{{ stat.label }}</span>
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Admin Sections Grid -->
+  <h2 class="section-heading">Quick Access</h2>
+  <div class="admin-grid">
+    @for (section of sections; track section.title) {
+      <a class="admin-card" [routerLink]="section.route">
+        <div
+          class="card-icon"
+          [style.background]="section.color + '14'"
+          [style.color]="section.color"
+        >
+          <span class="material-symbols-outlined">{{ section.icon }}</span>
+        </div>
+        <div class="card-body">
+          <h3 class="card-title">{{ section.title }}</h3>
+          <p class="card-desc">{{ section.description }}</p>
+        </div>
+        <span class="material-symbols-outlined card-arrow">arrow_forward</span>
+      </a>
+    }
+  </div>
+</div>

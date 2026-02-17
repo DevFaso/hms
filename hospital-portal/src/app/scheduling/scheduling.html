@@ -1,0 +1,236 @@
+<div class="page-container">
+  <div class="page-header">
+    <div class="page-title-group">
+      <h1>
+        <span class="material-symbols-outlined">calendar_month</span>
+        Staff Scheduling
+      </h1>
+      <p class="subtitle">Manage shifts, schedules, and leave requests</p>
+    </div>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="summary-row">
+    <div class="summary-card shifts-card">
+      <span class="material-symbols-outlined">event_note</span>
+      <div class="summary-info">
+        <span class="summary-value">{{ shifts().length }}</span>
+        <span class="summary-label">Shifts This Week</span>
+      </div>
+    </div>
+    <div class="summary-card pending-card">
+      <span class="material-symbols-outlined">hourglass_top</span>
+      <div class="summary-info">
+        <span class="summary-value">{{ pendingCount }}</span>
+        <span class="summary-label">Pending Leaves</span>
+      </div>
+    </div>
+    <div class="summary-card approved-card">
+      <span class="material-symbols-outlined">check_circle</span>
+      <div class="summary-info">
+        <span class="summary-value">{{ approvedCount }}</span>
+        <span class="summary-label">Approved Leaves</span>
+      </div>
+    </div>
+    <div class="summary-card total-card">
+      <span class="material-symbols-outlined">groups</span>
+      <div class="summary-info">
+        <span class="summary-value">{{ leaves().length }}</span>
+        <span class="summary-label">Total Leave Requests</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- View Toggle -->
+  <div class="tabs">
+    <button class="tab" [class.active]="activeView() === 'shifts'" (click)="setView('shifts')">
+      <span class="material-symbols-outlined">event_note</span>
+      Shifts
+    </button>
+    <button class="tab" [class.active]="activeView() === 'leaves'" (click)="setView('leaves')">
+      <span class="material-symbols-outlined">event_busy</span>
+      Leave Requests
+      @if (pendingCount > 0) {
+        <span class="badge">{{ pendingCount }}</span>
+      }
+    </button>
+  </div>
+
+  <!-- ═══ SHIFTS VIEW ═══ -->
+  @if (activeView() === 'shifts') {
+    <div class="schedule-section">
+      <div class="schedule-header">
+        <h3>
+          <span class="material-symbols-outlined">view_week</span>
+          Weekly Schedule
+        </h3>
+        <div class="week-nav">
+          <button class="week-btn" (click)="changeWeek(-1)" aria-label="Previous week">
+            <span class="material-symbols-outlined">chevron_left</span>
+          </button>
+          <button class="week-label" (click)="goToCurrentWeek()" title="Go to current week">
+            {{ getWeekLabel() }}
+          </button>
+          <button class="week-btn" (click)="changeWeek(1)" aria-label="Next week">
+            <span class="material-symbols-outlined">chevron_right</span>
+          </button>
+        </div>
+      </div>
+
+      @if (shiftsLoading()) {
+        <div class="schedule-loading">
+          <div class="spinner-sm"></div>
+          <span>Loading shifts...</span>
+        </div>
+      } @else {
+        <div class="week-grid">
+          @for (day of getWeekDays(); track day.date) {
+            <div class="day-column" [class.today]="day.isToday">
+              <div class="day-header">
+                <span class="day-name">{{ day.label }}</span>
+                <span class="day-date">{{ formatShortDate(day.date) }}</span>
+              </div>
+              <div class="day-shifts">
+                @for (shift of getShiftsForDay(day.date); track shift.id) {
+                  <div
+                    class="shift-card"
+                    [attr.data-type]="shift.shiftType"
+                    [attr.data-status]="shift.status"
+                  >
+                    <div class="shift-avatar">{{ getInitials(shift.staffName) }}</div>
+                    <div class="shift-info">
+                      <span class="shift-staff-name">{{ shift.staffName }}</span>
+                      <span class="shift-time"
+                        >{{ formatTime(shift.startTime) }} – {{ formatTime(shift.endTime) }}</span
+                      >
+                      <span class="shift-meta">
+                        <span class="material-symbols-outlined">{{
+                          shiftTypeIcon(shift.shiftType)
+                        }}</span>
+                        {{ formatShiftType(shift.shiftType) }}
+                      </span>
+                    </div>
+                    <span class="shift-status-badge" [attr.data-status]="shift.status">
+                      {{ shift.status }}
+                    </span>
+                  </div>
+                } @empty {
+                  <div class="no-shift">No shifts</div>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ═══ LEAVES VIEW ═══ -->
+  @if (activeView() === 'leaves') {
+    <div class="filter-bar">
+      <button
+        class="filter-chip"
+        [class.active]="leaveFilter() === 'ALL'"
+        (click)="setLeaveFilter('ALL')"
+      >
+        All
+      </button>
+      <button
+        class="filter-chip pending"
+        [class.active]="leaveFilter() === 'PENDING'"
+        (click)="setLeaveFilter('PENDING')"
+      >
+        Pending
+      </button>
+      <button
+        class="filter-chip approved"
+        [class.active]="leaveFilter() === 'APPROVED'"
+        (click)="setLeaveFilter('APPROVED')"
+      >
+        Approved
+      </button>
+      <button
+        class="filter-chip denied"
+        [class.active]="leaveFilter() === 'DENIED'"
+        (click)="setLeaveFilter('DENIED')"
+      >
+        Denied
+      </button>
+      <button
+        class="filter-chip cancelled"
+        [class.active]="leaveFilter() === 'CANCELLED'"
+        (click)="setLeaveFilter('CANCELLED')"
+      >
+        Cancelled
+      </button>
+    </div>
+
+    @if (leavesLoading()) {
+      <div class="schedule-loading">
+        <div class="spinner-sm"></div>
+        <span>Loading leave requests...</span>
+      </div>
+    } @else if (filteredLeaves().length === 0) {
+      <div class="empty-schedule">
+        <span class="material-symbols-outlined">event_available</span>
+        <h3>No leave requests</h3>
+        <p>No leave requests found matching the selected filter.</p>
+      </div>
+    } @else {
+      <div class="leave-list">
+        @for (leave of filteredLeaves(); track leave.id) {
+          <div class="leave-card" [attr.data-status]="leave.status">
+            <div class="leave-icon">
+              <span class="material-symbols-outlined">{{ leaveTypeIcon(leave.leaveType) }}</span>
+            </div>
+            <div class="leave-details">
+              <div class="leave-title-row">
+                <span class="leave-staff-name">{{ leave.staffName }}</span>
+                <span class="leave-type-label">{{ formatLeaveType(leave.leaveType) }}</span>
+                <span class="leave-status-badge" [attr.data-status]="leave.status">{{
+                  leave.status
+                }}</span>
+              </div>
+              <div class="leave-dates">
+                <span class="material-symbols-outlined">date_range</span>
+                {{ formatDate(leave.startDate) }}
+                @if (leave.startDate !== leave.endDate) {
+                  <span>&nbsp;→&nbsp;</span>{{ formatDate(leave.endDate) }}
+                }
+              </div>
+              @if (leave.startTime && leave.endTime) {
+                <div class="leave-times">
+                  <span class="material-symbols-outlined">schedule</span>
+                  {{ formatTime(leave.startTime) }} – {{ formatTime(leave.endTime) }}
+                </div>
+              }
+              @if (leave.reason) {
+                <div class="leave-reason">
+                  <span class="material-symbols-outlined">notes</span>
+                  {{ leave.reason }}
+                </div>
+              }
+              @if (leave.requiresCoverage) {
+                <span class="coverage-badge">
+                  <span class="material-symbols-outlined">swap_horiz</span>
+                  Coverage Required
+                </span>
+              }
+            </div>
+            <div class="leave-right">
+              @if (leave.departmentName) {
+                <span class="leave-dept">{{ leave.departmentName }}</span>
+              }
+              @if (leave.reviewedByName) {
+                <span class="reviewed-by">Reviewed: {{ leave.reviewedByName }}</span>
+              }
+              @if (leave.managerNote) {
+                <span class="manager-note">"{{ leave.managerNote }}"</span>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>
