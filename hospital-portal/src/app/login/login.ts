@@ -37,7 +37,6 @@ export class Login implements OnInit {
     firstName: '',
     lastName: '',
     phoneNumber: '',
-    bootstrapToken: '',
   };
 
   private readonly http = inject(HttpClient);
@@ -102,7 +101,6 @@ export class Login implements OnInit {
         firstName: this.bootstrap.firstName,
         lastName: this.bootstrap.lastName,
         phoneNumber: this.bootstrap.phoneNumber || undefined,
-        bootstrapToken: this.bootstrap.bootstrapToken || undefined,
       })
       .subscribe({
         next: (res) => {

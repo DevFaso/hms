@@ -26,5 +26,4 @@ public class BootstrapSignupRequest {
     private String lastName;
 
     private String phoneNumber;
-    private String bootstrapToken; // optional shared secret
 }
