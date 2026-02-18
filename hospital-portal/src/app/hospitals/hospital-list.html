@@ -177,71 +177,25 @@
 
             <div class="form-row">
               <div class="field">
-                <label for="hAddress">Address</label>
-                <input
-                  id="hAddress"
-                  type="text"
-                  [(ngModel)]="form.address"
-                  name="address"
-                  placeholder="Street address"
-                />
-              </div>
-              <div class="field">
-                <label for="hCity">City *</label>
-                <input
-                  id="hCity"
-                  type="text"
-                  [(ngModel)]="form.city"
-                  name="city"
-                  placeholder="City"
-                  required
-                />
-              </div>
-            </div>
-
-            <div class="form-row">
-              <div class="field">
-                <label for="hState">State</label>
-                <input
-                  id="hState"
-                  type="text"
-                  [(ngModel)]="form.state"
-                  name="state"
-                  placeholder="State / Province"
-                />
-              </div>
-              <div class="field">
                 <label for="hCountry">Country *</label>
                 <input
                   id="hCountry"
                   type="text"
                   [(ngModel)]="form.country"
                   name="country"
-                  placeholder="Country"
+                  placeholder="e.g., Burkina Faso, USA, France"
                   required
                 />
               </div>
-            </div>
-
-            <div class="form-row">
               <div class="field">
-                <label for="hZip">Zip Code</label>
+                <label for="hCity">Ville / City *</label>
                 <input
-                  id="hZip"
+                  id="hCity"
                   type="text"
-                  [(ngModel)]="form.zipCode"
-                  name="zipCode"
-                  placeholder="Zip / Postal code"
-                />
-              </div>
-              <div class="field">
-                <label for="hPoBox">P.O. Box</label>
-                <input
-                  id="hPoBox"
-                  type="text"
-                  [(ngModel)]="form.poBox"
-                  name="poBox"
-                  placeholder="P.O. Box"
+                  [(ngModel)]="form.city"
+                  name="city"
+                  placeholder="e.g., Ouagadougou, Paris, New York"
+                  required
                 />
               </div>
             </div>
@@ -254,7 +208,7 @@
                   type="text"
                   [(ngModel)]="form.province"
                   name="province"
-                  placeholder="Province"
+                  placeholder="e.g., Kadiogo"
                 />
               </div>
               <div class="field">
@@ -264,20 +218,66 @@
                   type="text"
                   [(ngModel)]="form.region"
                   name="region"
-                  placeholder="Region"
+                  placeholder="e.g., Centre, Île-de-France"
                 />
               </div>
             </div>
 
             <div class="form-row">
               <div class="field">
-                <label for="hSector">Sector</label>
+                <label for="hSector">Secteur / Neighborhood</label>
                 <input
                   id="hSector"
                   type="text"
                   [(ngModel)]="form.sector"
                   name="sector"
-                  placeholder="Sector"
+                  placeholder="e.g., Secteur 30"
+                />
+              </div>
+              <div class="field">
+                <label for="hAddress">Address / Street</label>
+                <input
+                  id="hAddress"
+                  type="text"
+                  [(ngModel)]="form.address"
+                  name="address"
+                  placeholder="e.g., Avenue Yalgado"
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="hPoBox">B.P. / P.O. Box</label>
+                <input
+                  id="hPoBox"
+                  type="text"
+                  [(ngModel)]="form.poBox"
+                  name="poBox"
+                  placeholder="e.g., BP 7022"
+                />
+              </div>
+              <div class="field">
+                <label for="hState">State</label>
+                <input
+                  id="hState"
+                  type="text"
+                  [(ngModel)]="form.state"
+                  name="state"
+                  placeholder="US/Canada only"
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="hZip">Code Postal / Zip Code</label>
+                <input
+                  id="hZip"
+                  type="text"
+                  [(ngModel)]="form.zipCode"
+                  name="zipCode"
+                  placeholder="Optional"
                 />
               </div>
               <div class="field">
