@@ -54,7 +54,7 @@ export class PatientListComponent implements OnInit {
         (p) =>
           p.firstName.toLowerCase().includes(term) ||
           p.lastName.toLowerCase().includes(term) ||
-          p.email.toLowerCase().includes(term) ||
+          (p.email?.toLowerCase().includes(term) ?? false) ||
           (p.mrn?.toLowerCase().includes(term) ?? false),
       ),
     );

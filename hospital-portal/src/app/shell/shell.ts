@@ -130,6 +130,7 @@ export class ShellComponent implements OnInit, OnDestroy {
 
     if (this.permissions.hasPermission('*')) {
       items.push(
+        { icon: 'local_hospital', label: 'Hospitals', route: '/hospitals' },
         { icon: 'corporate_fare', label: 'Organizations', route: '/organizations' },
         { icon: 'manage_accounts', label: 'Users', route: '/users' },
         { icon: 'shield', label: 'Roles', route: '/roles' },

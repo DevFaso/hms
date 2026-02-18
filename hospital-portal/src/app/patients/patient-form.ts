@@ -21,27 +21,55 @@ export class PatientFormComponent {
 
   saving = false;
   form: PatientCreateRequest = {
+    userId: this.auth.getUserId() ?? '',
     hospitalId: this.auth.getHospitalId() ?? '',
     firstName: '',
     lastName: '',
+    middleName: '',
     email: '',
-    phoneNumber: '',
+    phoneNumberPrimary: '',
+    phoneNumberSecondary: '',
     dateOfBirth: '',
     gender: '',
     address: '',
-    bloodGroup: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: '',
+    bloodType: '',
+    emergencyContactName: '',
+    emergencyContactPhone: '',
+    emergencyContactRelationship: '',
+    allergies: '',
+    medicalHistorySummary: '',
   };
 
   onSubmit(): void {
-    if (!this.form.firstName || !this.form.lastName || !this.form.email) return;
+    if (
+      !this.form.firstName ||
+      !this.form.lastName ||
+      !this.form.email ||
+      !this.form.phoneNumberPrimary ||
+      !this.form.gender ||
+      !this.form.dateOfBirth ||
+      !this.form.country ||
+      !this.form.city
+    ) {
+      this.toast.error('Please fill in all required fields');
+      return;
+    }
+    if (!this.form.userId) {
+      this.toast.error('Unable to resolve user context. Please log in again.');
+      return;
+    }
     this.saving = true;
     this.patientService.create(this.form).subscribe({
       next: (patient) => {
         this.toast.success('Patient registered successfully');
         this.router.navigate(['/patients', patient.id]);
       },
-      error: () => {
-        this.toast.error('Failed to register patient');
+      error: (err) => {
+        this.toast.error(err?.error?.message ?? 'Failed to register patient');
         this.saving = false;
       },
     });

@@ -97,7 +97,8 @@
               <span class="label">Email</span><span class="value">{{ p.email || '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Phone</span><span class="value">{{ p.phoneNumber ?? '—' }}</span>
+              <span class="label">Phone</span
+              ><span class="value">{{ p.phoneNumberPrimary ?? '—' }}</span>
             </div>
             <div class="info-row">
               <span class="label">Date of Birth</span
@@ -107,7 +108,18 @@
               <span class="label">Gender</span><span class="value">{{ p.gender ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Address</span><span class="value">{{ p.address ?? '—' }}</span>
+              <span class="label">Country</span><span class="value">{{ p.country ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Ville / City</span><span class="value">{{ p.city ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Province / Region</span
+              ><span class="value">{{ p.state ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Secteur / Neighborhood</span
+              ><span class="value">{{ p.address ?? '—' }}</span>
             </div>
           </div>
         </div>
@@ -142,8 +154,8 @@
           <h3><span class="material-symbols-outlined">bloodtype</span> Medical Details</h3>
           <div class="info-rows">
             <div class="info-row">
-              <span class="label">Blood Group</span
-              ><span class="value">{{ p.bloodGroup ?? '—' }}</span>
+              <span class="label">Blood Type</span
+              ><span class="value">{{ p.bloodType ?? '—' }}</span>
             </div>
             <div class="info-row">
               <span class="label">Allergies</span
@@ -153,7 +165,7 @@
         </div>
         <div class="info-card">
           <h3><span class="material-symbols-outlined">history</span> Medical History</h3>
-          <p class="medical-text">{{ p.medicalHistory ?? 'No medical history on file.' }}</p>
+          <p class="medical-text">{{ p.medicalHistorySummary ?? 'No medical history on file.' }}</p>
         </div>
       </div>
     }
