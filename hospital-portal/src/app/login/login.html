@@ -9,107 +9,314 @@
           />
         </svg>
       </div>
-      <h1>{{ 'LOGIN.TITLE' | translate }}</h1>
-      <p class="subtitle">Hospital Management System</p>
+      @if (bootstrapMode) {
+        <h1>Initial Setup</h1>
+        <p class="subtitle">Create your Super Admin account to get started</p>
+      } @else {
+        <h1>{{ 'LOGIN.TITLE' | translate }}</h1>
+        <p class="subtitle">Hospital Management System</p>
+      }
     </div>
+
+    @if (bootstrapSuccess) {
+      <output class="success-banner">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
+          />
+        </svg>
+        <span>{{ bootstrapSuccess }}</span>
+      </output>
+    }
 
     @if (error) {
       <div class="error-banner" role="alert">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
           <path
-            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
+            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
           />
         </svg>
         <span>{{ error }}</span>
       </div>
     }
 
-    <form (ngSubmit)="submit()" class="login-form">
-      <div class="form-group">
-        <label for="username">{{ 'LOGIN.USERNAME' | translate }}</label>
-        <div class="input-wrapper">
-          <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path
-              d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
-            />
-          </svg>
-          <input
-            id="username"
-            type="text"
-            [(ngModel)]="username"
-            name="username"
-            autocomplete="username"
-            placeholder="Enter your username"
-            [disabled]="loading"
-          />
-        </div>
-      </div>
-
-      <div class="form-group">
-        <label for="password">{{ 'LOGIN.PASSWORD' | translate }}</label>
-        <div class="input-wrapper">
-          <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path
-              d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"
-            />
-          </svg>
-          <input
-            id="password"
-            [type]="showPassword ? 'text' : 'password'"
-            [(ngModel)]="password"
-            name="password"
-            autocomplete="current-password"
-            placeholder="Enter your password"
-            [disabled]="loading"
-          />
-          <button
-            type="button"
-            class="toggle-password"
-            (click)="togglePasswordVisibility()"
-            tabindex="-1"
-          >
-            @if (showPassword) {
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <!-- ==================== BOOTSTRAP SETUP FORM ==================== -->
+    @if (bootstrapMode) {
+      <form (ngSubmit)="submitBootstrap()" class="login-form">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="bs-firstName">First Name *</label>
+            <div class="input-wrapper">
+              <svg
+                class="input-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
                 <path
-                  d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"
+                  d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
                 />
               </svg>
-            } @else {
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <input
+                id="bs-firstName"
+                type="text"
+                [(ngModel)]="bootstrap.firstName"
+                name="bsFirstName"
+                placeholder="First name"
+                [disabled]="bootstrapLoading"
+              />
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="bs-lastName">Last Name *</label>
+            <div class="input-wrapper">
+              <svg
+                class="input-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
                 <path
-                  d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"
+                  d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
                 />
               </svg>
-            }
-          </button>
+              <input
+                id="bs-lastName"
+                type="text"
+                [(ngModel)]="bootstrap.lastName"
+                name="bsLastName"
+                placeholder="Last name"
+                [disabled]="bootstrapLoading"
+              />
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div class="form-options">
-        <label class="remember-me">
-          <input type="checkbox" [(ngModel)]="remember" name="remember" />
-          <span>{{ 'LOGIN.REMEMBER_ME' | translate }}</span>
-        </label>
-        <div class="forgot-links">
-          <a href="javascript:void(0)" class="forgot-link">{{
-            'LOGIN.FORGOT_PASSWORD' | translate
-          }}</a>
-          <span class="link-separator">·</span>
-          <a href="javascript:void(0)" class="forgot-link">{{
-            'LOGIN.FORGOT_USERNAME' | translate
-          }}</a>
+        <div class="form-group">
+          <label for="bs-username">Username *</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"
+              />
+            </svg>
+            <input
+              id="bs-username"
+              type="text"
+              [(ngModel)]="bootstrap.username"
+              name="bsUsername"
+              autocomplete="username"
+              placeholder="Choose a username"
+              [disabled]="bootstrapLoading"
+            />
+          </div>
         </div>
-      </div>
 
-      <button type="submit" class="btn-login" [disabled]="loading">
-        @if (loading) {
-          <span class="spinner"></span>
-          <span>{{ 'LOGIN.SIGNING_IN' | translate }}...</span>
-        } @else {
-          <span>{{ 'LOGIN.SIGN_IN' | translate }}</span>
-        }
-      </button>
-    </form>
+        <div class="form-group">
+          <label for="bs-email">Email *</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"
+              />
+            </svg>
+            <input
+              id="bs-email"
+              type="email"
+              [(ngModel)]="bootstrap.email"
+              name="bsEmail"
+              autocomplete="email"
+              placeholder="admin@example.com"
+              [disabled]="bootstrapLoading"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="bs-phone">Phone Number</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"
+              />
+            </svg>
+            <input
+              id="bs-phone"
+              type="tel"
+              [(ngModel)]="bootstrap.phoneNumber"
+              name="bsPhone"
+              autocomplete="tel"
+              placeholder="Optional"
+              [disabled]="bootstrapLoading"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="bs-password">Password *</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"
+              />
+            </svg>
+            <input
+              id="bs-password"
+              [type]="showBootstrapPassword ? 'text' : 'password'"
+              [(ngModel)]="bootstrap.password"
+              name="bsPassword"
+              autocomplete="new-password"
+              placeholder="Min 8 characters"
+              [disabled]="bootstrapLoading"
+            />
+            <button
+              type="button"
+              class="toggle-password"
+              (click)="toggleBootstrapPasswordVisibility()"
+              tabindex="-1"
+            >
+              @if (showBootstrapPassword) {
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"
+                  />
+                </svg>
+              } @else {
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"
+                  />
+                </svg>
+              }
+            </button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="bs-confirm">Confirm Password *</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"
+              />
+            </svg>
+            <input
+              id="bs-confirm"
+              type="password"
+              [(ngModel)]="bootstrap.confirmPassword"
+              name="bsConfirmPassword"
+              autocomplete="new-password"
+              placeholder="Re-enter password"
+              [disabled]="bootstrapLoading"
+            />
+          </div>
+        </div>
+
+        <button type="submit" class="btn-login btn-bootstrap" [disabled]="bootstrapLoading">
+          @if (bootstrapLoading) {
+            <span class="spinner"></span>
+            <span>Creating account...</span>
+          } @else {
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"
+              />
+            </svg>
+            <span>Create Super Admin &amp; Get Started</span>
+          }
+        </button>
+      </form>
+    } @else {
+      <!-- ==================== LOGIN FORM ==================== -->
+      <form (ngSubmit)="submit()" class="login-form">
+        <div class="form-group">
+          <label for="username">{{ 'LOGIN.USERNAME' | translate }}</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"
+              />
+            </svg>
+            <input
+              id="username"
+              type="text"
+              [(ngModel)]="username"
+              name="username"
+              autocomplete="username"
+              placeholder="Enter your username"
+              [disabled]="loading"
+            />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="password">{{ 'LOGIN.PASSWORD' | translate }}</label>
+          <div class="input-wrapper">
+            <svg class="input-icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"
+              />
+            </svg>
+            <input
+              id="password"
+              [type]="showPassword ? 'text' : 'password'"
+              [(ngModel)]="password"
+              name="password"
+              autocomplete="current-password"
+              placeholder="Enter your password"
+              [disabled]="loading"
+            />
+            <button
+              type="button"
+              class="toggle-password"
+              (click)="togglePasswordVisibility()"
+              tabindex="-1"
+            >
+              @if (showPassword) {
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"
+                  />
+                </svg>
+              } @else {
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path
+                    d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"
+                  />
+                </svg>
+              }
+            </button>
+          </div>
+        </div>
+
+        <div class="form-options">
+          <label class="remember-me">
+            <input type="checkbox" [(ngModel)]="remember" name="remember" />
+            <span>{{ 'LOGIN.REMEMBER_ME' | translate }}</span>
+          </label>
+          <div class="forgot-links">
+            <a href="javascript:void(0)" class="forgot-link">{{
+              'LOGIN.FORGOT_PASSWORD' | translate
+            }}</a>
+            <span class="link-separator">·</span>
+            <a href="javascript:void(0)" class="forgot-link">{{
+              'LOGIN.FORGOT_USERNAME' | translate
+            }}</a>
+          </div>
+        </div>
+
+        <button type="submit" class="btn-login" [disabled]="loading">
+          @if (loading) {
+            <span class="spinner"></span>
+            <span>{{ 'LOGIN.SIGNING_IN' | translate }}...</span>
+          } @else {
+            <span>{{ 'LOGIN.SIGN_IN' | translate }}</span>
+          }
+        </button>
+      </form>
+    }
 
     <div class="login-footer">
       <p>&copy; {{ currentYear }} HMS - Hospital Management System</p>

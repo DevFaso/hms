@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -78,6 +79,9 @@ public class SecurityConfig {
     private final JwtAuthenticationEntryPoint unauthorizedHandler;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
+    @Value("${app.cors.allowed-origins:http://localhost:4200}")
+    private String allowedOrigins;
+
     // ===== Shared beans =====
 
     @Bean
@@ -118,7 +122,17 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         var cfg = new CorsConfiguration();
-        cfg.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*"));
+        // Build origin patterns from env-driven property + local defaults
+        var patterns = new java.util.ArrayList<>(List.of("http://localhost:*", "http://127.0.0.1:*"));
+        if (allowedOrigins != null && !allowedOrigins.isBlank()) {
+            for (String origin : allowedOrigins.split(",")) {
+                String trimmed = origin.trim();
+                if (!trimmed.isEmpty() && !patterns.contains(trimmed)) {
+                    patterns.add(trimmed);
+                }
+            }
+        }
+        cfg.setAllowedOriginPatterns(patterns);
         cfg.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS","HEAD"));
         cfg.setAllowedHeaders(List.of("*"));
         cfg.setExposedHeaders(List.of("Authorization","Content-Type"));
