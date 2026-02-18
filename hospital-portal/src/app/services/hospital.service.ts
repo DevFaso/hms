@@ -44,29 +44,22 @@ export interface HospitalResponse {
   updatedAt: string;
 }
 
-export interface HospitalPage {
-  content: HospitalResponse[];
-  totalElements: number;
-  totalPages: number;
-  size: number;
-  number: number;
-}
-
 @Injectable({ providedIn: 'root' })
 export class HospitalService {
   private readonly http = inject(HttpClient);
 
-  list(
-    page = 0,
-    size = 20,
-    filters?: { organizationId?: string; city?: string; state?: string; unassignedOnly?: boolean },
-  ): Observable<HospitalPage> {
-    let params = new HttpParams().set('page', String(page)).set('size', String(size));
+  list(filters?: {
+    organizationId?: string;
+    city?: string;
+    state?: string;
+    unassignedOnly?: boolean;
+  }): Observable<HospitalResponse[]> {
+    let params = new HttpParams();
     if (filters?.organizationId) params = params.set('organizationId', filters.organizationId);
     if (filters?.city) params = params.set('city', filters.city);
     if (filters?.state) params = params.set('state', filters.state);
     if (filters?.unassignedOnly) params = params.set('unassignedOnly', 'true');
-    return this.http.get<HospitalPage>('/hospitals', { params });
+    return this.http.get<HospitalResponse[]>('/hospitals', { params });
   }
 
   getById(id: string): Observable<HospitalResponse> {

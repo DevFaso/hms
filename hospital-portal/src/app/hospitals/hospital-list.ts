@@ -2,6 +2,7 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HospitalService, HospitalResponse, HospitalRequest } from '../services/hospital.service';
+
 import { ToastService } from '../core/toast.service';
 
 @Component({
@@ -31,23 +32,15 @@ export class HospitalListComponent implements OnInit {
   deletingHospital = signal<HospitalResponse | null>(null);
   deleting = signal(false);
 
-  // Pagination
-  currentPage = signal(0);
-  totalPages = signal(0);
-  totalElements = signal(0);
-
   ngOnInit(): void {
     this.loadHospitals();
   }
 
-  loadHospitals(page = 0): void {
+  loadHospitals(): void {
     this.loading.set(true);
-    this.hospitalService.list(page, 20).subscribe({
-      next: (res) => {
-        this.hospitals.set(res.content);
-        this.currentPage.set(res.number);
-        this.totalPages.set(res.totalPages);
-        this.totalElements.set(res.totalElements);
+    this.hospitalService.list().subscribe({
+      next: (data) => {
+        this.hospitals.set(data);
         this.applyFilter();
         this.loading.set(false);
       },
@@ -132,7 +125,7 @@ export class HospitalListComponent implements OnInit {
         this.toast.success(existing ? 'Hospital updated' : 'Hospital created');
         this.closeModal();
         this.saving.set(false);
-        this.loadHospitals(this.currentPage());
+        this.loadHospitals();
       },
       error: (err) => {
         this.toast.error(
@@ -163,20 +156,13 @@ export class HospitalListComponent implements OnInit {
         this.toast.success('Hospital deleted');
         this.cancelDelete();
         this.deleting.set(false);
-        this.loadHospitals(this.currentPage());
+        this.loadHospitals();
       },
       error: (err) => {
         this.toast.error(err?.error?.message ?? 'Failed to delete hospital');
         this.deleting.set(false);
       },
     });
-  }
-
-  // ---------- Pagination ----------
-  goToPage(page: number): void {
-    if (page >= 0 && page < this.totalPages()) {
-      this.loadHospitals(page);
-    }
   }
 
   // ---------- Helpers ----------
