@@ -1,0 +1,119 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Admissions</h1>
+      <p class="page-subtitle">Inpatient admissions and bed management</p>
+    </div>
+  </div>
+  <div class="summary-cards">
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon admitted">hotel</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByStatus('ADMITTED') }}</span
+        ><span class="card-label">Admitted</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon discharged">logout</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByStatus('DISCHARGED') }}</span
+        ><span class="card-label">Discharged</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon pending">schedule</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByStatus('PENDING') }}</span
+        ><span class="card-label">Pending</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon total">bar_chart</span>
+      <div class="card-info">
+        <span class="card-value">{{ admissions().length }}</span
+        ><span class="card-label">Total</span>
+      </div>
+    </div>
+  </div>
+  <div class="filter-bar">
+    <div class="tabs">
+      <button class="tab-btn" [class.active]="activeTab() === 'all'" (click)="setTab('all')">
+        All
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'admitted'"
+        (click)="setTab('admitted')"
+      >
+        Admitted
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'discharged'"
+        (click)="setTab('discharged')"
+      >
+        Discharged
+      </button>
+    </div>
+    <div class="search-box">
+      <span class="material-symbols-outlined">search</span
+      ><input
+        type="text"
+        placeholder="Search admissions..."
+        [(ngModel)]="searchTerm"
+        (input)="applyFilter()"
+      />
+    </div>
+  </div>
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading admissions...</p>
+    </div>
+  }
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">hotel</span>
+      <h3>No admissions found</h3>
+      <p>Admissions will appear here.</p>
+    </div>
+  }
+  @if (!loading() && filtered().length > 0) {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Patient</th>
+            <th scope="col">Room/Bed</th>
+            <th scope="col">Type</th>
+            <th scope="col">Acuity</th>
+            <th scope="col">Chief Complaint</th>
+            <th scope="col">Admitted</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (a of filtered(); track a.id) {
+            <tr class="data-row">
+              <td>
+                <div class="cell-primary">{{ a.patientName || 'Unknown' }}</div>
+              </td>
+              <td>{{ a.roomBed || '—' }}</td>
+              <td>{{ a.admissionType || '—' }}</td>
+              <td>
+                <span class="acuity-badge {{ getAcuityClass(a.acuityLevel) }}">{{
+                  a.acuityLevel
+                }}</span>
+              </td>
+              <td class="complaint-cell">{{ a.chiefComplaint || '—' }}</td>
+              <td>{{ a.admissionDateTime ? (a.admissionDateTime | date: 'mediumDate') : '—' }}</td>
+              <td>
+                <span class="status-badge {{ getStatusClass(a.status) }}">{{ a.status }}</span>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

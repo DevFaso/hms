@@ -173,6 +173,20 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     }
 
     @Override
+    public List<GeneralReferralResponseDTO> getAllReferrals(String status) {
+        List<GeneralReferral> referrals;
+        if (status != null && !status.isBlank()) {
+            ReferralStatus referralStatus = ReferralStatus.valueOf(status.toUpperCase());
+            referrals = referralRepository.findByStatusOrderByCreatedAtDesc(referralStatus);
+        } else {
+            referrals = referralRepository.findAllByOrderByCreatedAtDesc();
+        }
+        return referrals.stream()
+            .map(this::toResponse)
+            .toList();
+    }
+
+    @Override
     public List<GeneralReferralResponseDTO> getOverdueReferrals() {
         return referralRepository.findOverdueReferrals(LocalDateTime.now())
             .stream()

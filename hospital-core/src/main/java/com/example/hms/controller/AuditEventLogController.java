@@ -29,6 +29,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -71,6 +73,19 @@ public class AuditEventLogController {
         @PathVariable UUID userId,
         @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(auditService.getAuditLogsByUser(userId, pageable));
+    }
+
+    @GetMapping("/event-types-summary")
+    @Operation(summary = "Get event type counts", description = "Retrieve a summary of audit event counts grouped by event type.")
+    @ApiResponse(responseCode = "200", description = "Event type summary retrieved successfully")
+    public ResponseEntity<List<Map<String, Object>>> getEventTypesSummary() {
+        List<Map<String, Object>> summary = auditRepository.countByEventType().stream()
+            .map(row -> Map.<String, Object>of(
+                "eventType", row[0] != null ? row[0].toString() : "UNKNOWN",
+                "count", row[1]
+            ))
+            .toList();
+        return ResponseEntity.ok(summary);
     }
 
     @GetMapping("/event-type-status")

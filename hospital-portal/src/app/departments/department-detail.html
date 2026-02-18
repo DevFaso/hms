@@ -1,0 +1,194 @@
+<div class="page-container">
+  <a routerLink="/departments" class="back-link">
+    <span class="material-symbols-outlined">arrow_back</span>
+    Back to Departments
+  </a>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading department...</p>
+    </div>
+  }
+
+  @if (!loading() && department(); as dept) {
+    <div class="detail-header">
+      <div class="dept-avatar">
+        <span class="material-symbols-outlined">domain</span>
+      </div>
+      <div class="header-info">
+        <h1>{{ dept.name }}</h1>
+        <div class="header-meta">
+          <span class="meta-tag code">{{ dept.code }}</span>
+          @if (dept.hospitalName) {
+            <span class="meta-tag">
+              <span class="material-symbols-outlined">local_hospital</span>
+              {{ dept.hospitalName }}
+            </span>
+          }
+          <span class="status-badge" [class.active]="dept.active" [class.inactive]="!dept.active">
+            {{ dept.active ? 'Active' : 'Inactive' }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab" [class.active]="activeTab() === 'overview'" (click)="setTab('overview')">
+        Overview
+      </button>
+      <button class="tab" [class.active]="activeTab() === 'staff'" (click)="setTab('staff')">
+        Staff
+        @if (staff().length) {
+          <span class="tab-count">{{ staff().length }}</span>
+        }
+      </button>
+      <button class="tab" [class.active]="activeTab() === 'stats'" (click)="setTab('stats')">
+        Statistics
+      </button>
+    </div>
+
+    @if (activeTab() === 'overview') {
+      <div class="info-grid">
+        <div class="info-card">
+          <h3>
+            <span class="material-symbols-outlined">info</span>
+            Department Info
+          </h3>
+          <div class="info-rows">
+            <div class="info-row">
+              <span class="label">Name</span><span class="value">{{ dept.name }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Code</span><span class="value">{{ dept.code }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Description</span
+              ><span class="value">{{ dept.description ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Head of Department</span
+              ><span class="value">{{ dept.headOfDepartmentName ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Hospital</span
+              ><span class="value">{{ dept.hospitalName ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Status</span
+              ><span class="value">{{ dept.active ? 'Active' : 'Inactive' }}</span>
+            </div>
+          </div>
+        </div>
+        @if (stats(); as s) {
+          <div class="info-card">
+            <h3>
+              <span class="material-symbols-outlined">analytics</span>
+              Quick Stats
+            </h3>
+            <div class="stat-grid">
+              <div class="stat-item">
+                <span class="stat-value">{{ s.totalStaff }}</span>
+                <span class="stat-label">Total Staff</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value">{{ s.activeStaff }}</span>
+                <span class="stat-label">Active Staff</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value">{{ s.totalPatients }}</span>
+                <span class="stat-label">Patients</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-value">{{ s.totalAppointments }}</span>
+                <span class="stat-label">Appointments</span>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    @if (activeTab() === 'staff') {
+      @if (staff().length > 0) {
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Job Title</th>
+                <th>Email</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (s of staff(); track s.id) {
+                <tr>
+                  <td class="name-cell">{{ s.name }}</td>
+                  <td>{{ s.jobTitle ?? '—' }}</td>
+                  <td>{{ s.email ?? '—' }}</td>
+                  <td>
+                    <span
+                      class="status-badge"
+                      [class.active]="s.active"
+                      [class.inactive]="!s.active"
+                    >
+                      {{ s.active ? 'Active' : 'Inactive' }}
+                    </span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      } @else {
+        <div class="empty-state">
+          <span class="material-symbols-outlined empty-icon">group</span>
+          <h3>No staff assigned</h3>
+          <p>No staff members are currently assigned to this department.</p>
+        </div>
+      }
+    }
+
+    @if (activeTab() === 'stats') {
+      @if (stats(); as s) {
+        <div class="stats-grid-full">
+          <div class="stat-card">
+            <span class="material-symbols-outlined stat-icon staff-icon">group</span>
+            <div>
+              <h4>{{ s.totalStaff }}</h4>
+              <p>Total Staff</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <span class="material-symbols-outlined stat-icon active-icon">how_to_reg</span>
+            <div>
+              <h4>{{ s.activeStaff }}</h4>
+              <p>Active Staff</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <span class="material-symbols-outlined stat-icon patient-icon">people</span>
+            <div>
+              <h4>{{ s.totalPatients }}</h4>
+              <p>Patients Served</p>
+            </div>
+          </div>
+          <div class="stat-card">
+            <span class="material-symbols-outlined stat-icon appt-icon">calendar_month</span>
+            <div>
+              <h4>{{ s.totalAppointments }}</h4>
+              <p>Appointments</p>
+            </div>
+          </div>
+        </div>
+      } @else {
+        <div class="empty-state">
+          <span class="material-symbols-outlined empty-icon">analytics</span>
+          <h3>No statistics available</h3>
+          <p>Statistics for this department are not yet available.</p>
+        </div>
+      }
+    }
+  }
+</div>

@@ -125,6 +125,20 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<ConsultationResponseDTO> getAllConsultations(ConsultationStatus status) {
+        List<Consultation> consultations;
+        if (status != null) {
+            consultations = consultationRepository.findByStatusOrderByRequestedAtDesc(status);
+        } else {
+            consultations = consultationRepository.findAllByOrderByRequestedAtDesc();
+        }
+        return consultations.stream()
+            .map(this::toResponseDTO)
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getConsultationsRequestedBy(UUID providerId) {
         List<Consultation> consultations = consultationRepository.findByRequestingProvider_IdOrderByRequestedAtDesc(providerId);
         return consultations.stream()

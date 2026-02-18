@@ -181,6 +181,9 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         } else if (hospitalId != null) {
             shifts = shiftRepository.findByHospital_IdAndShiftDateBetweenOrderByShiftDateAscStartTimeAsc(
                 hospitalId, range.start(), range.end());
+        } else if (roleValidator.isSuperAdminFromAuth()) {
+            shifts = shiftRepository.findByShiftDateBetweenOrderByShiftDateAscStartTimeAsc(
+                range.start(), range.end());
         } else {
             shifts = shiftRepository.findByHospital_IdAndShiftDateBetweenOrderByShiftDateAscStartTimeAsc(
                 requireCurrentHospitalId(effectiveLocale), range.start(), range.end());
@@ -291,6 +294,9 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         } else if (hospitalId != null) {
             leaves = leaveRepository.findByHospital_IdAndStartDateBetweenOrderByStartDateAsc(
                 hospitalId, range.start(), range.end());
+        } else if (roleValidator.isSuperAdminFromAuth()) {
+            leaves = leaveRepository.findByStartDateBetweenOrderByStartDateAsc(
+                range.start(), range.end());
         } else {
             leaves = leaveRepository.findByHospital_IdAndStartDateBetweenOrderByStartDateAsc(
                 requireCurrentHospitalId(effectiveLocale), range.start(), range.end());

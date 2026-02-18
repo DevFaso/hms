@@ -1,0 +1,57 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Staff</h1>
+      <p class="page-subtitle">View and manage hospital staff members</p>
+    </div>
+  </div>
+
+  <div class="search-bar">
+    <span class="material-symbols-outlined search-icon">search</span>
+    <input
+      type="text"
+      placeholder="Search by name, email, or specialization..."
+      [(ngModel)]="searchTerm"
+      (ngModelChange)="applyFilter()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading staff...</p>
+    </div>
+  }
+
+  @if (!loading() && filtered().length > 0) {
+    <div class="staff-grid">
+      @for (member of filtered(); track member.id) {
+        <a class="staff-card" [routerLink]="['/staff', member.id]">
+          <div class="staff-avatar">
+            {{ getInitials(member.name) }}
+          </div>
+          <div class="staff-info">
+            <h4>{{ member.name }}</h4>
+            <p class="staff-role">{{ formatJobTitle(member.jobTitle) }}</p>
+            @if (member.departmentName) {
+              <p class="staff-dept">
+                <span class="material-symbols-outlined dept-icon">domain</span>
+                {{ member.departmentName }}
+              </p>
+            }
+            <p class="staff-email">{{ member.email }}</p>
+          </div>
+          <span class="status-dot" [class.active]="member.active"></span>
+        </a>
+      }
+    </div>
+  }
+
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">badge</span>
+      <h3>No staff found</h3>
+      <p>{{ searchTerm ? 'Try adjusting your search.' : 'No staff members registered yet.' }}</p>
+    </div>
+  }
+</div>

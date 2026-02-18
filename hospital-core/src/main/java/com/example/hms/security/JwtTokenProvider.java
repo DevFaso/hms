@@ -133,6 +133,9 @@ public class JwtTokenProvider {
         Date expiryDate = new Date(now.getTime() + accessTokenExpirationMs);
         Map<String, Object> claims = buildTenantClaims(userDetails.getUserId(), roles);
         claims.put(ROLES_CLAIM, roles);
+        if (userDetails.getUserId() != null) {
+            claims.put("uid", userDetails.getUserId().toString());
+        }
         return Jwts.builder()
             .subject(userDetails.getUsername())
             .claims(claims)
@@ -160,6 +163,9 @@ public class JwtTokenProvider {
         Date expiryDate = new Date(now.getTime() + accessTokenExpirationMs);
         Map<String, Object> claims = buildTenantClaims(userId, roles);
         claims.put(ROLES_CLAIM, roles);
+        if (userId != null) {
+            claims.put("uid", userId.toString());
+        }
         return Jwts.builder()
             .subject(descriptor.username())
             .claims(claims)

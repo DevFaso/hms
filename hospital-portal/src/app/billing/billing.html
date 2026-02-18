@@ -1,0 +1,236 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Billing & Invoices</h1>
+      <p class="page-subtitle">Manage invoices, payments, and revenue</p>
+    </div>
+  </div>
+
+  <div class="summary-cards">
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon total">receipt_long</span>
+      <div class="card-info">
+        <span class="card-value">{{ stats().total }}</span
+        ><span class="card-label">Total Invoices</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon paid">check_circle</span>
+      <div class="card-info">
+        <span class="card-value">{{ stats().paid }}</span
+        ><span class="card-label">Paid</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon pending">schedule</span>
+      <div class="card-info">
+        <span class="card-value">{{ stats().pending }}</span
+        ><span class="card-label">Pending</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon overdue">warning</span>
+      <div class="card-info">
+        <span class="card-value">{{ stats().overdue }}</span
+        ><span class="card-label">Overdue</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon revenue">payments</span>
+      <div class="card-info">
+        <span class="card-value">{{ formatCurrency(stats().totalRevenue) }}</span
+        ><span class="card-label">Revenue</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon outstanding">account_balance</span>
+      <div class="card-info">
+        <span class="card-value">{{ formatCurrency(stats().outstanding) }}</span
+        ><span class="card-label">Outstanding</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button
+      class="tab"
+      [class.active]="activeTab() === 'all'"
+      (click)="setTab('all')"
+      title="All invoices"
+    >
+      All ({{ invoices().length }})
+    </button>
+    <button
+      class="tab"
+      [class.active]="activeTab() === 'pending'"
+      (click)="setTab('pending')"
+      title="Pending invoices"
+    >
+      Pending ({{ stats().pending }})
+    </button>
+    <button
+      class="tab"
+      [class.active]="activeTab() === 'paid'"
+      (click)="setTab('paid')"
+      title="Paid invoices"
+    >
+      Paid ({{ stats().paid }})
+    </button>
+    <button
+      class="tab"
+      [class.active]="activeTab() === 'overdue'"
+      (click)="setTab('overdue')"
+      title="Overdue invoices"
+    >
+      Overdue ({{ stats().overdue }})
+    </button>
+  </div>
+
+  <div class="search-box">
+    <span class="material-symbols-outlined">search</span
+    ><input
+      type="text"
+      placeholder="Search by invoice #, patient, or status..."
+      [(ngModel)]="searchTerm"
+      (input)="applyFilter()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading billing data...</p>
+    </div>
+  }
+
+  @if (!loading() && filtered().length > 0) {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Invoice #</th>
+            <th scope="col">Patient</th>
+            <th scope="col">Hospital</th>
+            <th scope="col">Date</th>
+            <th scope="col">Due Date</th>
+            <th scope="col">Total</th>
+            <th scope="col">Paid</th>
+            <th scope="col">Balance</th>
+            <th scope="col">Status</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (inv of filtered(); track inv.id) {
+            <tr class="data-row">
+              <td class="invoice-num">{{ inv.invoiceNumber }}</td>
+              <td>
+                <div class="cell-primary">{{ inv.patientFullName || '—' }}</div>
+                <div class="cell-secondary">{{ inv.patientEmail || '' }}</div>
+              </td>
+              <td>{{ inv.hospitalName || '—' }}</td>
+              <td class="date-cell">
+                {{ inv.invoiceDate ? (inv.invoiceDate | date: 'mediumDate') : '—' }}
+              </td>
+              <td class="date-cell">
+                {{ inv.dueDate ? (inv.dueDate | date: 'mediumDate') : '—' }}
+              </td>
+              <td class="amount">{{ formatCurrency(inv.totalAmount) }}</td>
+              <td class="amount paid-amount">{{ formatCurrency(inv.amountPaid) }}</td>
+              <td class="amount balance-amount">{{ formatCurrency(inv.balanceDue) }}</td>
+              <td>
+                <span class="status-badge" [class]="getStatusClass(inv.status)">{{
+                  inv.status
+                }}</span>
+              </td>
+              <td class="actions-cell">
+                <button class="action-btn" title="View invoice details" (click)="viewInvoice(inv)">
+                  <span class="material-symbols-outlined">visibility</span>
+                </button>
+                <button class="action-btn" title="Download PDF" (click)="downloadPdf(inv.id)">
+                  <span class="material-symbols-outlined">picture_as_pdf</span>
+                </button>
+                <button class="action-btn" title="Email invoice" (click)="emailInvoice(inv)">
+                  <span class="material-symbols-outlined">email</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">receipt_long</span>
+      <h3>No invoices found</h3>
+      <p>{{ searchTerm ? 'Try adjusting your search.' : 'No billing records available.' }}</p>
+    </div>
+  }
+
+  @if (selectedInvoice(); as inv) {
+    <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
+      <div class="detail-panel">
+        <div class="panel-header">
+          <h2>Invoice {{ inv.invoiceNumber }}</h2>
+          <button class="close-btn" title="Close detail panel" (click)="closeDetail()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="panel-body">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <span class="field-label">Patient</span
+              ><span class="field-value">{{ inv.patientFullName }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Email</span
+              ><span class="field-value">{{ inv.patientEmail || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Hospital</span
+              ><span class="field-value">{{ inv.hospitalName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Invoice Date</span
+              ><span class="field-value">{{ inv.invoiceDate | date: 'longDate' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Due Date</span
+              ><span class="field-value">{{ inv.dueDate | date: 'longDate' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Status</span
+              ><span class="status-badge" [class]="getStatusClass(inv.status)">{{
+                inv.status
+              }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Total Amount</span
+              ><span class="field-value amount-lg">{{ formatCurrency(inv.totalAmount) }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Amount Paid</span
+              ><span class="field-value amount-lg paid-amount">{{
+                formatCurrency(inv.amountPaid)
+              }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Balance Due</span
+              ><span class="field-value amount-lg balance-amount">{{
+                formatCurrency(inv.balanceDue)
+              }}</span>
+            </div>
+          </div>
+          @if (inv.notes) {
+            <div class="notes-section">
+              <span class="field-label">Notes</span>
+              <p>{{ inv.notes }}</p>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

@@ -23,6 +23,10 @@ public interface ImagingOrderRepository extends JpaRepository<ImagingOrder, UUID
 
     List<ImagingOrder> findByHospital_IdAndStatusInOrderByOrderedAtDesc(UUID hospitalId, List<ImagingOrderStatus> statuses);
 
+    List<ImagingOrder> findByStatusOrderByOrderedAtDesc(ImagingOrderStatus status);
+
+    List<ImagingOrder> findAllByOrderByOrderedAtDesc();
+
     @Query("SELECT o FROM ImagingOrder o " +
         "WHERE o.patient.id = :patientId " +
         "AND o.modality = :modality " +

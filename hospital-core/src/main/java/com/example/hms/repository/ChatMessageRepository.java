@@ -24,13 +24,22 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
     """)
     Page<ChatMessage> findChatBetweenUsers(User user1, User user2, Pageable pageable);
 
-    // 2. Latest message per conversation for a user (native, PostgreSQL safe version)
+    // 2. Latest message per conversation for a user (H2 + PostgreSQL compatible)
     @Query(value = """
-        SELECT DISTINCT ON (LEAST(sender_id, recipient_id), GREATEST(sender_id, recipient_id))
-            id, sender_id, recipient_id, content, timestamp, read
-        FROM support.chat_messages
-        WHERE sender_id = :userId OR recipient_id = :userId
-        ORDER BY LEAST(sender_id, recipient_id), GREATEST(sender_id, recipient_id), sent_at DESC
+        SELECT m.id, m.sender_id, m.recipient_id, m.content, m.sent_at, m.is_read
+        FROM support.chat_messages m
+        INNER JOIN (
+            SELECT CASE WHEN sender_id < recipient_id THEN sender_id ELSE recipient_id END AS u1,
+                   CASE WHEN sender_id < recipient_id THEN recipient_id ELSE sender_id END AS u2,
+                   MAX(sent_at) AS max_sent
+            FROM support.chat_messages
+            WHERE sender_id = :userId OR recipient_id = :userId
+            GROUP BY u1, u2
+        ) latest ON (CASE WHEN m.sender_id < m.recipient_id THEN m.sender_id ELSE m.recipient_id END) = latest.u1
+               AND (CASE WHEN m.sender_id < m.recipient_id THEN m.recipient_id ELSE m.sender_id END) = latest.u2
+               AND m.sent_at = latest.max_sent
+        WHERE m.sender_id = :userId OR m.recipient_id = :userId
+        ORDER BY m.sent_at DESC
         LIMIT :limit OFFSET :offset
     """, nativeQuery = true)
     List<Object[]> findLatestMessagesForUserNative(
@@ -95,11 +104,20 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
     Page<ChatMessage> findAllUnreadMessagesForUser(UUID userId, Pageable pageable);
 
     @Query(value = """
-    SELECT DISTINCT ON (LEAST(sender_id, recipient_id), GREATEST(sender_id, recipient_id))
-        id, sender_id, recipient_id, content, timestamp, read
-    FROM support.chat_messages
-    WHERE sender_id = :userId OR recipient_id = :userId
-    ORDER BY LEAST(sender_id, recipient_id), GREATEST(sender_id, recipient_id), sent_at DESC
+    SELECT m.id, m.sender_id, m.recipient_id, m.content, m.timestamp, m.is_read
+    FROM support.chat_messages m
+    INNER JOIN (
+        SELECT CASE WHEN sender_id < recipient_id THEN sender_id ELSE recipient_id END AS u1,
+               CASE WHEN sender_id < recipient_id THEN recipient_id ELSE sender_id END AS u2,
+               MAX(sent_at) AS max_sent
+        FROM support.chat_messages
+        WHERE sender_id = :userId OR recipient_id = :userId
+        GROUP BY u1, u2
+    ) latest ON (CASE WHEN m.sender_id < m.recipient_id THEN m.sender_id ELSE m.recipient_id END) = latest.u1
+           AND (CASE WHEN m.sender_id < m.recipient_id THEN m.recipient_id ELSE m.sender_id END) = latest.u2
+           AND m.sent_at = latest.max_sent
+    WHERE m.sender_id = :userId OR m.recipient_id = :userId
+    ORDER BY m.sent_at DESC
     LIMIT :limit OFFSET :offset
 """, nativeQuery = true)
     List<Object[]> findLatestConversations(

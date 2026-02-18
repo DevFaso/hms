@@ -1,0 +1,727 @@
+<div class="profile-page">
+  <!-- Loading Skeleton -->
+  @if (loading()) {
+    <div class="profile-loading">
+      <div class="skeleton-header">
+        <div class="skeleton-avatar"></div>
+        <div class="skeleton-lines">
+          <div class="skeleton-line lg"></div>
+          <div class="skeleton-line md"></div>
+          <div class="skeleton-line sm"></div>
+        </div>
+      </div>
+      <div class="skeleton-tabs">
+        <div class="skeleton-tab"></div>
+        <div class="skeleton-tab"></div>
+        <div class="skeleton-tab"></div>
+        <div class="skeleton-tab"></div>
+      </div>
+      <div class="skeleton-body">
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+      </div>
+    </div>
+  }
+
+  @if (!loading() && user()) {
+    <!-- Profile Header / Banner -->
+    <div class="profile-header">
+      <div class="header-bg"></div>
+      <div class="header-content">
+        <!-- Avatar Section -->
+        <div class="avatar-section">
+          <div class="avatar-wrapper">
+            @if (user()?.profileImageUrl) {
+              <img
+                [src]="user()!.profileImageUrl"
+                [alt]="fullName()"
+                title="Profile photo"
+                class="avatar-img"
+              />
+            } @else {
+              <div class="avatar-placeholder">{{ userInitials() }}</div>
+            }
+            @if (uploadingAvatar()) {
+              <div class="avatar-uploading">
+                <span class="material-symbols-outlined spinning">progress_activity</span>
+              </div>
+            }
+            <label class="avatar-edit-btn" for="avatarInput" title="Change photo">
+              <span class="material-symbols-outlined">photo_camera</span>
+            </label>
+            <input
+              type="file"
+              id="avatarInput"
+              accept="image/*"
+              (change)="onAvatarFileSelected($event)"
+              hidden
+            />
+          </div>
+          @if (user()?.profileImageUrl) {
+            <button
+              class="remove-avatar-btn"
+              (click)="removeAvatar()"
+              [disabled]="uploadingAvatar()"
+            >
+              <span class="material-symbols-outlined">delete</span> Remove Photo
+            </button>
+          }
+        </div>
+
+        <!-- User Info -->
+        <div class="user-info">
+          <h1 class="user-name">{{ fullName() }}</h1>
+          <p class="user-username">&#64;{{ user()!.username }}</p>
+          <div class="role-badges">
+            @for (role of allRoles(); track role.id || role.code) {
+              <span class="role-badge">{{ role.displayName }}</span>
+            }
+          </div>
+          <div class="user-meta">
+            @if (user()!.email) {
+              <span class="meta-item">
+                <span class="material-symbols-outlined">mail</span>
+                {{ user()!.email }}
+              </span>
+            }
+            @if (user()!.phoneNumber) {
+              <span class="meta-item">
+                <span class="material-symbols-outlined">phone</span>
+                {{ user()!.phoneNumber }}
+              </span>
+            }
+            <span class="meta-item">
+              <span class="material-symbols-outlined">calendar_today</span>
+              Joined {{ memberSince() }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Quick Stats (desktop) -->
+        <div class="header-stats">
+          <div class="stat-item">
+            <span class="stat-value">{{ allRoles().length }}</span>
+            <span class="stat-label">Roles</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">{{ assignments().length }}</span>
+            <span class="stat-label">Assignments</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value">{{ securityScore() }}%</span>
+            <span class="stat-label">Security</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="profile-tabs">
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'overview'"
+        (click)="switchTab('overview')"
+      >
+        <span class="material-symbols-outlined">person</span>
+        <span class="tab-label">Overview</span>
+      </button>
+      <button class="tab-btn" [class.active]="activeTab() === 'edit'" (click)="switchTab('edit')">
+        <span class="material-symbols-outlined">edit</span>
+        <span class="tab-label">Edit Profile</span>
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'security'"
+        (click)="switchTab('security')"
+      >
+        <span class="material-symbols-outlined">shield</span>
+        <span class="tab-label">Security</span>
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'activity'"
+        (click)="switchTab('activity')"
+      >
+        <span class="material-symbols-outlined">history</span>
+        <span class="tab-label">Activity</span>
+      </button>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="tab-content">
+      <!-- ═══════════════════════════════════════════ -->
+      <!-- OVERVIEW TAB                                -->
+      <!-- ═══════════════════════════════════════════ -->
+      @if (activeTab() === 'overview') {
+        <div class="overview-grid">
+          <!-- Personal Information -->
+          <div class="card">
+            <div class="card-header">
+              <span class="material-symbols-outlined card-icon">badge</span>
+              <h3>Personal Information</h3>
+            </div>
+            <div class="card-body">
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-label">Full Name</span>
+                  <span class="info-value">{{ fullName() }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Username</span>
+                  <span class="info-value">{{ user()!.username }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Email</span>
+                  <span class="info-value">{{ user()!.email }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Phone</span>
+                  <span class="info-value">{{ user()!.phoneNumber || '—' }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Profile Type</span>
+                  <span class="info-value">{{ user()!.profileType ?? 'N/A' }}</span>
+                </div>
+                @if (user()!.licenseNumber) {
+                  <div class="info-item">
+                    <span class="info-label">License Number</span>
+                    <span class="info-value">{{ user()!.licenseNumber }}</span>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- Account Information -->
+          <div class="card">
+            <div class="card-header">
+              <span class="material-symbols-outlined card-icon">account_circle</span>
+              <h3>Account Details</h3>
+            </div>
+            <div class="card-body">
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-label">Account Status</span>
+                  <span class="info-value">
+                    <span
+                      class="status-dot"
+                      [class.active]="user()!.active"
+                      [class.inactive]="!user()!.active"
+                    ></span>
+                    {{ user()!.active ? 'Active' : 'Inactive' }}
+                  </span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Member Since</span>
+                  <span class="info-value">{{ memberSince() }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Account Age</span>
+                  <span class="info-value">{{ accountAge() }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">Last Login</span>
+                  <span class="info-value">{{ lastLogin() }}</span>
+                </div>
+                <div class="info-item">
+                  <span class="info-label">User ID</span>
+                  <span class="info-value id-value">{{ user()!.id }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Role Assignments -->
+          @if (assignments().length > 0) {
+            <div class="card full-width">
+              <div class="card-header">
+                <span class="material-symbols-outlined card-icon">assignment_ind</span>
+                <h3>Role Assignments</h3>
+              </div>
+              <div class="card-body">
+                <div class="assignments-list">
+                  @for (a of assignments(); track a.id) {
+                    <div class="assignment-row">
+                      <div class="assignment-role">
+                        <span class="material-symbols-outlined">shield</span>
+                        <span class="assignment-role-name">{{ a.roleName ?? a.roleCode }}</span>
+                      </div>
+                      @if (a.hospitalName) {
+                        <div class="assignment-hospital">
+                          <span class="material-symbols-outlined">local_hospital</span>
+                          <span>{{ a.hospitalName }}</span>
+                        </div>
+                      }
+                      <span
+                        class="assignment-status"
+                        [class.active]="a.active"
+                        [class.inactive]="!a.active"
+                      >
+                        {{ a.active ? 'Active' : 'Inactive' }}
+                      </span>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+
+          <!-- Security Overview -->
+          <div class="card full-width">
+            <div class="card-header">
+              <span class="material-symbols-outlined card-icon">security</span>
+              <h3>Security Overview</h3>
+              <button class="card-action-btn" (click)="switchTab('security')">
+                <span>View Details</span>
+                <span class="material-symbols-outlined">arrow_forward</span>
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="security-overview">
+                <div class="security-score-ring">
+                  <svg viewBox="0 0 100 100" class="score-svg">
+                    <circle cx="50" cy="50" r="42" fill="none" stroke="#e2e8f0" stroke-width="8" />
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="42"
+                      fill="none"
+                      [attr.stroke]="securityScoreColor()"
+                      stroke-width="8"
+                      stroke-linecap="round"
+                      [attr.stroke-dasharray]="2 * 3.14159 * 42"
+                      [attr.stroke-dashoffset]="2 * 3.14159 * 42 * (1 - securityScore() / 100)"
+                      transform="rotate(-90 50 50)"
+                    />
+                  </svg>
+                  <div class="score-text">
+                    <span class="score-number">{{ securityScore() }}</span>
+                    <span class="score-percent">%</span>
+                  </div>
+                </div>
+                <div class="security-details">
+                  <p class="security-label" [style.color]="securityScoreColor()">
+                    {{ securityScoreLabel() }}
+                  </p>
+                  <div class="security-checklist">
+                    <div class="check-item" [class.checked]="credentials()?.hasPrimaryMfa">
+                      <span class="material-symbols-outlined">
+                        {{
+                          credentials()?.hasPrimaryMfa ? 'check_circle' : 'radio_button_unchecked'
+                        }}
+                      </span>
+                      <span>Multi-Factor Authentication</span>
+                    </div>
+                    <div
+                      class="check-item"
+                      [class.checked]="credentials()?.hasPrimaryRecoveryContact"
+                    >
+                      <span class="material-symbols-outlined">
+                        {{
+                          credentials()?.hasPrimaryRecoveryContact
+                            ? 'check_circle'
+                            : 'radio_button_unchecked'
+                        }}
+                      </span>
+                      <span>Recovery Contact</span>
+                    </div>
+                    <div class="check-item" [class.checked]="!credentials()?.forcePasswordChange">
+                      <span class="material-symbols-outlined">
+                        {{
+                          !credentials()?.forcePasswordChange
+                            ? 'check_circle'
+                            : 'radio_button_unchecked'
+                        }}
+                      </span>
+                      <span>Password Up-to-Date</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- ═══════════════════════════════════════════ -->
+      <!-- EDIT PROFILE TAB                            -->
+      <!-- ═══════════════════════════════════════════ -->
+      @if (activeTab() === 'edit') {
+        <div class="edit-section">
+          <div class="card">
+            <div class="card-header">
+              <span class="material-symbols-outlined card-icon">edit</span>
+              <h3>Edit Personal Information</h3>
+            </div>
+            <div class="card-body">
+              <form class="edit-form" (ngSubmit)="saveProfile()">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="editFirstName">First Name</label>
+                    <input
+                      type="text"
+                      id="editFirstName"
+                      [ngModel]="editForm().firstName"
+                      (ngModelChange)="updateField('firstName', $event)"
+                      name="firstName"
+                      placeholder="Enter first name"
+                      required
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="editLastName">Last Name</label>
+                    <input
+                      type="text"
+                      id="editLastName"
+                      [ngModel]="editForm().lastName"
+                      (ngModelChange)="updateField('lastName', $event)"
+                      name="lastName"
+                      placeholder="Enter last name"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="editEmail">Email Address</label>
+                    <input
+                      type="email"
+                      id="editEmail"
+                      [ngModel]="editForm().email"
+                      (ngModelChange)="updateField('email', $event)"
+                      name="email"
+                      placeholder="Enter email"
+                      required
+                    />
+                  </div>
+                  <div class="form-group">
+                    <label for="editPhone">Phone Number</label>
+                    <input
+                      type="tel"
+                      id="editPhone"
+                      [ngModel]="editForm().phoneNumber"
+                      (ngModelChange)="updateField('phoneNumber', $event)"
+                      name="phoneNumber"
+                      placeholder="Enter phone number"
+                    />
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="editUsername">Username</label>
+                    <input
+                      type="text"
+                      id="editUsername"
+                      [ngModel]="editForm().username"
+                      (ngModelChange)="updateField('username', $event)"
+                      name="username"
+                      placeholder="Enter username"
+                      disabled
+                    />
+                    <span class="form-hint">Username cannot be changed</span>
+                  </div>
+                </div>
+
+                <div class="form-actions">
+                  <button type="button" class="btn btn-secondary" (click)="cancelEdit()">
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    class="btn btn-primary"
+                    [disabled]="!formDirty() || saving()"
+                  >
+                    @if (saving()) {
+                      <span class="material-symbols-outlined spinning">progress_activity</span>
+                      Saving...
+                    } @else {
+                      <span class="material-symbols-outlined">save</span>
+                      Save Changes
+                    }
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- ═══════════════════════════════════════════ -->
+      <!-- SECURITY TAB                                -->
+      <!-- ═══════════════════════════════════════════ -->
+      @if (activeTab() === 'security') {
+        <div class="security-section">
+          <!-- Password -->
+          <div class="card">
+            <div class="card-header">
+              <span class="material-symbols-outlined card-icon">lock</span>
+              <h3>Password</h3>
+            </div>
+            <div class="card-body">
+              <div class="security-action-row">
+                <div class="security-action-info">
+                  <p class="security-action-title">Change Password</p>
+                  <p class="security-action-desc">
+                    Send a password reset link to your registered email address.
+                    @if (credentials()?.forcePasswordChange) {
+                      <span class="force-change-badge">⚠ Password change required</span>
+                    }
+                  </p>
+                </div>
+                <button class="btn btn-secondary" (click)="requestPasswordReset()">
+                  <span class="material-symbols-outlined">mail</span>
+                  Send Reset Link
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- MFA -->
+          <div class="card">
+            <div class="card-header">
+              <span class="material-symbols-outlined card-icon">phonelink_lock</span>
+              <h3>Multi-Factor Authentication</h3>
+            </div>
+            <div class="card-body">
+              @if (credentials()?.mfaEnrollments?.length) {
+                <div class="mfa-list">
+                  @for (mfa of credentials()!.mfaEnrollments; track mfa.id ?? mfa.method) {
+                    <div class="mfa-item">
+                      <span class="material-symbols-outlined mfa-icon">
+                        {{ mfa.method === 'TOTP' ? 'key' : mfa.method === 'SMS' ? 'sms' : 'mail' }}
+                      </span>
+                      <div class="mfa-details">
+                        <span class="mfa-method">{{ mfa.method }}</span>
+                        @if (mfa.destination) {
+                          <span class="mfa-dest">{{ mfa.destination }}</span>
+                        }
+                      </div>
+                      <div class="mfa-badges">
+                        @if (mfa.verified) {
+                          <span class="badge-verified">Verified</span>
+                        } @else {
+                          <span class="badge-unverified">Unverified</span>
+                        }
+                        @if (mfa.primary) {
+                          <span class="badge-primary">Primary</span>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="empty-security-state">
+                  <span class="material-symbols-outlined">phonelink_lock</span>
+                  <p>No MFA methods configured</p>
+                  <span class="hint"
+                    >Add multi-factor authentication to improve account security.</span
+                  >
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Recovery Contacts -->
+          <div class="card">
+            <div class="card-header">
+              <span class="material-symbols-outlined card-icon">contact_phone</span>
+              <h3>Recovery Contacts</h3>
+            </div>
+            <div class="card-body">
+              @if (credentials()?.recoveryContacts?.length) {
+                <div class="recovery-list">
+                  @for (rc of credentials()!.recoveryContacts; track rc.id ?? rc.contactValue) {
+                    <div class="recovery-item">
+                      <span class="material-symbols-outlined recovery-icon">
+                        {{ rc.contactType === 'EMAIL' ? 'mail' : 'phone' }}
+                      </span>
+                      <div class="recovery-details">
+                        <span class="recovery-type">{{ rc.contactType }}</span>
+                        <span class="recovery-value">{{ rc.contactValue }}</span>
+                      </div>
+                      <div class="recovery-badges">
+                        @if (rc.verified) {
+                          <span class="badge-verified">Verified</span>
+                        } @else {
+                          <span class="badge-unverified">Unverified</span>
+                        }
+                        @if (rc.primary) {
+                          <span class="badge-primary">Primary</span>
+                        }
+                      </div>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="empty-security-state">
+                  <span class="material-symbols-outlined">contact_phone</span>
+                  <p>No recovery contacts configured</p>
+                  <span class="hint"
+                    >Add recovery contacts to regain access if you lose your credentials.</span
+                  >
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Credential Health Summary -->
+          @if (credentials()) {
+            <div class="card">
+              <div class="card-header">
+                <span class="material-symbols-outlined card-icon">health_and_safety</span>
+                <h3>Credential Health Summary</h3>
+              </div>
+              <div class="card-body">
+                <div class="health-grid">
+                  <div class="health-item">
+                    <span
+                      class="health-icon"
+                      [class.good]="!credentials()!.forcePasswordChange"
+                      [class.bad]="credentials()!.forcePasswordChange"
+                    >
+                      <span class="material-symbols-outlined">
+                        {{ !credentials()!.forcePasswordChange ? 'check_circle' : 'warning' }}
+                      </span>
+                    </span>
+                    <div>
+                      <p class="health-title">Password Status</p>
+                      <p class="health-value">
+                        {{ credentials()!.forcePasswordChange ? 'Change Required' : 'Up to Date' }}
+                      </p>
+                    </div>
+                  </div>
+                  <div class="health-item">
+                    <span
+                      class="health-icon"
+                      [class.good]="credentials()!.verifiedMfaCount > 0"
+                      [class.bad]="credentials()!.verifiedMfaCount === 0"
+                    >
+                      <span class="material-symbols-outlined">
+                        {{ credentials()!.verifiedMfaCount > 0 ? 'verified_user' : 'gpp_maybe' }}
+                      </span>
+                    </span>
+                    <div>
+                      <p class="health-title">MFA Status</p>
+                      <p class="health-value">
+                        {{ credentials()!.mfaEnrolledCount }} enrolled,
+                        {{ credentials()!.verifiedMfaCount }} verified
+                      </p>
+                    </div>
+                  </div>
+                  <div class="health-item">
+                    <span
+                      class="health-icon"
+                      [class.good]="credentials()!.verifiedRecoveryContacts > 0"
+                      [class.bad]="credentials()!.verifiedRecoveryContacts === 0"
+                    >
+                      <span class="material-symbols-outlined">
+                        {{ credentials()!.verifiedRecoveryContacts > 0 ? 'check_circle' : 'error' }}
+                      </span>
+                    </span>
+                    <div>
+                      <p class="health-title">Recovery Contacts</p>
+                      <p class="health-value">
+                        {{ credentials()!.recoveryContactCount }} configured,
+                        {{ credentials()!.verifiedRecoveryContacts }} verified
+                      </p>
+                    </div>
+                  </div>
+                  <div class="health-item">
+                    <span
+                      class="health-icon"
+                      [class.good]="credentials()!.lastLoginAt"
+                      [class.neutral]="!credentials()!.lastLoginAt"
+                    >
+                      <span class="material-symbols-outlined">schedule</span>
+                    </span>
+                    <div>
+                      <p class="health-title">Last Login</p>
+                      <p class="health-value">{{ lastLogin() }}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- ═══════════════════════════════════════════ -->
+      <!-- ACTIVITY TAB                                -->
+      <!-- ═══════════════════════════════════════════ -->
+      @if (activeTab() === 'activity') {
+        <div class="activity-section">
+          <div class="card">
+            <div class="card-header">
+              <span class="material-symbols-outlined card-icon">history</span>
+              <h3>Recent Activity</h3>
+            </div>
+            <div class="card-body">
+              @if (activityLoading()) {
+                <div class="activity-loading">
+                  <span class="material-symbols-outlined spinning">progress_activity</span>
+                  <p>Loading activity...</p>
+                </div>
+              } @else if (activityLog().length === 0) {
+                <div class="activity-empty">
+                  <span class="material-symbols-outlined">history_toggle_off</span>
+                  <p>No recent activity</p>
+                  <span class="hint">Your recent actions will appear here.</span>
+                </div>
+              } @else {
+                <div class="activity-timeline">
+                  @for (event of activityLog(); track $index) {
+                    <div class="timeline-item">
+                      <div
+                        class="timeline-marker"
+                        [style.background]="getActivityColor(event.eventType)"
+                      >
+                        <span class="material-symbols-outlined">{{
+                          getActivityIcon(event.eventType)
+                        }}</span>
+                      </div>
+                      <div class="timeline-content">
+                        <div class="timeline-header">
+                          <span class="timeline-type">{{ formatEventType(event.eventType) }}</span>
+                          <span class="timeline-time">{{
+                            formatTimestamp(event.eventTimestamp)
+                          }}</span>
+                        </div>
+                        <p class="timeline-desc">{{ event.eventDescription }}</p>
+                        <div class="timeline-meta">
+                          @if (event.ipAddress) {
+                            <span class="meta-tag">
+                              <span class="material-symbols-outlined">language</span>
+                              {{ event.ipAddress }}
+                            </span>
+                          }
+                          @if (event.hospitalName) {
+                            <span class="meta-tag">
+                              <span class="material-symbols-outlined">local_hospital</span>
+                              {{ event.hospitalName }}
+                            </span>
+                          }
+                          @if (event.status) {
+                            <span
+                              class="meta-tag status"
+                              [class.success]="event.status === 'SUCCESS'"
+                              [class.failure]="event.status !== 'SUCCESS'"
+                            >
+                              {{ event.status }}
+                            </span>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

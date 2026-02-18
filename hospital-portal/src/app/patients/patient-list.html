@@ -1,0 +1,95 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Patients</h1>
+      <p class="page-subtitle">Manage patient records and registrations</p>
+    </div>
+    @if (canCreate) {
+      <a routerLink="/patients/new" class="btn-primary">
+        <span class="material-symbols-outlined">person_add</span>
+        Register Patient
+      </a>
+    }
+  </div>
+
+  <!-- Search -->
+  <div class="search-bar">
+    <span class="material-symbols-outlined search-icon">search</span>
+    <input
+      type="text"
+      placeholder="Search by name, email, or MRN..."
+      [(ngModel)]="searchTerm"
+      (ngModelChange)="applyFilter()"
+    />
+  </div>
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading patients...</p>
+    </div>
+  }
+
+  <!-- Table -->
+  @if (!loading() && filtered().length > 0) {
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>MRN</th>
+            <th>Email</th>
+            <th>Phone</th>
+            <th>Gender</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (patient of filtered(); track patient.id) {
+            <tr>
+              <td class="name-cell">
+                <div class="avatar-sm">
+                  {{ patient.firstName.charAt(0) }}{{ patient.lastName.charAt(0) }}
+                </div>
+                <span>{{ patient.firstName }} {{ patient.lastName }}</span>
+              </td>
+              <td>{{ patient.mrn ?? '—' }}</td>
+              <td>{{ patient.email }}</td>
+              <td>{{ patient.phoneNumber ?? '—' }}</td>
+              <td>{{ patient.gender ?? '—' }}</td>
+              <td>
+                <span
+                  class="status-badge"
+                  [class.active]="patient.active"
+                  [class.inactive]="!patient.active"
+                >
+                  {{ patient.active ? 'Active' : 'Inactive' }}
+                </span>
+              </td>
+              <td>
+                <a [routerLink]="['/patients', patient.id]" class="action-link">
+                  <span class="material-symbols-outlined">visibility</span>
+                </a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- Empty -->
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">people</span>
+      <h3>No patients found</h3>
+      <p>
+        {{
+          searchTerm ? 'Try adjusting your search.' : 'Register your first patient to get started.'
+        }}
+      </p>
+    </div>
+  }
+</div>

@@ -44,6 +44,10 @@ public interface GeneralReferralRepository extends JpaRepository<GeneralReferral
         */
        List<GeneralReferral> findByHospitalIdOrderByCreatedAtDesc(UUID hospitalId);
 
+    List<GeneralReferral> findByStatusOrderByCreatedAtDesc(ReferralStatus status);
+
+    List<GeneralReferral> findAllByOrderByCreatedAtDesc();
+
     /**
      * Find referrals by specialty
      */

@@ -16,9 +16,11 @@ public class ChatMessageResponseDTO {
 
     private String id;
     private String timestamp;
+    private String senderId;
     private String senderName;
     private String senderRole;
     private String senderProfilePictureUrl;
+    private String recipientId;
     private String recipientName;
     private String recipientRole;
     private String recipientProfilePictureUrl;

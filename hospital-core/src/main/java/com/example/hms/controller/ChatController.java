@@ -113,7 +113,7 @@ public class ChatController {
     }
 
     @PutMapping("/mark-read/{senderId}/{recipientId}")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
     @Operation(summary = "Mark messages as read", description = "Mark all messages as read from sender to recipient.")
     public ResponseEntity<Void> markMessagesAsRead(
             @PathVariable UUID senderId,
@@ -125,7 +125,7 @@ public class ChatController {
 
     // --- REST: All Conversations (Inbox) ---
     @GetMapping("/conversations/{userId}")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
     @Operation(
             summary = "List all conversations for a user",
             description = "Returns conversation summaries (with the last message, participant, and unread count) for the given user."
@@ -140,7 +140,7 @@ public class ChatController {
 
     // --- REST: Paginated Chat History Between Two Users ---
     @GetMapping("/history/{user1Id}/{user2Id}")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
     @Operation(
             summary = "Get paginated chat history between two users",
             description = "Returns chat messages exchanged between user1 and user2 in descending timestamp order."
@@ -158,7 +158,7 @@ public class ChatController {
 
     // --- REST: Search in Chat History Between Two Users ---
     @GetMapping("/history/{user1Id}/{user2Id}/search")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
     @Operation(
             summary = "Search messages in chat history",
             description = "Searches for messages containing a keyword between two users."
@@ -175,7 +175,7 @@ public class ChatController {
 
     // --- REST: All Messages for a User (Inbox) ---
     @GetMapping("/messages/{userId}")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
     @Operation(
             summary = "Get all messages for a user",
             description = "Returns all messages where the user is either sender or recipient, optionally filtered by read status."
@@ -190,25 +190,25 @@ public class ChatController {
     }
 
     @GetMapping("/messages/by-sender-email")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
     public ResponseEntity<List<ChatMessageResponseDTO>> getMessagesBySenderEmail(@RequestParam String email) {
         return ResponseEntity.ok(chatMessageService.getMessagesBySenderEmail(email));
     }
 
     @GetMapping("/messages/by-recipient-email")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
     public ResponseEntity<List<ChatMessageResponseDTO>> getMessagesByRecipientEmail(@RequestParam String email) {
         return ResponseEntity.ok(chatMessageService.getMessagesByRecipientEmail(email));
     }
 
     @GetMapping("/messages/by-sender-username")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
     public ResponseEntity<List<ChatMessageResponseDTO>> getMessagesBySenderUsername(@RequestParam String username) {
         return ResponseEntity.ok(chatMessageService.getMessagesBySenderUsername(username));
     }
 
     @GetMapping("/messages/by-recipient-username")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'PATIENT', 'RECEPTIONIST')")
     public ResponseEntity<List<ChatMessageResponseDTO>> getMessagesByRecipientUsername(@RequestParam String username) {
         return ResponseEntity.ok(chatMessageService.getMessagesByRecipientUsername(username));
     }

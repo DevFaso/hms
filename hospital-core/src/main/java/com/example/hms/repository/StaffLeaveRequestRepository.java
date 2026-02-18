@@ -64,4 +64,9 @@ public interface StaffLeaveRequestRepository extends JpaRepository<StaffLeaveReq
     List<StaffLeaveRequest> findLeavesOverlappingDate(@Param("staffId") UUID staffId,
                                                      @Param("targetDate") LocalDate targetDate,
                                                      @Param("statuses") Collection<StaffLeaveStatus> statuses);
+
+    List<StaffLeaveRequest> findByStartDateBetweenOrderByStartDateAsc(
+        LocalDate startDate,
+        LocalDate endDate
+    );
 }

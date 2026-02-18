@@ -8,6 +8,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -16,10 +17,10 @@ import lombok.Setter;
 @Builder
 @Data
 public class ChatMessageRequestDTO {
-    @NotBlank
+    /** Recipient email – used by hospital-context sends. Optional if recipientId is set. */
     private String recipientEmail;
 
-    @NotBlank
+    /** Hospital name – used by hospital-context sends. Optional for SUPER_ADMIN. */
     private String hospitalName;
 
     @NotBlank
@@ -27,5 +28,14 @@ public class ChatMessageRequestDTO {
 
     private String roleCode;
 
-}
+    /**
+     * Deprecated: ignored by the current messaging implementation.
+     * The sender is always derived from the SecurityContext.
+     * @deprecated since 1.0, forRemoval in a future release.
+     */
+    @Deprecated(since = "1.0", forRemoval = true)
+    private UUID senderId;
 
+    /** Recipient UUID – alternative to recipientEmail. */
+    private UUID recipientId;
+}

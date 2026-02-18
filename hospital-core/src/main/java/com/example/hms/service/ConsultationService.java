@@ -18,6 +18,8 @@ public interface ConsultationService {
 
     List<ConsultationResponseDTO> getConsultationsForHospital(UUID hospitalId, ConsultationStatus status);
 
+    List<ConsultationResponseDTO> getAllConsultations(ConsultationStatus status);
+
     List<ConsultationResponseDTO> getConsultationsRequestedBy(UUID providerId);
 
     List<ConsultationResponseDTO> getConsultationsAssignedTo(UUID consultantId, ConsultationStatus status);

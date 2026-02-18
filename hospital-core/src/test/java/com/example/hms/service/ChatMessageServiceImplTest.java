@@ -42,6 +42,7 @@ class ChatMessageServiceImplTest {
         sender.setId(senderId);
         sender.setEmail("test@example.com");
         when(userRepository.findById(senderId)).thenReturn(Optional.of(sender));
+        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(sender));
         ChatMessageRequestDTO dto = new ChatMessageRequestDTO();
         dto.setRecipientEmail("test@example.com");
         dto.setHospitalName("General Hospital");

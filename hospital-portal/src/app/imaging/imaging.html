@@ -1,0 +1,220 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Imaging</h1>
+      <p class="page-subtitle">Radiology orders, scheduling, and reports</p>
+    </div>
+  </div>
+  <div class="summary-cards">
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon active">radiology</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByGroup('active') }}</span
+        ><span class="card-label">Active Orders</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon completed">check_circle</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByGroup('completed') }}</span
+        ><span class="card-label">Completed</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon total">bar_chart</span>
+      <div class="card-info">
+        <span class="card-value">{{ orders().length }}</span
+        ><span class="card-label">Total Orders</span>
+      </div>
+    </div>
+  </div>
+  <div class="filter-bar">
+    <div class="tabs">
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'all'"
+        (click)="setTab('all')"
+        title="Show all orders"
+      >
+        All
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'ordered'"
+        (click)="setTab('ordered')"
+        title="Show active orders"
+      >
+        Active
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'completed'"
+        (click)="setTab('completed')"
+        title="Show completed"
+      >
+        Completed
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'cancelled'"
+        (click)="setTab('cancelled')"
+        title="Show cancelled"
+      >
+        Cancelled
+      </button>
+    </div>
+    <div class="search-box">
+      <span class="material-symbols-outlined">search</span
+      ><input
+        type="text"
+        placeholder="Search imaging orders..."
+        [(ngModel)]="searchTerm"
+        (input)="applyFilter()"
+      />
+    </div>
+  </div>
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading imaging orders...</p>
+    </div>
+  }
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">radiology</span>
+      <h3>No imaging orders found</h3>
+      <p>Orders will appear here.</p>
+    </div>
+  }
+  @if (!loading() && filtered().length > 0) {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Patient</th>
+            <th scope="col">Modality</th>
+            <th scope="col">Study</th>
+            <th scope="col">Body Region</th>
+            <th scope="col">Priority</th>
+            <th scope="col">Ordered</th>
+            <th scope="col">Status</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (o of filtered(); track o.id) {
+            <tr class="data-row">
+              <td>
+                <div class="cell-primary">{{ o.patientDisplayName || 'Unknown' }}</div>
+                <div class="cell-secondary">{{ o.patientMrn }}</div>
+              </td>
+              <td>
+                <span class="modality-badge">{{ o.modality }}</span>
+              </td>
+              <td>{{ o.studyType || '—' }}</td>
+              <td>{{ o.bodyRegion || '—' }}</td>
+              <td>
+                <span class="priority-badge {{ getPriorityClass(o.priority) }}">{{
+                  o.priority
+                }}</span>
+              </td>
+              <td>{{ o.orderedAt ? (o.orderedAt | date: 'mediumDate') : '—' }}</td>
+              <td>
+                <span class="status-badge {{ getStatusClass(o.status) }}">{{ o.status }}</span>
+              </td>
+              <td>
+                <button class="btn-icon" (click)="viewDetail(o)" title="View imaging order details">
+                  <span class="material-symbols-outlined">visibility</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+  @if (selectedOrder(); as ord) {
+    <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
+      <div class="detail-panel">
+        <div class="detail-header">
+          <h2>Imaging Order Details</h2>
+          <button class="btn-close" (click)="closeDetail()" title="Close detail panel">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="detail-body">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <span class="field-label">Patient</span
+              ><span class="field-value">{{ ord.patientDisplayName }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">MRN</span
+              ><span class="field-value">{{ ord.patientMrn }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Modality</span
+              ><span class="field-value">{{ ord.modality }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Study Type</span
+              ><span class="field-value">{{ ord.studyType }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Body Region</span
+              ><span class="field-value">{{ ord.bodyRegion || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Laterality</span
+              ><span class="field-value">{{ ord.laterality || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Priority</span
+              ><span class="field-value"
+                ><span class="priority-badge {{ getPriorityClass(ord.priority) }}">{{
+                  ord.priority
+                }}</span></span
+              >
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Status</span
+              ><span class="field-value"
+                ><span class="status-badge {{ getStatusClass(ord.status) }}">{{
+                  ord.status
+                }}</span></span
+              >
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Ordering Provider</span
+              ><span class="field-value">{{ ord.orderingProviderName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Ordered At</span
+              ><span class="field-value">{{
+                ord.orderedAt ? (ord.orderedAt | date: 'medium') : '—'
+              }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Scheduled</span
+              ><span class="field-value"
+                >{{ ord.scheduledDate || '—' }} {{ ord.scheduledTime || '' }}</span
+              >
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Completed</span
+              ><span class="field-value">{{
+                ord.completedAt ? (ord.completedAt | date: 'medium') : '—'
+              }}</span>
+            </div>
+          </div>
+          @if (ord.clinicalQuestion) {
+            <div class="detail-notes">
+              <span class="field-label">Clinical Question</span>
+              <p>{{ ord.clinicalQuestion }}</p>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

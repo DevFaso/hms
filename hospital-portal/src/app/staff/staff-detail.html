@@ -1,0 +1,387 @@
+<div class="page-container">
+  <a class="back-link" routerLink="/staff">
+    <span class="material-symbols-outlined">arrow_back</span>
+    Back to Staff
+  </a>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading staff member...</p>
+    </div>
+  }
+
+  @if (!loading() && !staff()) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">person_off</span>
+      <h3>Staff member not found</h3>
+      <p>The requested staff member could not be loaded.</p>
+    </div>
+  }
+
+  @if (staff(); as s) {
+    <!-- Header -->
+    <div class="detail-header">
+      <div class="staff-avatar-lg">
+        {{ getInitials(s.name) }}
+      </div>
+      <div class="header-info">
+        <h1>{{ s.name }}</h1>
+        <div class="header-meta">
+          <span class="role-badge">{{ formatJobTitle(s.jobTitle) }}</span>
+          <span class="status-badge" [class.active]="s.active" [class.inactive]="!s.active">
+            {{ s.active ? 'Active' : 'Inactive' }}
+          </span>
+          @if (s.headOfDepartment) {
+            <span class="hod-badge">
+              <span class="material-symbols-outlined">star</span>
+              Head of Department
+            </span>
+          }
+        </div>
+        <p class="header-sub">{{ s.email }}</p>
+        @if (s.phoneNumber) {
+          <p class="header-sub">{{ s.phoneNumber }}</p>
+        }
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab" [class.active]="activeTab() === 'overview'" (click)="setTab('overview')">
+        <span class="material-symbols-outlined">person</span>
+        Overview
+      </button>
+      <button
+        class="tab"
+        [class.active]="activeTab() === 'employment'"
+        (click)="setTab('employment')"
+      >
+        <span class="material-symbols-outlined">work</span>
+        Employment
+      </button>
+      <button
+        class="tab"
+        [class.active]="activeTab() === 'department'"
+        (click)="setTab('department')"
+      >
+        <span class="material-symbols-outlined">domain</span>
+        Department
+      </button>
+      <button class="tab" [class.active]="activeTab() === 'schedule'" (click)="setTab('schedule')">
+        <span class="material-symbols-outlined">calendar_month</span>
+        Schedule
+      </button>
+    </div>
+
+    <!-- Overview Tab -->
+    @if (activeTab() === 'overview') {
+      <div class="info-grid">
+        <div class="info-card">
+          <h3>
+            <span class="material-symbols-outlined">badge</span>
+            Personal Information
+          </h3>
+          <div class="info-rows">
+            <div class="info-row">
+              <span class="label">Full Name</span>
+              <span class="value">{{ s.name }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Username</span>
+              <span class="value">{{ s.username }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Email</span>
+              <span class="value">{{ s.email }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Phone</span>
+              <span class="value">{{ s.phoneNumber ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Role</span>
+              <span class="value">{{ s.roleName ?? '—' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card">
+          <h3>
+            <span class="material-symbols-outlined">local_hospital</span>
+            Hospital Information
+          </h3>
+          <div class="info-rows">
+            <div class="info-row">
+              <span class="label">Hospital</span>
+              <span class="value">{{ s.hospitalName ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Hospital Email</span>
+              <span class="value">{{ s.hospitalEmail ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Status</span>
+              <span class="value">
+                <span class="inline-status" [class.active]="s.active">
+                  {{ s.active ? 'Active' : 'Inactive' }}
+                </span>
+              </span>
+            </div>
+            <div class="info-row">
+              <span class="label">Member Since</span>
+              <span class="value">{{ formatDate(s.createdAt) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Employment Tab -->
+    @if (activeTab() === 'employment') {
+      <div class="info-grid">
+        <div class="info-card">
+          <h3>
+            <span class="material-symbols-outlined">work</span>
+            Employment Details
+          </h3>
+          <div class="info-rows">
+            <div class="info-row">
+              <span class="label">Job Title</span>
+              <span class="value">{{ formatJobTitle(s.jobTitle) }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Employment Type</span>
+              <span class="value">{{ formatEmploymentType(s.employmentType) }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Specialization</span>
+              <span class="value">{{ s.specialization ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">License Number</span>
+              <span class="value">{{ s.licenseNumber ?? '—' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card">
+          <h3>
+            <span class="material-symbols-outlined">calendar_month</span>
+            Timeline
+          </h3>
+          <div class="info-rows">
+            <div class="info-row">
+              <span class="label">Start Date</span>
+              <span class="value">{{ formatDate(s.startDate) }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">End Date</span>
+              <span class="value">{{ formatDate(s.endDate) }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Created At</span>
+              <span class="value">{{ formatDate(s.createdAt) }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Last Updated</span>
+              <span class="value">{{ formatDate(s.updatedAt) }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- Department Tab -->
+    @if (activeTab() === 'department') {
+      <div class="info-grid">
+        <div class="info-card full-width">
+          <h3>
+            <span class="material-symbols-outlined">domain</span>
+            Department Information
+          </h3>
+          @if (s.departmentId) {
+            <div class="info-rows">
+              <div class="info-row">
+                <span class="label">Department</span>
+                <span class="value">{{ s.departmentName ?? '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Department Email</span>
+                <span class="value">{{ s.departmentEmail ?? '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Department Phone</span>
+                <span class="value">{{ s.departmentPhoneNumber ?? '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Head of Department</span>
+                <span class="value">
+                  @if (s.headOfDepartment) {
+                    <span class="inline-status active">Yes</span>
+                  } @else {
+                    No
+                  }
+                </span>
+              </div>
+            </div>
+            <a class="dept-link" [routerLink]="['/departments', s.departmentId]">
+              <span class="material-symbols-outlined">open_in_new</span>
+              View Department Details
+            </a>
+          } @else {
+            <div class="no-dept">
+              <span class="material-symbols-outlined">info</span>
+              This staff member is not assigned to any department.
+            </div>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- Schedule Tab -->
+    @if (activeTab() === 'schedule') {
+      <!-- Weekly Shift Calendar -->
+      <div class="schedule-section">
+        <div class="schedule-header">
+          <h3>
+            <span class="material-symbols-outlined">event_note</span>
+            Weekly Shifts
+          </h3>
+          <div class="week-nav">
+            <button class="week-btn" (click)="changeWeek(-1)" aria-label="Previous week">
+              <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+            <button class="week-label" (click)="goToCurrentWeek()" title="Go to current week">
+              {{ getWeekLabel() }}
+            </button>
+            <button class="week-btn" (click)="changeWeek(1)" aria-label="Next week">
+              <span class="material-symbols-outlined">chevron_right</span>
+            </button>
+          </div>
+        </div>
+
+        @if (shiftsLoading()) {
+          <div class="schedule-loading">
+            <div class="spinner-sm"></div>
+            <span>Loading shifts...</span>
+          </div>
+        } @else {
+          <div class="week-grid">
+            @for (day of getWeekDays(); track day.date) {
+              <div class="day-column" [class.today]="day.isToday">
+                <div class="day-header">
+                  <span class="day-name">{{ day.label }}</span>
+                  <span class="day-date">{{ formatShortDate(day.date) }}</span>
+                </div>
+                <div class="day-shifts">
+                  @for (shift of getShiftsForDay(day.date); track shift.id) {
+                    <div
+                      class="shift-card"
+                      [attr.data-type]="shift.shiftType"
+                      [attr.data-status]="shift.status"
+                    >
+                      <div class="shift-type-icon">
+                        <span class="material-symbols-outlined">{{
+                          shiftTypeIcon(shift.shiftType)
+                        }}</span>
+                      </div>
+                      <div class="shift-info">
+                        <span class="shift-time"
+                          >{{ formatTime(shift.startTime) }} – {{ formatTime(shift.endTime) }}</span
+                        >
+                        <span class="shift-meta">{{ formatShiftType(shift.shiftType) }}</span>
+                      </div>
+                      <span
+                        class="shift-status-dot"
+                        [attr.data-status]="shift.status"
+                        [title]="shift.status"
+                      ></span>
+                    </div>
+                  } @empty {
+                    <div class="no-shift">—</div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Leave Requests -->
+      <div class="schedule-section">
+        <div class="schedule-header">
+          <h3>
+            <span class="material-symbols-outlined">event_busy</span>
+            Leave Requests
+          </h3>
+        </div>
+
+        @if (leavesLoading()) {
+          <div class="schedule-loading">
+            <div class="spinner-sm"></div>
+            <span>Loading leave requests...</span>
+          </div>
+        } @else if (leaves().length === 0) {
+          <div class="empty-schedule">
+            <span class="material-symbols-outlined">event_available</span>
+            <p>No leave requests on record.</p>
+          </div>
+        } @else {
+          <div class="leave-list">
+            @for (leave of leaves(); track leave.id) {
+              <div class="leave-card" [attr.data-status]="leave.status">
+                <div class="leave-icon">
+                  <span class="material-symbols-outlined">{{
+                    leaveTypeIcon(leave.leaveType)
+                  }}</span>
+                </div>
+                <div class="leave-details">
+                  <div class="leave-title">
+                    <span class="leave-type-label">{{ formatLeaveType(leave.leaveType) }}</span>
+                    <span class="leave-status-badge" [attr.data-status]="leave.status">
+                      {{ leave.status }}
+                    </span>
+                  </div>
+                  <div class="leave-dates">
+                    <span class="material-symbols-outlined">date_range</span>
+                    {{ formatDate(leave.startDate) }}
+                    @if (leave.startDate !== leave.endDate) {
+                      <span>&nbsp;→&nbsp;</span>{{ formatDate(leave.endDate) }}
+                    }
+                  </div>
+                  @if (leave.startTime && leave.endTime) {
+                    <div class="leave-times">
+                      <span class="material-symbols-outlined">schedule</span>
+                      {{ formatTime(leave.startTime) }} – {{ formatTime(leave.endTime) }}
+                    </div>
+                  }
+                  @if (leave.reason) {
+                    <div class="leave-reason">
+                      <span class="material-symbols-outlined">notes</span>
+                      {{ leave.reason }}
+                    </div>
+                  }
+                  @if (leave.requiresCoverage) {
+                    <span class="coverage-badge">
+                      <span class="material-symbols-outlined">swap_horiz</span>
+                      Coverage Required
+                    </span>
+                  }
+                </div>
+                <div class="leave-meta">
+                  @if (leave.reviewedByName) {
+                    <span class="reviewed-by">Reviewed by {{ leave.reviewedByName }}</span>
+                  }
+                  @if (leave.managerNote) {
+                    <span class="manager-note">{{ leave.managerNote }}</span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  }
+</div>

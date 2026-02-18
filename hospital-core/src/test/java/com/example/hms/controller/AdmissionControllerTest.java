@@ -59,7 +59,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import(AdmissionControllerTest.Config.class)
 class AdmissionControllerTest {
 
-    private static final String BASE = "/api/admissions";
+    private static final String BASE = "/admissions";
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;

@@ -1,0 +1,199 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Laboratory</h1>
+      <p class="page-subtitle">Manage lab orders, results, and diagnostics</p>
+    </div>
+  </div>
+
+  <div class="summary-cards">
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon total">science</span>
+      <div class="card-info">
+        <span class="card-value">{{ stats().total }}</span
+        ><span class="card-label">Total Orders</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon pending">pending</span>
+      <div class="card-info">
+        <span class="card-value">{{ stats().pending }}</span
+        ><span class="card-label">Pending</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon completed">check_circle</span>
+      <div class="card-info">
+        <span class="card-value">{{ stats().completed }}</span
+        ><span class="card-label">Completed</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon cancelled">cancel</span>
+      <div class="card-info">
+        <span class="card-value">{{ stats().cancelled }}</span
+        ><span class="card-label">Cancelled</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button
+      class="tab"
+      [class.active]="activeTab() === 'all'"
+      (click)="setTab('all')"
+      title="All lab orders"
+    >
+      All ({{ orders().length }})
+    </button>
+    <button
+      class="tab"
+      [class.active]="activeTab() === 'pending'"
+      (click)="setTab('pending')"
+      title="Pending lab orders"
+    >
+      Pending ({{ stats().pending }})
+    </button>
+    <button
+      class="tab"
+      [class.active]="activeTab() === 'completed'"
+      (click)="setTab('completed')"
+      title="Completed lab orders"
+    >
+      Completed ({{ stats().completed }})
+    </button>
+  </div>
+
+  <div class="search-box">
+    <span class="material-symbols-outlined">search</span
+    ><input
+      type="text"
+      placeholder="Search by order code, patient, test, or status..."
+      [(ngModel)]="searchTerm"
+      (input)="applyFilter()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading lab orders...</p>
+    </div>
+  }
+
+  @if (!loading() && filtered().length > 0) {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Order Code</th>
+            <th scope="col">Patient</th>
+            <th scope="col">Test</th>
+            <th scope="col">Hospital</th>
+            <th scope="col">Ordered</th>
+            <th scope="col">Status</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (order of filtered(); track order.id) {
+            <tr class="data-row">
+              <td class="order-code">{{ order.labOrderCode || '—' }}</td>
+              <td>
+                <div class="cell-primary">{{ order.patientFullName || '—' }}</div>
+                <div class="cell-secondary">{{ order.patientEmail || '' }}</div>
+              </td>
+              <td>
+                <div class="cell-primary">{{ order.labTestName || '—' }}</div>
+                <div class="cell-secondary">{{ order.labTestCode || '' }}</div>
+              </td>
+              <td>{{ order.hospitalName || '—' }}</td>
+              <td class="date-cell">
+                {{ order.orderDatetime ? (order.orderDatetime | date: 'medium') : '—' }}
+              </td>
+              <td>
+                <span class="status-badge" [class]="getStatusClass(order.status)">{{
+                  order.status
+                }}</span>
+              </td>
+              <td>
+                <button class="action-btn" title="View order details" (click)="viewOrder(order)">
+                  <span class="material-symbols-outlined">visibility</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">science</span>
+      <h3>No lab orders found</h3>
+      <p>{{ searchTerm ? 'Try adjusting your search.' : 'No lab orders placed yet.' }}</p>
+    </div>
+  }
+
+  @if (selectedOrder(); as o) {
+    <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
+      <div class="detail-panel">
+        <div class="panel-header">
+          <h2>Lab Order {{ o.labOrderCode }}</h2>
+          <button class="close-btn" title="Close detail panel" (click)="closeDetail()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="panel-body">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <span class="field-label">Patient</span
+              ><span class="field-value">{{ o.patientFullName }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Email</span
+              ><span class="field-value">{{ o.patientEmail || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Hospital</span
+              ><span class="field-value">{{ o.hospitalName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Test</span
+              ><span class="field-value">{{ o.labTestName }} ({{ o.labTestCode }})</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Order Date</span
+              ><span class="field-value">{{ o.orderDatetime | date: 'long' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Status</span
+              ><span class="status-badge" [class]="getStatusClass(o.status)">{{ o.status }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Diagnosis Code</span
+              ><span class="field-value">{{ o.primaryDiagnosisCode || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Order Channel</span
+              ><span class="field-value">{{ o.orderChannel || '—' }}</span>
+            </div>
+          </div>
+          @if (o.clinicalIndication) {
+            <div class="notes-section">
+              <span class="field-label">Clinical Indication</span>
+              <p>{{ o.clinicalIndication }}</p>
+            </div>
+          }
+          @if (o.notes) {
+            <div class="notes-section">
+              <span class="field-label">Notes</span>
+              <p>{{ o.notes }}</p>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

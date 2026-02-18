@@ -38,7 +38,7 @@ import java.util.UUID;
  * Supports both patient self-service and provider-assisted workflows.
  */
 @RestController
-@RequestMapping("/api/birth-plans")
+@RequestMapping("/birth-plans")
 @Tag(name = "Birth Plan Management", description = "Endpoints for creating, updating, and managing patient birth plans with provider review workflow.")
 @RequiredArgsConstructor
 public class BirthPlanController {

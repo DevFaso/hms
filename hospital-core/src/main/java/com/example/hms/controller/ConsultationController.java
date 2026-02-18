@@ -70,6 +70,16 @@ public class ConsultationController {
         return ResponseEntity.ok(consultations);
     }
 
+    @GetMapping
+    @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
+    @Operation(summary = "List all consultations across all hospitals (super admin)")
+    public ResponseEntity<List<ConsultationResponseDTO>> getAllConsultations(
+        @RequestParam(required = false) ConsultationStatus status
+    ) {
+        List<ConsultationResponseDTO> consultations = consultationService.getAllConsultations(status);
+        return ResponseEntity.ok(consultations);
+    }
+
     @GetMapping("/hospital/{hospitalId}")
     @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR')")
     @Operation(summary = "List consultations for hospital",
