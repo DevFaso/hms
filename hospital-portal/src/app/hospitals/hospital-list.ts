@@ -128,9 +128,14 @@ export class HospitalListComponent implements OnInit {
         this.loadHospitals();
       },
       error: (err) => {
-        this.toast.error(
-          err?.error?.message ?? `Failed to ${existing ? 'update' : 'create'} hospital`,
-        );
+        const body = err?.error;
+        let msg = `Failed to ${existing ? 'update' : 'create'} hospital`;
+        if (body?.fieldErrors) {
+          msg = Object.values(body.fieldErrors).join('. ');
+        } else if (body?.message) {
+          msg = body.message;
+        }
+        this.toast.error(msg);
         this.saving.set(false);
       },
     });

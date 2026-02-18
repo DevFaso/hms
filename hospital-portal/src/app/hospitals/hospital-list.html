@@ -144,7 +144,9 @@
                   type="tel"
                   [(ngModel)]="form.phoneNumber"
                   name="phoneNumber"
-                  placeholder="+1234567890"
+                  placeholder="e.g., +22625000001"
+                  minlength="10"
+                  maxlength="15"
                   required
                 />
               </div>
