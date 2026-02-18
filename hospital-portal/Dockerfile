@@ -35,10 +35,10 @@ EXPOSE 80
 # At runtime, substitute placeholders in nginx config, then start nginx
 CMD sh -c "export PORT=\${PORT:-80} && \
     export API_BASE_URL=\${API_BASE_URL:-http://localhost:8081} && \
-    export NGINX_RESOLVER=\${NGINX_RESOLVER:-8.8.8.8} && \
+    export NGINX_RESOLVER=\${NGINX_RESOLVER:-\$(grep -m1 '^nameserver' /etc/resolv.conf | awk '{print \$2}' || echo '8.8.8.8')} && \
     sed -e \"s|__PORT__|\$PORT|g\" \
         -e \"s|__API_BASE_URL__|\$API_BASE_URL|g\" \
         -e \"s|__NGINX_RESOLVER__|\$NGINX_RESOLVER|g\" \
         /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && \
-    echo 'Starting nginx on port '\$PORT' → API='\$API_BASE_URL && \
+    echo 'Starting nginx on port '\$PORT' → API='\$API_BASE_URL' → resolver='\$NGINX_RESOLVER && \
     nginx -g 'daemon off;'"
