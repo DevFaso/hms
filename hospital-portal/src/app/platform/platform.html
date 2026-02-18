@@ -1,0 +1,1265 @@
+<div class="platform-registry">
+  <!-- ═══════════════ HEADER BAR ═══════════════ -->
+  <header class="page-header">
+    <div class="header-left">
+      <span class="material-icons header-icon">hub</span>
+      <div>
+        <h1>Platform Registry</h1>
+        <p class="header-sub">Manage integrations, services &amp; release operations</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-outline" (click)="exportSnapshot()" [disabled]="saving()">
+        <span class="material-icons">download</span> Export Snapshot
+      </button>
+    </div>
+  </header>
+
+  <!-- ═══════════════ TAB NAV ═══════════════ -->
+  <nav class="tab-nav">
+    <button
+      class="tab-btn"
+      [class.active]="activeView() === 'dashboard'"
+      (click)="switchView('dashboard')"
+    >
+      <span class="material-icons">dashboard</span> Dashboard
+    </button>
+    <button
+      class="tab-btn"
+      [class.active]="activeView() === 'services'"
+      (click)="switchView('services')"
+    >
+      <span class="material-icons">settings_applications</span> Services
+    </button>
+    <button
+      class="tab-btn"
+      [class.active]="activeView() === 'catalog'"
+      (click)="switchView('catalog')"
+    >
+      <span class="material-icons">storefront</span> Catalog
+    </button>
+    <button
+      class="tab-btn"
+      [class.active]="activeView() === 'releases'"
+      (click)="switchView('releases')"
+    >
+      <span class="material-icons">rocket_launch</span> Releases
+    </button>
+  </nav>
+
+  <!-- ═══════════════ LOADING ═══════════════ -->
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading platform data…</p>
+    </div>
+  }
+
+  <!-- ═══════════════ ERROR ═══════════════ -->
+  @if (error() && !loading()) {
+    <div class="error-banner">
+      <span class="material-icons">error_outline</span>
+      <span>{{ error() }}</span>
+      <button class="btn btn-sm" (click)="loadDashboard()">Retry</button>
+    </div>
+  }
+
+  <!-- ═══════════════════════════════════════════
+       DASHBOARD VIEW
+       ═══════════════════════════════════════════ -->
+  @if (activeView() === 'dashboard' && !loading()) {
+    @if (summary(); as s) {
+      <!-- KPI Cards -->
+      <div class="kpi-row">
+        <div class="kpi-card kpi-primary">
+          <span class="material-icons">integration_instructions</span>
+          <div class="kpi-body">
+            <span class="kpi-value">{{ s.actions.totalIntegrations }}</span>
+            <span class="kpi-label">Total Integrations</span>
+          </div>
+        </div>
+        <div class="kpi-card kpi-warning">
+          <span class="material-icons">pending</span>
+          <div class="kpi-body">
+            <span class="kpi-value">{{ s.actions.pendingIntegrations }}</span>
+            <span class="kpi-label">Pending</span>
+          </div>
+        </div>
+        <div class="kpi-card kpi-danger">
+          <span class="material-icons">link_off</span>
+          <div class="kpi-body">
+            <span class="kpi-value">{{ s.actions.disabledLinks }}</span>
+            <span class="kpi-label">Disabled Links</span>
+          </div>
+        </div>
+        <div class="kpi-card kpi-info">
+          <span class="material-icons">event</span>
+          <div class="kpi-body">
+            <span class="kpi-value">{{ s.actions.activeReleaseWindows }}</span>
+            <span class="kpi-label">Active Releases</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Module Cards -->
+      @if (s.modules.length > 0) {
+        <section class="section">
+          <h2 class="section-title">
+            <span class="material-icons">view_module</span> Integration Modules
+          </h2>
+          <div class="module-grid">
+            @for (mod of s.modules; track mod.title) {
+              <div class="module-card">
+                <div class="module-header">
+                  <h3>{{ mod.title }}</h3>
+                  <span class="module-meta">{{ mod.meta }}</span>
+                </div>
+                <p class="module-desc">{{ mod.description }}</p>
+                <div class="module-stats">
+                  <span class="stat stat-active">
+                    <span class="material-icons">check_circle</span>
+                    {{ mod.activeIntegrations }} Active
+                  </span>
+                  <span class="stat stat-pending">
+                    <span class="material-icons">schedule</span>
+                    {{ mod.pendingIntegrations }} Pending
+                  </span>
+                  <span class="stat stat-managed">
+                    <span class="material-icons">admin_panel_settings</span>
+                    {{ mod.managedIntegrations }} Managed
+                  </span>
+                </div>
+                <button
+                  class="btn btn-sm btn-outline module-configure-btn"
+                  (click)="switchView('services')"
+                >
+                  <span class="material-icons">settings</span> Configure
+                </button>
+              </div>
+            }
+          </div>
+        </section>
+      }
+
+      <!-- Automation Tasks -->
+      @if (s.automationTasks.length > 0) {
+        <section class="section">
+          <h2 class="section-title">
+            <span class="material-icons">smart_toy</span> Automation Tasks
+          </h2>
+          <div class="automation-grid">
+            @for (task of s.automationTasks; track task.id) {
+              <div class="automation-card">
+                <div class="automation-header">
+                  <h3>{{ task.title }}</h3>
+                  <span class="status-badge" [ngClass]="statusClass(task.status)">{{
+                    task.statusLabel
+                  }}</span>
+                </div>
+                <p class="automation-desc">{{ task.description }}</p>
+                <div class="automation-metrics">
+                  <div class="metric">
+                    <span class="metric-label">{{ task.metricLabel }}</span>
+                    <span class="metric-value">{{ task.metricValue }}</span>
+                  </div>
+                  <div class="metric">
+                    <span class="metric-label">Next Action</span>
+                    <span class="metric-value">{{ task.nextAction }}</span>
+                  </div>
+                  <div class="metric">
+                    <span class="metric-label">Last Run</span>
+                    <span class="metric-value">{{ task.lastRun }}</span>
+                  </div>
+                </div>
+                <div class="automation-actions">
+                  <button class="btn btn-sm btn-primary" (click)="runAutomationTask(task)">
+                    <span class="material-icons">{{ taskActionIcon(task.status) }}</span>
+                    {{ taskActionLabel(task.status) }}
+                  </button>
+                  <button class="btn btn-sm btn-outline" (click)="viewAutomationDetails(task)">
+                    <span class="material-icons">info</span> Details
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        </section>
+      }
+    }
+  }
+
+  <!-- ═══════════════════════════════════════════
+       SERVICES VIEW
+       ═══════════════════════════════════════════ -->
+  @if (activeView() === 'services' && !loading()) {
+    <div class="services-toolbar">
+      <div class="toolbar-group">
+        <label class="toolbar-label" for="orgSelect">Organization</label>
+        <select
+          id="orgSelect"
+          class="form-select"
+          [ngModel]="selectedOrgId()"
+          (ngModelChange)="selectOrg($event)"
+        >
+          @for (org of organizations(); track org.id) {
+            <option [value]="org.id">{{ org.name }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="toolbar-group">
+        <label class="toolbar-label" for="statusSelect">Status</label>
+        <select
+          id="statusSelect"
+          class="form-select"
+          [ngModel]="statusFilter()"
+          (ngModelChange)="statusFilter.set($event)"
+        >
+          <option value="">All</option>
+          @for (st of statusOptions; track st) {
+            <option [value]="st">{{ st }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="toolbar-spacer"></div>
+
+      <button class="btn btn-primary" (click)="openRegisterDrawer()">
+        <span class="material-icons">add</span> Register Service
+      </button>
+    </div>
+
+    @if (servicesLoading()) {
+      <div class="loading-state loading-sm">
+        <div class="spinner spinner-sm"></div>
+        <p>Loading services…</p>
+      </div>
+    }
+
+    @if (!servicesLoading() && filteredServices().length === 0) {
+      <div class="empty-state">
+        <span class="material-icons empty-icon">integration_instructions</span>
+        <h3>No services found</h3>
+        <p>Register a new service or change the status filter.</p>
+        <button class="btn btn-primary" (click)="openRegisterDrawer()">
+          <span class="material-icons">add</span> Register Service
+        </button>
+      </div>
+    }
+
+    @if (!servicesLoading() && filteredServices().length > 0) {
+      <div class="services-table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Provider</th>
+              <th>Status</th>
+              <th>Managed</th>
+              <th>Hospitals</th>
+              <th>Departments</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (svc of filteredServices(); track svc.id) {
+              <tr class="clickable-row" (click)="openServiceDetail(svc)">
+                <td>
+                  <div class="type-cell">
+                    <span class="material-icons type-icon">{{
+                      serviceTypeIcon(svc.serviceType)
+                    }}</span>
+                    <div>
+                      <span class="type-name">{{ serviceTypeLabel(svc.serviceType) }}</span>
+                      <span class="type-code">{{ svc.serviceType }}</span>
+                    </div>
+                  </div>
+                </td>
+                <td>{{ svc.provider || '—' }}</td>
+                <td>
+                  <span class="status-pill" [ngClass]="serviceStatusClass(svc.status)">{{
+                    svc.status
+                  }}</span>
+                </td>
+                <td>
+                  @if (svc.managedByPlatform) {
+                    <span class="material-icons managed-yes">verified</span>
+                  } @else {
+                    <span class="managed-no">—</span>
+                  }
+                </td>
+                <td class="num-cell">{{ svc.hospitalLinkCount }}</td>
+                <td class="num-cell">{{ svc.departmentLinkCount }}</td>
+                <td>
+                  <div
+                    class="row-actions"
+                    role="toolbar"
+                    tabindex="0"
+                    (click)="$event.stopPropagation()"
+                    (keydown.enter)="$event.stopPropagation()"
+                  >
+                    @if (svc.status !== 'ACTIVE') {
+                      <button
+                        class="icon-btn icon-btn-success"
+                        title="Activate"
+                        (click)="changeServiceStatus(svc, 'ACTIVE')"
+                      >
+                        <span class="material-icons">check_circle</span>
+                      </button>
+                    }
+                    @if (svc.status === 'ACTIVE') {
+                      <button
+                        class="icon-btn icon-btn-warning"
+                        title="Deactivate"
+                        (click)="changeServiceStatus(svc, 'INACTIVE')"
+                      >
+                        <span class="material-icons">pause_circle</span>
+                      </button>
+                    }
+                    <button class="icon-btn" title="View Details" (click)="openServiceDetail(svc)">
+                      <span class="material-icons">open_in_new</span>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- ═══════════════════════════════════════════
+       CATALOG VIEW
+       ═══════════════════════════════════════════ -->
+  @if (activeView() === 'catalog' && !loading()) {
+    <div class="catalog-toolbar">
+      <div class="search-box">
+        <span class="material-icons">search</span>
+        <input
+          type="text"
+          placeholder="Search catalog…"
+          [ngModel]="catalogSearchTerm()"
+          (ngModelChange)="catalogSearchTerm.set($event)"
+        />
+      </div>
+    </div>
+
+    @if (filteredCatalog().length === 0) {
+      <div class="empty-state">
+        <span class="material-icons empty-icon">storefront</span>
+        <h3>No catalog items found</h3>
+        <p>Try adjusting your search terms.</p>
+      </div>
+    }
+
+    @if (filteredCatalog().length > 0) {
+      <div class="catalog-grid">
+        @for (item of filteredCatalog(); track item.id) {
+          <div class="catalog-card" [class.catalog-disabled]="!item.enabled">
+            <div class="catalog-card-header">
+              <span class="material-icons catalog-icon">{{
+                serviceTypeIcon(item.serviceType)
+              }}</span>
+              <div class="catalog-title-wrap">
+                <h3>{{ item.displayName }}</h3>
+                <span class="catalog-type">{{ item.serviceType }}</span>
+              </div>
+              @if (item.enabled) {
+                <span class="enabled-badge">Enabled</span>
+              } @else {
+                <span class="disabled-badge">Disabled</span>
+              }
+            </div>
+            <p class="catalog-desc">{{ item.description }}</p>
+
+            @if (item.capabilities && item.capabilities.length > 0) {
+              <div class="catalog-capabilities">
+                @for (cap of item.capabilities; track cap) {
+                  <span class="capability-chip">{{ cap }}</span>
+                }
+              </div>
+            }
+
+            <div class="catalog-meta">
+              @if (item.provider) {
+                <span class="meta-item"
+                  ><span class="material-icons">business</span> {{ item.provider }}</span
+                >
+              }
+              @if (item.autoProvision) {
+                <span class="meta-item"
+                  ><span class="material-icons">bolt</span> Auto-provision</span
+                >
+              }
+              @if (item.managedByPlatform) {
+                <span class="meta-item"
+                  ><span class="material-icons">admin_panel_settings</span> Managed</span
+                >
+              }
+            </div>
+
+            <div class="catalog-actions">
+              <button
+                class="btn btn-sm btn-primary"
+                (click)="provisionCatalogItem(item)"
+                [disabled]="saving()"
+              >
+                <span class="material-icons">add_circle</span> Provision
+              </button>
+              @if (item.documentationUrl || item.onboardingGuideUrl || item.baseUrl) {
+                <button class="btn btn-sm btn-outline" (click)="openDocs(item)">
+                  <span class="material-icons">description</span> Docs
+                </button>
+              }
+              @if (item.sandboxUrl) {
+                <button class="btn btn-sm btn-outline" (click)="openSandbox(item)">
+                  <span class="material-icons">science</span> Sandbox
+                </button>
+              }
+              <button class="btn btn-sm btn-outline" (click)="openCatalogDetail(item)">
+                <span class="material-icons">info</span> Details
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+
+  <!-- ═══════════════════════════════════════════
+       RELEASES VIEW
+       ═══════════════════════════════════════════ -->
+  @if (activeView() === 'releases' && !loading()) {
+    <div class="releases-toolbar">
+      <h2 class="section-title inline-title">
+        <span class="material-icons">rocket_launch</span> Release Windows
+      </h2>
+      <div class="toolbar-spacer"></div>
+      <button class="btn btn-primary" (click)="openReleaseForm()">
+        <span class="material-icons">add</span> Schedule Release
+      </button>
+    </div>
+
+    @if (summary(); as s) {
+      <div class="releases-kpi">
+        <div class="kpi-card kpi-info kpi-sm">
+          <span class="material-icons">event</span>
+          <div class="kpi-body">
+            <span class="kpi-value">{{ s.actions.activeReleaseWindows }}</span>
+            <span class="kpi-label">Active Windows</span>
+          </div>
+        </div>
+        @if (s.actions.lastSnapshotGeneratedAt) {
+          <div class="kpi-card kpi-secondary kpi-sm">
+            <span class="material-icons">photo_camera</span>
+            <div class="kpi-body">
+              <span class="kpi-value snapshot-val">{{ s.actions.lastSnapshotGeneratedAt }}</span>
+              <span class="kpi-label">Last Snapshot</span>
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    @if (releases().length === 0) {
+      <div class="empty-state">
+        <span class="material-icons empty-icon">event_busy</span>
+        <h3>No release windows scheduled</h3>
+        <p>Schedule a release window to coordinate deployments.</p>
+        <button class="btn btn-primary" (click)="openReleaseForm()">
+          <span class="material-icons">add</span> Schedule Release
+        </button>
+      </div>
+    }
+
+    @if (releases().length > 0) {
+      <div class="releases-list">
+        @for (rel of releases(); track rel.id) {
+          <div class="release-card">
+            <div class="release-header">
+              <h3>{{ rel.name }}</h3>
+              <span class="status-pill" [ngClass]="releaseStatusClass(rel.status)">{{
+                rel.status
+              }}</span>
+            </div>
+            @if (rel.description) {
+              <p class="release-desc">{{ rel.description }}</p>
+            }
+            <div class="release-details">
+              <div class="release-detail">
+                <span class="material-icons">dns</span>
+                <span>{{ rel.environment }}</span>
+              </div>
+              <div class="release-detail">
+                <span class="material-icons">schedule</span>
+                <span>{{ rel.startsAt }} → {{ rel.endsAt }}</span>
+              </div>
+              @if (rel.ownerTeam) {
+                <div class="release-detail">
+                  <span class="material-icons">group</span>
+                  <span>{{ rel.ownerTeam }}</span>
+                </div>
+              }
+              @if (rel.freezeChanges) {
+                <div class="release-detail release-freeze">
+                  <span class="material-icons">ac_unit</span>
+                  <span>Change Freeze</span>
+                </div>
+              }
+            </div>
+            @if (rel.notes) {
+              <p class="release-notes">{{ rel.notes }}</p>
+            }
+          </div>
+        }
+      </div>
+    }
+  }
+
+  <!-- ═══════════════════════════════════════════
+       SERVICE DETAIL DRAWER
+       ═══════════════════════════════════════════ -->
+  @if (serviceDrawerOpen()) {
+    <div
+      class="drawer-backdrop"
+      role="button"
+      tabindex="0"
+      (click)="closeServiceDrawer()"
+      (keydown.enter)="closeServiceDrawer()"
+    ></div>
+    <aside class="drawer">
+      <div class="drawer-header">
+        <h2>
+          <span class="material-icons">{{ serviceTypeIcon(selectedService()!.serviceType) }}</span>
+          {{ serviceTypeLabel(selectedService()!.serviceType) }}
+        </h2>
+        <button class="icon-btn" (click)="closeServiceDrawer()">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+
+      <div class="drawer-body">
+        @if (!editingService()) {
+          <!-- Read-only detail -->
+          <div class="detail-section">
+            <h3>Service Information</h3>
+            <div class="detail-grid">
+              <div class="detail-item">
+                <span class="detail-label">Type</span>
+                <span>{{ selectedService()!.serviceType }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Status</span>
+                <span
+                  class="status-pill"
+                  [ngClass]="serviceStatusClass(selectedService()!.status)"
+                  >{{ selectedService()!.status }}</span
+                >
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Provider</span>
+                <span>{{ selectedService()!.provider || '—' }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Base URL</span>
+                <span class="url-text">{{ selectedService()!.baseUrl || '—' }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Documentation</span>
+                @if (selectedService()!.documentationUrl) {
+                  <a [href]="selectedService()!.documentationUrl" target="_blank" class="link"
+                    >View Docs</a
+                  >
+                } @else {
+                  <span>—</span>
+                }
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">API Key Ref</span>
+                <span>{{ selectedService()!.apiKeyReference || '—' }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Platform-Managed</span>
+                <span>{{ selectedService()!.managedByPlatform ? 'Yes' : 'No' }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Hospital Links</span>
+                <span>{{ selectedService()!.hospitalLinkCount }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Department Links</span>
+                <span>{{ selectedService()!.departmentLinkCount }}</span>
+              </div>
+            </div>
+          </div>
+
+          @if (selectedService()!.ownership; as own) {
+            <div class="detail-section">
+              <h3>Ownership</h3>
+              <div class="detail-grid">
+                <div class="detail-item">
+                  <span class="detail-label">Owner Team</span>
+                  <span>{{ own.ownerTeam || '—' }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Contact Email</span>
+                  <span>{{ own.ownerContactEmail || '—' }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Data Steward</span>
+                  <span>{{ own.dataSteward || '—' }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Service Level</span>
+                  <span>{{ own.serviceLevel || '—' }}</span>
+                </div>
+              </div>
+            </div>
+          }
+
+          <!-- Status Quick Actions -->
+          <div class="detail-section">
+            <h3>Quick Actions</h3>
+            <div class="quick-actions">
+              @for (st of statusOptions; track st) {
+                <button
+                  class="btn btn-sm"
+                  [class.btn-primary]="st === selectedService()!.status"
+                  [class.btn-outline]="st !== selectedService()!.status"
+                  [disabled]="st === selectedService()!.status || saving()"
+                  (click)="changeServiceStatus(selectedService()!, st)"
+                >
+                  {{ st }}
+                </button>
+              }
+            </div>
+          </div>
+
+          <!-- Hospital Links in drawer -->
+          <div class="detail-section">
+            <h3>Hospital Links</h3>
+            @if (linksLoading()) {
+              <div class="loading-state loading-sm">
+                <div class="spinner spinner-sm"></div>
+              </div>
+            } @else if (hospitalLinks().length === 0) {
+              <p class="muted-text">No hospital links for this service.</p>
+            } @else {
+              <div class="link-list">
+                @for (link of hospitalLinks(); track link.id) {
+                  <div class="link-item">
+                    <div class="link-info">
+                      <span class="material-icons">local_hospital</span>
+                      <span>{{ link.hospitalName }}</span>
+                    </div>
+                    <button
+                      class="btn btn-sm"
+                      [class.btn-danger]="link.enabled"
+                      [class.btn-success]="!link.enabled"
+                      (click)="toggleHospitalLink(link)"
+                    >
+                      {{ link.enabled ? 'Unlink' : 'Link' }}
+                    </button>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+
+          <div class="drawer-footer">
+            <button class="btn btn-primary" (click)="startEditService()">
+              <span class="material-icons">edit</span> Edit Service
+            </button>
+          </div>
+        } @else {
+          <!-- Edit form -->
+          <form class="edit-form" (ngSubmit)="saveService()">
+            <div class="form-group">
+              <label for="editProvider">Provider</label>
+              <input
+                id="editProvider"
+                type="text"
+                class="form-input"
+                [ngModel]="serviceForm().provider"
+                (ngModelChange)="updateServiceField('provider', $event)"
+                name="provider"
+              />
+            </div>
+            <div class="form-group">
+              <label for="editBaseUrl">Base URL</label>
+              <input
+                id="editBaseUrl"
+                type="url"
+                class="form-input"
+                [ngModel]="serviceForm().baseUrl"
+                (ngModelChange)="updateServiceField('baseUrl', $event)"
+                name="baseUrl"
+              />
+            </div>
+            <div class="form-group">
+              <label for="editDocUrl">Documentation URL</label>
+              <input
+                id="editDocUrl"
+                type="url"
+                class="form-input"
+                [ngModel]="serviceForm().documentationUrl"
+                (ngModelChange)="updateServiceField('documentationUrl', $event)"
+                name="docUrl"
+              />
+            </div>
+            <div class="form-group">
+              <label for="editApiKeyRef">API Key Reference</label>
+              <input
+                id="editApiKeyRef"
+                type="text"
+                class="form-input"
+                [ngModel]="serviceForm().apiKeyReference"
+                (ngModelChange)="updateServiceField('apiKeyReference', $event)"
+                name="apiKeyRef"
+              />
+            </div>
+            <div class="form-group form-check">
+              <input
+                type="checkbox"
+                id="editManaged"
+                [ngModel]="serviceForm().managedByPlatform"
+                (ngModelChange)="updateServiceField('managedByPlatform', $event)"
+                name="managedByPlatform"
+              />
+              <label for="editManaged">Managed by Platform</label>
+            </div>
+
+            <h4 class="form-section-title">Ownership</h4>
+            <div class="form-group">
+              <label for="editOwnerTeam">Owner Team</label>
+              <input
+                id="editOwnerTeam"
+                type="text"
+                class="form-input"
+                [ngModel]="serviceForm().ownerTeam"
+                (ngModelChange)="updateServiceField('ownerTeam', $event)"
+                name="ownerTeam"
+              />
+            </div>
+            <div class="form-group">
+              <label for="editContactEmail">Contact Email</label>
+              <input
+                id="editContactEmail"
+                type="email"
+                class="form-input"
+                [ngModel]="serviceForm().ownerContactEmail"
+                (ngModelChange)="updateServiceField('ownerContactEmail', $event)"
+                name="ownerEmail"
+              />
+            </div>
+            <div class="form-group">
+              <label for="editDataSteward">Data Steward</label>
+              <input
+                id="editDataSteward"
+                type="text"
+                class="form-input"
+                [ngModel]="serviceForm().dataSteward"
+                (ngModelChange)="updateServiceField('dataSteward', $event)"
+                name="dataSteward"
+              />
+            </div>
+            <div class="form-group">
+              <label for="editServiceLevel">Service Level</label>
+              <input
+                id="editServiceLevel"
+                type="text"
+                class="form-input"
+                [ngModel]="serviceForm().serviceLevel"
+                (ngModelChange)="updateServiceField('serviceLevel', $event)"
+                name="serviceLevel"
+              />
+            </div>
+
+            <h4 class="form-section-title">Metadata</h4>
+            <div class="form-group">
+              <label for="editIntegrationNotes">Integration Notes</label>
+              <textarea
+                id="editIntegrationNotes"
+                class="form-input"
+                rows="3"
+                [ngModel]="serviceForm().integrationNotes"
+                (ngModelChange)="updateServiceField('integrationNotes', $event)"
+                name="notes"
+              ></textarea>
+            </div>
+
+            <div class="drawer-footer">
+              <button type="button" class="btn btn-outline" (click)="cancelEditService()">
+                Cancel
+              </button>
+              <button type="submit" class="btn btn-primary" [disabled]="saving()">
+                @if (saving()) {
+                  <div class="spinner spinner-xs"></div>
+                  Saving…
+                } @else {
+                  <span class="material-icons">save</span> Save Changes
+                }
+              </button>
+            </div>
+          </form>
+        }
+      </div>
+    </aside>
+  }
+
+  <!-- ═══════════════════════════════════════════
+       REGISTER SERVICE DRAWER
+       ═══════════════════════════════════════════ -->
+  @if (registerDrawerOpen()) {
+    <div
+      class="drawer-backdrop"
+      role="button"
+      tabindex="0"
+      (click)="closeRegisterDrawer()"
+      (keydown.enter)="closeRegisterDrawer()"
+    ></div>
+    <aside class="drawer">
+      <div class="drawer-header">
+        <h2><span class="material-icons">add_circle</span> Register New Service</h2>
+        <button class="icon-btn" (click)="closeRegisterDrawer()">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+
+      <div class="drawer-body">
+        <form class="edit-form" (ngSubmit)="registerService()">
+          <div class="form-group">
+            <label for="regServiceType">Service Type *</label>
+            <select
+              id="regServiceType"
+              class="form-select"
+              [ngModel]="registerForm().serviceType"
+              (ngModelChange)="updateRegisterField('serviceType', $event)"
+              name="serviceType"
+              required
+            >
+              @for (t of serviceTypes; track t) {
+                <option [value]="t">{{ serviceTypeLabel(t) }} ({{ t }})</option>
+              }
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="regProvider">Provider</label>
+            <input
+              id="regProvider"
+              type="text"
+              class="form-input"
+              [ngModel]="registerForm().provider"
+              (ngModelChange)="updateRegisterField('provider', $event)"
+              name="provider"
+              placeholder="e.g. Epic, Cerner"
+            />
+          </div>
+          <div class="form-group">
+            <label for="regBaseUrl">Base URL</label>
+            <input
+              id="regBaseUrl"
+              type="url"
+              class="form-input"
+              [ngModel]="registerForm().baseUrl"
+              (ngModelChange)="updateRegisterField('baseUrl', $event)"
+              name="baseUrl"
+              placeholder="https://..."
+            />
+          </div>
+          <div class="form-group">
+            <label for="regDocUrl">Documentation URL</label>
+            <input
+              id="regDocUrl"
+              type="url"
+              class="form-input"
+              [ngModel]="registerForm().documentationUrl"
+              (ngModelChange)="updateRegisterField('documentationUrl', $event)"
+              name="docUrl"
+            />
+          </div>
+          <div class="form-group">
+            <label for="regApiKeyRef">API Key Reference</label>
+            <input
+              id="regApiKeyRef"
+              type="text"
+              class="form-input"
+              [ngModel]="registerForm().apiKeyReference"
+              (ngModelChange)="updateRegisterField('apiKeyReference', $event)"
+              name="apiKeyRef"
+            />
+          </div>
+          <div class="form-group form-check">
+            <input
+              type="checkbox"
+              id="regManaged"
+              [ngModel]="registerForm().managedByPlatform"
+              (ngModelChange)="updateRegisterField('managedByPlatform', $event)"
+              name="managed"
+            />
+            <label for="regManaged">Managed by Platform</label>
+          </div>
+
+          <h4 class="form-section-title">Ownership</h4>
+          <div class="form-group">
+            <label for="regOwnerTeam">Owner Team</label>
+            <input
+              id="regOwnerTeam"
+              type="text"
+              class="form-input"
+              [ngModel]="registerForm().ownerTeam"
+              (ngModelChange)="updateRegisterField('ownerTeam', $event)"
+              name="ownerTeam"
+            />
+          </div>
+          <div class="form-group">
+            <label for="regContactEmail">Contact Email</label>
+            <input
+              id="regContactEmail"
+              type="email"
+              class="form-input"
+              [ngModel]="registerForm().ownerContactEmail"
+              (ngModelChange)="updateRegisterField('ownerContactEmail', $event)"
+              name="ownerEmail"
+            />
+          </div>
+          <div class="form-group">
+            <label for="regDataSteward">Data Steward</label>
+            <input
+              id="regDataSteward"
+              type="text"
+              class="form-input"
+              [ngModel]="registerForm().dataSteward"
+              (ngModelChange)="updateRegisterField('dataSteward', $event)"
+              name="dataSteward"
+            />
+          </div>
+          <div class="form-group">
+            <label for="regServiceLevel">Service Level</label>
+            <input
+              id="regServiceLevel"
+              type="text"
+              class="form-input"
+              [ngModel]="registerForm().serviceLevel"
+              (ngModelChange)="updateRegisterField('serviceLevel', $event)"
+              name="serviceLevel"
+              placeholder="e.g. Gold, Silver"
+            />
+          </div>
+
+          <h4 class="form-section-title">Metadata</h4>
+          <div class="form-group">
+            <label for="regIntNotes">Integration Notes</label>
+            <textarea
+              id="regIntNotes"
+              class="form-input"
+              rows="3"
+              [ngModel]="registerForm().integrationNotes"
+              (ngModelChange)="updateRegisterField('integrationNotes', $event)"
+              name="notes"
+            ></textarea>
+          </div>
+
+          <div class="drawer-footer">
+            <button type="button" class="btn btn-outline" (click)="closeRegisterDrawer()">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="saving()">
+              @if (saving()) {
+                <div class="spinner spinner-xs"></div>
+                Registering…
+              } @else {
+                <span class="material-icons">add_circle</span> Register Service
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </aside>
+  }
+
+  <!-- ═══════════════════════════════════════════
+       CATALOG DETAIL DRAWER
+       ═══════════════════════════════════════════ -->
+  @if (catalogDetailOpen() && selectedCatalogItem(); as item) {
+    <div
+      class="drawer-backdrop"
+      role="button"
+      tabindex="0"
+      (click)="closeCatalogDetail()"
+      (keydown.enter)="closeCatalogDetail()"
+    ></div>
+    <aside class="drawer">
+      <div class="drawer-header">
+        <h2>
+          <span class="material-icons">{{ serviceTypeIcon(item.serviceType) }}</span>
+          {{ item.displayName }}
+        </h2>
+        <button class="icon-btn" (click)="closeCatalogDetail()">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="drawer-body">
+        <div class="detail-section">
+          <h3>Overview</h3>
+          <p>{{ item.description }}</p>
+          <div class="detail-grid">
+            <div class="detail-item">
+              <span class="detail-label">Service Type</span>
+              <span>{{ item.serviceType }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Provider</span>
+              <span>{{ item.provider || '—' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Enabled</span>
+              <span>{{ item.enabled ? 'Yes' : 'No' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Auto-Provision</span>
+              <span>{{ item.autoProvision ? 'Yes' : 'No' }}</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">Platform-Managed</span>
+              <span>{{ item.managedByPlatform ? 'Yes' : 'No' }}</span>
+            </div>
+            @if (item.featureFlag) {
+              <div class="detail-item">
+                <span class="detail-label">Feature Flag</span>
+                <span class="code-text">{{ item.featureFlag }}</span>
+              </div>
+            }
+          </div>
+        </div>
+
+        @if (item.capabilities && item.capabilities.length > 0) {
+          <div class="detail-section">
+            <h3>Capabilities</h3>
+            <div class="catalog-capabilities">
+              @for (cap of item.capabilities; track cap) {
+                <span class="capability-chip">{{ cap }}</span>
+              }
+            </div>
+          </div>
+        }
+
+        <div class="detail-section">
+          <h3>URLs</h3>
+          <div class="detail-grid">
+            <div class="detail-item full-width">
+              <span class="detail-label">Base URL</span>
+              <span class="url-text">{{ item.baseUrl || '—' }}</span>
+            </div>
+            <div class="detail-item full-width">
+              <span class="detail-label">Documentation</span>
+              @if (item.documentationUrl) {
+                <a [href]="item.documentationUrl" target="_blank" class="link">{{
+                  item.documentationUrl
+                }}</a>
+              } @else {
+                <span>—</span>
+              }
+            </div>
+            <div class="detail-item full-width">
+              <span class="detail-label">Sandbox</span>
+              @if (item.sandboxUrl) {
+                <a [href]="item.sandboxUrl" target="_blank" class="link">{{ item.sandboxUrl }}</a>
+              } @else {
+                <span>—</span>
+              }
+            </div>
+            <div class="detail-item full-width">
+              <span class="detail-label">Onboarding Guide</span>
+              @if (item.onboardingGuideUrl) {
+                <a [href]="item.onboardingGuideUrl" target="_blank" class="link">{{
+                  item.onboardingGuideUrl
+                }}</a>
+              } @else {
+                <span>—</span>
+              }
+            </div>
+          </div>
+        </div>
+
+        @if (item.defaultOwnership) {
+          <div class="detail-section">
+            <h3>Default Ownership</h3>
+            <div class="detail-grid">
+              <div class="detail-item">
+                <span class="detail-label">Owner Team</span>
+                <span>{{ item.defaultOwnership.ownerTeam || '—' }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Contact Email</span>
+                <span>{{ item.defaultOwnership.ownerContactEmail || '—' }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Data Steward</span>
+                <span>{{ item.defaultOwnership.dataSteward || '—' }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Service Level</span>
+                <span>{{ item.defaultOwnership.serviceLevel || '—' }}</span>
+              </div>
+            </div>
+          </div>
+        }
+
+        <div class="drawer-footer">
+          <button
+            class="btn btn-primary"
+            (click)="provisionCatalogItem(item)"
+            [disabled]="saving()"
+          >
+            <span class="material-icons">add_circle</span> Provision to Organization
+          </button>
+          @if (item.documentationUrl || item.onboardingGuideUrl) {
+            <button class="btn btn-outline" (click)="openDocs(item)">
+              <span class="material-icons">description</span> Open Docs
+            </button>
+          }
+        </div>
+      </div>
+    </aside>
+  }
+
+  <!-- ═══════════════════════════════════════════
+       RELEASE WINDOW FORM DRAWER
+       ═══════════════════════════════════════════ -->
+  @if (releaseFormOpen()) {
+    <div
+      class="drawer-backdrop"
+      role="button"
+      tabindex="0"
+      (click)="closeReleaseForm()"
+      (keydown.enter)="closeReleaseForm()"
+    ></div>
+    <aside class="drawer">
+      <div class="drawer-header">
+        <h2><span class="material-icons">event</span> Schedule Release Window</h2>
+        <button class="icon-btn" (click)="closeReleaseForm()">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="drawer-body">
+        <form class="edit-form" (ngSubmit)="scheduleRelease()">
+          <div class="form-group">
+            <label for="relName">Name *</label>
+            <input
+              id="relName"
+              type="text"
+              class="form-input"
+              [ngModel]="releaseForm().name"
+              (ngModelChange)="updateReleaseField('name', $event)"
+              name="name"
+              required
+              placeholder="e.g. Q1 2025 Platform Release"
+            />
+          </div>
+          <div class="form-group">
+            <label for="relDescription">Description</label>
+            <textarea
+              id="relDescription"
+              class="form-input"
+              rows="2"
+              [ngModel]="releaseForm().description"
+              (ngModelChange)="updateReleaseField('description', $event)"
+              name="description"
+            ></textarea>
+          </div>
+          <div class="form-group">
+            <label for="relEnvironment">Environment *</label>
+            <select
+              id="relEnvironment"
+              class="form-select"
+              [ngModel]="releaseForm().environment"
+              (ngModelChange)="updateReleaseField('environment', $event)"
+              name="environment"
+              required
+            >
+              <option value="staging">Staging</option>
+              <option value="production">Production</option>
+              <option value="development">Development</option>
+              <option value="uat">UAT</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="relStartsAt">Starts At *</label>
+              <input
+                id="relStartsAt"
+                type="datetime-local"
+                class="form-input"
+                [ngModel]="releaseForm().startsAt"
+                (ngModelChange)="updateReleaseField('startsAt', $event)"
+                name="startsAt"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="relEndsAt">Ends At *</label>
+              <input
+                id="relEndsAt"
+                type="datetime-local"
+                class="form-input"
+                [ngModel]="releaseForm().endsAt"
+                (ngModelChange)="updateReleaseField('endsAt', $event)"
+                name="endsAt"
+                required
+              />
+            </div>
+          </div>
+          <div class="form-group form-check">
+            <input
+              type="checkbox"
+              id="freezeChanges"
+              [ngModel]="releaseForm().freezeChanges"
+              (ngModelChange)="updateReleaseField('freezeChanges', $event)"
+              name="freezeChanges"
+            />
+            <label for="freezeChanges">Freeze Changes During Window</label>
+          </div>
+          <div class="form-group">
+            <label for="relOwnerTeam">Owner Team</label>
+            <input
+              id="relOwnerTeam"
+              type="text"
+              class="form-input"
+              [ngModel]="releaseForm().ownerTeam"
+              (ngModelChange)="updateReleaseField('ownerTeam', $event)"
+              name="ownerTeam"
+            />
+          </div>
+          <div class="form-group">
+            <label for="relNotes">Notes</label>
+            <textarea
+              id="relNotes"
+              class="form-input"
+              rows="3"
+              [ngModel]="releaseForm().notes"
+              (ngModelChange)="updateReleaseField('notes', $event)"
+              name="notes"
+              placeholder="Additional release notes…"
+            ></textarea>
+          </div>
+
+          <div class="drawer-footer">
+            <button type="button" class="btn btn-outline" (click)="closeReleaseForm()">
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="saving()">
+              @if (saving()) {
+                <div class="spinner spinner-xs"></div>
+                Scheduling…
+              } @else {
+                <span class="material-icons">event_available</span> Schedule
+              }
+            </button>
+          </div>
+        </form>
+      </div>
+    </aside>
+  }
+</div>

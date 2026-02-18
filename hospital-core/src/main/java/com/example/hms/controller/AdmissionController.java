@@ -34,7 +34,7 @@ import java.util.UUID;
  * REST Controller for admission management
  */
 @RestController
-@RequestMapping("/api/admissions")
+@RequestMapping("/admissions")
 @RequiredArgsConstructor
 @Tag(name = "Admission Management", description = "Endpoints for managing patient admissions and order sets")
 public class AdmissionController {
@@ -46,6 +46,17 @@ public class AdmissionController {
     @Operation(summary = "Admit a patient", description = "Create a new hospital admission for a patient")
     public ResponseEntity<AdmissionResponseDTO> admitPatient(@Valid @RequestBody AdmissionRequestDTO request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(admissionService.admitPatient(request));
+    }
+
+    @GetMapping
+    @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
+    @Operation(summary = "List all admissions", description = "Retrieve all admissions across all hospitals (super admin only)")
+    public ResponseEntity<List<AdmissionResponseDTO>> listAllAdmissions(
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate
+    ) {
+        return ResponseEntity.ok(admissionService.getAllAdmissions(status, startDate, endDate));
     }
 
     @GetMapping("/{admissionId}")
@@ -112,7 +123,7 @@ public class AdmissionController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_HOSPITAL_ADMIN')")
     @Operation(summary = "Get admissions by hospital", description = "Retrieve admissions for a hospital with optional filters")
     public ResponseEntity<List<AdmissionResponseDTO>> getAdmissionsByHospital(
         @PathVariable UUID hospitalId,

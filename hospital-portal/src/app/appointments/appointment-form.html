@@ -1,0 +1,172 @@
+<div class="page-container">
+  <a routerLink="/appointments" class="back-link">
+    <span class="material-symbols-outlined">arrow_back</span>
+    Back to Appointments
+  </a>
+
+  <div class="form-card">
+    <div class="form-header">
+      <span class="material-symbols-outlined form-icon">event</span>
+      <div>
+        <h1>New Appointment</h1>
+        <p>Schedule a new patient appointment</p>
+      </div>
+    </div>
+
+    <form (ngSubmit)="submit()" #apptForm="ngForm">
+      <div class="form-grid">
+        <!-- Date & Time -->
+        <div class="form-section">
+          <h3>Date & Time</h3>
+          <div class="field-row">
+            <div class="field">
+              <label for="date">Appointment Date *</label>
+              <input
+                id="date"
+                type="date"
+                [(ngModel)]="form.appointmentDate"
+                name="appointmentDate"
+                required
+              />
+            </div>
+          </div>
+          <div class="field-row two-col">
+            <div class="field">
+              <label for="start">Start Time *</label>
+              <input
+                id="start"
+                type="time"
+                [(ngModel)]="form.startTime"
+                name="startTime"
+                required
+              />
+            </div>
+            <div class="field">
+              <label for="end">End Time *</label>
+              <input id="end" type="time" [(ngModel)]="form.endTime" name="endTime" required />
+            </div>
+          </div>
+        </div>
+
+        <!-- Patient Info -->
+        <div class="form-section">
+          <h3>Patient</h3>
+          <div class="field-row two-col">
+            <div class="field">
+              <label for="patientEmail">Patient Email</label>
+              <input
+                id="patientEmail"
+                type="email"
+                placeholder="patient@example.com"
+                [(ngModel)]="form.patientEmail"
+                name="patientEmail"
+              />
+            </div>
+            <div class="field">
+              <label for="patientId">Or Patient ID</label>
+              <input
+                id="patientId"
+                type="text"
+                placeholder="UUID"
+                [(ngModel)]="form.patientId"
+                name="patientId"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Staff Info -->
+        <div class="form-section">
+          <h3>Doctor / Staff</h3>
+          <div class="field-row two-col">
+            <div class="field">
+              <label for="staffEmail">Staff Email</label>
+              <input
+                id="staffEmail"
+                type="email"
+                placeholder="doctor@example.com"
+                [(ngModel)]="form.staffEmail"
+                name="staffEmail"
+              />
+            </div>
+            <div class="field">
+              <label for="staffId">Or Staff ID</label>
+              <input
+                id="staffId"
+                type="text"
+                placeholder="UUID"
+                [(ngModel)]="form.staffId"
+                name="staffId"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Location -->
+        <div class="form-section">
+          <h3>Location</h3>
+          <div class="field-row two-col">
+            <div class="field">
+              <label for="hospitalName">Hospital Name</label>
+              <input
+                id="hospitalName"
+                type="text"
+                placeholder="Hospital name"
+                [(ngModel)]="form.hospitalName"
+                name="hospitalName"
+              />
+            </div>
+            <div class="field">
+              <label for="departmentId">Department ID</label>
+              <input
+                id="departmentId"
+                type="text"
+                placeholder="UUID"
+                [(ngModel)]="form.departmentId"
+                name="departmentId"
+              />
+            </div>
+          </div>
+        </div>
+
+        <!-- Details -->
+        <div class="form-section full-width">
+          <h3>Details</h3>
+          <div class="field">
+            <label for="reason">Reason for Visit</label>
+            <input
+              id="reason"
+              type="text"
+              placeholder="e.g., Annual checkup, Follow-up"
+              [(ngModel)]="form.reason"
+              name="reason"
+            />
+          </div>
+          <div class="field notes-field">
+            <label for="notes">Notes</label>
+            <textarea
+              id="notes"
+              rows="3"
+              placeholder="Additional notes..."
+              [(ngModel)]="form.notes"
+              name="notes"
+            ></textarea>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <a routerLink="/appointments" class="btn-secondary">Cancel</a>
+        <button type="submit" class="btn-primary" [disabled]="saving()">
+          @if (saving()) {
+            <span class="mini-spinner"></span>
+            Creating...
+          } @else {
+            <span class="material-symbols-outlined">event_available</span>
+            Create Appointment
+          }
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

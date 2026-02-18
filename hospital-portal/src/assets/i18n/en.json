@@ -6,7 +6,12 @@
     "TITLE": "Sign In",
     "USERNAME": "Username",
     "PASSWORD": "Password",
+    "REMEMBER_ME": "Remember me",
+    "SIGN_IN": "Sign In",
+    "SIGNING_IN": "Signing in",
     "SUBMIT": "Log In",
+    "FORGOT_PASSWORD": "Forgot password?",
+    "FORGOT_USERNAME": "Forgot username?",
     "ERROR": "Invalid credentials"
   },
   "COMMON": {

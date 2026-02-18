@@ -154,7 +154,15 @@ public class BillingInvoiceController {
         @PathVariable UUID id,
         @Valid @RequestBody EmailInvoiceRequest request,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        invoiceEmailService.emailInvoice(id, request);
-        return ResponseEntity.ok(Map.of("status", "SENT", "sentAt", java.time.OffsetDateTime.now()));
+        try {
+            invoiceEmailService.emailInvoice(id, request);
+            return ResponseEntity.ok(Map.of("status", "SENT", "sentAt", java.time.OffsetDateTime.now()));
+        } catch (org.springframework.mail.MailException ex) {
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(Map.of("status", "FAILED", "error", "Mail service unavailable"));
+        } catch (Exception ex) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("status", "FAILED", "error", "Failed to send email"));
+        }
     }
 }

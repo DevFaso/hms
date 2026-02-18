@@ -1,0 +1,74 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Register Patient</h1>
+      <p class="page-subtitle">Add a new patient to the system</p>
+    </div>
+    <a routerLink="/patients" class="btn-secondary">
+      <span class="material-symbols-outlined">arrow_back</span>
+      Back to Patients
+    </a>
+  </div>
+
+  <form class="form-card" (ngSubmit)="onSubmit()">
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="firstName">First Name *</label>
+        <input id="firstName" type="text" [(ngModel)]="form.firstName" name="firstName" required />
+      </div>
+      <div class="form-group">
+        <label for="lastName">Last Name *</label>
+        <input id="lastName" type="text" [(ngModel)]="form.lastName" name="lastName" required />
+      </div>
+      <div class="form-group">
+        <label for="email">Email *</label>
+        <input id="email" type="email" [(ngModel)]="form.email" name="email" required />
+      </div>
+      <div class="form-group">
+        <label for="phone">Phone Number</label>
+        <input id="phone" type="tel" [(ngModel)]="form.phoneNumber" name="phoneNumber" />
+      </div>
+      <div class="form-group">
+        <label for="dob">Date of Birth</label>
+        <input id="dob" type="date" [(ngModel)]="form.dateOfBirth" name="dateOfBirth" />
+      </div>
+      <div class="form-group">
+        <label for="gender">Gender</label>
+        <select id="gender" [(ngModel)]="form.gender" name="gender">
+          <option value="">Select gender</option>
+          <option value="MALE">Male</option>
+          <option value="FEMALE">Female</option>
+          <option value="OTHER">Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="bloodGroup">Blood Group</label>
+        <select id="bloodGroup" [(ngModel)]="form.bloodGroup" name="bloodGroup">
+          <option value="">Select blood group</option>
+          <option value="A+">A+</option>
+          <option value="A-">A-</option>
+          <option value="B+">B+</option>
+          <option value="B-">B-</option>
+          <option value="AB+">AB+</option>
+          <option value="AB-">AB-</option>
+          <option value="O+">O+</option>
+          <option value="O-">O-</option>
+        </select>
+      </div>
+      <div class="form-group full-width">
+        <label for="address">Address</label>
+        <textarea id="address" [(ngModel)]="form.address" name="address" rows="3"></textarea>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn-primary" [disabled]="saving">
+        @if (saving) {
+          <span class="spinner-sm"></span>
+        }
+        Register Patient
+      </button>
+      <a routerLink="/patients" class="btn-secondary">Cancel</a>
+    </div>
+  </form>
+</div>

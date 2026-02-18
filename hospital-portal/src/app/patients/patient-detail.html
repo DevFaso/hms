@@ -1,0 +1,369 @@
+<div class="page-container">
+  <a routerLink="/patients" class="back-link">
+    <span class="material-symbols-outlined">arrow_back</span>
+    Back to Patients
+  </a>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading patient record...</p>
+    </div>
+  }
+
+  @if (!loading() && patient(); as p) {
+    <!-- Header -->
+    <div class="detail-header">
+      <div class="patient-avatar-lg">{{ getInitials(p) }}</div>
+      <div class="header-info">
+        <h1>{{ p.firstName }} {{ p.lastName }}</h1>
+        <div class="header-meta">
+          @if (p.mrn) {
+            <span class="meta-tag mrn"
+              ><span class="material-symbols-outlined">badge</span> MRN: {{ p.mrn }}</span
+            >
+          }
+          <span class="meta-tag"
+            ><span class="material-symbols-outlined">calendar_today</span>
+            {{ getAge(p.dateOfBirth) }}</span
+          >
+          @if (p.gender) {
+            <span class="meta-tag"
+              ><span class="material-symbols-outlined">person</span> {{ p.gender }}</span
+            >
+          }
+          <span class="status-badge" [class.active]="p.active" [class.inactive]="!p.active">{{
+            p.active ? 'Active' : 'Inactive'
+          }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button
+        class="tab"
+        [class.active]="activeTab() === 'overview'"
+        (click)="setTab('overview')"
+        title="Patient overview"
+      >
+        Overview
+      </button>
+      <button
+        class="tab"
+        [class.active]="activeTab() === 'medical'"
+        (click)="setTab('medical')"
+        title="Medical info"
+      >
+        Medical
+      </button>
+      <button
+        class="tab"
+        [class.active]="activeTab() === 'vitals'"
+        (click)="setTab('vitals')"
+        title="Vital signs"
+      >
+        Vitals
+      </button>
+      <button
+        class="tab"
+        [class.active]="activeTab() === 'encounters'"
+        (click)="setTab('encounters')"
+        title="Clinical encounters"
+      >
+        Encounters
+      </button>
+      <button
+        class="tab"
+        [class.active]="activeTab() === 'appointments'"
+        (click)="setTab('appointments')"
+        title="Appointment history"
+      >
+        Appointments
+      </button>
+    </div>
+
+    <!-- ═══ Overview Tab ═══ -->
+    @if (activeTab() === 'overview') {
+      <div class="info-grid">
+        <div class="info-card">
+          <h3><span class="material-symbols-outlined">person</span> Personal Information</h3>
+          <div class="info-rows">
+            <div class="info-row">
+              <span class="label">Full Name</span
+              ><span class="value">{{ p.firstName }} {{ p.lastName }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Email</span><span class="value">{{ p.email || '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Phone</span><span class="value">{{ p.phoneNumber ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Date of Birth</span
+              ><span class="value">{{ p.dateOfBirth ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Gender</span><span class="value">{{ p.gender ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Address</span><span class="value">{{ p.address ?? '—' }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="info-card">
+          <h3>
+            <span class="material-symbols-outlined">local_hospital</span> Hospital Information
+          </h3>
+          <div class="info-rows">
+            <div class="info-row">
+              <span class="label">Hospital</span
+              ><span class="value">{{ p.hospitalName ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">MRN</span><span class="value">{{ p.mrn ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Username</span><span class="value">{{ p.username || '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Registered</span
+              ><span class="value">{{ p.createdAt | date: 'mediumDate' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ═══ Medical Tab ═══ -->
+    @if (activeTab() === 'medical') {
+      <div class="info-grid">
+        <div class="info-card">
+          <h3><span class="material-symbols-outlined">bloodtype</span> Medical Details</h3>
+          <div class="info-rows">
+            <div class="info-row">
+              <span class="label">Blood Group</span
+              ><span class="value">{{ p.bloodGroup ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">Allergies</span
+              ><span class="value">{{ p.allergies ?? 'None recorded' }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="info-card">
+          <h3><span class="material-symbols-outlined">history</span> Medical History</h3>
+          <p class="medical-text">{{ p.medicalHistory ?? 'No medical history on file.' }}</p>
+        </div>
+      </div>
+    }
+
+    <!-- ═══ Vitals Tab ═══ -->
+    @if (activeTab() === 'vitals') {
+      @if (vitalsLoading()) {
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Loading vitals...</p>
+        </div>
+      }
+      @if (!vitalsLoading() && vitals().length > 0) {
+        <div class="vitals-grid">
+          @for (v of vitals(); track v.id) {
+            <div class="vital-card">
+              <div class="vital-header">
+                <span class="vital-date">{{ v.recordedAt | date: 'medium' }}</span>
+                <span class="vital-by">by {{ v.staffName || '—' }}</span>
+              </div>
+              <div class="vital-metrics">
+                @if (v.heartRate) {
+                  <div class="vital-metric">
+                    <span class="material-symbols-outlined">favorite</span>
+                    <div>
+                      <strong>{{ v.heartRate }}</strong
+                      ><small> bpm</small>
+                    </div>
+                    <span class="vital-label">Heart Rate</span>
+                  </div>
+                }
+                @if (v.systolicBp || v.diastolicBp) {
+                  <div class="vital-metric">
+                    <span class="material-symbols-outlined">speed</span>
+                    <div>
+                      <strong>{{ v.systolicBp }}/{{ v.diastolicBp }}</strong
+                      ><small> mmHg</small>
+                    </div>
+                    <span class="vital-label">Blood Pressure</span>
+                  </div>
+                }
+                @if (v.temperature) {
+                  <div class="vital-metric">
+                    <span class="material-symbols-outlined">thermostat</span>
+                    <div>
+                      <strong>{{ v.temperature }}</strong
+                      ><small> °C</small>
+                    </div>
+                    <span class="vital-label">Temperature</span>
+                  </div>
+                }
+                @if (v.oxygenSaturation) {
+                  <div class="vital-metric">
+                    <span class="material-symbols-outlined">air</span>
+                    <div>
+                      <strong>{{ v.oxygenSaturation }}</strong
+                      ><small>%</small>
+                    </div>
+                    <span class="vital-label">SpO₂</span>
+                  </div>
+                }
+                @if (v.respiratoryRate) {
+                  <div class="vital-metric">
+                    <span class="material-symbols-outlined">pulmonology</span>
+                    <div>
+                      <strong>{{ v.respiratoryRate }}</strong
+                      ><small> /min</small>
+                    </div>
+                    <span class="vital-label">Resp. Rate</span>
+                  </div>
+                }
+                @if (v.painLevel !== null && v.painLevel !== undefined) {
+                  <div class="vital-metric">
+                    <span class="material-symbols-outlined">sentiment_very_dissatisfied</span>
+                    <div>
+                      <strong>{{ v.painLevel }}</strong
+                      ><small>/10</small>
+                    </div>
+                    <span class="vital-label">Pain Level</span>
+                  </div>
+                }
+                @if (v.weight) {
+                  <div class="vital-metric">
+                    <span class="material-symbols-outlined">monitor_weight</span>
+                    <div>
+                      <strong>{{ v.weight }}</strong
+                      ><small> kg</small>
+                    </div>
+                    <span class="vital-label">Weight</span>
+                  </div>
+                }
+                @if (v.height) {
+                  <div class="vital-metric">
+                    <span class="material-symbols-outlined">height</span>
+                    <div>
+                      <strong>{{ v.height }}</strong
+                      ><small> cm</small>
+                    </div>
+                    <span class="vital-label">Height</span>
+                  </div>
+                }
+              </div>
+              @if (v.notes) {
+                <p class="vital-notes">{{ v.notes }}</p>
+              }
+            </div>
+          }
+        </div>
+      }
+      @if (!vitalsLoading() && vitals().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined empty-icon">monitor_heart</span>
+          <h3>No vitals recorded</h3>
+          <p>Vital signs will appear here when recorded.</p>
+        </div>
+      }
+    }
+
+    <!-- ═══ Encounters Tab ═══ -->
+    @if (activeTab() === 'encounters') {
+      @if (encountersLoading()) {
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Loading encounters...</p>
+        </div>
+      }
+      @if (!encountersLoading() && encounters().length > 0) {
+        <div class="data-table">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Type</th>
+                <th scope="col">Provider</th>
+                <th scope="col">Department</th>
+                <th scope="col">Status</th>
+                <th scope="col">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (enc of encounters(); track enc.id) {
+                <tr>
+                  <td class="date-cell">{{ enc.encounterDate | date: 'mediumDate' }}</td>
+                  <td>
+                    <span class="encounter-type">{{ enc.encounterType }}</span>
+                  </td>
+                  <td>{{ enc.staffFullName || enc.staffName || '—' }}</td>
+                  <td>{{ enc.departmentName || '—' }}</td>
+                  <td>
+                    <span [class]="getEncounterStatusClass(enc.status)">{{ enc.status }}</span>
+                  </td>
+                  <td class="notes-cell">{{ enc.notes || '—' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      @if (!encountersLoading() && encounters().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined empty-icon">medical_information</span>
+          <h3>No encounters</h3>
+          <p>Clinical encounters will appear here.</p>
+        </div>
+      }
+    }
+
+    <!-- ═══ Appointments Tab ═══ -->
+    @if (activeTab() === 'appointments') {
+      @if (appointmentsLoading()) {
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <p>Loading appointments...</p>
+        </div>
+      }
+      @if (!appointmentsLoading() && appointments().length > 0) {
+        <div class="data-table">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Date</th>
+                <th scope="col">Time</th>
+                <th scope="col">Provider</th>
+                <th scope="col">Reason</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (appt of appointments(); track appt.id) {
+                <tr>
+                  <td class="date-cell">{{ appt.appointmentDate | date: 'mediumDate' }}</td>
+                  <td>{{ appt.startTime }} – {{ appt.endTime }}</td>
+                  <td>{{ appt.staffName || '—' }}</td>
+                  <td>{{ appt.reason || '—' }}</td>
+                  <td>
+                    <span [class]="getApptStatusClass(appt.status)">{{ appt.status }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      @if (!appointmentsLoading() && appointments().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined empty-icon">calendar_month</span>
+          <h3>No appointments</h3>
+          <p>Patient appointment history will appear here.</p>
+        </div>
+      }
+    }
+  }
+</div>

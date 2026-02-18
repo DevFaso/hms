@@ -53,21 +53,26 @@ import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 public class SecurityConfig {
 
     private static final Logger SEC_LOG = LoggerFactory.getLogger(SecurityConfig.class);
-    private static final String API_FEATURE_FLAGS = "/api/feature-flags";
+
+    // -----------------------------------------------------------------------
+    // Path constants — context-path is /api, so Spring Security sees paths
+    // *after* the context-path is stripped.  All matchers are relative.
+    // -----------------------------------------------------------------------
+    private static final String API_FEATURE_FLAGS = "/feature-flags";
     private static final String API_FEATURE_FLAGS_PATTERN = API_FEATURE_FLAGS + "/**";
-    private static final String API_PATIENTS = "/api/patients";
+    private static final String API_PATIENTS = "/patients";
     private static final String API_PATIENTS_PATTERN = API_PATIENTS + "/**";
-    private static final String API_PATIENT_VITALS = "/api/patients/*/vitals";
+    private static final String API_PATIENT_VITALS = "/patients/*/vitals";
     private static final String API_PATIENT_VITALS_PATTERN = API_PATIENT_VITALS + "/**";
-    private static final String API_REGISTRATIONS = "/api/registrations";
+    private static final String API_REGISTRATIONS = "/registrations";
     private static final String API_REGISTRATIONS_PATTERN = API_REGISTRATIONS + "/**";
-    private static final String API_LAB_ORDERS = "/api/lab-orders";
+    private static final String API_LAB_ORDERS = "/lab-orders";
     private static final String API_LAB_ORDERS_PATTERN = API_LAB_ORDERS + "/**";
-    private static final String API_LAB_RESULTS = "/api/lab-results";
+    private static final String API_LAB_RESULTS = "/lab-results";
     private static final String API_LAB_RESULTS_PATTERN = API_LAB_RESULTS + "/**";
-    private static final String API_NURSE = "/api/nurse";
+    private static final String API_NURSE = "/nurse";
     private static final String API_NURSE_PATTERN = API_NURSE + "/**";
-    private static final String API_ME_PATIENT_PATTERN = "/api/me/patient/**";
+    private static final String API_ME_PATIENT_PATTERN = "/me/patient/**";
 
     private final HospitalUserDetailsService userDetailsService;
     private final JwtAuthenticationEntryPoint unauthorizedHandler;
@@ -125,14 +130,14 @@ public class SecurityConfig {
     }
 
     // =====================================================================
-    // Chain #1 — API security for /api/**
+    // Chain #1 — Primary API security (all paths inside context-path /api)
     // =====================================================================
 
     @Bean
     @Order(1)
     public SecurityFilterChain apiSecurity(HttpSecurity http) throws Exception {
         http
-            .securityMatcher("/api/**")
+            .securityMatcher("/**")
             .cors(c -> {})
             .csrf(AbstractHttpConfigurer::disable) // NOSONAR — stateless JWT API, no session/cookie auth
             .exceptionHandling(ex -> ex
@@ -142,12 +147,21 @@ public class SecurityConfig {
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // Preflight
-                .requestMatchers(HttpMethod.OPTIONS, "/api/**").permitAll()
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                // Public API endpoints
-                .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers("/api/swagger-ui/**", "/api/v3/api-docs/**").permitAll()
-                .requestMatchers("/api/actuator/health", "/api/actuator/health/**", "/api/actuator/info").permitAll()
+                // Credential / token endpoints require authentication
+                .requestMatchers("/auth/credentials/**").authenticated()
+                .requestMatchers("/auth/token/**").authenticated()
+                .requestMatchers("/auth/logout").authenticated()
+
+                // Public auth endpoints (login, register, etc.)
+                .requestMatchers("/auth/**").permitAll()
+
+                // Swagger / OpenAPI
+                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+
+                // Actuator health
+                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                 .requestMatchers(HttpMethod.PUT, API_FEATURE_FLAGS, API_FEATURE_FLAGS_PATTERN)
                 .hasAuthority(ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.DELETE, API_FEATURE_FLAGS, API_FEATURE_FLAGS_PATTERN)
@@ -181,36 +195,36 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
 
                             // Allow receptionist to register patients via admin-register
-                            .requestMatchers(HttpMethod.POST, "/api/users/admin-register")
+                            .requestMatchers(HttpMethod.POST, "/users/admin-register")
                             .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
 
                 // Hospitals / Staff / Departments / Roles (specific before broad)
-                .requestMatchers(HttpMethod.GET, "/api/hospitals/{id}")
+                .requestMatchers(HttpMethod.GET, "/hospitals/{id}")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE)
-                .requestMatchers(HttpMethod.GET, "/api/hospitals", "/api/hospitals/")
+                .requestMatchers(HttpMethod.GET, "/hospitals", "/hospitals/")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE)
-                .requestMatchers(org.springframework.http.HttpMethod.GET, "/api/me/hospital")
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/me/hospital")
                 .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
-                .requestMatchers("/api/hospitals/**")
+                .requestMatchers("/hospitals/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN)
 
                 // Organizations and security management
-                .requestMatchers("/api/organizations/**")
+                .requestMatchers("/organizations/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
-                .requestMatchers("/api/assignments/**")
+                .requestMatchers("/assignments/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
-                .requestMatchers("/api/staff/**")
+                .requestMatchers("/staff/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
-                .requestMatchers(HttpMethod.GET, "/api/departments/**")
+                .requestMatchers(HttpMethod.GET, "/departments/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
-                .requestMatchers(HttpMethod.POST, "/api/departments/filter")
+                .requestMatchers(HttpMethod.POST, "/departments/filter")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
-                .requestMatchers("/api/departments/**")
+                .requestMatchers("/departments/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
-                .requestMatchers("/api/roles/**")
+                .requestMatchers("/roles/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
-                .requestMatchers("/api/chat/send/**")
+                .requestMatchers("/chat/send/**")
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_STAFF, ROLE_PATIENT, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE)
 
                 // Patient portal — self-service endpoints (MyChart equivalent)
@@ -224,7 +238,7 @@ public class SecurityConfig {
                 .hasAuthority(ROLE_PATIENT)
 
                 // Notifications - allow all authenticated users
-                .requestMatchers("/api/notifications/**")
+                .requestMatchers("/notifications/**")
                 .authenticated()
 
                 // Nurse workflow dashboard endpoints
@@ -236,7 +250,7 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_SUPER_ADMIN)
 
                 // ---------- Lab modules ----------
-                .requestMatchers(HttpMethod.GET,   "/api/lab-test-definitions/**")
+                .requestMatchers(HttpMethod.GET,   "/lab-test-definitions/**")
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.GET,   API_LAB_ORDERS, API_LAB_ORDERS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
@@ -250,11 +264,11 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
                 .requestMatchers(HttpMethod.PATCH, API_LAB_ORDERS_PATTERN, API_LAB_RESULTS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
-                .requestMatchers(HttpMethod.POST,  "/api/lab-results/{id}/attachments")
+                .requestMatchers(HttpMethod.POST,  "/lab-results/{id}/attachments")
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_HOSPITAL_ADMIN)
 
                 // Public access to uploaded profile images (served as static assets)
-                .requestMatchers(HttpMethod.GET, "/api/uploads/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
 
                 .anyRequest().authenticated()
             )
@@ -279,70 +293,7 @@ public class SecurityConfig {
         return http.build();
     }
 
-    // =====================================================================
-    // Chain #2 — SPA / static (everything else) → permitAll
-    // =====================================================================
-
-    @Bean
-    @Order(2)
-    public SecurityFilterChain spaAndStaticSecurity(HttpSecurity http) throws Exception {
-        http
-            // Matches anything not already matched by the API chain
-            .securityMatcher("/**")
-            .cors(c -> {})
-            .csrf(AbstractHttpConfigurer::disable) // NOSONAR — SPA static-asset chain, no state-changing endpoints
-            .authorizeHttpRequests(auth -> auth
-                // Preflight
-                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-
-                // Static assets (folder globs only — avoid /**/*.ext which breaks PathPatternParser)
-                .requestMatchers(
-                    "/", "/index.html",
-                    "/favicon.ico",
-                    "/assets/**", "/static/**", "/dist/**",
-                    "/manifest.webmanifest", "/site.webmanifest"
-                ).permitAll()
-
-                // SPA routes you want publicly accessible (frontend router)
-                .requestMatchers(
-                    "/announcements",
-                    "/notifications",
-                    "/login",
-                    "/register"
-                ).permitAll()
-
-                // Auth endpoints: expose only the minimal set anonymously
-                .requestMatchers(HttpMethod.POST,
-                    "/auth/login",
-                    "/auth/register",
-                    "/auth/bootstrap-signup",
-                    "/auth/request-reset",
-                    "/auth/reset-password",
-                    "/auth/verify-email",
-                    "/auth/resend-verification"
-                ).permitAll()
-                .requestMatchers(HttpMethod.GET,
-                    "/auth/bootstrap-status",
-                    "/auth/ping",
-                    "/auth/verify-email"
-                ).permitAll()
-                .requestMatchers(
-                    "/auth/logout",
-                    "/auth/credentials/**",
-                    "/auth/token/echo"
-                ).authenticated()
-
-                // Everything else in this chain (non-API) → permit
-                .anyRequest().permitAll()
-            )
-            .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .addFilterBefore((request, response, chain) -> {
-                if (request instanceof HttpServletRequest req && "OPTIONS".equalsIgnoreCase(req.getMethod())) {
-                    SEC_LOG.debug("[CORS] Preflight path={}", req.getRequestURI());
-                }
-                chain.doFilter(request, response);
-            }, UsernamePasswordAuthenticationFilter.class);
-
-        return http.build();
-    }
+    // Chain #2 removed — with context-path=/api, Chain #1's securityMatcher("/**")
+    // already handles all requests.  Static assets are served by the Angular SPA
+    // on a separate port, not through the Spring Boot backend.
 }

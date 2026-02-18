@@ -1,0 +1,223 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Consultations</h1>
+      <p class="page-subtitle">Specialist consultations and referral workflows</p>
+    </div>
+  </div>
+  <div class="summary-cards">
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon pending">pending_actions</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByGroup('pending') }}</span
+        ><span class="card-label">Pending</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon active">hourglass_top</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByGroup('active') }}</span
+        ><span class="card-label">In Progress</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon completed">task_alt</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByGroup('completed') }}</span
+        ><span class="card-label">Completed</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon total">bar_chart</span>
+      <div class="card-info">
+        <span class="card-value">{{ consultations().length }}</span
+        ><span class="card-label">Total</span>
+      </div>
+    </div>
+  </div>
+  <div class="filter-bar">
+    <div class="tabs">
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'all'"
+        (click)="setTab('all')"
+        title="Show all"
+      >
+        All
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'pending'"
+        (click)="setTab('pending')"
+        title="Show pending"
+      >
+        Pending
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'active'"
+        (click)="setTab('active')"
+        title="Show active"
+      >
+        Active
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'completed'"
+        (click)="setTab('completed')"
+        title="Show completed"
+      >
+        Completed
+      </button>
+    </div>
+    <div class="search-box">
+      <span class="material-symbols-outlined">search</span
+      ><input
+        type="text"
+        placeholder="Search consultations..."
+        [(ngModel)]="searchTerm"
+        (input)="applyFilter()"
+      />
+    </div>
+  </div>
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading consultations...</p>
+    </div>
+  }
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">forum</span>
+      <h3>No consultations found</h3>
+      <p>Consultations will appear here.</p>
+    </div>
+  }
+  @if (!loading() && filtered().length > 0) {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Patient</th>
+            <th scope="col">Specialty</th>
+            <th scope="col">Consultant</th>
+            <th scope="col">Urgency</th>
+            <th scope="col">Requested</th>
+            <th scope="col">Status</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of filtered(); track c.id) {
+            <tr class="data-row">
+              <td>
+                <div class="cell-primary">{{ c.patientName || 'Unknown' }}</div>
+                <div class="cell-secondary">{{ c.patientMrn }}</div>
+              </td>
+              <td>{{ c.specialtyRequested || '—' }}</td>
+              <td>{{ c.consultantName || 'Unassigned' }}</td>
+              <td>
+                <span class="urgency-badge {{ getUrgencyClass(c.urgency) }}">{{ c.urgency }}</span>
+              </td>
+              <td>{{ c.requestedAt ? (c.requestedAt | date: 'mediumDate') : '—' }}</td>
+              <td>
+                <span class="status-badge {{ getStatusClass(c.status) }}">{{ c.status }}</span>
+              </td>
+              <td>
+                <button class="btn-icon" (click)="viewDetail(c)" title="View consultation details">
+                  <span class="material-symbols-outlined">visibility</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+  @if (selectedConsult(); as con) {
+    <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
+      <div class="detail-panel">
+        <div class="detail-header">
+          <h2>Consultation Details</h2>
+          <button class="btn-close" (click)="closeDetail()" title="Close">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="detail-body">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <span class="field-label">Patient</span
+              ><span class="field-value">{{ con.patientName }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">MRN</span
+              ><span class="field-value">{{ con.patientMrn }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Type</span
+              ><span class="field-value">{{ con.consultationType }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Specialty</span
+              ><span class="field-value">{{ con.specialtyRequested }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Requesting Provider</span
+              ><span class="field-value">{{ con.requestingProviderName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Consultant</span
+              ><span class="field-value">{{ con.consultantName || 'Unassigned' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Urgency</span
+              ><span class="field-value"
+                ><span class="urgency-badge {{ getUrgencyClass(con.urgency) }}">{{
+                  con.urgency
+                }}</span></span
+              >
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Status</span
+              ><span class="field-value"
+                ><span class="status-badge {{ getStatusClass(con.status) }}">{{
+                  con.status
+                }}</span></span
+              >
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Requested</span
+              ><span class="field-value">{{
+                con.requestedAt ? (con.requestedAt | date: 'medium') : '—'
+              }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Completed</span
+              ><span class="field-value">{{
+                con.completedAt ? (con.completedAt | date: 'medium') : '—'
+              }}</span>
+            </div>
+          </div>
+          @if (con.reasonForConsult) {
+            <div class="detail-notes">
+              <span class="field-label">Reason</span>
+              <p>{{ con.reasonForConsult }}</p>
+            </div>
+          }
+          @if (con.clinicalQuestion) {
+            <div class="detail-notes">
+              <span class="field-label">Clinical Question</span>
+              <p>{{ con.clinicalQuestion }}</p>
+            </div>
+          }
+          @if (con.recommendations) {
+            <div class="detail-notes">
+              <span class="field-label">Recommendations</span>
+              <p>{{ con.recommendations }}</p>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

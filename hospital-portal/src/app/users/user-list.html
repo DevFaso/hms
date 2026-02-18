@@ -1,0 +1,195 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Users</h1>
+      <p class="page-subtitle">Manage system users and access</p>
+    </div>
+    <button class="btn-primary" (click)="openCreate()">
+      <span class="material-symbols-outlined">person_add</span>
+      Register User
+    </button>
+  </div>
+
+  <div class="search-bar">
+    <span class="material-symbols-outlined search-icon">search</span>
+    <input
+      type="text"
+      placeholder="Search by name, email, role..."
+      [(ngModel)]="searchTerm"
+      (ngModelChange)="applyFilter()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading users...</p>
+    </div>
+  }
+
+  @if (!loading() && filtered().length > 0) {
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>User</th>
+            <th>Username</th>
+            <th>Role</th>
+            <th>Profile</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (user of filtered(); track user.id) {
+            <tr>
+              <td class="name-cell">
+                <div class="user-name-wrap">
+                  <div class="user-avatar" [class.inactive]="!user.active">
+                    {{ getInitials(user) }}
+                  </div>
+                  <div>
+                    <span class="user-name">{{ user.firstName }} {{ user.lastName }}</span>
+                    <span class="user-email">{{ user.email }}</span>
+                  </div>
+                </div>
+              </td>
+              <td>{{ user.username }}</td>
+              <td>
+                <span class="role-chip">{{ user.roleName || '—' }}</span>
+              </td>
+              <td>{{ user.profileType || '—' }}</td>
+              <td>
+                <span
+                  class="status-badge"
+                  [class.active]="user.active"
+                  [class.inactive]="!user.active"
+                >
+                  {{ user.active ? 'Active' : 'Inactive' }}
+                </span>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (totalPages() > 1) {
+      <div class="pagination">
+        <button
+          class="page-btn"
+          [disabled]="currentPage() === 0"
+          (click)="goToPage(currentPage() - 1)"
+        >
+          <span class="material-symbols-outlined">chevron_left</span>
+        </button>
+        <span class="page-info">Page {{ currentPage() + 1 }} of {{ totalPages() }}</span>
+        <button
+          class="page-btn"
+          [disabled]="currentPage() >= totalPages() - 1"
+          (click)="goToPage(currentPage() + 1)"
+        >
+          <span class="material-symbols-outlined">chevron_right</span>
+        </button>
+      </div>
+    }
+  }
+
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">manage_accounts</span>
+      <h3>No users found</h3>
+      <p>{{ searchTerm ? 'Try adjusting your search.' : 'Register a new user to get started.' }}</p>
+    </div>
+  }
+
+  <!-- Create User Modal -->
+  @if (showCreate()) {
+    <div
+      class="modal-backdrop"
+      (click)="closeCreate()"
+      (keydown.escape)="closeCreate()"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal"
+        [open]="showCreate()"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeCreate()"
+        tabindex="-1"
+      >
+        <div class="modal-header">
+          <h2>Register New User</h2>
+          <button class="modal-close" (click)="closeCreate()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <form (ngSubmit)="submitCreate()">
+          <div class="modal-body">
+            <div class="field-row">
+              <div class="field">
+                <label for="firstName">First Name *</label>
+                <input
+                  id="firstName"
+                  type="text"
+                  [(ngModel)]="createForm.firstName"
+                  name="firstName"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="lastName">Last Name *</label>
+                <input
+                  id="lastName"
+                  type="text"
+                  [(ngModel)]="createForm.lastName"
+                  name="lastName"
+                  required
+                />
+              </div>
+            </div>
+            <div class="field">
+              <label for="username">Username *</label>
+              <input
+                id="username"
+                type="text"
+                [(ngModel)]="createForm.username"
+                name="username"
+                required
+              />
+            </div>
+            <div class="field">
+              <label for="email">Email *</label>
+              <input id="email" type="email" [(ngModel)]="createForm.email" name="email" required />
+            </div>
+            <div class="field">
+              <label for="password">Password *</label>
+              <input
+                id="password"
+                type="password"
+                [(ngModel)]="createForm.password"
+                name="password"
+                required
+              />
+            </div>
+            <div class="field">
+              <label for="roles">Roles (comma-separated)</label>
+              <input
+                id="roles"
+                type="text"
+                [(ngModel)]="roleInput"
+                name="roles"
+                placeholder="ROLE_DOCTOR, ROLE_NURSE"
+              />
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeCreate()">Cancel</button>
+            <button type="submit" class="btn-primary" [disabled]="saving()">
+              {{ saving() ? 'Registering...' : 'Register' }}
+            </button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+  }
+</div>

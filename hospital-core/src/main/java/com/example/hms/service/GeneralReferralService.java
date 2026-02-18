@@ -31,5 +31,7 @@ public interface GeneralReferralService {
     
     List<GeneralReferralResponseDTO> getReferralsByHospital(UUID hospitalId, String status);
     
+    List<GeneralReferralResponseDTO> getAllReferrals(String status);
+    
     List<GeneralReferralResponseDTO> getOverdueReferrals();
 }

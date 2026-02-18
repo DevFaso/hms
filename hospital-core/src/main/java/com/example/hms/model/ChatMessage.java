@@ -71,20 +71,20 @@ public class ChatMessage extends BaseEntity {
 
     private LocalDateTime timestamp;
 
-    /** Context (role@hospital) of the sender at send time. */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "assignment_id", nullable = false,
+    /** Context (role@hospital) of the sender at send time. Nullable for SUPER_ADMIN direct messages. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assignment_id",
         foreignKey = @ForeignKey(name = "fk_chat_assignment"))
     private UserRoleHospitalAssignment assignment;
 
     @PrePersist
     @PreUpdate
     private void validate() {
-        if (sender == null || recipient == null || assignment == null) {
-            throw new IllegalStateException("sender, recipient and assignment are required");
+        if (sender == null || recipient == null) {
+            throw new IllegalStateException("sender and recipient are required");
         }
-        // Ensure the assignment belongs to the sender
-        if (assignment.getUser() != null && sender.getId() != null
+        // Ensure the assignment belongs to the sender (if present)
+        if (assignment != null && assignment.getUser() != null && sender.getId() != null
             && !Objects.equals(assignment.getUser().getId(), sender.getId())) {
             throw new IllegalStateException("Chat assignment must belong to the sender");
         }

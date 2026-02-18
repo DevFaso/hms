@@ -1,0 +1,197 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Organizations</h1>
+      <p class="page-subtitle">Manage healthcare organizations and entities</p>
+    </div>
+    <button class="btn-primary" (click)="openCreate()">
+      <span class="material-symbols-outlined">add</span>
+      New Organization
+    </button>
+  </div>
+
+  <div class="search-bar">
+    <span class="material-symbols-outlined search-icon">search</span>
+    <input
+      type="text"
+      placeholder="Search organizations..."
+      [(ngModel)]="searchTerm"
+      (ngModelChange)="applyFilter()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading organizations...</p>
+    </div>
+  }
+
+  @if (!loading() && filtered().length > 0) {
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Code</th>
+            <th>Type</th>
+            <th>Contact</th>
+            <th>Hospitals</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (org of filtered(); track org.id) {
+            <tr>
+              <td class="name-cell">
+                <div class="org-name-wrap">
+                  <div class="org-icon">
+                    <span class="material-symbols-outlined">corporate_fare</span>
+                  </div>
+                  <div>
+                    <span class="org-name">{{ org.name }}</span>
+                    @if (org.description) {
+                      <span class="org-desc">{{ org.description }}</span>
+                    }
+                  </div>
+                </div>
+              </td>
+              <td>
+                <span class="code-badge">{{ org.code }}</span>
+              </td>
+              <td>{{ org.type || '—' }}</td>
+              <td>{{ org.primaryContactEmail || '—' }}</td>
+              <td>
+                <span class="count-chip">{{ org.hospitals.length }}</span>
+              </td>
+              <td>
+                <span
+                  class="status-badge"
+                  [class.active]="org.active"
+                  [class.inactive]="!org.active"
+                >
+                  {{ org.active ? 'Active' : 'Inactive' }}
+                </span>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (totalPages() > 1) {
+      <div class="pagination">
+        <button
+          class="page-btn"
+          [disabled]="currentPage() === 0"
+          (click)="goToPage(currentPage() - 1)"
+        >
+          <span class="material-symbols-outlined">chevron_left</span>
+        </button>
+        <span class="page-info">Page {{ currentPage() + 1 }} of {{ totalPages() }}</span>
+        <button
+          class="page-btn"
+          [disabled]="currentPage() >= totalPages() - 1"
+          (click)="goToPage(currentPage() + 1)"
+        >
+          <span class="material-symbols-outlined">chevron_right</span>
+        </button>
+      </div>
+    }
+  }
+
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">corporate_fare</span>
+      <h3>No organizations found</h3>
+      <p>{{ searchTerm ? 'Try adjusting your search.' : 'Create your first organization.' }}</p>
+    </div>
+  }
+
+  <!-- Create Modal -->
+  @if (showCreate()) {
+    <div
+      class="modal-backdrop"
+      (click)="closeCreate()"
+      (keydown.escape)="closeCreate()"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal"
+        [open]="showCreate()"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeCreate()"
+        tabindex="-1"
+      >
+        <div class="modal-header">
+          <h2>Create Organization</h2>
+          <button class="modal-close" (click)="closeCreate()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <form (ngSubmit)="submitCreate()">
+          <div class="modal-body">
+            <div class="field">
+              <label for="orgName">Name *</label>
+              <input
+                id="orgName"
+                type="text"
+                [(ngModel)]="createForm.name"
+                name="name"
+                placeholder="Organization name"
+                required
+              />
+            </div>
+            <div class="field">
+              <label for="orgCode">Code *</label>
+              <input
+                id="orgCode"
+                type="text"
+                [(ngModel)]="createForm.code"
+                name="code"
+                placeholder="ORG-001"
+                required
+              />
+            </div>
+            <div class="field">
+              <label for="orgDesc">Description</label>
+              <textarea
+                id="orgDesc"
+                rows="3"
+                [(ngModel)]="createForm.description"
+                name="description"
+                placeholder="Description..."
+              ></textarea>
+            </div>
+            <div class="field">
+              <label for="orgType">Type</label>
+              <input
+                id="orgType"
+                type="text"
+                [(ngModel)]="createForm.type"
+                name="type"
+                placeholder="e.g., HOSPITAL_NETWORK"
+              />
+            </div>
+            <div class="field">
+              <label for="orgEmail">Contact Email</label>
+              <input
+                id="orgEmail"
+                type="email"
+                [(ngModel)]="createForm.primaryContactEmail"
+                name="email"
+                placeholder="admin@org.com"
+              />
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeCreate()">Cancel</button>
+            <button type="submit" class="btn-primary" [disabled]="saving()">
+              {{ saving() ? 'Creating...' : 'Create' }}
+            </button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+  }
+</div>

@@ -687,4 +687,86 @@ class TreatmentPlanServiceImplTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("staff must belong to hospital");
     }
+
+    // ---- listAll ----
+
+    @Test
+    void listAll_withStatus_success() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<TreatmentPlan> page = new PageImpl<>(List.of(plan));
+        when(treatmentPlanRepository.findAllByStatus(TreatmentPlanStatus.DRAFT, pageable))
+                .thenReturn(page);
+        when(treatmentPlanMapper.toResponseDTO(plan)).thenReturn(responseDTO);
+
+        Page<TreatmentPlanResponseDTO> result = service.listAll(TreatmentPlanStatus.DRAFT, pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+    }
+
+    @Test
+    void listAll_noStatus_success() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<TreatmentPlan> page = new PageImpl<>(List.of(plan));
+        when(treatmentPlanRepository.findAll(pageable)).thenReturn(page);
+        when(treatmentPlanMapper.toResponseDTO(plan)).thenReturn(responseDTO);
+
+        Page<TreatmentPlanResponseDTO> result = service.listAll(null, pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+    }
+
+    // ---- signOff staff hospital mismatch ----
+
+    @Test
+    void create_signOffStaffHospitalMismatch_throws() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        signOff.setHospital(other);
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+        when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
+        when(staffRepository.findById(supervisingId)).thenReturn(Optional.of(supervising));
+        when(staffRepository.findById(signOffId)).thenReturn(Optional.of(signOff));
+
+        assertThatThrownBy(() -> service.create(requestDTO))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("staff must belong to hospital");
+    }
+
+    // ---- updateFollowUp with assigned staff ----
+
+    @Test
+    void updateFollowUp_withAssignedStaff_success() {
+        UUID followUpId = UUID.randomUUID();
+        UUID staffMemberId = UUID.randomUUID();
+        Staff assignedStaff = new Staff();
+        assignedStaff.setId(staffMemberId);
+
+        TreatmentPlanFollowUp followUp = TreatmentPlanFollowUp.builder()
+                .treatmentPlan(plan)
+                .label("Old")
+                .build();
+        followUp.setId(followUpId);
+
+        TreatmentPlanFollowUpRequestDTO fuReq = TreatmentPlanFollowUpRequestDTO.builder()
+                .label("Updated")
+                .instructions("Updated instructions")
+                .assignedStaffId(staffMemberId)
+                .build();
+        TreatmentPlanFollowUpDTO fuDTO = new TreatmentPlanFollowUpDTO();
+
+        when(treatmentPlanFollowUpRepository.findByIdAndTreatmentPlanId(followUpId, planId))
+                .thenReturn(Optional.of(followUp));
+        when(staffRepository.findById(staffMemberId)).thenReturn(Optional.of(assignedStaff));
+        when(treatmentPlanFollowUpRepository.save(followUp)).thenReturn(followUp);
+        when(treatmentPlanMapper.toFollowUpDTO(followUp)).thenReturn(fuDTO);
+
+        TreatmentPlanFollowUpDTO result = service.updateFollowUp(planId, followUpId, fuReq);
+
+        assertThat(result).isNotNull();
+        assertThat(followUp.getAssignedStaff()).isEqualTo(assignedStaff);
+    }
 }

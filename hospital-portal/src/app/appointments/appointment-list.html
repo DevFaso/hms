@@ -1,0 +1,101 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Appointments</h1>
+      <p class="page-subtitle">Schedule and manage patient appointments</p>
+    </div>
+    @if (canCreate) {
+      <a routerLink="/appointments/new" class="btn-primary">
+        <span class="material-symbols-outlined">event</span>
+        New Appointment
+      </a>
+    }
+  </div>
+
+  <!-- Filters -->
+  <div class="filter-row">
+    <div class="search-bar filter-search">
+      <span class="material-symbols-outlined search-icon">search</span>
+      <input
+        type="text"
+        placeholder="Search by patient, doctor, or reason..."
+        [(ngModel)]="searchTerm"
+        (ngModelChange)="applyFilter()"
+      />
+    </div>
+    <select
+      class="filter-select"
+      title="Filter by status"
+      [(ngModel)]="statusFilter"
+      (ngModelChange)="applyFilter()"
+    >
+      <option value="">All Statuses</option>
+      <option value="SCHEDULED">Scheduled</option>
+      <option value="CONFIRMED">Confirmed</option>
+      <option value="IN_PROGRESS">In Progress</option>
+      <option value="COMPLETED">Completed</option>
+      <option value="CANCELLED">Cancelled</option>
+      <option value="NO_SHOW">No Show</option>
+    </select>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading appointments...</p>
+    </div>
+  }
+
+  @if (!loading() && filtered().length > 0) {
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Patient</th>
+            <th>Doctor</th>
+            <th>Date</th>
+            <th>Time</th>
+            <th>Reason</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (appt of filtered(); track appt.id) {
+            <tr>
+              <td>{{ appt.patientName }}</td>
+              <td>{{ appt.staffName }}</td>
+              <td>{{ appt.appointmentDate }}</td>
+              <td>{{ appt.startTime }} – {{ appt.endTime }}</td>
+              <td>{{ appt.reason }}</td>
+              <td>
+                <span class="status-badge" [class]="getStatusClass(appt.status)">
+                  {{ appt.status }}
+                </span>
+              </td>
+              <td>
+                <a [routerLink]="['/appointments', appt.id]" class="action-link">
+                  <span class="material-symbols-outlined">visibility</span>
+                </a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">calendar_month</span>
+      <h3>No appointments found</h3>
+      <p>
+        {{
+          searchTerm || statusFilter
+            ? 'Try adjusting your filters.'
+            : 'Schedule your first appointment.'
+        }}
+      </p>
+    </div>
+  }
+</div>

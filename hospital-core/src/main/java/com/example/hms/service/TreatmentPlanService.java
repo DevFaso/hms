@@ -24,6 +24,8 @@ public interface TreatmentPlanService {
 
     Page<TreatmentPlanResponseDTO> listByHospital(UUID hospitalId, TreatmentPlanStatus status, Pageable pageable);
 
+    Page<TreatmentPlanResponseDTO> listAll(TreatmentPlanStatus status, Pageable pageable);
+
     TreatmentPlanFollowUpDTO addFollowUp(UUID planId, TreatmentPlanFollowUpRequestDTO requestDTO);
 
     TreatmentPlanFollowUpDTO updateFollowUp(UUID planId, UUID followUpId, TreatmentPlanFollowUpRequestDTO requestDTO);

@@ -58,6 +58,11 @@ public interface AdmissionService {
     List<AdmissionResponseDTO> getAdmissionsByHospital(UUID hospitalId, String status, LocalDateTime startDate, LocalDateTime endDate);
 
     /**
+     * Get all admissions across all hospitals (super admin only)
+     */
+    List<AdmissionResponseDTO> getAllAdmissions(String status, LocalDateTime startDate, LocalDateTime endDate);
+
+    /**
      * Get current admission for patient
      */
     AdmissionResponseDTO getCurrentAdmissionForPatient(UUID patientId);

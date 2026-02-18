@@ -27,5 +27,7 @@ public interface ImagingOrderService {
 
     List<ImagingOrderResponseDTO> getOrdersByHospital(UUID hospitalId, ImagingOrderStatus status);
 
+    List<ImagingOrderResponseDTO> getAllOrders(ImagingOrderStatus status);
+
     List<ImagingOrderDuplicateMatchDTO> previewDuplicates(UUID patientId, ImagingModality modality, String bodyRegion, Integer lookbackDays);
 }

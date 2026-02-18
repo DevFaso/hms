@@ -6,7 +6,12 @@
     "TITLE": "Connexion",
     "USERNAME": "Nom d'utilisateur",
     "PASSWORD": "Mot de passe",
+    "REMEMBER_ME": "Se souvenir de moi",
+    "SIGN_IN": "Se connecter",
+    "SIGNING_IN": "Connexion en cours",
     "SUBMIT": "Se connecter",
+    "FORGOT_PASSWORD": "Mot de passe oublié ?",
+    "FORGOT_USERNAME": "Nom d'utilisateur oublié ?",
     "ERROR": "Identifiants invalides"
   },
   "COMMON": {

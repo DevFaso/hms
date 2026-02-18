@@ -19,5 +19,7 @@ public interface TreatmentPlanRepository extends JpaRepository<TreatmentPlan, UU
 
     Page<TreatmentPlan> findAllByPatientId(UUID patientId, Pageable pageable);
 
+    Page<TreatmentPlan> findAllByStatus(TreatmentPlanStatus status, Pageable pageable);
+
     Optional<TreatmentPlan> findByIdAndHospitalId(UUID id, UUID hospitalId);
 }

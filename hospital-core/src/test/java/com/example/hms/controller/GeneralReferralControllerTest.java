@@ -73,7 +73,7 @@ class GeneralReferralControllerTest {
 
         when(referralService.createReferral(any(GeneralReferralRequestDTO.class))).thenReturn(response);
 
-        mockMvc.perform(post("/api/referrals")
+        mockMvc.perform(post("/referrals")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)))
             .andExpect(status().isCreated())
@@ -94,7 +94,7 @@ class GeneralReferralControllerTest {
 
         when(referralService.submitReferral(referralId)).thenReturn(response);
 
-        mockMvc.perform(post("/api/referrals/{referralId}/submit", referralId))
+        mockMvc.perform(post("/referrals/{referralId}/submit", referralId))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value(ReferralStatus.SUBMITTED.name()));
 
@@ -111,7 +111,7 @@ class GeneralReferralControllerTest {
 
         when(referralService.acknowledgeReferral(referralId, "notes", providerId)).thenReturn(response);
 
-        mockMvc.perform(post("/api/referrals/{id}/acknowledge", referralId)
+        mockMvc.perform(post("/referrals/{id}/acknowledge", referralId)
                 .param("notes", "notes")
                 .param("receivingProviderId", providerId.toString()))
             .andExpect(status().isOk())
@@ -125,7 +125,7 @@ class GeneralReferralControllerTest {
     void cancelReferral_returns204() throws Exception {
         UUID referralId = UUID.randomUUID();
 
-        mockMvc.perform(post("/api/referrals/{id}/cancel", referralId)
+        mockMvc.perform(post("/referrals/{id}/cancel", referralId)
                 .param("reason", "duplicate"))
             .andExpect(status().isNoContent())
             .andExpect(content().string(""));
@@ -142,7 +142,7 @@ class GeneralReferralControllerTest {
 
         when(referralService.getReferralsByHospital(hospitalId, "submitted")).thenReturn(List.of(response));
 
-        mockMvc.perform(get("/api/referrals/hospital/{hospitalId}", hospitalId)
+        mockMvc.perform(get("/referrals/hospital/{hospitalId}", hospitalId)
                 .param("status", "submitted"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[0].status").value(ReferralStatus.SUBMITTED.name()));
@@ -158,7 +158,7 @@ class GeneralReferralControllerTest {
 
         when(referralService.getOverdueReferrals()).thenReturn(List.of(overdue));
 
-        mockMvc.perform(get("/api/referrals/overdue"))
+        mockMvc.perform(get("/referrals/overdue"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$[0].isOverdue").value(true));
 

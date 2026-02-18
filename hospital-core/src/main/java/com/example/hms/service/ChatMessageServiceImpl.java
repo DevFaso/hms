@@ -52,27 +52,42 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         User sender = userRepository.findById(currentUserId)
             .orElseThrow(() -> new ResourceNotFoundException("Sender not found"));
 
-        if (sender.getEmail().equalsIgnoreCase(dto.getRecipientEmail())) {
+        // Resolve recipient by UUID or email
+        User recipient;
+        if (dto.getRecipientId() != null) {
+            recipient = userRepository.findById(dto.getRecipientId())
+                .orElseThrow(() -> new ResourceNotFoundException("Recipient not found"));
+        } else if (dto.getRecipientEmail() != null && !dto.getRecipientEmail().isBlank()) {
+            recipient = userRepository.findByEmail(dto.getRecipientEmail())
+                .orElseThrow(() -> new ResourceNotFoundException("Recipient not found"));
+        } else {
+            throw new IllegalArgumentException("Either recipientId or recipientEmail is required");
+        }
+
+        if (sender.getId().equals(recipient.getId())) {
             throw new SecurityException("Cannot send a chat message to yourself.");
         }
 
-        User recipient = userRepository.findByEmail(dto.getRecipientEmail())
-            .orElseThrow(() -> new ResourceNotFoundException("Recipient not found"));
+        // Check if sender is SUPER_ADMIN (skip hospital/assignment validation)
+        boolean isSuperAdmin = isSuperAdminContext();
 
-        // Resolve hospital by name using HospitalRepository
-        com.example.hms.model.Hospital hospital = null;
-        if (dto.getHospitalName() != null && !dto.getHospitalName().isBlank()) {
-            hospital = hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + dto.getHospitalName()));
+        UserRoleHospitalAssignment assignment = null;
+        if (!isSuperAdmin) {
+            // Resolve hospital by name using HospitalRepository
+            com.example.hms.model.Hospital hospital = null;
+            if (dto.getHospitalName() != null && !dto.getHospitalName().isBlank()) {
+                hospital = hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
+                    .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + dto.getHospitalName()));
+            }
+
+            validateSenderAssignment(sender.getId(), hospital != null ? hospital.getId() : null);
+
+            assignment = getSenderAssignment(
+                sender.getId(),
+                hospital != null ? hospital.getId() : null,
+                dto.getRoleCode()
+            );
         }
-
-        validateSenderAssignment(sender.getId(), hospital != null ? hospital.getId() : null);
-
-        UserRoleHospitalAssignment assignment = getSenderAssignment(
-            sender.getId(),
-            hospital != null ? hospital.getId() : null,
-            dto.getRoleCode()
-        );
 
         ChatMessage message = ChatMessage.builder()
             .sender(sender)
@@ -85,6 +100,13 @@ public class ChatMessageServiceImpl implements ChatMessageService {
 
         ChatMessage saved = chatMessageRepository.save(message);
         return chatMessageMapper.toChatMessageResponseDTO(saved);
+    }
+
+    private boolean isSuperAdminContext() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) return false;
+        return authentication.getAuthorities().stream()
+            .anyMatch(a -> "ROLE_SUPER_ADMIN".equals(a.getAuthority()));
     }
 
     private void validateSenderAssignment(UUID senderId, UUID hospitalId) {

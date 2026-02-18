@@ -324,7 +324,7 @@ class ChatMessageTest {
                 .build();
 
             IllegalStateException ex = assertThrows(IllegalStateException.class, () -> invokeValidate(msg));
-            assertEquals("sender, recipient and assignment are required", ex.getMessage());
+            assertEquals("sender and recipient are required", ex.getMessage());
         }
 
         @Test
@@ -336,19 +336,18 @@ class ChatMessageTest {
                 .build();
 
             IllegalStateException ex = assertThrows(IllegalStateException.class, () -> invokeValidate(msg));
-            assertEquals("sender, recipient and assignment are required", ex.getMessage());
+            assertEquals("sender and recipient are required", ex.getMessage());
         }
 
         @Test
-        @DisplayName("throws when assignment is null")
+        @DisplayName("does not throw when assignment is null (optional)")
         void assignmentNull() {
             ChatMessage msg = ChatMessage.builder()
                 .sender(buildUser(UUID.randomUUID()))
                 .recipient(buildUser(UUID.randomUUID()))
                 .build();
 
-            IllegalStateException ex = assertThrows(IllegalStateException.class, () -> invokeValidate(msg));
-            assertEquals("sender, recipient and assignment are required", ex.getMessage());
+            assertDoesNotThrow(() -> invokeValidate(msg));
         }
 
         @Test
@@ -356,7 +355,7 @@ class ChatMessageTest {
         void allNull() {
             ChatMessage msg = ChatMessage.builder().build();
             IllegalStateException ex = assertThrows(IllegalStateException.class, () -> invokeValidate(msg));
-            assertEquals("sender, recipient and assignment are required", ex.getMessage());
+            assertEquals("sender and recipient are required", ex.getMessage());
         }
 
         @Test

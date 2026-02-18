@@ -1,0 +1,198 @@
+<div class="page-container chat-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Messages</h1>
+      <p class="page-subtitle">Internal team communications</p>
+    </div>
+    <div class="page-actions">
+      <button class="btn-outline" (click)="loadConversations()">
+        <span class="material-symbols-outlined">refresh</span> Refresh
+      </button>
+    </div>
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading conversations...</p>
+    </div>
+  }
+
+  @if (error(); as err) {
+    <div class="error-state">
+      <span class="material-symbols-outlined error-icon">error</span>
+      <h3>Something went wrong</h3>
+      <p>{{ err }}</p>
+      <button class="btn-primary" (click)="loadConversations()">Retry</button>
+    </div>
+  }
+
+  @if (!loading() && !error()) {
+    <div class="chat-layout">
+      <!-- Sidebar: Conversations -->
+      <div class="conv-sidebar">
+        <div class="conv-header">
+          <h3>Conversations</h3>
+          <button class="btn-new-chat" (click)="openNewConversation()" title="New conversation">
+            <span class="material-symbols-outlined">edit_square</span>
+          </button>
+        </div>
+
+        <!-- Search conversations -->
+        <div class="conv-search">
+          <span class="material-symbols-outlined search-icon">search</span>
+          <input
+            type="text"
+            placeholder="Search conversations..."
+            [ngModel]="convSearchTerm()"
+            (ngModelChange)="convSearchTerm.set($event)"
+          />
+        </div>
+
+        @if (filteredConversations().length > 0) {
+          <div class="conv-list">
+            @for (conv of filteredConversations(); track conv.conversationUserId) {
+              <button
+                class="conv-item"
+                [class.active]="
+                  activeConversation()?.conversationUserId === conv.conversationUserId
+                "
+                (click)="selectConversation(conv)"
+              >
+                <div class="conv-avatar">{{ getInitials(conv.conversationUserName) }}</div>
+                <div class="conv-info">
+                  <span class="conv-name">{{ conv.conversationUserName }}</span>
+                  <span class="conv-preview">{{ conv.lastMessageContent }}</span>
+                </div>
+                @if (conv.unreadCount > 0) {
+                  <span class="unread-badge">{{ conv.unreadCount }}</span>
+                }
+              </button>
+            }
+          </div>
+        } @else {
+          <div class="conv-empty">
+            <span class="material-symbols-outlined">chat_bubble_outline</span>
+            <p>No conversations yet</p>
+            <button class="btn-start-chat" (click)="openNewConversation()">
+              <span class="material-symbols-outlined">add</span> Start a conversation
+            </button>
+          </div>
+        }
+      </div>
+
+      <!-- Main Area -->
+      <div class="msg-area">
+        <!-- New Conversation Panel -->
+        @if (showNewConversation()) {
+          <div class="new-conv-panel">
+            <div class="new-conv-header">
+              <h3>New Conversation</h3>
+              <button class="btn-icon" (click)="closeNewConversation()" title="Close">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div class="new-conv-search">
+              <span class="material-symbols-outlined search-icon">person_search</span>
+              <input
+                type="text"
+                placeholder="Search users by name or email..."
+                [ngModel]="userSearchTerm()"
+                (ngModelChange)="userSearchTerm.set($event)"
+              />
+            </div>
+
+            @if (loadingUsers()) {
+              <div class="new-conv-loading">
+                <div class="spinner-sm"></div>
+                <p>Loading users...</p>
+              </div>
+            } @else if (filteredUsers().length > 0) {
+              <div class="new-conv-users">
+                @for (user of filteredUsers(); track user.id) {
+                  <button class="user-item" (click)="startConversationWith(user)">
+                    <div class="conv-avatar">
+                      {{ getInitials(user.firstName + ' ' + user.lastName) }}
+                    </div>
+                    <div class="user-item-info">
+                      <span class="user-item-name">{{ user.firstName }} {{ user.lastName }}</span>
+                      <span class="user-item-role">{{ user.roleName || user.profileType }}</span>
+                    </div>
+                    <span class="material-symbols-outlined user-item-action">chat</span>
+                  </button>
+                }
+              </div>
+            } @else {
+              <div class="new-conv-empty">
+                <span class="material-symbols-outlined">group_off</span>
+                <p>No users found</p>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Active conversation messages -->
+        @if (!showNewConversation() && activeConversation(); as conv) {
+          <div class="msg-header">
+            <div class="msg-header-avatar">{{ getInitials(conv.conversationUserName) }}</div>
+            <div class="msg-header-info">
+              <span class="msg-header-name">{{ conv.conversationUserName }}</span>
+            </div>
+            <div class="msg-header-actions">
+              <button class="btn-icon" (click)="refreshMessages()" title="Refresh messages">
+                <span class="material-symbols-outlined">refresh</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="msg-body">
+            @for (msg of messages(); track msg.id) {
+              <div
+                class="msg-bubble"
+                [class.own]="isOwnMessage(msg)"
+                [class.other]="!isOwnMessage(msg)"
+              >
+                <p>{{ msg.content }}</p>
+                <span class="msg-time">{{ formatTime(msg.timestamp) }}</span>
+              </div>
+            }
+            @if (messages().length === 0) {
+              <div class="msg-empty">
+                <span class="material-symbols-outlined">waving_hand</span>
+                <p>No messages yet. Say hello!</p>
+              </div>
+            }
+          </div>
+
+          <div class="msg-input-area">
+            <input
+              type="text"
+              placeholder="Type a message..."
+              [(ngModel)]="messageText"
+              (keydown.enter)="sendMessage()"
+            />
+            <button
+              class="send-btn"
+              [disabled]="sendingMessage() || !messageText.trim()"
+              (click)="sendMessage()"
+            >
+              <span class="material-symbols-outlined">send</span>
+            </button>
+          </div>
+        }
+
+        <!-- No conversation selected (and not in new-conv mode) -->
+        @if (!showNewConversation() && !activeConversation()) {
+          <div class="no-conversation">
+            <span class="material-symbols-outlined">chat</span>
+            <h3>Select a conversation</h3>
+            <p>Choose a conversation from the sidebar or start a new one.</p>
+            <button class="btn-primary" (click)="openNewConversation()">
+              <span class="material-symbols-outlined">add</span> New Conversation
+            </button>
+          </div>
+        }
+      </div>
+    </div>
+  }
+</div>

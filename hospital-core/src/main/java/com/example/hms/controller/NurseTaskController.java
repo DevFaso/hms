@@ -190,7 +190,7 @@ public class NurseTaskController {
 
     private UUID ensureHospitalScope(Authentication auth, UUID requestedHospital) {
         UUID resolved = authUtils.resolveHospitalScope(auth, requestedHospital, false);
-        if (resolved == null) {
+        if (resolved == null && !authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
             throw new BusinessException("Hospital context required for nurse workflow data.");
         }
         return resolved;

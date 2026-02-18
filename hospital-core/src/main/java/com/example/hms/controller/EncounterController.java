@@ -67,7 +67,8 @@ public class EncounterController {
     ) {
         // Enforce hospital scoping
         UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
-        boolean isReceptionist = authUtils.hasAuthority(auth, "ROLE_RECEPTIONIST");
+        boolean isSuperAdmin = authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
+        boolean isReceptionist = !isSuperAdmin && authUtils.hasAuthority(auth, "ROLE_RECEPTIONIST");
         if (isReceptionist) {
             if (jwtHospitalId == null) {
                 throw new BusinessException("Receptionist must be affiliated with a hospital (missing hospitalId in token).");
@@ -133,7 +134,8 @@ public class EncounterController {
             return ResponseEntity.badRequest().build();
         }
 
-        boolean isReceptionist = authUtils.hasAuthority(auth, "ROLE_RECEPTIONIST");
+        boolean isSuperAdmin = authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
+        boolean isReceptionist = !isSuperAdmin && authUtils.hasAuthority(auth, "ROLE_RECEPTIONIST");
         UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
         UUID resolvedHospitalId = hospitalId;
 
@@ -143,7 +145,7 @@ public class EncounterController {
                 throw new BusinessException("Receptionist must be affiliated with a hospital (missing hospitalId in token).");
             }
             resolvedHospitalId = jwtHospitalId;
-        } else if (resolvedHospitalId == null) {
+        } else if (!isSuperAdmin && resolvedHospitalId == null) {
             // doctors/nurses/admins: fallback to JWT if provided
             resolvedHospitalId = jwtHospitalId;
         }
