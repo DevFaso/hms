@@ -233,8 +233,8 @@
 
 <!-- ═══ CREATE/EDIT ENCOUNTER MODAL ═══ -->
 @if (showModal()) {
-  <div class="modal-backdrop" (click)="closeModal()">
-    <div class="modal modal-lg" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
+    <div class="modal modal-lg" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
       <div class="modal-header">
         <h2>{{ editing() ? 'Edit Encounter' : 'New Encounter' }}</h2>
         <button class="modal-close" (click)="closeModal()"><span class="material-symbols-outlined">close</span></button>
@@ -242,12 +242,12 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label>Patient ID *</label>
-            <input type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" required />
+            <label for="enc-patientId">Patient ID *</label>
+            <input id="enc-patientId" type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" required />
           </div>
           <div class="field">
-            <label>Staff *</label>
-            <select [(ngModel)]="form.staffId" required>
+            <label for="enc-staffId">Staff *</label>
+            <select id="enc-staffId" [(ngModel)]="form.staffId" required>
               <option value="">Select provider...</option>
               @for (s of staffMembers(); track s.id) {
                 <option [value]="s.id">{{ s.name }}</option>
@@ -257,8 +257,8 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Hospital *</label>
-            <select [(ngModel)]="form.hospitalId" required>
+            <label for="enc-hospitalId">Hospital *</label>
+            <select id="enc-hospitalId" [(ngModel)]="form.hospitalId" required>
               <option value="">Select hospital...</option>
               @for (h of hospitals(); track h.id) {
                 <option [value]="h.id">{{ h.name }}</option>
@@ -266,8 +266,8 @@
             </select>
           </div>
           <div class="field">
-            <label>Encounter Type *</label>
-            <select [(ngModel)]="form.encounterType" required>
+            <label for="enc-type">Encounter Type *</label>
+            <select id="enc-type" [(ngModel)]="form.encounterType" required>
               @for (t of encounterTypes; track t) {
                 <option [value]="t">{{ t }}</option>
               }
@@ -276,17 +276,17 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Encounter Date *</label>
-            <input type="date" [(ngModel)]="form.encounterDate" required />
+            <label for="enc-date">Encounter Date *</label>
+            <input id="enc-date" type="date" [(ngModel)]="form.encounterDate" required />
           </div>
           <div class="field">
-            <label>Department ID</label>
-            <input type="text" [(ngModel)]="form.departmentId" placeholder="Optional" />
+            <label for="enc-deptId">Department ID</label>
+            <input id="enc-deptId" type="text" [(ngModel)]="form.departmentId" placeholder="Optional" />
           </div>
         </div>
         <div class="field">
-          <label>Notes</label>
-          <textarea [(ngModel)]="form.notes" rows="3" placeholder="Clinical notes..."></textarea>
+          <label for="enc-notes">Notes</label>
+          <textarea id="enc-notes" [(ngModel)]="form.notes" rows="3" placeholder="Clinical notes..."></textarea>
         </div>
       </div>
       <div class="modal-actions">
@@ -301,8 +301,8 @@
 
 <!-- ═══ DELETE CONFIRM ═══ -->
 @if (showDeleteConfirm()) {
-  <div class="modal-backdrop" (click)="cancelDelete()">
-    <div class="modal" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop" tabindex="-1" (click)="cancelDelete()" (keydown.escape)="cancelDelete()">
+    <div class="modal" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
       <div class="modal-header"><h2>Delete Encounter</h2><button class="modal-close" (click)="cancelDelete()"><span class="material-symbols-outlined">close</span></button></div>
       <div class="modal-body">
         <p class="delete-warning">Are you sure you want to delete the encounter for <strong>{{ deletingEnc()?.patientName }}</strong>? This action cannot be undone.</p>

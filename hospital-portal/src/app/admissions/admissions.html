@@ -130,8 +130,8 @@
 
 <!-- ═══ CREATE / EDIT ADMISSION MODAL ═══ -->
 @if (showModal()) {
-  <div class="modal-backdrop" (click)="closeModal()">
-    <div class="modal modal-lg" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
+    <div class="modal modal-lg" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
       <div class="modal-header">
         <h2>{{ editing() ? 'Edit Admission' : 'New Admission' }}</h2>
         <button class="modal-close" (click)="closeModal()"><span class="material-symbols-outlined">close</span></button>
@@ -139,12 +139,12 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label>Patient ID *</label>
-            <input type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" required />
+            <label for="adm-patientId">Patient ID *</label>
+            <input id="adm-patientId" type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" required />
           </div>
           <div class="field">
-            <label>Hospital *</label>
-            <select [(ngModel)]="form.hospitalId" required>
+            <label for="adm-hospitalId">Hospital *</label>
+            <select id="adm-hospitalId" [(ngModel)]="form.hospitalId" required>
               <option value="">Select hospital...</option>
               @for (h of hospitals(); track h.id) {
                 <option [value]="h.id">{{ h.name }}</option>
@@ -154,8 +154,8 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Admitting Provider *</label>
-            <select [(ngModel)]="form.admittingProviderId" required>
+            <label for="adm-providerId">Admitting Provider *</label>
+            <select id="adm-providerId" [(ngModel)]="form.admittingProviderId" required>
               <option value="">Select provider...</option>
               @for (s of staffMembers(); track s.id) {
                 <option [value]="s.id">{{ s.name }}</option>
@@ -163,22 +163,22 @@
             </select>
           </div>
           <div class="field">
-            <label>Room / Bed</label>
-            <input type="text" [(ngModel)]="form.roomBed" placeholder="e.g. Room 201-B" />
+            <label for="adm-roomBed">Room / Bed</label>
+            <input id="adm-roomBed" type="text" [(ngModel)]="form.roomBed" placeholder="e.g. Room 201-B" />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Admission Type *</label>
-            <select [(ngModel)]="form.admissionType" required>
+            <label for="adm-type">Admission Type *</label>
+            <select id="adm-type" [(ngModel)]="form.admissionType" required>
               @for (t of admissionTypes; track t) {
                 <option [value]="t">{{ t }}</option>
               }
             </select>
           </div>
           <div class="field">
-            <label>Acuity Level *</label>
-            <select [(ngModel)]="form.acuityLevel" required>
+            <label for="adm-acuity">Acuity Level *</label>
+            <select id="adm-acuity" [(ngModel)]="form.acuityLevel" required>
               @for (l of acuityLevels; track l) {
                 <option [value]="l">{{ l }}</option>
               }
@@ -187,21 +187,21 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Admission Date/Time *</label>
-            <input type="datetime-local" [(ngModel)]="form.admissionDateTime" required />
+            <label for="adm-dateTime">Admission Date/Time *</label>
+            <input id="adm-dateTime" type="datetime-local" [(ngModel)]="form.admissionDateTime" required />
           </div>
           <div class="field">
-            <label>Department ID</label>
-            <input type="text" [(ngModel)]="form.departmentId" placeholder="Optional" />
+            <label for="adm-deptId">Department ID</label>
+            <input id="adm-deptId" type="text" [(ngModel)]="form.departmentId" placeholder="Optional" />
           </div>
         </div>
         <div class="field">
-          <label>Chief Complaint *</label>
-          <textarea [(ngModel)]="form.chiefComplaint" rows="2" placeholder="Reason for admission..." required></textarea>
+          <label for="adm-complaint">Chief Complaint *</label>
+          <textarea id="adm-complaint" [(ngModel)]="form.chiefComplaint" rows="2" placeholder="Reason for admission..." required></textarea>
         </div>
         <div class="field">
-          <label>Admission Notes</label>
-          <textarea [(ngModel)]="form.admissionNotes" rows="2" placeholder="Additional notes..."></textarea>
+          <label for="adm-notes">Admission Notes</label>
+          <textarea id="adm-notes" [(ngModel)]="form.admissionNotes" rows="2" placeholder="Additional notes..."></textarea>
         </div>
       </div>
       <div class="modal-actions">
@@ -216,8 +216,8 @@
 
 <!-- ═══ DELETE CONFIRM ═══ -->
 @if (showDeleteConfirm()) {
-  <div class="modal-backdrop" (click)="cancelDelete()">
-    <div class="modal" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop" tabindex="-1" (click)="cancelDelete()" (keydown.escape)="cancelDelete()">
+    <div class="modal" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
       <div class="modal-header"><h2>Delete Admission</h2><button class="modal-close" (click)="cancelDelete()"><span class="material-symbols-outlined">close</span></button></div>
       <div class="modal-body">
         <p class="delete-warning">Are you sure you want to delete the admission for <strong>{{ deletingAdm()?.patientName }}</strong>? This action cannot be undone.</p>

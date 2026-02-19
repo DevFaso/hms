@@ -204,8 +204,8 @@
 
 <!-- ═══ CREATE / EDIT PRESCRIPTION MODAL ═══ -->
 @if (showModal()) {
-  <div class="modal-backdrop" (click)="closeModal()">
-    <div class="modal modal-lg" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
+    <div class="modal modal-lg" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
       <div class="modal-header">
         <h2>{{ editing() ? 'Edit Prescription' : 'New Prescription' }}</h2>
         <button class="modal-close" (click)="closeModal()"><span class="material-symbols-outlined">close</span></button>
@@ -213,12 +213,12 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label>Patient ID *</label>
-            <input type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" required />
+            <label for="rx-patientId">Patient ID *</label>
+            <input id="rx-patientId" type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" required />
           </div>
           <div class="field">
-            <label>Prescriber</label>
-            <select [(ngModel)]="form.staffId">
+            <label for="rx-staffId">Prescriber</label>
+            <select id="rx-staffId" [(ngModel)]="form.staffId">
               <option value="">Select prescriber...</option>
               @for (s of staffMembers(); track s.id) {
                 <option [value]="s.id">{{ s.name }}</option>
@@ -227,32 +227,32 @@
           </div>
         </div>
         <div class="field">
-          <label>Medication Name *</label>
-          <input type="text" [(ngModel)]="form.medicationName" placeholder="e.g. Amoxicillin 500mg" required />
+          <label for="rx-medName">Medication Name *</label>
+          <input id="rx-medName" type="text" [(ngModel)]="form.medicationName" placeholder="e.g. Amoxicillin 500mg" required />
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Dosage</label>
-            <input type="text" [(ngModel)]="form.dosage" placeholder="e.g. 500mg" />
+            <label for="rx-dosage">Dosage</label>
+            <input id="rx-dosage" type="text" [(ngModel)]="form.dosage" placeholder="e.g. 500mg" />
           </div>
           <div class="field">
-            <label>Frequency</label>
-            <input type="text" [(ngModel)]="form.frequency" placeholder="e.g. 3x daily" />
+            <label for="rx-frequency">Frequency</label>
+            <input id="rx-frequency" type="text" [(ngModel)]="form.frequency" placeholder="e.g. 3x daily" />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Duration</label>
-            <input type="text" [(ngModel)]="form.duration" placeholder="e.g. 7 days" />
+            <label for="rx-duration">Duration</label>
+            <input id="rx-duration" type="text" [(ngModel)]="form.duration" placeholder="e.g. 7 days" />
           </div>
           <div class="field">
-            <label>Encounter ID</label>
-            <input type="text" [(ngModel)]="form.encounterId" placeholder="Optional" />
+            <label for="rx-encounterId">Encounter ID</label>
+            <input id="rx-encounterId" type="text" [(ngModel)]="form.encounterId" placeholder="Optional" />
           </div>
         </div>
         <div class="field">
-          <label>Notes</label>
-          <textarea [(ngModel)]="form.notes" rows="3" placeholder="Prescription notes..."></textarea>
+          <label for="rx-notes">Notes</label>
+          <textarea id="rx-notes" [(ngModel)]="form.notes" rows="3" placeholder="Prescription notes..."></textarea>
         </div>
       </div>
       <div class="modal-actions">
@@ -267,8 +267,8 @@
 
 <!-- ═══ DELETE CONFIRM ═══ -->
 @if (showDeleteConfirm()) {
-  <div class="modal-backdrop" (click)="cancelDelete()">
-    <div class="modal" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop" tabindex="-1" (click)="cancelDelete()" (keydown.escape)="cancelDelete()">
+    <div class="modal" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
       <div class="modal-header"><h2>Delete Prescription</h2><button class="modal-close" (click)="cancelDelete()"><span class="material-symbols-outlined">close</span></button></div>
       <div class="modal-body">
         <p class="delete-warning">Are you sure you want to delete the prescription for <strong>{{ deletingRx()?.medicationName }}</strong>? This action cannot be undone.</p>

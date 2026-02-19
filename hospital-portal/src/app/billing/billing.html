@@ -238,8 +238,8 @@
 
 <!-- ═══ CREATE / EDIT INVOICE MODAL ═══ -->
 @if (showModal()) {
-  <div class="modal-backdrop" (click)="closeModal()">
-    <div class="modal modal-lg" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
+    <div class="modal modal-lg" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
       <div class="modal-header">
         <h2>{{ editing() ? 'Edit Invoice' : 'New Invoice' }}</h2>
         <button class="modal-close" (click)="closeModal()"><span class="material-symbols-outlined">close</span></button>
@@ -247,22 +247,22 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label>Patient Email *</label>
-            <input type="email" [(ngModel)]="form.patientEmail" placeholder="patient&#64;example.com" required />
+            <label for="bill-patientEmail">Patient Email *</label>
+            <input id="bill-patientEmail" type="email" [(ngModel)]="form.patientEmail" placeholder="patient&#64;example.com" required />
           </div>
           <div class="field">
-            <label>Hospital Name *</label>
-            <input type="text" [(ngModel)]="form.hospitalName" placeholder="Hospital name" required />
+            <label for="bill-hospitalName">Hospital Name *</label>
+            <input id="bill-hospitalName" type="text" [(ngModel)]="form.hospitalName" placeholder="Hospital name" required />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Invoice Number *</label>
-            <input type="text" [(ngModel)]="form.invoiceNumber" placeholder="INV-0001" required />
+            <label for="bill-invoiceNumber">Invoice Number *</label>
+            <input id="bill-invoiceNumber" type="text" [(ngModel)]="form.invoiceNumber" placeholder="INV-0001" required />
           </div>
           <div class="field">
-            <label>Status *</label>
-            <select [(ngModel)]="form.status" required>
+            <label for="bill-status">Status *</label>
+            <select id="bill-status" [(ngModel)]="form.status" required>
               @for (s of paymentStatuses; track s) {
                 <option [value]="s">{{ s }}</option>
               }
@@ -271,27 +271,27 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Invoice Date *</label>
-            <input type="date" [(ngModel)]="form.invoiceDate" required />
+            <label for="bill-invoiceDate">Invoice Date *</label>
+            <input id="bill-invoiceDate" type="date" [(ngModel)]="form.invoiceDate" required />
           </div>
           <div class="field">
-            <label>Due Date *</label>
-            <input type="date" [(ngModel)]="form.dueDate" required />
+            <label for="bill-dueDate">Due Date *</label>
+            <input id="bill-dueDate" type="date" [(ngModel)]="form.dueDate" required />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Total Amount *</label>
-            <input type="number" [(ngModel)]="form.totalAmount" min="0" required />
+            <label for="bill-totalAmount">Total Amount *</label>
+            <input id="bill-totalAmount" type="number" [(ngModel)]="form.totalAmount" min="0" required />
           </div>
           <div class="field">
-            <label>Amount Paid</label>
-            <input type="number" [(ngModel)]="form.amountPaid" min="0" />
+            <label for="bill-amountPaid">Amount Paid</label>
+            <input id="bill-amountPaid" type="number" [(ngModel)]="form.amountPaid" min="0" />
           </div>
         </div>
         <div class="field">
-          <label>Notes</label>
-          <textarea [(ngModel)]="form.notes" rows="3" placeholder="Invoice notes..."></textarea>
+          <label for="bill-notes">Notes</label>
+          <textarea id="bill-notes" [(ngModel)]="form.notes" rows="3" placeholder="Invoice notes..."></textarea>
         </div>
       </div>
       <div class="modal-actions">
@@ -306,8 +306,8 @@
 
 <!-- ═══ DELETE CONFIRM ═══ -->
 @if (showDeleteConfirm()) {
-  <div class="modal-backdrop" (click)="cancelDelete()">
-    <div class="modal" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop" tabindex="-1" (click)="cancelDelete()" (keydown.escape)="cancelDelete()">
+    <div class="modal" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
       <div class="modal-header"><h2>Delete Invoice</h2><button class="modal-close" (click)="cancelDelete()"><span class="material-symbols-outlined">close</span></button></div>
       <div class="modal-body">
         <p class="delete-warning">Are you sure you want to delete invoice <strong>{{ deletingInv()?.invoiceNumber }}</strong>? This action cannot be undone.</p>

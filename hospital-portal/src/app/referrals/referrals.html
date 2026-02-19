@@ -237,7 +237,7 @@
 
   <!-- Create Referral Modal -->
   @if (showModal()) {
-    <div class="modal-backdrop" (click)="closeModal()"></div>
+    <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()"></div>
     <div class="modal modal-lg">
       <div class="modal-header">
         <h2>New Referral</h2>
@@ -246,12 +246,12 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label>Patient ID</label>
-            <input type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" />
+            <label for="ref-patientId">Patient ID</label>
+            <input id="ref-patientId" type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" />
           </div>
           <div class="field">
-            <label>Hospital</label>
-            <select [(ngModel)]="form.hospitalId" title="Hospital">
+            <label for="ref-hospitalId">Hospital</label>
+            <select id="ref-hospitalId" [(ngModel)]="form.hospitalId" title="Hospital">
               <option value="">Select hospital</option>
               @for (h of hospitals(); track h.id) {
                 <option [value]="h.id">{{ h.name }}</option>
@@ -261,12 +261,12 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Target Specialty</label>
-            <input type="text" [(ngModel)]="form.targetSpecialty" placeholder="e.g. Cardiology" />
+            <label for="ref-specialty">Target Specialty</label>
+            <input id="ref-specialty" type="text" [(ngModel)]="form.targetSpecialty" placeholder="e.g. Cardiology" />
           </div>
           <div class="field">
-            <label>Urgency</label>
-            <select [(ngModel)]="form.urgency" title="Urgency">
+            <label for="ref-urgency">Urgency</label>
+            <select id="ref-urgency" [(ngModel)]="form.urgency" title="Urgency">
               @for (u of urgencies; track u) {
                 <option [value]="u">{{ u }}</option>
               }
@@ -275,20 +275,20 @@
         </div>
         <div class="form-row">
           <div class="field" style="flex:1">
-            <label>Referral Reason</label>
-            <textarea [(ngModel)]="form.referralReason" rows="3" placeholder="Reason for referral"></textarea>
+            <label for="ref-reason">Referral Reason</label>
+            <textarea id="ref-reason" [(ngModel)]="form.referralReason" rows="3" placeholder="Reason for referral"></textarea>
           </div>
         </div>
         <div class="form-row">
           <div class="field" style="flex:1">
-            <label>Clinical Indication</label>
-            <textarea [(ngModel)]="form.clinicalIndication" rows="2" placeholder="Optional"></textarea>
+            <label for="ref-indication">Clinical Indication</label>
+            <textarea id="ref-indication" [(ngModel)]="form.clinicalIndication" rows="2" placeholder="Optional"></textarea>
           </div>
         </div>
         <div class="form-row">
           <div class="field" style="flex:1">
-            <label>Clinical Summary</label>
-            <textarea [(ngModel)]="form.clinicalSummary" rows="2" placeholder="Optional"></textarea>
+            <label for="ref-summary">Clinical Summary</label>
+            <textarea id="ref-summary" [(ngModel)]="form.clinicalSummary" rows="2" placeholder="Optional"></textarea>
           </div>
         </div>
       </div>
@@ -303,7 +303,7 @@
 
   <!-- Cancel Referral Confirmation -->
   @if (showDeleteConfirm()) {
-    <div class="modal-backdrop" (click)="cancelDeleteAction()"></div>
+    <div class="modal-backdrop" tabindex="-1" (click)="cancelDeleteAction()" (keydown.escape)="cancelDeleteAction()"></div>
     <div class="modal">
       <div class="modal-header">
         <h2>Cancel Referral</h2>

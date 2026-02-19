@@ -250,8 +250,8 @@
 
 <!-- ═══ CREATE/EDIT SHIFT MODAL ═══ -->
 @if (showShiftModal()) {
-  <div class="modal-backdrop" (click)="closeShiftModal()">
-    <div class="modal modal-lg" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop" tabindex="-1" (click)="closeShiftModal()" (keydown.escape)="closeShiftModal()">
+    <div class="modal modal-lg" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
       <div class="modal-header">
         <h2>{{ editingShift() ? 'Edit Shift' : 'Create Shift' }}</h2>
         <button class="modal-close" (click)="closeShiftModal()"><span class="material-symbols-outlined">close</span></button>
@@ -259,8 +259,8 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label>Staff Member *</label>
-            <select [(ngModel)]="shiftForm.staffId" required>
+            <label for="shift-staffId">Staff Member *</label>
+            <select id="shift-staffId" [(ngModel)]="shiftForm.staffId" required>
               <option value="">Select staff...</option>
               @for (s of staffMembers(); track s.id) {
                 <option [value]="s.id">{{ s.name }}</option>
@@ -268,8 +268,8 @@
             </select>
           </div>
           <div class="field">
-            <label>Hospital *</label>
-            <select [(ngModel)]="shiftForm.hospitalId" required>
+            <label for="shift-hospitalId">Hospital *</label>
+            <select id="shift-hospitalId" [(ngModel)]="shiftForm.hospitalId" required>
               <option value="">Select hospital...</option>
               @for (h of hospitals(); track h.id) {
                 <option [value]="h.id">{{ h.name }}</option>
@@ -279,12 +279,12 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Shift Date *</label>
-            <input type="date" [(ngModel)]="shiftForm.shiftDate" required />
+            <label for="shift-date">Shift Date *</label>
+            <input id="shift-date" type="date" [(ngModel)]="shiftForm.shiftDate" required />
           </div>
           <div class="field">
-            <label>Shift Type *</label>
-            <select [(ngModel)]="shiftForm.shiftType" required>
+            <label for="shift-type">Shift Type *</label>
+            <select id="shift-type" [(ngModel)]="shiftForm.shiftType" required>
               @for (t of shiftTypes; track t) {
                 <option [value]="t">{{ t }}</option>
               }
@@ -293,17 +293,17 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Start Time *</label>
-            <input type="time" [(ngModel)]="shiftForm.startTime" required />
+            <label for="shift-startTime">Start Time *</label>
+            <input id="shift-startTime" type="time" [(ngModel)]="shiftForm.startTime" required />
           </div>
           <div class="field">
-            <label>End Time *</label>
-            <input type="time" [(ngModel)]="shiftForm.endTime" required />
+            <label for="shift-endTime">End Time *</label>
+            <input id="shift-endTime" type="time" [(ngModel)]="shiftForm.endTime" required />
           </div>
         </div>
         <div class="field">
-          <label>Notes</label>
-          <textarea [(ngModel)]="shiftForm.notes" rows="3" placeholder="Optional notes..."></textarea>
+          <label for="shift-notes">Notes</label>
+          <textarea id="shift-notes" [(ngModel)]="shiftForm.notes" rows="3" placeholder="Optional notes..."></textarea>
         </div>
       </div>
       <div class="modal-actions">
@@ -318,8 +318,8 @@
 
 <!-- ═══ REQUEST LEAVE MODAL ═══ -->
 @if (showLeaveModal()) {
-  <div class="modal-backdrop" (click)="closeLeaveModal()">
-    <div class="modal modal-lg" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop" tabindex="-1" (click)="closeLeaveModal()" (keydown.escape)="closeLeaveModal()">
+    <div class="modal modal-lg" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
       <div class="modal-header">
         <h2>Request Leave</h2>
         <button class="modal-close" (click)="closeLeaveModal()"><span class="material-symbols-outlined">close</span></button>
@@ -327,8 +327,8 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label>Staff Member *</label>
-            <select [(ngModel)]="leaveForm.staffId" required>
+            <label for="leave-staffId">Staff Member *</label>
+            <select id="leave-staffId" [(ngModel)]="leaveForm.staffId" required>
               <option value="">Select staff...</option>
               @for (s of staffMembers(); track s.id) {
                 <option [value]="s.id">{{ s.name }}</option>
@@ -336,8 +336,8 @@
             </select>
           </div>
           <div class="field">
-            <label>Hospital *</label>
-            <select [(ngModel)]="leaveForm.hospitalId" required>
+            <label for="leave-hospitalId">Hospital *</label>
+            <select id="leave-hospitalId" [(ngModel)]="leaveForm.hospitalId" required>
               <option value="">Select hospital...</option>
               @for (h of hospitals(); track h.id) {
                 <option [value]="h.id">{{ h.name }}</option>
@@ -347,33 +347,33 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Leave Type *</label>
-            <select [(ngModel)]="leaveForm.leaveType" required>
+            <label for="leave-type">Leave Type *</label>
+            <select id="leave-type" [(ngModel)]="leaveForm.leaveType" required>
               @for (t of leaveTypes; track t) {
                 <option [value]="t">{{ t }}</option>
               }
             </select>
           </div>
           <div class="field">
-            <label class="toggle-label">
-              <input type="checkbox" [(ngModel)]="leaveForm.requiresCoverage" />
+            <label class="toggle-label" for="leave-coverage">
+              <input id="leave-coverage" type="checkbox" [(ngModel)]="leaveForm.requiresCoverage" />
               Requires Coverage
             </label>
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Start Date *</label>
-            <input type="date" [(ngModel)]="leaveForm.startDate" required />
+            <label for="leave-startDate">Start Date *</label>
+            <input id="leave-startDate" type="date" [(ngModel)]="leaveForm.startDate" required />
           </div>
           <div class="field">
-            <label>End Date *</label>
-            <input type="date" [(ngModel)]="leaveForm.endDate" required />
+            <label for="leave-endDate">End Date *</label>
+            <input id="leave-endDate" type="date" [(ngModel)]="leaveForm.endDate" required />
           </div>
         </div>
         <div class="field">
-          <label>Reason</label>
-          <textarea [(ngModel)]="leaveForm.reason" rows="3" placeholder="Reason for leave..."></textarea>
+          <label for="leave-reason">Reason</label>
+          <textarea id="leave-reason" [(ngModel)]="leaveForm.reason" rows="3" placeholder="Reason for leave..."></textarea>
         </div>
       </div>
       <div class="modal-actions">

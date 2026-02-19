@@ -229,7 +229,7 @@
 
   <!-- Create/Edit Treatment Plan Modal -->
   @if (showModal()) {
-    <div class="modal-backdrop" (click)="closeModal()"></div>
+    <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()"></div>
     <div class="modal modal-lg">
       <div class="modal-header">
         <h2>{{ editing() ? 'Edit' : 'New' }} Treatment Plan</h2>
@@ -238,12 +238,12 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label>Patient ID</label>
-            <input type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" />
+            <label for="tp-patientId">Patient ID</label>
+            <input id="tp-patientId" type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" />
           </div>
           <div class="field">
-            <label>Hospital</label>
-            <select [(ngModel)]="form.hospitalId" title="Hospital">
+            <label for="tp-hospitalId">Hospital</label>
+            <select id="tp-hospitalId" [(ngModel)]="form.hospitalId" title="Hospital">
               <option value="">Select hospital</option>
               @for (h of hospitals(); track h.id) {
                 <option [value]="h.id">{{ h.name }}</option>
@@ -253,8 +253,8 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Author Staff</label>
-            <select [(ngModel)]="form.authorStaffId" title="Author staff">
+            <label for="tp-authorStaff">Author Staff</label>
+            <select id="tp-authorStaff" [(ngModel)]="form.authorStaffId" title="Author staff">
               <option value="">Select staff</option>
               @for (s of staffList(); track s.id) {
                 <option [value]="s.id">{{ s.name }}</option>
@@ -262,24 +262,24 @@
             </select>
           </div>
           <div class="field">
-            <label>Assignment ID</label>
-            <input type="text" [(ngModel)]="form.assignmentId" placeholder="Assignment ID" />
+            <label for="tp-assignmentId">Assignment ID</label>
+            <input id="tp-assignmentId" type="text" [(ngModel)]="form.assignmentId" placeholder="Assignment ID" />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Start Date</label>
-            <input type="date" [(ngModel)]="form.timelineStartDate" />
+            <label for="tp-startDate">Start Date</label>
+            <input id="tp-startDate" type="date" [(ngModel)]="form.timelineStartDate" />
           </div>
           <div class="field">
-            <label>Review Date</label>
-            <input type="date" [(ngModel)]="form.timelineReviewDate" />
+            <label for="tp-reviewDate">Review Date</label>
+            <input id="tp-reviewDate" type="date" [(ngModel)]="form.timelineReviewDate" />
           </div>
         </div>
         <div class="form-row">
           <div class="field full-width">
-            <label>Problem Statement</label>
-            <textarea [(ngModel)]="form.problemStatement" rows="3" placeholder="Describe the problem"></textarea>
+            <label for="tp-problem">Problem Statement</label>
+            <textarea id="tp-problem" [(ngModel)]="form.problemStatement" rows="3" placeholder="Describe the problem"></textarea>
           </div>
         </div>
       </div>

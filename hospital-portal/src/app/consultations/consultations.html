@@ -235,7 +235,7 @@
 
   <!-- Create Consultation Modal -->
   @if (showModal()) {
-    <div class="modal-backdrop" (click)="closeModal()"></div>
+    <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()"></div>
     <div class="modal modal-lg">
       <div class="modal-header">
         <h2>New Consultation</h2>
@@ -244,12 +244,12 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label>Patient ID</label>
-            <input type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" />
+            <label for="con-patientId">Patient ID</label>
+            <input id="con-patientId" type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" />
           </div>
           <div class="field">
-            <label>Hospital</label>
-            <select [(ngModel)]="form.hospitalId" title="Hospital">
+            <label for="con-hospitalId">Hospital</label>
+            <select id="con-hospitalId" [(ngModel)]="form.hospitalId" title="Hospital">
               <option value="">Select hospital</option>
               @for (h of hospitals(); track h.id) {
                 <option [value]="h.id">{{ h.name }}</option>
@@ -259,16 +259,16 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Type</label>
-            <select [(ngModel)]="form.consultationType" title="Consultation type">
+            <label for="con-type">Type</label>
+            <select id="con-type" [(ngModel)]="form.consultationType" title="Consultation type">
               @for (t of consultationTypes; track t) {
                 <option [value]="t">{{ t }}</option>
               }
             </select>
           </div>
           <div class="field">
-            <label>Urgency</label>
-            <select [(ngModel)]="form.urgency" title="Urgency">
+            <label for="con-urgency">Urgency</label>
+            <select id="con-urgency" [(ngModel)]="form.urgency" title="Urgency">
               @for (u of urgencies; track u) {
                 <option [value]="u">{{ u }}</option>
               }
@@ -277,20 +277,20 @@
         </div>
         <div class="form-row">
           <div class="field full-width">
-            <label>Specialty Requested</label>
-            <input type="text" [(ngModel)]="form.specialtyRequested" placeholder="e.g. Cardiology" />
+            <label for="con-specialty">Specialty Requested</label>
+            <input id="con-specialty" type="text" [(ngModel)]="form.specialtyRequested" placeholder="e.g. Cardiology" />
           </div>
         </div>
         <div class="form-row">
           <div class="field full-width">
-            <label>Reason for Consult</label>
-            <textarea [(ngModel)]="form.reasonForConsult" rows="3" placeholder="Reason for consultation"></textarea>
+            <label for="con-reason">Reason for Consult</label>
+            <textarea id="con-reason" [(ngModel)]="form.reasonForConsult" rows="3" placeholder="Reason for consultation"></textarea>
           </div>
         </div>
         <div class="form-row">
           <div class="field full-width">
-            <label>Clinical Question</label>
-            <textarea [(ngModel)]="form.clinicalQuestion" rows="2" placeholder="Optional"></textarea>
+            <label for="con-clinicalQ">Clinical Question</label>
+            <textarea id="con-clinicalQ" [(ngModel)]="form.clinicalQuestion" rows="2" placeholder="Optional"></textarea>
           </div>
         </div>
       </div>
@@ -305,7 +305,7 @@
 
   <!-- Cancel Consultation Confirmation -->
   @if (showDeleteConfirm()) {
-    <div class="modal-backdrop" (click)="cancelDeleteAction()"></div>
+    <div class="modal-backdrop" tabindex="-1" (click)="cancelDeleteAction()" (keydown.escape)="cancelDeleteAction()"></div>
     <div class="modal">
       <div class="modal-header">
         <h2>Cancel Consultation</h2>

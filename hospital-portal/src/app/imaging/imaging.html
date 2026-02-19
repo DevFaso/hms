@@ -235,7 +235,7 @@
 
   <!-- Create/Edit Imaging Order Modal -->
   @if (showModal()) {
-    <div class="modal-backdrop" (click)="closeModal()"></div>
+    <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()"></div>
     <div class="modal modal-lg">
       <div class="modal-header">
         <h2>{{ editing() ? 'Edit' : 'New' }} Imaging Order</h2>
@@ -244,12 +244,12 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label>Patient ID</label>
-            <input type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" />
+            <label for="img-patientId">Patient ID</label>
+            <input id="img-patientId" type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" />
           </div>
           <div class="field">
-            <label>Hospital</label>
-            <select [(ngModel)]="form.hospitalId" title="Hospital">
+            <label for="img-hospitalId">Hospital</label>
+            <select id="img-hospitalId" [(ngModel)]="form.hospitalId" title="Hospital">
               <option value="">Select hospital</option>
               @for (h of hospitals(); track h.id) {
                 <option [value]="h.id">{{ h.name }}</option>
@@ -259,16 +259,16 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Modality</label>
-            <select [(ngModel)]="form.modality" title="Modality">
+            <label for="img-modality">Modality</label>
+            <select id="img-modality" [(ngModel)]="form.modality" title="Modality">
               @for (m of modalities; track m) {
                 <option [value]="m">{{ m }}</option>
               }
             </select>
           </div>
           <div class="field">
-            <label>Priority</label>
-            <select [(ngModel)]="form.priority" title="Priority">
+            <label for="img-priority">Priority</label>
+            <select id="img-priority" [(ngModel)]="form.priority" title="Priority">
               @for (p of priorities; track p) {
                 <option [value]="p">{{ p }}</option>
               }
@@ -277,22 +277,22 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Study Type</label>
-            <input type="text" [(ngModel)]="form.studyType" placeholder="e.g. Chest X-Ray" />
+            <label for="img-studyType">Study Type</label>
+            <input id="img-studyType" type="text" [(ngModel)]="form.studyType" placeholder="e.g. Chest X-Ray" />
           </div>
           <div class="field">
-            <label>Body Region</label>
-            <input type="text" [(ngModel)]="form.bodyRegion" placeholder="e.g. Chest" />
+            <label for="img-bodyRegion">Body Region</label>
+            <input id="img-bodyRegion" type="text" [(ngModel)]="form.bodyRegion" placeholder="e.g. Chest" />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Laterality</label>
-            <input type="text" [(ngModel)]="form.laterality" placeholder="e.g. LEFT, RIGHT, BILATERAL" />
+            <label for="img-laterality">Laterality</label>
+            <input id="img-laterality" type="text" [(ngModel)]="form.laterality" placeholder="e.g. LEFT, RIGHT, BILATERAL" />
           </div>
           <div class="field full-width">
-            <label>Clinical Question</label>
-            <input type="text" [(ngModel)]="form.clinicalQuestion" placeholder="Optional" />
+            <label for="img-clinicalQ">Clinical Question</label>
+            <input id="img-clinicalQ" type="text" [(ngModel)]="form.clinicalQuestion" placeholder="Optional" />
           </div>
         </div>
       </div>
@@ -307,7 +307,7 @@
 
   <!-- Cancel Imaging Order Confirmation -->
   @if (showDeleteConfirm()) {
-    <div class="modal-backdrop" (click)="cancelDeleteAction()"></div>
+    <div class="modal-backdrop" tabindex="-1" (click)="cancelDeleteAction()" (keydown.escape)="cancelDeleteAction()"></div>
     <div class="modal">
       <div class="modal-header">
         <h2>Cancel Order</h2>

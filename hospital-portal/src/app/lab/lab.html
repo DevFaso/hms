@@ -205,8 +205,8 @@
 
 <!-- ═══ CREATE / EDIT LAB ORDER MODAL ═══ -->
 @if (showModal()) {
-  <div class="modal-backdrop" (click)="closeModal()">
-    <div class="modal modal-lg" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
+    <div class="modal modal-lg" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
       <div class="modal-header">
         <h2>{{ editing() ? 'Edit Lab Order' : 'New Lab Order' }}</h2>
         <button class="modal-close" (click)="closeModal()"><span class="material-symbols-outlined">close</span></button>
@@ -214,12 +214,12 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label>Patient ID *</label>
-            <input type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" required />
+            <label for="lab-patientId">Patient ID *</label>
+            <input id="lab-patientId" type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" required />
           </div>
           <div class="field">
-            <label>Hospital *</label>
-            <select [(ngModel)]="form.hospitalId" required>
+            <label for="lab-hospitalId">Hospital *</label>
+            <select id="lab-hospitalId" [(ngModel)]="form.hospitalId" required>
               <option value="">Select hospital...</option>
               @for (h of hospitals(); track h.id) {
                 <option [value]="h.id">{{ h.name }}</option>
@@ -229,18 +229,18 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Test Name *</label>
-            <input type="text" [(ngModel)]="form.testName" placeholder="e.g. Complete Blood Count" required />
+            <label for="lab-testName">Test Name *</label>
+            <input id="lab-testName" type="text" [(ngModel)]="form.testName" placeholder="e.g. Complete Blood Count" required />
           </div>
           <div class="field">
-            <label>Test Code</label>
-            <input type="text" [(ngModel)]="form.testCode" placeholder="e.g. CBC" />
+            <label for="lab-testCode">Test Code</label>
+            <input id="lab-testCode" type="text" [(ngModel)]="form.testCode" placeholder="e.g. CBC" />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label>Priority</label>
-            <select [(ngModel)]="form.priority">
+            <label for="lab-priority">Priority</label>
+            <select id="lab-priority" [(ngModel)]="form.priority">
               <option value="">Select priority...</option>
               @for (p of priorities; track p) {
                 <option [value]="p">{{ p }}</option>
@@ -248,21 +248,21 @@
             </select>
           </div>
           <div class="field">
-            <label>Encounter ID</label>
-            <input type="text" [(ngModel)]="form.encounterId" placeholder="Optional" />
+            <label for="lab-encounterId">Encounter ID</label>
+            <input id="lab-encounterId" type="text" [(ngModel)]="form.encounterId" placeholder="Optional" />
           </div>
         </div>
         <div class="field">
-          <label>Clinical Indication *</label>
-          <textarea [(ngModel)]="form.clinicalIndication" rows="2" placeholder="Clinical indication..." required></textarea>
+          <label for="lab-clinicalIndication">Clinical Indication *</label>
+          <textarea id="lab-clinicalIndication" [(ngModel)]="form.clinicalIndication" rows="2" placeholder="Clinical indication..." required></textarea>
         </div>
         <div class="field">
-          <label>Medical Necessity Note *</label>
-          <textarea [(ngModel)]="form.medicalNecessityNote" rows="2" placeholder="Medical necessity..." required></textarea>
+          <label for="lab-medNecessity">Medical Necessity Note *</label>
+          <textarea id="lab-medNecessity" [(ngModel)]="form.medicalNecessityNote" rows="2" placeholder="Medical necessity..." required></textarea>
         </div>
         <div class="field">
-          <label>Notes</label>
-          <textarea [(ngModel)]="form.notes" rows="2" placeholder="Additional notes..."></textarea>
+          <label for="lab-notes">Notes</label>
+          <textarea id="lab-notes" [(ngModel)]="form.notes" rows="2" placeholder="Additional notes..."></textarea>
         </div>
       </div>
       <div class="modal-actions">
@@ -277,8 +277,8 @@
 
 <!-- ═══ DELETE CONFIRM ═══ -->
 @if (showDeleteConfirm()) {
-  <div class="modal-backdrop" (click)="cancelDelete()">
-    <div class="modal" (click)="$event.stopPropagation()">
+  <div class="modal-backdrop" tabindex="-1" (click)="cancelDelete()" (keydown.escape)="cancelDelete()">
+    <div class="modal" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
       <div class="modal-header"><h2>Delete Lab Order</h2><button class="modal-close" (click)="cancelDelete()"><span class="material-symbols-outlined">close</span></button></div>
       <div class="modal-body">
         <p class="delete-warning">Are you sure you want to delete lab order <strong>{{ deletingOrder()?.labOrderCode }}</strong>? This action cannot be undone.</p>
