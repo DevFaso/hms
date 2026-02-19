@@ -229,7 +229,12 @@
 
   <!-- Create/Edit Treatment Plan Modal -->
   @if (showModal()) {
-    <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()"></div>
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+    ></div>
     <div class="modal modal-lg">
       <div class="modal-header">
         <h2>{{ editing() ? 'Edit' : 'New' }} Treatment Plan</h2>
@@ -239,7 +244,12 @@
         <div class="form-row">
           <div class="field">
             <label for="tp-patientId">Patient ID</label>
-            <input id="tp-patientId" type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" />
+            <input
+              id="tp-patientId"
+              type="text"
+              [(ngModel)]="form.patientId"
+              placeholder="Patient ID"
+            />
           </div>
           <div class="field">
             <label for="tp-hospitalId">Hospital</label>
@@ -263,7 +273,12 @@
           </div>
           <div class="field">
             <label for="tp-assignmentId">Assignment ID</label>
-            <input id="tp-assignmentId" type="text" [(ngModel)]="form.assignmentId" placeholder="Assignment ID" />
+            <input
+              id="tp-assignmentId"
+              type="text"
+              [(ngModel)]="form.assignmentId"
+              placeholder="Assignment ID"
+            />
           </div>
         </div>
         <div class="form-row">
@@ -279,14 +294,19 @@
         <div class="form-row">
           <div class="field full-width">
             <label for="tp-problem">Problem Statement</label>
-            <textarea id="tp-problem" [(ngModel)]="form.problemStatement" rows="3" placeholder="Describe the problem"></textarea>
+            <textarea
+              id="tp-problem"
+              [(ngModel)]="form.problemStatement"
+              rows="3"
+              placeholder="Describe the problem"
+            ></textarea>
           </div>
         </div>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeModal()">Cancel</button>
         <button class="btn-primary" (click)="submitForm()" [disabled]="saving()">
-          {{ saving() ? 'Saving...' : (editing() ? 'Update Plan' : 'Create Plan') }}
+          {{ saving() ? 'Saving...' : editing() ? 'Update Plan' : 'Create Plan' }}
         </button>
       </div>
     </div>

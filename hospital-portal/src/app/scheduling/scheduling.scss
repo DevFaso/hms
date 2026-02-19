@@ -707,8 +707,13 @@
   cursor: pointer;
   color: #64748b;
   transition: all 0.15s;
-  .material-symbols-outlined { font-size: 13px; }
-  &:hover { background: #e2e8f0; color: #1e293b; }
+  .material-symbols-outlined {
+    font-size: 13px;
+  }
+  &:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+  }
 }
 
 .shift-actions-col {
@@ -738,12 +743,20 @@
   max-width: 520px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
   animation: modalIn 0.2s ease-out;
-  &.modal-lg { max-width: 680px; }
+  &.modal-lg {
+    max-width: 680px;
+  }
 }
 
 @keyframes modalIn {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .modal-header {
@@ -752,7 +765,11 @@
   justify-content: space-between;
   padding: 20px 24px;
   border-bottom: 1px solid #f1f5f9;
-  h2 { margin: 0; font-size: 1.1rem; font-weight: 700; }
+  h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
 }
 
 .modal-close {
@@ -765,7 +782,9 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  .material-symbols-outlined { font-size: 18px; }
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
 }
 
 .modal-body {
@@ -787,8 +806,14 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  label { font-size: 0.82rem; font-weight: 500; color: #64748b; }
-  input, select, textarea {
+  label {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: #64748b;
+  }
+  input,
+  select,
+  textarea {
     padding: 10px 14px;
     border: 1px solid #d1d5db;
     border-radius: 8px;
@@ -796,7 +821,10 @@
     outline: none;
     transition: border-color 0.2s;
     font-family: inherit;
-    &:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+    &:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
   }
 }
 

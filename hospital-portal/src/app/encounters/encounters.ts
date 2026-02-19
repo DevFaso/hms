@@ -1,7 +1,12 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { EncounterService, EncounterRequest, EncounterResponse, EncounterType } from '../services/encounter.service';
+import {
+  EncounterService,
+  EncounterRequest,
+  EncounterResponse,
+  EncounterType,
+} from '../services/encounter.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { StaffService } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
@@ -38,7 +43,13 @@ export class EncountersComponent implements OnInit {
   saving = signal(false);
   editingId = '';
   form: EncounterRequest = this.emptyForm();
-  encounterTypes: EncounterType[] = ['OUTPATIENT', 'INPATIENT', 'EMERGENCY', 'TELEMEDICINE', 'HOME_VISIT'];
+  encounterTypes: EncounterType[] = [
+    'OUTPATIENT',
+    'INPATIENT',
+    'EMERGENCY',
+    'TELEMEDICINE',
+    'HOME_VISIT',
+  ];
 
   // Delete
   showDeleteConfirm = signal(false);
@@ -46,47 +57,93 @@ export class EncountersComponent implements OnInit {
   deleting = signal(false);
 
   emptyForm(): EncounterRequest {
-    return { patientId: '', staffId: '', hospitalId: '', encounterType: 'OUTPATIENT', encounterDate: '' };
+    return {
+      patientId: '',
+      staffId: '',
+      hospitalId: '',
+      encounterType: 'OUTPATIENT',
+      encounterDate: '',
+    };
   }
 
   ngOnInit(): void {
     this.loadEncounters();
     this.hospitalService.list().subscribe({ next: (h) => this.hospitals.set(h) });
     this.staffService.list().subscribe({
-      next: (list) => this.staffMembers.set(list.map((s) => ({ id: s.id, name: s.name || s.email }))),
+      next: (list) =>
+        this.staffMembers.set(list.map((s) => ({ id: s.id, name: s.name || s.email }))),
     });
   }
 
   // ── CRUD ──
-  openCreate(): void { this.form = this.emptyForm(); this.editing.set(false); this.editingId = ''; this.showModal.set(true); }
+  openCreate(): void {
+    this.form = this.emptyForm();
+    this.editing.set(false);
+    this.editingId = '';
+    this.showModal.set(true);
+  }
 
   openEdit(enc: EncounterResponse): void {
     this.editing.set(true);
     this.editingId = enc.id;
-    this.form = { patientId: enc.patientId, staffId: enc.staffId, hospitalId: enc.hospitalId, departmentId: enc.departmentId || undefined, encounterType: enc.encounterType, encounterDate: enc.encounterDate?.split('T')[0] || '', notes: enc.notes || undefined };
+    this.form = {
+      patientId: enc.patientId,
+      staffId: enc.staffId,
+      hospitalId: enc.hospitalId,
+      departmentId: enc.departmentId || undefined,
+      encounterType: enc.encounterType,
+      encounterDate: enc.encounterDate?.split('T')[0] || '',
+      notes: enc.notes || undefined,
+    };
     this.showModal.set(true);
   }
 
-  closeModal(): void { this.showModal.set(false); }
+  closeModal(): void {
+    this.showModal.set(false);
+  }
 
   submitForm(): void {
     this.saving.set(true);
-    const op = this.editing() ? this.encounterService.update(this.editingId, this.form) : this.encounterService.create(this.form);
+    const op = this.editing()
+      ? this.encounterService.update(this.editingId, this.form)
+      : this.encounterService.create(this.form);
     op.subscribe({
-      next: () => { this.toast.success(this.editing() ? 'Encounter updated' : 'Encounter created'); this.closeModal(); this.loadEncounters(); this.saving.set(false); },
-      error: () => { this.toast.error('Failed to save encounter'); this.saving.set(false); },
+      next: () => {
+        this.toast.success(this.editing() ? 'Encounter updated' : 'Encounter created');
+        this.closeModal();
+        this.loadEncounters();
+        this.saving.set(false);
+      },
+      error: () => {
+        this.toast.error('Failed to save encounter');
+        this.saving.set(false);
+      },
     });
   }
 
-  confirmDelete(enc: EncounterResponse): void { this.deletingEnc.set(enc); this.showDeleteConfirm.set(true); }
-  cancelDelete(): void { this.showDeleteConfirm.set(false); this.deletingEnc.set(null); }
+  confirmDelete(enc: EncounterResponse): void {
+    this.deletingEnc.set(enc);
+    this.showDeleteConfirm.set(true);
+  }
+  cancelDelete(): void {
+    this.showDeleteConfirm.set(false);
+    this.deletingEnc.set(null);
+  }
   executeDelete(): void {
     const enc = this.deletingEnc();
     if (!enc) return;
     this.deleting.set(true);
     this.encounterService.delete(enc.id).subscribe({
-      next: () => { this.toast.success('Encounter deleted'); this.cancelDelete(); this.loadEncounters(); this.deleting.set(false); },
-      error: () => { this.toast.error('Failed to delete encounter'); this.deleting.set(false); },
+      next: () => {
+        this.toast.success('Encounter deleted');
+        this.cancelDelete();
+        this.loadEncounters();
+        this.deleting.set(false);
+      },
+      error: () => {
+        this.toast.error('Failed to delete encounter');
+        this.deleting.set(false);
+      },
     });
   }
 

@@ -99,12 +99,7 @@
             <div class="form-row">
               <div class="field">
                 <label for="dHospital">Hospital *</label>
-                <select
-                  id="dHospital"
-                  [(ngModel)]="form.hospitalId"
-                  name="hospitalId"
-                  required
-                >
+                <select id="dHospital" [(ngModel)]="form.hospitalId" name="hospitalId" required>
                   <option value="">Select hospital</option>
                   @for (h of hospitals(); track h.id) {
                     <option [value]="h.id">{{ h.name }}</option>

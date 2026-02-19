@@ -54,7 +54,14 @@ export class SchedulingComponent implements OnInit {
   shiftTypes: StaffShiftType[] = ['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT', 'FLEX'];
 
   emptyShiftForm(): StaffShiftRequest {
-    return { staffId: '', hospitalId: '', shiftDate: '', startTime: '', endTime: '', shiftType: 'MORNING' };
+    return {
+      staffId: '',
+      hospitalId: '',
+      shiftDate: '',
+      startTime: '',
+      endTime: '',
+      shiftType: 'MORNING',
+    };
   }
 
   // ── Leave Modal ──
@@ -65,7 +72,14 @@ export class SchedulingComponent implements OnInit {
   leaveTypes: StaffLeaveType[] = ['VACATION', 'SICK', 'EMERGENCY', 'TRAINING', 'UNPAID', 'OTHER'];
 
   emptyLeaveForm(): StaffLeaveRequest {
-    return { staffId: '', hospitalId: '', startDate: '', endDate: '', leaveType: 'VACATION', requiresCoverage: false };
+    return {
+      staffId: '',
+      hospitalId: '',
+      startDate: '',
+      endDate: '',
+      leaveType: 'VACATION',
+      requiresCoverage: false,
+    };
   }
 
   ngOnInit(): void {
@@ -73,7 +87,8 @@ export class SchedulingComponent implements OnInit {
     this.loadLeaves();
     this.hospitalService.list().subscribe({ next: (h) => this.hospitals.set(h) });
     this.staffService.list().subscribe({
-      next: (list) => this.staffMembers.set(list.map((s) => ({ id: s.id, name: s.name || s.email }))),
+      next: (list) =>
+        this.staffMembers.set(list.map((s) => ({ id: s.id, name: s.name || s.email }))),
     });
   }
 
@@ -88,11 +103,22 @@ export class SchedulingComponent implements OnInit {
   openEditShift(s: StaffShiftResponse): void {
     this.editingShift.set(true);
     this.editingShiftId = s.id;
-    this.shiftForm = { staffId: s.staffId, hospitalId: s.hospitalId, departmentId: s.departmentId, shiftDate: s.shiftDate, startTime: s.startTime, endTime: s.endTime, shiftType: s.shiftType, notes: s.notes };
+    this.shiftForm = {
+      staffId: s.staffId,
+      hospitalId: s.hospitalId,
+      departmentId: s.departmentId,
+      shiftDate: s.shiftDate,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      shiftType: s.shiftType,
+      notes: s.notes,
+    };
     this.showShiftModal.set(true);
   }
 
-  closeShiftModal(): void { this.showShiftModal.set(false); }
+  closeShiftModal(): void {
+    this.showShiftModal.set(false);
+  }
 
   submitShift(): void {
     this.savingShift.set(true);
@@ -100,8 +126,16 @@ export class SchedulingComponent implements OnInit {
       ? this.schedulingService.updateShift(this.editingShiftId, this.shiftForm)
       : this.schedulingService.createShift(this.shiftForm);
     op.subscribe({
-      next: () => { this.toast.success(this.editingShift() ? 'Shift updated' : 'Shift created'); this.closeShiftModal(); this.loadShifts(); this.savingShift.set(false); },
-      error: () => { this.toast.error('Failed to save shift'); this.savingShift.set(false); },
+      next: () => {
+        this.toast.success(this.editingShift() ? 'Shift updated' : 'Shift created');
+        this.closeShiftModal();
+        this.loadShifts();
+        this.savingShift.set(false);
+      },
+      error: () => {
+        this.toast.error('Failed to save shift');
+        this.savingShift.set(false);
+      },
     });
   }
 
@@ -111,13 +145,23 @@ export class SchedulingComponent implements OnInit {
     this.showLeaveModal.set(true);
   }
 
-  closeLeaveModal(): void { this.showLeaveModal.set(false); }
+  closeLeaveModal(): void {
+    this.showLeaveModal.set(false);
+  }
 
   submitLeave(): void {
     this.savingLeave.set(true);
     this.schedulingService.requestLeave(this.leaveForm).subscribe({
-      next: () => { this.toast.success('Leave request submitted'); this.closeLeaveModal(); this.loadLeaves(); this.savingLeave.set(false); },
-      error: () => { this.toast.error('Failed to submit leave request'); this.savingLeave.set(false); },
+      next: () => {
+        this.toast.success('Leave request submitted');
+        this.closeLeaveModal();
+        this.loadLeaves();
+        this.savingLeave.set(false);
+      },
+      error: () => {
+        this.toast.error('Failed to submit leave request');
+        this.savingLeave.set(false);
+      },
     });
   }
 

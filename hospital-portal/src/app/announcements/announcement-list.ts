@@ -56,9 +56,7 @@ export class AnnouncementListComponent implements OnInit {
       this.filtered.set(this.announcements());
       return;
     }
-    this.filtered.set(
-      this.announcements().filter((a) => a.text.toLowerCase().includes(term)),
-    );
+    this.filtered.set(this.announcements().filter((a) => a.text.toLowerCase().includes(term)));
   }
 
   // ---------- Create ----------

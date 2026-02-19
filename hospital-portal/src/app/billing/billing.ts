@@ -40,7 +40,15 @@ export class BillingComponent implements OnInit {
   deletingInv = signal<BillingInvoiceResponse | null>(null);
   deleting = signal(false);
 
-  paymentStatuses: PaymentStatus[] = ['DRAFT', 'PENDING', 'PAID', 'PARTIAL', 'OVERDUE', 'CANCELLED', 'REFUNDED'];
+  paymentStatuses: PaymentStatus[] = [
+    'DRAFT',
+    'PENDING',
+    'PAID',
+    'PARTIAL',
+    'OVERDUE',
+    'CANCELLED',
+    'REFUNDED',
+  ];
 
   ngOnInit(): void {
     this.loadInvoices();

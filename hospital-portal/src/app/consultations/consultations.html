@@ -130,11 +130,19 @@
               </td>
               <td>
                 <div class="action-group">
-                  <button class="action-link" (click)="viewDetail(c)" title="View consultation details">
+                  <button
+                    class="action-link"
+                    (click)="viewDetail(c)"
+                    title="View consultation details"
+                  >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
                   @if (!['COMPLETED', 'CANCELLED'].includes(c.status)) {
-                    <button class="action-link delete" (click)="confirmCancel(c)" title="Cancel consultation">
+                    <button
+                      class="action-link delete"
+                      (click)="confirmCancel(c)"
+                      title="Cancel consultation"
+                    >
                       <span class="material-symbols-outlined">cancel</span>
                     </button>
                   }
@@ -235,7 +243,12 @@
 
   <!-- Create Consultation Modal -->
   @if (showModal()) {
-    <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()"></div>
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+    ></div>
     <div class="modal modal-lg">
       <div class="modal-header">
         <h2>New Consultation</h2>
@@ -245,7 +258,12 @@
         <div class="form-row">
           <div class="field">
             <label for="con-patientId">Patient ID</label>
-            <input id="con-patientId" type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" />
+            <input
+              id="con-patientId"
+              type="text"
+              [(ngModel)]="form.patientId"
+              placeholder="Patient ID"
+            />
           </div>
           <div class="field">
             <label for="con-hospitalId">Hospital</label>
@@ -278,19 +296,34 @@
         <div class="form-row">
           <div class="field full-width">
             <label for="con-specialty">Specialty Requested</label>
-            <input id="con-specialty" type="text" [(ngModel)]="form.specialtyRequested" placeholder="e.g. Cardiology" />
+            <input
+              id="con-specialty"
+              type="text"
+              [(ngModel)]="form.specialtyRequested"
+              placeholder="e.g. Cardiology"
+            />
           </div>
         </div>
         <div class="form-row">
           <div class="field full-width">
             <label for="con-reason">Reason for Consult</label>
-            <textarea id="con-reason" [(ngModel)]="form.reasonForConsult" rows="3" placeholder="Reason for consultation"></textarea>
+            <textarea
+              id="con-reason"
+              [(ngModel)]="form.reasonForConsult"
+              rows="3"
+              placeholder="Reason for consultation"
+            ></textarea>
           </div>
         </div>
         <div class="form-row">
           <div class="field full-width">
             <label for="con-clinicalQ">Clinical Question</label>
-            <textarea id="con-clinicalQ" [(ngModel)]="form.clinicalQuestion" rows="2" placeholder="Optional"></textarea>
+            <textarea
+              id="con-clinicalQ"
+              [(ngModel)]="form.clinicalQuestion"
+              rows="2"
+              placeholder="Optional"
+            ></textarea>
           </div>
         </div>
       </div>
@@ -305,7 +338,12 @@
 
   <!-- Cancel Consultation Confirmation -->
   @if (showDeleteConfirm()) {
-    <div class="modal-backdrop" tabindex="-1" (click)="cancelDeleteAction()" (keydown.escape)="cancelDeleteAction()"></div>
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="cancelDeleteAction()"
+      (keydown.escape)="cancelDeleteAction()"
+    ></div>
     <div class="modal">
       <div class="modal-header">
         <h2>Cancel Consultation</h2>
@@ -314,7 +352,11 @@
       <div class="modal-body">
         <div class="delete-warning">
           <span class="material-symbols-outlined">warning</span>
-          <p>Cancel the consultation for <strong>{{ deletingItem()?.patientName }}</strong> — <strong>{{ deletingItem()?.specialtyRequested }}</strong>?</p>
+          <p>
+            Cancel the consultation for <strong>{{ deletingItem()?.patientName }}</strong> —
+            <strong>{{ deletingItem()?.specialtyRequested }}</strong
+            >?
+          </p>
         </div>
       </div>
       <div class="modal-actions">

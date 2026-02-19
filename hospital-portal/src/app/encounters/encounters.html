@@ -124,7 +124,11 @@
                   <button class="btn-icon" title="Edit encounter" (click)="openEdit(enc)">
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="btn-icon danger" title="Delete encounter" (click)="confirmDelete(enc)">
+                  <button
+                    class="btn-icon danger"
+                    title="Delete encounter"
+                    (click)="confirmDelete(enc)"
+                  >
                     <span class="material-symbols-outlined">delete</span>
                   </button>
                 </div>
@@ -234,16 +238,29 @@
 <!-- ═══ CREATE/EDIT ENCOUNTER MODAL ═══ -->
 @if (showModal()) {
   <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
-    <div class="modal modal-lg" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
       <div class="modal-header">
         <h2>{{ editing() ? 'Edit Encounter' : 'New Encounter' }}</h2>
-        <button class="modal-close" (click)="closeModal()"><span class="material-symbols-outlined">close</span></button>
+        <button class="modal-close" (click)="closeModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
       </div>
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
             <label for="enc-patientId">Patient ID *</label>
-            <input id="enc-patientId" type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" required />
+            <input
+              id="enc-patientId"
+              type="text"
+              [(ngModel)]="form.patientId"
+              placeholder="Patient ID"
+              required
+            />
           </div>
           <div class="field">
             <label for="enc-staffId">Staff *</label>
@@ -281,18 +298,34 @@
           </div>
           <div class="field">
             <label for="enc-deptId">Department ID</label>
-            <input id="enc-deptId" type="text" [(ngModel)]="form.departmentId" placeholder="Optional" />
+            <input
+              id="enc-deptId"
+              type="text"
+              [(ngModel)]="form.departmentId"
+              placeholder="Optional"
+            />
           </div>
         </div>
         <div class="field">
           <label for="enc-notes">Notes</label>
-          <textarea id="enc-notes" [(ngModel)]="form.notes" rows="3" placeholder="Clinical notes..."></textarea>
+          <textarea
+            id="enc-notes"
+            [(ngModel)]="form.notes"
+            rows="3"
+            placeholder="Clinical notes..."
+          ></textarea>
         </div>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeModal()">Cancel</button>
-        <button class="btn-primary" (click)="submitForm()" [disabled]="saving() || !form.patientId || !form.staffId || !form.hospitalId || !form.encounterDate">
-          {{ saving() ? 'Saving...' : (editing() ? 'Update' : 'Create') }}
+        <button
+          class="btn-primary"
+          (click)="submitForm()"
+          [disabled]="
+            saving() || !form.patientId || !form.staffId || !form.hospitalId || !form.encounterDate
+          "
+        >
+          {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Create' }}
         </button>
       </div>
     </div>
@@ -301,15 +334,36 @@
 
 <!-- ═══ DELETE CONFIRM ═══ -->
 @if (showDeleteConfirm()) {
-  <div class="modal-backdrop" tabindex="-1" (click)="cancelDelete()" (keydown.escape)="cancelDelete()">
-    <div class="modal" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
-      <div class="modal-header"><h2>Delete Encounter</h2><button class="modal-close" (click)="cancelDelete()"><span class="material-symbols-outlined">close</span></button></div>
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="cancelDelete()"
+    (keydown.escape)="cancelDelete()"
+  >
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>Delete Encounter</h2>
+        <button class="modal-close" (click)="cancelDelete()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
       <div class="modal-body">
-        <p class="delete-warning">Are you sure you want to delete the encounter for <strong>{{ deletingEnc()?.patientName }}</strong>? This action cannot be undone.</p>
+        <p class="delete-warning">
+          Are you sure you want to delete the encounter for
+          <strong>{{ deletingEnc()?.patientName }}</strong
+          >? This action cannot be undone.
+        </p>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
-        <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">{{ deleting() ? 'Deleting...' : 'Delete' }}</button>
+        <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
+          {{ deleting() ? 'Deleting...' : 'Delete' }}
+        </button>
       </div>
     </div>
   </div>

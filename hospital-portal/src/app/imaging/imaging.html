@@ -129,14 +129,22 @@
               </td>
               <td>
                 <div class="action-group">
-                  <button class="action-link" (click)="viewDetail(o)" title="View imaging order details">
+                  <button
+                    class="action-link"
+                    (click)="viewDetail(o)"
+                    title="View imaging order details"
+                  >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
                   @if (!['COMPLETED', 'FINAL', 'CANCELLED'].includes(o.status)) {
                     <button class="action-link" (click)="openEdit(o)" title="Edit order">
                       <span class="material-symbols-outlined">edit</span>
                     </button>
-                    <button class="action-link delete" (click)="confirmCancel(o)" title="Cancel order">
+                    <button
+                      class="action-link delete"
+                      (click)="confirmCancel(o)"
+                      title="Cancel order"
+                    >
                       <span class="material-symbols-outlined">cancel</span>
                     </button>
                   }
@@ -235,7 +243,12 @@
 
   <!-- Create/Edit Imaging Order Modal -->
   @if (showModal()) {
-    <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()"></div>
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+    ></div>
     <div class="modal modal-lg">
       <div class="modal-header">
         <h2>{{ editing() ? 'Edit' : 'New' }} Imaging Order</h2>
@@ -245,7 +258,12 @@
         <div class="form-row">
           <div class="field">
             <label for="img-patientId">Patient ID</label>
-            <input id="img-patientId" type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" />
+            <input
+              id="img-patientId"
+              type="text"
+              [(ngModel)]="form.patientId"
+              placeholder="Patient ID"
+            />
           </div>
           <div class="field">
             <label for="img-hospitalId">Hospital</label>
@@ -278,28 +296,48 @@
         <div class="form-row">
           <div class="field">
             <label for="img-studyType">Study Type</label>
-            <input id="img-studyType" type="text" [(ngModel)]="form.studyType" placeholder="e.g. Chest X-Ray" />
+            <input
+              id="img-studyType"
+              type="text"
+              [(ngModel)]="form.studyType"
+              placeholder="e.g. Chest X-Ray"
+            />
           </div>
           <div class="field">
             <label for="img-bodyRegion">Body Region</label>
-            <input id="img-bodyRegion" type="text" [(ngModel)]="form.bodyRegion" placeholder="e.g. Chest" />
+            <input
+              id="img-bodyRegion"
+              type="text"
+              [(ngModel)]="form.bodyRegion"
+              placeholder="e.g. Chest"
+            />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
             <label for="img-laterality">Laterality</label>
-            <input id="img-laterality" type="text" [(ngModel)]="form.laterality" placeholder="e.g. LEFT, RIGHT, BILATERAL" />
+            <input
+              id="img-laterality"
+              type="text"
+              [(ngModel)]="form.laterality"
+              placeholder="e.g. LEFT, RIGHT, BILATERAL"
+            />
           </div>
           <div class="field full-width">
             <label for="img-clinicalQ">Clinical Question</label>
-            <input id="img-clinicalQ" type="text" [(ngModel)]="form.clinicalQuestion" placeholder="Optional" />
+            <input
+              id="img-clinicalQ"
+              type="text"
+              [(ngModel)]="form.clinicalQuestion"
+              placeholder="Optional"
+            />
           </div>
         </div>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeModal()">Cancel</button>
         <button class="btn-primary" (click)="submitForm()" [disabled]="saving()">
-          {{ saving() ? 'Saving...' : (editing() ? 'Update Order' : 'Create Order') }}
+          {{ saving() ? 'Saving...' : editing() ? 'Update Order' : 'Create Order' }}
         </button>
       </div>
     </div>
@@ -307,7 +345,12 @@
 
   <!-- Cancel Imaging Order Confirmation -->
   @if (showDeleteConfirm()) {
-    <div class="modal-backdrop" tabindex="-1" (click)="cancelDeleteAction()" (keydown.escape)="cancelDeleteAction()"></div>
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="cancelDeleteAction()"
+      (keydown.escape)="cancelDeleteAction()"
+    ></div>
     <div class="modal">
       <div class="modal-header">
         <h2>Cancel Order</h2>
@@ -316,7 +359,11 @@
       <div class="modal-body">
         <div class="delete-warning">
           <span class="material-symbols-outlined">warning</span>
-          <p>Cancel the <strong>{{ deletingItem()?.modality }}</strong> order for <strong>{{ deletingItem()?.patientDisplayName }}</strong>?</p>
+          <p>
+            Cancel the <strong>{{ deletingItem()?.modality }}</strong> order for
+            <strong>{{ deletingItem()?.patientDisplayName }}</strong
+            >?
+          </p>
         </div>
       </div>
       <div class="modal-actions">

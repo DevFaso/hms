@@ -5,7 +5,9 @@
       <p class="page-subtitle">Manage invoices, payments, and revenue</p>
     </div>
     <div class="page-actions">
-      <button class="btn-primary" (click)="openCreate()"><span class="material-symbols-outlined">add</span> New Invoice</button>
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span> New Invoice
+      </button>
     </div>
   </div>
 
@@ -148,11 +150,29 @@
               </td>
               <td class="actions-cell">
                 <div class="action-group">
-                  <button class="action-link view-link" title="View invoice details" (click)="viewInvoice(inv)"><span class="material-symbols-outlined">visibility</span></button>
-                  <button class="action-link" title="Download PDF" (click)="downloadPdf(inv.id)"><span class="material-symbols-outlined">picture_as_pdf</span></button>
-                  <button class="action-link" title="Email invoice" (click)="emailInvoice(inv)"><span class="material-symbols-outlined">email</span></button>
-                  <button class="action-link edit-link" title="Edit" (click)="openEdit(inv)"><span class="material-symbols-outlined">edit</span></button>
-                  <button class="action-link delete-link" title="Delete" (click)="confirmDelete(inv)"><span class="material-symbols-outlined">delete</span></button>
+                  <button
+                    class="action-link view-link"
+                    title="View invoice details"
+                    (click)="viewInvoice(inv)"
+                  >
+                    <span class="material-symbols-outlined">visibility</span>
+                  </button>
+                  <button class="action-link" title="Download PDF" (click)="downloadPdf(inv.id)">
+                    <span class="material-symbols-outlined">picture_as_pdf</span>
+                  </button>
+                  <button class="action-link" title="Email invoice" (click)="emailInvoice(inv)">
+                    <span class="material-symbols-outlined">email</span>
+                  </button>
+                  <button class="action-link edit-link" title="Edit" (click)="openEdit(inv)">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button
+                    class="action-link delete-link"
+                    title="Delete"
+                    (click)="confirmDelete(inv)"
+                  >
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
                 </div>
               </td>
             </tr>
@@ -239,26 +259,51 @@
 <!-- ═══ CREATE / EDIT INVOICE MODAL ═══ -->
 @if (showModal()) {
   <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
-    <div class="modal modal-lg" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
       <div class="modal-header">
         <h2>{{ editing() ? 'Edit Invoice' : 'New Invoice' }}</h2>
-        <button class="modal-close" (click)="closeModal()"><span class="material-symbols-outlined">close</span></button>
+        <button class="modal-close" (click)="closeModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
       </div>
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
             <label for="bill-patientEmail">Patient Email *</label>
-            <input id="bill-patientEmail" type="email" [(ngModel)]="form.patientEmail" placeholder="patient&#64;example.com" required />
+            <input
+              id="bill-patientEmail"
+              type="email"
+              [(ngModel)]="form.patientEmail"
+              placeholder="patient&#64;example.com"
+              required
+            />
           </div>
           <div class="field">
             <label for="bill-hospitalName">Hospital Name *</label>
-            <input id="bill-hospitalName" type="text" [(ngModel)]="form.hospitalName" placeholder="Hospital name" required />
+            <input
+              id="bill-hospitalName"
+              type="text"
+              [(ngModel)]="form.hospitalName"
+              placeholder="Hospital name"
+              required
+            />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
             <label for="bill-invoiceNumber">Invoice Number *</label>
-            <input id="bill-invoiceNumber" type="text" [(ngModel)]="form.invoiceNumber" placeholder="INV-0001" required />
+            <input
+              id="bill-invoiceNumber"
+              type="text"
+              [(ngModel)]="form.invoiceNumber"
+              placeholder="INV-0001"
+              required
+            />
           </div>
           <div class="field">
             <label for="bill-status">Status *</label>
@@ -282,7 +327,13 @@
         <div class="form-row">
           <div class="field">
             <label for="bill-totalAmount">Total Amount *</label>
-            <input id="bill-totalAmount" type="number" [(ngModel)]="form.totalAmount" min="0" required />
+            <input
+              id="bill-totalAmount"
+              type="number"
+              [(ngModel)]="form.totalAmount"
+              min="0"
+              required
+            />
           </div>
           <div class="field">
             <label for="bill-amountPaid">Amount Paid</label>
@@ -291,13 +342,29 @@
         </div>
         <div class="field">
           <label for="bill-notes">Notes</label>
-          <textarea id="bill-notes" [(ngModel)]="form.notes" rows="3" placeholder="Invoice notes..."></textarea>
+          <textarea
+            id="bill-notes"
+            [(ngModel)]="form.notes"
+            rows="3"
+            placeholder="Invoice notes..."
+          ></textarea>
         </div>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeModal()">Cancel</button>
-        <button class="btn-primary" (click)="submitForm()" [disabled]="saving() || !form.patientEmail || !form.hospitalName || !form.invoiceNumber || !form.invoiceDate || !form.dueDate">
-          {{ saving() ? 'Saving...' : (editing() ? 'Update' : 'Create') }}
+        <button
+          class="btn-primary"
+          (click)="submitForm()"
+          [disabled]="
+            saving() ||
+            !form.patientEmail ||
+            !form.hospitalName ||
+            !form.invoiceNumber ||
+            !form.invoiceDate ||
+            !form.dueDate
+          "
+        >
+          {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Create' }}
         </button>
       </div>
     </div>
@@ -306,15 +373,35 @@
 
 <!-- ═══ DELETE CONFIRM ═══ -->
 @if (showDeleteConfirm()) {
-  <div class="modal-backdrop" tabindex="-1" (click)="cancelDelete()" (keydown.escape)="cancelDelete()">
-    <div class="modal" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
-      <div class="modal-header"><h2>Delete Invoice</h2><button class="modal-close" (click)="cancelDelete()"><span class="material-symbols-outlined">close</span></button></div>
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="cancelDelete()"
+    (keydown.escape)="cancelDelete()"
+  >
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>Delete Invoice</h2>
+        <button class="modal-close" (click)="cancelDelete()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
       <div class="modal-body">
-        <p class="delete-warning">Are you sure you want to delete invoice <strong>{{ deletingInv()?.invoiceNumber }}</strong>? This action cannot be undone.</p>
+        <p class="delete-warning">
+          Are you sure you want to delete invoice <strong>{{ deletingInv()?.invoiceNumber }}</strong
+          >? This action cannot be undone.
+        </p>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
-        <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">{{ deleting() ? 'Deleting...' : 'Delete' }}</button>
+        <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
+          {{ deleting() ? 'Deleting...' : 'Delete' }}
+        </button>
       </div>
     </div>
   </div>

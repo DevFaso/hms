@@ -41,7 +41,12 @@ export class ConsultationsComponent implements OnInit {
   deletingItem = signal<ConsultationResponse | null>(null);
   deleting = signal(false);
 
-  consultationTypes: ConsultationType[] = ['FORMAL', 'CURBSIDE', 'TRANSFER_OF_CARE', 'SECOND_OPINION'];
+  consultationTypes: ConsultationType[] = [
+    'FORMAL',
+    'CURBSIDE',
+    'TRANSFER_OF_CARE',
+    'SECOND_OPINION',
+  ];
   urgencies: ConsultationUrgency[] = ['ROUTINE', 'URGENT', 'EMERGENT', 'STAT'];
 
   ngOnInit(): void {

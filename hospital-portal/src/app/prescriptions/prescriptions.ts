@@ -47,7 +47,14 @@ export class PrescriptionsComponent implements OnInit {
   }
 
   emptyForm(): PrescriptionRequest {
-    return { patientId: '', medicationName: '', dosage: '', frequency: '', duration: '', notes: '' };
+    return {
+      patientId: '',
+      medicationName: '',
+      dosage: '',
+      frequency: '',
+      duration: '',
+      notes: '',
+    };
   }
 
   openCreate(): void {

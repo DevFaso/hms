@@ -250,11 +250,23 @@
 
 <!-- ═══ CREATE/EDIT SHIFT MODAL ═══ -->
 @if (showShiftModal()) {
-  <div class="modal-backdrop" tabindex="-1" (click)="closeShiftModal()" (keydown.escape)="closeShiftModal()">
-    <div class="modal modal-lg" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeShiftModal()"
+    (keydown.escape)="closeShiftModal()"
+  >
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
       <div class="modal-header">
         <h2>{{ editingShift() ? 'Edit Shift' : 'Create Shift' }}</h2>
-        <button class="modal-close" (click)="closeShiftModal()"><span class="material-symbols-outlined">close</span></button>
+        <button class="modal-close" (click)="closeShiftModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
       </div>
       <div class="modal-body">
         <div class="form-row">
@@ -303,13 +315,29 @@
         </div>
         <div class="field">
           <label for="shift-notes">Notes</label>
-          <textarea id="shift-notes" [(ngModel)]="shiftForm.notes" rows="3" placeholder="Optional notes..."></textarea>
+          <textarea
+            id="shift-notes"
+            [(ngModel)]="shiftForm.notes"
+            rows="3"
+            placeholder="Optional notes..."
+          ></textarea>
         </div>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeShiftModal()">Cancel</button>
-        <button class="btn-primary" (click)="submitShift()" [disabled]="savingShift() || !shiftForm.staffId || !shiftForm.hospitalId || !shiftForm.shiftDate || !shiftForm.startTime || !shiftForm.endTime">
-          {{ savingShift() ? 'Saving...' : (editingShift() ? 'Update Shift' : 'Create Shift') }}
+        <button
+          class="btn-primary"
+          (click)="submitShift()"
+          [disabled]="
+            savingShift() ||
+            !shiftForm.staffId ||
+            !shiftForm.hospitalId ||
+            !shiftForm.shiftDate ||
+            !shiftForm.startTime ||
+            !shiftForm.endTime
+          "
+        >
+          {{ savingShift() ? 'Saving...' : editingShift() ? 'Update Shift' : 'Create Shift' }}
         </button>
       </div>
     </div>
@@ -318,11 +346,23 @@
 
 <!-- ═══ REQUEST LEAVE MODAL ═══ -->
 @if (showLeaveModal()) {
-  <div class="modal-backdrop" tabindex="-1" (click)="closeLeaveModal()" (keydown.escape)="closeLeaveModal()">
-    <div class="modal modal-lg" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeLeaveModal()"
+    (keydown.escape)="closeLeaveModal()"
+  >
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
       <div class="modal-header">
         <h2>Request Leave</h2>
-        <button class="modal-close" (click)="closeLeaveModal()"><span class="material-symbols-outlined">close</span></button>
+        <button class="modal-close" (click)="closeLeaveModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
       </div>
       <div class="modal-body">
         <div class="form-row">
@@ -373,12 +413,27 @@
         </div>
         <div class="field">
           <label for="leave-reason">Reason</label>
-          <textarea id="leave-reason" [(ngModel)]="leaveForm.reason" rows="3" placeholder="Reason for leave..."></textarea>
+          <textarea
+            id="leave-reason"
+            [(ngModel)]="leaveForm.reason"
+            rows="3"
+            placeholder="Reason for leave..."
+          ></textarea>
         </div>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeLeaveModal()">Cancel</button>
-        <button class="btn-primary" (click)="submitLeave()" [disabled]="savingLeave() || !leaveForm.staffId || !leaveForm.hospitalId || !leaveForm.startDate || !leaveForm.endDate">
+        <button
+          class="btn-primary"
+          (click)="submitLeave()"
+          [disabled]="
+            savingLeave() ||
+            !leaveForm.staffId ||
+            !leaveForm.hospitalId ||
+            !leaveForm.startDate ||
+            !leaveForm.endDate
+          "
+        >
           {{ savingLeave() ? 'Submitting...' : 'Submit Request' }}
         </button>
       </div>

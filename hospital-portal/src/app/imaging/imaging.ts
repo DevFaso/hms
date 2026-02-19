@@ -43,7 +43,16 @@ export class ImagingComponent implements OnInit {
   deletingItem = signal<ImagingOrderResponse | null>(null);
   deleting = signal(false);
 
-  modalities: ImagingModality[] = ['XRAY', 'CT', 'MRI', 'ULTRASOUND', 'PET', 'MAMMOGRAPHY', 'FLUOROSCOPY', 'NUCLEAR'];
+  modalities: ImagingModality[] = [
+    'XRAY',
+    'CT',
+    'MRI',
+    'ULTRASOUND',
+    'PET',
+    'MAMMOGRAPHY',
+    'FLUOROSCOPY',
+    'NUCLEAR',
+  ];
   priorities: ImagingPriority[] = ['ROUTINE', 'URGENT', 'STAT', 'ASAP'];
 
   ngOnInit(): void {
@@ -117,18 +126,23 @@ export class ImagingComponent implements OnInit {
   }
   executeCancel(): void {
     this.deleting.set(true);
-    this.imagingService.updateOrderStatus(this.deletingItem()!.id, { status: 'CANCELLED', notes: 'Cancelled by admin' }).subscribe({
-      next: () => {
-        this.toast.success('Order cancelled');
-        this.cancelDeleteAction();
-        this.deleting.set(false);
-        this.load();
-      },
-      error: () => {
-        this.toast.error('Cancel failed');
-        this.deleting.set(false);
-      },
-    });
+    this.imagingService
+      .updateOrderStatus(this.deletingItem()!.id, {
+        status: 'CANCELLED',
+        notes: 'Cancelled by admin',
+      })
+      .subscribe({
+        next: () => {
+          this.toast.success('Order cancelled');
+          this.cancelDeleteAction();
+          this.deleting.set(false);
+          this.load();
+        },
+        error: () => {
+          this.toast.error('Cancel failed');
+          this.deleting.set(false);
+        },
+      });
   }
 
   load(): void {

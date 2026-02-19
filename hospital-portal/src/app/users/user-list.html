@@ -302,7 +302,7 @@
           <div class="modal-actions">
             <button type="button" class="btn-secondary" (click)="closeCreate()">Cancel</button>
             <button type="submit" class="btn-primary" [disabled]="saving()">
-              {{ saving() ? 'Saving...' : (editing() ? 'Update' : 'Register') }}
+              {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Register' }}
             </button>
           </div>
         </form>
@@ -312,8 +312,19 @@
 
   <!-- Delete Confirmation Modal -->
   @if (showDeleteConfirm()) {
-    <div class="modal-backdrop" (click)="cancelDelete()" (keydown.escape)="cancelDelete()" tabindex="-1">
-      <dialog class="modal" [open]="showDeleteConfirm()" (click)="$event.stopPropagation()" (keydown.escape)="cancelDelete()" tabindex="-1">
+    <div
+      class="modal-backdrop"
+      (click)="cancelDelete()"
+      (keydown.escape)="cancelDelete()"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal"
+        [open]="showDeleteConfirm()"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="cancelDelete()"
+        tabindex="-1"
+      >
         <div class="modal-header">
           <h2>Delete User</h2>
           <button class="modal-close" (click)="cancelDelete()">
@@ -323,13 +334,24 @@
         <div class="modal-body">
           <div class="delete-warning">
             <span class="material-symbols-outlined warning-icon">warning</span>
-            <p>Are you sure you want to delete <strong>{{ deletingUser()?.firstName }} {{ deletingUser()?.lastName }}</strong>?</p>
-            <p class="delete-detail">This will permanently remove this user account and all associated data.</p>
+            <p>
+              Are you sure you want to delete
+              <strong>{{ deletingUser()?.firstName }} {{ deletingUser()?.lastName }}</strong
+              >?
+            </p>
+            <p class="delete-detail">
+              This will permanently remove this user account and all associated data.
+            </p>
           </div>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn-secondary" (click)="cancelDelete()">Cancel</button>
-          <button type="button" class="btn-danger" [disabled]="deleting()" (click)="executeDelete()">
+          <button
+            type="button"
+            class="btn-danger"
+            [disabled]="deleting()"
+            (click)="executeDelete()"
+          >
             {{ deleting() ? 'Deleting...' : 'Delete' }}
           </button>
         </div>

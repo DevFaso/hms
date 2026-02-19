@@ -134,7 +134,11 @@
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
                   @if (!['COMPLETED', 'CANCELLED'].includes(r.status)) {
-                    <button class="action-link delete" (click)="confirmCancel(r)" title="Cancel referral">
+                    <button
+                      class="action-link delete"
+                      (click)="confirmCancel(r)"
+                      title="Cancel referral"
+                    >
                       <span class="material-symbols-outlined">cancel</span>
                     </button>
                   }
@@ -237,7 +241,12 @@
 
   <!-- Create Referral Modal -->
   @if (showModal()) {
-    <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()"></div>
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+    ></div>
     <div class="modal modal-lg">
       <div class="modal-header">
         <h2>New Referral</h2>
@@ -247,7 +256,12 @@
         <div class="form-row">
           <div class="field">
             <label for="ref-patientId">Patient ID</label>
-            <input id="ref-patientId" type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" />
+            <input
+              id="ref-patientId"
+              type="text"
+              [(ngModel)]="form.patientId"
+              placeholder="Patient ID"
+            />
           </div>
           <div class="field">
             <label for="ref-hospitalId">Hospital</label>
@@ -262,7 +276,12 @@
         <div class="form-row">
           <div class="field">
             <label for="ref-specialty">Target Specialty</label>
-            <input id="ref-specialty" type="text" [(ngModel)]="form.targetSpecialty" placeholder="e.g. Cardiology" />
+            <input
+              id="ref-specialty"
+              type="text"
+              [(ngModel)]="form.targetSpecialty"
+              placeholder="e.g. Cardiology"
+            />
           </div>
           <div class="field">
             <label for="ref-urgency">Urgency</label>
@@ -274,21 +293,36 @@
           </div>
         </div>
         <div class="form-row">
-          <div class="field" style="flex:1">
+          <div class="field" style="flex: 1">
             <label for="ref-reason">Referral Reason</label>
-            <textarea id="ref-reason" [(ngModel)]="form.referralReason" rows="3" placeholder="Reason for referral"></textarea>
+            <textarea
+              id="ref-reason"
+              [(ngModel)]="form.referralReason"
+              rows="3"
+              placeholder="Reason for referral"
+            ></textarea>
           </div>
         </div>
         <div class="form-row">
-          <div class="field" style="flex:1">
+          <div class="field" style="flex: 1">
             <label for="ref-indication">Clinical Indication</label>
-            <textarea id="ref-indication" [(ngModel)]="form.clinicalIndication" rows="2" placeholder="Optional"></textarea>
+            <textarea
+              id="ref-indication"
+              [(ngModel)]="form.clinicalIndication"
+              rows="2"
+              placeholder="Optional"
+            ></textarea>
           </div>
         </div>
         <div class="form-row">
-          <div class="field" style="flex:1">
+          <div class="field" style="flex: 1">
             <label for="ref-summary">Clinical Summary</label>
-            <textarea id="ref-summary" [(ngModel)]="form.clinicalSummary" rows="2" placeholder="Optional"></textarea>
+            <textarea
+              id="ref-summary"
+              [(ngModel)]="form.clinicalSummary"
+              rows="2"
+              placeholder="Optional"
+            ></textarea>
           </div>
         </div>
       </div>
@@ -303,7 +337,12 @@
 
   <!-- Cancel Referral Confirmation -->
   @if (showDeleteConfirm()) {
-    <div class="modal-backdrop" tabindex="-1" (click)="cancelDeleteAction()" (keydown.escape)="cancelDeleteAction()"></div>
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="cancelDeleteAction()"
+      (keydown.escape)="cancelDeleteAction()"
+    ></div>
     <div class="modal">
       <div class="modal-header">
         <h2>Cancel Referral</h2>
@@ -312,7 +351,11 @@
       <div class="modal-body">
         <div class="delete-warning">
           <span class="material-symbols-outlined">warning</span>
-          <p>Cancel the referral for <strong>{{ deletingRef()?.patientName }}</strong> to <strong>{{ deletingRef()?.targetSpecialty }}</strong>?</p>
+          <p>
+            Cancel the referral for <strong>{{ deletingRef()?.patientName }}</strong> to
+            <strong>{{ deletingRef()?.targetSpecialty }}</strong
+            >?
+          </p>
         </div>
       </div>
       <div class="modal-actions">

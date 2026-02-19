@@ -51,11 +51,7 @@
               <button class="action-link" title="Edit" (click)="openEdit(member)">
                 <span class="material-symbols-outlined">edit</span>
               </button>
-              <button
-                class="action-link danger"
-                title="Deactivate"
-                (click)="confirmDelete(member)"
-              >
+              <button class="action-link danger" title="Deactivate" (click)="confirmDelete(member)">
                 <span class="material-symbols-outlined">person_off</span>
               </button>
             </div>
@@ -110,12 +106,7 @@
               </div>
               <div class="field">
                 <label for="sHospital">Hospital *</label>
-                <select
-                  id="sHospital"
-                  [(ngModel)]="form.hospitalId"
-                  name="hospitalId"
-                  required
-                >
+                <select id="sHospital" [(ngModel)]="form.hospitalId" name="hospitalId" required>
                   <option value="">Select hospital</option>
                   @for (h of hospitals(); track h.id) {
                     <option [value]="h.id">{{ h.name }}</option>
@@ -136,11 +127,7 @@
               </div>
               <div class="field">
                 <label for="sEmployment">Employment Type</label>
-                <select
-                  id="sEmployment"
-                  [(ngModel)]="form.employmentType"
-                  name="employmentType"
-                >
+                <select id="sEmployment" [(ngModel)]="form.employmentType" name="employmentType">
                   <option value="">Select type</option>
                   @for (et of employmentTypes; track et) {
                     <option [value]="et">{{ et.replaceAll('_', ' ') }}</option>

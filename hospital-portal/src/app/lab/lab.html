@@ -5,7 +5,9 @@
       <p class="page-subtitle">Manage lab orders, results, and diagnostics</p>
     </div>
     <div class="page-actions">
-      <button class="btn-primary" (click)="openCreate()"><span class="material-symbols-outlined">add</span> New Lab Order</button>
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span> New Lab Order
+      </button>
     </div>
   </div>
 
@@ -121,9 +123,23 @@
               </td>
               <td>
                 <div class="action-group">
-                  <button class="action-link view-link" title="View order details" (click)="viewOrder(order)"><span class="material-symbols-outlined">visibility</span></button>
-                  <button class="action-link edit-link" title="Edit" (click)="openEdit(order)"><span class="material-symbols-outlined">edit</span></button>
-                  <button class="action-link delete-link" title="Delete" (click)="confirmDelete(order)"><span class="material-symbols-outlined">delete</span></button>
+                  <button
+                    class="action-link view-link"
+                    title="View order details"
+                    (click)="viewOrder(order)"
+                  >
+                    <span class="material-symbols-outlined">visibility</span>
+                  </button>
+                  <button class="action-link edit-link" title="Edit" (click)="openEdit(order)">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button
+                    class="action-link delete-link"
+                    title="Delete"
+                    (click)="confirmDelete(order)"
+                  >
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
                 </div>
               </td>
             </tr>
@@ -206,16 +222,29 @@
 <!-- ═══ CREATE / EDIT LAB ORDER MODAL ═══ -->
 @if (showModal()) {
   <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
-    <div class="modal modal-lg" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
       <div class="modal-header">
         <h2>{{ editing() ? 'Edit Lab Order' : 'New Lab Order' }}</h2>
-        <button class="modal-close" (click)="closeModal()"><span class="material-symbols-outlined">close</span></button>
+        <button class="modal-close" (click)="closeModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
       </div>
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
             <label for="lab-patientId">Patient ID *</label>
-            <input id="lab-patientId" type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" required />
+            <input
+              id="lab-patientId"
+              type="text"
+              [(ngModel)]="form.patientId"
+              placeholder="Patient ID"
+              required
+            />
           </div>
           <div class="field">
             <label for="lab-hospitalId">Hospital *</label>
@@ -230,11 +259,22 @@
         <div class="form-row">
           <div class="field">
             <label for="lab-testName">Test Name *</label>
-            <input id="lab-testName" type="text" [(ngModel)]="form.testName" placeholder="e.g. Complete Blood Count" required />
+            <input
+              id="lab-testName"
+              type="text"
+              [(ngModel)]="form.testName"
+              placeholder="e.g. Complete Blood Count"
+              required
+            />
           </div>
           <div class="field">
             <label for="lab-testCode">Test Code</label>
-            <input id="lab-testCode" type="text" [(ngModel)]="form.testCode" placeholder="e.g. CBC" />
+            <input
+              id="lab-testCode"
+              type="text"
+              [(ngModel)]="form.testCode"
+              placeholder="e.g. CBC"
+            />
           </div>
         </div>
         <div class="form-row">
@@ -249,26 +289,59 @@
           </div>
           <div class="field">
             <label for="lab-encounterId">Encounter ID</label>
-            <input id="lab-encounterId" type="text" [(ngModel)]="form.encounterId" placeholder="Optional" />
+            <input
+              id="lab-encounterId"
+              type="text"
+              [(ngModel)]="form.encounterId"
+              placeholder="Optional"
+            />
           </div>
         </div>
         <div class="field">
           <label for="lab-clinicalIndication">Clinical Indication *</label>
-          <textarea id="lab-clinicalIndication" [(ngModel)]="form.clinicalIndication" rows="2" placeholder="Clinical indication..." required></textarea>
+          <textarea
+            id="lab-clinicalIndication"
+            [(ngModel)]="form.clinicalIndication"
+            rows="2"
+            placeholder="Clinical indication..."
+            required
+          ></textarea>
         </div>
         <div class="field">
           <label for="lab-medNecessity">Medical Necessity Note *</label>
-          <textarea id="lab-medNecessity" [(ngModel)]="form.medicalNecessityNote" rows="2" placeholder="Medical necessity..." required></textarea>
+          <textarea
+            id="lab-medNecessity"
+            [(ngModel)]="form.medicalNecessityNote"
+            rows="2"
+            placeholder="Medical necessity..."
+            required
+          ></textarea>
         </div>
         <div class="field">
           <label for="lab-notes">Notes</label>
-          <textarea id="lab-notes" [(ngModel)]="form.notes" rows="2" placeholder="Additional notes..."></textarea>
+          <textarea
+            id="lab-notes"
+            [(ngModel)]="form.notes"
+            rows="2"
+            placeholder="Additional notes..."
+          ></textarea>
         </div>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeModal()">Cancel</button>
-        <button class="btn-primary" (click)="submitForm()" [disabled]="saving() || !form.patientId || !form.hospitalId || !form.testName || !form.clinicalIndication || !form.medicalNecessityNote">
-          {{ saving() ? 'Saving...' : (editing() ? 'Update' : 'Create') }}
+        <button
+          class="btn-primary"
+          (click)="submitForm()"
+          [disabled]="
+            saving() ||
+            !form.patientId ||
+            !form.hospitalId ||
+            !form.testName ||
+            !form.clinicalIndication ||
+            !form.medicalNecessityNote
+          "
+        >
+          {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Create' }}
         </button>
       </div>
     </div>
@@ -277,15 +350,36 @@
 
 <!-- ═══ DELETE CONFIRM ═══ -->
 @if (showDeleteConfirm()) {
-  <div class="modal-backdrop" tabindex="-1" (click)="cancelDelete()" (keydown.escape)="cancelDelete()">
-    <div class="modal" tabindex="-1" (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
-      <div class="modal-header"><h2>Delete Lab Order</h2><button class="modal-close" (click)="cancelDelete()"><span class="material-symbols-outlined">close</span></button></div>
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="cancelDelete()"
+    (keydown.escape)="cancelDelete()"
+  >
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>Delete Lab Order</h2>
+        <button class="modal-close" (click)="cancelDelete()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
       <div class="modal-body">
-        <p class="delete-warning">Are you sure you want to delete lab order <strong>{{ deletingOrder()?.labOrderCode }}</strong>? This action cannot be undone.</p>
+        <p class="delete-warning">
+          Are you sure you want to delete lab order
+          <strong>{{ deletingOrder()?.labOrderCode }}</strong
+          >? This action cannot be undone.
+        </p>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
-        <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">{{ deleting() ? 'Deleting...' : 'Delete' }}</button>
+        <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
+          {{ deleting() ? 'Deleting...' : 'Delete' }}
+        </button>
       </div>
     </div>
   </div>
