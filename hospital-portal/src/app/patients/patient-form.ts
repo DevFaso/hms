@@ -63,7 +63,14 @@ export class PatientFormComponent {
       return;
     }
     this.saving = true;
-    this.patientService.create(this.form).subscribe({
+
+    // Remove empty-string hospitalId — let the backend resolve from JWT/assignments
+    const payload = { ...this.form };
+    if (!payload.hospitalId) {
+      delete (payload as Partial<PatientCreateRequest>).hospitalId;
+    }
+
+    this.patientService.create(payload).subscribe({
       next: (patient) => {
         this.toast.success('Patient registered successfully');
         this.router.navigate(['/patients', patient.id]);

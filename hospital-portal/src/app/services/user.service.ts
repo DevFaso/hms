@@ -43,10 +43,16 @@ export interface AdminRegisterRequest {
   password: string;
   firstName: string;
   lastName: string;
-  phoneNumber?: string;
+  phoneNumber: string;
   roleNames: string[];
   hospitalId?: string;
   hospitalName?: string;
+  licenseNumber?: string;
+  jobTitle?: string;
+  employmentType?: string;
+  departmentId?: string;
+  specialization?: string;
+  forcePasswordChange?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })

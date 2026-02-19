@@ -125,6 +125,7 @@
         </div>
         <form (ngSubmit)="submitCreate()">
           <div class="modal-body">
+            <!-- Name Row -->
             <div class="field-row">
               <div class="field">
                 <label for="firstName">First Name *</label>
@@ -147,39 +148,134 @@
                 />
               </div>
             </div>
-            <div class="field">
-              <label for="username">Username *</label>
-              <input
-                id="username"
-                type="text"
-                [(ngModel)]="createForm.username"
-                name="username"
-                required
-              />
+
+            <!-- Username & Email -->
+            <div class="field-row">
+              <div class="field">
+                <label for="username">Username *</label>
+                <input
+                  id="username"
+                  type="text"
+                  [(ngModel)]="createForm.username"
+                  name="username"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="email">Email *</label>
+                <input
+                  id="email"
+                  type="email"
+                  [(ngModel)]="createForm.email"
+                  name="email"
+                  required
+                />
+              </div>
             </div>
-            <div class="field">
-              <label for="email">Email *</label>
-              <input id="email" type="email" [(ngModel)]="createForm.email" name="email" required />
+
+            <!-- Password & Phone -->
+            <div class="field-row">
+              <div class="field">
+                <label for="password">Password *</label>
+                <input
+                  id="password"
+                  type="password"
+                  [(ngModel)]="createForm.password"
+                  name="password"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="phoneNumber">Phone Number *</label>
+                <input
+                  id="phoneNumber"
+                  type="tel"
+                  [(ngModel)]="createForm.phoneNumber"
+                  name="phoneNumber"
+                  required
+                  placeholder="+226 70 00 00 00"
+                />
+              </div>
             </div>
+
+            <!-- Roles (multi-select checkboxes) -->
+            <fieldset class="field">
+              <legend>Roles *</legend>
+              <div class="role-checkbox-group">
+                @for (role of availableRoles(); track role.id) {
+                  <label class="role-checkbox">
+                    <input
+                      type="checkbox"
+                      [checked]="selectedRoles.includes(role.code)"
+                      (change)="onRoleToggle(role.code, $any($event.target).checked)"
+                    />
+                    <span class="role-label">{{ role.name || role.code }}</span>
+                  </label>
+                }
+                @if (availableRoles().length === 0) {
+                  <span class="hint-text">Loading roles...</span>
+                }
+              </div>
+            </fieldset>
+
+            <!-- License Number (conditional) -->
+            @if (licenseRequired) {
+              <div class="field">
+                <label for="licenseNumber">License Number *</label>
+                <input
+                  id="licenseNumber"
+                  type="text"
+                  [(ngModel)]="createForm.licenseNumber"
+                  name="licenseNumber"
+                  required
+                  placeholder="Medical license number"
+                />
+                <span class="hint-text">Required for medical roles (Doctor, Nurse, Lab Scientist, Pharmacist)</span>
+              </div>
+            }
+
+            <!-- Hospital -->
             <div class="field">
-              <label for="password">Password *</label>
-              <input
-                id="password"
-                type="password"
-                [(ngModel)]="createForm.password"
-                name="password"
-                required
-              />
+              <label for="hospitalId">Hospital</label>
+              <select id="hospitalId" [(ngModel)]="createForm.hospitalId" name="hospitalId">
+                <option value="">— None —</option>
+                @for (h of availableHospitals(); track h.id) {
+                  <option [value]="h.id">{{ h.name }}</option>
+                }
+              </select>
             </div>
+
+            <!-- Job Title & Employment Type -->
+            <div class="field-row">
+              <div class="field">
+                <label for="jobTitle">Job Title</label>
+                <select id="jobTitle" [(ngModel)]="createForm.jobTitle" name="jobTitle">
+                  <option value="">— Select —</option>
+                  @for (jt of jobTitles; track jt) {
+                    <option [value]="jt">{{ formatEnumLabel(jt) }}</option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label for="employmentType">Employment Type</label>
+                <select id="employmentType" [(ngModel)]="createForm.employmentType" name="employmentType">
+                  <option value="">— Select —</option>
+                  @for (et of employmentTypes; track et) {
+                    <option [value]="et">{{ formatEnumLabel(et) }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+
+            <!-- Specialization -->
             <div class="field">
-              <label for="roles">Roles (comma-separated)</label>
-              <input
-                id="roles"
-                type="text"
-                [(ngModel)]="roleInput"
-                name="roles"
-                placeholder="ROLE_DOCTOR, ROLE_NURSE"
-              />
+              <label for="specialization">Specialization</label>
+              <select id="specialization" [(ngModel)]="createForm.specialization" name="specialization">
+                <option value="">— Select —</option>
+                @for (sp of specializations; track sp) {
+                  <option [value]="sp">{{ formatEnumLabel(sp) }}</option>
+                }
+              </select>
             </div>
           </div>
           <div class="modal-actions">

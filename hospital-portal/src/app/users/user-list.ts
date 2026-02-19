@@ -2,7 +2,29 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { UserService, UserSummary, AdminRegisterRequest } from '../services/user.service';
+import { RoleService, RoleResponse } from '../services/role.service';
+import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
+
+const MEDICAL_ROLE_CODES = new Set(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_LAB_SCIENTIST', 'ROLE_PHARMACIST']);
+
+const JOB_TITLES = [
+  'DOCTOR', 'PHYSICIAN', 'NURSE_PRACTITIONER', 'NURSE', 'MIDWIFE',
+  'HOSPITAL_ADMIN', 'ADMINISTRATIVE_STAFF', 'TECHNICIAN', 'PHARMACIST',
+  'LAB_TECHNICIAN', 'RECEPTIONIST', 'SURGEON', 'HOSPITAL_ADMINISTRATOR',
+  'LABORATORY_SCIENTIST', 'RADIOLOGIST', 'ANESTHESIOLOGIST', 'PHYSIOTHERAPIST',
+  'PSYCHOLOGIST', 'SOCIAL_WORKER', 'BILLING_SPECIALIST', 'IT_SUPPORT',
+];
+
+const EMPLOYMENT_TYPES = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'LOCUM', 'INTERN'];
+
+const SPECIALIZATIONS = [
+  'GENERAL_PRACTICE', 'CARDIOLOGY', 'NEUROLOGY', 'PEDIATRICS', 'ORTHOPEDICS',
+  'DERMATOLOGY', 'GYNECOLOGY', 'ONCOLOGY', 'RADIOLOGY', 'PSYCHIATRY',
+  'GENERAL_NURSE', 'ICU_NURSE', 'PEDIATRIC_NURSE', 'SURGICAL_NURSE',
+  'CLINICAL_PHARMACY', 'HOSPITAL_PHARMACY', 'LAB_TECHNICIAN', 'PATHOLOGY',
+  'MICROBIOLOGY', 'OTHER',
+];
 
 @Component({
   selector: 'app-user-list',
@@ -13,6 +35,8 @@ import { ToastService } from '../core/toast.service';
 })
 export class UserListComponent implements OnInit {
   private readonly userService = inject(UserService);
+  private readonly roleService = inject(RoleService);
+  private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
 
   users = signal<UserSummary[]>([]);
@@ -26,18 +50,29 @@ export class UserListComponent implements OnInit {
 
   showCreate = signal(false);
   saving = signal(false);
-  createForm: AdminRegisterRequest = {
-    username: '',
-    email: '',
-    password: '',
-    firstName: '',
-    lastName: '',
-    roleNames: [],
-  };
-  roleInput = '';
+
+  // Lookup data for dropdowns
+  availableRoles = signal<RoleResponse[]>([]);
+  availableHospitals = signal<{ id: string; name: string }[]>([]);
+
+  // Form fields
+  createForm: AdminRegisterRequest = this.freshForm();
+  selectedRoles: string[] = [];
+
+  // Enum options for dropdowns
+  readonly jobTitles = JOB_TITLES;
+  readonly employmentTypes = EMPLOYMENT_TYPES;
+  readonly specializations = SPECIALIZATIONS;
+
+  /** True when any selected role is a medical role requiring a license number */
+  get licenseRequired(): boolean {
+    return this.selectedRoles.some((r) => MEDICAL_ROLE_CODES.has(r));
+  }
 
   ngOnInit(): void {
     this.loadUsers();
+    this.loadRoles();
+    this.loadHospitals();
   }
 
   loadUsers(page = 0): void {
@@ -54,6 +89,25 @@ export class UserListComponent implements OnInit {
       error: () => {
         this.toast.error('Failed to load users');
         this.loading.set(false);
+      },
+    });
+  }
+
+  loadRoles(): void {
+    this.roleService.list().subscribe({
+      next: (roles) => this.availableRoles.set(roles),
+      error: () => {
+        /* silent — roles dropdown just stays empty */
+      },
+    });
+  }
+
+  loadHospitals(): void {
+    this.hospitalService.list().subscribe({
+      next: (hospitals: HospitalResponse[]) =>
+        this.availableHospitals.set(hospitals.map((h) => ({ id: h.id, name: h.name }))),
+      error: () => {
+        /* silent */
       },
     });
   }
@@ -81,20 +135,27 @@ export class UserListComponent implements OnInit {
   }
 
   openCreate(): void {
-    this.createForm = {
-      username: '',
-      email: '',
-      password: '',
-      firstName: '',
-      lastName: '',
-      roleNames: [],
-    };
-    this.roleInput = '';
+    this.createForm = this.freshForm();
+    this.selectedRoles = [];
     this.showCreate.set(true);
   }
 
   closeCreate(): void {
     this.showCreate.set(false);
+  }
+
+  onRoleToggle(roleCode: string, checked: boolean): void {
+    if (checked) {
+      if (!this.selectedRoles.includes(roleCode)) {
+        this.selectedRoles.push(roleCode);
+      }
+    } else {
+      this.selectedRoles = this.selectedRoles.filter((r) => r !== roleCode);
+    }
+    // Clear licenseNumber when no medical role selected
+    if (!this.licenseRequired) {
+      this.createForm.licenseNumber = undefined;
+    }
   }
 
   submitCreate(): void {
@@ -103,15 +164,22 @@ export class UserListComponent implements OnInit {
       !this.createForm.email ||
       !this.createForm.password ||
       !this.createForm.firstName ||
-      !this.createForm.lastName
+      !this.createForm.lastName ||
+      !this.createForm.phoneNumber
     ) {
       this.toast.error('All required fields must be filled');
       return;
     }
-    this.createForm.roleNames = this.roleInput
-      .split(',')
-      .map((r) => r.trim())
-      .filter((r) => r.length > 0);
+    if (this.selectedRoles.length === 0) {
+      this.toast.error('At least one role must be selected');
+      return;
+    }
+    if (this.licenseRequired && !this.createForm.licenseNumber?.trim()) {
+      this.toast.error('License number is required for medical roles');
+      return;
+    }
+
+    this.createForm.roleNames = [...this.selectedRoles];
 
     this.saving.set(true);
     this.userService.adminRegister(this.createForm).subscribe({
@@ -132,5 +200,24 @@ export class UserListComponent implements OnInit {
     if (page >= 0 && page < this.totalPages()) {
       this.loadUsers(page);
     }
+  }
+
+  formatEnumLabel(value: string): string {
+    return value
+      .replaceAll('_', ' ')
+      .toLowerCase()
+      .replaceAll(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  private freshForm(): AdminRegisterRequest {
+    return {
+      username: '',
+      email: '',
+      password: '',
+      firstName: '',
+      lastName: '',
+      phoneNumber: '',
+      roleNames: [],
+    };
   }
 }

@@ -110,7 +110,7 @@
   border-radius: 16px;
   border: none;
   width: 100%;
-  max-width: 520px;
+  max-width: 640px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
   animation: slideUp 0.2s ease-out;
 }
@@ -159,6 +159,8 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  max-height: 65vh;
+  overflow-y: auto;
 }
 
 .field-row {
@@ -176,13 +178,15 @@
     font-weight: 500;
     color: var(--text-secondary);
   }
-  input {
+  input,
+  select {
     padding: 10px 14px;
     border: 1px solid #d1d5db;
     border-radius: 8px;
     font-size: 0.9rem;
     outline: none;
     transition: border-color 0.2s;
+    background: #fff;
     &:focus {
       border-color: var(--primary);
       box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
@@ -191,6 +195,64 @@
       color: #9ca3af;
     }
   }
+}
+
+fieldset.field {
+  border: none;
+  padding: 0;
+  margin: 0;
+  legend {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+  }
+}
+
+.role-checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 160px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafbfc;
+}
+
+.role-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+  &:hover {
+    background: #eff6ff;
+    border-color: #93c5fd;
+  }
+  input[type='checkbox'] {
+    accent-color: var(--primary);
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.role-label {
+  white-space: nowrap;
+}
+
+.hint-text {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-style: italic;
 }
 
 .modal-actions {
