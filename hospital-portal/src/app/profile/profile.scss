@@ -159,21 +159,23 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
   border-radius: 50%;
   border: 4px solid $bg-card;
   box-shadow: $shadow-md;
+  background: linear-gradient(135deg, $primary, $purple); // fallback while img loads
 
-  .avatar-img,
-  .avatar-placeholder {
+  .avatar-img {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
+    object-position: center;
     display: block;
-  }
-
-  .avatar-img {
-    /* Hide alt-text that browsers render while image loads */
-    color: transparent;
+    color: transparent; // hide alt-text
+    z-index: 1;
   }
 
   .avatar-placeholder {
+    position: absolute;
+    inset: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -193,6 +195,7 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
     align-items: center;
     justify-content: center;
     color: white;
+    z-index: 2;
   }
 
   .avatar-edit-btn {
@@ -213,6 +216,7 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
       background 0.2s,
       transform 0.2s;
     border: 2px solid $bg-card;
+    z-index: 2;
     .material-symbols-outlined {
       font-size: 18px;
     }
