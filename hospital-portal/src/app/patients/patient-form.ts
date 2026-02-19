@@ -1,10 +1,11 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { PatientService, PatientCreateRequest } from '../services/patient.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
+import { HospitalService, HospitalResponse } from '../services/hospital.service';
 
 @Component({
   selector: 'app-patient-form',
@@ -13,13 +14,18 @@ import { ToastService } from '../core/toast.service';
   templateUrl: './patient-form.html',
   styleUrl: './patient-form.scss',
 })
-export class PatientFormComponent {
+export class PatientFormComponent implements OnInit {
   private readonly patientService = inject(PatientService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly hospitalService = inject(HospitalService);
 
   saving = false;
+  hospitals: HospitalResponse[] = [];
+  /** true when the logged-in user already has a hospital in their JWT / context */
+  hasContextHospital = false;
+
   form: PatientCreateRequest = {
     userId: this.auth.getUserId() ?? '',
     hospitalId: this.auth.getHospitalId() ?? '',
@@ -44,6 +50,15 @@ export class PatientFormComponent {
     medicalHistorySummary: '',
   };
 
+  ngOnInit(): void {
+    this.hasContextHospital = !!this.auth.getHospitalId();
+    // Always load the hospital list so the user can choose (or confirm) the hospital
+    this.hospitalService.list().subscribe({
+      next: (list) => (this.hospitals = list),
+      error: () => this.toast.error('Failed to load hospitals'),
+    });
+  }
+
   onSubmit(): void {
     if (
       !this.form.firstName ||
@@ -62,15 +77,13 @@ export class PatientFormComponent {
       this.toast.error('Unable to resolve user context. Please log in again.');
       return;
     }
+    if (!this.form.hospitalId) {
+      this.toast.error('Please select a hospital');
+      return;
+    }
     this.saving = true;
 
-    // Remove empty-string hospitalId — let the backend resolve from JWT/assignments
-    const payload = { ...this.form };
-    if (!payload.hospitalId) {
-      delete (payload as Partial<PatientCreateRequest>).hospitalId;
-    }
-
-    this.patientService.create(payload).subscribe({
+    this.patientService.create(this.form).subscribe({
       next: (patient) => {
         this.toast.success('Patient registered successfully');
         this.router.navigate(['/patients', patient.id]);

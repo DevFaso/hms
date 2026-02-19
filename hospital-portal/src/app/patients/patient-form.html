@@ -74,6 +74,15 @@
           <option value="O-">O-</option>
         </select>
       </div>
+      <div class="form-group">
+        <label for="hospital">Hospital *</label>
+        <select id="hospital" [(ngModel)]="form.hospitalId" name="hospitalId" required>
+          <option value="">Select hospital</option>
+          @for (h of hospitals; track h.id) {
+            <option [value]="h.id">{{ h.name }}</option>
+          }
+        </select>
+      </div>
 
       <div class="form-group full-width section-divider">
         <h3 class="section-title">Location</h3>
