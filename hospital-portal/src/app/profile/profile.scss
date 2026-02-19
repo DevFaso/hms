@@ -159,7 +159,7 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
   border-radius: 50%;
   border: 4px solid $bg-card;
   box-shadow: $shadow-md;
-  background: linear-gradient(135deg, $primary, $purple); // fallback while img loads
+  background: $bg-card; // neutral fallback — no gradient
 
   .avatar-img {
     position: absolute;
