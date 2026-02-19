@@ -283,14 +283,13 @@
                 />
               </div>
               <div class="field">
-                <label for="hOrgId">Organization ID</label>
-                <input
-                  id="hOrgId"
-                  type="text"
-                  [(ngModel)]="form.organizationId"
-                  name="organizationId"
-                  placeholder="UUID (optional)"
-                />
+                <label for="hOrgId">Organization</label>
+                <select id="hOrgId" [(ngModel)]="form.organizationId" name="organizationId">
+                  <option value="">None (unassigned)</option>
+                  @for (org of organizations(); track org.id) {
+                    <option [value]="org.id">{{ org.name }} ({{ org.code }})</option>
+                  }
+                </select>
               </div>
             </div>
 

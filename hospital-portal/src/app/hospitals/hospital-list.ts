@@ -2,6 +2,7 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HospitalService, HospitalResponse, HospitalRequest } from '../services/hospital.service';
+import { OrganizationService, OrganizationResponse } from '../services/organization.service';
 
 import { ToastService } from '../core/toast.service';
 
@@ -14,12 +15,16 @@ import { ToastService } from '../core/toast.service';
 })
 export class HospitalListComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
+  private readonly orgService = inject(OrganizationService);
   private readonly toast = inject(ToastService);
 
   hospitals = signal<HospitalResponse[]>([]);
   filtered = signal<HospitalResponse[]>([]);
   loading = signal(true);
   searchTerm = '';
+
+  /** Organizations loaded for the dropdown */
+  organizations = signal<OrganizationResponse[]>([]);
 
   // Create / Edit
   showModal = signal(false);
@@ -34,6 +39,9 @@ export class HospitalListComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadHospitals();
+    this.orgService.list(0, 100, true).subscribe({
+      next: (page) => this.organizations.set(page.content),
+    });
   }
 
   loadHospitals(): void {
