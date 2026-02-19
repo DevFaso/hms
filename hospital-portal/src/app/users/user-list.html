@@ -230,7 +230,9 @@
                   required
                   placeholder="Medical license number"
                 />
-                <span class="hint-text">Required for medical roles (Doctor, Nurse, Lab Scientist, Pharmacist)</span>
+                <span class="hint-text"
+                  >Required for medical roles (Doctor, Nurse, Lab Scientist, Pharmacist)</span
+                >
               </div>
             }
 
@@ -258,7 +260,11 @@
               </div>
               <div class="field">
                 <label for="employmentType">Employment Type</label>
-                <select id="employmentType" [(ngModel)]="createForm.employmentType" name="employmentType">
+                <select
+                  id="employmentType"
+                  [(ngModel)]="createForm.employmentType"
+                  name="employmentType"
+                >
                   <option value="">— Select —</option>
                   @for (et of employmentTypes; track et) {
                     <option [value]="et">{{ formatEnumLabel(et) }}</option>
@@ -270,7 +276,11 @@
             <!-- Specialization -->
             <div class="field">
               <label for="specialization">Specialization</label>
-              <select id="specialization" [(ngModel)]="createForm.specialization" name="specialization">
+              <select
+                id="specialization"
+                [(ngModel)]="createForm.specialization"
+                name="specialization"
+              >
                 <option value="">— Select —</option>
                 @for (sp of specializations; track sp) {
                   <option [value]="sp">{{ formatEnumLabel(sp) }}</option>
