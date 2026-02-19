@@ -8,6 +8,7 @@ import com.example.hms.service.PasswordResetService;
 import com.example.hms.service.UserCredentialLifecycleService;
 import com.example.hms.service.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -18,7 +19,10 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -143,5 +147,106 @@ class AuthControllerTest {
     void credentialsMe_returnsUnauthorizedWhenNotAuthenticated() throws Exception {
         mockMvc.perform(get("/auth/credentials/me"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // =====================================================================
+    // POST /auth/verify-password  (lock-screen unlock)
+    // =====================================================================
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private void authenticateAs(String username) {
+        var auth = new UsernamePasswordAuthenticationToken(
+                username, "jwt-token-placeholder",
+                AuthorityUtils.createAuthorityList("ROLE_STAFF"));
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    @Test
+    void verifyPassword_correctPassword_returns200() throws Exception {
+        authenticateAs("drjones");
+
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(new UsernamePasswordAuthenticationToken("drjones", null));
+
+        LoginRequest req = new LoginRequest("drjones", "CorrectPass1!");
+
+        mockMvc.perform(post("/auth/verify-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Password verified."));
+    }
+
+    @Test
+    void verifyPassword_wrongPassword_returns401() throws Exception {
+        authenticateAs("drjones");
+
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new BadCredentialsException("Bad credentials"));
+
+        LoginRequest req = new LoginRequest("drjones", "WrongPassword!");
+
+        mockMvc.perform(post("/auth/verify-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Invalid password."));
+    }
+
+    @Test
+    void verifyPassword_usernameMismatch_returns403() throws Exception {
+        authenticateAs("drjones");
+
+        LoginRequest req = new LoginRequest("someoneelse", "AnyPassword1!");
+
+        mockMvc.perform(post("/auth/verify-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Cannot verify password for a different user."));
+    }
+
+    @Test
+    void verifyPassword_disabledAccount_returns401() throws Exception {
+        authenticateAs("drjones");
+
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new DisabledException("Account is disabled"));
+
+        LoginRequest req = new LoginRequest("drjones", "CorrectPass1!");
+
+        mockMvc.perform(post("/auth/verify-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Account is disabled."));
+    }
+
+    @Test
+    void verifyPassword_blankPassword_returns400() throws Exception {
+        authenticateAs("drjones");
+
+        LoginRequest req = new LoginRequest("drjones", "");
+
+        mockMvc.perform(post("/auth/verify-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void verifyPassword_blankUsername_returns400() throws Exception {
+        authenticateAs("drjones");
+
+        LoginRequest req = new LoginRequest("", "SomePassword1!");
+
+        mockMvc.perform(post("/auth/verify-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
     }
 }

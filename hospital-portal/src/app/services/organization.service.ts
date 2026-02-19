@@ -64,6 +64,11 @@ export class OrganizationService {
     return this.http.post<OrganizationResponse>('/super-admin/organizations', req);
   }
 
+  /** Fetch the list of valid organization type enum values from the backend */
+  getTypes(): Observable<string[]> {
+    return this.http.get<string[]>('/organizations/types');
+  }
+
   update(id: string, req: Partial<OrganizationCreateRequest>): Observable<OrganizationResponse> {
     return this.http.put<OrganizationResponse>(`/organizations/${id}`, req);
   }

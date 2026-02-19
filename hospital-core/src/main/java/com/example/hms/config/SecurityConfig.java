@@ -167,6 +167,7 @@ public class SecurityConfig {
                 .requestMatchers("/auth/credentials/**").authenticated()
                 .requestMatchers("/auth/token/**").authenticated()
                 .requestMatchers("/auth/logout").authenticated()
+                .requestMatchers("/auth/verify-password").authenticated()
 
                 // Public auth endpoints (login, register, etc.)
                 .requestMatchers("/auth/**").permitAll()

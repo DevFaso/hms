@@ -59,7 +59,7 @@
               <td>
                 <span class="code-badge">{{ org.code }}</span>
               </td>
-              <td>{{ org.type || '—' }}</td>
+              <td>{{ org.type ? formatType(org.type) : '—' }}</td>
               <td>{{ org.primaryContactEmail || '—' }}</td>
               <td>
                 <span class="count-chip">{{ org.hospitals.length }}</span>
@@ -165,13 +165,12 @@
             </div>
             <div class="field">
               <label for="orgType">Type</label>
-              <input
-                id="orgType"
-                type="text"
-                [(ngModel)]="createForm.type"
-                name="type"
-                placeholder="e.g., HOSPITAL_NETWORK"
-              />
+              <select id="orgType" [(ngModel)]="createForm.type" name="type">
+                <option value="" disabled selected>Select type…</option>
+                @for (t of orgTypes(); track t) {
+                  <option [value]="t">{{ formatType(t) }}</option>
+                }
+              </select>
             </div>
             <div class="field">
               <label for="orgEmail">Contact Email</label>

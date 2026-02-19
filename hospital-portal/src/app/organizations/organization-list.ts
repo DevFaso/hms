@@ -28,12 +28,18 @@ export class OrganizationListComponent implements OnInit {
   saving = signal(false);
   createForm: OrganizationCreateRequest = { name: '', code: '' };
 
+  /** Valid organization type enum values loaded from backend */
+  orgTypes = signal<string[]>([]);
+
   currentPage = signal(0);
   totalPages = signal(0);
   totalElements = signal(0);
 
   ngOnInit(): void {
     this.loadOrganizations();
+    this.orgService.getTypes().subscribe({
+      next: (types) => this.orgTypes.set(types),
+    });
   }
 
   loadOrganizations(page = 0): void {
@@ -103,5 +109,13 @@ export class OrganizationListComponent implements OnInit {
     if (page >= 0 && page < this.totalPages()) {
       this.loadOrganizations(page);
     }
+  }
+
+  /** Convert SCREAMING_SNAKE enum value to Title Case display label */
+  formatType(value: string): string {
+    return value
+      .split('_')
+      .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
+      .join(' ');
   }
 }

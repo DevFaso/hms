@@ -314,6 +314,45 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse("Logged out successfully."));
     }
 
+    /**
+     * Verify current user's password without issuing new tokens.
+     * Used by the lock-screen to re-authenticate when the session is idle.
+     * Requires a valid JWT (user is already logged in but screen is locked).
+     */
+    @PostMapping("/verify-password")
+    @Operation(summary = "Verify password for screen unlock",
+               description = "Validates the current user's password. Returns 200 if correct, 401 if wrong. "
+                           + "Does NOT issue new tokens — the existing JWT remains valid.")
+    @ApiResponse(responseCode = "200", description = "Password verified")
+    @ApiResponse(responseCode = "401", description = "Invalid password")
+    public ResponseEntity<Object> verifyPassword(@Valid @RequestBody LoginRequest request) {
+        String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();
+
+        // Security: only allow verifying the password for the currently authenticated user
+        if (!currentUsername.equalsIgnoreCase(request.getUsername())) {
+            log.warn("🔒 [VERIFY-PWD] Username mismatch: authenticated='{}' requested='{}'",
+                    currentUsername, request.getUsername());
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(new MessageResponse("Cannot verify password for a different user."));
+        }
+
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
+            log.info("🔒 [VERIFY-PWD] Password verified for user='{}'", currentUsername);
+            return ResponseEntity.ok(new MessageResponse("Password verified."));
+        } catch (BadCredentialsException ex) {
+            log.warn("🔒 [VERIFY-PWD] Wrong password for user='{}'", currentUsername);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Invalid password."));
+        } catch (DisabledException ex) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Account is disabled."));
+        } finally {
+            resetSecurityContextToAnonymous();
+        }
+    }
+
     @PostMapping("/request-reset")
     public ResponseEntity<Void> legacyRequestPasswordReset(
             @RequestParam("email") @Email @NotBlank String email,

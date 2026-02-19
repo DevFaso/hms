@@ -5,7 +5,9 @@ import { Subscription } from 'rxjs';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { ToastService } from '../core/toast.service';
+import { IdleService } from '../core/idle.service';
 import { NotificationService, Notification } from '../services/notification.service';
+import { LockScreenComponent } from '../lock-screen/lock-screen';
 
 interface NavItem {
   icon: string;
@@ -17,7 +19,7 @@ interface NavItem {
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, LockScreenComponent],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
 })
@@ -27,6 +29,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   protected readonly toast = inject(ToastService);
   private readonly notifService = inject(NotificationService);
+  protected readonly idle = inject(IdleService);
   private notifSub?: Subscription;
 
   sidebarCollapsed = signal(false);
@@ -148,6 +151,10 @@ export class ShellComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.userProfile.set(this.auth.getUserProfile());
     this.loadNotifications();
+
+    // Start idle detection — lock screen after 10 minutes of inactivity
+    this.idle.start();
+
     const username = this.auth.getSubject();
     if (username) {
       this.notifService.connectWebSocket(username);
@@ -161,6 +168,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.notifSub?.unsubscribe();
     this.notifService.disconnectWebSocket();
+    this.idle.stop();
   }
 
   private loadNotifications(): void {
@@ -196,6 +204,23 @@ export class ShellComponent implements OnInit, OnDestroy {
   }
 
   logout(): void {
+    this.auth.logout();
+    this.router.navigateByUrl('/login');
+  }
+
+  /** Called when user clicks "Sign out instead" on the lock screen */
+  onLockScreenSignOut(): void {
+    this.tearDownAndRedirect();
+  }
+
+  /** Called when a different person wants to sign in from the lock screen */
+  onSwitchUser(): void {
+    this.tearDownAndRedirect();
+  }
+
+  /** Shared tear-down: stop idle, log out, redirect to login */
+  private tearDownAndRedirect(): void {
+    this.idle.stop();
     this.auth.logout();
     this.router.navigateByUrl('/login');
   }
