@@ -187,6 +187,15 @@ export const routes: Routes = [
         loadComponent: () => import('./chat/chat').then((m) => m.ChatComponent),
       },
 
+      // Announcements (Admin)
+      {
+        path: 'announcements',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN'] },
+        loadComponent: () =>
+          import('./announcements/announcement-list').then((m) => m.AnnouncementListComponent),
+      },
+
       // Hospitals (Admin)
       {
         path: 'hospitals',

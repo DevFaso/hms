@@ -135,6 +135,7 @@ export class ShellComponent implements OnInit, OnDestroy {
       items.push(
         { icon: 'local_hospital', label: 'Hospitals', route: '/hospitals' },
         { icon: 'corporate_fare', label: 'Organizations', route: '/organizations' },
+        { icon: 'campaign', label: 'Announcements', route: '/announcements' },
         { icon: 'manage_accounts', label: 'Users', route: '/users' },
         { icon: 'shield', label: 'Roles', route: '/roles' },
         { icon: 'hub', label: 'Platform', route: '/platform' },

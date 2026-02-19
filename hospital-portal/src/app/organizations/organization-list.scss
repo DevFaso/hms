@@ -224,3 +224,21 @@
     max-width: 100%;
   }
 }
+
+.action-group {
+  display: flex; gap: 4px;
+}
+.action-link {
+  display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+  background: none; border: none; border-radius: 6px; cursor: pointer;
+  .material-symbols-outlined { font-size: 18px; }
+  &.edit { color: #2563eb; &:hover { background: #eff6ff; } }
+  &.delete { color: #dc2626; &:hover { background: #fef2f2; } }
+}
+.delete-warning {
+  text-align: center; padding: 12px;
+  .warning-icon { font-size: 48px; color: #dc2626; }
+  p { margin: 8px 0; }
+  .delete-detail { font-style: italic; color: var(--text-secondary); font-size: 0.9rem; }
+}
+.btn-danger { background: #dc2626; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; &:hover { background: #b91c1c; } &:disabled { opacity: 0.5; cursor: default; } }

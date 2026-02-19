@@ -86,6 +86,12 @@ export class UserListComponent implements OnInit {
 
   showCreate = signal(false);
   saving = signal(false);
+  editing = signal<UserSummary | null>(null);
+
+  // Delete
+  showDeleteConfirm = signal(false);
+  deletingUser = signal<UserSummary | null>(null);
+  deleting = signal(false);
 
   // Lookup data for dropdowns
   availableRoles = signal<RoleResponse[]>([]);
@@ -173,11 +179,28 @@ export class UserListComponent implements OnInit {
   openCreate(): void {
     this.createForm = this.freshForm();
     this.selectedRoles = [];
+    this.editing.set(null);
+    this.showCreate.set(true);
+  }
+
+  openEdit(user: UserSummary): void {
+    this.editing.set(user);
+    this.createForm = {
+      username: user.username,
+      email: user.email,
+      password: '',
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phoneNumber: '',
+      roleNames: user.roleName ? [user.roleName] : [],
+    };
+    this.selectedRoles = user.roleName ? [user.roleName] : [];
     this.showCreate.set(true);
   }
 
   closeCreate(): void {
     this.showCreate.set(false);
+    this.editing.set(null);
   }
 
   onRoleToggle(roleCode: string, checked: boolean): void {
@@ -195,13 +218,13 @@ export class UserListComponent implements OnInit {
   }
 
   submitCreate(): void {
+    const isEdit = !!this.editing();
     if (
       !this.createForm.username ||
       !this.createForm.email ||
-      !this.createForm.password ||
+      (!isEdit && !this.createForm.password) ||
       !this.createForm.firstName ||
-      !this.createForm.lastName ||
-      !this.createForm.phoneNumber
+      !this.createForm.lastName
     ) {
       this.toast.error('All required fields must be filled');
       return;
@@ -218,16 +241,51 @@ export class UserListComponent implements OnInit {
     this.createForm.roleNames = [...this.selectedRoles];
 
     this.saving.set(true);
-    this.userService.adminRegister(this.createForm).subscribe({
+    const existing = this.editing();
+    const op = existing
+      ? this.userService.update(existing.id, this.createForm)
+      : this.userService.adminRegister(this.createForm);
+
+    op.subscribe({
       next: () => {
-        this.toast.success('User created successfully');
+        this.toast.success(existing ? 'User updated' : 'User created');
         this.showCreate.set(false);
         this.saving.set(false);
+        this.editing.set(null);
         this.loadUsers();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to create user');
+        this.toast.error(err?.error?.message ?? 'Operation failed');
         this.saving.set(false);
+      },
+    });
+  }
+
+  confirmDelete(user: UserSummary): void {
+    this.deletingUser.set(user);
+    this.showDeleteConfirm.set(true);
+  }
+
+  cancelDelete(): void {
+    this.showDeleteConfirm.set(false);
+    this.deletingUser.set(null);
+  }
+
+  executeDelete(): void {
+    const user = this.deletingUser();
+    if (!user) return;
+    this.deleting.set(true);
+    this.userService.delete(user.id).subscribe({
+      next: () => {
+        this.toast.success('User deleted');
+        this.showDeleteConfirm.set(false);
+        this.deleting.set(false);
+        this.deletingUser.set(null);
+        this.loadUsers();
+      },
+      error: (err) => {
+        this.toast.error(err?.error?.message ?? 'Failed to delete user');
+        this.deleting.set(false);
       },
     });
   }

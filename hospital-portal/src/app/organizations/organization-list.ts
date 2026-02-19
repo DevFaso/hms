@@ -26,7 +26,13 @@ export class OrganizationListComponent implements OnInit {
 
   showCreate = signal(false);
   saving = signal(false);
+  editing = signal<OrganizationResponse | null>(null);
   createForm: OrganizationCreateRequest = { name: '', code: '', timezone: '', contactEmail: '' };
+
+  // Delete
+  showDeleteConfirm = signal(false);
+  deletingOrg = signal<OrganizationResponse | null>(null);
+  deleting = signal(false);
 
   /** Valid organization type enum values loaded from backend */
   orgTypes = signal<string[]>([]);
@@ -123,11 +129,27 @@ export class OrganizationListComponent implements OnInit {
 
   openCreate(): void {
     this.createForm = { name: '', code: '', timezone: '', contactEmail: '' };
+    this.editing.set(null);
+    this.showCreate.set(true);
+  }
+
+  openEdit(org: OrganizationResponse): void {
+    this.editing.set(org);
+    this.createForm = {
+      name: org.name,
+      code: org.code,
+      timezone: org.defaultTimezone ?? '',
+      contactEmail: org.primaryContactEmail ?? '',
+      contactPhone: org.primaryContactPhone ?? '',
+      notes: org.onboardingNotes ?? '',
+      type: org.type ?? '',
+    };
     this.showCreate.set(true);
   }
 
   closeCreate(): void {
     this.showCreate.set(false);
+    this.editing.set(null);
   }
 
   submitCreate(): void {
@@ -141,16 +163,51 @@ export class OrganizationListComponent implements OnInit {
       return;
     }
     this.saving.set(true);
-    this.orgService.create(this.createForm).subscribe({
+    const existing = this.editing();
+    const op = existing
+      ? this.orgService.update(existing.id, this.createForm)
+      : this.orgService.create(this.createForm);
+
+    op.subscribe({
       next: () => {
-        this.toast.success('Organization created');
+        this.toast.success(existing ? 'Organization updated' : 'Organization created');
         this.showCreate.set(false);
         this.saving.set(false);
+        this.editing.set(null);
         this.loadOrganizations();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to create organization');
+        this.toast.error(err?.error?.message ?? 'Operation failed');
         this.saving.set(false);
+      },
+    });
+  }
+
+  confirmDelete(org: OrganizationResponse): void {
+    this.deletingOrg.set(org);
+    this.showDeleteConfirm.set(true);
+  }
+
+  cancelDelete(): void {
+    this.showDeleteConfirm.set(false);
+    this.deletingOrg.set(null);
+  }
+
+  executeDelete(): void {
+    const org = this.deletingOrg();
+    if (!org) return;
+    this.deleting.set(true);
+    this.orgService.delete(org.id).subscribe({
+      next: () => {
+        this.toast.success('Organization deleted');
+        this.showDeleteConfirm.set(false);
+        this.deleting.set(false);
+        this.deletingOrg.set(null);
+        this.loadOrganizations();
+      },
+      error: (err) => {
+        this.toast.error(err?.error?.message ?? 'Failed to delete organization');
+        this.deleting.set(false);
       },
     });
   }
