@@ -37,11 +37,11 @@ export interface OrganizationPage {
 export interface OrganizationCreateRequest {
   name: string;
   code: string;
-  description?: string;
+  timezone: string;
+  contactEmail: string;
+  contactPhone?: string;
+  notes?: string;
   type?: string;
-  primaryContactEmail?: string;
-  primaryContactPhone?: string;
-  defaultTimezone?: string;
 }
 
 @Injectable({ providedIn: 'root' })

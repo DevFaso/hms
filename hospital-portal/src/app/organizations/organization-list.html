@@ -154,14 +154,24 @@
               />
             </div>
             <div class="field">
-              <label for="orgDesc">Description</label>
-              <textarea
-                id="orgDesc"
-                rows="3"
-                [(ngModel)]="createForm.description"
-                name="description"
-                placeholder="Description..."
-              ></textarea>
+              <label for="orgEmail">Contact Email *</label>
+              <input
+                id="orgEmail"
+                type="email"
+                [(ngModel)]="createForm.contactEmail"
+                name="contactEmail"
+                placeholder="admin@org.com"
+                required
+              />
+            </div>
+            <div class="field">
+              <label for="orgTimezone">Timezone *</label>
+              <select id="orgTimezone" [(ngModel)]="createForm.timezone" name="timezone" required>
+                <option value="" disabled selected>Select timezone…</option>
+                @for (tz of timezones; track tz) {
+                  <option [value]="tz">{{ tz }}</option>
+                }
+              </select>
             </div>
             <div class="field">
               <label for="orgType">Type</label>
@@ -173,14 +183,24 @@
               </select>
             </div>
             <div class="field">
-              <label for="orgEmail">Contact Email</label>
+              <label for="orgPhone">Contact Phone</label>
               <input
-                id="orgEmail"
-                type="email"
-                [(ngModel)]="createForm.primaryContactEmail"
-                name="email"
-                placeholder="admin@org.com"
+                id="orgPhone"
+                type="tel"
+                [(ngModel)]="createForm.contactPhone"
+                name="contactPhone"
+                placeholder="+1 (555) 000-0000"
               />
+            </div>
+            <div class="field">
+              <label for="orgNotes">Notes</label>
+              <textarea
+                id="orgNotes"
+                rows="3"
+                [(ngModel)]="createForm.notes"
+                name="notes"
+                placeholder="Onboarding notes..."
+              ></textarea>
             </div>
           </div>
           <div class="modal-actions">

@@ -26,10 +26,55 @@ export class OrganizationListComponent implements OnInit {
 
   showCreate = signal(false);
   saving = signal(false);
-  createForm: OrganizationCreateRequest = { name: '', code: '' };
+  createForm: OrganizationCreateRequest = { name: '', code: '', timezone: '', contactEmail: '' };
 
   /** Valid organization type enum values loaded from backend */
   orgTypes = signal<string[]>([]);
+
+  /** Common IANA timezones for the dropdown */
+  readonly timezones: string[] = [
+    'Africa/Ouagadougou',
+    'Africa/Abidjan',
+    'Africa/Accra',
+    'Africa/Bamako',
+    'Africa/Dakar',
+    'Africa/Lagos',
+    'Africa/Nairobi',
+    'Africa/Johannesburg',
+    'Africa/Cairo',
+    'Africa/Casablanca',
+    'America/New_York',
+    'America/Chicago',
+    'America/Denver',
+    'America/Los_Angeles',
+    'America/Toronto',
+    'America/Sao_Paulo',
+    'America/Mexico_City',
+    'America/Bogota',
+    'America/Lima',
+    'America/Buenos_Aires',
+    'Asia/Dubai',
+    'Asia/Kolkata',
+    'Asia/Shanghai',
+    'Asia/Tokyo',
+    'Asia/Singapore',
+    'Asia/Seoul',
+    'Asia/Bangkok',
+    'Asia/Riyadh',
+    'Australia/Sydney',
+    'Australia/Melbourne',
+    'Europe/London',
+    'Europe/Paris',
+    'Europe/Berlin',
+    'Europe/Madrid',
+    'Europe/Rome',
+    'Europe/Amsterdam',
+    'Europe/Brussels',
+    'Europe/Moscow',
+    'Pacific/Auckland',
+    'Pacific/Honolulu',
+    'UTC',
+  ];
 
   currentPage = signal(0);
   totalPages = signal(0);
@@ -77,7 +122,7 @@ export class OrganizationListComponent implements OnInit {
   }
 
   openCreate(): void {
-    this.createForm = { name: '', code: '' };
+    this.createForm = { name: '', code: '', timezone: '', contactEmail: '' };
     this.showCreate.set(true);
   }
 
@@ -86,8 +131,13 @@ export class OrganizationListComponent implements OnInit {
   }
 
   submitCreate(): void {
-    if (!this.createForm.name || !this.createForm.code) {
-      this.toast.error('Name and code are required');
+    if (
+      !this.createForm.name ||
+      !this.createForm.code ||
+      !this.createForm.contactEmail ||
+      !this.createForm.timezone
+    ) {
+      this.toast.error('Name, code, contact email, and timezone are required');
       return;
     }
     this.saving.set(true);
