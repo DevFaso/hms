@@ -159,23 +159,21 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
   border-radius: 50%;
   border: 4px solid $bg-card;
   box-shadow: $shadow-md;
-  background: $bg-card; // neutral fallback — no gradient
+  flex-shrink: 0;
 
+  // Mirrors the shell .avatar-img that works correctly
   .avatar-img {
-    position: absolute;
-    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    object-position: center;
+    border-radius: inherit;
     display: block;
     color: transparent; // hide alt-text
-    z-index: 1;
   }
 
   .avatar-placeholder {
-    position: absolute;
-    inset: 0;
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
