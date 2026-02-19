@@ -7,6 +7,14 @@
       </h1>
       <p class="subtitle">Manage shifts, schedules, and leave requests</p>
     </div>
+    <div class="page-actions">
+      <button class="btn-primary" (click)="openCreateShift()">
+        <span class="material-symbols-outlined">add</span> New Shift
+      </button>
+      <button class="btn-secondary" (click)="openCreateLeave()">
+        <span class="material-symbols-outlined">event_busy</span> Request Leave
+      </button>
+    </div>
   </div>
 
   <!-- Summary Cards -->
@@ -110,9 +118,14 @@
                         {{ formatShiftType(shift.shiftType) }}
                       </span>
                     </div>
-                    <span class="shift-status-badge" [attr.data-status]="shift.status">
-                      {{ shift.status }}
-                    </span>
+                    <div class="shift-actions-col">
+                      <span class="shift-status-badge" [attr.data-status]="shift.status">
+                        {{ shift.status }}
+                      </span>
+                      <button class="action-link" title="Edit shift" (click)="openEditShift(shift)">
+                        <span class="material-symbols-outlined">edit</span>
+                      </button>
+                    </div>
                   </div>
                 } @empty {
                   <div class="no-shift">No shifts</div>
@@ -234,3 +247,141 @@
     }
   }
 </div>
+
+<!-- ═══ CREATE/EDIT SHIFT MODAL ═══ -->
+@if (showShiftModal()) {
+  <div class="modal-backdrop" (click)="closeShiftModal()">
+    <div class="modal modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>{{ editingShift() ? 'Edit Shift' : 'Create Shift' }}</h2>
+        <button class="modal-close" (click)="closeShiftModal()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label>Staff Member *</label>
+            <select [(ngModel)]="shiftForm.staffId" required>
+              <option value="">Select staff...</option>
+              @for (s of staffMembers(); track s.id) {
+                <option [value]="s.id">{{ s.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label>Hospital *</label>
+            <select [(ngModel)]="shiftForm.hospitalId" required>
+              <option value="">Select hospital...</option>
+              @for (h of hospitals(); track h.id) {
+                <option [value]="h.id">{{ h.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Shift Date *</label>
+            <input type="date" [(ngModel)]="shiftForm.shiftDate" required />
+          </div>
+          <div class="field">
+            <label>Shift Type *</label>
+            <select [(ngModel)]="shiftForm.shiftType" required>
+              @for (t of shiftTypes; track t) {
+                <option [value]="t">{{ t }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Start Time *</label>
+            <input type="time" [(ngModel)]="shiftForm.startTime" required />
+          </div>
+          <div class="field">
+            <label>End Time *</label>
+            <input type="time" [(ngModel)]="shiftForm.endTime" required />
+          </div>
+        </div>
+        <div class="field">
+          <label>Notes</label>
+          <textarea [(ngModel)]="shiftForm.notes" rows="3" placeholder="Optional notes..."></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeShiftModal()">Cancel</button>
+        <button class="btn-primary" (click)="submitShift()" [disabled]="savingShift() || !shiftForm.staffId || !shiftForm.hospitalId || !shiftForm.shiftDate || !shiftForm.startTime || !shiftForm.endTime">
+          {{ savingShift() ? 'Saving...' : (editingShift() ? 'Update Shift' : 'Create Shift') }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ REQUEST LEAVE MODAL ═══ -->
+@if (showLeaveModal()) {
+  <div class="modal-backdrop" (click)="closeLeaveModal()">
+    <div class="modal modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>Request Leave</h2>
+        <button class="modal-close" (click)="closeLeaveModal()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label>Staff Member *</label>
+            <select [(ngModel)]="leaveForm.staffId" required>
+              <option value="">Select staff...</option>
+              @for (s of staffMembers(); track s.id) {
+                <option [value]="s.id">{{ s.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label>Hospital *</label>
+            <select [(ngModel)]="leaveForm.hospitalId" required>
+              <option value="">Select hospital...</option>
+              @for (h of hospitals(); track h.id) {
+                <option [value]="h.id">{{ h.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Leave Type *</label>
+            <select [(ngModel)]="leaveForm.leaveType" required>
+              @for (t of leaveTypes; track t) {
+                <option [value]="t">{{ t }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label class="toggle-label">
+              <input type="checkbox" [(ngModel)]="leaveForm.requiresCoverage" />
+              Requires Coverage
+            </label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Start Date *</label>
+            <input type="date" [(ngModel)]="leaveForm.startDate" required />
+          </div>
+          <div class="field">
+            <label>End Date *</label>
+            <input type="date" [(ngModel)]="leaveForm.endDate" required />
+          </div>
+        </div>
+        <div class="field">
+          <label>Reason</label>
+          <textarea [(ngModel)]="leaveForm.reason" rows="3" placeholder="Reason for leave..."></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeLeaveModal()">Cancel</button>
+        <button class="btn-primary" (click)="submitLeave()" [disabled]="savingLeave() || !leaveForm.staffId || !leaveForm.hospitalId || !leaveForm.startDate || !leaveForm.endDate">
+          {{ savingLeave() ? 'Submitting...' : 'Submit Request' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

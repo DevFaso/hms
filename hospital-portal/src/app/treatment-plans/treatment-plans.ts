@@ -1,7 +1,13 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TreatmentPlanService, TreatmentPlanResponse } from '../services/treatment-plan.service';
+import {
+  TreatmentPlanService,
+  TreatmentPlanResponse,
+  TreatmentPlanRequest,
+} from '../services/treatment-plan.service';
+import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 
 @Component({
@@ -13,6 +19,8 @@ import { ToastService } from '../core/toast.service';
 })
 export class TreatmentPlansComponent implements OnInit {
   private readonly tpService = inject(TreatmentPlanService);
+  private readonly hospitalService = inject(HospitalService);
+  private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
 
   plans = signal<TreatmentPlanResponse[]>([]);
@@ -22,8 +30,77 @@ export class TreatmentPlansComponent implements OnInit {
   activeTab = signal<'all' | 'active' | 'draft' | 'completed'>('all');
   selectedPlan = signal<TreatmentPlanResponse | null>(null);
 
+  hospitals = signal<HospitalResponse[]>([]);
+  staffList = signal<StaffResponse[]>([]);
+
+  /* ── CRUD signals ── */
+  showModal = signal(false);
+  editing = signal(false);
+  saving = signal(false);
+  editId = '';
+  form: TreatmentPlanRequest = this.emptyForm();
+
   ngOnInit(): void {
     this.load();
+    this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
+    this.staffService.list().subscribe((s) => this.staffList.set(s ?? []));
+  }
+
+  emptyForm(): TreatmentPlanRequest {
+    return {
+      patientId: '',
+      hospitalId: '',
+      assignmentId: '',
+      authorStaffId: '',
+      problemStatement: '',
+      timelineStartDate: '',
+      timelineReviewDate: '',
+    };
+  }
+
+  openCreate(): void {
+    this.form = this.emptyForm();
+    this.editing.set(false);
+    this.editId = '';
+    this.showModal.set(true);
+  }
+
+  openEdit(p: TreatmentPlanResponse): void {
+    this.form = {
+      patientId: p.patientId ?? '',
+      hospitalId: p.hospitalId ?? '',
+      assignmentId: '',
+      authorStaffId: '',
+      problemStatement: p.problemStatement ?? '',
+      timelineStartDate: p.timelineStartDate ?? '',
+      timelineReviewDate: p.timelineReviewDate ?? '',
+    };
+    this.editId = p.id;
+    this.editing.set(true);
+    this.showModal.set(true);
+  }
+
+  closeModal(): void {
+    this.showModal.set(false);
+  }
+
+  submitForm(): void {
+    this.saving.set(true);
+    const op = this.editing()
+      ? this.tpService.update(this.editId, this.form)
+      : this.tpService.create(this.form);
+    op.subscribe({
+      next: () => {
+        this.toast.success(this.editing() ? 'Plan updated' : 'Plan created');
+        this.closeModal();
+        this.saving.set(false);
+        this.load();
+      },
+      error: () => {
+        this.toast.error('Save failed');
+        this.saving.set(false);
+      },
+    });
   }
 
   load(): void {

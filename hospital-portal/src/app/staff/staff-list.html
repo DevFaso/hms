@@ -4,6 +4,10 @@
       <h1 class="page-title">Staff</h1>
       <p class="page-subtitle">View and manage hospital staff members</p>
     </div>
+    <button class="btn-primary" (click)="openCreate()">
+      <span class="material-symbols-outlined">add</span>
+      New Staff
+    </button>
   </div>
 
   <div class="search-bar">
@@ -26,7 +30,7 @@
   @if (!loading() && filtered().length > 0) {
     <div class="staff-grid">
       @for (member of filtered(); track member.id) {
-        <a class="staff-card" [routerLink]="['/staff', member.id]">
+        <div class="staff-card">
           <div class="staff-avatar">
             {{ getInitials(member.name) }}
           </div>
@@ -41,8 +45,22 @@
             }
             <p class="staff-email">{{ member.email }}</p>
           </div>
-          <span class="status-dot" [class.active]="member.active"></span>
-        </a>
+          <div class="staff-actions-col">
+            <span class="status-dot" [class.active]="member.active"></span>
+            <div class="action-group">
+              <button class="action-link" title="Edit" (click)="openEdit(member)">
+                <span class="material-symbols-outlined">edit</span>
+              </button>
+              <button
+                class="action-link danger"
+                title="Deactivate"
+                (click)="confirmDelete(member)"
+              >
+                <span class="material-symbols-outlined">person_off</span>
+              </button>
+            </div>
+          </div>
+        </div>
       }
     </div>
   }
@@ -51,7 +69,179 @@
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">badge</span>
       <h3>No staff found</h3>
-      <p>{{ searchTerm ? 'Try adjusting your search.' : 'No staff members registered yet.' }}</p>
+      <p>{{ searchTerm ? 'Try adjusting your search.' : 'Register your first staff member.' }}</p>
+    </div>
+  }
+
+  <!-- Create / Edit Modal -->
+  @if (showModal()) {
+    <div
+      class="modal-backdrop"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal modal-lg"
+        [open]="showModal()"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeModal()"
+        tabindex="-1"
+      >
+        <div class="modal-header">
+          <h2>{{ editing() ? 'Edit Staff' : 'Register Staff' }}</h2>
+          <button class="modal-close" (click)="closeModal()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <form (ngSubmit)="submitForm()">
+          <div class="modal-body">
+            <div class="form-row">
+              <div class="field">
+                <label for="sUser">User *</label>
+                <select id="sUser" [(ngModel)]="form.userId" name="userId" required>
+                  <option value="">Select user</option>
+                  @for (u of users(); track u.id) {
+                    <option [value]="u.id">
+                      {{ u.firstName }} {{ u.lastName }} ({{ u.email }})
+                    </option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label for="sHospital">Hospital *</label>
+                <select
+                  id="sHospital"
+                  [(ngModel)]="form.hospitalId"
+                  name="hospitalId"
+                  required
+                >
+                  <option value="">Select hospital</option>
+                  @for (h of hospitals(); track h.id) {
+                    <option [value]="h.id">{{ h.name }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="sJobTitle">Job Title</label>
+                <select id="sJobTitle" [(ngModel)]="form.jobTitle" name="jobTitle">
+                  <option value="">Select title</option>
+                  @for (jt of jobTitles; track jt) {
+                    <option [value]="jt">{{ jt.replaceAll('_', ' ') }}</option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label for="sEmployment">Employment Type</label>
+                <select
+                  id="sEmployment"
+                  [(ngModel)]="form.employmentType"
+                  name="employmentType"
+                >
+                  <option value="">Select type</option>
+                  @for (et of employmentTypes; track et) {
+                    <option [value]="et">{{ et.replaceAll('_', ' ') }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="sSpec">Specialization</label>
+                <input
+                  id="sSpec"
+                  type="text"
+                  [(ngModel)]="form.specialization"
+                  name="specialization"
+                  placeholder="e.g., Cardiology"
+                />
+              </div>
+              <div class="field">
+                <label for="sLicense">License Number</label>
+                <input
+                  id="sLicense"
+                  type="text"
+                  [(ngModel)]="form.licenseNumber"
+                  name="licenseNumber"
+                  placeholder="e.g., MED-12345"
+                />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="sDept">Department</label>
+              <input
+                id="sDept"
+                type="text"
+                [(ngModel)]="form.departmentId"
+                name="departmentId"
+                placeholder="Department ID (optional)"
+              />
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeModal()">Cancel</button>
+            <button type="submit" class="btn-primary" [disabled]="saving()">
+              {{
+                saving()
+                  ? editing()
+                    ? 'Saving...'
+                    : 'Registering...'
+                  : editing()
+                    ? 'Save Changes'
+                    : 'Register'
+              }}
+            </button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+  }
+
+  <!-- Delete / Deactivate Confirmation Modal -->
+  @if (showDeleteConfirm()) {
+    <div
+      class="modal-backdrop"
+      (click)="cancelDelete()"
+      (keydown.escape)="cancelDelete()"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal"
+        [open]="showDeleteConfirm()"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="cancelDelete()"
+        tabindex="-1"
+      >
+        <div class="modal-header">
+          <h2>Deactivate Staff</h2>
+          <button class="modal-close" (click)="cancelDelete()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="delete-warning">
+            Are you sure you want to deactivate
+            <strong>{{ deletingStaff()?.name }}</strong
+            >? They will no longer be able to access the system.
+          </p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+          <button
+            type="button"
+            class="btn-danger"
+            [disabled]="deleting()"
+            (click)="executeDelete()"
+          >
+            {{ deleting() ? 'Deactivating...' : 'Deactivate' }}
+          </button>
+        </div>
+      </dialog>
     </div>
   }
 </div>

@@ -4,6 +4,11 @@
       <h1 class="page-title">Imaging</h1>
       <p class="page-subtitle">Radiology orders, scheduling, and reports</p>
     </div>
+    <div class="page-actions">
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span> New Order
+      </button>
+    </div>
   </div>
   <div class="summary-cards">
     <div class="summary-card">
@@ -123,9 +128,19 @@
                 <span class="status-badge {{ getStatusClass(o.status) }}">{{ o.status }}</span>
               </td>
               <td>
-                <button class="btn-icon" (click)="viewDetail(o)" title="View imaging order details">
-                  <span class="material-symbols-outlined">visibility</span>
-                </button>
+                <div class="action-group">
+                  <button class="action-link" (click)="viewDetail(o)" title="View imaging order details">
+                    <span class="material-symbols-outlined">visibility</span>
+                  </button>
+                  @if (!['COMPLETED', 'FINAL', 'CANCELLED'].includes(o.status)) {
+                    <button class="action-link" (click)="openEdit(o)" title="Edit order">
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                    <button class="action-link delete" (click)="confirmCancel(o)" title="Cancel order">
+                      <span class="material-symbols-outlined">cancel</span>
+                    </button>
+                  }
+                </div>
               </td>
             </tr>
           }
@@ -214,6 +229,101 @@
             </div>
           }
         </div>
+      </div>
+    </div>
+  }
+
+  <!-- Create/Edit Imaging Order Modal -->
+  @if (showModal()) {
+    <div class="modal-backdrop" (click)="closeModal()"></div>
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>{{ editing() ? 'Edit' : 'New' }} Imaging Order</h2>
+        <button class="modal-close" (click)="closeModal()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label>Patient ID</label>
+            <input type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" />
+          </div>
+          <div class="field">
+            <label>Hospital</label>
+            <select [(ngModel)]="form.hospitalId" title="Hospital">
+              <option value="">Select hospital</option>
+              @for (h of hospitals(); track h.id) {
+                <option [value]="h.id">{{ h.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Modality</label>
+            <select [(ngModel)]="form.modality" title="Modality">
+              @for (m of modalities; track m) {
+                <option [value]="m">{{ m }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label>Priority</label>
+            <select [(ngModel)]="form.priority" title="Priority">
+              @for (p of priorities; track p) {
+                <option [value]="p">{{ p }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Study Type</label>
+            <input type="text" [(ngModel)]="form.studyType" placeholder="e.g. Chest X-Ray" />
+          </div>
+          <div class="field">
+            <label>Body Region</label>
+            <input type="text" [(ngModel)]="form.bodyRegion" placeholder="e.g. Chest" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Laterality</label>
+            <input type="text" [(ngModel)]="form.laterality" placeholder="e.g. LEFT, RIGHT, BILATERAL" />
+          </div>
+          <div class="field full-width">
+            <label>Clinical Question</label>
+            <input type="text" [(ngModel)]="form.clinicalQuestion" placeholder="Optional" />
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeModal()">Cancel</button>
+        <button class="btn-primary" (click)="submitForm()" [disabled]="saving()">
+          {{ saving() ? 'Saving...' : (editing() ? 'Update Order' : 'Create Order') }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Cancel Imaging Order Confirmation -->
+  @if (showDeleteConfirm()) {
+    <div class="modal-backdrop" (click)="cancelDeleteAction()"></div>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Cancel Order</h2>
+        <button class="modal-close" (click)="cancelDeleteAction()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="delete-warning">
+          <span class="material-symbols-outlined">warning</span>
+          <p>Cancel the <strong>{{ deletingItem()?.modality }}</strong> order for <strong>{{ deletingItem()?.patientDisplayName }}</strong>?</p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelDeleteAction()">Keep</button>
+        <button class="btn-danger" (click)="executeCancel()" [disabled]="deleting()">
+          {{ deleting() ? 'Cancelling...' : 'Cancel Order' }}
+        </button>
       </div>
     </div>
   }

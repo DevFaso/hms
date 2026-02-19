@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
+import { HospitalService, HospitalResponse } from '../services/hospital.service';
 
 interface Department {
   id: string;
@@ -11,8 +12,24 @@ interface Department {
   code: string;
   description?: string;
   headOfDepartment?: string;
+  headOfDepartmentEmail?: string;
+  phoneNumber?: string;
+  email?: string;
   staffCount?: number;
   active: boolean;
+  hospitalId?: string;
+  hospitalName?: string;
+}
+
+interface DepartmentRequest {
+  hospitalId: string;
+  name: string;
+  code: string;
+  description?: string;
+  phoneNumber?: string;
+  email?: string;
+  active: boolean;
+  headOfDepartmentEmail?: string;
 }
 
 @Component({
@@ -25,14 +42,31 @@ interface Department {
 export class DepartmentListComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly toast = inject(ToastService);
+  private readonly hospitalService = inject(HospitalService);
 
   departments = signal<Department[]>([]);
   filtered = signal<Department[]>([]);
   searchTerm = '';
   loading = signal(true);
 
+  hospitals = signal<HospitalResponse[]>([]);
+
+  // Create / Edit
+  showModal = signal(false);
+  editing = signal<Department | null>(null);
+  saving = signal(false);
+  form: DepartmentRequest = this.emptyForm();
+
+  // Delete
+  showDeleteConfirm = signal(false);
+  deletingDept = signal<Department | null>(null);
+  deleting = signal(false);
+
   ngOnInit(): void {
     this.loadDepartments();
+    this.hospitalService.list().subscribe({
+      next: (data) => this.hospitals.set(data),
+    });
   }
 
   loadDepartments(): void {
@@ -65,5 +99,114 @@ export class DepartmentListComponent implements OnInit {
           (d.description?.toLowerCase().includes(term) ?? false),
       ),
     );
+  }
+
+  // ---------- Create ----------
+  openCreate(): void {
+    this.form = this.emptyForm();
+    this.editing.set(null);
+    this.showModal.set(true);
+  }
+
+  // ---------- Edit ----------
+  openEdit(dept: Department): void {
+    this.editing.set(dept);
+    this.form = {
+      hospitalId: dept.hospitalId ?? '',
+      name: dept.name,
+      code: dept.code,
+      description: dept.description ?? '',
+      phoneNumber: dept.phoneNumber ?? '',
+      email: dept.email ?? '',
+      active: dept.active,
+      headOfDepartmentEmail: dept.headOfDepartmentEmail ?? '',
+    };
+    this.showModal.set(true);
+  }
+
+  closeModal(): void {
+    this.showModal.set(false);
+    this.editing.set(null);
+  }
+
+  submitForm(): void {
+    if (!this.form.name || !this.form.code || !this.form.hospitalId) {
+      this.toast.error('Hospital, name, and code are required');
+      return;
+    }
+    this.saving.set(true);
+    const payload: DepartmentRequest = { ...this.form };
+    if (!payload.description) delete payload.description;
+    if (!payload.phoneNumber) delete payload.phoneNumber;
+    if (!payload.email) delete payload.email;
+    if (!payload.headOfDepartmentEmail) delete payload.headOfDepartmentEmail;
+
+    const existing = this.editing();
+    const request$ = existing
+      ? this.http.put<Department>(`/departments/${existing.id}`, payload)
+      : this.http.post<Department>('/departments', payload);
+
+    request$.subscribe({
+      next: () => {
+        this.toast.success(existing ? 'Department updated' : 'Department created');
+        this.closeModal();
+        this.saving.set(false);
+        this.loadDepartments();
+      },
+      error: (err) => {
+        const body = err?.error;
+        let msg = `Failed to ${existing ? 'update' : 'create'} department`;
+        if (body?.fieldErrors) {
+          msg = Object.values(body.fieldErrors).join('. ');
+        } else if (body?.message) {
+          msg = body.message;
+        }
+        this.toast.error(msg);
+        this.saving.set(false);
+      },
+    });
+  }
+
+  // ---------- Delete ----------
+  confirmDelete(dept: Department): void {
+    this.deletingDept.set(dept);
+    this.showDeleteConfirm.set(true);
+  }
+
+  cancelDelete(): void {
+    this.showDeleteConfirm.set(false);
+    this.deletingDept.set(null);
+  }
+
+  executeDelete(): void {
+    const dept = this.deletingDept();
+    if (!dept) return;
+    this.deleting.set(true);
+    this.http.delete(`/departments/${dept.id}`).subscribe({
+      next: () => {
+        this.toast.success('Department deleted');
+        this.cancelDelete();
+        this.deleting.set(false);
+        this.loadDepartments();
+      },
+      error: (err) => {
+        this.toast.error(err?.error?.message ?? 'Failed to delete department');
+        this.deleting.set(false);
+      },
+    });
+  }
+
+  // ---------- Helpers ----------
+  private emptyForm(): DepartmentRequest {
+    return {
+      hospitalId: '',
+      name: '',
+      code: '',
+      description: '',
+      phoneNumber: '',
+      email: '',
+      active: true,
+      headOfDepartmentEmail: '',
+    };
   }
 }

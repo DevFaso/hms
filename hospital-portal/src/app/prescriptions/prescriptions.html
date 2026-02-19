@@ -4,6 +4,9 @@
       <h1 class="page-title">Prescriptions</h1>
       <p class="page-subtitle">Medication orders and prescription management</p>
     </div>
+    <div class="page-actions">
+      <button class="btn-primary" (click)="openCreate()"><span class="material-symbols-outlined">add</span> New Prescription</button>
+    </div>
   </div>
   <div class="summary-cards">
     <div class="summary-card">
@@ -125,9 +128,11 @@
                 <span class="status-badge {{ getStatusClass(p.status) }}">{{ p.status }}</span>
               </td>
               <td>
-                <button class="btn-icon" (click)="viewDetail(p)" title="View prescription details">
-                  <span class="material-symbols-outlined">visibility</span>
-                </button>
+                <div class="action-group">
+                  <button class="action-link view-link" (click)="viewDetail(p)" title="View prescription details"><span class="material-symbols-outlined">visibility</span></button>
+                  <button class="action-link edit-link" (click)="openEdit(p)" title="Edit"><span class="material-symbols-outlined">edit</span></button>
+                  <button class="action-link delete-link" (click)="confirmDelete(p)" title="Delete"><span class="material-symbols-outlined">delete</span></button>
+                </div>
               </td>
             </tr>
           }
@@ -196,3 +201,82 @@
     </div>
   }
 </div>
+
+<!-- ═══ CREATE / EDIT PRESCRIPTION MODAL ═══ -->
+@if (showModal()) {
+  <div class="modal-backdrop" (click)="closeModal()">
+    <div class="modal modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>{{ editing() ? 'Edit Prescription' : 'New Prescription' }}</h2>
+        <button class="modal-close" (click)="closeModal()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label>Patient ID *</label>
+            <input type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" required />
+          </div>
+          <div class="field">
+            <label>Prescriber</label>
+            <select [(ngModel)]="form.staffId">
+              <option value="">Select prescriber...</option>
+              @for (s of staffMembers(); track s.id) {
+                <option [value]="s.id">{{ s.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>Medication Name *</label>
+          <input type="text" [(ngModel)]="form.medicationName" placeholder="e.g. Amoxicillin 500mg" required />
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Dosage</label>
+            <input type="text" [(ngModel)]="form.dosage" placeholder="e.g. 500mg" />
+          </div>
+          <div class="field">
+            <label>Frequency</label>
+            <input type="text" [(ngModel)]="form.frequency" placeholder="e.g. 3x daily" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Duration</label>
+            <input type="text" [(ngModel)]="form.duration" placeholder="e.g. 7 days" />
+          </div>
+          <div class="field">
+            <label>Encounter ID</label>
+            <input type="text" [(ngModel)]="form.encounterId" placeholder="Optional" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Notes</label>
+          <textarea [(ngModel)]="form.notes" rows="3" placeholder="Prescription notes..."></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeModal()">Cancel</button>
+        <button class="btn-primary" (click)="submitForm()" [disabled]="saving() || !form.medicationName">
+          {{ saving() ? 'Saving...' : (editing() ? 'Update' : 'Create') }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ DELETE CONFIRM ═══ -->
+@if (showDeleteConfirm()) {
+  <div class="modal-backdrop" (click)="cancelDelete()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header"><h2>Delete Prescription</h2><button class="modal-close" (click)="cancelDelete()"><span class="material-symbols-outlined">close</span></button></div>
+      <div class="modal-body">
+        <p class="delete-warning">Are you sure you want to delete the prescription for <strong>{{ deletingRx()?.medicationName }}</strong>? This action cannot be undone.</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+        <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">{{ deleting() ? 'Deleting...' : 'Delete' }}</button>
+      </div>
+    </div>
+  </div>
+}

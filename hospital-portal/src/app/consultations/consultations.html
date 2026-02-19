@@ -4,6 +4,11 @@
       <h1 class="page-title">Consultations</h1>
       <p class="page-subtitle">Specialist consultations and referral workflows</p>
     </div>
+    <div class="page-actions">
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span> New Consultation
+      </button>
+    </div>
   </div>
   <div class="summary-cards">
     <div class="summary-card">
@@ -124,9 +129,16 @@
                 <span class="status-badge {{ getStatusClass(c.status) }}">{{ c.status }}</span>
               </td>
               <td>
-                <button class="btn-icon" (click)="viewDetail(c)" title="View consultation details">
-                  <span class="material-symbols-outlined">visibility</span>
-                </button>
+                <div class="action-group">
+                  <button class="action-link" (click)="viewDetail(c)" title="View consultation details">
+                    <span class="material-symbols-outlined">visibility</span>
+                  </button>
+                  @if (!['COMPLETED', 'CANCELLED'].includes(c.status)) {
+                    <button class="action-link delete" (click)="confirmCancel(c)" title="Cancel consultation">
+                      <span class="material-symbols-outlined">cancel</span>
+                    </button>
+                  }
+                </div>
               </td>
             </tr>
           }
@@ -217,6 +229,99 @@
             </div>
           }
         </div>
+      </div>
+    </div>
+  }
+
+  <!-- Create Consultation Modal -->
+  @if (showModal()) {
+    <div class="modal-backdrop" (click)="closeModal()"></div>
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>New Consultation</h2>
+        <button class="modal-close" (click)="closeModal()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label>Patient ID</label>
+            <input type="text" [(ngModel)]="form.patientId" placeholder="Patient ID" />
+          </div>
+          <div class="field">
+            <label>Hospital</label>
+            <select [(ngModel)]="form.hospitalId" title="Hospital">
+              <option value="">Select hospital</option>
+              @for (h of hospitals(); track h.id) {
+                <option [value]="h.id">{{ h.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Type</label>
+            <select [(ngModel)]="form.consultationType" title="Consultation type">
+              @for (t of consultationTypes; track t) {
+                <option [value]="t">{{ t }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label>Urgency</label>
+            <select [(ngModel)]="form.urgency" title="Urgency">
+              @for (u of urgencies; track u) {
+                <option [value]="u">{{ u }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field full-width">
+            <label>Specialty Requested</label>
+            <input type="text" [(ngModel)]="form.specialtyRequested" placeholder="e.g. Cardiology" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field full-width">
+            <label>Reason for Consult</label>
+            <textarea [(ngModel)]="form.reasonForConsult" rows="3" placeholder="Reason for consultation"></textarea>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field full-width">
+            <label>Clinical Question</label>
+            <textarea [(ngModel)]="form.clinicalQuestion" rows="2" placeholder="Optional"></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeModal()">Cancel</button>
+        <button class="btn-primary" (click)="submitForm()" [disabled]="saving()">
+          {{ saving() ? 'Saving...' : 'Create Consultation' }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Cancel Consultation Confirmation -->
+  @if (showDeleteConfirm()) {
+    <div class="modal-backdrop" (click)="cancelDeleteAction()"></div>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Cancel Consultation</h2>
+        <button class="modal-close" (click)="cancelDeleteAction()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="delete-warning">
+          <span class="material-symbols-outlined">warning</span>
+          <p>Cancel the consultation for <strong>{{ deletingItem()?.patientName }}</strong> — <strong>{{ deletingItem()?.specialtyRequested }}</strong>?</p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelDeleteAction()">Keep</button>
+        <button class="btn-danger" (click)="executeCancel()" [disabled]="deleting()">
+          {{ deleting() ? 'Cancelling...' : 'Cancel Consultation' }}
+        </button>
       </div>
     </div>
   }

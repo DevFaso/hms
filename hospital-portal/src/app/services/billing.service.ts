@@ -50,6 +50,19 @@ export interface InvoiceItemResponse {
   totalPrice: number;
 }
 
+export interface BillingInvoiceRequest {
+  patientEmail: string;
+  hospitalName: string;
+  encounterReference?: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  dueDate: string;
+  totalAmount: number;
+  amountPaid: number;
+  status: PaymentStatus;
+  notes?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class BillingService {
   private readonly http = inject(HttpClient);
@@ -132,5 +145,13 @@ export class BillingService {
       `/billing-invoices/${id}/email`,
       data,
     );
+  }
+
+  createInvoice(req: BillingInvoiceRequest): Observable<BillingInvoiceResponse> {
+    return this.http.post<BillingInvoiceResponse>('/billing-invoices', req);
+  }
+
+  deleteInvoice(id: string): Observable<void> {
+    return this.http.delete<void>(`/billing-invoices/${id}`);
   }
 }

@@ -1,7 +1,12 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { PrescriptionService, PrescriptionResponse } from '../services/prescription.service';
+import {
+  PrescriptionService,
+  PrescriptionResponse,
+  PrescriptionRequest,
+} from '../services/prescription.service';
+import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 
 @Component({
@@ -13,6 +18,7 @@ import { ToastService } from '../core/toast.service';
 })
 export class PrescriptionsComponent implements OnInit {
   private readonly prescriptionService = inject(PrescriptionService);
+  private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
 
   prescriptions = signal<PrescriptionResponse[]>([]);
@@ -22,8 +28,96 @@ export class PrescriptionsComponent implements OnInit {
   activeTab = signal<'all' | 'active' | 'completed' | 'cancelled'>('all');
   selectedPrescription = signal<PrescriptionResponse | null>(null);
 
+  staffMembers = signal<StaffResponse[]>([]);
+
+  /* ── CRUD signals ── */
+  showModal = signal(false);
+  editing = signal(false);
+  saving = signal(false);
+  editingId = signal<string | null>(null);
+  form: PrescriptionRequest = this.emptyForm();
+
+  showDeleteConfirm = signal(false);
+  deletingRx = signal<PrescriptionResponse | null>(null);
+  deleting = signal(false);
+
   ngOnInit(): void {
     this.load();
+    this.staffService.list().subscribe((s) => this.staffMembers.set(s ?? []));
+  }
+
+  emptyForm(): PrescriptionRequest {
+    return { patientId: '', medicationName: '', dosage: '', frequency: '', duration: '', notes: '' };
+  }
+
+  openCreate(): void {
+    this.form = this.emptyForm();
+    this.editing.set(false);
+    this.editingId.set(null);
+    this.showModal.set(true);
+  }
+
+  openEdit(p: PrescriptionResponse): void {
+    this.form = {
+      patientId: p.patientId ?? '',
+      staffId: p.staffId ?? '',
+      encounterId: p.encounterId,
+      medicationName: p.medicationName ?? '',
+      dosage: p.dosage ?? '',
+      frequency: p.frequency ?? '',
+      duration: p.duration ?? '',
+      notes: p.notes ?? '',
+    };
+    this.editing.set(true);
+    this.editingId.set(p.id);
+    this.showModal.set(true);
+  }
+
+  closeModal(): void {
+    this.showModal.set(false);
+  }
+
+  submitForm(): void {
+    this.saving.set(true);
+    const op = this.editing()
+      ? this.prescriptionService.update(this.editingId()!, this.form)
+      : this.prescriptionService.create(this.form);
+    op.subscribe({
+      next: () => {
+        this.toast.success(this.editing() ? 'Prescription updated' : 'Prescription created');
+        this.closeModal();
+        this.saving.set(false);
+        this.load();
+      },
+      error: () => {
+        this.toast.error('Save failed');
+        this.saving.set(false);
+      },
+    });
+  }
+
+  confirmDelete(p: PrescriptionResponse): void {
+    this.deletingRx.set(p);
+    this.showDeleteConfirm.set(true);
+  }
+  cancelDelete(): void {
+    this.showDeleteConfirm.set(false);
+    this.deletingRx.set(null);
+  }
+  executeDelete(): void {
+    this.deleting.set(true);
+    this.prescriptionService.delete(this.deletingRx()!.id).subscribe({
+      next: () => {
+        this.toast.success('Prescription deleted');
+        this.cancelDelete();
+        this.deleting.set(false);
+        this.load();
+      },
+      error: () => {
+        this.toast.error('Delete failed');
+        this.deleting.set(false);
+      },
+    });
   }
 
   load(): void {

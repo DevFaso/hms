@@ -4,6 +4,10 @@
       <h1 class="page-title">Departments</h1>
       <p class="page-subtitle">Manage hospital departments and divisions</p>
     </div>
+    <button class="btn-primary" (click)="openCreate()">
+      <span class="material-symbols-outlined">add</span>
+      New Department
+    </button>
   </div>
 
   <div class="search-bar">
@@ -26,7 +30,7 @@
   @if (!loading() && filtered().length > 0) {
     <div class="dept-grid">
       @for (dept of filtered(); track dept.id) {
-        <a class="dept-card" [routerLink]="['/departments', dept.id]">
+        <div class="dept-card">
           <div class="dept-icon-wrap">
             <span class="material-symbols-outlined">domain</span>
           </div>
@@ -47,8 +51,16 @@
             <span class="status-badge" [class.active]="dept.active">
               {{ dept.active ? 'Active' : 'Inactive' }}
             </span>
+            <div class="action-group">
+              <button class="action-link" title="Edit" (click)="openEdit(dept)">
+                <span class="material-symbols-outlined">edit</span>
+              </button>
+              <button class="action-link danger" title="Delete" (click)="confirmDelete(dept)">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
           </div>
-        </a>
+        </div>
       }
     </div>
   }
@@ -57,7 +69,187 @@
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">domain</span>
       <h3>No departments found</h3>
-      <p>{{ searchTerm ? 'Try adjusting your search.' : 'No departments created yet.' }}</p>
+      <p>{{ searchTerm ? 'Try adjusting your search.' : 'Create your first department.' }}</p>
+    </div>
+  }
+
+  <!-- Create / Edit Modal -->
+  @if (showModal()) {
+    <div
+      class="modal-backdrop"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal modal-lg"
+        [open]="showModal()"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeModal()"
+        tabindex="-1"
+      >
+        <div class="modal-header">
+          <h2>{{ editing() ? 'Edit Department' : 'Create Department' }}</h2>
+          <button class="modal-close" (click)="closeModal()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <form (ngSubmit)="submitForm()">
+          <div class="modal-body">
+            <div class="form-row">
+              <div class="field">
+                <label for="dHospital">Hospital *</label>
+                <select
+                  id="dHospital"
+                  [(ngModel)]="form.hospitalId"
+                  name="hospitalId"
+                  required
+                >
+                  <option value="">Select hospital</option>
+                  @for (h of hospitals(); track h.id) {
+                    <option [value]="h.id">{{ h.name }}</option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label for="dName">Name *</label>
+                <input
+                  id="dName"
+                  type="text"
+                  [(ngModel)]="form.name"
+                  name="name"
+                  placeholder="e.g., Cardiology"
+                  required
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="dCode">Code *</label>
+                <input
+                  id="dCode"
+                  type="text"
+                  [(ngModel)]="form.code"
+                  name="code"
+                  placeholder="e.g., CARDIO"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="dEmail">Email</label>
+                <input
+                  id="dEmail"
+                  type="email"
+                  [(ngModel)]="form.email"
+                  name="email"
+                  placeholder="dept&#64;hospital.com"
+                />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="dPhone">Phone Number</label>
+                <input
+                  id="dPhone"
+                  type="tel"
+                  [(ngModel)]="form.phoneNumber"
+                  name="phoneNumber"
+                  placeholder="+22625000001"
+                />
+              </div>
+              <div class="field">
+                <label for="dHead">Head of Dept. Email</label>
+                <input
+                  id="dHead"
+                  type="email"
+                  [(ngModel)]="form.headOfDepartmentEmail"
+                  name="headOfDepartmentEmail"
+                  placeholder="head&#64;hospital.com"
+                />
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="dDesc">Description</label>
+              <textarea
+                id="dDesc"
+                [(ngModel)]="form.description"
+                name="description"
+                rows="3"
+                placeholder="Brief description of the department"
+              ></textarea>
+            </div>
+
+            @if (editing()) {
+              <div class="field">
+                <label class="toggle-label">
+                  <input type="checkbox" [(ngModel)]="form.active" name="active" />
+                  Active
+                </label>
+              </div>
+            }
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeModal()">Cancel</button>
+            <button type="submit" class="btn-primary" [disabled]="saving()">
+              {{
+                saving()
+                  ? editing()
+                    ? 'Saving...'
+                    : 'Creating...'
+                  : editing()
+                    ? 'Save Changes'
+                    : 'Create'
+              }}
+            </button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+  }
+
+  <!-- Delete Confirmation Modal -->
+  @if (showDeleteConfirm()) {
+    <div
+      class="modal-backdrop"
+      (click)="cancelDelete()"
+      (keydown.escape)="cancelDelete()"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal"
+        [open]="showDeleteConfirm()"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="cancelDelete()"
+        tabindex="-1"
+      >
+        <div class="modal-header">
+          <h2>Delete Department</h2>
+          <button class="modal-close" (click)="cancelDelete()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="delete-warning">
+            Are you sure you want to delete
+            <strong>{{ deletingDept()?.name }}</strong
+            >? This action cannot be undone.
+          </p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+          <button
+            type="button"
+            class="btn-danger"
+            [disabled]="deleting()"
+            (click)="executeDelete()"
+          >
+            {{ deleting() ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
+      </dialog>
     </div>
   }
 </div>

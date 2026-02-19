@@ -4,6 +4,9 @@
       <h1 class="page-title">Billing & Invoices</h1>
       <p class="page-subtitle">Manage invoices, payments, and revenue</p>
     </div>
+    <div class="page-actions">
+      <button class="btn-primary" (click)="openCreate()"><span class="material-symbols-outlined">add</span> New Invoice</button>
+    </div>
   </div>
 
   <div class="summary-cards">
@@ -144,15 +147,13 @@
                 }}</span>
               </td>
               <td class="actions-cell">
-                <button class="action-btn" title="View invoice details" (click)="viewInvoice(inv)">
-                  <span class="material-symbols-outlined">visibility</span>
-                </button>
-                <button class="action-btn" title="Download PDF" (click)="downloadPdf(inv.id)">
-                  <span class="material-symbols-outlined">picture_as_pdf</span>
-                </button>
-                <button class="action-btn" title="Email invoice" (click)="emailInvoice(inv)">
-                  <span class="material-symbols-outlined">email</span>
-                </button>
+                <div class="action-group">
+                  <button class="action-link view-link" title="View invoice details" (click)="viewInvoice(inv)"><span class="material-symbols-outlined">visibility</span></button>
+                  <button class="action-link" title="Download PDF" (click)="downloadPdf(inv.id)"><span class="material-symbols-outlined">picture_as_pdf</span></button>
+                  <button class="action-link" title="Email invoice" (click)="emailInvoice(inv)"><span class="material-symbols-outlined">email</span></button>
+                  <button class="action-link edit-link" title="Edit" (click)="openEdit(inv)"><span class="material-symbols-outlined">edit</span></button>
+                  <button class="action-link delete-link" title="Delete" (click)="confirmDelete(inv)"><span class="material-symbols-outlined">delete</span></button>
+                </div>
               </td>
             </tr>
           }
@@ -234,3 +235,87 @@
     </div>
   }
 </div>
+
+<!-- ═══ CREATE / EDIT INVOICE MODAL ═══ -->
+@if (showModal()) {
+  <div class="modal-backdrop" (click)="closeModal()">
+    <div class="modal modal-lg" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>{{ editing() ? 'Edit Invoice' : 'New Invoice' }}</h2>
+        <button class="modal-close" (click)="closeModal()"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label>Patient Email *</label>
+            <input type="email" [(ngModel)]="form.patientEmail" placeholder="patient&#64;example.com" required />
+          </div>
+          <div class="field">
+            <label>Hospital Name *</label>
+            <input type="text" [(ngModel)]="form.hospitalName" placeholder="Hospital name" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Invoice Number *</label>
+            <input type="text" [(ngModel)]="form.invoiceNumber" placeholder="INV-0001" required />
+          </div>
+          <div class="field">
+            <label>Status *</label>
+            <select [(ngModel)]="form.status" required>
+              @for (s of paymentStatuses; track s) {
+                <option [value]="s">{{ s }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Invoice Date *</label>
+            <input type="date" [(ngModel)]="form.invoiceDate" required />
+          </div>
+          <div class="field">
+            <label>Due Date *</label>
+            <input type="date" [(ngModel)]="form.dueDate" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label>Total Amount *</label>
+            <input type="number" [(ngModel)]="form.totalAmount" min="0" required />
+          </div>
+          <div class="field">
+            <label>Amount Paid</label>
+            <input type="number" [(ngModel)]="form.amountPaid" min="0" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Notes</label>
+          <textarea [(ngModel)]="form.notes" rows="3" placeholder="Invoice notes..."></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeModal()">Cancel</button>
+        <button class="btn-primary" (click)="submitForm()" [disabled]="saving() || !form.patientEmail || !form.hospitalName || !form.invoiceNumber || !form.invoiceDate || !form.dueDate">
+          {{ saving() ? 'Saving...' : (editing() ? 'Update' : 'Create') }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ DELETE CONFIRM ═══ -->
+@if (showDeleteConfirm()) {
+  <div class="modal-backdrop" (click)="cancelDelete()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-header"><h2>Delete Invoice</h2><button class="modal-close" (click)="cancelDelete()"><span class="material-symbols-outlined">close</span></button></div>
+      <div class="modal-body">
+        <p class="delete-warning">Are you sure you want to delete invoice <strong>{{ deletingInv()?.invoiceNumber }}</strong>? This action cannot be undone.</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+        <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">{{ deleting() ? 'Deleting...' : 'Delete' }}</button>
+      </div>
+    </div>
+  </div>
+}

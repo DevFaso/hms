@@ -35,6 +35,19 @@ export interface LabResultResponse {
   notes: string;
 }
 
+export interface LabOrderRequest {
+  patientId: string;
+  hospitalId: string;
+  encounterId?: string;
+  testName: string;
+  testCode?: string;
+  status: string;
+  priority?: string;
+  clinicalIndication: string;
+  medicalNecessityNote: string;
+  notes?: string;
+}
+
 interface ApiWrapper<T> {
   data: T;
   success: boolean;
@@ -90,5 +103,21 @@ export class LabService {
     return this.http
       .get<ApiWrapper<LabResultResponse[]>>('/lab-results/pending-review')
       .pipe(map((res) => res?.data ?? []));
+  }
+
+  createOrder(req: LabOrderRequest): Observable<LabOrderResponse> {
+    return this.http
+      .post<ApiWrapper<LabOrderResponse>>('/lab-orders', req)
+      .pipe(map((res) => res.data));
+  }
+
+  updateOrder(id: string, req: Partial<LabOrderRequest>): Observable<LabOrderResponse> {
+    return this.http
+      .put<ApiWrapper<LabOrderResponse>>(`/lab-orders/${id}`, req)
+      .pipe(map((res) => res.data));
+  }
+
+  deleteOrder(id: string): Observable<void> {
+    return this.http.delete<void>(`/lab-orders/${id}`);
   }
 }

@@ -3,10 +3,16 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   StaffSchedulingService,
+  StaffShiftRequest,
   StaffShiftResponse,
+  StaffShiftType,
+  StaffLeaveRequest,
   StaffLeaveResponse,
   StaffLeaveStatus,
+  StaffLeaveType,
 } from '../services/staff-scheduling.service';
+import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import { StaffService } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 
 @Component({
@@ -18,6 +24,8 @@ import { ToastService } from '../core/toast.service';
 })
 export class SchedulingComponent implements OnInit {
   private readonly schedulingService = inject(StaffSchedulingService);
+  private readonly hospitalService = inject(HospitalService);
+  private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
 
   activeView = signal<'shifts' | 'leaves'>('shifts');
@@ -32,9 +40,85 @@ export class SchedulingComponent implements OnInit {
   leavesLoading = signal(false);
   leaveFilter = signal<'ALL' | StaffLeaveStatus>('ALL');
 
+  // Dropdowns
+  hospitals = signal<HospitalResponse[]>([]);
+  staffMembers = signal<{ id: string; name: string }[]>([]);
+
+  // ── Shift Modal ──
+  showShiftModal = signal(false);
+  editingShift = signal(false);
+  savingShift = signal(false);
+  editingShiftId = '';
+  shiftForm: StaffShiftRequest = this.emptyShiftForm();
+
+  shiftTypes: StaffShiftType[] = ['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT', 'FLEX'];
+
+  emptyShiftForm(): StaffShiftRequest {
+    return { staffId: '', hospitalId: '', shiftDate: '', startTime: '', endTime: '', shiftType: 'MORNING' };
+  }
+
+  // ── Leave Modal ──
+  showLeaveModal = signal(false);
+  savingLeave = signal(false);
+  leaveForm: StaffLeaveRequest = this.emptyLeaveForm();
+
+  leaveTypes: StaffLeaveType[] = ['VACATION', 'SICK', 'EMERGENCY', 'TRAINING', 'UNPAID', 'OTHER'];
+
+  emptyLeaveForm(): StaffLeaveRequest {
+    return { staffId: '', hospitalId: '', startDate: '', endDate: '', leaveType: 'VACATION', requiresCoverage: false };
+  }
+
   ngOnInit(): void {
     this.loadShifts();
     this.loadLeaves();
+    this.hospitalService.list().subscribe({ next: (h) => this.hospitals.set(h) });
+    this.staffService.list().subscribe({
+      next: (list) => this.staffMembers.set(list.map((s) => ({ id: s.id, name: s.name || s.email }))),
+    });
+  }
+
+  // ── Shift CRUD ──
+  openCreateShift(): void {
+    this.shiftForm = this.emptyShiftForm();
+    this.editingShift.set(false);
+    this.editingShiftId = '';
+    this.showShiftModal.set(true);
+  }
+
+  openEditShift(s: StaffShiftResponse): void {
+    this.editingShift.set(true);
+    this.editingShiftId = s.id;
+    this.shiftForm = { staffId: s.staffId, hospitalId: s.hospitalId, departmentId: s.departmentId, shiftDate: s.shiftDate, startTime: s.startTime, endTime: s.endTime, shiftType: s.shiftType, notes: s.notes };
+    this.showShiftModal.set(true);
+  }
+
+  closeShiftModal(): void { this.showShiftModal.set(false); }
+
+  submitShift(): void {
+    this.savingShift.set(true);
+    const op = this.editingShift()
+      ? this.schedulingService.updateShift(this.editingShiftId, this.shiftForm)
+      : this.schedulingService.createShift(this.shiftForm);
+    op.subscribe({
+      next: () => { this.toast.success(this.editingShift() ? 'Shift updated' : 'Shift created'); this.closeShiftModal(); this.loadShifts(); this.savingShift.set(false); },
+      error: () => { this.toast.error('Failed to save shift'); this.savingShift.set(false); },
+    });
+  }
+
+  // ── Leave CRUD ──
+  openCreateLeave(): void {
+    this.leaveForm = this.emptyLeaveForm();
+    this.showLeaveModal.set(true);
+  }
+
+  closeLeaveModal(): void { this.showLeaveModal.set(false); }
+
+  submitLeave(): void {
+    this.savingLeave.set(true);
+    this.schedulingService.requestLeave(this.leaveForm).subscribe({
+      next: () => { this.toast.success('Leave request submitted'); this.closeLeaveModal(); this.loadLeaves(); this.savingLeave.set(false); },
+      error: () => { this.toast.error('Failed to submit leave request'); this.savingLeave.set(false); },
+    });
   }
 
   setView(view: 'shifts' | 'leaves'): void {
