@@ -148,6 +148,7 @@ $sidebar-active: #2563eb;
   font-size: 0.75rem;
   font-weight: 600;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .user-info-mini {
@@ -285,6 +286,7 @@ $sidebar-active: #2563eb;
   font-size: 0.75rem;
   font-weight: 600;
   flex-shrink: 0;
+  overflow: hidden;
 }
 
 .avatar-lg {
@@ -298,6 +300,7 @@ $sidebar-active: #2563eb;
   justify-content: center;
   font-size: 0.875rem;
   font-weight: 600;
+  overflow: hidden;
 }
 
 /* Avatar image inside any avatar container */
@@ -306,6 +309,9 @@ $sidebar-active: #2563eb;
   height: 100%;
   object-fit: cover;
   border-radius: inherit;
+  display: block;
+  /* Hide alt-text that browsers render while image loads */
+  color: transparent;
 }
 
 .profile-name {
