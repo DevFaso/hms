@@ -32,6 +32,24 @@ public interface StaffShiftRepository extends JpaRepository<StaffShift, UUID> {
                                    @Param("endTime") LocalTime endTime,
                                    @Param("excludeId") UUID excludeId);
 
+    /**
+     * Check overlap for an overnight shift (endTime &lt; startTime, i.e. crosses midnight).
+     * A conflict exists when another non-cancelled shift on the same date has any time
+     * portion after the new shift's start time (the pre-midnight leg).
+     */
+    @Query("SELECT CASE WHEN COUNT(s) > 0 THEN true ELSE false END " +
+           "FROM StaffShift s " +
+           "WHERE s.staff.id = :staffId " +
+           "AND s.shiftDate = :shiftDate " +
+           "AND s.status <> com.example.hms.enums.StaffShiftStatus.CANCELLED " +
+           "AND (:excludeId IS NULL OR s.id <> :excludeId) " +
+           "AND s.endTime > :startTime")
+    boolean existsOvernightOverlappingShift(@Param("staffId") UUID staffId,
+                                            @Param("shiftDate") LocalDate shiftDate,
+                                            @Param("startTime") LocalTime startTime,
+                                            @Param("endTime") LocalTime endTime,
+                                            @Param("excludeId") UUID excludeId);
+
     @EntityGraph(attributePaths = {"staff", "staff.user", "hospital", "department", "scheduledBy", "lastModifiedBy"})
     Optional<StaffShift> findDetailedById(UUID id);
 

@@ -368,11 +368,22 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         if (dto.shiftDate().isBefore(LocalDate.now())) {
             throw new BusinessRuleException(message("schedule.shift.pastDate", locale));
         }
-        if (!dto.endTime().isAfter(dto.startTime())) {
+        // For overnight shifts (e.g. 17:00→01:15) endTime is before startTime — that is valid.
+        // Only reject when start and end are identical (zero-duration shift).
+        if (dto.startTime().equals(dto.endTime())) {
             throw new BusinessRuleException(message("schedule.shift.timeRange.invalid", locale));
         }
-        if (shiftRepository.existsOverlappingShift(staff.getId(), dto.shiftDate(), dto.startTime(), dto.endTime(), excludeShiftId)) {
-            throw new BusinessRuleException(message("schedule.shift.overlap", locale));
+        boolean overnight = dto.endTime().isBefore(dto.startTime());
+        if (overnight) {
+            if (shiftRepository.existsOvernightOverlappingShift(
+                    staff.getId(), dto.shiftDate(), dto.startTime(), dto.endTime(), excludeShiftId)) {
+                throw new BusinessRuleException(message("schedule.shift.overlap", locale));
+            }
+        } else {
+            if (shiftRepository.existsOverlappingShift(
+                    staff.getId(), dto.shiftDate(), dto.startTime(), dto.endTime(), excludeShiftId)) {
+                throw new BusinessRuleException(message("schedule.shift.overlap", locale));
+            }
         }
         ensureAvailabilityCoversShift(dto, staff, locale);
         ensureNoLeaveConflict(dto, staff, locale);
@@ -385,11 +396,20 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         if (availability.isDayOff()) {
             throw new BusinessRuleException(message("schedule.shift.availability.dayOff", locale));
         }
-        if (availability.getAvailableFrom() != null && dto.startTime().isBefore(availability.getAvailableFrom())) {
-            throw new BusinessRuleException(message("schedule.shift.availability.start", locale));
-        }
-        if (availability.getAvailableTo() != null && dto.endTime().isAfter(availability.getAvailableTo())) {
-            throw new BusinessRuleException(message("schedule.shift.availability.end", locale));
+        boolean overnight = dto.endTime().isBefore(dto.startTime());
+        if (overnight) {
+            // For overnight shifts only validate the start portion against the shift-date availability
+            if (availability.getAvailableFrom() != null && dto.startTime().isBefore(availability.getAvailableFrom())) {
+                throw new BusinessRuleException(message("schedule.shift.availability.start", locale));
+            }
+            // The end portion falls on the next day — skip end-time check for the current day
+        } else {
+            if (availability.getAvailableFrom() != null && dto.startTime().isBefore(availability.getAvailableFrom())) {
+                throw new BusinessRuleException(message("schedule.shift.availability.start", locale));
+            }
+            if (availability.getAvailableTo() != null && dto.endTime().isAfter(availability.getAvailableTo())) {
+                throw new BusinessRuleException(message("schedule.shift.availability.end", locale));
+            }
         }
     }
 
@@ -416,13 +436,20 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
     private void ensureNoLeaveConflict(StaffShiftRequestDTO dto, Staff staff, Locale locale) {
         List<StaffLeaveRequest> overlappingLeaves = leaveRepository.findLeavesOverlappingDate(
             staff.getId(), dto.shiftDate(), ACTIVE_LEAVE_STATUSES);
+        boolean overnight = dto.endTime().isBefore(dto.startTime());
         for (StaffLeaveRequest leave : overlappingLeaves) {
             if (leave.getStartTime() == null || leave.getEndTime() == null) {
                 throw new BusinessRuleException(message("schedule.shift.leaveConflict", locale));
             }
             LocalTime leaveStart = leave.getStartTime();
             LocalTime leaveEnd = leave.getEndTime();
-            boolean overlaps = leaveStart.isBefore(dto.endTime()) && leaveEnd.isAfter(dto.startTime());
+            boolean overlaps;
+            if (overnight) {
+                // Shift spans midnight: overlaps if leave touches [startTime→23:59] on shift date
+                overlaps = leaveStart.isBefore(LocalTime.MAX) && leaveEnd.isAfter(dto.startTime());
+            } else {
+                overlaps = leaveStart.isBefore(dto.endTime()) && leaveEnd.isAfter(dto.startTime());
+            }
             if (overlaps) {
                 throw new BusinessRuleException(message("schedule.shift.leaveConflict", locale));
             }
