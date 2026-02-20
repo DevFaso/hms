@@ -280,9 +280,16 @@
               <span class="chip-avatar">{{ staffInitials(selectedStaff()!) }}</span>
               <div class="chip-info">
                 <span class="chip-name">{{ selectedStaff()!.name }}</span>
-                <span class="chip-sub">{{ selectedStaff()!.jobTitle ?? selectedStaff()!.roleName ?? 'Staff' }}</span>
+                <span class="chip-sub">{{
+                  selectedStaff()!.jobTitle ?? selectedStaff()!.roleName ?? 'Staff'
+                }}</span>
               </div>
-              <button class="chip-clear" type="button" (click)="clearStaff()" aria-label="Clear selected staff">
+              <button
+                class="chip-clear"
+                type="button"
+                (click)="clearStaff()"
+                aria-label="Clear selected staff"
+              >
                 <span class="material-symbols-outlined">close</span>
               </button>
             </div>
@@ -306,16 +313,15 @@
               @if (staffSuggestionsOpen()) {
                 <ul class="suggestions-dropdown" aria-label="Staff suggestions">
                   @for (s of staffSuggestions(); track s.id) {
-                    <li
-                      class="suggestion-item"
-                      (mousedown)="selectStaff(s)"
-                    >
+                    <li class="suggestion-item" (mousedown)="selectStaff(s)">
                       <span class="sug-avatar">{{ staffInitials(s) }}</span>
                       <div class="sug-info">
                         <span class="sug-name">{{ s.name }}</span>
                         <span class="sug-meta">
                           {{ s.jobTitle ?? s.roleName ?? 'Staff' }}
-                          @if (s.departmentName) { &nbsp;·&nbsp; {{ s.departmentName }} }
+                          @if (s.departmentName) {
+                            &nbsp;·&nbsp; {{ s.departmentName }}
+                          }
                         </span>
                         <span class="sug-hospital">
                           <span class="material-symbols-outlined">local_hospital</span>
@@ -343,7 +349,12 @@
               <span class="material-symbols-outlined lock-icon">lock</span>
               <div class="locked-info">
                 <span class="locked-name">{{ selectedStaff()!.hospitalName ?? 'Hospital' }}</span>
-                <span class="locked-sub">Auto-matched from staff · <span class="uuid-pill">{{ selectedStaff()!.hospitalId | slice:0:8 }}…</span></span>
+                <span class="locked-sub"
+                  >Auto-matched from staff ·
+                  <span class="uuid-pill"
+                    >{{ selectedStaff()!.hospitalId | slice: 0 : 8 }}…</span
+                  ></span
+                >
               </div>
             </div>
           } @else {
