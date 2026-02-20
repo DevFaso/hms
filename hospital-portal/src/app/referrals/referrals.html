@@ -255,8 +255,8 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
+            <label for="ref-patientSearch">Patient *</label>
             @if (selectedPatient()) {
-              <label>Patient</label>
               <div class="picker-chip">
                 <span class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</span>
                 <span class="chip-info">
@@ -272,7 +272,6 @@
                 </button>
               </div>
             } @else {
-              <label for="ref-patientSearch">Patient *</label>
               <div class="patient-picker-wrap">
                 <span class="picker-search-icon material-icons">person_search</span>
                 <input
@@ -281,6 +280,7 @@
                   class="picker-input"
                   [value]="patientQuery()"
                   (input)="onPatientQueryChange($any($event.target).value)"
+                  (blur)="patientDropdownOpen.set(false)"
                   placeholder="Search by name, email or MRN…"
                   autocomplete="off"
                 />
@@ -290,7 +290,7 @@
                 @if (patientDropdownOpen()) {
                   <ul class="picker-dropdown" aria-label="Patient suggestions">
                     @for (p of patientSuggestions(); track p.id) {
-                      <li class="picker-option" (click)="selectPatient(p)">
+                      <li class="picker-option" (mousedown)="selectPatient(p)">
                         <span class="opt-avatar">{{ patientInitials(p) }}</span>
                         <span class="opt-info">
                           <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
