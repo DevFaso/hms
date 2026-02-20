@@ -57,7 +57,13 @@ export class SchedulingComponent implements OnInit {
   };
 
   readonly allDays: DayOfWeek[] = [
-    'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY',
+    'MONDAY',
+    'TUESDAY',
+    'WEDNESDAY',
+    'THURSDAY',
+    'FRIDAY',
+    'SATURDAY',
+    'SUNDAY',
   ];
 
   openBulkModal(): void {
@@ -115,7 +121,7 @@ export class SchedulingComponent implements OnInit {
         if (result.totalScheduled > 0) {
           this.toast.success(
             `${result.totalScheduled} shift(s) scheduled` +
-            (result.totalSkipped > 0 ? `, ${result.totalSkipped} skipped.` : '.'),
+              (result.totalSkipped > 0 ? `, ${result.totalSkipped} skipped.` : '.'),
           );
           this.loadShifts();
         } else {

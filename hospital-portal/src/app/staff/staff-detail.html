@@ -281,7 +281,9 @@
                       [attr.data-type]="shift.shiftType"
                       [attr.data-status]="shift.status"
                       [class.cross-midnight]="shift.crossMidnight"
-                      [class.cross-midnight-end]="shift.crossMidnight && shift.shiftEndDate === day.date"
+                      [class.cross-midnight-end]="
+                        shift.crossMidnight && shift.shiftEndDate === day.date
+                      "
                     >
                       <div class="shift-type-icon">
                         <span class="material-symbols-outlined">{{

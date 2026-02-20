@@ -103,7 +103,9 @@
                     [attr.data-type]="shift.shiftType"
                     [attr.data-status]="shift.status"
                     [class.cross-midnight]="shift.crossMidnight"
-                    [class.cross-midnight-end]="shift.crossMidnight && shift.shiftEndDate === day.date"
+                    [class.cross-midnight-end]="
+                      shift.crossMidnight && shift.shiftEndDate === day.date
+                    "
                   >
                     <div class="shift-avatar">{{ getInitials(shift.staffName) }}</div>
                     <div class="shift-info">
@@ -246,241 +248,212 @@
 
 <!-- ═══ BULK SCHEDULE MODAL ═══ -->
 @if (bulkModalOpen()) {
-  <dialog
-    class="modal-panel"
-    open
-    aria-labelledby="bulk-modal-title"
-  >
-      <!-- Header -->
-      <div class="modal-header">
-        <div class="modal-title-group">
-          <span class="material-symbols-outlined modal-icon">date_range</span>
-          <div>
-            <h2 id="bulk-modal-title" class="modal-title">Bulk Schedule Shifts</h2>
-            <p class="modal-subtitle">Schedule recurring shifts over a date range by day of week</p>
-          </div>
+  <dialog class="modal-panel" open aria-labelledby="bulk-modal-title">
+    <!-- Header -->
+    <div class="modal-header">
+      <div class="modal-title-group">
+        <span class="material-symbols-outlined modal-icon">date_range</span>
+        <div>
+          <h2 id="bulk-modal-title" class="modal-title">Bulk Schedule Shifts</h2>
+          <p class="modal-subtitle">Schedule recurring shifts over a date range by day of week</p>
         </div>
-        <button class="modal-close" (click)="closeBulkModal()" aria-label="Close bulk schedule modal">
-          <span class="material-symbols-outlined">close</span>
-        </button>
       </div>
+      <button class="modal-close" (click)="closeBulkModal()" aria-label="Close bulk schedule modal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
 
-      <!-- Body -->
-      <div class="modal-body">
-
-        <!-- Staff + Hospital IDs -->
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="bulk-staffId">
-              <span class="material-symbols-outlined">badge</span>
-              Staff ID <span class="required">*</span>
-            </label>
-            <input
-              id="bulk-staffId"
-              class="form-input"
-              type="text"
-              placeholder="Paste staff UUID"
-              [(ngModel)]="bulk.staffId"
-            />
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="bulk-hospitalId">
-              <span class="material-symbols-outlined">local_hospital</span>
-              Hospital ID <span class="required">*</span>
-            </label>
-            <input
-              id="bulk-hospitalId"
-              class="form-input"
-              type="text"
-              placeholder="Paste hospital UUID"
-              [(ngModel)]="bulk.hospitalId"
-            />
-          </div>
-        </div>
-
-        <!-- Date Range -->
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="bulk-startDate">
-              <span class="material-symbols-outlined">today</span>
-              Start Date <span class="required">*</span>
-            </label>
-            <input
-              id="bulk-startDate"
-              class="form-input"
-              type="date"
-              [(ngModel)]="bulk.startDate"
-            />
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="bulk-endDate">
-              <span class="material-symbols-outlined">event</span>
-              End Date <span class="required">*</span>
-            </label>
-            <input
-              id="bulk-endDate"
-              class="form-input"
-              type="date"
-              [(ngModel)]="bulk.endDate"
-            />
-          </div>
-        </div>
-
-        <!-- Times + Shift Type -->
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label" for="bulk-startTime">
-              <span class="material-symbols-outlined">schedule</span>
-              Start Time <span class="required">*</span>
-            </label>
-            <input
-              id="bulk-startTime"
-              class="form-input"
-              type="time"
-              [(ngModel)]="bulk.startTime"
-            />
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="bulk-endTime">
-              <span class="material-symbols-outlined">schedule</span>
-              End Time <span class="required">*</span>
-              <span class="form-hint">(can be next day)</span>
-            </label>
-            <input
-              id="bulk-endTime"
-              class="form-input"
-              type="time"
-              [(ngModel)]="bulk.endTime"
-            />
-          </div>
-          <div class="form-group">
-            <label class="form-label" for="bulk-shiftType">
-              <span class="material-symbols-outlined">brightness_4</span>
-              Shift Type <span class="required">*</span>
-            </label>
-            <select id="bulk-shiftType" class="form-input form-select" [(ngModel)]="bulk.shiftType">
-              <option value="MORNING">Morning</option>
-              <option value="AFTERNOON">Afternoon</option>
-              <option value="EVENING">Evening</option>
-              <option value="NIGHT">Night</option>
-              <option value="ON_CALL">On Call</option>
-              <option value="FLEX">Flex</option>
-            </select>
-          </div>
-        </div>
-
-        <!-- Days of Week -->
-        <fieldset class="form-group form-group--full dow-fieldset">
-          <legend class="form-label">
-            <span class="material-symbols-outlined">view_week</span>
-            Days of Week <span class="required">*</span>
-          </legend>
-          <div class="dow-presets">
-            <button type="button" class="dow-preset-btn" (click)="selectWeekdays()">Mon–Fri</button>
-            <button type="button" class="dow-preset-btn" (click)="selectWeekend()">Sat–Sun</button>
-            <button type="button" class="dow-preset-btn" (click)="selectAllDays()">All days</button>
-          </div>
-          <div class="dow-grid">
-            @for (day of allDays; track day) {
-              <button
-                type="button"
-                class="dow-chip"
-                [class.selected]="isDaySelected(day)"
-                [attr.aria-pressed]="isDaySelected(day)"
-                (click)="toggleDay(day)"
-              >
-                {{ day.slice(0, 3) }}
-              </button>
-            }
-          </div>
-        </fieldset>
-
-        <!-- Notes -->
-        <div class="form-group form-group--full">
-          <label class="form-label" for="bulk-notes">
-            <span class="material-symbols-outlined">notes</span>
-            Notes (optional)
+    <!-- Body -->
+    <div class="modal-body">
+      <!-- Staff + Hospital IDs -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="bulk-staffId">
+            <span class="material-symbols-outlined">badge</span>
+            Staff ID <span class="required">*</span>
           </label>
           <input
-            id="bulk-notes"
+            id="bulk-staffId"
             class="form-input"
             type="text"
-            placeholder="Applied to every generated shift"
-            [(ngModel)]="bulk.notes"
+            placeholder="Paste staff UUID"
+            [(ngModel)]="bulk.staffId"
           />
         </div>
-
-        <!-- Skip Conflicts Toggle -->
-        <div class="form-group form-group--full toggle-row">
-          <p class="toggle-description">
-            <span class="material-symbols-outlined">skip_next</span>
-            <span>
-              Skip conflicting dates
-              <span class="toggle-hint">
-                Dates with overlapping shifts or leave will be silently skipped instead of aborting
-              </span>
-            </span>
-          </p>
-          <div class="toggle-switch">
-            <input
-              id="bulk-skip"
-              type="checkbox"
-              aria-label="Skip conflicting dates"
-              [(ngModel)]="bulk.skipConflicts"
-            />
-            <span class="toggle-track" aria-hidden="true">
-              <span class="toggle-thumb"></span>
-            </span>
-          </div>
+        <div class="form-group">
+          <label class="form-label" for="bulk-hospitalId">
+            <span class="material-symbols-outlined">local_hospital</span>
+            Hospital ID <span class="required">*</span>
+          </label>
+          <input
+            id="bulk-hospitalId"
+            class="form-input"
+            type="text"
+            placeholder="Paste hospital UUID"
+            [(ngModel)]="bulk.hospitalId"
+          />
         </div>
-
-        <!-- Result Summary (shown after submit) -->
-        @if (bulkResult()) {
-          <div class="bulk-result">
-            <div class="bulk-result-stats">
-              <div class="bulk-stat scheduled">
-                <span class="material-symbols-outlined">check_circle</span>
-                <span class="bulk-stat-val">{{ bulkResult()!.totalScheduled }}</span>
-                <span class="bulk-stat-lbl">Scheduled</span>
-              </div>
-              <div class="bulk-stat skipped">
-                <span class="material-symbols-outlined">cancel</span>
-                <span class="bulk-stat-val">{{ bulkResult()!.totalSkipped }}</span>
-                <span class="bulk-stat-lbl">Skipped</span>
-              </div>
-            </div>
-            @if (bulkResult()!.skipped.length > 0) {
-              <div class="bulk-skipped-list">
-                <h4 class="bulk-skipped-title">Skipped dates</h4>
-                @for (skip of bulkResult()!.skipped; track skip.date) {
-                  <div class="bulk-skip-row">
-                    <span class="material-symbols-outlined skip-icon">event_busy</span>
-                    <span class="skip-date">{{ formatDate(skip.date) }}</span>
-                    <span class="skip-reason">{{ skip.reason }}</span>
-                  </div>
-                }
-              </div>
-            }
-          </div>
-        }
       </div>
 
-      <!-- Footer -->
-      <div class="modal-footer">
-        <button class="btn-ghost" (click)="closeBulkModal()">Cancel</button>
-        <button
-          class="btn-primary"
-          (click)="submitBulk()"
-          [disabled]="bulkSubmitting()"
-        >
-          @if (bulkSubmitting()) {
-            <span class="spinner-sm"></span>
-            Scheduling…
-          } @else {
-            <span class="material-symbols-outlined">bolt</span>
-            Generate Shifts
+      <!-- Date Range -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="bulk-startDate">
+            <span class="material-symbols-outlined">today</span>
+            Start Date <span class="required">*</span>
+          </label>
+          <input id="bulk-startDate" class="form-input" type="date" [(ngModel)]="bulk.startDate" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="bulk-endDate">
+            <span class="material-symbols-outlined">event</span>
+            End Date <span class="required">*</span>
+          </label>
+          <input id="bulk-endDate" class="form-input" type="date" [(ngModel)]="bulk.endDate" />
+        </div>
+      </div>
+
+      <!-- Times + Shift Type -->
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label" for="bulk-startTime">
+            <span class="material-symbols-outlined">schedule</span>
+            Start Time <span class="required">*</span>
+          </label>
+          <input id="bulk-startTime" class="form-input" type="time" [(ngModel)]="bulk.startTime" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="bulk-endTime">
+            <span class="material-symbols-outlined">schedule</span>
+            End Time <span class="required">*</span>
+            <span class="form-hint">(can be next day)</span>
+          </label>
+          <input id="bulk-endTime" class="form-input" type="time" [(ngModel)]="bulk.endTime" />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="bulk-shiftType">
+            <span class="material-symbols-outlined">brightness_4</span>
+            Shift Type <span class="required">*</span>
+          </label>
+          <select id="bulk-shiftType" class="form-input form-select" [(ngModel)]="bulk.shiftType">
+            <option value="MORNING">Morning</option>
+            <option value="AFTERNOON">Afternoon</option>
+            <option value="EVENING">Evening</option>
+            <option value="NIGHT">Night</option>
+            <option value="ON_CALL">On Call</option>
+            <option value="FLEX">Flex</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Days of Week -->
+      <fieldset class="form-group form-group--full dow-fieldset">
+        <legend class="form-label">
+          <span class="material-symbols-outlined">view_week</span>
+          Days of Week <span class="required">*</span>
+        </legend>
+        <div class="dow-presets">
+          <button type="button" class="dow-preset-btn" (click)="selectWeekdays()">Mon–Fri</button>
+          <button type="button" class="dow-preset-btn" (click)="selectWeekend()">Sat–Sun</button>
+          <button type="button" class="dow-preset-btn" (click)="selectAllDays()">All days</button>
+        </div>
+        <div class="dow-grid">
+          @for (day of allDays; track day) {
+            <button
+              type="button"
+              class="dow-chip"
+              [class.selected]="isDaySelected(day)"
+              [attr.aria-pressed]="isDaySelected(day)"
+              (click)="toggleDay(day)"
+            >
+              {{ day.slice(0, 3) }}
+            </button>
           }
-        </button>
+        </div>
+      </fieldset>
+
+      <!-- Notes -->
+      <div class="form-group form-group--full">
+        <label class="form-label" for="bulk-notes">
+          <span class="material-symbols-outlined">notes</span>
+          Notes (optional)
+        </label>
+        <input
+          id="bulk-notes"
+          class="form-input"
+          type="text"
+          placeholder="Applied to every generated shift"
+          [(ngModel)]="bulk.notes"
+        />
       </div>
+
+      <!-- Skip Conflicts Toggle -->
+      <div class="form-group form-group--full toggle-row">
+        <p class="toggle-description">
+          <span class="material-symbols-outlined">skip_next</span>
+          <span>
+            Skip conflicting dates
+            <span class="toggle-hint">
+              Dates with overlapping shifts or leave will be silently skipped instead of aborting
+            </span>
+          </span>
+        </p>
+        <div class="toggle-switch">
+          <input
+            id="bulk-skip"
+            type="checkbox"
+            aria-label="Skip conflicting dates"
+            [(ngModel)]="bulk.skipConflicts"
+          />
+          <span class="toggle-track" aria-hidden="true">
+            <span class="toggle-thumb"></span>
+          </span>
+        </div>
+      </div>
+
+      <!-- Result Summary (shown after submit) -->
+      @if (bulkResult()) {
+        <div class="bulk-result">
+          <div class="bulk-result-stats">
+            <div class="bulk-stat scheduled">
+              <span class="material-symbols-outlined">check_circle</span>
+              <span class="bulk-stat-val">{{ bulkResult()!.totalScheduled }}</span>
+              <span class="bulk-stat-lbl">Scheduled</span>
+            </div>
+            <div class="bulk-stat skipped">
+              <span class="material-symbols-outlined">cancel</span>
+              <span class="bulk-stat-val">{{ bulkResult()!.totalSkipped }}</span>
+              <span class="bulk-stat-lbl">Skipped</span>
+            </div>
+          </div>
+          @if (bulkResult()!.skipped.length > 0) {
+            <div class="bulk-skipped-list">
+              <h4 class="bulk-skipped-title">Skipped dates</h4>
+              @for (skip of bulkResult()!.skipped; track skip.date) {
+                <div class="bulk-skip-row">
+                  <span class="material-symbols-outlined skip-icon">event_busy</span>
+                  <span class="skip-date">{{ formatDate(skip.date) }}</span>
+                  <span class="skip-reason">{{ skip.reason }}</span>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Footer -->
+    <div class="modal-footer">
+      <button class="btn-ghost" (click)="closeBulkModal()">Cancel</button>
+      <button class="btn-primary" (click)="submitBulk()" [disabled]="bulkSubmitting()">
+        @if (bulkSubmitting()) {
+          <span class="spinner-sm"></span>
+          Scheduling…
+        } @else {
+          <span class="material-symbols-outlined">bolt</span>
+          Generate Shifts
+        }
+      </button>
+    </div>
   </dialog>
 }
