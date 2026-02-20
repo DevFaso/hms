@@ -9,6 +9,9 @@ import com.example.hms.payload.dto.StaffLeaveResponseDTO;
 import com.example.hms.payload.dto.StaffShiftResponseDTO;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
+import java.time.LocalTime;
+
 @Component
 public class StaffSchedulingMapper {
 
@@ -17,6 +20,17 @@ public class StaffSchedulingMapper {
         Department department = shift.getDepartment();
         User scheduledBy = shift.getScheduledBy();
         User lastModified = shift.getLastModifiedBy();
+
+        LocalTime startTime = shift.getStartTime();
+        LocalTime endTime   = shift.getEndTime();
+
+        // A shift that ends earlier (by clock time) than it starts spans midnight.
+        // e.g. startTime=17:00, endTime=01:30  →  crossMidnight=true, shiftEndDate = shiftDate+1
+        boolean crossMidnight = (startTime != null && endTime != null)
+            && endTime.isBefore(startTime);
+        LocalDate shiftEndDate = crossMidnight
+            ? shift.getShiftDate().plusDays(1)
+            : shift.getShiftDate();
 
         return new StaffShiftResponseDTO(
             shift.getId(),
@@ -28,8 +42,10 @@ public class StaffSchedulingMapper {
             department != null ? department.getId() : null,
             department != null ? department.getName() : null,
             shift.getShiftDate(),
-            shift.getStartTime(),
-            shift.getEndTime(),
+            startTime,
+            endTime,
+            crossMidnight,
+            shiftEndDate,
             shift.getShiftType(),
             shift.getStatus(),
             shift.isPublished(),

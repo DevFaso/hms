@@ -17,9 +17,20 @@ public record StaffShiftResponseDTO(
     String hospitalName,
     UUID departmentId,
     String departmentName,
+    /** The calendar date the shift starts (always the start-day anchor). */
     LocalDate shiftDate,
     LocalTime startTime,
     LocalTime endTime,
+    /**
+     * True when endTime &lt; startTime, meaning the shift crosses midnight
+     * and ends on {@link #shiftEndDate} (shiftDate + 1 day).
+     */
+    boolean crossMidnight,
+    /**
+     * The calendar date the shift ends. Equals {@link #shiftDate} for same-day shifts
+     * and shiftDate + 1 for cross-midnight shifts.
+     */
+    LocalDate shiftEndDate,
     StaffShiftType shiftType,
     StaffShiftStatus status,
     boolean published,

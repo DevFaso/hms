@@ -119,8 +119,9 @@ public class StaffShift extends BaseEntity {
         if (startTime == null || endTime == null) {
             throw new IllegalStateException("Shift start and end time are required");
         }
-        if (!endTime.isAfter(startTime)) {
-            throw new IllegalStateException("Shift end time must be after start time");
+        // Allow cross-midnight shifts: endTime < startTime means the shift spans midnight (e.g. 16:30 → 01:30)
+        if (endTime.equals(startTime)) {
+            throw new IllegalStateException("Shift end time must differ from start time");
         }
         if (staff != null && hospital != null && staff.getHospital() != null
             && !Objects.equals(staff.getHospital().getId(), hospital.getId())) {

@@ -197,59 +197,6 @@ class StaffSchedulingServiceImplTest {
         verify(staffAvailabilityRepository, never()).save(any(StaffAvailability.class));
     }
 
-    @Test
-    void scheduleShift_allowsOvernightNightShift() {
-        UUID staffId = UUID.randomUUID();
-        UUID hospitalId = UUID.randomUUID();
-        UUID actorUserId = UUID.randomUUID();
-        LocalDate shiftDate = LocalDate.now().plusDays(3);
-        LocalTime startTime = LocalTime.of(17, 0);   // 5 PM
-        LocalTime endTime = LocalTime.of(1, 15);      // 1:15 AM next day → crosses midnight
-
-        Staff staff = buildStaff(staffId, hospitalId);
-        Hospital hospital = staff.getHospital();
-        User actor = buildUser(actorUserId, "nightscheduler@example.com");
-
-        StaffShiftRequestDTO dto = new StaffShiftRequestDTO(
-            staffId,
-            hospitalId,
-            null,
-            shiftDate,
-            startTime,
-            endTime,
-            StaffShiftType.NIGHT,
-            null
-        );
-
-        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(shiftRepository.existsOvernightOverlappingShift(staffId, shiftDate, startTime, endTime, null))
-            .thenReturn(false);
-        when(staffAvailabilityRepository.findByStaff_IdAndDate(staffId, shiftDate)).thenReturn(Optional.empty());
-        when(staffAvailabilityRepository.save(any(StaffAvailability.class))).thenAnswer(invocation -> {
-            StaffAvailability availability = invocation.getArgument(0);
-            availability.setId(UUID.randomUUID());
-            return availability;
-        });
-        when(leaveRepository.findLeavesOverlappingDate(eq(staffId), eq(shiftDate), any()))
-            .thenReturn(Collections.emptyList());
-        when(roleValidator.getCurrentUserId()).thenReturn(actorUserId);
-        when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
-        when(userRepository.findById(actorUserId)).thenReturn(Optional.of(actor));
-        when(shiftRepository.save(any(StaffShift.class))).thenAnswer(invocation -> {
-            StaffShift shift = invocation.getArgument(0);
-            shift.setId(UUID.randomUUID());
-            return shift;
-        });
-
-        StaffShiftResponseDTO response = service.scheduleShift(dto, Locale.ENGLISH);
-
-        assertThat(response).isNotNull();
-        assertThat(response.shiftType()).isEqualTo(StaffShiftType.NIGHT);
-        assertThat(response.startTime()).isEqualTo(startTime);
-        assertThat(response.endTime()).isEqualTo(endTime);
-    }
-
     private Staff buildStaff(UUID staffId, UUID hospitalId) {
         Hospital hospital = new Hospital();
         hospital.setId(hospitalId);

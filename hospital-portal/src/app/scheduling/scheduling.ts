@@ -3,16 +3,14 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
   StaffSchedulingService,
-  StaffShiftRequest,
   StaffShiftResponse,
-  StaffShiftType,
-  StaffLeaveRequest,
   StaffLeaveResponse,
   StaffLeaveStatus,
-  StaffLeaveType,
+  BulkShiftRequest,
+  BulkShiftResult,
+  BulkShiftSkip,
+  DayOfWeek,
 } from '../services/staff-scheduling.service';
-import { HospitalService, HospitalResponse } from '../services/hospital.service';
-import { StaffService } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 
 @Component({
@@ -24,8 +22,6 @@ import { ToastService } from '../core/toast.service';
 })
 export class SchedulingComponent implements OnInit {
   private readonly schedulingService = inject(StaffSchedulingService);
-  private readonly hospitalService = inject(HospitalService);
-  private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
 
   activeView = signal<'shifts' | 'leaves'>('shifts');
@@ -40,129 +36,108 @@ export class SchedulingComponent implements OnInit {
   leavesLoading = signal(false);
   leaveFilter = signal<'ALL' | StaffLeaveStatus>('ALL');
 
-  // Dropdowns
-  hospitals = signal<HospitalResponse[]>([]);
-  staffMembers = signal<{ id: string; name: string }[]>([]);
+  // ── Bulk Schedule Modal ──────────────────────────────────────────────────
+  bulkModalOpen = signal(false);
+  bulkSubmitting = signal(false);
+  bulkResult = signal<BulkShiftResult | null>(null);
 
-  // ── Shift Modal ──
-  showShiftModal = signal(false);
-  editingShift = signal(false);
-  savingShift = signal(false);
-  editingShiftId = '';
-  shiftForm: StaffShiftRequest = this.emptyShiftForm();
+  /** Backing model for the bulk scheduling form */
+  bulk: BulkShiftRequest = {
+    staffId: '',
+    hospitalId: '',
+    departmentId: undefined,
+    startDate: '',
+    endDate: '',
+    daysOfWeek: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'],
+    startTime: '18:00',
+    endTime: '01:00',
+    shiftType: 'NIGHT',
+    notes: '',
+    skipConflicts: true,
+  };
 
-  shiftTypes: StaffShiftType[] = ['MORNING', 'AFTERNOON', 'EVENING', 'NIGHT', 'FLEX'];
+  readonly allDays: DayOfWeek[] = [
+    'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY',
+  ];
 
-  emptyShiftForm(): StaffShiftRequest {
-    return {
-      staffId: '',
-      hospitalId: '',
-      shiftDate: '',
-      startTime: '',
-      endTime: '',
-      shiftType: 'MORNING',
-    };
+  openBulkModal(): void {
+    this.bulkResult.set(null);
+    this.bulkModalOpen.set(true);
   }
 
-  // ── Leave Modal ──
-  showLeaveModal = signal(false);
-  savingLeave = signal(false);
-  leaveForm: StaffLeaveRequest = this.emptyLeaveForm();
-
-  leaveTypes: StaffLeaveType[] = ['VACATION', 'SICK', 'EMERGENCY', 'TRAINING', 'UNPAID', 'OTHER'];
-
-  emptyLeaveForm(): StaffLeaveRequest {
-    return {
-      staffId: '',
-      hospitalId: '',
-      startDate: '',
-      endDate: '',
-      leaveType: 'VACATION',
-      requiresCoverage: false,
-    };
+  closeBulkModal(): void {
+    this.bulkModalOpen.set(false);
   }
+
+  isDaySelected(day: DayOfWeek): boolean {
+    return this.bulk.daysOfWeek.includes(day);
+  }
+
+  toggleDay(day: DayOfWeek): void {
+    if (this.isDaySelected(day)) {
+      this.bulk.daysOfWeek = this.bulk.daysOfWeek.filter((d) => d !== day);
+    } else {
+      this.bulk.daysOfWeek = [...this.bulk.daysOfWeek, day];
+    }
+  }
+
+  selectWeekdays(): void {
+    this.bulk.daysOfWeek = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY'];
+  }
+
+  selectWeekend(): void {
+    this.bulk.daysOfWeek = ['SATURDAY', 'SUNDAY'];
+  }
+
+  selectAllDays(): void {
+    this.bulk.daysOfWeek = [...this.allDays];
+  }
+
+  submitBulk(): void {
+    if (!this.bulk.staffId || !this.bulk.hospitalId) {
+      this.toast.error('Staff ID and Hospital ID are required.');
+      return;
+    }
+    if (!this.bulk.startDate || !this.bulk.endDate) {
+      this.toast.error('Please specify the date range.');
+      return;
+    }
+    if (this.bulk.daysOfWeek.length === 0) {
+      this.toast.error('Select at least one day of the week.');
+      return;
+    }
+    this.bulkSubmitting.set(true);
+    this.bulkResult.set(null);
+    this.schedulingService.bulkScheduleShifts(this.bulk).subscribe({
+      next: (result) => {
+        this.bulkResult.set(result);
+        this.bulkSubmitting.set(false);
+        if (result.totalScheduled > 0) {
+          this.toast.success(
+            `${result.totalScheduled} shift(s) scheduled` +
+            (result.totalSkipped > 0 ? `, ${result.totalSkipped} skipped.` : '.'),
+          );
+          this.loadShifts();
+        } else {
+          this.toast.error('No shifts were created. All candidate dates were skipped.');
+        }
+      },
+      error: (err) => {
+        this.bulkSubmitting.set(false);
+        const msg = err?.error?.message ?? 'Bulk scheduling failed. Please try again.';
+        this.toast.error(msg);
+      },
+    });
+  }
+
+  formatBulkSkipDate(skip: BulkShiftSkip): string {
+    return this.formatDate(skip.date) + ' — ' + skip.reason;
+  }
+  // ── End Bulk Modal ────────────────────────────────────────────────────────
 
   ngOnInit(): void {
     this.loadShifts();
     this.loadLeaves();
-    this.hospitalService.list().subscribe({ next: (h) => this.hospitals.set(h) });
-    this.staffService.list().subscribe({
-      next: (list) =>
-        this.staffMembers.set(list.map((s) => ({ id: s.id, name: s.name || s.email }))),
-    });
-  }
-
-  // ── Shift CRUD ──
-  openCreateShift(): void {
-    this.shiftForm = this.emptyShiftForm();
-    this.editingShift.set(false);
-    this.editingShiftId = '';
-    this.showShiftModal.set(true);
-  }
-
-  openEditShift(s: StaffShiftResponse): void {
-    this.editingShift.set(true);
-    this.editingShiftId = s.id;
-    this.shiftForm = {
-      staffId: s.staffId,
-      hospitalId: s.hospitalId,
-      departmentId: s.departmentId,
-      shiftDate: s.shiftDate,
-      startTime: s.startTime,
-      endTime: s.endTime,
-      shiftType: s.shiftType,
-      notes: s.notes,
-    };
-    this.showShiftModal.set(true);
-  }
-
-  closeShiftModal(): void {
-    this.showShiftModal.set(false);
-  }
-
-  submitShift(): void {
-    this.savingShift.set(true);
-    const op = this.editingShift()
-      ? this.schedulingService.updateShift(this.editingShiftId, this.shiftForm)
-      : this.schedulingService.createShift(this.shiftForm);
-    op.subscribe({
-      next: () => {
-        this.toast.success(this.editingShift() ? 'Shift updated' : 'Shift created');
-        this.closeShiftModal();
-        this.loadShifts();
-        this.savingShift.set(false);
-      },
-      error: () => {
-        this.toast.error('Failed to save shift');
-        this.savingShift.set(false);
-      },
-    });
-  }
-
-  // ── Leave CRUD ──
-  openCreateLeave(): void {
-    this.leaveForm = this.emptyLeaveForm();
-    this.showLeaveModal.set(true);
-  }
-
-  closeLeaveModal(): void {
-    this.showLeaveModal.set(false);
-  }
-
-  submitLeave(): void {
-    this.savingLeave.set(true);
-    this.schedulingService.requestLeave(this.leaveForm).subscribe({
-      next: () => {
-        this.toast.success('Leave request submitted');
-        this.closeLeaveModal();
-        this.loadLeaves();
-        this.savingLeave.set(false);
-      },
-      error: () => {
-        this.toast.error('Failed to submit leave request');
-        this.savingLeave.set(false);
-      },
-    });
   }
 
   setView(view: 'shifts' | 'leaves'): void {
@@ -220,7 +195,13 @@ export class SchedulingComponent implements OnInit {
   }
 
   getShiftsForDay(date: string): StaffShiftResponse[] {
-    return this.shifts().filter((s) => s.shiftDate === date);
+    return this.shifts().filter(
+      (s) =>
+        s.shiftDate === date ||
+        // Cross-midnight: also show on the end-date column so the viewer can
+        // see that the shift is still running at the start of that day.
+        (s.crossMidnight && s.shiftEndDate === date),
+    );
   }
 
   getWeekLabel(): string {
@@ -272,6 +253,18 @@ export class SchedulingComponent implements OnInit {
     const ampm = h >= 12 ? 'PM' : 'AM';
     const hr = h % 12 || 12;
     return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`;
+  }
+
+  /**
+   * Returns a formatted time-range string for a shift.
+   * Cross-midnight end times get a "+1" suffix so the viewer knows the shift
+   * ends on the following calendar day.
+   * e.g.  "5:00 PM – 1:30 AM (+1)"
+   */
+  formatShiftRange(shift: StaffShiftResponse): string {
+    const start = this.formatTime(shift.startTime);
+    const end = this.formatTime(shift.endTime);
+    return shift.crossMidnight ? `${start} – ${end} (+1)` : `${start} – ${end}`;
   }
 
   formatDate(date?: string): string {

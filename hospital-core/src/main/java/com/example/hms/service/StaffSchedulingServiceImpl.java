@@ -12,6 +12,9 @@ import com.example.hms.model.StaffAvailability;
 import com.example.hms.model.StaffLeaveRequest;
 import com.example.hms.model.StaffShift;
 import com.example.hms.model.User;
+import com.example.hms.payload.dto.BulkShiftRequestDTO;
+import com.example.hms.payload.dto.BulkShiftResultDTO;
+import com.example.hms.payload.dto.BulkShiftSkipDTO;
 import com.example.hms.payload.dto.StaffLeaveDecisionDTO;
 import com.example.hms.payload.dto.StaffLeaveRequestDTO;
 import com.example.hms.payload.dto.StaffLeaveResponseDTO;
@@ -32,9 +35,11 @@ import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
@@ -80,6 +85,103 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         validateShiftWindow(dto, staff, effectiveLocale, null);
 
         User actor = getCurrentUser(effectiveLocale);
+        StaffShift saved = persistShift(staff, hospital, department, dto, actor);
+        log.info("[schedule] shift created staff={}, date={}, start={}, end={}",
+            staff.getId(), dto.shiftDate(), dto.startTime(), dto.endTime());
+        return mapper.toShiftDto(saved);
+    }
+
+    @Override
+    @Transactional
+    public BulkShiftResultDTO bulkScheduleShifts(BulkShiftRequestDTO dto, Locale locale) {
+        Locale effectiveLocale = safeLocale(locale);
+
+        // ── Resolve & validate shared context ────────────────────────────────
+        if (dto.endDate().isBefore(dto.startDate())) {
+            throw new BusinessRuleException(message("schedule.dateRange.invalid", effectiveLocale));
+        }
+        if (dto.daysOfWeek() == null || dto.daysOfWeek().isEmpty()) {
+            throw new BusinessRuleException(message("schedule.bulk.daysOfWeek.required", effectiveLocale));
+        }
+        if (dto.endTime().equals(dto.startTime())) {
+            throw new BusinessRuleException(message("schedule.shift.timeRange.invalid", effectiveLocale));
+        }
+
+        Staff staff = findStaff(dto.staffId(), effectiveLocale);
+        Hospital hospital = findHospital(dto.hospitalId(), effectiveLocale);
+        Department department = resolveDepartment(dto.departmentId(), staff, hospital, effectiveLocale);
+
+        ensureStaffBelongsToHospital(staff, hospital, effectiveLocale);
+        ensureStaffActive(staff, effectiveLocale);
+        ensureSchedulerPermissions(staff, hospital.getId(), department, effectiveLocale);
+
+        User actor = getCurrentUser(effectiveLocale);
+        Set<DayOfWeek> targetDays = dto.daysOfWeek();
+
+        List<StaffShiftResponseDTO> scheduled = new ArrayList<>();
+        List<BulkShiftSkipDTO> skipped = new ArrayList<>();
+
+        BulkContext ctx = new BulkContext(staff, hospital, department, actor, effectiveLocale, dto);
+
+        // ── Iterate each date in the range ───────────────────────────────────
+        for (LocalDate current = dto.startDate(); !current.isAfter(dto.endDate()); current = current.plusDays(1)) {
+            processBulkDate(current, targetDays, ctx, scheduled, skipped);
+        }
+
+        log.info("[bulk-schedule] done staff={} scheduled={} skipped={}",
+            staff.getId(), scheduled.size(), skipped.size());
+        return new BulkShiftResultDTO(scheduled, skipped, scheduled.size(), skipped.size());
+    }
+
+    /** Bundles immutable context shared across every date in a bulk operation. */
+    private record BulkContext(Staff staff, Hospital hospital, Department department,
+                               User actor, Locale locale, BulkShiftRequestDTO dto) { }
+
+    /**
+     * Attempt to schedule a single date as part of a bulk operation.
+     * Mutates {@code scheduled} or {@code skipped} in place.
+     */
+    private void processBulkDate(LocalDate date,
+                                  Set<DayOfWeek> targetDays,
+                                  BulkContext ctx,
+                                  List<StaffShiftResponseDTO> scheduled,
+                                  List<BulkShiftSkipDTO> skipped) {
+        if (!targetDays.contains(date.getDayOfWeek())) {
+            return; // Not a target day — silently skip
+        }
+
+        BulkShiftRequestDTO dto = ctx.dto();
+        StaffShiftRequestDTO perDayDto = new StaffShiftRequestDTO(
+            dto.staffId(), dto.hospitalId(), dto.departmentId(),
+            date, dto.startTime(), dto.endTime(), dto.shiftType(), dto.notes()
+        );
+
+        try {
+            validateShiftWindow(perDayDto, ctx.staff(), ctx.locale(), null);
+        } catch (BusinessRuleException | IllegalStateException ex) {
+            if (dto.skipConflicts()) {
+                skipped.add(new BulkShiftSkipDTO(date, ex.getMessage()));
+                log.debug("[bulk-schedule] skipped date={} reason={}", date, ex.getMessage());
+                return;
+            }
+            throw ex;
+        }
+
+        StaffShift saved = persistShift(ctx.staff(), ctx.hospital(), ctx.department(), perDayDto, ctx.actor());
+        scheduled.add(mapper.toShiftDto(saved));
+        log.info("[bulk-schedule] shift created staff={} date={} start={} end={}",
+            ctx.staff().getId(), date, dto.startTime(), dto.endTime());
+    }
+
+    /**
+     * Persists a new {@link StaffShift} entity without any validation — validation
+     * must be done by the caller ({@link #validateShiftWindow}) before invoking this.
+     */
+    private StaffShift persistShift(Staff staff,
+                                    Hospital hospital,
+                                    Department department,
+                                    StaffShiftRequestDTO dto,
+                                    User actor) {
         StaffShift shift = StaffShift.builder()
             .staff(staff)
             .hospital(hospital)
@@ -94,11 +196,7 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
             .lastModifiedBy(actor)
             .statusChangedAt(LocalDateTime.now())
             .build();
-
-        StaffShift saved = shiftRepository.save(shift);
-        log.info("[schedule] shift created staff={}, date={}, start={}, end={}",
-            staff.getId(), dto.shiftDate(), dto.startTime(), dto.endTime());
-        return mapper.toShiftDto(saved);
+        return shiftRepository.save(shift);
     }
 
     @Override
@@ -171,24 +269,39 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
                                                   Locale locale) {
         Locale effectiveLocale = safeLocale(locale);
         DateRange range = resolveDateRange(startDate, endDate, effectiveLocale);
+
+        // Extend the query window one day back so that cross-midnight shifts whose
+        // shiftDate = (rangeStart - 1 day) but whose shiftEndDate falls inside the
+        // requested range are included in the results.
+        LocalDate queryStart = range.start().minusDays(1);
+        LocalDate queryEnd   = range.end();
+
         List<StaffShift> shifts;
         if (staffId != null) {
             shifts = shiftRepository.findByStaff_IdAndShiftDateBetweenOrderByShiftDateAscStartTimeAsc(
-                staffId, range.start(), range.end());
+                staffId, queryStart, queryEnd);
         } else if (departmentId != null) {
             shifts = shiftRepository.findByDepartment_IdAndShiftDateBetweenOrderByShiftDateAscStartTimeAsc(
-                departmentId, range.start(), range.end());
+                departmentId, queryStart, queryEnd);
         } else if (hospitalId != null) {
             shifts = shiftRepository.findByHospital_IdAndShiftDateBetweenOrderByShiftDateAscStartTimeAsc(
-                hospitalId, range.start(), range.end());
+                hospitalId, queryStart, queryEnd);
         } else if (roleValidator.isSuperAdminFromAuth()) {
             shifts = shiftRepository.findByShiftDateBetweenOrderByShiftDateAscStartTimeAsc(
-                range.start(), range.end());
+                queryStart, queryEnd);
         } else {
             shifts = shiftRepository.findByHospital_IdAndShiftDateBetweenOrderByShiftDateAscStartTimeAsc(
-                requireCurrentHospitalId(effectiveLocale), range.start(), range.end());
+                requireCurrentHospitalId(effectiveLocale), queryStart, queryEnd);
         }
-        return shifts.stream().map(mapper::toShiftDto).toList();
+
+        // Filter out the extra day-before shifts that are NOT cross-midnight (they
+        // have shiftDate = queryStart but shiftEndDate = shiftDate, i.e. same-day,
+        // so they fall outside the originally requested range).
+        return shifts.stream()
+            .map(mapper::toShiftDto)
+            .filter(s -> !s.shiftDate().isBefore(range.start())    // normal same-day shifts
+                || s.shiftEndDate().compareTo(range.start()) >= 0) // cross-midnight from prior day
+            .toList();
     }
 
     @Override
@@ -368,22 +481,12 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         if (dto.shiftDate().isBefore(LocalDate.now())) {
             throw new BusinessRuleException(message("schedule.shift.pastDate", locale));
         }
-        // For overnight shifts (e.g. 17:00→01:15) endTime is before startTime — that is valid.
-        // Only reject when start and end are identical (zero-duration shift).
-        if (dto.startTime().equals(dto.endTime())) {
+        // Allow cross-midnight shifts where endTime < startTime (e.g. NIGHT: 16:30 → 01:30 next day)
+        if (dto.endTime().equals(dto.startTime())) {
             throw new BusinessRuleException(message("schedule.shift.timeRange.invalid", locale));
         }
-        boolean overnight = dto.endTime().isBefore(dto.startTime());
-        if (overnight) {
-            if (shiftRepository.existsOvernightOverlappingShift(
-                    staff.getId(), dto.shiftDate(), dto.startTime(), dto.endTime(), excludeShiftId)) {
-                throw new BusinessRuleException(message("schedule.shift.overlap", locale));
-            }
-        } else {
-            if (shiftRepository.existsOverlappingShift(
-                    staff.getId(), dto.shiftDate(), dto.startTime(), dto.endTime(), excludeShiftId)) {
-                throw new BusinessRuleException(message("schedule.shift.overlap", locale));
-            }
+        if (shiftRepository.existsOverlappingShift(staff.getId(), dto.shiftDate(), dto.startTime(), dto.endTime(), excludeShiftId)) {
+            throw new BusinessRuleException(message("schedule.shift.overlap", locale));
         }
         ensureAvailabilityCoversShift(dto, staff, locale);
         ensureNoLeaveConflict(dto, staff, locale);
@@ -396,14 +499,12 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
         if (availability.isDayOff()) {
             throw new BusinessRuleException(message("schedule.shift.availability.dayOff", locale));
         }
-        boolean overnight = dto.endTime().isBefore(dto.startTime());
-        if (overnight) {
-            // For overnight shifts only validate the start portion against the shift-date availability
-            if (availability.getAvailableFrom() != null && dto.startTime().isBefore(availability.getAvailableFrom())) {
-                throw new BusinessRuleException(message("schedule.shift.availability.start", locale));
-            }
-            // The end portion falls on the next day — skip end-time check for the current day
-        } else {
+        // For cross-midnight availability windows (availableTo < availableFrom), coverage is always satisfied
+        // because the window spans the entire day boundary. Only check for same-day windows.
+        boolean crossMidnightAvail = availability.getAvailableFrom() != null
+            && availability.getAvailableTo() != null
+            && availability.getAvailableTo().isBefore(availability.getAvailableFrom());
+        if (!crossMidnightAvail) {
             if (availability.getAvailableFrom() != null && dto.startTime().isBefore(availability.getAvailableFrom())) {
                 throw new BusinessRuleException(message("schedule.shift.availability.start", locale));
             }
@@ -436,24 +537,37 @@ public class StaffSchedulingServiceImpl implements StaffSchedulingService {
     private void ensureNoLeaveConflict(StaffShiftRequestDTO dto, Staff staff, Locale locale) {
         List<StaffLeaveRequest> overlappingLeaves = leaveRepository.findLeavesOverlappingDate(
             staff.getId(), dto.shiftDate(), ACTIVE_LEAVE_STATUSES);
-        boolean overnight = dto.endTime().isBefore(dto.startTime());
         for (StaffLeaveRequest leave : overlappingLeaves) {
             if (leave.getStartTime() == null || leave.getEndTime() == null) {
+                // Full-day leave — any shift on that date conflicts
                 throw new BusinessRuleException(message("schedule.shift.leaveConflict", locale));
             }
-            LocalTime leaveStart = leave.getStartTime();
-            LocalTime leaveEnd = leave.getEndTime();
-            boolean overlaps;
-            if (overnight) {
-                // Shift spans midnight: overlaps if leave touches [startTime→23:59] on shift date
-                overlaps = leaveStart.isBefore(LocalTime.MAX) && leaveEnd.isAfter(dto.startTime());
-            } else {
-                overlaps = leaveStart.isBefore(dto.endTime()) && leaveEnd.isAfter(dto.startTime());
-            }
+            // Convert both windows to minutes-since-midnight, expanding cross-midnight windows
+            // to span into the next day (i.e. add 1440 minutes when endTime < startTime).
+            int shiftStart  = toMinutes(dto.startTime());
+            int shiftEnd    = isCrossMidnight(dto.startTime(), dto.endTime())
+                ? toMinutes(dto.endTime()) + 1440
+                : toMinutes(dto.endTime());
+            int leaveStart  = toMinutes(leave.getStartTime());
+            int leaveEnd    = isCrossMidnight(leave.getStartTime(), leave.getEndTime())
+                ? toMinutes(leave.getEndTime()) + 1440
+                : toMinutes(leave.getEndTime());
+
+            boolean overlaps = shiftStart < leaveEnd && shiftEnd > leaveStart;
             if (overlaps) {
                 throw new BusinessRuleException(message("schedule.shift.leaveConflict", locale));
             }
         }
+    }
+
+    /** @return true when {@code end} is strictly before {@code start} (cross-midnight window). */
+    private static boolean isCrossMidnight(LocalTime start, LocalTime end) {
+        return end.isBefore(start);
+    }
+
+    /** @return minutes since midnight for the given time. */
+    private static int toMinutes(LocalTime t) {
+        return t.getHour() * 60 + t.getMinute();
     }
 
     private void validateLeaveWindow(StaffLeaveRequestDTO dto,

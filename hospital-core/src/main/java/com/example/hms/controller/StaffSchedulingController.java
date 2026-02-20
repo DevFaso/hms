@@ -1,5 +1,7 @@
 package com.example.hms.controller;
 
+import com.example.hms.payload.dto.BulkShiftRequestDTO;
+import com.example.hms.payload.dto.BulkShiftResultDTO;
 import com.example.hms.payload.dto.StaffLeaveDecisionDTO;
 import com.example.hms.payload.dto.StaffLeaveRequestDTO;
 import com.example.hms.payload.dto.StaffLeaveResponseDTO;
@@ -116,6 +118,24 @@ public class StaffSchedulingController {
     ) {
         Locale locale = parseLocale(lang);
         return ResponseEntity.ok(schedulingService.decideLeave(leaveId, request, locale));
+    }
+
+    @Operation(
+        summary = "Bulk-schedule recurring shifts",
+        description = "Creates shifts for a staff member on specified days-of-week between startDate and endDate. "
+            + "Set skipConflicts=true (recommended) to silently skip dates with existing overlaps or leave requests "
+            + "instead of aborting the whole batch. The response lists both created shifts and skipped dates."
+    )
+    @ApiResponse(responseCode = "200", description = "Bulk operation completed (may include partial skips)",
+        content = @Content(schema = @Schema(implementation = BulkShiftResultDTO.class)))
+    @PostMapping("/shifts/bulk")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    public ResponseEntity<BulkShiftResultDTO> bulkScheduleShifts(
+        @Valid @RequestBody BulkShiftRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) String lang
+    ) {
+        Locale locale = parseLocale(lang);
+        return ResponseEntity.ok(schedulingService.bulkScheduleShifts(request, locale));
     }
 
     @Operation(summary = "Cancel a pending leave request")

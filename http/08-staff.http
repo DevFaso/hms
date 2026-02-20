@@ -118,7 +118,7 @@ Accept: application/json
 ### SCHEDULING (Shifts & Leaves)
 ### ----------------------------------------
 
-### Create shift
+### Create single shift (cross-midnight example: 5 PM → 1 AM)
 POST {{baseUrl}}/staff/scheduling/shifts
 Authorization: Bearer {{adminToken}}
 Content-Type: application/json
@@ -126,10 +126,48 @@ Content-Type: application/json
 {
   "staffId": "{{staffId}}",
   "hospitalId": "{{hospitalId}}",
-  "shiftDate": "2026-02-16",
-  "startTime": "08:00",
-  "endTime": "16:00",
-  "shiftType": "DAY"
+  "shiftDate": "2026-02-23",
+  "startTime": "17:00",
+  "endTime": "01:00",
+  "shiftType": "NIGHT",
+  "notes": "Cross-midnight night shift"
+}
+
+### Bulk-schedule shifts: Mon–Fri 6 PM → 1 AM (NIGHT) for 4 weeks
+### skipConflicts=true means conflicting dates are skipped, not aborted
+POST {{baseUrl}}/staff/scheduling/shifts/bulk
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "staffId": "{{staffId}}",
+  "hospitalId": "{{hospitalId}}",
+  "startDate": "2026-02-23",
+  "endDate": "2026-03-20",
+  "daysOfWeek": ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY"],
+  "startTime": "18:00",
+  "endTime": "01:00",
+  "shiftType": "NIGHT",
+  "notes": "Weekly Mon-Fri night rotation",
+  "skipConflicts": true
+}
+
+### Bulk-schedule Weekend mornings (Sat + Sun 7 AM → 3 PM)
+POST {{baseUrl}}/staff/scheduling/shifts/bulk
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "staffId": "{{staffId}}",
+  "hospitalId": "{{hospitalId}}",
+  "startDate": "2026-02-22",
+  "endDate": "2026-03-29",
+  "daysOfWeek": ["SATURDAY", "SUNDAY"],
+  "startTime": "07:00",
+  "endTime": "15:00",
+  "shiftType": "MORNING",
+  "notes": "Weekend morning coverage",
+  "skipConflicts": true
 }
 
 ### List shifts

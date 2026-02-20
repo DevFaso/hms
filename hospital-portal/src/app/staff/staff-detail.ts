@@ -143,7 +143,12 @@ export class StaffDetailComponent implements OnInit {
   }
 
   getShiftsForDay(date: string): StaffShiftResponse[] {
-    return this.shifts().filter((s) => s.shiftDate === date);
+    return this.shifts().filter(
+      (s) =>
+        s.shiftDate === date ||
+        // Cross-midnight: also show on the end-date column.
+        (s.crossMidnight && s.shiftEndDate === date),
+    );
   }
 
   getWeekLabel(): string {
@@ -200,6 +205,18 @@ export class StaffDetailComponent implements OnInit {
     const ampm = h >= 12 ? 'PM' : 'AM';
     const hr = h % 12 || 12;
     return `${hr}:${m.toString().padStart(2, '0')} ${ampm}`;
+  }
+
+  /**
+   * Returns a formatted time-range string for a shift.
+   * Cross-midnight end times get a "+1" suffix so the viewer knows the shift
+   * ends on the following calendar day.
+   * e.g.  "5:00 PM – 1:30 AM (+1)"
+   */
+  formatShiftRange(shift: StaffShiftResponse): string {
+    const start = this.formatTime(shift.startTime);
+    const end = this.formatTime(shift.endTime);
+    return shift.crossMidnight ? `${start} – ${end} (+1)` : `${start} – ${end}`;
   }
 
   formatShiftType(type: string): string {
