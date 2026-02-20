@@ -255,13 +255,53 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label for="ref-patientId">Patient ID</label>
-            <input
-              id="ref-patientId"
-              type="text"
-              [(ngModel)]="form.patientId"
-              placeholder="Patient ID"
-            />
+            @if (selectedPatient()) {
+              <label>Patient</label>
+              <div class="picker-chip">
+                <span class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</span>
+                <span class="chip-info">
+                  <span class="chip-name"
+                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
+                  >
+                  <span class="chip-sub">{{
+                    selectedPatient()!.mrn || selectedPatient()!.email
+                  }}</span>
+                </span>
+                <button type="button" class="chip-clear" (click)="clearPatient()" title="Remove">
+                  ×
+                </button>
+              </div>
+            } @else {
+              <label for="ref-patientSearch">Patient *</label>
+              <div class="patient-picker-wrap">
+                <span class="picker-search-icon material-icons">person_search</span>
+                <input
+                  id="ref-patientSearch"
+                  type="text"
+                  class="picker-input"
+                  [value]="patientQuery()"
+                  (input)="onPatientQueryChange($any($event.target).value)"
+                  placeholder="Search by name, email or MRN…"
+                  autocomplete="off"
+                />
+                @if (patientSearchLoading()) {
+                  <span class="picker-spinner"></span>
+                }
+                @if (patientDropdownOpen()) {
+                  <ul class="picker-dropdown" aria-label="Patient suggestions">
+                    @for (p of patientSuggestions(); track p.id) {
+                      <li class="picker-option" (click)="selectPatient(p)">
+                        <span class="opt-avatar">{{ patientInitials(p) }}</span>
+                        <span class="opt-info">
+                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                          <span class="opt-meta">{{ p.mrn }} · {{ p.email }}</span>
+                        </span>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
           </div>
           <div class="field">
             <label for="ref-hospitalId">Hospital</label>

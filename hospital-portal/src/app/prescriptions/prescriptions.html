@@ -232,14 +232,58 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label for="rx-patientId">Patient ID *</label>
-            <input
-              id="rx-patientId"
-              type="text"
-              [(ngModel)]="form.patientId"
-              placeholder="Patient ID"
-              required
-            />
+            <label for="rx-patientSearch">Patient *</label>
+            @if (selectedPatient()) {
+              <div class="picker-chip">
+                <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
+                <div class="chip-info">
+                  <span class="chip-name"
+                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
+                  >
+                  <span class="chip-sub">{{ selectedPatient()!.email }}</span>
+                </div>
+                <button
+                  type="button"
+                  class="chip-clear"
+                  (click)="clearPatient()"
+                  title="Change patient"
+                >
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            } @else {
+              <div class="patient-picker-wrap">
+                <span class="material-symbols-outlined picker-search-icon">person_search</span>
+                <input
+                  id="rx-patientSearch"
+                  class="picker-input"
+                  type="text"
+                  placeholder="Search by name, email or MRN…"
+                  [value]="patientQuery()"
+                  (input)="onPatientQueryChange($any($event.target).value)"
+                  (blur)="patientDropdownOpen.set(false)"
+                  autocomplete="off"
+                />
+                @if (patientSearchLoading()) {
+                  <div class="picker-spinner"></div>
+                }
+                @if (patientDropdownOpen()) {
+                  <ul class="picker-dropdown" aria-label="Patient suggestions">
+                    @for (p of patientSuggestions(); track p.id) {
+                      <li class="picker-option" (mousedown)="selectPatient(p)">
+                        <div class="opt-avatar">{{ patientInitials(p) }}</div>
+                        <div class="opt-info">
+                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                          <span class="opt-meta"
+                            >{{ p.email }}{{ p.mrn ? ' · MRN ' + p.mrn : '' }}</span
+                          >
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
           </div>
           <div class="field">
             <label for="rx-staffId">Prescriber</label>
