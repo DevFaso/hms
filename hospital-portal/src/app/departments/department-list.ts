@@ -1,10 +1,10 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import { StaffService, StaffResponse } from '../services/staff.service';
 
 interface Department {
   id: string;
@@ -35,7 +35,7 @@ interface DepartmentRequest {
 @Component({
   selector: 'app-department-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule],
   templateUrl: './department-list.html',
   styleUrl: './department-list.scss',
 })
@@ -43,6 +43,7 @@ export class DepartmentListComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly toast = inject(ToastService);
   private readonly hospitalService = inject(HospitalService);
+  private readonly staffService = inject(StaffService);
 
   departments = signal<Department[]>([]);
   filtered = signal<Department[]>([]);
@@ -50,6 +51,10 @@ export class DepartmentListComponent implements OnInit {
   loading = signal(true);
 
   hospitals = signal<HospitalResponse[]>([]);
+
+  // Staff for head-of-department dropdown (keyed by hospitalId selection)
+  staffForHospital = signal<StaffResponse[]>([]);
+  staffLoading = signal(false);
 
   // Create / Edit
   showModal = signal(false);
@@ -105,6 +110,7 @@ export class DepartmentListComponent implements OnInit {
   openCreate(): void {
     this.form = this.emptyForm();
     this.editing.set(null);
+    this.staffForHospital.set([]);
     this.showModal.set(true);
   }
 
@@ -121,7 +127,42 @@ export class DepartmentListComponent implements OnInit {
       active: dept.active,
       headOfDepartmentEmail: dept.headOfDepartmentEmail ?? '',
     };
+    // Pre-load staff for the existing hospital so the dropdown is populated
+    if (dept.hospitalId) {
+      this.loadStaffForHospital(dept.hospitalId);
+    }
     this.showModal.set(true);
+  }
+
+  /** Called when the hospital <select> changes — load staff and clear head selection */
+  onHospitalChange(hospitalId: string): void {
+    this.form.headOfDepartmentEmail = '';
+    this.staffForHospital.set([]);
+    if (hospitalId) {
+      this.loadStaffForHospital(hospitalId);
+    }
+  }
+
+  private loadStaffForHospital(hospitalId: string): void {
+    this.staffLoading.set(true);
+    this.staffService.list(hospitalId).subscribe({
+      next: (staff) => {
+        this.staffForHospital.set(staff.filter((s) => s.active));
+        this.staffLoading.set(false);
+      },
+      error: () => {
+        this.staffForHospital.set([]);
+        this.staffLoading.set(false);
+      },
+    });
+  }
+
+  /** Auto-uppercase the department code as the user types */
+  onCodeInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const upper = input.value.toUpperCase();
+    input.value = upper;
+    this.form.code = upper;
   }
 
   closeModal(): void {

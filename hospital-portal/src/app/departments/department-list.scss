@@ -247,7 +247,24 @@
     &::placeholder {
       color: #9ca3af;
     }
+    &:disabled {
+      background: #f8fafc;
+      color: #9ca3af;
+      cursor: not-allowed;
+    }
   }
+}
+
+.field-hint {
+  font-size: 0.74rem;
+  color: #64748b;
+  margin-top: -2px;
+}
+
+.select-placeholder,
+.select-loading {
+  font-style: italic;
+  color: #9ca3af !important;
 }
 
 .toggle-label {

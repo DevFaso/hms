@@ -99,7 +99,13 @@
             <div class="form-row">
               <div class="field">
                 <label for="dHospital">Hospital *</label>
-                <select id="dHospital" [(ngModel)]="form.hospitalId" name="hospitalId" required>
+                <select
+                  id="dHospital"
+                  [(ngModel)]="form.hospitalId"
+                  name="hospitalId"
+                  required
+                  (ngModelChange)="onHospitalChange($event)"
+                >
                   <option value="">Select hospital</option>
                   @for (h of hospitals(); track h.id) {
                     <option [value]="h.id">{{ h.name }}</option>
@@ -125,11 +131,13 @@
                 <input
                   id="dCode"
                   type="text"
-                  [(ngModel)]="form.code"
+                  [ngModel]="form.code"
+                  (input)="onCodeInput($event)"
                   name="code"
-                  placeholder="e.g., CARDIO"
+                  placeholder="e.g., CARDIO-01"
                   required
                 />
+                <span class="field-hint">Uppercase letters, digits, - and _ only</span>
               </div>
               <div class="field">
                 <label for="dEmail">Email</label>
@@ -155,14 +163,29 @@
                 />
               </div>
               <div class="field">
-                <label for="dHead">Head of Dept. Email</label>
-                <input
-                  id="dHead"
-                  type="email"
-                  [(ngModel)]="form.headOfDepartmentEmail"
-                  name="headOfDepartmentEmail"
-                  placeholder="head&#64;hospital.com"
-                />
+                <label for="dHead">Head of Department</label>
+                @if (!form.hospitalId) {
+                  <select id="dHead-empty" disabled class="select-placeholder">
+                    <option value="">Select a hospital first</option>
+                  </select>
+                } @else if (staffLoading()) {
+                  <select id="dHead-loading" disabled class="select-loading">
+                    <option value="">Loading staff…</option>
+                  </select>
+                } @else {
+                  <select
+                    id="dHead"
+                    [(ngModel)]="form.headOfDepartmentEmail"
+                    name="headOfDepartmentEmail"
+                  >
+                    <option value="">— None —</option>
+                    @for (s of staffForHospital(); track s.id) {
+                      <option [value]="s.email">
+                        {{ s.name }}{{ s.jobTitle ? ' · ' + s.jobTitle : '' }}
+                      </option>
+                    }
+                  </select>
+                }
               </div>
             </div>
 
