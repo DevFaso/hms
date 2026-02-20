@@ -265,33 +265,96 @@
 
     <!-- Body -->
     <div class="modal-body">
-      <!-- Staff + Hospital IDs -->
+      <!-- Staff Search + Hospital (auto-filled) -->
       <div class="form-row">
+        <!-- ── Staff picker ── -->
         <div class="form-group">
-          <label class="form-label" for="bulk-staffId">
+          <label class="form-label" for="bulk-staffSearch">
             <span class="material-symbols-outlined">badge</span>
-            Staff ID <span class="required">*</span>
+            Staff Member <span class="required">*</span>
           </label>
-          <input
-            id="bulk-staffId"
-            class="form-input"
-            type="text"
-            placeholder="Paste staff UUID"
-            [(ngModel)]="bulk.staffId"
-          />
+
+          @if (selectedStaff()) {
+            <!-- Selected chip -->
+            <div class="selected-chip">
+              <span class="chip-avatar">{{ staffInitials(selectedStaff()!) }}</span>
+              <div class="chip-info">
+                <span class="chip-name">{{ selectedStaff()!.name }}</span>
+                <span class="chip-sub">{{ selectedStaff()!.jobTitle ?? selectedStaff()!.roleName ?? 'Staff' }}</span>
+              </div>
+              <button class="chip-clear" type="button" (click)="clearStaff()" aria-label="Clear selected staff">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+          } @else {
+            <!-- Search input + suggestions dropdown -->
+            <div class="staff-search-wrap">
+              <span class="material-symbols-outlined search-icon">search</span>
+              <input
+                id="bulk-staffSearch"
+                class="form-input staff-search-input"
+                type="text"
+                placeholder="Search by name, role or hospital…"
+                [value]="staffQuery()"
+                (input)="onStaffQueryChange($any($event.target).value)"
+                (blur)="closeSuggestions()"
+                autocomplete="off"
+              />
+              @if (staffLoading()) {
+                <span class="search-spinner"></span>
+              }
+              @if (staffSuggestionsOpen()) {
+                <ul class="suggestions-dropdown" aria-label="Staff suggestions">
+                  @for (s of staffSuggestions(); track s.id) {
+                    <li
+                      class="suggestion-item"
+                      (mousedown)="selectStaff(s)"
+                    >
+                      <span class="sug-avatar">{{ staffInitials(s) }}</span>
+                      <div class="sug-info">
+                        <span class="sug-name">{{ s.name }}</span>
+                        <span class="sug-meta">
+                          {{ s.jobTitle ?? s.roleName ?? 'Staff' }}
+                          @if (s.departmentName) { &nbsp;·&nbsp; {{ s.departmentName }} }
+                        </span>
+                        <span class="sug-hospital">
+                          <span class="material-symbols-outlined">local_hospital</span>
+                          {{ s.hospitalName ?? 'Unknown hospital' }}
+                        </span>
+                      </div>
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          }
         </div>
+
+        <!-- ── Hospital (auto-filled or manual fallback) ── -->
         <div class="form-group">
           <label class="form-label" for="bulk-hospitalId">
             <span class="material-symbols-outlined">local_hospital</span>
-            Hospital ID <span class="required">*</span>
+            Hospital <span class="required">*</span>
           </label>
-          <input
-            id="bulk-hospitalId"
-            class="form-input"
-            type="text"
-            placeholder="Paste hospital UUID"
-            [(ngModel)]="bulk.hospitalId"
-          />
+
+          @if (selectedStaff()) {
+            <!-- Read-only chip showing the matched hospital -->
+            <div class="hospital-locked">
+              <span class="material-symbols-outlined lock-icon">lock</span>
+              <div class="locked-info">
+                <span class="locked-name">{{ selectedStaff()!.hospitalName ?? 'Hospital' }}</span>
+                <span class="locked-sub">Auto-matched from staff · <span class="uuid-pill">{{ selectedStaff()!.hospitalId | slice:0:8 }}…</span></span>
+              </div>
+            </div>
+          } @else {
+            <input
+              id="bulk-hospitalId"
+              class="form-input"
+              type="text"
+              placeholder="Paste hospital UUID"
+              [(ngModel)]="bulk.hospitalId"
+            />
+          }
         </div>
       </div>
 

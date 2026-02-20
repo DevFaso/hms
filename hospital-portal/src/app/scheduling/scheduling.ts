@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { debounceTime, distinctUntilChanged, Subject, switchMap, of } from 'rxjs';
 import {
   StaffSchedulingService,
   StaffShiftResponse,
@@ -11,6 +12,7 @@ import {
   BulkShiftSkip,
   DayOfWeek,
 } from '../services/staff-scheduling.service';
+import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 
 @Component({
@@ -22,6 +24,7 @@ import { ToastService } from '../core/toast.service';
 })
 export class SchedulingComponent implements OnInit {
   private readonly schedulingService = inject(StaffSchedulingService);
+  private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
 
   activeView = signal<'shifts' | 'leaves'>('shifts');
@@ -40,6 +43,83 @@ export class SchedulingComponent implements OnInit {
   bulkModalOpen = signal(false);
   bulkSubmitting = signal(false);
   bulkResult = signal<BulkShiftResult | null>(null);
+
+  // ── Staff search / autocomplete ──────────────────────────────────────────
+  /** All loaded staff (fetched once when modal opens) */
+  private allStaff: StaffResponse[] = [];
+  /** The currently selected staff member */
+  selectedStaff = signal<StaffResponse | null>(null);
+  /** Text the user is typing in the staff search box */
+  staffQuery = signal('');
+  /** Debounce: staff suggestions shown under the input */
+  staffSuggestions = signal<StaffResponse[]>([]);
+  staffSuggestionsOpen = signal(false);
+  staffLoading = signal(false);
+
+  private readonly staffSearch$ = new Subject<string>();
+
+  /** Initialise the debounced search pipeline once */
+  private initStaffSearch(): void {
+    this.staffSearch$
+      .pipe(
+        debounceTime(220),
+        distinctUntilChanged(),
+        switchMap((q) => {
+          const query = q.trim().toLowerCase();
+          if (!query) return of([]);
+          return of(
+            this.allStaff.filter(
+              (s) =>
+                s.name.toLowerCase().includes(query) ||
+                (s.jobTitle ?? '').toLowerCase().includes(query) ||
+                (s.hospitalName ?? '').toLowerCase().includes(query) ||
+                (s.departmentName ?? '').toLowerCase().includes(query),
+            ),
+          );
+        }),
+      )
+      .subscribe((results) => {
+        this.staffSuggestions.set(results.slice(0, 8));
+        this.staffSuggestionsOpen.set(results.length > 0);
+        this.staffLoading.set(false);
+      });
+  }
+
+  onStaffQueryChange(value: string): void {
+    this.staffQuery.set(value);
+    if (!value.trim()) {
+      this.staffSuggestions.set([]);
+      this.staffSuggestionsOpen.set(false);
+      return;
+    }
+    this.staffLoading.set(true);
+    this.staffSearch$.next(value);
+  }
+
+  selectStaff(staff: StaffResponse): void {
+    this.selectedStaff.set(staff);
+    this.bulk.staffId = staff.id;
+    this.bulk.hospitalId = staff.hospitalId;
+    this.staffQuery.set('');
+    this.staffSuggestions.set([]);
+    this.staffSuggestionsOpen.set(false);
+  }
+
+  clearStaff(): void {
+    this.selectedStaff.set(null);
+    this.bulk.staffId = '';
+    this.bulk.hospitalId = '';
+    this.staffQuery.set('');
+  }
+
+  closeSuggestions(): void {
+    // Small delay so a click on a suggestion registers first
+    setTimeout(() => this.staffSuggestionsOpen.set(false), 150);
+  }
+
+  staffInitials(staff: StaffResponse): string {
+    return this.getInitials(staff.name);
+  }
 
   /** Backing model for the bulk scheduling form */
   bulk: BulkShiftRequest = {
@@ -68,7 +148,22 @@ export class SchedulingComponent implements OnInit {
 
   openBulkModal(): void {
     this.bulkResult.set(null);
+    this.clearStaff();
     this.bulkModalOpen.set(true);
+    // Load staff list once (only if not already loaded)
+    if (this.allStaff.length === 0) {
+      this.staffLoading.set(true);
+      this.staffService.list().subscribe({
+        next: (staff) => {
+          this.allStaff = staff;
+          this.staffLoading.set(false);
+        },
+        error: () => {
+          this.staffLoading.set(false);
+          this.toast.error('Could not load staff list.');
+        },
+      });
+    }
   }
 
   closeBulkModal(): void {
@@ -142,6 +237,7 @@ export class SchedulingComponent implements OnInit {
   // ── End Bulk Modal ────────────────────────────────────────────────────────
 
   ngOnInit(): void {
+    this.initStaffSearch();
     this.loadShifts();
     this.loadLeaves();
   }
