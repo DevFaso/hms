@@ -57,22 +57,26 @@
       >
         Medical
       </button>
-      <button
-        class="tab"
-        [class.active]="activeTab() === 'vitals'"
-        (click)="setTab('vitals')"
-        title="Vital signs"
-      >
-        Vitals
-      </button>
-      <button
-        class="tab"
-        [class.active]="activeTab() === 'encounters'"
-        (click)="setTab('encounters')"
-        title="Clinical encounters"
-      >
-        Encounters
-      </button>
+      @if (canViewVitals()) {
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'vitals'"
+          (click)="setTab('vitals')"
+          title="Vital signs"
+        >
+          Vitals
+        </button>
+      }
+      @if (canViewEncounters()) {
+        <button
+          class="tab"
+          [class.active]="activeTab() === 'encounters'"
+          (click)="setTab('encounters')"
+          title="Clinical encounters"
+        >
+          Encounters
+        </button>
+      }
       <button
         class="tab"
         [class.active]="activeTab() === 'appointments'"
@@ -171,7 +175,7 @@
     }
 
     <!-- ═══ Vitals Tab ═══ -->
-    @if (activeTab() === 'vitals') {
+    @if (activeTab() === 'vitals' && canViewVitals()) {
       @if (vitalsLoading()) {
         <div class="loading-state">
           <div class="spinner"></div>
@@ -285,7 +289,7 @@
     }
 
     <!-- ═══ Encounters Tab ═══ -->
-    @if (activeTab() === 'encounters') {
+    @if (activeTab() === 'encounters' && canViewEncounters()) {
       @if (encountersLoading()) {
         <div class="loading-state">
           <div class="spinner"></div>

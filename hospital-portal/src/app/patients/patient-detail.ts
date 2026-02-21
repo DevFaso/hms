@@ -6,6 +6,7 @@ import { VitalSignService, VitalSignResponse } from '../services/vital-sign.serv
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { AppointmentService, AppointmentResponse } from '../services/appointment.service';
 import { ToastService } from '../core/toast.service';
+import { PermissionService } from '../core/permission.service';
 
 type TabKey = 'overview' | 'medical' | 'vitals' | 'encounters' | 'appointments';
 
@@ -24,6 +25,7 @@ export class PatientDetailComponent implements OnInit {
   private readonly encounterService = inject(EncounterService);
   private readonly appointmentService = inject(AppointmentService);
   private readonly toast = inject(ToastService);
+  protected readonly permissions = inject(PermissionService);
 
   patient = signal<PatientResponse | null>(null);
   loading = signal(true);
@@ -64,10 +66,21 @@ export class PatientDetailComponent implements OnInit {
     });
   }
 
+  /** Whether the current user can view clinical vitals */
+  canViewVitals(): boolean {
+    return this.permissions.hasPermission('Update Vital Signs');
+  }
+
+  /** Whether the current user can view clinical encounters */
+  canViewEncounters(): boolean {
+    return this.permissions.hasPermission('Create Encounters');
+  }
+
   setTab(tab: TabKey): void {
     this.activeTab.set(tab);
-    if (tab === 'vitals' && this.vitals().length === 0) this.loadVitals();
-    if (tab === 'encounters' && this.encounters().length === 0) this.loadEncounters();
+    if (tab === 'vitals' && this.canViewVitals() && this.vitals().length === 0) this.loadVitals();
+    if (tab === 'encounters' && this.canViewEncounters() && this.encounters().length === 0)
+      this.loadEncounters();
     if (tab === 'appointments' && this.appointments().length === 0) this.loadAppointments();
   }
 
