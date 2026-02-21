@@ -423,7 +423,10 @@ public class StaffServiceImpl implements StaffService {
     }
 
     private void validateRoleSpecificRequirements(StaffRequestDTO dto, String roleName, Locale locale) {
-        switch (roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            return; // no role-specific validation needed when no role is assigned
+        }
+        switch (roleName.toUpperCase()) {
             case "ROLE_DOCTOR":
                 validateDoctorFields(dto, locale);
                 break;

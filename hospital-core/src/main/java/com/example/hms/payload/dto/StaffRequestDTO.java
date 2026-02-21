@@ -9,7 +9,6 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.PastOrPresent;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -47,20 +46,17 @@ public class StaffRequestDTO {
     @NotBlank(message = "{staff.employmentType.blank}")
     @Schema(description = "Employment type, e.g. FULL_TIME, PART_TIME")
     @Enumerated(EnumType.STRING)
-    @NotNull(message = "{staff.employmentType.required}")
     private EmploymentType employmentType;
 
     @Size(max = 100, message = "{staff.specialization.size}")
     @Enumerated(EnumType.STRING)
-    @Schema(description = "Specialization of the staff (e.g. CARDIOLOGY, PEDIATRICS)")
-    @NotNull(message = "{staff.specialization.required}")
+    @Schema(description = "Specialization of the staff (e.g. CARDIOLOGY, PEDIATRICS) — required for doctors/radiologists only")
     private Specialization specialization;
 
     @Size(max = 50, message = "{staff.license.size}")
     @Schema(description = "License number (required for roles like doctor, nurse, pharmacist)")
     private String licenseNumber;
 
-    @NotNull(message = "{staff.startDate.required}")
     @PastOrPresent(message = "{staff.startDate.past}")
     @Schema(description = "Employment start date")
     private LocalDate startDate;
