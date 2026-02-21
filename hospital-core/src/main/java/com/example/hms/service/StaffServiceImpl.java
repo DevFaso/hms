@@ -391,7 +391,20 @@ public class StaffServiceImpl implements StaffService {
     }
 
 
+    private static final Set<String> CLINICAL_JOB_TITLES = Set.of(
+        "DOCTOR", "PHYSICIAN", "SURGEON", "ANESTHESIOLOGIST", "RADIOLOGIST",
+        "PHYSIOTHERAPIST", "PSYCHOLOGIST",
+        "NURSE", "NURSE_PRACTITIONER", "MIDWIFE",
+        "PHARMACIST",
+        "LAB_TECHNICIAN", "LABORATORY_SCIENTIST"
+    );
+
     private void validateLicenseNumber(StaffRequestDTO dto, Locale locale) {
+        String jobTitle = dto.getJobTitle();
+        // Only clinical roles require a license number
+        if (jobTitle == null || !CLINICAL_JOB_TITLES.contains(jobTitle.toUpperCase())) {
+            return;
+        }
         String licenseNumber = dto.getLicenseNumber();
         if (licenseNumber == null || licenseNumber.isBlank()) {
             throw new BusinessRuleException(
