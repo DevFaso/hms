@@ -97,6 +97,15 @@ public class UserRoleHospitalAssignmentController {
         return ResponseEntity.ok(assignmentService.regenerateAssignmentCode(assignmentId, resendNotifications));
     }
 
+    @Operation(summary = "Resend the onboarding email + SMS for an existing assignment")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
+    @PostMapping("/{assignmentId}/resend-notification")
+    public ResponseEntity<Void> resendNotification(@PathVariable UUID assignmentId) {
+        log.info("📧 Resending notifications for assignment '{}'", assignmentId);
+        assignmentService.sendNotifications(assignmentId);
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "Confirm an assignment using the registrar's confirmation code")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
     @PostMapping("/{assignmentId}/confirm")

@@ -105,4 +105,11 @@ public interface UserRoleHospitalAssignmentService {
      * Get minimal assignment data for dropdowns.
      */
     List<AssignmentMinimalDTO> getMinimalAssignments();
+
+    /**
+     * Resend the email + SMS notification for an existing assignment.
+     * Used by the {@code AssignmentCreatedEventListener} (AFTER_COMMIT) and
+     * the admin "resend notification" endpoint.
+     */
+    void sendNotifications(UUID assignmentId);
 }
