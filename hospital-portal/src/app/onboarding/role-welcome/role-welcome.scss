@@ -443,7 +443,10 @@
   font-weight: 600;
   color: #c2410c;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
   white-space: nowrap;
 
   &:hover {
