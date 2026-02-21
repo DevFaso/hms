@@ -675,6 +675,95 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .build();
     }
 
+    /**
+     * Self-service verification — called by the ASSIGNEE from the onboarding email link.
+     * No authentication required. Verifies the 6-digit confirmation code sent to the assignee
+     * and marks the assignment as verified on success.
+     */
+    @Override
+    public UserRoleAssignmentPublicViewDTO verifyAssignmentByCode(String assignmentCode, String confirmationCode) {
+        Locale locale = Locale.getDefault();
+
+        String sanitizedCode = assignmentCode != null ? assignmentCode.trim() : null;
+        if (sanitizedCode == null || sanitizedCode.isBlank()) {
+            throw new ResourceNotFoundException(
+                messageSource.getMessage(MSG_ASSIGNMENT_NOT_FOUND_BY_CODE,
+                    new Object[]{assignmentCode},
+                    DEFAULT_ASSIGNMENT_NOT_FOUND_BY_CODE_PREFIX + assignmentCode,
+                    locale));
+        }
+
+        String sanitizedPin = confirmationCode != null ? confirmationCode.trim() : null;
+        if (sanitizedPin == null || sanitizedPin.isBlank()) {
+            throw new BusinessException(
+                messageSource.getMessage(MSG_ASSIGNMENT_INVALID_CODE, null,
+                    DEFAULT_CONFIRMATION_CODE_INVALID, locale));
+        }
+
+        UserRoleHospitalAssignment assignment = assignmentRepository.findByAssignmentCode(sanitizedCode)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                messageSource.getMessage(MSG_ASSIGNMENT_NOT_FOUND_BY_CODE,
+                    new Object[]{sanitizedCode},
+                    DEFAULT_ASSIGNMENT_NOT_FOUND_BY_CODE_PREFIX + sanitizedCode,
+                    locale)));
+
+        if (assignment.getConfirmationVerifiedAt() != null) {
+            log.info("ℹ️ Assignment '{}' was already verified at {}", sanitizedCode, assignment.getConfirmationVerifiedAt());
+            return buildPublicView(assignment);
+        }
+
+        String expectedPin = assignment.getConfirmationCode();
+        if (expectedPin == null || !expectedPin.equalsIgnoreCase(sanitizedPin)) {
+            throw new BusinessException(
+                messageSource.getMessage(MSG_ASSIGNMENT_INVALID_CODE, null,
+                    DEFAULT_CONFIRMATION_CODE_INVALID, locale));
+        }
+
+        assignment.setConfirmationVerifiedAt(LocalDateTime.now());
+        assignment.setActive(Boolean.TRUE);
+        UserRoleHospitalAssignment saved = assignmentRepository.save(assignment);
+
+        syncLegacyRole(saved.getUser(), saved.getRole());
+        recordAssignmentConfirmationAudit(saved, saved.getUser());
+
+        // Build the DTO before clearing so temp credentials are included in this
+        // one-time response.  After the DTO is constructed the plaintext is wiped
+        // from the database so it is never surfaced again.
+        UserRoleAssignmentPublicViewDTO result = buildPublicView(saved);
+        if (saved.getTempPlainPassword() != null) {
+            saved.setTempPlainPassword(null);
+            assignmentRepository.save(saved);
+            log.info("🔐 Temp credentials delivered via verify response for assignment '{}'; plaintext cleared.", sanitizedCode);
+        }
+
+        log.info("✅ Assignment '{}' self-verified by assignee", sanitizedCode);
+        return result;
+    }
+
+    private UserRoleAssignmentPublicViewDTO buildPublicView(UserRoleHospitalAssignment assignment) {
+        Role role = assignment.getRole();
+        Hospital hospital = assignment.getHospital();
+        User assignee = assignment.getUser();
+        String tempPlain = assignment.getTempPlainPassword();
+        return UserRoleAssignmentPublicViewDTO.builder()
+            .assignmentId(assignment.getId())
+            .assignmentCode(assignment.getAssignmentCode())
+            .roleName(role != null ? role.getName() : null)
+            .roleCode(role != null ? getRoleCode(role) : null)
+            .roleDescription(role != null ? role.getDescription() : null)
+            .hospitalName(hospital != null ? hospital.getName() : null)
+            .hospitalCode(hospital != null ? hospital.getCode() : null)
+            .hospitalAddress(hospital != null ? hospital.getAddress() : null)
+            .assigneeName(resolveDisplayName(assignee, null))
+            .confirmationVerified(assignment.getConfirmationVerifiedAt() != null)
+            .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
+            .profileCompletionUrl(assignmentLinkService.buildProfileCompletionUrl(assignment.getAssignmentCode()))
+            .profileChecklist(buildRoleProfileChecklist(role))
+            .tempUsername(tempPlain != null && assignee != null ? assignee.getUsername() : null)
+            .tempPassword(tempPlain)
+            .build();
+    }
+
     @Override
     public UserRoleAssignmentBulkImportResponseDTO bulkImportAssignments(UserRoleAssignmentBulkImportRequestDTO requestDTO) {
         Objects.requireNonNull(requestDTO, "Request must not be null");
@@ -1431,6 +1520,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             String hospitalDisplay = resolveHospitalName(assignment.getHospital());
             String profileCompletionUrl = assignmentLinkService.buildProfileCompletionUrl(assignment.getAssignmentCode());
 
+            // Capture temp credentials before clearing them from the DB
+            String tempUsername = user.getUsername();
+            String tempPlain = assignment.getTempPlainPassword();
+
             emailService.sendRoleAssignmentConfirmationEmail(
                 email,
                 userDisplayName,
@@ -1438,8 +1531,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 hospitalDisplay,
                 confirmationCode,
                 assignment.getAssignmentCode(),
-                profileCompletionUrl
+                profileCompletionUrl,
+                tempPlain != null ? tempUsername : null,
+                tempPlain
             );
+
+            if (tempPlain != null) {
+                log.info("🔐 Temp credentials included in onboarding email for assignment '{}'.", assignment.getId());
+            }
         } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to send assignment confirmation email for assignment '{}': {}", assignment.getId(), ex.getMessage());
         }

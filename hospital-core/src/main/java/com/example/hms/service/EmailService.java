@@ -73,7 +73,9 @@ public interface EmailService {
         String hospitalDisplayName,
         String confirmationCode,
         String assignmentCode,
-        String profileCompletionUrl
+        String profileCompletionUrl,
+        String tempUsername,
+        String tempPassword
     );
 
     void sendHtml(

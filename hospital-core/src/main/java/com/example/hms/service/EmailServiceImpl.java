@@ -112,37 +112,65 @@ public class EmailServiceImpl implements EmailService {
                                                     String hospitalDisplayName,
                                                     String confirmationCode,
                                                     String assignmentCode,
-                                                    String profileCompletionUrl) {
+                                                    String profileCompletionUrl,
+                                                    String tempUsername,
+                                                    String tempPassword) {
         validateAddresses(List.of(to));
         log.info("📧 Sending role assignment confirmation email to: {}", to);
 
         String safeUserName = (userName != null && !userName.isBlank()) ? userName : GENERIC_GREETING;
         String safeRole = (roleDisplayName != null && !roleDisplayName.isBlank()) ? roleDisplayName : "the assigned role";
         String safeHospital = (hospitalDisplayName != null && !hospitalDisplayName.isBlank()) ? hospitalDisplayName : "our hospital network";
+
+        // Temporary credentials section (only for brand-new users)
+        String credentialsSection = "";
+        if (tempUsername != null && tempPassword != null) {
+            credentialsSection = """
+                <div style="background:#fef9c3;border:1px solid #fbbf24;border-radius:8px;padding:16px;margin:20px 0;">
+                  <h3 style="margin:0 0 8px;color:#92400e;">🔑 Your Temporary Login Credentials</h3>
+                  <p style="margin:4px 0;">Username: <strong style="font-family:monospace;">%s</strong></p>
+                  <p style="margin:4px 0;">Password: <strong style="font-family:monospace;">%s</strong></p>
+                  <p style="margin:8px 0 0;font-size:13px;color:#92400e;">
+                    ⚠️ You will be asked to change your password on first login.
+                    Keep these credentials safe and do not share them.
+                  </p>
+                </div>
+                """.formatted(escapeHtml(tempUsername), escapeHtml(tempPassword));
+        }
+
         String linkSection = "";
         if (profileCompletionUrl != null && !profileCompletionUrl.isBlank()) {
             linkSection = """
                 <p style="margin:24px 0;">
-                    <a href="%s" style="background:#2563eb;color:#fff;padding:12px 18px;border-radius:6px;text-decoration:none;display:inline-block;">Finish profile setup</a>
+                    <a href="%s" style="background:#2563eb;color:#fff;padding:12px 18px;border-radius:6px;text-decoration:none;display:inline-block;">Confirm your assignment</a>
                 </p>
                 <p style="font-size: 14px; color: #666;">If the button above doesn't work, copy and paste this link into your browser:<br /><a href="%s">%s</a></p>
                 """.formatted(profileCompletionUrl, profileCompletionUrl, profileCompletionUrl);
         }
 
         String body = """
-            <h2>Confirm Your New Role Assignment</h2>
+            <h2>You've Been Assigned a New Role</h2>
             <p>Hi %s,</p>
             <p>You have been assigned the role <strong>%s</strong> at <strong>%s</strong>.</p>
-            <p>Please confirm this assignment with the verification code below:</p>
-                <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">%s</p>
-            <p>Assignment reference: <strong>%s</strong></p>
-            <p>If you did not expect this assignment, please contact the hospital administrator immediately.</p>
             %s
-            <p style="color:#666">This code will expire soon for security purposes.</p>
-            """.formatted(safeUserName, safeRole, safeHospital, confirmationCode, assignmentCode, linkSection);
+            <p>Please confirm this assignment with the 6-digit verification code below:</p>
+            <p style="font-size: 28px; font-weight: bold; letter-spacing: 6px; background:#f1f5f9; padding:12px; border-radius:6px; display:inline-block;">%s</p>
+            <p>Assignment reference: <strong>%s</strong></p>
+            <p>If you did not expect this assignment, please contact the administrator immediately.</p>
+            %s
+            <p style="color:#666;font-size:13px;">This verification code expires soon for security purposes.</p>
+            """.formatted(safeUserName, safeRole, safeHospital,
+                          credentialsSection,
+                          confirmationCode, assignmentCode, linkSection);
 
         sendHtml(List.of(to), List.of(), List.of(), "Action Required: Confirm Your Hospital Role Assignment", body);
         log.info("✅ Role assignment confirmation email sent to {}", to);
+    }
+
+    /** Minimal HTML-escape for safe inline display of user-supplied strings. */
+    private static String escapeHtml(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
     }
 
     @Override

@@ -36,4 +36,13 @@ public interface UserService {
     UUID getUserIdByUsername(String username);
 
     void updateProfileImage(UUID userId, String imageUrl);
+
+    /**
+     * Change a user's own password (self-service).
+     * Clears {@code forcePasswordChange} and all rotation-related timestamps.
+     *
+     * @param userId      the user whose password is being changed
+     * @param newPassword the new plaintext password (must be ≥ 8 chars, already validated by caller)
+     */
+    void changeOwnPassword(UUID userId, String newPassword);
 }

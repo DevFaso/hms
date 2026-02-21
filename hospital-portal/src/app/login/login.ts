@@ -152,6 +152,7 @@ export class Login implements OnInit {
         staffId?: string;
         roleName?: string;
         active?: boolean;
+        forcePasswordChange?: boolean;
       }>('/auth/login', {
         username: this.username,
         password: this.password,
@@ -186,7 +187,9 @@ export class Login implements OnInit {
             this.auth.setUserProfile(profile);
           }
 
-          const dest = this.auth.resolveLandingPath();
+          const dest = res.forcePasswordChange
+            ? '/force-change-password'
+            : this.auth.resolveLandingPath();
           void this.router.navigateByUrl(dest);
           this.loading = false;
         },

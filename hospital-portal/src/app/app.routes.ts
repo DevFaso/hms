@@ -13,6 +13,23 @@ export const routes: Routes = [
     loadComponent: () => import('./login/login').then((m) => m.Login),
   },
 
+  // Role-assignment onboarding — public, no auth required (email link target)
+  {
+    path: 'onboarding/role-welcome',
+    loadComponent: () =>
+      import('./onboarding/role-welcome/role-welcome').then((m) => m.RoleWelcomeComponent),
+  },
+
+  // Force password change — shown after first login with temp credentials
+  {
+    path: 'force-change-password',
+    canActivate: [AuthGuard],
+    loadComponent: () =>
+      import('./force-change-password/force-change-password').then(
+        (m) => m.ForceChangePasswordComponent,
+      ),
+  },
+
   // Authenticated shell
   {
     path: '',

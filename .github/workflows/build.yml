@@ -5,9 +5,15 @@ on:
       - main
       - develop
       - uat
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
 
 concurrency:
-  group: sonarqube-${{ github.ref }}
+  group: sonarqube-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -49,7 +55,29 @@ jobs:
           SPRING_PROFILES_ACTIVE: test
         run: ./gradlew :hospital-core:build :hospital-core:jacocoTestReport
 
-      - name: SonarQube analysis
+      - name: SonarQube analysis (branch push)
+        if: github.event_name == 'push'
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./gradlew sonar -x test -Dsonar.token=${{ secrets.SONAR_TOKEN }}
+          BRANCH_NAME: ${{ github.ref_name }}
+        run: |
+          ./gradlew sonar -x test \
+            -Dsonar.token="${SONAR_TOKEN}" \
+            -Dsonar.branch.name="${BRANCH_NAME}"
+
+      - name: SonarQube analysis (pull request)
+        if: github.event_name == 'pull_request'
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          PR_KEY: ${{ github.event.pull_request.number }}
+          PR_BRANCH: ${{ github.head_ref }}
+          PR_BASE: ${{ github.base_ref }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ./gradlew sonar -x test \
+            -Dsonar.token="${SONAR_TOKEN}" \
+            -Dsonar.pullrequest.key="${PR_KEY}" \
+            -Dsonar.pullrequest.branch="${PR_BRANCH}" \
+            -Dsonar.pullrequest.base="${PR_BASE}" \
+            -Dsonar.pullrequest.github.repository="${GH_REPO}" \
+            -Dsonar.pullrequest.provider=github

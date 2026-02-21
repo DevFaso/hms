@@ -106,6 +106,31 @@ test.describe('Authentication', () => {
     // Mock the backend so these tests work without a live Spring Boot server.
     // They test Angular's login flow behaviour (token storage, redirect) not the API itself.
     test.beforeEach(async ({ page }) => {
+      // Intercept ALL api calls after redirect so the dashboard doesn't 401-redirect back to /login
+      const EMPTY_PAGE = { content: [], totalElements: 0, totalPages: 0, size: 20, number: 0 };
+      await page.route('**/api/**', (r) =>
+        r.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(EMPTY_PAGE),
+        }),
+      );
+      await page.route('**/api/staff**', (r) =>
+        r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+      );
+      await page.route('**/api/patients**', (r) =>
+        r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+      );
+      await page.route('**/api/hospitals**', (r) =>
+        r.fulfill({ status: 200, contentType: 'application/json', body: '[]' }),
+      );
+      await page.route('**/super-admin/summary**', (r) =>
+        r.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ totalPatients: 0, activeUsers: 0, totalHospitals: 0 }),
+        }),
+      );
       await page.route('**/auth/login', async (route) => {
         const body = route.request().postDataJSON() as { username?: string };
         if (body?.username === 'superadmin') {
@@ -126,10 +151,7 @@ test.describe('Authentication', () => {
 
     test('successful login redirects to dashboard', async ({ page }) => {
       await loginPage.fillCredentials('superadmin', 'TempPass123!');
-      await Promise.all([
-        page.waitForResponse('**/auth/login'),
-        loginPage.submit(),
-      ]);
+      await Promise.all([page.waitForResponse('**/auth/login'), loginPage.submit()]);
 
       await page.waitForURL('**/dashboard', { timeout: 15_000 });
       await expect(page.locator('.welcome-banner')).toBeVisible({ timeout: 10_000 });
@@ -137,10 +159,7 @@ test.describe('Authentication', () => {
 
     test('stores auth token in localStorage after login', async ({ page }) => {
       await loginPage.fillCredentials('superadmin', 'TempPass123!');
-      await Promise.all([
-        page.waitForResponse('**/auth/login'),
-        loginPage.submit(),
-      ]);
+      await Promise.all([page.waitForResponse('**/auth/login'), loginPage.submit()]);
       await page.waitForURL('**/dashboard', { timeout: 15_000 });
 
       const token = await page.evaluate(() => localStorage.getItem('auth_token'));
@@ -150,10 +169,7 @@ test.describe('Authentication', () => {
 
     test('stores user profile in localStorage after login', async ({ page }) => {
       await loginPage.fillCredentials('superadmin', 'TempPass123!');
-      await Promise.all([
-        page.waitForResponse('**/auth/login'),
-        loginPage.submit(),
-      ]);
+      await Promise.all([page.waitForResponse('**/auth/login'), loginPage.submit()]);
       await page.waitForURL('**/dashboard', { timeout: 15_000 });
 
       const profile = await page.evaluate(() => {
