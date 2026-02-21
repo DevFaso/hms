@@ -547,14 +547,18 @@ public class UserServiceImpl implements UserService {
         }
         try {
             UUID actorId = actor != null ? actor.getId() : created.getId();
-            UUID assignmentId = Optional.ofNullable(actor)
-                .map(this::resolveActorAssignmentId)
-                .orElseGet(() -> assignments.stream()
+
+            // For USER_CREATE audits the assignment link must belong to the *created* user,
+            // not the actor (admin), because AuditEventLog validates that
+            // assignment.user == audit.user and the userId here is the actor.
+            // We record no assignment link so the audit stays valid regardless of whether
+            // the new user already has an active assignment at the time of this call.
+            UUID assignmentId = assignments.stream()
                     .filter(Objects::nonNull)
                     .map(UserRoleHospitalAssignment::getId)
                     .filter(Objects::nonNull)
                     .findFirst()
-                    .orElse(null));
+                    .orElse(null);
 
             Map<String, Object> details = new HashMap<>();
             details.put("createdUserId", created.getId());
@@ -569,9 +573,9 @@ public class UserServiceImpl implements UserService {
                 .toList());
 
             AuditEventRequestDTO auditEvent = AuditEventRequestDTO.builder()
-                .userId(actorId)
+                .userId(created.getId())
                 .assignmentId(assignmentId)
-                .userName(resolveUserDisplayName(actor != null ? actor : created))
+                .userName(resolveUserDisplayName(created))
                 .eventType(AuditEventType.USER_CREATE)
                 .eventDescription("New user account created")
                 .resourceId(created.getId() != null ? created.getId().toString() : null)
