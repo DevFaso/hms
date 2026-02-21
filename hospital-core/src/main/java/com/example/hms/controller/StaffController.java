@@ -40,7 +40,7 @@ public class StaffController {
 
     @Operation(summary = "List all staff")
     @GetMapping
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','DOCTOR','NURSE','MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<List<StaffResponseDTO>> getAllStaff(
         @RequestHeader(name = "Accept-Language", required = false) String lang) {
         Locale locale = parseLocale(lang);
@@ -49,7 +49,7 @@ public class StaffController {
 
     @Operation(summary = "Create staff profile")
     @PostMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<StaffResponseDTO> create(
         @RequestBody StaffRequestDTO request,
         @RequestHeader(name = "Accept-Language", required = false) String lang
@@ -60,7 +60,7 @@ public class StaffController {
 
     @Operation(summary = "Update staff profile")
     @PutMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<StaffResponseDTO> update(
         @PathVariable UUID id,
         @RequestBody StaffRequestDTO request,
@@ -72,7 +72,7 @@ public class StaffController {
 
     @Operation(summary = "Soft delete staff profile")
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<Void> delete(
         @PathVariable UUID id,
         @RequestHeader(name = "Accept-Language", required = false) String lang
@@ -85,7 +85,7 @@ public class StaffController {
     // 2.1 Search: by user email
     @Operation(summary = "Find staff by user email")
     @GetMapping("/search/by-email")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<List<StaffResponseDTO>> getByUserEmail(
         @RequestParam @Email String email,
         @RequestHeader(name = "Accept-Language", required = false) String lang) {
@@ -96,7 +96,7 @@ public class StaffController {
     // 2.2 Search: by user phone
     @Operation(summary = "Find staff by user phone number")
     @GetMapping("/search/by-phone")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<List<StaffResponseDTO>> getByUserPhone(
         @RequestParam String phone,
         @RequestHeader(name = "Accept-Language", required = false) String lang) {
@@ -107,7 +107,7 @@ public class StaffController {
     // 2.3 Get any license for a given user (first/any)
     @Operation(summary = "Get any license number by userId")
     @GetMapping("/users/{userId}/license")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<Optional<String>> getAnyLicense(
         @PathVariable UUID userId) {
         return ResponseEntity.ok(staffService.getAnyLicenseByUserId(userId));
@@ -116,7 +116,7 @@ public class StaffController {
     // 2.4 Get staff by id but only if active
     @Operation(summary = "Get staff by id (active only)")
     @GetMapping("/{id}/active")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<Optional<StaffResponseDTO>> getActiveById(
         @PathVariable UUID id,
         @RequestHeader(name = "Accept-Language", required = false) String lang) {
@@ -127,7 +127,7 @@ public class StaffController {
     // 2.5 Existence checks
     @Operation(summary = "Check existence by staffId + hospitalId + active=true")
     @GetMapping("/{id}/exists-in-hospital")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<Boolean> existsInHospitalActive(
         @PathVariable UUID id,
         @RequestParam UUID hospitalId) {
@@ -136,7 +136,7 @@ public class StaffController {
 
     @Operation(summary = "Check if license number exists for a given user")
     @GetMapping("/license/exists")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<Boolean> existsLicenseForUser(
         @RequestParam String licenseNumber,
         @RequestParam UUID userId) {
@@ -146,7 +146,7 @@ public class StaffController {
     // 2.6 Hospital scoped queries (paged)
     @Operation(summary = "Paged staff by hospital")
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<Page<StaffResponseDTO>> pageByHospital(
         @PathVariable UUID hospitalId,
         @ParameterObject Pageable pageable) {
@@ -155,7 +155,7 @@ public class StaffController {
 
     @Operation(summary = "Paged staff by hospital (active only)")
     @GetMapping("/hospital/{hospitalId}/active")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<Page<StaffResponseDTO>> pageByHospitalActive(
         @PathVariable UUID hospitalId,
         @ParameterObject Pageable pageable) {
@@ -165,7 +165,7 @@ public class StaffController {
     // 2.7 First staff record for user (oldest)
     @Operation(summary = "First staff by user (oldest by creation date)")
     @GetMapping("/users/{userId}/first")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     public ResponseEntity<Optional<StaffResponseDTO>> getFirstForUser(
         @PathVariable UUID userId,
         @RequestHeader(name = "Accept-Language", required = false) String lang) {
