@@ -238,7 +238,11 @@ public class StaffServiceImpl implements StaffService {
             assignment = existingStaff.getAssignment();
         }
 
-        if (!existingStaff.getLicenseNumber().equals(dto.getLicenseNumber())) {
+        String existingLic = existingStaff.getLicenseNumber();
+        String newLic = dto.getLicenseNumber();
+        boolean licenceChanged = (existingLic == null && newLic != null)
+                || (existingLic != null && !existingLic.equals(newLic));
+        if (licenceChanged) {
             validateLicenseNumber(dto, locale);
         }
 
