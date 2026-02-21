@@ -40,17 +40,110 @@ export class StaffListComponent implements OnInit {
   deleting = signal(false);
 
   readonly employmentTypes = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'VOLUNTEER', 'INTERN'];
+
+  /**
+   * Exact values from the backend JobTitle enum.
+   * PATIENT / VISITOR / SUPER_ADMIN are omitted — not valid staff job titles.
+   */
   readonly jobTitles = [
     'DOCTOR',
+    'PHYSICIAN',
+    'NURSE_PRACTITIONER',
     'NURSE',
+    'MIDWIFE',
     'SURGEON',
+    'ANESTHESIOLOGIST',
+    'RADIOLOGIST',
+    'PHYSIOTHERAPIST',
+    'PSYCHOLOGIST',
     'PHARMACIST',
     'LAB_TECHNICIAN',
-    'RADIOLOGIST',
-    'ADMIN_STAFF',
+    'LABORATORY_SCIENTIST',
+    'TECHNICIAN',
+    'HOSPITAL_ADMIN',
+    'HOSPITAL_ADMINISTRATOR',
+    'ADMINISTRATIVE_STAFF',
+    'ADMINISTRATIVE_ASSISTANT',
     'RECEPTIONIST',
+    'BILLING_SPECIALIST',
+    'SOCIAL_WORKER',
+    'HUMAN_RESOURCES',
+    'IT_SUPPORT',
+    'CLEANING_STAFF',
+    'SECURITY_PERSONNEL',
+  ];
+
+  /**
+   * Exact values from the backend Specialization enum.
+   * Grouped by clinical category — no free-text allowed.
+   */
+  readonly specializations = [
+    // Doctors (all require licence)
+    'GENERAL_PRACTICE',
+    'CARDIOLOGY',
+    'NEUROLOGY',
+    'PEDIATRICS',
+    'ORTHOPEDICS',
+    'DERMATOLOGY',
+    'GYNECOLOGY',
+    'ONCOLOGY',
+    'RADIOLOGY',
+    'PSYCHIATRY',
+    // Nurses (all require licence)
+    'GENERAL_NURSE',
+    'ICU_NURSE',
+    'PEDIATRIC_NURSE',
+    'SURGICAL_NURSE',
+    // Pharmacists (all require licence)
+    'CLINICAL_PHARMACY',
+    'HOSPITAL_PHARMACY',
+    // Lab staff (LAB_TECHNICIAN + PATHOLOGY require licence; MICROBIOLOGY role-dependent)
+    'LAB_TECHNICIAN',
+    'PATHOLOGY',
+    'MICROBIOLOGY',
+    // Default / non-clinical
     'OTHER',
   ];
+
+  /**
+   * Job titles that require a medical licence number.
+   *
+   * Rules (aligned with international medical standards + backend validation):
+   *   ✅ ALL doctors/clinicians     — DOCTOR, PHYSICIAN, SURGEON, ANESTHESIOLOGIST,
+   *                                   RADIOLOGIST, PHYSIOTHERAPIST, PSYCHOLOGIST
+   *   ✅ ALL nurses                  — NURSE, NURSE_PRACTITIONER, MIDWIFE
+   *   ✅ ALL pharmacists             — PHARMACIST
+   *   ✅ Lab / diagnostic staff      — LAB_TECHNICIAN, LABORATORY_SCIENTIST
+   *   ❌ Administrative / support    — RECEPTIONIST, ADMIN_STAFF, HR, IT, etc. → no licence
+   */
+  private readonly licencedTitles = new Set([
+    // Doctors & clinicians
+    'DOCTOR',
+    'PHYSICIAN',
+    'SURGEON',
+    'ANESTHESIOLOGIST',
+    'RADIOLOGIST',
+    'PHYSIOTHERAPIST',
+    'PSYCHOLOGIST',
+    // Nurses
+    'NURSE',
+    'NURSE_PRACTITIONER',
+    'MIDWIFE',
+    // Pharmacists
+    'PHARMACIST',
+    // Lab & diagnostic
+    'LAB_TECHNICIAN',
+    'LABORATORY_SCIENTIST',
+  ]);
+
+  /** Whether the currently-selected job title requires a specialization / licence */
+  get needsSpecialization(): boolean {
+    return this.licencedTitles.has(this.form.jobTitle ?? '');
+  }
+
+  get needsLicence(): boolean {
+    return this.licencedTitles.has(this.form.jobTitle ?? '');
+  }
 
   ngOnInit(): void {
     this.loadStaff();
@@ -134,6 +227,11 @@ export class StaffListComponent implements OnInit {
     if (!payload.licenseNumber) delete payload.licenseNumber;
     if (!payload.jobTitle) delete payload.jobTitle;
     if (!payload.employmentType) delete payload.employmentType;
+    // Never send specialization or licenseNumber for non-clinical roles
+    if (!this.needsSpecialization) {
+      delete payload.specialization;
+      delete payload.licenseNumber;
+    }
 
     const existing = this.editing();
     const request$ = existing

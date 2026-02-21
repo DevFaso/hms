@@ -139,23 +139,36 @@
             <div class="form-row">
               <div class="field">
                 <label for="sSpec">Specialization</label>
-                <input
-                  id="sSpec"
-                  type="text"
-                  [(ngModel)]="form.specialization"
-                  name="specialization"
-                  placeholder="e.g., Cardiology"
-                />
+                @if (needsSpecialization) {
+                  <select id="sSpec" [(ngModel)]="form.specialization" name="specialization">
+                    <option value="">Select specialization…</option>
+                    @for (sp of specializations; track sp) {
+                      <option [value]="sp">{{ sp.replaceAll('_', ' ') }}</option>
+                    }
+                  </select>
+                } @else {
+                  <div class="locked-field">
+                    <span class="material-symbols-outlined">block</span>
+                    Not applicable for this role
+                  </div>
+                }
               </div>
               <div class="field">
                 <label for="sLicense">License Number</label>
-                <input
-                  id="sLicense"
-                  type="text"
-                  [(ngModel)]="form.licenseNumber"
-                  name="licenseNumber"
-                  placeholder="e.g., MED-12345"
-                />
+                @if (needsLicence) {
+                  <input
+                    id="sLicense"
+                    type="text"
+                    [(ngModel)]="form.licenseNumber"
+                    name="licenseNumber"
+                    placeholder="e.g., MED-12345"
+                  />
+                } @else {
+                  <div class="locked-field">
+                    <span class="material-symbols-outlined">block</span>
+                    Not applicable for this role
+                  </div>
+                }
               </div>
             </div>
 
