@@ -198,11 +198,14 @@ export class StaffListComponent implements OnInit {
   // ---------- Edit ----------
   openEdit(member: StaffResponse): void {
     this.editing.set(member);
+    // Sanitize specialization: clear any old free-text value that isn't a valid enum member
+    const rawSpec = member.specialization ?? '';
+    const validSpec = this.specializations.includes(rawSpec) ? rawSpec : '';
     this.form = {
       userId: member.userId,
       hospitalId: member.hospitalId,
       departmentId: member.departmentId ?? '',
-      specialization: member.specialization ?? '',
+      specialization: validSpec,
       licenseNumber: member.licenseNumber ?? '',
       jobTitle: member.jobTitle ?? '',
       employmentType: member.employmentType ?? '',
