@@ -74,6 +74,8 @@ public class SecurityConfig {
     private static final String API_NURSE = "/nurse";
     private static final String API_NURSE_PATTERN = API_NURSE + "/**";
     private static final String API_ME_PATIENT_PATTERN = "/me/patient/**";
+    private static final String API_STAFF = "/staff";
+    private static final String API_STAFF_PATTERN = API_STAFF + "/**";
 
     private final HospitalUserDetailsService userDetailsService;
     private final JwtAuthenticationEntryPoint unauthorizedHandler;
@@ -229,7 +231,15 @@ public class SecurityConfig {
 
                 .requestMatchers("/assignments/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
-                .requestMatchers("/staff/**")
+                // GET /staff — readable by anyone who books or manages appointments
+                .requestMatchers(HttpMethod.GET, API_STAFF, API_STAFF_PATTERN)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                // POST/PUT/DELETE /staff — admin only
+                .requestMatchers(HttpMethod.POST, API_STAFF)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+                .requestMatchers(HttpMethod.PUT, API_STAFF_PATTERN)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+                .requestMatchers(HttpMethod.DELETE, API_STAFF_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
                 .requestMatchers(HttpMethod.GET, "/departments/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
