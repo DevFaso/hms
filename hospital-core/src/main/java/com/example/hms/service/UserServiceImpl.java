@@ -36,6 +36,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import com.example.hms.event.UserCreatedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -85,6 +87,7 @@ public class UserServiceImpl implements UserService {
     private final AuditEventLogService auditEventLogService;
     private final StaffRepository staffRepository;
     private final JwtTokenProvider jwtTokenProvider;
+    private final ApplicationEventPublisher eventPublisher;
 
     /*
      * --------------------------------
@@ -298,8 +301,21 @@ public class UserServiceImpl implements UserService {
     propagateTempPassword(newUserCreated, tempPasswordHolder[0], ensuredAssignments);
 
     if (newUserCreated) {
-    User actor = resolveCurrentActor().orElse(user);
-    recordUserCreationAudit(actor, user, ensuredAssignments);
+        User actor = resolveCurrentActor().orElse(user);
+        // Publish after-commit event so the audit runs once the new user is
+        // visible in the DB (avoids poisoning the outer transaction via REQUIRES_NEW
+        // trying to load an uncommitted user).
+        List<UUID> assignmentIdList = ensuredAssignments.stream()
+                .filter(Objects::nonNull)
+                .map(UserRoleHospitalAssignment::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        eventPublisher.publishEvent(new UserCreatedEvent(
+                actor.getId(),
+                resolveUserDisplayName(actor),
+                user.getId(),
+                resolveUserDisplayName(user),
+                assignmentIdList));
     }
 
     // ---- 5) Upsert Staff when needed ----
@@ -308,8 +324,10 @@ public class UserServiceImpl implements UserService {
     }
 
     // ---- 6) Reload + map ----
+    log.debug("[RELOAD] fetching user by id={} after save", user.getId());
     final User reloaded = userRepository.findByIdWithRolesAndProfiles(user.getId())
-        .orElseThrow(() -> new IllegalStateException("User disappeared after save"));
+        .orElseThrow(() -> new IllegalStateException(
+            "User disappeared after save (id=" + user.getId() + ")"));
     final Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(reloaded);
 
     final long roleCount = assignmentRepository.countDistinctRolesByUserId(reloaded.getId());
@@ -539,56 +557,6 @@ public class UserServiceImpl implements UserService {
         return hospitalRepository.findById(provided)
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_PREFIX + provided))
                 .getId();
-    }
-
-        private void recordUserCreationAudit(User actor, User created, List<UserRoleHospitalAssignment> assignments) {
-        if (created == null) {
-            return;
-        }
-        try {
-            UUID actorId = actor != null ? actor.getId() : created.getId();
-
-            // For USER_CREATE audits the assignment link must belong to the *created* user,
-            // not the actor (admin), because AuditEventLog validates that
-            // assignment.user == audit.user and the userId here is the actor.
-            // We record no assignment link so the audit stays valid regardless of whether
-            // the new user already has an active assignment at the time of this call.
-            UUID assignmentId = assignments.stream()
-                    .filter(Objects::nonNull)
-                    .map(UserRoleHospitalAssignment::getId)
-                    .filter(Objects::nonNull)
-                    .findFirst()
-                    .orElse(null);
-
-            Map<String, Object> details = new HashMap<>();
-            details.put("createdUserId", created.getId());
-            details.put("actorId", actorId);
-            details.put("roles", assignments.stream()
-                .filter(Objects::nonNull)
-                .map(UserRoleHospitalAssignment::getRole)
-                .filter(Objects::nonNull)
-                .map(Role::getCode)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList());
-
-            AuditEventRequestDTO auditEvent = AuditEventRequestDTO.builder()
-                .userId(created.getId())
-                .assignmentId(assignmentId)
-                .userName(resolveUserDisplayName(created))
-                .eventType(AuditEventType.USER_CREATE)
-                .eventDescription("New user account created")
-                .resourceId(created.getId() != null ? created.getId().toString() : null)
-                .resourceName(resolveUserDisplayName(created))
-                .entityType("USER")
-                .status(AuditStatus.SUCCESS)
-                .details(details)
-                .build();
-
-            auditEventLogService.logEvent(auditEvent);
-        } catch (RuntimeException ex) {
-            log.warn("⚠️ Failed to record user creation audit for user '{}': {}", created.getId(), ex.getMessage());
-        }
     }
 
     private void recordUserDeletionAudit(User deletedUser) {
