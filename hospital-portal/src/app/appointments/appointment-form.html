@@ -39,13 +39,27 @@
                 [(ngModel)]="form.startTime"
                 name="startTime"
                 required
+                (change)="onStartTimeChange()"
               />
             </div>
             <div class="field">
               <label for="end">End Time *</label>
-              <input id="end" type="time" [(ngModel)]="form.endTime" name="endTime" required />
+              <input
+                id="end"
+                type="time"
+                [(ngModel)]="form.endTime"
+                name="endTime"
+                required
+                (change)="onEndTimeChange()"
+              />
             </div>
           </div>
+          @if (timeError()) {
+            <p class="field-error">
+              <span class="material-symbols-outlined">error</span>
+              {{ timeError() }}
+            </p>
+          }
         </div>
 
         <!-- Patient picker -->

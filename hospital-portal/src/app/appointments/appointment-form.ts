@@ -227,12 +227,51 @@ export class AppointmentFormComponent implements OnInit {
     return this.hospitals().find((h) => h.id === id)?.name ?? id;
   }
 
+  // ── Time validation ────────────────────────────────────
+  timeError = signal<string | null>(null);
+
+  onStartTimeChange(): void {
+    const start = this.form.startTime;
+    if (!start) return;
+    this.timeError.set(null);
+    const [h, m] = start.split(':').map(Number);
+    const totalMin = h * 60 + m + 30;
+    const endH = Math.floor(totalMin / 60) % 24;
+    const endM = totalMin % 60;
+    const autoEnd = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
+    if (!this.form.endTime || this.form.endTime <= start) {
+      this.form.endTime = autoEnd;
+    }
+  }
+
+  onEndTimeChange(): void {
+    if (this.form.startTime && this.form.endTime) {
+      if (this.form.endTime <= this.form.startTime) {
+        this.timeError.set('End time must be after start time');
+      } else {
+        this.timeError.set(null);
+      }
+    }
+  }
+
+  private validateTimes(): boolean {
+    if (!this.form.startTime || !this.form.endTime) return true;
+    if (this.form.endTime <= this.form.startTime) {
+      this.timeError.set('End time must be after start time');
+      this.toast.error('End time must be after start time');
+      return false;
+    }
+    this.timeError.set(null);
+    return true;
+  }
+
   // ── Submit ───────────────────────────────────────────────
   submit(): void {
     if (!this.form.appointmentDate || !this.form.startTime || !this.form.endTime) {
       this.toast.error('Date, start time, and end time are required');
       return;
     }
+    if (!this.validateTimes()) return;
     if (!this.form.patientId) {
       this.toast.error('Please select a patient');
       return;
