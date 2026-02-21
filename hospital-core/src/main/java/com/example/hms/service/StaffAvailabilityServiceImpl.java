@@ -127,8 +127,8 @@ public class StaffAvailabilityServiceImpl implements StaffAvailabilityService {
                 return ok;
             })
             .orElseGet(() -> {
-                log.info("No availability record found for staff {} on {}", staffId, date);
-                return false;
+                log.info("No availability record found for staff {} on {} — treating as available (open schedule)", staffId, date);
+                return true;
             });
     }
 
