@@ -31,4 +31,12 @@ public class UserRoleAssignmentPublicViewDTO {
     private LocalDateTime confirmationVerifiedAt;
     private String profileCompletionUrl;
     private List<String> profileChecklist;
+
+    /**
+     * Temporary login credentials delivered once on first successful verification.
+     * Both fields are {@code null} for existing users (who already have permanent credentials)
+     * and {@code null} on subsequent calls after the one-time plaintext has been cleared.
+     */
+    private String tempUsername;
+    private String tempPassword;
 }

@@ -188,6 +188,7 @@ public class AuthController {
                     .roleName(preferredRole)
                     .active(user.isActive())
                     .profilePictureUrl(user.getProfileImageUrl())
+                    .forcePasswordChange(user.isForcePasswordChange())
                     .build();
 
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
@@ -352,6 +353,65 @@ public class AuthController {
             resetSecurityContextToAnonymous();
         }
     }
+
+    /**
+     * Change the authenticated user's own password.
+     * Clears the {@code forcePasswordChange} flag on success so subsequent
+     * logins return {@code forcePasswordChange: false}.
+     */
+    @PostMapping("/me/change-password")
+    @Operation(summary = "Change own password", description = "Allows any authenticated user to change their own password. Clears the force-password-change flag.")
+    @ApiResponse(responseCode = "200", description = "Password changed successfully")
+    @ApiResponse(responseCode = "400", description = "New password too short or same as current")
+    @ApiResponse(responseCode = "401", description = "Current password incorrect")
+    public ResponseEntity<Object> changeOwnPassword(
+            @Valid @RequestBody ChangePasswordRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Not authenticated."));
+        }
+        String username = authentication.getName();
+        var userOpt = userRepository.findByUsername(username);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("User not found."));
+        }
+        var user = userOpt.get();
+
+        // Verify the user knows their current credentials (prevents CSRF token theft)
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(username, request.currentPassword()));
+        } catch (BadCredentialsException ex) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Current password is incorrect."));
+        } finally {
+            resetSecurityContextToAnonymous();
+            // Restore the original authentication after verify sub-call
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        if (request.newPassword() == null || request.newPassword().length() < 8) {
+            return ResponseEntity.badRequest()
+                    .body(new MessageResponse("New password must be at least 8 characters."));
+        }
+        if (request.newPassword().equals(request.currentPassword())) {
+            return ResponseEntity.badRequest()
+                    .body(new MessageResponse("New password must differ from the current password."));
+        }
+
+        // Update password and clear force-change flag via service
+        userService.changeOwnPassword(user.getId(), request.newPassword());
+
+        log.info("🔑 [CHANGE-PWD] Password changed for user='{}'; forcePasswordChange cleared.", username);
+        return ResponseEntity.ok(new MessageResponse("Password changed successfully."));
+    }
+
+    /** Request body for {@code POST /auth/me/change-password}. */
+    public record ChangePasswordRequest(
+            @NotBlank String currentPassword,
+            @NotBlank String newPassword) {}
 
     @PostMapping("/request-reset")
     public ResponseEntity<Void> legacyRequestPasswordReset(

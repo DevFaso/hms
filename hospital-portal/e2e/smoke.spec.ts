@@ -33,7 +33,10 @@ test.describe('Smoke Tests', () => {
 
   test('can authenticate with valid credentials', async ({ browser }) => {
     // This test requires a live backend — skip when running locally without SMOKE_BASE_URL
-    test.skip(!LIVE_BACKEND, 'Skipped locally: requires live backend. Set SMOKE_BASE_URL to enable.');
+    test.skip(
+      !LIVE_BACKEND,
+      'Skipped locally: requires live backend. Set SMOKE_BASE_URL to enable.',
+    );
     const context = await browser.newContext({ baseURL: BASE, storageState: undefined });
     const page = await context.newPage();
     await page.goto('/login', { waitUntil: 'networkidle' });
@@ -46,11 +49,19 @@ test.describe('Smoke Tests', () => {
   });
 
   test('dashboard shows metrics', async ({ page }) => {
+    test.skip(
+      !LIVE_BACKEND,
+      'Skipped locally: requires live backend. Set SMOKE_BASE_URL to enable.',
+    );
     await page.goto('/dashboard', { waitUntil: 'networkidle' });
     await expect(page.locator('.welcome-banner')).toBeVisible({ timeout: 15_000 });
   });
 
   test('sidebar navigation is present', async ({ page }) => {
+    test.skip(
+      !LIVE_BACKEND,
+      'Skipped locally: requires live backend. Set SMOKE_BASE_URL to enable.',
+    );
     await page.goto('/dashboard', { waitUntil: 'networkidle' });
     await expect(page.locator('aside.sidebar')).toBeVisible();
     const navCount = await page.locator('.nav-item').count();
@@ -58,6 +69,10 @@ test.describe('Smoke Tests', () => {
   });
 
   test('patients page loads', async ({ page }) => {
+    test.skip(
+      !LIVE_BACKEND,
+      'Skipped locally: requires live backend. Set SMOKE_BASE_URL to enable.',
+    );
     await page.goto('/patients', { waitUntil: 'networkidle' });
     await expect(page.locator('main .page-title')).toBeVisible({ timeout: 10_000 });
   });

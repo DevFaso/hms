@@ -170,6 +170,7 @@ public class SecurityConfig {
                 .requestMatchers("/auth/token/**").authenticated()
                 .requestMatchers("/auth/logout").authenticated()
                 .requestMatchers("/auth/verify-password").authenticated()
+                .requestMatchers("/auth/me/**").authenticated()
 
                 // Public auth endpoints (login, register, etc.)
                 .requestMatchers("/auth/**").permitAll()
@@ -229,6 +230,11 @@ public class SecurityConfig {
                 .requestMatchers("/organizations/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
+                // Public assignment endpoints — no auth required (onboarding flow)
+                .requestMatchers(HttpMethod.GET, "/assignments/public/**").permitAll()
+                .requestMatchers(HttpMethod.POST, "/assignments/public/**").permitAll()
+
+                // All other assignment endpoints — admin only
                 .requestMatchers("/assignments/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
                 // GET /staff — readable by anyone who books or manages appointments

@@ -160,6 +160,17 @@ public class UserRoleHospitalAssignmentController {
         return ResponseEntity.ok(assignmentService.getAssignmentPublicView(assignmentCode));
     }
 
+    @Operation(summary = "Self-service verification: assignee submits their 6-digit confirmation code")
+    @PostMapping("/public/{assignmentCode}/verify")
+    public ResponseEntity<UserRoleAssignmentPublicViewDTO> verifyAssignmentByCode(
+            @PathVariable String assignmentCode,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "JSON body with confirmationCode field")
+            @RequestBody java.util.Map<String, String> body) {
+        String confirmationCode = body != null ? body.get("confirmationCode") : null;
+        log.info("🔐 Self-service verification attempt for assignment code '{}'", assignmentCode);
+        return ResponseEntity.ok(assignmentService.verifyAssignmentByCode(assignmentCode, confirmationCode));
+    }
+
     @Operation(summary = "Delete an assignment by ID")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
     @DeleteMapping("/{id}")

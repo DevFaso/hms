@@ -90,6 +90,13 @@ public interface UserRoleHospitalAssignmentService {
     UserRoleAssignmentPublicViewDTO getAssignmentPublicView(String assignmentCode);
 
     /**
+     * Self-service verification: the assignee submits their confirmation code.
+     * This is the unauthenticated endpoint used from the onboarding email link.
+     * On success the assignment is marked as verified and the public view is returned.
+     */
+    UserRoleAssignmentPublicViewDTO verifyAssignmentByCode(String assignmentCode, String confirmationCode);
+
+    /**
      * Bulk import assignments using a CSV payload.
      */
     UserRoleAssignmentBulkImportResponseDTO bulkImportAssignments(UserRoleAssignmentBulkImportRequestDTO requestDTO);

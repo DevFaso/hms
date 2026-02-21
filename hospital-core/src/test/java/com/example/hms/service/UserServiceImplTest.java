@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.UserMapper;
 import com.example.hms.model.Role;
 import com.example.hms.model.User;
@@ -24,7 +25,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -126,5 +129,46 @@ class UserServiceImplTest {
 
         assertThat(response.isSuccess()).isTrue();
         assertThat(response.getUsername()).isEqualTo("admin");
+    }
+
+    // =====================================================================
+    // changeOwnPassword
+    // =====================================================================
+
+    @Test
+    void changeOwnPassword_success_clearsForcePasswordChangeFlag() {
+        user.setForcePasswordChange(true);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("NewPass99!")).thenReturn("$2a$hashed");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        userService.changeOwnPassword(userId, "NewPass99!");
+
+        assertThat(user.isForcePasswordChange()).isFalse();
+        assertThat(user.getPasswordHash()).isEqualTo("$2a$hashed");
+        assertThat(user.getPasswordRotationWarningAt()).isNull();
+        assertThat(user.getPasswordRotationForcedAt()).isNull();
+        assertThat(user.getPasswordChangedAt()).isNotNull();
+        verify(userRepository).save(user);
+    }
+
+    @Test
+    void changeOwnPassword_userNotFound_throwsResourceNotFoundException() {
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.changeOwnPassword(userId, "NewPass99!"))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void changeOwnPassword_encodesNewPassword() {
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(passwordEncoder.encode("BrandNewPass1!")).thenReturn("$2a$encoded");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        userService.changeOwnPassword(userId, "BrandNewPass1!");
+
+        verify(passwordEncoder).encode("BrandNewPass1!");
+        assertThat(user.getPasswordHash()).isEqualTo("$2a$encoded");
     }
 }
