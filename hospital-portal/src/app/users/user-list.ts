@@ -242,9 +242,20 @@ export class UserListComponent implements OnInit {
 
     this.saving.set(true);
     const existing = this.editing();
+
+    // Strip empty strings for optional UUID / enum fields so Jackson on the backend
+    // doesn't attempt to deserialize "" as a UUID or enum value (→ 400 parse error).
+    const payload: AdminRegisterRequest = { ...this.createForm };
+    if (!payload.hospitalId) delete payload.hospitalId;
+    if (!payload.jobTitle) delete payload.jobTitle;
+    if (!payload.employmentType) delete payload.employmentType;
+    if (!payload.specialization) delete payload.specialization;
+    if (!payload.licenseNumber?.trim()) delete payload.licenseNumber;
+    if (!payload.departmentId) delete payload.departmentId;
+
     const op = existing
-      ? this.userService.update(existing.id, this.createForm)
-      : this.userService.adminRegister(this.createForm);
+      ? this.userService.update(existing.id, payload)
+      : this.userService.adminRegister(payload);
 
     op.subscribe({
       next: () => {

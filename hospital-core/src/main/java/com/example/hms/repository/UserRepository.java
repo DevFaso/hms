@@ -109,10 +109,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                            Pageable pageable);
 
     /**
-     * Paged list of active users with roles pre-fetched.
-     * Avoids fetch join to keep count query simple.
+     * Paged list of non-deleted users.
+     * NOTE: @EntityGraph is intentionally omitted here — combining a collection-fetch
+     * entity graph with a LIMIT/OFFSET paged query triggers Hibernate 6 warning
+     * HHH90003004 ("firstResult/maxResults specified with collection fetch") and
+     * causes incorrect pagination (full table loaded in memory, then sliced).
+     * UserMapper.toSummaryDTO accesses userRoles lazily which is fine inside the
+     * surrounding @Transactional(readOnly = true) boundary.
      */
-  @EntityGraph(attributePaths = { "userRoles", "userRoles.role" })
     @Query("select u from User u where u.isDeleted = false")
     Page<User> findAllActive(Pageable pageable);
 
