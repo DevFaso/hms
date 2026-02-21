@@ -184,10 +184,15 @@ public class StaffServiceImpl implements StaffService {
                 .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("role.notFound", new Object[]{dto.getRoleName()}, locale)));
         }
 
-        UserRoleHospitalAssignment assignment = null;
+        UserRoleHospitalAssignment assignment;
         if (role != null) {
             assignment = assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(user.getId(), hospital.getId(), role.getId())
                 .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("assignment.notFound", null, locale)));
+        } else {
+            // No role specified — resolve the user's active assignment at this hospital
+            assignment = assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospital.getId())
+                .orElseThrow(() -> new BusinessRuleException(
+                    getLocalizedMessage("staff.assignment.required", new Object[]{dto.getUserEmail(), dto.getHospitalName()}, locale)));
         }
 
         validateLicenseNumber(dto, locale);
@@ -230,12 +235,18 @@ public class StaffServiceImpl implements StaffService {
                 .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("role.notFound", new Object[]{dto.getRoleName()}, locale)));
         }
 
-        UserRoleHospitalAssignment assignment = null;
+        UserRoleHospitalAssignment assignment;
         if (role != null) {
             assignment = assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(user.getId(), hospital.getId(), role.getId())
                 .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("assignment.notFound", null, locale)));
         } else {
-            assignment = existingStaff.getAssignment();
+            // No role change requested — resolve the user's active assignment at this hospital
+            assignment = assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospital.getId())
+                .orElseGet(existingStaff::getAssignment); // fall back to existing if nothing active found yet
+            if (assignment == null) {
+                throw new BusinessRuleException(
+                    getLocalizedMessage("staff.assignment.required", new Object[]{dto.getUserEmail(), dto.getHospitalName()}, locale));
+            }
         }
 
         String existingLic = existingStaff.getLicenseNumber();
