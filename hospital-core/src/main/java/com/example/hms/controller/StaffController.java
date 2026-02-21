@@ -40,7 +40,7 @@ public class StaffController {
 
     @Operation(summary = "List all staff")
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','RECEPTIONIST','DOCTOR','NURSE','MIDWIFE')")
     public ResponseEntity<List<StaffResponseDTO>> getAllStaff(
         @RequestHeader(name = "Accept-Language", required = false) String lang) {
         Locale locale = parseLocale(lang);
