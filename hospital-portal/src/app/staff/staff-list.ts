@@ -2,7 +2,9 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
-import { StaffService, StaffResponse } from '../services/staff.service';
+import { StaffService, StaffResponse, StaffUpsertRequest } from '../services/staff.service';
+import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import { UserService, UserSummary } from '../services/user.service';
 import { ToastService } from '../core/toast.service';
 
 @Component({
@@ -14,6 +16,8 @@ import { ToastService } from '../core/toast.service';
 })
 export class StaffListComponent implements OnInit {
   private readonly staffService = inject(StaffService);
+  private readonly hospitalService = inject(HospitalService);
+  private readonly userService = inject(UserService);
   private readonly toast = inject(ToastService);
 
   staff = signal<StaffResponse[]>([]);
@@ -21,8 +25,134 @@ export class StaffListComponent implements OnInit {
   searchTerm = '';
   loading = signal(true);
 
+  hospitals = signal<HospitalResponse[]>([]);
+  users = signal<UserSummary[]>([]);
+
+  // Create / Edit
+  showModal = signal(false);
+  editing = signal<StaffResponse | null>(null);
+  saving = signal(false);
+  form: StaffUpsertRequest = this.emptyForm();
+
+  // Delete
+  showDeleteConfirm = signal(false);
+  deletingStaff = signal<StaffResponse | null>(null);
+  deleting = signal(false);
+
+  readonly employmentTypes = ['FULL_TIME', 'PART_TIME', 'CONTRACT', 'VOLUNTEER', 'INTERN'];
+
+  /**
+   * Exact values from the backend JobTitle enum.
+   * PATIENT / VISITOR / SUPER_ADMIN are omitted — not valid staff job titles.
+   */
+  readonly jobTitles = [
+    'DOCTOR',
+    'PHYSICIAN',
+    'NURSE_PRACTITIONER',
+    'NURSE',
+    'MIDWIFE',
+    'SURGEON',
+    'ANESTHESIOLOGIST',
+    'RADIOLOGIST',
+    'PHYSIOTHERAPIST',
+    'PSYCHOLOGIST',
+    'PHARMACIST',
+    'LAB_TECHNICIAN',
+    'LABORATORY_SCIENTIST',
+    'TECHNICIAN',
+    'HOSPITAL_ADMIN',
+    'HOSPITAL_ADMINISTRATOR',
+    'ADMINISTRATIVE_STAFF',
+    'ADMINISTRATIVE_ASSISTANT',
+    'RECEPTIONIST',
+    'BILLING_SPECIALIST',
+    'SOCIAL_WORKER',
+    'HUMAN_RESOURCES',
+    'IT_SUPPORT',
+    'CLEANING_STAFF',
+    'SECURITY_PERSONNEL',
+  ];
+
+  /**
+   * Exact values from the backend Specialization enum.
+   * Grouped by clinical category — no free-text allowed.
+   */
+  readonly specializations = [
+    // Doctors (all require licence)
+    'GENERAL_PRACTICE',
+    'CARDIOLOGY',
+    'NEUROLOGY',
+    'PEDIATRICS',
+    'ORTHOPEDICS',
+    'DERMATOLOGY',
+    'GYNECOLOGY',
+    'ONCOLOGY',
+    'RADIOLOGY',
+    'PSYCHIATRY',
+    // Nurses (all require licence)
+    'GENERAL_NURSE',
+    'ICU_NURSE',
+    'PEDIATRIC_NURSE',
+    'SURGICAL_NURSE',
+    // Pharmacists (all require licence)
+    'CLINICAL_PHARMACY',
+    'HOSPITAL_PHARMACY',
+    // Lab staff (LAB_TECHNICIAN + PATHOLOGY require licence; MICROBIOLOGY role-dependent)
+    'LAB_TECHNICIAN',
+    'PATHOLOGY',
+    'MICROBIOLOGY',
+    // Default / non-clinical
+    'OTHER',
+  ];
+
+  /**
+   * Job titles that require a medical licence number.
+   *
+   * Rules (aligned with international medical standards + backend validation):
+   *   ✅ ALL doctors/clinicians     — DOCTOR, PHYSICIAN, SURGEON, ANESTHESIOLOGIST,
+   *                                   RADIOLOGIST, PHYSIOTHERAPIST, PSYCHOLOGIST
+   *   ✅ ALL nurses                  — NURSE, NURSE_PRACTITIONER, MIDWIFE
+   *   ✅ ALL pharmacists             — PHARMACIST
+   *   ✅ Lab / diagnostic staff      — LAB_TECHNICIAN, LABORATORY_SCIENTIST
+   *   ❌ Administrative / support    — RECEPTIONIST, ADMIN_STAFF, HR, IT, etc. → no licence
+   */
+  private readonly licencedTitles = new Set([
+    // Doctors & clinicians
+    'DOCTOR',
+    'PHYSICIAN',
+    'SURGEON',
+    'ANESTHESIOLOGIST',
+    'RADIOLOGIST',
+    'PHYSIOTHERAPIST',
+    'PSYCHOLOGIST',
+    // Nurses
+    'NURSE',
+    'NURSE_PRACTITIONER',
+    'MIDWIFE',
+    // Pharmacists
+    'PHARMACIST',
+    // Lab & diagnostic
+    'LAB_TECHNICIAN',
+    'LABORATORY_SCIENTIST',
+  ]);
+
+  /** Whether the currently-selected job title requires a specialization / licence */
+  get needsSpecialization(): boolean {
+    return this.licencedTitles.has(this.form.jobTitle ?? '');
+  }
+
+  get needsLicence(): boolean {
+    return this.licencedTitles.has(this.form.jobTitle ?? '');
+  }
+
   ngOnInit(): void {
     this.loadStaff();
+    this.hospitalService.list().subscribe({
+      next: (data) => this.hospitals.set(data),
+    });
+    this.userService.list(0, 500).subscribe({
+      next: (page) => this.users.set(page.content),
+    });
   }
 
   loadStaff(): void {
@@ -58,6 +188,114 @@ export class StaffListComponent implements OnInit {
     );
   }
 
+  // ---------- Create ----------
+  openCreate(): void {
+    this.form = this.emptyForm();
+    this.editing.set(null);
+    this.showModal.set(true);
+  }
+
+  // ---------- Edit ----------
+  openEdit(member: StaffResponse): void {
+    this.editing.set(member);
+    // Sanitize specialization: clear any old free-text value that isn't a valid enum member
+    const rawSpec = member.specialization ?? '';
+    const validSpec = this.specializations.includes(rawSpec) ? rawSpec : '';
+    this.form = {
+      userEmail: member.email,
+      hospitalName: member.hospitalName ?? '',
+      departmentName: member.departmentName ?? '',
+      specialization: validSpec,
+      licenseNumber: member.licenseNumber ?? '',
+      jobTitle: member.jobTitle ?? '',
+      employmentType: member.employmentType ?? '',
+      startDate: member.startDate ?? '',
+      roleName: member.roleCode ?? '',
+    };
+    this.showModal.set(true);
+  }
+
+  closeModal(): void {
+    this.showModal.set(false);
+    this.editing.set(null);
+  }
+
+  submitForm(): void {
+    if (!this.form.userEmail || !this.form.hospitalName) {
+      this.toast.error('User and hospital are required');
+      return;
+    }
+    this.saving.set(true);
+    const payload: StaffUpsertRequest = { ...this.form };
+    if (!payload.departmentName) delete payload.departmentName;
+    if (!payload.specialization) delete payload.specialization;
+    if (!payload.licenseNumber) delete payload.licenseNumber;
+    if (!payload.jobTitle) delete payload.jobTitle;
+    if (!payload.employmentType) delete payload.employmentType;
+    if (!payload.startDate) delete payload.startDate;
+    if (!payload.roleName) delete payload.roleName;
+    // Never send specialization or licenseNumber for non-clinical roles
+    if (!this.needsSpecialization) {
+      delete payload.specialization;
+      delete payload.licenseNumber;
+    }
+
+    const existing = this.editing();
+    const request$ = existing
+      ? this.staffService.update(existing.id, payload)
+      : this.staffService.create(payload);
+
+    request$.subscribe({
+      next: () => {
+        this.toast.success(existing ? 'Staff updated' : 'Staff created');
+        this.closeModal();
+        this.saving.set(false);
+        this.loadStaff();
+      },
+      error: (err) => {
+        const body = err?.error;
+        let msg = `Failed to ${existing ? 'update' : 'create'} staff`;
+        if (body?.fieldErrors) {
+          msg = Object.values(body.fieldErrors).join('. ');
+        } else if (body?.message) {
+          msg = body.message;
+        }
+        this.toast.error(msg);
+        this.saving.set(false);
+      },
+    });
+  }
+
+  // ---------- Delete ----------
+  confirmDelete(member: StaffResponse): void {
+    this.deletingStaff.set(member);
+    this.showDeleteConfirm.set(true);
+  }
+
+  cancelDelete(): void {
+    this.showDeleteConfirm.set(false);
+    this.deletingStaff.set(null);
+  }
+
+  executeDelete(): void {
+    const member = this.deletingStaff();
+    if (!member) return;
+    this.deleting.set(true);
+    this.staffService.deactivate(member.id).subscribe({
+      next: () => {
+        this.toast.success('Staff deactivated');
+        this.cancelDelete();
+        this.deleting.set(false);
+        this.loadStaff();
+      },
+      error: (err) => {
+        this.toast.error(err?.error?.message ?? 'Failed to deactivate staff');
+        this.deleting.set(false);
+      },
+    });
+  }
+
+  // ---------- Helpers ----------
   getInitials(name: string): string {
     if (!name) return '??';
     const parts = name.trim().split(/\s+/);
@@ -71,5 +309,19 @@ export class StaffListComponent implements OnInit {
       .replaceAll('_', ' ')
       .toLowerCase()
       .replaceAll(/\b\w/g, (c) => c.toUpperCase());
+  }
+
+  private emptyForm(): StaffUpsertRequest {
+    return {
+      userEmail: '',
+      hospitalName: '',
+      departmentName: '',
+      specialization: '',
+      licenseNumber: '',
+      jobTitle: '',
+      employmentType: '',
+      startDate: new Date().toISOString().slice(0, 10), // today as default start date
+      roleName: '',
+    };
   }
 }

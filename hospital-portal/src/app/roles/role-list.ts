@@ -25,10 +25,16 @@ export class RoleListComponent implements OnInit {
   searchTerm = '';
   filtered = signal<RoleResponse[]>([]);
 
-  // Create modal
+  // Create / Edit modal
   showCreate = signal(false);
   saving = signal(false);
+  editing = signal<RoleResponse | null>(null);
   createForm: RoleCreateRequest = { name: '' };
+
+  // Delete
+  showDeleteConfirm = signal(false);
+  deletingRole = signal<RoleResponse | null>(null);
+  deleting = signal(false);
 
   // Permissions modal
   showPermissions = signal(false);
@@ -74,11 +80,23 @@ export class RoleListComponent implements OnInit {
 
   openCreate(): void {
     this.createForm = { name: '' };
+    this.editing.set(null);
+    this.showCreate.set(true);
+  }
+
+  openEdit(role: RoleResponse): void {
+    this.editing.set(role);
+    this.createForm = {
+      name: role.name,
+      description: role.description ?? '',
+      code: role.code ?? '',
+    };
     this.showCreate.set(true);
   }
 
   closeCreate(): void {
     this.showCreate.set(false);
+    this.editing.set(null);
   }
 
   submitCreate(): void {
@@ -87,16 +105,51 @@ export class RoleListComponent implements OnInit {
       return;
     }
     this.saving.set(true);
-    this.roleService.create(this.createForm).subscribe({
+    const existing = this.editing();
+    const op = existing
+      ? this.roleService.update(existing.id, this.createForm)
+      : this.roleService.create(this.createForm);
+
+    op.subscribe({
       next: () => {
-        this.toast.success('Role created');
+        this.toast.success(existing ? 'Role updated' : 'Role created');
         this.showCreate.set(false);
         this.saving.set(false);
+        this.editing.set(null);
         this.loadRoles();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to create role');
+        this.toast.error(err?.error?.message ?? 'Operation failed');
         this.saving.set(false);
+      },
+    });
+  }
+
+  confirmDelete(role: RoleResponse): void {
+    this.deletingRole.set(role);
+    this.showDeleteConfirm.set(true);
+  }
+
+  cancelDelete(): void {
+    this.showDeleteConfirm.set(false);
+    this.deletingRole.set(null);
+  }
+
+  executeDelete(): void {
+    const role = this.deletingRole();
+    if (!role) return;
+    this.deleting.set(true);
+    this.roleService.delete(role.id).subscribe({
+      next: () => {
+        this.toast.success('Role deleted');
+        this.showDeleteConfirm.set(false);
+        this.deleting.set(false);
+        this.deletingRole.set(null);
+        this.loadRoles();
+      },
+      error: (err) => {
+        this.toast.error(err?.error?.message ?? 'Failed to delete role');
+        this.deleting.set(false);
       },
     });
   }

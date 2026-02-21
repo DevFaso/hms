@@ -4,36 +4,73 @@ import { Observable } from 'rxjs';
 
 export interface PatientResponse {
   id: string;
-  userId: string;
-  username: string;
-  email: string;
   firstName: string;
   lastName: string;
-  phoneNumber?: string;
+  middleName?: string;
   dateOfBirth?: string;
   gender?: string;
   address?: string;
-  bloodGroup?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  country?: string;
+  phoneNumberPrimary?: string;
+  phoneNumberSecondary?: string;
+  email?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  bloodType?: string;
   allergies?: string;
-  medicalHistory?: string;
-  hospitalId: string;
-  hospitalName?: string;
+  medicalHistorySummary?: string;
+  preferredPharmacy?: string;
+  careTeamNotes?: string;
+  chronicConditions?: string[];
   mrn?: string;
+  displayName?: string;
+  username?: string;
+  hospitalId?: string;
+  hospitalName?: string;
+  departmentId?: string;
+  departmentName?: string;
+  organizationId?: string;
   active: boolean;
-  createdAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface PatientCreateRequest {
-  userId?: string;
+  userId: string;
   hospitalId: string;
   firstName: string;
   lastName: string;
-  email: string;
-  phoneNumber?: string;
+  middleName?: string;
   dateOfBirth?: string;
   gender?: string;
   address?: string;
-  bloodGroup?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  country?: string;
+  phoneNumberPrimary: string;
+  phoneNumberSecondary?: string;
+  email: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  bloodType?: string;
+  allergies?: string;
+  medicalHistorySummary?: string;
+  preferredPharmacy?: string;
+  careTeamNotes?: string;
+  chronicConditions?: string[];
+  organizationId?: string;
+  departmentId?: string;
+  isActive?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -52,7 +89,7 @@ export class PatientService {
   }
 
   create(req: PatientCreateRequest): Observable<PatientResponse> {
-    return this.http.post<PatientResponse>('/patients/staff-register', req);
+    return this.http.post<PatientResponse>('/patients', req);
   }
 
   update(id: string, req: Partial<PatientCreateRequest>): Observable<PatientResponse> {

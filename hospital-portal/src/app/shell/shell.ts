@@ -5,7 +5,9 @@ import { Subscription } from 'rxjs';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { ToastService } from '../core/toast.service';
+import { IdleService } from '../core/idle.service';
 import { NotificationService, Notification } from '../services/notification.service';
+import { LockScreenComponent } from '../lock-screen/lock-screen';
 
 interface NavItem {
   icon: string;
@@ -17,7 +19,7 @@ interface NavItem {
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, LockScreenComponent],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
 })
@@ -27,6 +29,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   protected readonly toast = inject(ToastService);
   private readonly notifService = inject(NotificationService);
+  protected readonly idle = inject(IdleService);
   private notifSub?: Subscription;
 
   sidebarCollapsed = signal(false);
@@ -78,45 +81,45 @@ export class ShellComponent implements OnInit, OnDestroy {
         icon: 'swap_horiz',
         label: 'Encounters',
         route: '/encounters',
-        permission: 'View Patient Records',
+        permission: 'Create Encounters',
       },
       {
         icon: 'hotel',
         label: 'Admissions',
         route: '/admissions',
-        permission: 'View Patient Records',
+        permission: 'Admit Patients',
       },
       {
         icon: 'medication',
         label: 'Prescriptions',
         route: '/prescriptions',
-        permission: 'View Patient Records',
+        permission: 'Create Prescriptions',
       },
       {
         icon: 'monitor_heart',
         label: 'Nurse Station',
         route: '/nurse-station',
-        permission: 'View Patient Records',
+        permission: 'Document Nursing Notes',
       },
       {
         icon: 'radiology',
         label: 'Imaging',
         route: '/imaging',
-        permission: 'View Patient Records',
+        permission: 'Request Imaging Studies',
       },
       {
         icon: 'forum',
         label: 'Consultations',
         route: '/consultations',
-        permission: 'View Patient Records',
+        permission: 'Request Consultations',
       },
       {
         icon: 'assignment',
         label: 'Treatment Plans',
         route: '/treatment-plans',
-        permission: 'View Patient Records',
+        permission: 'Create Treatment Plans',
       },
-      { icon: 'send', label: 'Referrals', route: '/referrals', permission: 'View Patient Records' },
+      { icon: 'send', label: 'Referrals', route: '/referrals', permission: 'Create Referrals' },
       { icon: 'receipt_long', label: 'Billing', route: '/billing', permission: 'View Billing' },
       { icon: 'science', label: 'Laboratory', route: '/lab', permission: 'View Lab' },
       {
@@ -130,7 +133,9 @@ export class ShellComponent implements OnInit, OnDestroy {
 
     if (this.permissions.hasPermission('*')) {
       items.push(
+        { icon: 'local_hospital', label: 'Hospitals', route: '/hospitals' },
         { icon: 'corporate_fare', label: 'Organizations', route: '/organizations' },
+        { icon: 'campaign', label: 'Announcements', route: '/announcements' },
         { icon: 'manage_accounts', label: 'Users', route: '/users' },
         { icon: 'shield', label: 'Roles', route: '/roles' },
         { icon: 'hub', label: 'Platform', route: '/platform' },
@@ -147,6 +152,10 @@ export class ShellComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.userProfile.set(this.auth.getUserProfile());
     this.loadNotifications();
+
+    // Start idle detection — lock screen after 10 minutes of inactivity
+    this.idle.start();
+
     const username = this.auth.getSubject();
     if (username) {
       this.notifService.connectWebSocket(username);
@@ -160,6 +169,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   ngOnDestroy(): void {
     this.notifSub?.unsubscribe();
     this.notifService.disconnectWebSocket();
+    this.idle.stop();
   }
 
   private loadNotifications(): void {
@@ -195,6 +205,23 @@ export class ShellComponent implements OnInit, OnDestroy {
   }
 
   logout(): void {
+    this.auth.logout();
+    this.router.navigateByUrl('/login');
+  }
+
+  /** Called when user clicks "Sign out instead" on the lock screen */
+  onLockScreenSignOut(): void {
+    this.tearDownAndRedirect();
+  }
+
+  /** Called when a different person wants to sign in from the lock screen */
+  onSwitchUser(): void {
+    this.tearDownAndRedirect();
+  }
+
+  /** Shared tear-down: stop idle, log out, redirect to login */
+  private tearDownAndRedirect(): void {
+    this.idle.stop();
     this.auth.logout();
     this.router.navigateByUrl('/login');
   }

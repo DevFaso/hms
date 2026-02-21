@@ -29,6 +29,10 @@ export interface StaffShiftResponse {
   shiftDate: string;
   startTime: string;
   endTime: string;
+  /** True when the shift spans midnight (endTime < startTime). */
+  crossMidnight: boolean;
+  /** The calendar date the shift ends on — shiftDate for same-day, shiftDate+1 for cross-midnight. */
+  shiftEndDate: string;
   shiftType: StaffShiftType;
   status: StaffShiftStatus;
   published: boolean;
@@ -46,6 +50,46 @@ export interface StaffShiftResponse {
 export interface StaffShiftStatusUpdate {
   status: StaffShiftStatus;
   cancellationReason?: string;
+}
+
+// ── Bulk Scheduling ──
+export type DayOfWeek =
+  | 'MONDAY'
+  | 'TUESDAY'
+  | 'WEDNESDAY'
+  | 'THURSDAY'
+  | 'FRIDAY'
+  | 'SATURDAY'
+  | 'SUNDAY';
+
+export interface BulkShiftRequest {
+  staffId: string;
+  hospitalId: string;
+  departmentId?: string;
+  /** First date (inclusive), ISO-8601 (YYYY-MM-DD) */
+  startDate: string;
+  /** Last date (inclusive), ISO-8601 (YYYY-MM-DD) */
+  endDate: string;
+  /** Days of the week to create shifts on */
+  daysOfWeek: DayOfWeek[];
+  startTime: string;
+  endTime: string;
+  shiftType: StaffShiftType;
+  notes?: string;
+  /** When true, conflicting dates are silently skipped instead of aborting the batch */
+  skipConflicts: boolean;
+}
+
+export interface BulkShiftSkip {
+  date: string;
+  reason: string;
+}
+
+export interface BulkShiftResult {
+  scheduled: StaffShiftResponse[];
+  skipped: BulkShiftSkip[];
+  totalScheduled: number;
+  totalSkipped: number;
 }
 
 // ── Leave ──
@@ -157,6 +201,10 @@ export class StaffSchedulingService {
 
   updateShiftStatus(shiftId: string, req: StaffShiftStatusUpdate): Observable<StaffShiftResponse> {
     return this.http.patch<StaffShiftResponse>(`/staff/scheduling/shifts/${shiftId}/status`, req);
+  }
+
+  bulkScheduleShifts(req: BulkShiftRequest): Observable<BulkShiftResult> {
+    return this.http.post<BulkShiftResult>('/staff/scheduling/shifts/bulk', req);
   }
 
   // ── Leaves ──

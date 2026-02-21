@@ -236,5 +236,14 @@ export class AuthService {
   logout(): void {
     this.clearToken();
     this.clearUserProfile();
+    // Clear idle lock state so the lock screen doesn't appear on next login
+    if (this.isBrowser) {
+      try {
+        sessionStorage.removeItem('hms_idle_locked');
+        sessionStorage.removeItem('hms_lock_ts');
+      } catch {
+        /* storage not available */
+      }
+    }
   }
 }

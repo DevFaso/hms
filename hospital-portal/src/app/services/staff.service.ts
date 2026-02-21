@@ -31,13 +31,15 @@ export interface StaffResponse {
 }
 
 export interface StaffUpsertRequest {
-  userId: string;
-  hospitalId: string;
-  departmentId?: string;
+  userEmail: string;
+  hospitalName: string;
+  departmentName?: string;
   specialization?: string;
   licenseNumber?: string;
   jobTitle?: string;
   employmentType?: string;
+  startDate?: string;
+  roleName?: string;
 }
 
 @Injectable({ providedIn: 'root' })

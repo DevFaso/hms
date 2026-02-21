@@ -91,8 +91,9 @@ public class StaffAvailability extends BaseEntity {
             if (availableFrom == null || availableTo == null) {
                 throw new IllegalStateException("availableFrom/availableTo are required when dayOff=false");
             }
-            if (!availableTo.isAfter(availableFrom)) {
-                throw new IllegalStateException("availableTo must be after availableFrom");
+            // Allow cross-midnight windows: availableTo < availableFrom means the window spans midnight
+            if (availableTo.equals(availableFrom)) {
+                throw new IllegalStateException("availableTo must differ from availableFrom");
             }
         }
     }

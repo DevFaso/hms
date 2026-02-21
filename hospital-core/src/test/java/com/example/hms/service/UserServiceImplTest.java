@@ -12,7 +12,6 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.JwtTokenProvider;
-import com.example.hms.config.BootstrapProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,7 +41,6 @@ class UserServiceImplTest {
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private StaffRepository staffRepository;
-    @Mock private BootstrapProperties bootstrapProperties;
     @Mock private JwtTokenProvider jwtTokenProvider;
 
     @InjectMocks
@@ -86,23 +84,25 @@ class UserServiceImplTest {
     }
 
     @Test
-    void bootstrapFirstUser_withInvalidToken_returnsFalse() {
-        when(userRepository.count()).thenReturn(0L);
-        when(bootstrapProperties.getToken()).thenReturn("secret-token");
+    void bootstrapFirstUser_withExistingUsers_returnsFalse() {
+        when(userRepository.count()).thenReturn(5L);
 
         BootstrapSignupRequest request = new BootstrapSignupRequest();
-        request.setBootstrapToken("wrong-token");
+        request.setUsername("admin");
+        request.setEmail("admin@test.com");
+        request.setPassword("password");
+        request.setFirstName("Admin");
+        request.setLastName("User");
 
         BootstrapSignupResponse response = userService.bootstrapFirstUser(request);
 
         assertThat(response.isSuccess()).isFalse();
-        assertThat(response.getMessage()).contains("Invalid bootstrap token");
+        assertThat(response.getMessage()).contains("not allowed");
     }
 
     @Test
     void bootstrapFirstUser_success() {
         when(userRepository.count()).thenReturn(0L);
-        when(bootstrapProperties.getToken()).thenReturn(null);
         when(passwordEncoder.encode(any())).thenReturn("encoded");
         when(userRepository.save(any(User.class))).thenAnswer(inv -> {
             User u = inv.getArgument(0);

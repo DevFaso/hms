@@ -4,6 +4,11 @@
       <h1 class="page-title">Referrals</h1>
       <p class="page-subtitle">Patient referral tracking and management</p>
     </div>
+    <div class="page-actions">
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span> New Referral
+      </button>
+    </div>
   </div>
   <div class="summary-cards">
     <div class="summary-card">
@@ -124,9 +129,20 @@
                 <span class="status-badge {{ getStatusClass(r.status) }}">{{ r.status }}</span>
               </td>
               <td>
-                <button class="btn-icon" (click)="viewDetail(r)" title="View referral details">
-                  <span class="material-symbols-outlined">visibility</span>
-                </button>
+                <div class="action-group">
+                  <button class="action-link" (click)="viewDetail(r)" title="View referral details">
+                    <span class="material-symbols-outlined">visibility</span>
+                  </button>
+                  @if (!['COMPLETED', 'CANCELLED'].includes(r.status)) {
+                    <button
+                      class="action-link delete"
+                      (click)="confirmCancel(r)"
+                      title="Cancel referral"
+                    >
+                      <span class="material-symbols-outlined">cancel</span>
+                    </button>
+                  }
+                </div>
               </td>
             </tr>
           }
@@ -219,6 +235,174 @@
             </div>
           }
         </div>
+      </div>
+    </div>
+  }
+
+  <!-- Create Referral Modal -->
+  @if (showModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+    ></div>
+    <div class="modal modal-lg">
+      <div class="modal-header">
+        <h2>New Referral</h2>
+        <button class="modal-close" (click)="closeModal()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label for="ref-patientSearch">Patient *</label>
+            @if (selectedPatient()) {
+              <div class="picker-chip">
+                <span class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</span>
+                <span class="chip-info">
+                  <span class="chip-name"
+                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
+                  >
+                  <span class="chip-sub">{{
+                    selectedPatient()!.mrn || selectedPatient()!.email
+                  }}</span>
+                </span>
+                <button type="button" class="chip-clear" (click)="clearPatient()" title="Remove">
+                  ×
+                </button>
+              </div>
+            } @else {
+              <div class="patient-picker-wrap">
+                <span class="picker-search-icon material-icons">person_search</span>
+                <input
+                  id="ref-patientSearch"
+                  type="text"
+                  class="picker-input"
+                  [value]="patientQuery()"
+                  (input)="onPatientQueryChange($any($event.target).value)"
+                  (blur)="patientDropdownOpen.set(false)"
+                  placeholder="Search by name, email or MRN…"
+                  autocomplete="off"
+                />
+                @if (patientSearchLoading()) {
+                  <span class="picker-spinner"></span>
+                }
+                @if (patientDropdownOpen()) {
+                  <ul class="picker-dropdown" aria-label="Patient suggestions">
+                    @for (p of patientSuggestions(); track p.id) {
+                      <li class="picker-option" (mousedown)="selectPatient(p)">
+                        <span class="opt-avatar">{{ patientInitials(p) }}</span>
+                        <span class="opt-info">
+                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                          <span class="opt-meta">{{ p.mrn }} · {{ p.email }}</span>
+                        </span>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
+          </div>
+          <div class="field">
+            <label for="ref-hospitalId">Hospital</label>
+            <select id="ref-hospitalId" [(ngModel)]="form.hospitalId" title="Hospital">
+              <option value="">Select hospital</option>
+              @for (h of hospitals(); track h.id) {
+                <option [value]="h.id">{{ h.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="ref-specialty">Target Specialty</label>
+            <input
+              id="ref-specialty"
+              type="text"
+              [(ngModel)]="form.targetSpecialty"
+              placeholder="e.g. Cardiology"
+            />
+          </div>
+          <div class="field">
+            <label for="ref-urgency">Urgency</label>
+            <select id="ref-urgency" [(ngModel)]="form.urgency" title="Urgency">
+              @for (u of urgencies; track u) {
+                <option [value]="u">{{ u }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field" style="flex: 1">
+            <label for="ref-reason">Referral Reason</label>
+            <textarea
+              id="ref-reason"
+              [(ngModel)]="form.referralReason"
+              rows="3"
+              placeholder="Reason for referral"
+            ></textarea>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field" style="flex: 1">
+            <label for="ref-indication">Clinical Indication</label>
+            <textarea
+              id="ref-indication"
+              [(ngModel)]="form.clinicalIndication"
+              rows="2"
+              placeholder="Optional"
+            ></textarea>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field" style="flex: 1">
+            <label for="ref-summary">Clinical Summary</label>
+            <textarea
+              id="ref-summary"
+              [(ngModel)]="form.clinicalSummary"
+              rows="2"
+              placeholder="Optional"
+            ></textarea>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeModal()">Cancel</button>
+        <button class="btn-primary" (click)="submitForm()" [disabled]="saving()">
+          {{ saving() ? 'Saving...' : 'Create Referral' }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Cancel Referral Confirmation -->
+  @if (showDeleteConfirm()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="cancelDeleteAction()"
+      (keydown.escape)="cancelDeleteAction()"
+    ></div>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Cancel Referral</h2>
+        <button class="modal-close" (click)="cancelDeleteAction()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="delete-warning">
+          <span class="material-symbols-outlined">warning</span>
+          <p>
+            Cancel the referral for <strong>{{ deletingRef()?.patientName }}</strong> to
+            <strong>{{ deletingRef()?.targetSpecialty }}</strong
+            >?
+          </p>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelDeleteAction()">Keep</button>
+        <button class="btn-danger" (click)="executeCancel()" [disabled]="deleting()">
+          {{ deleting() ? 'Cancelling...' : 'Cancel Referral' }}
+        </button>
       </div>
     </div>
   }

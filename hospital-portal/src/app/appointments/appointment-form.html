@@ -39,67 +39,143 @@
                 [(ngModel)]="form.startTime"
                 name="startTime"
                 required
+                (change)="onStartTimeChange()"
               />
             </div>
             <div class="field">
               <label for="end">End Time *</label>
-              <input id="end" type="time" [(ngModel)]="form.endTime" name="endTime" required />
+              <input
+                id="end"
+                type="time"
+                [(ngModel)]="form.endTime"
+                name="endTime"
+                required
+                (change)="onEndTimeChange()"
+              />
             </div>
           </div>
+          @if (timeError()) {
+            <p class="field-error">
+              <span class="material-symbols-outlined">error</span>
+              {{ timeError() }}
+            </p>
+          }
         </div>
 
-        <!-- Patient Info -->
+        <!-- Patient picker -->
         <div class="form-section">
-          <h3>Patient</h3>
-          <div class="field-row two-col">
-            <div class="field">
-              <label for="patientEmail">Patient Email</label>
-              <input
-                id="patientEmail"
-                type="email"
-                placeholder="patient@example.com"
-                [(ngModel)]="form.patientEmail"
-                name="patientEmail"
-              />
+          <h3>Patient *</h3>
+          @if (selectedPatient()) {
+            <div class="picker-chip">
+              <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
+              <div class="chip-info">
+                <span class="chip-name"
+                  >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
+                >
+                <span class="chip-sub"
+                  >{{ selectedPatient()!.email
+                  }}{{ selectedPatient()!.mrn ? ' · MRN ' + selectedPatient()!.mrn : '' }}</span
+                >
+              </div>
+              <button
+                type="button"
+                class="chip-clear"
+                (click)="clearPatient()"
+                title="Change patient"
+              >
+                <span class="material-symbols-outlined">close</span>
+              </button>
             </div>
-            <div class="field">
-              <label for="patientId">Or Patient ID</label>
+          } @else {
+            <div class="patient-picker-wrap">
+              <span class="material-symbols-outlined picker-search-icon">person_search</span>
               <input
-                id="patientId"
+                class="picker-input"
                 type="text"
-                placeholder="UUID"
-                [(ngModel)]="form.patientId"
-                name="patientId"
+                placeholder="Search by name, email or MRN…"
+                [value]="patientQuery()"
+                (input)="onPatientQueryChange($any($event.target).value)"
+                (blur)="patientDropdownOpen.set(false)"
+                autocomplete="off"
               />
+              @if (patientSearchLoading()) {
+                <div class="picker-spinner"></div>
+              }
+              @if (patientDropdownOpen()) {
+                <ul class="picker-dropdown" aria-label="Patient suggestions">
+                  @for (p of patientSuggestions(); track p.id) {
+                    <li class="picker-option" (mousedown)="selectPatient(p)">
+                      <div class="opt-avatar">{{ patientInitials(p) }}</div>
+                      <div class="opt-info">
+                        <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                        <span class="opt-meta"
+                          >{{ p.email }}{{ p.mrn ? ' · MRN ' + p.mrn : '' }}</span
+                        >
+                      </div>
+                    </li>
+                  }
+                </ul>
+              }
             </div>
-          </div>
+          }
         </div>
 
-        <!-- Staff Info -->
+        <!-- Staff / Doctor picker -->
         <div class="form-section">
-          <h3>Doctor / Staff</h3>
-          <div class="field-row two-col">
-            <div class="field">
-              <label for="staffEmail">Staff Email</label>
-              <input
-                id="staffEmail"
-                type="email"
-                placeholder="doctor@example.com"
-                [(ngModel)]="form.staffEmail"
-                name="staffEmail"
-              />
+          <h3>Doctor / Staff *</h3>
+          @if (selectedStaff()) {
+            <div class="picker-chip staff-chip">
+              <div class="chip-avatar staff-avatar">{{ staffInitials(selectedStaff()!) }}</div>
+              <div class="chip-info">
+                <span class="chip-name">{{ selectedStaff()!.name }}</span>
+                <span class="chip-sub"
+                  >{{ selectedStaff()!.jobTitle
+                  }}{{
+                    selectedStaff()!.hospitalName ? ' · ' + selectedStaff()!.hospitalName : ''
+                  }}</span
+                >
+              </div>
+              <button
+                type="button"
+                class="chip-clear"
+                (click)="clearStaff()"
+                title="Change staff member"
+              >
+                <span class="material-symbols-outlined">close</span>
+              </button>
             </div>
-            <div class="field">
-              <label for="staffId">Or Staff ID</label>
+          } @else {
+            <div class="patient-picker-wrap">
+              <span class="material-symbols-outlined picker-search-icon">badge</span>
               <input
-                id="staffId"
+                class="picker-input"
                 type="text"
-                placeholder="UUID"
-                [(ngModel)]="form.staffId"
-                name="staffId"
+                placeholder="Search doctor or staff by name…"
+                [value]="staffQuery()"
+                (input)="onStaffQueryChange($any($event.target).value)"
+                (blur)="staffDropdownOpen.set(false)"
+                autocomplete="off"
               />
+              @if (staffSearchLoading()) {
+                <div class="picker-spinner"></div>
+              }
+              @if (staffDropdownOpen()) {
+                <ul class="picker-dropdown" aria-label="Staff suggestions">
+                  @for (s of staffSuggestions(); track s.id) {
+                    <li class="picker-option" (mousedown)="selectStaff(s)">
+                      <div class="opt-avatar staff-avatar">{{ staffInitials(s) }}</div>
+                      <div class="opt-info">
+                        <span class="opt-name">{{ s.name }}</span>
+                        <span class="opt-meta"
+                          >{{ s.jobTitle }}{{ s.hospitalName ? ' · ' + s.hospitalName : '' }}</span
+                        >
+                      </div>
+                    </li>
+                  }
+                </ul>
+              }
             </div>
-          </div>
+          }
         </div>
 
         <!-- Location -->
@@ -107,24 +183,40 @@
           <h3>Location</h3>
           <div class="field-row two-col">
             <div class="field">
-              <label for="hospitalName">Hospital Name</label>
-              <input
-                id="hospitalName"
-                type="text"
-                placeholder="Hospital name"
-                [(ngModel)]="form.hospitalName"
-                name="hospitalName"
-              />
+              <label for="hospitalSel">Hospital</label>
+              @if (selectedStaff()?.hospitalId) {
+                <div class="locked-field">
+                  <span class="material-symbols-outlined">lock</span>
+                  {{ selectedStaff()!.hospitalName }}
+                </div>
+              } @else {
+                <select
+                  id="hospitalSel"
+                  [value]="selectedHospitalId()"
+                  (change)="onHospitalChange($any($event.target).value)"
+                  name="hospital"
+                >
+                  <option value="">Select hospital…</option>
+                  @for (h of hospitals(); track h.id) {
+                    <option [value]="h.id">{{ h.name }}</option>
+                  }
+                </select>
+              }
             </div>
             <div class="field">
-              <label for="departmentId">Department ID</label>
-              <input
-                id="departmentId"
-                type="text"
-                placeholder="UUID"
-                [(ngModel)]="form.departmentId"
-                name="departmentId"
-              />
+              <label for="deptSel">Department</label>
+              <select id="deptSel" [(ngModel)]="form.departmentId" name="departmentId">
+                <option value="">
+                  @if (selectedHospitalId() || selectedStaff()?.hospitalId) {
+                    Any department
+                  } @else {
+                    Select hospital first
+                  }
+                </option>
+                @for (d of departments(); track d.id) {
+                  <option [value]="d.id">{{ d.name }}</option>
+                }
+              </select>
             </div>
           </div>
         </div>

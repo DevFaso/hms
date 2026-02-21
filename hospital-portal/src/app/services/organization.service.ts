@@ -37,11 +37,11 @@ export interface OrganizationPage {
 export interface OrganizationCreateRequest {
   name: string;
   code: string;
-  description?: string;
+  timezone: string;
+  contactEmail: string;
+  contactPhone?: string;
+  notes?: string;
   type?: string;
-  primaryContactEmail?: string;
-  primaryContactPhone?: string;
-  defaultTimezone?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -62,6 +62,11 @@ export class OrganizationService {
 
   create(req: OrganizationCreateRequest): Observable<OrganizationResponse> {
     return this.http.post<OrganizationResponse>('/super-admin/organizations', req);
+  }
+
+  /** Fetch the list of valid organization type enum values from the backend */
+  getTypes(): Observable<string[]> {
+    return this.http.get<string[]>('/organizations/types');
   }
 
   update(id: string, req: Partial<OrganizationCreateRequest>): Observable<OrganizationResponse> {

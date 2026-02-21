@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
@@ -73,10 +74,15 @@ public class SecurityConfig {
     private static final String API_NURSE = "/nurse";
     private static final String API_NURSE_PATTERN = API_NURSE + "/**";
     private static final String API_ME_PATIENT_PATTERN = "/me/patient/**";
+    private static final String API_STAFF = "/staff";
+    private static final String API_STAFF_PATTERN = API_STAFF + "/**";
 
     private final HospitalUserDetailsService userDetailsService;
     private final JwtAuthenticationEntryPoint unauthorizedHandler;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    @Value("${app.cors.allowed-origins:http://localhost:4200}")
+    private String allowedOrigins;
 
     // ===== Shared beans =====
 
@@ -118,7 +124,17 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         var cfg = new CorsConfiguration();
-        cfg.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*"));
+        // Build origin patterns from env-driven property + local defaults
+        var patterns = new java.util.ArrayList<>(List.of("http://localhost:*", "http://127.0.0.1:*"));
+        if (allowedOrigins != null && !allowedOrigins.isBlank()) {
+            for (String origin : allowedOrigins.split(",")) {
+                String trimmed = origin.trim();
+                if (!trimmed.isEmpty() && !patterns.contains(trimmed)) {
+                    patterns.add(trimmed);
+                }
+            }
+        }
+        cfg.setAllowedOriginPatterns(patterns);
         cfg.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS","HEAD"));
         cfg.setAllowedHeaders(List.of("*"));
         cfg.setExposedHeaders(List.of("Authorization","Content-Type"));
@@ -153,6 +169,7 @@ public class SecurityConfig {
                 .requestMatchers("/auth/credentials/**").authenticated()
                 .requestMatchers("/auth/token/**").authenticated()
                 .requestMatchers("/auth/logout").authenticated()
+                .requestMatchers("/auth/verify-password").authenticated()
 
                 // Public auth endpoints (login, register, etc.)
                 .requestMatchers("/auth/**").permitAll()
@@ -214,7 +231,15 @@ public class SecurityConfig {
 
                 .requestMatchers("/assignments/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
-                .requestMatchers("/staff/**")
+                // GET /staff — readable by anyone who books or manages appointments
+                .requestMatchers(HttpMethod.GET, API_STAFF, API_STAFF_PATTERN)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                // POST/PUT/DELETE /staff — admin only
+                .requestMatchers(HttpMethod.POST, API_STAFF)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+                .requestMatchers(HttpMethod.PUT, API_STAFF_PATTERN)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+                .requestMatchers(HttpMethod.DELETE, API_STAFF_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
                 .requestMatchers(HttpMethod.GET, "/departments/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)

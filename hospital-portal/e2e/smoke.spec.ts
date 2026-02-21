@@ -3,11 +3,17 @@
  *
  * Runs against SMOKE_BASE_URL (or default localhost).
  * Should be fast, minimal, and catch critical regressions.
+ *
+ * Tests that require a live backend (login, metrics) are skipped
+ * unless SMOKE_BASE_URL is set (i.e. running against a real environment).
  */
 import { test, expect } from '@playwright/test';
 
 const BASE =
   process.env.SMOKE_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:4200';
+
+/** True when running against a real deployment (CI smoke run), not local mock */
+const LIVE_BACKEND = !!process.env.SMOKE_BASE_URL;
 
 test.describe('Smoke Tests', () => {
   test('application loads without crashing', async ({ page }) => {
@@ -26,6 +32,8 @@ test.describe('Smoke Tests', () => {
   });
 
   test('can authenticate with valid credentials', async ({ browser }) => {
+    // This test requires a live backend — skip when running locally without SMOKE_BASE_URL
+    test.skip(!LIVE_BACKEND, 'Skipped locally: requires live backend. Set SMOKE_BASE_URL to enable.');
     const context = await browser.newContext({ baseURL: BASE, storageState: undefined });
     const page = await context.newPage();
     await page.goto('/login', { waitUntil: 'networkidle' });

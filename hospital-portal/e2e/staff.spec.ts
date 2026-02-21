@@ -67,15 +67,15 @@ test.describe('Staff Module', () => {
       }
     });
 
-    test('clicking a staff card navigates to detail', async ({ page }) => {
+    test('clicking edit on a staff card opens the edit modal', async ({ page }) => {
       await page.waitForFunction(() => !document.querySelector('.loading-state'), {
         timeout: 15_000,
       });
 
       const cards = page.locator('.staff-card');
       if ((await cards.count()) > 0) {
-        await cards.first().click();
-        await page.waitForURL(/\/staff\/[a-zA-Z0-9-]+/);
+        await cards.first().getByTitle('Edit').click();
+        await expect(page.locator('.modal-header h2')).toContainText('Edit Staff');
       }
     });
   });

@@ -280,6 +280,10 @@
                       class="shift-card"
                       [attr.data-type]="shift.shiftType"
                       [attr.data-status]="shift.status"
+                      [class.cross-midnight]="shift.crossMidnight"
+                      [class.cross-midnight-end]="
+                        shift.crossMidnight && shift.shiftEndDate === day.date
+                      "
                     >
                       <div class="shift-type-icon">
                         <span class="material-symbols-outlined">{{
@@ -287,9 +291,10 @@
                         }}</span>
                       </div>
                       <div class="shift-info">
-                        <span class="shift-time"
-                          >{{ formatTime(shift.startTime) }} – {{ formatTime(shift.endTime) }}</span
-                        >
+                        <span class="shift-time">{{ formatShiftRange(shift) }}</span>
+                        @if (shift.crossMidnight && shift.shiftEndDate === day.date) {
+                          <span class="cross-midnight-badge">← cont'd</span>
+                        }
                         <span class="shift-meta">{{ formatShiftType(shift.shiftType) }}</span>
                       </div>
                       <span

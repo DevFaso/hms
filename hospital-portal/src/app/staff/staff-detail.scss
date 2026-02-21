@@ -604,6 +604,18 @@
     opacity: 0.55;
     text-decoration: line-through;
   }
+
+  // Cross-midnight shift: subtle dashed border to hint it spans midnight.
+  &.cross-midnight {
+    border-style: dashed;
+    border-color: #c7d2fe;
+  }
+
+  // End-date column rendering: muted to indicate it's a continuation.
+  &.cross-midnight-end {
+    opacity: 0.75;
+    background: #f8fafc;
+  }
 }
 
 .shift-type-icon {
@@ -633,6 +645,18 @@
     text-transform: uppercase;
     letter-spacing: 0.3px;
   }
+}
+
+// Badge shown on the end-date column for a cross-midnight shift.
+.cross-midnight-badge {
+  display: inline-block;
+  font-size: 0.5rem;
+  font-weight: 600;
+  color: #3730a3;
+  background: #e0e7ff;
+  border-radius: 4px;
+  padding: 1px 4px;
+  margin-top: 1px;
 }
 
 .shift-status-dot {

@@ -4,6 +4,11 @@
       <h1 class="page-title">Prescriptions</h1>
       <p class="page-subtitle">Medication orders and prescription management</p>
     </div>
+    <div class="page-actions">
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span> New Prescription
+      </button>
+    </div>
   </div>
   <div class="summary-cards">
     <div class="summary-card">
@@ -125,9 +130,21 @@
                 <span class="status-badge {{ getStatusClass(p.status) }}">{{ p.status }}</span>
               </td>
               <td>
-                <button class="btn-icon" (click)="viewDetail(p)" title="View prescription details">
-                  <span class="material-symbols-outlined">visibility</span>
-                </button>
+                <div class="action-group">
+                  <button
+                    class="action-link view-link"
+                    (click)="viewDetail(p)"
+                    title="View prescription details"
+                  >
+                    <span class="material-symbols-outlined">visibility</span>
+                  </button>
+                  <button class="action-link edit-link" (click)="openEdit(p)" title="Edit">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button class="action-link delete-link" (click)="confirmDelete(p)" title="Delete">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
               </td>
             </tr>
           }
@@ -196,3 +213,190 @@
     </div>
   }
 </div>
+
+<!-- ═══ CREATE / EDIT PRESCRIPTION MODAL ═══ -->
+@if (showModal()) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ editing() ? 'Edit Prescription' : 'New Prescription' }}</h2>
+        <button class="modal-close" (click)="closeModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label for="rx-patientSearch">Patient *</label>
+            @if (selectedPatient()) {
+              <div class="picker-chip">
+                <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
+                <div class="chip-info">
+                  <span class="chip-name"
+                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
+                  >
+                  <span class="chip-sub">{{ selectedPatient()!.email }}</span>
+                </div>
+                <button
+                  type="button"
+                  class="chip-clear"
+                  (click)="clearPatient()"
+                  title="Change patient"
+                >
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            } @else {
+              <div class="patient-picker-wrap">
+                <span class="material-symbols-outlined picker-search-icon">person_search</span>
+                <input
+                  id="rx-patientSearch"
+                  class="picker-input"
+                  type="text"
+                  placeholder="Search by name, email or MRN…"
+                  [value]="patientQuery()"
+                  (input)="onPatientQueryChange($any($event.target).value)"
+                  (blur)="patientDropdownOpen.set(false)"
+                  autocomplete="off"
+                />
+                @if (patientSearchLoading()) {
+                  <div class="picker-spinner"></div>
+                }
+                @if (patientDropdownOpen()) {
+                  <ul class="picker-dropdown" aria-label="Patient suggestions">
+                    @for (p of patientSuggestions(); track p.id) {
+                      <li class="picker-option" (mousedown)="selectPatient(p)">
+                        <div class="opt-avatar">{{ patientInitials(p) }}</div>
+                        <div class="opt-info">
+                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                          <span class="opt-meta"
+                            >{{ p.email }}{{ p.mrn ? ' · MRN ' + p.mrn : '' }}</span
+                          >
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
+          </div>
+          <div class="field">
+            <label for="rx-staffId">Prescriber</label>
+            <select id="rx-staffId" [(ngModel)]="form.staffId">
+              <option value="">Select prescriber...</option>
+              @for (s of staffMembers(); track s.id) {
+                <option [value]="s.id">{{ s.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="rx-medName">Medication Name *</label>
+          <input
+            id="rx-medName"
+            type="text"
+            [(ngModel)]="form.medicationName"
+            placeholder="e.g. Amoxicillin 500mg"
+            required
+          />
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="rx-dosage">Dosage</label>
+            <input id="rx-dosage" type="text" [(ngModel)]="form.dosage" placeholder="e.g. 500mg" />
+          </div>
+          <div class="field">
+            <label for="rx-frequency">Frequency</label>
+            <input
+              id="rx-frequency"
+              type="text"
+              [(ngModel)]="form.frequency"
+              placeholder="e.g. 3x daily"
+            />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="rx-duration">Duration</label>
+            <input
+              id="rx-duration"
+              type="text"
+              [(ngModel)]="form.duration"
+              placeholder="e.g. 7 days"
+            />
+          </div>
+          <div class="field">
+            <label for="rx-encounterId">Encounter ID</label>
+            <input
+              id="rx-encounterId"
+              type="text"
+              [(ngModel)]="form.encounterId"
+              placeholder="Optional"
+            />
+          </div>
+        </div>
+        <div class="field">
+          <label for="rx-notes">Notes</label>
+          <textarea
+            id="rx-notes"
+            [(ngModel)]="form.notes"
+            rows="3"
+            placeholder="Prescription notes..."
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeModal()">Cancel</button>
+        <button
+          class="btn-primary"
+          (click)="submitForm()"
+          [disabled]="saving() || !form.medicationName"
+        >
+          {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Create' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ DELETE CONFIRM ═══ -->
+@if (showDeleteConfirm()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="cancelDelete()"
+    (keydown.escape)="cancelDelete()"
+  >
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>Delete Prescription</h2>
+        <button class="modal-close" (click)="cancelDelete()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="delete-warning">
+          Are you sure you want to delete the prescription for
+          <strong>{{ deletingRx()?.medicationName }}</strong
+          >? This action cannot be undone.
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+        <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
+          {{ deleting() ? 'Deleting...' : 'Delete' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

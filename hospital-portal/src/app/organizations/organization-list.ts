@@ -26,7 +26,61 @@ export class OrganizationListComponent implements OnInit {
 
   showCreate = signal(false);
   saving = signal(false);
-  createForm: OrganizationCreateRequest = { name: '', code: '' };
+  editing = signal<OrganizationResponse | null>(null);
+  createForm: OrganizationCreateRequest = { name: '', code: '', timezone: '', contactEmail: '' };
+
+  // Delete
+  showDeleteConfirm = signal(false);
+  deletingOrg = signal<OrganizationResponse | null>(null);
+  deleting = signal(false);
+
+  /** Valid organization type enum values loaded from backend */
+  orgTypes = signal<string[]>([]);
+
+  /** Common IANA timezones for the dropdown */
+  readonly timezones: string[] = [
+    'Africa/Ouagadougou',
+    'Africa/Abidjan',
+    'Africa/Accra',
+    'Africa/Bamako',
+    'Africa/Dakar',
+    'Africa/Lagos',
+    'Africa/Nairobi',
+    'Africa/Johannesburg',
+    'Africa/Cairo',
+    'Africa/Casablanca',
+    'America/New_York',
+    'America/Chicago',
+    'America/Denver',
+    'America/Los_Angeles',
+    'America/Toronto',
+    'America/Sao_Paulo',
+    'America/Mexico_City',
+    'America/Bogota',
+    'America/Lima',
+    'America/Buenos_Aires',
+    'Asia/Dubai',
+    'Asia/Kolkata',
+    'Asia/Shanghai',
+    'Asia/Tokyo',
+    'Asia/Singapore',
+    'Asia/Seoul',
+    'Asia/Bangkok',
+    'Asia/Riyadh',
+    'Australia/Sydney',
+    'Australia/Melbourne',
+    'Europe/London',
+    'Europe/Paris',
+    'Europe/Berlin',
+    'Europe/Madrid',
+    'Europe/Rome',
+    'Europe/Amsterdam',
+    'Europe/Brussels',
+    'Europe/Moscow',
+    'Pacific/Auckland',
+    'Pacific/Honolulu',
+    'UTC',
+  ];
 
   currentPage = signal(0);
   totalPages = signal(0);
@@ -34,6 +88,9 @@ export class OrganizationListComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadOrganizations();
+    this.orgService.getTypes().subscribe({
+      next: (types) => this.orgTypes.set(types),
+    });
   }
 
   loadOrganizations(page = 0): void {
@@ -71,30 +128,86 @@ export class OrganizationListComponent implements OnInit {
   }
 
   openCreate(): void {
-    this.createForm = { name: '', code: '' };
+    this.createForm = { name: '', code: '', timezone: '', contactEmail: '' };
+    this.editing.set(null);
+    this.showCreate.set(true);
+  }
+
+  openEdit(org: OrganizationResponse): void {
+    this.editing.set(org);
+    this.createForm = {
+      name: org.name,
+      code: org.code,
+      timezone: org.defaultTimezone ?? '',
+      contactEmail: org.primaryContactEmail ?? '',
+      contactPhone: org.primaryContactPhone ?? '',
+      notes: org.onboardingNotes ?? '',
+      type: org.type ?? '',
+    };
     this.showCreate.set(true);
   }
 
   closeCreate(): void {
     this.showCreate.set(false);
+    this.editing.set(null);
   }
 
   submitCreate(): void {
-    if (!this.createForm.name || !this.createForm.code) {
-      this.toast.error('Name and code are required');
+    if (
+      !this.createForm.name ||
+      !this.createForm.code ||
+      !this.createForm.contactEmail ||
+      !this.createForm.timezone
+    ) {
+      this.toast.error('Name, code, contact email, and timezone are required');
       return;
     }
     this.saving.set(true);
-    this.orgService.create(this.createForm).subscribe({
+    const existing = this.editing();
+    const op = existing
+      ? this.orgService.update(existing.id, this.createForm)
+      : this.orgService.create(this.createForm);
+
+    op.subscribe({
       next: () => {
-        this.toast.success('Organization created');
+        this.toast.success(existing ? 'Organization updated' : 'Organization created');
         this.showCreate.set(false);
         this.saving.set(false);
+        this.editing.set(null);
         this.loadOrganizations();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to create organization');
+        this.toast.error(err?.error?.message ?? 'Operation failed');
         this.saving.set(false);
+      },
+    });
+  }
+
+  confirmDelete(org: OrganizationResponse): void {
+    this.deletingOrg.set(org);
+    this.showDeleteConfirm.set(true);
+  }
+
+  cancelDelete(): void {
+    this.showDeleteConfirm.set(false);
+    this.deletingOrg.set(null);
+  }
+
+  executeDelete(): void {
+    const org = this.deletingOrg();
+    if (!org) return;
+    this.deleting.set(true);
+    this.orgService.delete(org.id).subscribe({
+      next: () => {
+        this.toast.success('Organization deleted');
+        this.showDeleteConfirm.set(false);
+        this.deleting.set(false);
+        this.deletingOrg.set(null);
+        this.loadOrganizations();
+      },
+      error: (err) => {
+        this.toast.error(err?.error?.message ?? 'Failed to delete organization');
+        this.deleting.set(false);
       },
     });
   }
@@ -103,5 +216,13 @@ export class OrganizationListComponent implements OnInit {
     if (page >= 0 && page < this.totalPages()) {
       this.loadOrganizations(page);
     }
+  }
+
+  /** Convert SCREAMING_SNAKE enum value to Title Case display label */
+  formatType(value: string): string {
+    return value
+      .split('_')
+      .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
+      .join(' ');
   }
 }

@@ -1,7 +1,11 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ReferralService, ReferralResponse } from '../services/referral.service';
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { ReferralService, ReferralResponse, ReferralRequest } from '../services/referral.service';
+import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 
 @Component({
@@ -13,6 +17,8 @@ import { ToastService } from '../core/toast.service';
 })
 export class ReferralsComponent implements OnInit {
   private readonly referralService = inject(ReferralService);
+  private readonly hospitalService = inject(HospitalService);
+  private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
 
   referrals = signal<ReferralResponse[]>([]);
@@ -22,8 +28,140 @@ export class ReferralsComponent implements OnInit {
   activeTab = signal<'all' | 'pending' | 'active' | 'completed'>('all');
   selectedReferral = signal<ReferralResponse | null>(null);
 
+  hospitals = signal<HospitalResponse[]>([]);
+
+  // Patient picker
+  patientQuery = signal('');
+  patientSuggestions = signal<PatientResponse[]>([]);
+  patientDropdownOpen = signal(false);
+  patientSearchLoading = signal(false);
+  selectedPatient = signal<PatientResponse | null>(null);
+  private readonly patientSearch$ = new Subject<string>();
+
+  /* ── CRUD signals ── */
+  showModal = signal(false);
+  editing = signal(false);
+  saving = signal(false);
+  form: ReferralRequest = this.emptyForm();
+
+  showDeleteConfirm = signal(false);
+  deletingRef = signal<ReferralResponse | null>(null);
+  deleting = signal(false);
+
+  urgencies = ['ROUTINE', 'URGENT', 'EMERGENT', 'STAT'];
+
   ngOnInit(): void {
     this.load();
+    this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
+    this.initPatientSearch();
+  }
+
+  emptyForm(): ReferralRequest {
+    return {
+      patientId: '',
+      hospitalId: '',
+      targetSpecialty: '',
+      referralReason: '',
+      urgency: 'ROUTINE',
+    };
+  }
+
+  initPatientSearch(): void {
+    this.patientSearch$
+      .pipe(
+        debounceTime(220),
+        distinctUntilChanged(),
+        switchMap((q) => {
+          this.patientSearchLoading.set(true);
+          return this.patientService.list(undefined, q);
+        }),
+      )
+      .subscribe({
+        next: (list) => {
+          this.patientSuggestions.set(list.slice(0, 8));
+          this.patientDropdownOpen.set(list.length > 0);
+          this.patientSearchLoading.set(false);
+        },
+        error: () => this.patientSearchLoading.set(false),
+      });
+  }
+
+  onPatientQueryChange(q: string): void {
+    this.patientQuery.set(q);
+    if (q.length >= 2) this.patientSearch$.next(q);
+    else {
+      this.patientSuggestions.set([]);
+      this.patientDropdownOpen.set(false);
+    }
+  }
+
+  selectPatient(p: PatientResponse): void {
+    this.selectedPatient.set(p);
+    this.form.patientId = p.id;
+    this.patientDropdownOpen.set(false);
+    this.patientQuery.set('');
+  }
+
+  clearPatient(): void {
+    this.selectedPatient.set(null);
+    this.form.patientId = '';
+    this.patientQuery.set('');
+  }
+
+  patientInitials(p: PatientResponse): string {
+    return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
+  }
+
+  openCreate(): void {
+    this.form = this.emptyForm();
+    this.editing.set(false);
+    this.selectedPatient.set(null);
+    this.patientQuery.set('');
+    this.showModal.set(true);
+  }
+
+  closeModal(): void {
+    this.showModal.set(false);
+  }
+
+  submitForm(): void {
+    this.saving.set(true);
+    this.referralService.create(this.form).subscribe({
+      next: () => {
+        this.toast.success('Referral created');
+        this.closeModal();
+        this.saving.set(false);
+        this.load();
+      },
+      error: () => {
+        this.toast.error('Save failed');
+        this.saving.set(false);
+      },
+    });
+  }
+
+  confirmCancel(r: ReferralResponse): void {
+    this.deletingRef.set(r);
+    this.showDeleteConfirm.set(true);
+  }
+  cancelDeleteAction(): void {
+    this.showDeleteConfirm.set(false);
+    this.deletingRef.set(null);
+  }
+  executeCancel(): void {
+    this.deleting.set(true);
+    this.referralService.cancel(this.deletingRef()!.id, 'Cancelled by admin').subscribe({
+      next: () => {
+        this.toast.success('Referral cancelled');
+        this.cancelDeleteAction();
+        this.deleting.set(false);
+        this.load();
+      },
+      error: () => {
+        this.toast.error('Cancel failed');
+        this.deleting.set(false);
+      },
+    });
   }
 
   load(): void {

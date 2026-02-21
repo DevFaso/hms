@@ -17,6 +17,8 @@ export class PatientFormPage {
   readonly dobInput: Locator;
   readonly genderSelect: Locator;
   readonly bloodGroupSelect: Locator;
+  readonly countryInput: Locator;
+  readonly cityInput: Locator;
   readonly submitButton: Locator;
   readonly successMessage: Locator;
   readonly errorMessage: Locator;
@@ -29,10 +31,12 @@ export class PatientFormPage {
     this.firstNameInput = page.locator('#firstName');
     this.lastNameInput = page.locator('#lastName');
     this.emailInput = page.locator('#email');
-    this.phoneInput = page.locator('#phone');
+    this.phoneInput = page.locator('#phonePrimary');
     this.dobInput = page.locator('#dob');
     this.genderSelect = page.locator('#gender');
-    this.bloodGroupSelect = page.locator('#bloodGroup');
+    this.bloodGroupSelect = page.locator('#bloodType');
+    this.countryInput = page.locator('#country');
+    this.cityInput = page.locator('#city');
     this.submitButton = page.locator('button[type="submit"]');
     this.successMessage = page.locator('.success-message, .toast-success, .toast.success');
     this.errorMessage = page.locator('.error-message, .error-banner, .toast-error, .toast.error');
@@ -58,6 +62,8 @@ export class PatientFormPage {
     dob?: string;
     gender?: string;
     bloodGroup?: string;
+    country?: string;
+    city?: string;
   }): Promise<void> {
     await this.firstNameInput.fill(data.firstName);
     await this.lastNameInput.fill(data.lastName);
@@ -66,6 +72,8 @@ export class PatientFormPage {
     if (data.dob) await this.dobInput.fill(data.dob);
     if (data.gender) await this.genderSelect.selectOption(data.gender);
     if (data.bloodGroup) await this.bloodGroupSelect.selectOption(data.bloodGroup);
+    if (data.country) await this.countryInput.fill(data.country);
+    if (data.city) await this.cityInput.fill(data.city);
   }
 
   /** Submit the form */
@@ -82,6 +90,8 @@ export class PatientFormPage {
     dob?: string;
     gender?: string;
     bloodGroup?: string;
+    country?: string;
+    city?: string;
   }): Promise<void> {
     await this.fillForm(data);
     await this.submit();

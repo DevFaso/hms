@@ -12,8 +12,12 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
       if (error.status === 401) {
-        auth.logout();
-        void router.navigate(['/login']);
+        // Don't auto-logout on failed lock-screen password verification
+        const isVerifyPassword = req.url.includes('/auth/verify-password');
+        if (!isVerifyPassword) {
+          auth.logout();
+          void router.navigate(['/login']);
+        }
       } else if (error.status === 403) {
         void router.navigate(['/error/403']);
       }

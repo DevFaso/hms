@@ -184,10 +184,15 @@ public class StaffServiceImpl implements StaffService {
                 .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("role.notFound", new Object[]{dto.getRoleName()}, locale)));
         }
 
-        UserRoleHospitalAssignment assignment = null;
+        UserRoleHospitalAssignment assignment;
         if (role != null) {
             assignment = assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(user.getId(), hospital.getId(), role.getId())
                 .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("assignment.notFound", null, locale)));
+        } else {
+            // No role specified — resolve the user's active assignment at this hospital
+            assignment = assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospital.getId())
+                .orElseThrow(() -> new BusinessRuleException(
+                    getLocalizedMessage("staff.assignment.required", new Object[]{dto.getUserEmail(), dto.getHospitalName()}, locale)));
         }
 
         validateLicenseNumber(dto, locale);
@@ -230,15 +235,25 @@ public class StaffServiceImpl implements StaffService {
                 .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("role.notFound", new Object[]{dto.getRoleName()}, locale)));
         }
 
-        UserRoleHospitalAssignment assignment = null;
+        UserRoleHospitalAssignment assignment;
         if (role != null) {
             assignment = assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(user.getId(), hospital.getId(), role.getId())
                 .orElseThrow(() -> new ResourceNotFoundException(getLocalizedMessage("assignment.notFound", null, locale)));
         } else {
-            assignment = existingStaff.getAssignment();
+            // No role change requested — resolve the user's active assignment at this hospital
+            assignment = assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospital.getId())
+                .orElseGet(existingStaff::getAssignment); // fall back to existing if nothing active found yet
+            if (assignment == null) {
+                throw new BusinessRuleException(
+                    getLocalizedMessage("staff.assignment.required", new Object[]{dto.getUserEmail(), dto.getHospitalName()}, locale));
+            }
         }
 
-        if (!existingStaff.getLicenseNumber().equals(dto.getLicenseNumber())) {
+        String existingLic = existingStaff.getLicenseNumber();
+        String newLic = dto.getLicenseNumber();
+        boolean licenceChanged = (existingLic == null && newLic != null)
+                || (existingLic != null && !existingLic.equals(newLic));
+        if (licenceChanged) {
             validateLicenseNumber(dto, locale);
         }
 
@@ -391,7 +406,20 @@ public class StaffServiceImpl implements StaffService {
     }
 
 
+    private static final Set<String> CLINICAL_JOB_TITLES = Set.of(
+        "DOCTOR", "PHYSICIAN", "SURGEON", "ANESTHESIOLOGIST", "RADIOLOGIST",
+        "PHYSIOTHERAPIST", "PSYCHOLOGIST",
+        "NURSE", "NURSE_PRACTITIONER", "MIDWIFE",
+        "PHARMACIST",
+        "LAB_TECHNICIAN", "LABORATORY_SCIENTIST"
+    );
+
     private void validateLicenseNumber(StaffRequestDTO dto, Locale locale) {
+        String jobTitle = dto.getJobTitle();
+        // Only clinical roles require a license number
+        if (jobTitle == null || !CLINICAL_JOB_TITLES.contains(jobTitle.toUpperCase())) {
+            return;
+        }
         String licenseNumber = dto.getLicenseNumber();
         if (licenseNumber == null || licenseNumber.isBlank()) {
             throw new BusinessRuleException(
@@ -406,7 +434,10 @@ public class StaffServiceImpl implements StaffService {
     }
 
     private void validateRoleSpecificRequirements(StaffRequestDTO dto, String roleName, Locale locale) {
-        switch (roleName) {
+        if (roleName == null || roleName.isBlank()) {
+            return; // no role-specific validation needed when no role is assigned
+        }
+        switch (roleName.toUpperCase()) {
             case "ROLE_DOCTOR":
                 validateDoctorFields(dto, locale);
                 break;

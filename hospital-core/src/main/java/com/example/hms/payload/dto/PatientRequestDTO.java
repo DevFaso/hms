@@ -41,7 +41,6 @@ public class PatientRequestDTO {
     @Size(max = 10, message = "Gender cannot exceed 10 characters.")
     private String gender;
 
-    @NotBlank(message = "Address is required.")
     @Size(max = 255, message = "Address cannot exceed 255 characters.")
     private String address;
 

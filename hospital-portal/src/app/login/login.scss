@@ -12,7 +12,7 @@
   border-radius: 16px;
   padding: 2.5rem;
   width: 100%;
-  max-width: 420px;
+  max-width: 480px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
@@ -59,10 +59,32 @@
   margin-bottom: 1.5rem;
 }
 
+.success-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  color: #15803d;
+  font-size: 0.875rem;
+  margin-bottom: 1.5rem;
+}
+
 .login-form {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+}
+
+.form-row {
+  display: flex;
+  gap: 0.75rem;
+
+  .form-group {
+    flex: 1;
+  }
 }
 
 .form-group {
@@ -211,6 +233,14 @@
   }
 }
 
+.btn-bootstrap {
+  background: linear-gradient(135deg, #059669, #047857);
+
+  &:hover:not(:disabled) {
+    box-shadow: 0 4px 12px rgba(5, 150, 105, 0.4);
+  }
+}
+
 .spinner {
   width: 18px;
   height: 18px;
@@ -271,6 +301,11 @@
   }
 
   .login-form {
+    gap: 1rem;
+  }
+
+  .form-row {
+    flex-direction: column;
     gap: 1rem;
   }
 

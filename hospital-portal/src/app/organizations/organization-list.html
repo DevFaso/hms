@@ -38,6 +38,7 @@
             <th>Contact</th>
             <th>Hospitals</th>
             <th>Status</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -59,7 +60,7 @@
               <td>
                 <span class="code-badge">{{ org.code }}</span>
               </td>
-              <td>{{ org.type || '—' }}</td>
+              <td>{{ org.type ? formatType(org.type) : '—' }}</td>
               <td>{{ org.primaryContactEmail || '—' }}</td>
               <td>
                 <span class="count-chip">{{ org.hospitals.length }}</span>
@@ -72,6 +73,16 @@
                 >
                   {{ org.active ? 'Active' : 'Inactive' }}
                 </span>
+              </td>
+              <td>
+                <div class="action-group">
+                  <button class="action-link edit" title="Edit" (click)="openEdit(org)">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button class="action-link delete" title="Delete" (click)="confirmDelete(org)">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
               </td>
             </tr>
           }
@@ -124,7 +135,7 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>Create Organization</h2>
+          <h2>{{ editing() ? 'Edit Organization' : 'Create Organization' }}</h2>
           <button class="modal-close" (click)="closeCreate()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -154,43 +165,110 @@
               />
             </div>
             <div class="field">
-              <label for="orgDesc">Description</label>
-              <textarea
-                id="orgDesc"
-                rows="3"
-                [(ngModel)]="createForm.description"
-                name="description"
-                placeholder="Description..."
-              ></textarea>
-            </div>
-            <div class="field">
-              <label for="orgType">Type</label>
-              <input
-                id="orgType"
-                type="text"
-                [(ngModel)]="createForm.type"
-                name="type"
-                placeholder="e.g., HOSPITAL_NETWORK"
-              />
-            </div>
-            <div class="field">
-              <label for="orgEmail">Contact Email</label>
+              <label for="orgEmail">Contact Email *</label>
               <input
                 id="orgEmail"
                 type="email"
-                [(ngModel)]="createForm.primaryContactEmail"
-                name="email"
+                [(ngModel)]="createForm.contactEmail"
+                name="contactEmail"
                 placeholder="admin@org.com"
+                required
               />
+            </div>
+            <div class="field">
+              <label for="orgTimezone">Timezone *</label>
+              <select id="orgTimezone" [(ngModel)]="createForm.timezone" name="timezone" required>
+                <option value="" disabled selected>Select timezone…</option>
+                @for (tz of timezones; track tz) {
+                  <option [value]="tz">{{ tz }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="orgType">Type</label>
+              <select id="orgType" [(ngModel)]="createForm.type" name="type">
+                <option value="" disabled selected>Select type…</option>
+                @for (t of orgTypes(); track t) {
+                  <option [value]="t">{{ formatType(t) }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="orgPhone">Contact Phone</label>
+              <input
+                id="orgPhone"
+                type="tel"
+                [(ngModel)]="createForm.contactPhone"
+                name="contactPhone"
+                placeholder="+1 (555) 000-0000"
+              />
+            </div>
+            <div class="field">
+              <label for="orgNotes">Notes</label>
+              <textarea
+                id="orgNotes"
+                rows="3"
+                [(ngModel)]="createForm.notes"
+                name="notes"
+                placeholder="Onboarding notes..."
+              ></textarea>
             </div>
           </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary" (click)="closeCreate()">Cancel</button>
             <button type="submit" class="btn-primary" [disabled]="saving()">
-              {{ saving() ? 'Creating...' : 'Create' }}
+              {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Create' }}
             </button>
           </div>
         </form>
+      </dialog>
+    </div>
+  }
+
+  <!-- Delete Confirmation Modal -->
+  @if (showDeleteConfirm()) {
+    <div
+      class="modal-backdrop"
+      (click)="cancelDelete()"
+      (keydown.escape)="cancelDelete()"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal"
+        [open]="showDeleteConfirm()"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="cancelDelete()"
+        tabindex="-1"
+      >
+        <div class="modal-header">
+          <h2>Delete Organization</h2>
+          <button class="modal-close" (click)="cancelDelete()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="delete-warning">
+            <span class="material-symbols-outlined warning-icon">warning</span>
+            <p>
+              Are you sure you want to delete <strong>{{ deletingOrg()?.name }}</strong
+              >?
+            </p>
+            <p class="delete-detail">
+              This action cannot be undone. All associated data will be permanently removed.
+            </p>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+          <button
+            type="button"
+            class="btn-danger"
+            [disabled]="deleting()"
+            (click)="executeDelete()"
+          >
+            {{ deleting() ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
       </dialog>
     </div>
   }

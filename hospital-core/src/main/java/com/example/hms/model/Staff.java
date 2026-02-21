@@ -91,7 +91,7 @@ public class Staff extends BaseEntity {
     @Column(length = 100)
     private String specialization;
 
-    @Column(name = "license_number", nullable = false, length = 100)
+    @Column(name = "license_number", length = 100)
     private String licenseNumber;
 
     @Column(name = "npi", length = 20, unique = true)

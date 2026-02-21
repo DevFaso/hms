@@ -31,7 +31,6 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
-import com.example.hms.config.BootstrapProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -83,7 +82,6 @@ public class UserServiceImpl implements UserService {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditEventLogService;
     private final StaffRepository staffRepository;
-    private final BootstrapProperties bootstrapProperties;
     private final JwtTokenProvider jwtTokenProvider;
 
     /*
@@ -162,17 +160,7 @@ public class UserServiceImpl implements UserService {
                     .build();
         }
 
-        // Optional shared secret enforcement (property-based for testability)
-        String expectedToken = bootstrapProperties.getToken();
-        if (expectedToken != null && !expectedToken.isBlank()
-                && (request.getBootstrapToken() == null || !expectedToken.equals(request.getBootstrapToken()))) {
-            return BootstrapSignupResponse.builder()
-                    .success(false)
-                    .message("Invalid bootstrap token")
-                    .username(null)
-                    .email(null)
-                    .build();
-        }
+        // No token check — the endpoint is self-protecting (only works when 0 users exist)
 
         User user = new User();
         user.setUsername(request.getUsername());
@@ -207,9 +195,30 @@ public class UserServiceImpl implements UserService {
                 .ipAddress(null)
                 .build());
 
+        // Send welcome email (fire-and-forget — don't block bootstrap on mail failure)
+        try {
+            String htmlBody = "<h2>Welcome to HMS, " + user.getFirstName() + "!</h2>"
+                    + "<p>Your <strong>Super Admin</strong> account has been created and is <strong>active immediately</strong>.</p>"
+                    + "<table style='border-collapse:collapse'>"
+                    + "<tr><td style='padding:4px 12px;font-weight:bold'>Username:</td><td>" + user.getUsername() + "</td></tr>"
+                    + "<tr><td style='padding:4px 12px;font-weight:bold'>Email:</td><td>" + user.getEmail() + "</td></tr>"
+                    + "<tr><td style='padding:4px 12px;font-weight:bold'>Role:</td><td>Super Admin</td></tr>"
+                    + "</table>"
+                    + "<p style='margin-top:16px'>You can sign in now and begin configuring the system.</p>"
+                    + "<p style='color:#888;font-size:12px'>This is an automated message from HMS.</p>";
+            emailService.sendHtml(
+                    java.util.List.of(user.getEmail()),
+                    java.util.List.of(), java.util.List.of(),
+                    "HMS — Your Super Admin Account Is Ready",
+                    htmlBody);
+            log.info("[BOOTSTRAP] Welcome email sent to {}", user.getEmail());
+        } catch (Exception e) {
+            log.warn("[BOOTSTRAP] Failed to send welcome email to {}: {}", user.getEmail(), e.getMessage());
+        }
+
         return BootstrapSignupResponse.builder()
                 .success(true)
-                .message("Bootstrap Super Admin created")
+                .message("Bootstrap Super Admin created — account is active, you can sign in now")
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .build();

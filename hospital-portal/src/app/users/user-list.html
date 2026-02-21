@@ -37,6 +37,7 @@
             <th>Role</th>
             <th>Profile</th>
             <th>Status</th>
+            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -66,6 +67,16 @@
                 >
                   {{ user.active ? 'Active' : 'Inactive' }}
                 </span>
+              </td>
+              <td>
+                <div class="action-group">
+                  <button class="action-link edit" title="Edit" (click)="openEdit(user)">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button class="action-link delete" title="Delete" (click)="confirmDelete(user)">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
               </td>
             </tr>
           }
@@ -118,13 +129,14 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>Register New User</h2>
+          <h2>{{ editing() ? 'Edit User' : 'Register New User' }}</h2>
           <button class="modal-close" (click)="closeCreate()">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
         <form (ngSubmit)="submitCreate()">
           <div class="modal-body">
+            <!-- Name Row -->
             <div class="field-row">
               <div class="field">
                 <label for="firstName">First Name *</label>
@@ -147,48 +159,202 @@
                 />
               </div>
             </div>
-            <div class="field">
-              <label for="username">Username *</label>
-              <input
-                id="username"
-                type="text"
-                [(ngModel)]="createForm.username"
-                name="username"
-                required
-              />
+
+            <!-- Username & Email -->
+            <div class="field-row">
+              <div class="field">
+                <label for="username">Username *</label>
+                <input
+                  id="username"
+                  type="text"
+                  [(ngModel)]="createForm.username"
+                  name="username"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="email">Email *</label>
+                <input
+                  id="email"
+                  type="email"
+                  [(ngModel)]="createForm.email"
+                  name="email"
+                  required
+                />
+              </div>
             </div>
-            <div class="field">
-              <label for="email">Email *</label>
-              <input id="email" type="email" [(ngModel)]="createForm.email" name="email" required />
+
+            <!-- Password & Phone -->
+            <div class="field-row">
+              <div class="field">
+                <label for="password">Password *</label>
+                <input
+                  id="password"
+                  type="password"
+                  [(ngModel)]="createForm.password"
+                  name="password"
+                  required
+                />
+              </div>
+              <div class="field">
+                <label for="phoneNumber">Phone Number *</label>
+                <input
+                  id="phoneNumber"
+                  type="tel"
+                  [(ngModel)]="createForm.phoneNumber"
+                  name="phoneNumber"
+                  required
+                  placeholder="+226 70 00 00 00"
+                />
+              </div>
             </div>
+
+            <!-- Roles (multi-select checkboxes) -->
+            <fieldset class="field">
+              <legend>Roles *</legend>
+              <div class="role-checkbox-group">
+                @for (role of availableRoles(); track role.id) {
+                  <label class="role-checkbox">
+                    <input
+                      type="checkbox"
+                      [checked]="selectedRoles.includes(role.code)"
+                      (change)="onRoleToggle(role.code, $any($event.target).checked)"
+                    />
+                    <span class="role-label">{{ role.name || role.code }}</span>
+                  </label>
+                }
+                @if (availableRoles().length === 0) {
+                  <span class="hint-text">Loading roles...</span>
+                }
+              </div>
+            </fieldset>
+
+            <!-- License Number (conditional) -->
+            @if (licenseRequired) {
+              <div class="field">
+                <label for="licenseNumber">License Number *</label>
+                <input
+                  id="licenseNumber"
+                  type="text"
+                  [(ngModel)]="createForm.licenseNumber"
+                  name="licenseNumber"
+                  required
+                  placeholder="Medical license number"
+                />
+                <span class="hint-text"
+                  >Required for medical roles (Doctor, Nurse, Lab Scientist, Pharmacist)</span
+                >
+              </div>
+            }
+
+            <!-- Hospital -->
             <div class="field">
-              <label for="password">Password *</label>
-              <input
-                id="password"
-                type="password"
-                [(ngModel)]="createForm.password"
-                name="password"
-                required
-              />
+              <label for="hospitalId">Hospital</label>
+              <select id="hospitalId" [(ngModel)]="createForm.hospitalId" name="hospitalId">
+                <option value="">— None —</option>
+                @for (h of availableHospitals(); track h.id) {
+                  <option [value]="h.id">{{ h.name }}</option>
+                }
+              </select>
             </div>
+
+            <!-- Job Title & Employment Type -->
+            <div class="field-row">
+              <div class="field">
+                <label for="jobTitle">Job Title</label>
+                <select id="jobTitle" [(ngModel)]="createForm.jobTitle" name="jobTitle">
+                  <option value="">— Select —</option>
+                  @for (jt of jobTitles; track jt) {
+                    <option [value]="jt">{{ formatEnumLabel(jt) }}</option>
+                  }
+                </select>
+              </div>
+              <div class="field">
+                <label for="employmentType">Employment Type</label>
+                <select
+                  id="employmentType"
+                  [(ngModel)]="createForm.employmentType"
+                  name="employmentType"
+                >
+                  <option value="">— Select —</option>
+                  @for (et of employmentTypes; track et) {
+                    <option [value]="et">{{ formatEnumLabel(et) }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+
+            <!-- Specialization -->
             <div class="field">
-              <label for="roles">Roles (comma-separated)</label>
-              <input
-                id="roles"
-                type="text"
-                [(ngModel)]="roleInput"
-                name="roles"
-                placeholder="ROLE_DOCTOR, ROLE_NURSE"
-              />
+              <label for="specialization">Specialization</label>
+              <select
+                id="specialization"
+                [(ngModel)]="createForm.specialization"
+                name="specialization"
+              >
+                <option value="">— Select —</option>
+                @for (sp of specializations; track sp) {
+                  <option [value]="sp">{{ formatEnumLabel(sp) }}</option>
+                }
+              </select>
             </div>
           </div>
           <div class="modal-actions">
             <button type="button" class="btn-secondary" (click)="closeCreate()">Cancel</button>
             <button type="submit" class="btn-primary" [disabled]="saving()">
-              {{ saving() ? 'Registering...' : 'Register' }}
+              {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Register' }}
             </button>
           </div>
         </form>
+      </dialog>
+    </div>
+  }
+
+  <!-- Delete Confirmation Modal -->
+  @if (showDeleteConfirm()) {
+    <div
+      class="modal-backdrop"
+      (click)="cancelDelete()"
+      (keydown.escape)="cancelDelete()"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal"
+        [open]="showDeleteConfirm()"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="cancelDelete()"
+        tabindex="-1"
+      >
+        <div class="modal-header">
+          <h2>Delete User</h2>
+          <button class="modal-close" (click)="cancelDelete()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="delete-warning">
+            <span class="material-symbols-outlined warning-icon">warning</span>
+            <p>
+              Are you sure you want to delete
+              <strong>{{ deletingUser()?.firstName }} {{ deletingUser()?.lastName }}</strong
+              >?
+            </p>
+            <p class="delete-detail">
+              This will permanently remove this user account and all associated data.
+            </p>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+          <button
+            type="button"
+            class="btn-danger"
+            [disabled]="deleting()"
+            (click)="executeDelete()"
+          >
+            {{ deleting() ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
       </dialog>
     </div>
   }

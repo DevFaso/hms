@@ -4,6 +4,11 @@
       <h1 class="page-title">Admissions</h1>
       <p class="page-subtitle">Inpatient admissions and bed management</p>
     </div>
+    <div class="page-actions">
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span> New Admission
+      </button>
+    </div>
   </div>
   <div class="summary-cards">
     <div class="summary-card">
@@ -90,6 +95,7 @@
             <th scope="col">Chief Complaint</th>
             <th scope="col">Admitted</th>
             <th scope="col">Status</th>
+            <th scope="col" class="actions-col">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -110,6 +116,16 @@
               <td>
                 <span class="status-badge {{ getStatusClass(a.status) }}">{{ a.status }}</span>
               </td>
+              <td>
+                <div class="action-group">
+                  <button class="action-link edit-link" (click)="openEdit(a)">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button class="action-link delete-link" (click)="confirmDelete(a)">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              </td>
             </tr>
           }
         </tbody>
@@ -117,3 +133,227 @@
     </div>
   }
 </div>
+
+<!-- ═══ CREATE / EDIT ADMISSION MODAL ═══ -->
+@if (showModal()) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>{{ editing() ? 'Edit Admission' : 'New Admission' }}</h2>
+        <button class="modal-close" (click)="closeModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label for="adm-patientSearch">Patient *</label>
+            @if (selectedPatient()) {
+              <div class="picker-chip">
+                <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
+                <div class="chip-info">
+                  <span class="chip-name"
+                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
+                  >
+                  <span class="chip-sub">{{ selectedPatient()!.email }}</span>
+                </div>
+                <button
+                  type="button"
+                  class="chip-clear"
+                  (click)="clearPatient()"
+                  title="Change patient"
+                >
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            } @else {
+              <div class="patient-picker-wrap">
+                <span class="material-symbols-outlined picker-search-icon">person_search</span>
+                <input
+                  id="adm-patientSearch"
+                  class="picker-input"
+                  type="text"
+                  placeholder="Search by name, email or MRN…"
+                  [value]="patientQuery()"
+                  (input)="onPatientQueryChange($any($event.target).value)"
+                  (blur)="patientDropdownOpen.set(false)"
+                  autocomplete="off"
+                />
+                @if (patientSearchLoading()) {
+                  <div class="picker-spinner"></div>
+                }
+                @if (patientDropdownOpen()) {
+                  <ul class="picker-dropdown" aria-label="Patient suggestions">
+                    @for (p of patientSuggestions(); track p.id) {
+                      <li class="picker-option" (mousedown)="selectPatient(p)">
+                        <div class="opt-avatar">{{ patientInitials(p) }}</div>
+                        <div class="opt-info">
+                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                          <span class="opt-meta"
+                            >{{ p.email }}{{ p.mrn ? ' · MRN ' + p.mrn : '' }}</span
+                          >
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
+          </div>
+          <div class="field">
+            <label for="adm-hospitalId">Hospital *</label>
+            <select
+              id="adm-hospitalId"
+              [value]="form.hospitalId"
+              (change)="onHospitalChange($any($event.target).value)"
+              required
+            >
+              <option value="">Select hospital...</option>
+              @for (h of hospitals(); track h.id) {
+                <option [value]="h.id">{{ h.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="adm-providerId">Admitting Provider *</label>
+            <select id="adm-providerId" [(ngModel)]="form.admittingProviderId" required>
+              <option value="">Select provider...</option>
+              @for (s of staffMembers(); track s.id) {
+                <option [value]="s.id">{{ s.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="adm-roomBed">Room / Bed</label>
+            <input
+              id="adm-roomBed"
+              type="text"
+              [(ngModel)]="form.roomBed"
+              placeholder="e.g. Room 201-B"
+            />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="adm-type">Admission Type *</label>
+            <select id="adm-type" [(ngModel)]="form.admissionType" required>
+              @for (t of admissionTypes; track t) {
+                <option [value]="t">{{ t }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="adm-acuity">Acuity Level *</label>
+            <select id="adm-acuity" [(ngModel)]="form.acuityLevel" required>
+              @for (l of acuityLevels; track l) {
+                <option [value]="l">{{ l }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="adm-dateTime">Admission Date/Time *</label>
+            <input
+              id="adm-dateTime"
+              type="datetime-local"
+              [(ngModel)]="form.admissionDateTime"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="adm-deptId">Department</label>
+            <select id="adm-deptId" [(ngModel)]="form.departmentId">
+              <option value="">
+                {{ form.hospitalId ? 'Any department' : 'Select hospital first' }}
+              </option>
+              @for (d of departments(); track d.id) {
+                <option [value]="d.id">{{ d.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="adm-complaint">Chief Complaint *</label>
+          <textarea
+            id="adm-complaint"
+            [(ngModel)]="form.chiefComplaint"
+            rows="2"
+            placeholder="Reason for admission..."
+            required
+          ></textarea>
+        </div>
+        <div class="field">
+          <label for="adm-notes">Admission Notes</label>
+          <textarea
+            id="adm-notes"
+            [(ngModel)]="form.admissionNotes"
+            rows="2"
+            placeholder="Additional notes..."
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeModal()">Cancel</button>
+        <button
+          class="btn-primary"
+          (click)="submitForm()"
+          [disabled]="
+            saving() ||
+            !form.patientId ||
+            !form.hospitalId ||
+            !form.admittingProviderId ||
+            !form.admissionDateTime ||
+            !form.chiefComplaint
+          "
+        >
+          {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Create' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ DELETE CONFIRM ═══ -->
+@if (showDeleteConfirm()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="cancelDelete()"
+    (keydown.escape)="cancelDelete()"
+  >
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>Delete Admission</h2>
+        <button class="modal-close" (click)="cancelDelete()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="delete-warning">
+          Are you sure you want to delete the admission for
+          <strong>{{ deletingAdm()?.patientName }}</strong
+          >? This action cannot be undone.
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+        <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
+          {{ deleting() ? 'Deleting...' : 'Delete' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

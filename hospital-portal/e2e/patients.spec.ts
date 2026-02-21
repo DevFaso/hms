@@ -80,6 +80,8 @@ test.describe('Patients Module', () => {
       await expect(patientFormPage.dobInput).toBeVisible();
       await expect(patientFormPage.genderSelect).toBeVisible();
       await expect(patientFormPage.bloodGroupSelect).toBeVisible();
+      await expect(patientFormPage.countryInput).toBeVisible();
+      await expect(patientFormPage.cityInput).toBeVisible();
       await expect(patientFormPage.submitButton).toBeVisible();
     });
 
@@ -101,6 +103,8 @@ test.describe('Patients Module', () => {
         dob: '1985-06-15',
         gender: 'MALE',
         bloodGroup: 'O+',
+        country: 'Burkina Faso',
+        city: 'Ouagadougou',
       });
 
       // Verify the form fields are filled

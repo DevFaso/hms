@@ -1,7 +1,17 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ImagingService, ImagingOrderResponse } from '../services/imaging.service';
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import {
+  ImagingService,
+  ImagingOrderResponse,
+  ImagingOrderRequest,
+  ImagingModality,
+  ImagingPriority,
+} from '../services/imaging.service';
+import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 
 @Component({
@@ -13,6 +23,8 @@ import { ToastService } from '../core/toast.service';
 })
 export class ImagingComponent implements OnInit {
   private readonly imagingService = inject(ImagingService);
+  private readonly hospitalService = inject(HospitalService);
+  private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
 
   orders = signal<ImagingOrderResponse[]>([]);
@@ -22,8 +34,183 @@ export class ImagingComponent implements OnInit {
   activeTab = signal<'all' | 'ordered' | 'completed' | 'cancelled'>('all');
   selectedOrder = signal<ImagingOrderResponse | null>(null);
 
+  hospitals = signal<HospitalResponse[]>([]);
+
+  // Patient picker
+  patientQuery = signal('');
+  patientSuggestions = signal<PatientResponse[]>([]);
+  patientDropdownOpen = signal(false);
+  patientSearchLoading = signal(false);
+  selectedPatient = signal<PatientResponse | null>(null);
+  private readonly patientSearch$ = new Subject<string>();
+
+  /* ── CRUD signals ── */
+  showModal = signal(false);
+  editing = signal(false);
+  saving = signal(false);
+  editId = '';
+  form: ImagingOrderRequest = this.emptyForm();
+
+  showDeleteConfirm = signal(false);
+  deletingItem = signal<ImagingOrderResponse | null>(null);
+  deleting = signal(false);
+
+  modalities: ImagingModality[] = [
+    'XRAY',
+    'CT',
+    'MRI',
+    'ULTRASOUND',
+    'PET',
+    'MAMMOGRAPHY',
+    'FLUOROSCOPY',
+    'NUCLEAR',
+  ];
+  priorities: ImagingPriority[] = ['ROUTINE', 'URGENT', 'STAT', 'ASAP'];
+
   ngOnInit(): void {
     this.load();
+    this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
+    this.initPatientSearch();
+  }
+
+  emptyForm(): ImagingOrderRequest {
+    return {
+      patientId: '',
+      hospitalId: '',
+      modality: 'XRAY' as ImagingModality,
+      studyType: '',
+      priority: 'ROUTINE' as ImagingPriority,
+    };
+  }
+
+  initPatientSearch(): void {
+    this.patientSearch$
+      .pipe(
+        debounceTime(220),
+        distinctUntilChanged(),
+        switchMap((q) => {
+          this.patientSearchLoading.set(true);
+          return this.patientService.list(undefined, q);
+        }),
+      )
+      .subscribe({
+        next: (list) => {
+          this.patientSuggestions.set(list.slice(0, 8));
+          this.patientDropdownOpen.set(list.length > 0);
+          this.patientSearchLoading.set(false);
+        },
+        error: () => this.patientSearchLoading.set(false),
+      });
+  }
+
+  onPatientQueryChange(q: string): void {
+    this.patientQuery.set(q);
+    if (q.length >= 2) this.patientSearch$.next(q);
+    else {
+      this.patientSuggestions.set([]);
+      this.patientDropdownOpen.set(false);
+    }
+  }
+
+  selectPatient(p: PatientResponse): void {
+    this.selectedPatient.set(p);
+    this.form.patientId = p.id;
+    this.patientDropdownOpen.set(false);
+    this.patientQuery.set('');
+  }
+
+  clearPatient(): void {
+    this.selectedPatient.set(null);
+    this.form.patientId = '';
+    this.patientQuery.set('');
+  }
+
+  patientInitials(p: PatientResponse): string {
+    return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
+  }
+
+  openCreate(): void {
+    this.form = this.emptyForm();
+    this.editing.set(false);
+    this.editId = '';
+    this.selectedPatient.set(null);
+    this.patientQuery.set('');
+    this.showModal.set(true);
+  }
+
+  openEdit(o: ImagingOrderResponse): void {
+    this.form = {
+      patientId: o.patientId,
+      hospitalId: o.hospitalId ?? '',
+      modality: o.modality ?? 'XRAY',
+      studyType: o.studyType ?? '',
+      bodyRegion: o.bodyRegion ?? '',
+      priority: o.priority ?? 'ROUTINE',
+      laterality: o.laterality ?? '',
+      clinicalQuestion: o.clinicalQuestion ?? '',
+    };
+    this.selectedPatient.set({
+      id: o.patientId,
+      firstName: o.patientDisplayName?.split(' ')[0] ?? '',
+      lastName: o.patientDisplayName?.split(' ').slice(1).join(' ') ?? '',
+      email: '',
+      mrn: o.patientMrn,
+    } as PatientResponse);
+    this.editId = o.id;
+    this.editing.set(true);
+    this.showModal.set(true);
+  }
+
+  closeModal(): void {
+    this.showModal.set(false);
+  }
+
+  submitForm(): void {
+    this.saving.set(true);
+    const op = this.editing()
+      ? this.imagingService.updateOrder(this.editId, this.form)
+      : this.imagingService.createOrder(this.form);
+    op.subscribe({
+      next: () => {
+        this.toast.success(this.editing() ? 'Order updated' : 'Order created');
+        this.closeModal();
+        this.saving.set(false);
+        this.load();
+      },
+      error: () => {
+        this.toast.error('Save failed');
+        this.saving.set(false);
+      },
+    });
+  }
+
+  confirmCancel(o: ImagingOrderResponse): void {
+    this.deletingItem.set(o);
+    this.showDeleteConfirm.set(true);
+  }
+  cancelDeleteAction(): void {
+    this.showDeleteConfirm.set(false);
+    this.deletingItem.set(null);
+  }
+  executeCancel(): void {
+    this.deleting.set(true);
+    this.imagingService
+      .updateOrderStatus(this.deletingItem()!.id, {
+        status: 'CANCELLED',
+        notes: 'Cancelled by admin',
+      })
+      .subscribe({
+        next: () => {
+          this.toast.success('Order cancelled');
+          this.cancelDeleteAction();
+          this.deleting.set(false);
+          this.load();
+        },
+        error: () => {
+          this.toast.error('Cancel failed');
+          this.deleting.set(false);
+        },
+      });
   }
 
   load(): void {

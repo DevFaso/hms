@@ -1,7 +1,17 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { EncounterService, EncounterResponse } from '../services/encounter.service';
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import {
+  EncounterService,
+  EncounterRequest,
+  EncounterResponse,
+  EncounterType,
+} from '../services/encounter.service';
+import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import { StaffService, StaffResponse } from '../services/staff.service';
+import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 
 @Component({
@@ -13,6 +23,9 @@ import { ToastService } from '../core/toast.service';
 })
 export class EncountersComponent implements OnInit {
   private readonly encounterService = inject(EncounterService);
+  private readonly hospitalService = inject(HospitalService);
+  private readonly staffService = inject(StaffService);
+  private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
 
   encounters = signal<EncounterResponse[]>([]);
@@ -24,8 +37,214 @@ export class EncountersComponent implements OnInit {
   noteContent = '';
   showNoteForm = signal(false);
 
+  // Dropdowns
+  hospitals = signal<HospitalResponse[]>([]);
+  staffMembers = signal<{ id: string; name: string }[]>([]);
+  private allStaff: StaffResponse[] = [];
+  departments = signal<{ id: string; name: string }[]>([]);
+
+  // Patient picker
+  patientQuery = signal('');
+  patientSuggestions = signal<PatientResponse[]>([]);
+  patientDropdownOpen = signal(false);
+  patientSearchLoading = signal(false);
+  selectedPatient = signal<PatientResponse | null>(null);
+  private readonly patientSearch$ = new Subject<string>();
+
+  // CRUD
+  showModal = signal(false);
+  editing = signal(false);
+  saving = signal(false);
+  editingId = '';
+  form: EncounterRequest = this.emptyForm();
+  encounterTypes: EncounterType[] = [
+    'OUTPATIENT',
+    'INPATIENT',
+    'EMERGENCY',
+    'TELEMEDICINE',
+    'HOME_VISIT',
+  ];
+
+  // Delete
+  showDeleteConfirm = signal(false);
+  deletingEnc = signal<EncounterResponse | null>(null);
+  deleting = signal(false);
+
+  emptyForm(): EncounterRequest {
+    return {
+      patientId: '',
+      staffId: '',
+      hospitalId: '',
+      encounterType: 'OUTPATIENT',
+      encounterDate: '',
+    };
+  }
+
   ngOnInit(): void {
     this.loadEncounters();
+    this.hospitalService.list().subscribe({ next: (h) => this.hospitals.set(h) });
+    this.staffService.list().subscribe({
+      next: (list) => {
+        this.allStaff = list;
+        this.staffMembers.set(list.map((s) => ({ id: s.id, name: s.name || s.email })));
+      },
+    });
+    this.initPatientSearch();
+  }
+
+  // ── Patient picker ──
+  initPatientSearch(): void {
+    this.patientSearch$
+      .pipe(
+        debounceTime(220),
+        distinctUntilChanged(),
+        switchMap((q) => {
+          this.patientSearchLoading.set(true);
+          return this.patientService.list(undefined, q);
+        }),
+      )
+      .subscribe({
+        next: (list) => {
+          this.patientSuggestions.set(list.slice(0, 8));
+          this.patientDropdownOpen.set(list.length > 0);
+          this.patientSearchLoading.set(false);
+        },
+        error: () => this.patientSearchLoading.set(false),
+      });
+  }
+
+  onPatientQueryChange(q: string): void {
+    this.patientQuery.set(q);
+    if (q.length >= 2) this.patientSearch$.next(q);
+    else {
+      this.patientSuggestions.set([]);
+      this.patientDropdownOpen.set(false);
+    }
+  }
+
+  selectPatient(p: PatientResponse): void {
+    this.selectedPatient.set(p);
+    this.form.patientId = p.id;
+    this.patientDropdownOpen.set(false);
+    this.patientQuery.set('');
+  }
+
+  clearPatient(): void {
+    this.selectedPatient.set(null);
+    this.form.patientId = '';
+    this.patientQuery.set('');
+  }
+
+  patientInitials(p: PatientResponse): string {
+    return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
+  }
+
+  // ── Department derivation ──
+  onHospitalChange(hospitalId: string): void {
+    this.form.hospitalId = hospitalId;
+    this.form.departmentId = undefined;
+    this.loadDepartmentsFor(hospitalId);
+  }
+
+  loadDepartmentsFor(hospitalId: string): void {
+    if (!hospitalId) {
+      this.departments.set([]);
+      return;
+    }
+    const seen = new Set<string>();
+    const depts = this.allStaff
+      .filter((s) => s.hospitalId === hospitalId && s.departmentId)
+      .reduce<{ id: string; name: string }[]>((acc, s) => {
+        if (!seen.has(s.departmentId!)) {
+          seen.add(s.departmentId!);
+          acc.push({ id: s.departmentId!, name: s.departmentName || s.departmentId! });
+        }
+        return acc;
+      }, []);
+    this.departments.set(depts);
+  }
+
+  // ── CRUD ──
+  openCreate(): void {
+    this.form = this.emptyForm();
+    this.editing.set(false);
+    this.editingId = '';
+    this.selectedPatient.set(null);
+    this.patientQuery.set('');
+    this.departments.set([]);
+    this.showModal.set(true);
+  }
+
+  openEdit(enc: EncounterResponse): void {
+    this.editing.set(true);
+    this.editingId = enc.id;
+    this.form = {
+      patientId: enc.patientId,
+      staffId: enc.staffId,
+      hospitalId: enc.hospitalId,
+      departmentId: enc.departmentId || undefined,
+      encounterType: enc.encounterType,
+      encounterDate: enc.encounterDate?.split('T')[0] || '',
+      notes: enc.notes || undefined,
+    };
+    // Pre-fill patient picker display with existing data
+    this.selectedPatient.set({
+      id: enc.patientId,
+      firstName: enc.patientName?.split(' ')[0] ?? '',
+      lastName: enc.patientName?.split(' ').slice(1).join(' ') ?? '',
+      email: '',
+    } as PatientResponse);
+    this.loadDepartmentsFor(enc.hospitalId ?? '');
+    this.showModal.set(true);
+  }
+
+  closeModal(): void {
+    this.showModal.set(false);
+  }
+
+  submitForm(): void {
+    this.saving.set(true);
+    const op = this.editing()
+      ? this.encounterService.update(this.editingId, this.form)
+      : this.encounterService.create(this.form);
+    op.subscribe({
+      next: () => {
+        this.toast.success(this.editing() ? 'Encounter updated' : 'Encounter created');
+        this.closeModal();
+        this.loadEncounters();
+        this.saving.set(false);
+      },
+      error: () => {
+        this.toast.error('Failed to save encounter');
+        this.saving.set(false);
+      },
+    });
+  }
+
+  confirmDelete(enc: EncounterResponse): void {
+    this.deletingEnc.set(enc);
+    this.showDeleteConfirm.set(true);
+  }
+  cancelDelete(): void {
+    this.showDeleteConfirm.set(false);
+    this.deletingEnc.set(null);
+  }
+  executeDelete(): void {
+    const enc = this.deletingEnc();
+    if (!enc) return;
+    this.deleting.set(true);
+    this.encounterService.delete(enc.id).subscribe({
+      next: () => {
+        this.toast.success('Encounter deleted');
+        this.cancelDelete();
+        this.loadEncounters();
+        this.deleting.set(false);
+      },
+      error: () => {
+        this.toast.error('Failed to delete encounter');
+        this.deleting.set(false);
+      },
+    });
   }
 
   loadEncounters(): void {

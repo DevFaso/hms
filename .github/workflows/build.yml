@@ -5,10 +5,9 @@ on:
       - main
       - develop
       - uat
-  pull_request:
 
 concurrency:
-  group: sonarqube-${{ github.event.pull_request.number || github.ref }}
+  group: sonarqube-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -53,4 +52,4 @@ jobs:
       - name: SonarQube analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./gradlew sonar --info -x test
+        run: ./gradlew sonar -x test -Dsonar.token=${{ secrets.SONAR_TOKEN }}

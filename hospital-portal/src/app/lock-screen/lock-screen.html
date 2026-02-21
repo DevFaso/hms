@@ -1,0 +1,78 @@
+<div class="lock-overlay">
+  <div class="lock-card">
+    <!-- Lock icon -->
+    <div class="lock-icon-wrapper">
+      <span class="material-symbols-outlined lock-icon">lock</span>
+    </div>
+
+    <!-- User info -->
+    <div class="user-section">
+      <div class="avatar-lock">
+        @if (userAvatarUrl) {
+          <img [src]="userAvatarUrl" alt="Avatar" class="avatar-img" />
+        } @else {
+          {{ userInitials }}
+        }
+      </div>
+      <h2 class="user-name">{{ userName }}</h2>
+      <p class="user-role">{{ userRole }}</p>
+    </div>
+
+    <p class="lock-message">Your session has been locked due to inactivity.</p>
+    <p class="lock-sub">Enter your password to continue.</p>
+
+    @if (error) {
+      <div class="error-banner" role="alert">
+        <span class="material-symbols-outlined">error</span>
+        <span>{{ error }}</span>
+      </div>
+    }
+
+    <form (ngSubmit)="unlock()" class="unlock-form">
+      <div class="input-wrapper">
+        <span class="material-symbols-outlined input-icon">lock</span>
+        <input
+          id="unlock-password"
+          [type]="showPassword ? 'text' : 'password'"
+          [(ngModel)]="password"
+          name="password"
+          placeholder="Enter your password"
+          [disabled]="loading()"
+        />
+        <button
+          type="button"
+          class="toggle-password"
+          (click)="togglePassword()"
+          tabindex="-1"
+          aria-label="Toggle password visibility"
+        >
+          <span class="material-symbols-outlined">
+            {{ showPassword ? 'visibility_off' : 'visibility' }}
+          </span>
+        </button>
+      </div>
+
+      <button type="submit" class="btn-unlock" [disabled]="loading() || !password">
+        @if (loading()) {
+          <span class="spinner"></span>
+          <span>Verifying...</span>
+        } @else {
+          <span class="material-symbols-outlined">lock_open</span>
+          <span>Unlock</span>
+        }
+      </button>
+    </form>
+
+    <div class="lock-footer">
+      <p class="footer-hint">Not {{ userName }}?</p>
+      <button class="btn-switch-user" (click)="switchUser()">
+        <span class="material-symbols-outlined">person_add</span>
+        Sign in as a different user
+      </button>
+      <button class="btn-signout" (click)="signOut()">
+        <span class="material-symbols-outlined">logout</span>
+        Sign out
+      </button>
+    </div>
+  </div>
+</div>
