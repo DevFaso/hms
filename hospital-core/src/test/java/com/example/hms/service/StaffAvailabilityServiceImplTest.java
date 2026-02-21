@@ -332,13 +332,14 @@ class StaffAvailabilityServiceImplTest {
     }
 
     @Test
-    void isStaffAvailable_noRecord_returnsFalse() {
+    void isStaffAvailable_noRecord_returnsTrue() {
         LocalDateTime appointmentTime = LocalDateTime.of(LocalDate.now().plusDays(1), LocalTime.of(10, 0));
         when(staffRepository.existsByIdAndActiveTrue(staffId)).thenReturn(true);
         when(availabilityRepository.findByStaff_IdAndDate(staffId, appointmentTime.toLocalDate()))
             .thenReturn(Optional.empty());
 
-        assertThat(service.isStaffAvailable(staffId, appointmentTime)).isFalse();
+        // No availability record = open schedule → staff is available by default
+        assertThat(service.isStaffAvailable(staffId, appointmentTime)).isTrue();
     }
 
     @Test
