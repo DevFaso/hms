@@ -59,10 +59,11 @@ jobs:
         if: github.event_name == 'push'
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          BRANCH_NAME: ${{ github.ref_name }}
         run: |
           ./gradlew sonar -x test \
-            -Dsonar.token=${{ secrets.SONAR_TOKEN }} \
-            -Dsonar.branch.name=${{ github.ref_name }}
+            -Dsonar.token="${SONAR_TOKEN}" \
+            -Dsonar.branch.name="${BRANCH_NAME}"
 
       - name: SonarQube analysis (pull request)
         if: github.event_name == 'pull_request'

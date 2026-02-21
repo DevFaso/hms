@@ -34,7 +34,9 @@ public class AdminSignupRequest {
     @NotBlank(message = "Email is required.")
     private String email;
 
-    @NotBlank(message = "Password is required.")
+    // Password is optional for non-patient staff registrations: when omitted the service
+    // auto-generates a temporary password and sets forcePasswordChange=true so the user
+    // is prompted to choose a permanent one on first login.
     private String password;
 
     @NotBlank(message = "First name is required.")

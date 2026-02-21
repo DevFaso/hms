@@ -726,14 +726,25 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         syncLegacyRole(saved.getUser(), saved.getRole());
         recordAssignmentConfirmationAudit(saved, saved.getUser());
 
+        // Build the DTO before clearing so temp credentials are included in this
+        // one-time response.  After the DTO is constructed the plaintext is wiped
+        // from the database so it is never surfaced again.
+        UserRoleAssignmentPublicViewDTO result = buildPublicView(saved);
+        if (saved.getTempPlainPassword() != null) {
+            saved.setTempPlainPassword(null);
+            assignmentRepository.save(saved);
+            log.info("🔐 Temp credentials delivered via verify response for assignment '{}'; plaintext cleared.", sanitizedCode);
+        }
+
         log.info("✅ Assignment '{}' self-verified by assignee", sanitizedCode);
-        return buildPublicView(saved);
+        return result;
     }
 
     private UserRoleAssignmentPublicViewDTO buildPublicView(UserRoleHospitalAssignment assignment) {
         Role role = assignment.getRole();
         Hospital hospital = assignment.getHospital();
         User assignee = assignment.getUser();
+        String tempPlain = assignment.getTempPlainPassword();
         return UserRoleAssignmentPublicViewDTO.builder()
             .assignmentId(assignment.getId())
             .assignmentCode(assignment.getAssignmentCode())
@@ -748,6 +759,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
             .profileCompletionUrl(assignmentLinkService.buildProfileCompletionUrl(assignment.getAssignmentCode()))
             .profileChecklist(buildRoleProfileChecklist(role))
+            .tempUsername(tempPlain != null && assignee != null ? assignee.getUsername() : null)
+            .tempPassword(tempPlain)
             .build();
     }
 
@@ -1523,11 +1536,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 tempPlain
             );
 
-            // One-time delivery: clear the plaintext from the DB immediately after sending
             if (tempPlain != null) {
-                assignment.setTempPlainPassword(null);
-                assignmentRepository.save(assignment);
-                log.info("🔐 Temp credentials included in onboarding email for assignment '{}'; plaintext cleared.", assignment.getId());
+                log.info("🔐 Temp credentials included in onboarding email for assignment '{}'.", assignment.getId());
             }
         } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to send assignment confirmation email for assignment '{}': {}", assignment.getId(), ex.getMessage());
