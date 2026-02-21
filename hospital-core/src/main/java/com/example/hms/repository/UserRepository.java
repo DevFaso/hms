@@ -61,9 +61,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findActiveByEmailOrPhone(@Param("identifier") String identifier);
 
     /* ---------- Rich fetch for mapping a single user (roles + profiles) ---------- */
+    // NOTE: avoid deep nested paths like "staffProfile.assignment.role" — in Hibernate 6
+    // the @Query + @EntityGraph combination returns Optional.empty() when the intermediate
+    // association (staffProfile) is null, even though the user row exists.
     @EntityGraph(attributePaths = {
         "userRoles", "userRoles.role",
-        "staffProfile", "staffProfile.assignment", "staffProfile.assignment.role",
+        "staffProfile",
         "patientProfile"
     })
     @Query("select u from User u where u.id = :id and u.isDeleted = false")

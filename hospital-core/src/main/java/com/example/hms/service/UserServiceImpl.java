@@ -140,7 +140,10 @@ public class UserServiceImpl implements UserService {
                     saved.getEmail(), e.getMessage());
         }
 
-        User reloaded = userRepository.findByIdWithRolesAndProfiles(saved.getId())
+        // Use plain findById — the @EntityGraph path "staffProfile.assignment.role"
+        // in findByIdWithRolesAndProfiles returns Optional.empty() in Hibernate 6
+        // when staffProfile is null (new patient users have no staff profile).
+        User reloaded = userRepository.findById(saved.getId())
                 .orElseThrow(() -> new IllegalStateException("User disappeared after save"));
         Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(reloaded);
 
@@ -324,8 +327,13 @@ public class UserServiceImpl implements UserService {
     }
 
     // ---- 6) Reload + map ----
+    // Use plain findById — the @EntityGraph path "staffProfile.assignment.role"
+    // in findByIdWithRolesAndProfiles returns Optional.empty() in Hibernate 6 when
+    // the user has no staffProfile yet (e.g. ADMIN role assigned to an existing user
+    // whose staff record hasn't been created yet).  Lazy fields load fine since we
+    // are still inside the @Transactional boundary.
     log.debug("[RELOAD] fetching user by id={} after save", user.getId());
-    final User reloaded = userRepository.findByIdWithRolesAndProfiles(user.getId())
+    final User reloaded = userRepository.findById(user.getId())
         .orElseThrow(() -> new IllegalStateException(
             "User disappeared after save (id=" + user.getId() + ")"));
     final Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(reloaded);
