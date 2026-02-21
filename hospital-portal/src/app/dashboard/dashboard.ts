@@ -111,32 +111,43 @@ export class DashboardComponent implements OnInit {
       if (--pending <= 0) this.loading.set(false);
     };
 
-    // Try super-admin summary
-    pending++;
-    this.dashboardService.getSummary().subscribe({
-      next: (summary) => {
-        this.adminSummary.set(summary);
-        this.recentAuditEvents.set(summary.recentAuditEvents ?? []);
-        this.isSuperAdmin.set(true);
-        done();
-      },
-      error: () => done(),
-    });
+    // Super-admin summary — only call if user has the SUPER_ADMIN role
+    if (this.auth.hasAnyRole(['ROLE_SUPER_ADMIN'])) {
+      pending++;
+      this.dashboardService.getSummary().subscribe({
+        next: (summary) => {
+          this.adminSummary.set(summary);
+          this.recentAuditEvents.set(summary.recentAuditEvents ?? []);
+          this.isSuperAdmin.set(true);
+          done();
+        },
+        error: () => done(),
+      });
+    }
 
-    // Try clinical dashboard
-    pending++;
-    this.dashboardService.getClinicalDashboard().subscribe({
-      next: (dashboard) => {
-        this.kpis.set(dashboard.kpis ?? []);
-        this.alerts.set(dashboard.alerts ?? []);
-        this.inboxCounts.set(dashboard.inboxCounts ?? null);
-        this.onCallStatus.set(dashboard.onCallStatus ?? null);
-        this.roomedPatients.set(dashboard.roomedPatients ?? []);
-        this.isClinician.set(true);
-        done();
-      },
-      error: () => done(),
-    });
+    // Clinical dashboard — only call if user is a clinician
+    const clinicalRoles = [
+      'ROLE_DOCTOR',
+      'ROLE_PHYSICIAN',
+      'ROLE_SURGEON',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+    ];
+    if (this.auth.hasAnyRole(clinicalRoles)) {
+      pending++;
+      this.dashboardService.getClinicalDashboard().subscribe({
+        next: (dashboard) => {
+          this.kpis.set(dashboard.kpis ?? []);
+          this.alerts.set(dashboard.alerts ?? []);
+          this.inboxCounts.set(dashboard.inboxCounts ?? null);
+          this.onCallStatus.set(dashboard.onCallStatus ?? null);
+          this.roomedPatients.set(dashboard.roomedPatients ?? []);
+          this.isClinician.set(true);
+          done();
+        },
+        error: () => done(),
+      });
+    }
 
     // Today's appointments
     if (this.permissions.hasPermission('View Appointments')) {
@@ -161,6 +172,11 @@ export class DashboardComponent implements OnInit {
         },
         error: () => done(),
       });
+    }
+
+    // If no async tasks were scheduled, release the loading state immediately
+    if (pending === 0) {
+      this.loading.set(false);
     }
   }
 

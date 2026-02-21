@@ -100,7 +100,7 @@ public class EncounterController {
     // Read by ID
     // ----------------------------------------------------------
     @GetMapping(value = "/{id}", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_PATIENT','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_PATIENT','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get an encounter by ID")
     public ResponseEntity<EncounterResponseDTO> getById(
         @PathVariable UUID id,
@@ -111,10 +111,10 @@ public class EncounterController {
     }
 
     // ----------------------------------------------------------
-    // Paged & filtered list (receptionist auto-scoped to own hospital)
+    // Paged & filtered list
     // ----------------------------------------------------------
     @GetMapping(consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Search/List encounters")
     public ResponseEntity<Page<EncounterResponseDTO>> list(
         @RequestParam(required = false) UUID patientId,
@@ -135,18 +135,11 @@ public class EncounterController {
         }
 
         boolean isSuperAdmin = authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
-        boolean isReceptionist = !isSuperAdmin && authUtils.hasAuthority(auth, "ROLE_RECEPTIONIST");
         UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
         UUID resolvedHospitalId = hospitalId;
 
-        if (isReceptionist) {
-            // receptionist is always scoped to JWT hospital
-            if (jwtHospitalId == null) {
-                throw new BusinessException("Receptionist must be affiliated with a hospital (missing hospitalId in token).");
-            }
-            resolvedHospitalId = jwtHospitalId;
-        } else if (!isSuperAdmin && resolvedHospitalId == null) {
-            // doctors/nurses/admins: fallback to JWT if provided
+        if (!isSuperAdmin && resolvedHospitalId == null) {
+            // doctors/nurses/admins: fallback to JWT hospital if not specified
             resolvedHospitalId = jwtHospitalId;
         }
 
@@ -190,7 +183,7 @@ public class EncounterController {
     // By Doctor
     // ----------------------------------------------------------
     @GetMapping(value = "/doctor/{identifier}", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get encounters by doctor (UUID | username | email | license)")
     public ResponseEntity<List<EncounterResponseDTO>> byDoctor(
         @PathVariable String identifier,

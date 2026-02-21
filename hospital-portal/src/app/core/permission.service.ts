@@ -19,6 +19,16 @@ export class PermissionService {
       'Access All Patient Records',
       'Update Patient Records',
       'Register Patients',
+      // Clinical
+      'Create Encounters',
+      'Admit Patients',
+      'Create Prescriptions',
+      'Document Nursing Notes',
+      'Request Imaging Studies',
+      'Request Consultations',
+      'Create Treatment Plans',
+      'Create Referrals',
+      // Admin
       'View Staff',
       'Manage Staff',
       'View Staff Schedules',
@@ -41,27 +51,57 @@ export class PermissionService {
       'Schedule Appointments',
       'View Patient Records',
       'Update Patient Records',
+      // Clinical — gates nav items
+      'Create Encounters',
+      'Admit Patients',
+      'Create Prescriptions',
+      'Request Imaging Studies',
+      'Request Consultations',
+      'Create Treatment Plans',
+      'Create Referrals',
+      // Lab / Lab orders
       'Order Lab Tests',
       'View Lab',
+      // Scheduling
       'View Staff Schedules',
+      // Notifications
+      'View Notifications',
     ],
     ROLE_NURSE: [
       'View Dashboard',
       'View Appointments',
       'View Patient Records',
       'Update Patient Records',
+      // Clinical
+      'Create Encounters',
+      'Document Nursing Notes',
+      'Request Consultations',
+      'Create Treatment Plans',
+      'Create Referrals',
+      'Admit Patients',
+      // Vitals / meds
       'Update Vital Signs',
       'Administer Medications',
       'View Lab',
+      // Notifications
+      'View Notifications',
     ],
     ROLE_MIDWIFE: [
       'View Dashboard',
       'View Appointments',
       'View Patient Records',
       'Update Patient Records',
+      // Clinical
+      'Create Encounters',
+      'Admit Patients',
+      'Create Referrals',
+      'Create Treatment Plans',
+      // Maternity-specific
       'Perform Prenatal Assessments',
       'Create Birth Plans',
       'Perform Postpartum Care',
+      // Notifications
+      'View Notifications',
     ],
     ROLE_RECEPTIONIST: [
       'View Dashboard',
@@ -74,8 +114,30 @@ export class PermissionService {
       'Register Patients',
       'View Patient Records',
       'Update Patient Contact Info',
+      // Notifications
+      'View Notifications',
     ],
-    ROLE_LAB_SCIENTIST: ['View Dashboard', 'View Lab', 'Process Lab Tests', 'View Patient Records'],
+    ROLE_LAB_SCIENTIST: [
+      'View Dashboard',
+      'View Lab',
+      'Process Lab Tests',
+      'View Patient Records',
+      'View Notifications',
+    ],
+    ROLE_PHARMACIST: [
+      'View Dashboard',
+      'View Prescriptions',
+      'Create Prescriptions',
+      'Dispense Medications',
+      'View Patient Records',
+      'View Notifications',
+    ],
+    ROLE_RADIOLOGIST: [
+      'View Dashboard',
+      'View Patient Records',
+      'Request Imaging Studies',
+      'View Notifications',
+    ],
     ROLE_PATIENT: ['View Dashboard', 'View Appointments', 'View Patient Records'],
   };
 

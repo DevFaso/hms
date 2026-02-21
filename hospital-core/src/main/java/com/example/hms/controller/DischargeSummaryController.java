@@ -76,7 +76,7 @@ public class DischargeSummaryController {
 
     @Operation(summary = "Get discharge summary by ID")
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_SCIENTIST','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_SCIENTIST')")
     public ResponseEntity<DischargeSummaryResponseDTO> getDischargeSummaryById(
         @PathVariable UUID id,
         Locale locale

@@ -51,7 +51,7 @@ public class TreatmentPlanController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get treatment plan by id")
     public ResponseEntity<TreatmentPlanResponseDTO> getById(@PathVariable UUID id) {
         return ResponseEntity.ok(treatmentPlanService.getById(id));

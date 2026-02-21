@@ -67,7 +67,7 @@ public class MaternalHistoryController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('VIEW_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN', 'ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('VIEW_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get maternal history by ID",
                description = "Retrieves a specific maternal history record by its ID")
     public ResponseEntity<MaternalHistoryResponseDTO> getMaternalHistoryById(
@@ -80,7 +80,7 @@ public class MaternalHistoryController {
     }
 
     @GetMapping("/patient/{patientId}/current")
-    @PreAuthorize("hasAnyAuthority('VIEW_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN', 'ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('VIEW_MATERNAL_HISTORY', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get current maternal history for patient",
                description = "Retrieves the latest version of maternal history for a patient")
     public ResponseEntity<MaternalHistoryResponseDTO> getCurrentMaternalHistory(
