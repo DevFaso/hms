@@ -95,10 +95,10 @@
             <div class="form-row">
               <div class="field">
                 <label for="sUser">User *</label>
-                <select id="sUser" [(ngModel)]="form.userId" name="userId" required>
+                <select id="sUser" [(ngModel)]="form.userEmail" name="userEmail" required>
                   <option value="">Select user</option>
                   @for (u of users(); track u.id) {
-                    <option [value]="u.id">
+                    <option [value]="u.email">
                       {{ u.firstName }} {{ u.lastName }} ({{ u.email }})
                     </option>
                   }
@@ -106,10 +106,10 @@
               </div>
               <div class="field">
                 <label for="sHospital">Hospital *</label>
-                <select id="sHospital" [(ngModel)]="form.hospitalId" name="hospitalId" required>
+                <select id="sHospital" [(ngModel)]="form.hospitalName" name="hospitalName" required>
                   <option value="">Select hospital</option>
                   @for (h of hospitals(); track h.id) {
-                    <option [value]="h.id">{{ h.name }}</option>
+                    <option [value]="h.name">{{ h.name }}</option>
                   }
                 </select>
               </div>
@@ -172,15 +172,27 @@
               </div>
             </div>
 
-            <div class="field">
-              <label for="sDept">Department</label>
-              <input
-                id="sDept"
-                type="text"
-                [(ngModel)]="form.departmentId"
-                name="departmentId"
-                placeholder="Department ID (optional)"
-              />
+            <div class="form-row">
+              <div class="field">
+                <label for="sDept">Department</label>
+                <input
+                  id="sDept"
+                  type="text"
+                  [(ngModel)]="form.departmentName"
+                  name="departmentName"
+                  placeholder="Department name (optional)"
+                />
+              </div>
+              <div class="field">
+                <label for="sStartDate">Start Date *</label>
+                <input
+                  id="sStartDate"
+                  type="date"
+                  [(ngModel)]="form.startDate"
+                  name="startDate"
+                  required
+                />
+              </div>
             </div>
           </div>
           <div class="modal-actions">

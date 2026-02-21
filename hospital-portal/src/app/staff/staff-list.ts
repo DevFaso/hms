@@ -202,13 +202,15 @@ export class StaffListComponent implements OnInit {
     const rawSpec = member.specialization ?? '';
     const validSpec = this.specializations.includes(rawSpec) ? rawSpec : '';
     this.form = {
-      userId: member.userId,
-      hospitalId: member.hospitalId,
-      departmentId: member.departmentId ?? '',
+      userEmail: member.email,
+      hospitalName: member.hospitalName ?? '',
+      departmentName: member.departmentName ?? '',
       specialization: validSpec,
       licenseNumber: member.licenseNumber ?? '',
       jobTitle: member.jobTitle ?? '',
       employmentType: member.employmentType ?? '',
+      startDate: member.startDate ?? '',
+      roleName: member.roleCode ?? '',
     };
     this.showModal.set(true);
   }
@@ -219,17 +221,19 @@ export class StaffListComponent implements OnInit {
   }
 
   submitForm(): void {
-    if (!this.form.userId || !this.form.hospitalId) {
+    if (!this.form.userEmail || !this.form.hospitalName) {
       this.toast.error('User and hospital are required');
       return;
     }
     this.saving.set(true);
     const payload: StaffUpsertRequest = { ...this.form };
-    if (!payload.departmentId) delete payload.departmentId;
+    if (!payload.departmentName) delete payload.departmentName;
     if (!payload.specialization) delete payload.specialization;
     if (!payload.licenseNumber) delete payload.licenseNumber;
     if (!payload.jobTitle) delete payload.jobTitle;
     if (!payload.employmentType) delete payload.employmentType;
+    if (!payload.startDate) delete payload.startDate;
+    if (!payload.roleName) delete payload.roleName;
     // Never send specialization or licenseNumber for non-clinical roles
     if (!this.needsSpecialization) {
       delete payload.specialization;
@@ -309,13 +313,15 @@ export class StaffListComponent implements OnInit {
 
   private emptyForm(): StaffUpsertRequest {
     return {
-      userId: '',
-      hospitalId: '',
-      departmentId: '',
+      userEmail: '',
+      hospitalName: '',
+      departmentName: '',
       specialization: '',
       licenseNumber: '',
       jobTitle: '',
       employmentType: '',
+      startDate: new Date().toISOString().slice(0, 10), // today as default start date
+      roleName: '',
     };
   }
 }
