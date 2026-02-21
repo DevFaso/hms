@@ -2328,7 +2328,7 @@ CREATE TABLE IF NOT EXISTS hospital.staff (
     id UUID NOT NULL,
     user_id UUID NOT NULL,
     npi VARCHAR(20),
-    license_number VARCHAR(100) NOT NULL,
+    license_number VARCHAR(100),
     specialization VARCHAR(100),
     signature_certificate_id VARCHAR(120),
     name VARCHAR(500),
