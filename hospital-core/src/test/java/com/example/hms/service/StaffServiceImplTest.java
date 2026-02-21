@@ -783,7 +783,7 @@ class StaffServiceImplTest {
     }
 
     @Test
-    void createStaff_noRoleName_throwsNPE() {
+    void createStaff_noRoleName_succeedsWithoutNPE() {
         StaffRequestDTO dto = StaffRequestDTO.builder()
             .userEmail("doctor@test.com")
             .hospitalName("Test Hospital")
@@ -795,9 +795,15 @@ class StaffServiceImplTest {
         when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
         when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
         when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
+        when(staffMapper.toStaff(dto, user, hospital, null, null)).thenReturn(staff);
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
 
-        assertThatThrownBy(() -> staffService.createStaff(dto, locale))
-            .isInstanceOf(NullPointerException.class);
+        StaffResponseDTO result = staffService.createStaff(dto, locale);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getId()).isEqualTo(staffId.toString());
+        verify(staffRepository).save(staff);
     }
 
     @Test
