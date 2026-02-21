@@ -179,10 +179,10 @@
                   <span class="info-value">{{ user()!.phoneNumber || '—' }}</span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">Profile Type</span>
-                  <span class="info-value">{{ user()!.profileType ?? 'N/A' }}</span>
+                  <span class="info-label">Role</span>
+                  <span class="info-value profile-type-badge">{{ sessionProfileType() }}</span>
                 </div>
-                @if (user()!.licenseNumber) {
+                @if (showLicenseNumber()) {
                   <div class="info-item">
                     <span class="info-label">License Number</span>
                     <span class="info-value">{{ user()!.licenseNumber }}</span>
@@ -223,16 +223,20 @@
                   <span class="info-label">Last Login</span>
                   <span class="info-value">{{ lastLogin() }}</span>
                 </div>
-                <div class="info-item">
-                  <span class="info-label">User ID</span>
-                  <span class="info-value id-value">{{ user()!.id }}</span>
-                </div>
+                @if (isSuperAdmin()) {
+                  <div class="info-item">
+                    <span class="info-label">User ID</span>
+                    <span class="info-value id-value" title="Internal system ID">{{
+                      user()!.id
+                    }}</span>
+                  </div>
+                }
               </div>
             </div>
           </div>
 
-          <!-- Role Assignments -->
-          @if (assignments().length > 0) {
+          <!-- Role Assignments — staff/admin only -->
+          @if (isStaffOrAdmin() && assignments().length > 0) {
             <div class="card full-width">
               <div class="card-header">
                 <span class="material-symbols-outlined card-icon">assignment_ind</span>

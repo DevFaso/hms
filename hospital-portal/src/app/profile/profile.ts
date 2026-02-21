@@ -73,6 +73,60 @@ export class ProfileComponent implements OnInit {
     }));
   });
 
+  /**
+   * True when the JWT carries any administrative / clinical staff role.
+   * A user logged in through the staff portal is ALWAYS treated as staff here,
+   * even if a patient record happens to exist for them in the DB.
+   */
+  isStaffOrAdmin = computed(() => {
+    const staffRoles = [
+      'ROLE_SUPER_ADMIN',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_ADMIN',
+      'ROLE_DOCTOR',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_RECEPTIONIST',
+      'ROLE_LAB_SCIENTIST',
+      'ROLE_STAFF',
+    ];
+    return this.auth.hasAnyRole(staffRoles);
+  });
+
+  isSuperAdmin = computed(() => this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']));
+
+  /**
+   * The profile-type label to display — derived from the JWT session roles,
+   * never from the raw `profileType` DB field returned by the API.
+   * A Super Admin who also happens to have a patient record should see
+   * "Super Admin" here, not "PATIENT".
+   */
+  sessionProfileType = computed((): string => {
+    const roles = this.auth.getRoles();
+    const priority: [string, string][] = [
+      ['ROLE_SUPER_ADMIN', 'Super Admin'],
+      ['ROLE_HOSPITAL_ADMIN', 'Hospital Admin'],
+      ['ROLE_ADMIN', 'Administrator'],
+      ['ROLE_DOCTOR', 'Doctor'],
+      ['ROLE_NURSE', 'Nurse'],
+      ['ROLE_MIDWIFE', 'Midwife'],
+      ['ROLE_RECEPTIONIST', 'Receptionist'],
+      ['ROLE_LAB_SCIENTIST', 'Lab Scientist'],
+      ['ROLE_STAFF', 'Staff Member'],
+      ['ROLE_PATIENT', 'Patient'],
+    ];
+    for (const [role, label] of priority) {
+      if (roles.includes(role)) return label;
+    }
+    return 'User';
+  });
+
+  /** Show license number only for clinical staff roles in this session. */
+  showLicenseNumber = computed(() => {
+    const clinicalRoles = ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_LAB_SCIENTIST'];
+    return this.auth.hasAnyRole(clinicalRoles) && !!this.user()?.licenseNumber;
+  });
+
   memberSince = computed(() => {
     const u = this.user();
     if (!u?.createdAt) return '';
@@ -417,7 +471,7 @@ export class ProfileComponent implements OnInit {
     return (eventType ?? '')
       .replaceAll('_', ' ')
       .toLowerCase()
-      .replace(/\b\w/g, (c) => c.toUpperCase());
+      .replaceAll(/\b\w/g, (c) => c.toUpperCase());
   }
 
   formatTimestamp(ts: string): string {
