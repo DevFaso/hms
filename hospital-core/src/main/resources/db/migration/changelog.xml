@@ -47,4 +47,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V4: Make hospital.staff.license_number nullable
+         Non-clinical staff (RECEPTIONIST, ADMIN, etc.) do not hold a
+         medical licence. Clinical-role validation is enforced at the
+         application layer (StaffServiceImpl.validateLicenseNumber).
+         ================================================================= -->
+    <changeSet id="V4-staff-license-number-nullable" author="hms-team" runOnChange="false">
+        <sqlFile path="V4__staff_license_number_nullable.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
