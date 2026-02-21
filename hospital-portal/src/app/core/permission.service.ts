@@ -72,9 +72,11 @@ export class PermissionService {
       'View Appointments',
       'View Patient Records',
       'Update Patient Records',
+      'Register Patients',
       // Clinical
       'Create Encounters',
       'Document Nursing Notes',
+      'Create Prescriptions',
       'Request Consultations',
       'Create Treatment Plans',
       'Create Referrals',
@@ -91,9 +93,12 @@ export class PermissionService {
       'View Appointments',
       'View Patient Records',
       'Update Patient Records',
+      'Register Patients',
       // Clinical
       'Create Encounters',
       'Admit Patients',
+      'Document Nursing Notes',
+      'Create Prescriptions',
       'Create Referrals',
       'Create Treatment Plans',
       // Maternity-specific

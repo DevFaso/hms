@@ -170,15 +170,37 @@
           <div class="rw-credentials-grid">
             <div class="rw-credentials-item">
               <span class="rw-credentials-label">Username</span>
-              <span class="rw-credentials-value">{{ assignment.tempUsername }}</span>
+              <div class="rw-credentials-value-row">
+                <span class="rw-credentials-value">{{ assignment.tempUsername }}</span>
+                <button
+                  class="rw-copy-btn"
+                  [class.rw-copy-btn--copied]="copiedUsername"
+                  (click)="copyToClipboard(assignment.tempUsername!, 'username')"
+                  [title]="copiedUsername ? 'Copied!' : 'Copy username'"
+                  type="button"
+                >
+                  {{ copiedUsername ? '✓ Copied' : 'Copy' }}
+                </button>
+              </div>
             </div>
             <div class="rw-credentials-item">
               <span class="rw-credentials-label">Temporary Password</span>
-              <span class="rw-credentials-value">{{ assignment.tempPassword }}</span>
+              <div class="rw-credentials-value-row">
+                <span class="rw-credentials-value">{{ assignment.tempPassword }}</span>
+                <button
+                  class="rw-copy-btn"
+                  [class.rw-copy-btn--copied]="copiedPassword"
+                  (click)="copyToClipboard(assignment.tempPassword!, 'password')"
+                  [title]="copiedPassword ? 'Copied!' : 'Copy password'"
+                  type="button"
+                >
+                  {{ copiedPassword ? '✓ Copied' : 'Copy' }}
+                </button>
+              </div>
             </div>
           </div>
           <p class="rw-credentials-warn">
-            ⚠️ These credentials are shown only once. Screenshot or note them before continuing.
+            ⚠️ These credentials are shown only once. Screenshot or copy them before continuing.
           </p>
         </div>
       } @else {

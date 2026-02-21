@@ -40,6 +40,10 @@ export class RoleWelcomeComponent implements OnInit {
   verifyError = '';
   errorMessage = '';
 
+  /** Copy-to-clipboard feedback */
+  copiedUsername = false;
+  copiedPassword = false;
+
   @ViewChildren('digitInput') digitInputs!: QueryList<ElementRef<HTMLInputElement>>;
 
   private readonly route = inject(ActivatedRoute);
@@ -138,6 +142,21 @@ export class RoleWelcomeComponent implements OnInit {
 
   get isCodeComplete(): boolean {
     return this.digits.every((d) => d.length === 1);
+  }
+
+  // ─── Copy to clipboard ──────────────────────────────────────────────────
+
+  copyToClipboard(text: string, field: 'username' | 'password'): void {
+    if (!this.isBrowser || !navigator.clipboard) return;
+    navigator.clipboard.writeText(text).then(() => {
+      if (field === 'username') {
+        this.copiedUsername = true;
+        setTimeout(() => (this.copiedUsername = false), 2000);
+      } else {
+        this.copiedPassword = true;
+        setTimeout(() => (this.copiedPassword = false), 2000);
+      }
+    });
   }
 
   // ─── Submission ──────────────────────────────────────────────────────────

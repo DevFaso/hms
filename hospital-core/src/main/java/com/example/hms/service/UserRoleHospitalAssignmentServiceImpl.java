@@ -1369,6 +1369,34 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             : role.getName(); // fallback
     }
 
+    /**
+     * Converts a raw role code (e.g. {@code ROLE_SUPER_ADMIN}) into a human-readable
+     * display name (e.g. {@code Super Admin}) suitable for emails and UI labels.
+     * Falls back to the role's display name if set, otherwise strips the ROLE_ prefix
+     * and title-cases the remaining words.
+     */
+    private String beautifyRoleDisplay(Role role) {
+        if (role == null) return "Assigned Role";
+        // Prefer the role's configured name if it looks human-readable
+        String name = role.getName();
+        if (name != null && !name.isBlank() && !name.toUpperCase().equals(name)) {
+            return name.trim();
+        }
+        String code = getRoleCode(role);
+        if (code == null || code.isBlank()) return "Assigned Role";
+        // Strip ROLE_ prefix, replace _ with space, title-case each word
+        String stripped = code.replaceFirst("(?i)^ROLE_", "").replace("_", " ").toLowerCase();
+        String[] words = stripped.split(" ");
+        StringBuilder sb = new StringBuilder();
+        for (String word : words) {
+            if (!word.isEmpty()) {
+                if (!sb.isEmpty()) sb.append(" ");
+                sb.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+            }
+        }
+        return sb.toString();
+    }
+
     private boolean isRoleCode(String actual, String expected) {
         if (actual == null || expected == null) {
             return false;
@@ -1516,7 +1544,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             }
 
             String userDisplayName = resolveDisplayName(user, email);
-            String roleDisplay = assignment.getRole() != null ? getRoleCode(assignment.getRole()) : "assigned role";
+            String roleDisplay = beautifyRoleDisplay(assignment.getRole());
             String hospitalDisplay = resolveHospitalName(assignment.getHospital());
             String profileCompletionUrl = assignmentLinkService.buildProfileCompletionUrl(assignment.getAssignmentCode());
 

@@ -412,6 +412,12 @@
   opacity: 0.75;
 }
 
+.rw-credentials-value-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .rw-credentials-value {
   font-family: 'Courier New', Courier, monospace;
   font-size: 1.1rem;
@@ -422,8 +428,34 @@
   border-radius: 0.375rem;
   padding: 0.375rem 0.75rem;
   letter-spacing: 0.04em;
+  flex: 1;
   -webkit-user-select: all;
   user-select: all;
+}
+
+.rw-copy-btn {
+  flex-shrink: 0;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #c2410c;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+
+  &:hover {
+    background: #ffedd5;
+    border-color: #fb923c;
+  }
+
+  &--copied {
+    background: #dcfce7;
+    border-color: #86efac;
+    color: #15803d;
+  }
 }
 
 .rw-credentials-warn {
