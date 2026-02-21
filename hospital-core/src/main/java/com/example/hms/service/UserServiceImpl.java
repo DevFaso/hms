@@ -289,7 +289,35 @@ public class UserServiceImpl implements UserService {
     final User user = existingByIdentity.or(() -> existingByLicense)
         .orElseGet(() -> createNewUser(request, username, email, phone, isPatient, tempPasswordHolder));
 
-    if ((existingByIdentity.isPresent() || existingByLicense.isPresent())
+    // If the matched user was previously soft-deleted, resurrect them.
+    // Without this, a 201 is returned but the user remains isDeleted=true / isActive=false
+    // and never appears in any list (findAllActive filters isDeleted=false).
+    if (user.isDeleted()) {
+        log.info("[RESURRECT] Re-registering previously deleted user id={} username={}",
+                user.getId(), user.getUsername());
+        user.setDeleted(false);
+        user.setActive(true);
+        // Refresh personal details from the new request so the resurrected account is up to date.
+        if (request.getFirstName() != null) user.setFirstName(request.getFirstName());
+        if (request.getLastName()  != null) user.setLastName(request.getLastName());
+        if (phone != null)                  user.setPhoneNumber(phone);
+        if (email != null)                  user.setEmail(email);
+        // Re-hash the password if the caller supplied one; otherwise auto-generate.
+        String rawPw = request.getPassword();
+        boolean autoGen = rawPw == null || rawPw.isBlank();
+        if (autoGen) {
+            rawPw = generateTemporaryPassword();
+            tempPasswordHolder[0] = rawPw;
+        }
+        user.setPasswordHash(passwordEncoder.encode(rawPw));
+        LocalDateTime now = LocalDateTime.now();
+        user.setPasswordChangedAt(now);
+        user.setForcePasswordChange(autoGen || Boolean.TRUE.equals(request.getForcePasswordChange()));
+        user.setPasswordRotationForcedAt(user.isForcePasswordChange() ? now : null);
+        userRepository.save(user);
+    }
+
+    if (!user.isDeleted() && (existingByIdentity.isPresent() || existingByLicense.isPresent())
             && Boolean.TRUE.equals(request.getForcePasswordChange())) {
         user.setForcePasswordChange(true);
         user.setPasswordRotationForcedAt(LocalDateTime.now());
