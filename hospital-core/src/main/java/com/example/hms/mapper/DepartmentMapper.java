@@ -97,18 +97,22 @@ public class DepartmentMapper {
 
         UserRoleHospitalAssignment assignment = department.getAssignment();
 
-        List<DepartmentTranslation> newTranslations = new ArrayList<>();
+        List<DepartmentTranslation> existing = department.getDepartmentTranslations();
+        if (existing == null) {
+            existing = new ArrayList<>();
+            department.setDepartmentTranslations(existing);
+        }
+        existing.clear();
         if (dto.getTranslations() != null) {
             for (DepartmentTranslationRequestDTO tr : dto.getTranslations()) {
                 DepartmentTranslation t = toDepartmentTranslation(tr);
                 if (t != null) {
                     t.setDepartment(department);
                     t.setAssignment(assignment);
-                    newTranslations.add(t);
+                    existing.add(t);
                 }
             }
         }
-        department.setDepartmentTranslations(newTranslations);
 
     }
 
