@@ -17,6 +17,7 @@ import java.util.UUID;
 public interface UserRepository extends JpaRepository<User, UUID> {
 
   /* ---------- Lightweight counts for dashboards ---------- */
+  long countByIsDeletedFalse();
   long countByIsActiveTrueAndIsDeletedFalse();
 
     /* ---------- Existence checks (case-insensitive where it matters) ---------- */
