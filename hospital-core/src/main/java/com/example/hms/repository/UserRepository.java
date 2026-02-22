@@ -17,6 +17,7 @@ import java.util.UUID;
 public interface UserRepository extends JpaRepository<User, UUID> {
 
   /* ---------- Lightweight counts for dashboards ---------- */
+  long countByIsDeletedFalse();
   long countByIsActiveTrueAndIsDeletedFalse();
 
     /* ---------- Existence checks (case-insensitive where it matters) ---------- */
@@ -61,9 +62,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findActiveByEmailOrPhone(@Param("identifier") String identifier);
 
     /* ---------- Rich fetch for mapping a single user (roles + profiles) ---------- */
+    // NOTE: avoid deep nested paths like "staffProfile.assignment.role" — in Hibernate 6
+    // the @Query + @EntityGraph combination returns Optional.empty() when the intermediate
+    // association (staffProfile) is null, even though the user row exists.
     @EntityGraph(attributePaths = {
         "userRoles", "userRoles.role",
-        "staffProfile", "staffProfile.assignment", "staffProfile.assignment.role",
+        "staffProfile",
         "patientProfile"
     })
     @Query("select u from User u where u.id = :id and u.isDeleted = false")
@@ -106,10 +110,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                            Pageable pageable);
 
     /**
-     * Paged list of active users with roles pre-fetched.
-     * Avoids fetch join to keep count query simple.
+     * Paged list of non-deleted users.
+     * NOTE: @EntityGraph is intentionally omitted here — combining a collection-fetch
+     * entity graph with a LIMIT/OFFSET paged query triggers Hibernate 6 warning
+     * HHH90003004 ("firstResult/maxResults specified with collection fetch") and
+     * causes incorrect pagination (full table loaded in memory, then sliced).
+     * UserMapper.toSummaryDTO accesses userRoles lazily which is fine inside the
+     * surrounding @Transactional(readOnly = true) boundary.
      */
-  @EntityGraph(attributePaths = { "userRoles", "userRoles.role" })
     @Query("select u from User u where u.isDeleted = false")
     Page<User> findAllActive(Pageable pageable);
 

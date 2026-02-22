@@ -97,6 +97,15 @@ public class UserRoleHospitalAssignmentController {
         return ResponseEntity.ok(assignmentService.regenerateAssignmentCode(assignmentId, resendNotifications));
     }
 
+    @Operation(summary = "Resend the onboarding email + SMS for an existing assignment")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
+    @PostMapping("/{assignmentId}/resend-notification")
+    public ResponseEntity<Void> resendNotification(@PathVariable UUID assignmentId) {
+        log.info("📧 Resending notifications for assignment '{}'", assignmentId);
+        assignmentService.sendNotifications(assignmentId);
+        return ResponseEntity.noContent().build();
+    }
+
     @Operation(summary = "Confirm an assignment using the registrar's confirmation code")
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
     @PostMapping("/{assignmentId}/confirm")
@@ -158,6 +167,17 @@ public class UserRoleHospitalAssignmentController {
     public ResponseEntity<UserRoleAssignmentPublicViewDTO> getPublicAssignment(@PathVariable String assignmentCode) {
         log.info("🌐 Fetching public assignment view for code '{}'", assignmentCode);
         return ResponseEntity.ok(assignmentService.getAssignmentPublicView(assignmentCode));
+    }
+
+    @Operation(summary = "Self-service verification: assignee submits their 6-digit confirmation code")
+    @PostMapping("/public/{assignmentCode}/verify")
+    public ResponseEntity<UserRoleAssignmentPublicViewDTO> verifyAssignmentByCode(
+            @PathVariable String assignmentCode,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "JSON body with confirmationCode field")
+            @RequestBody java.util.Map<String, String> body) {
+        String confirmationCode = body != null ? body.get("confirmationCode") : null;
+        log.info("🔐 Self-service verification attempt for assignment code '{}'", assignmentCode);
+        return ResponseEntity.ok(assignmentService.verifyAssignmentByCode(assignmentCode, confirmationCode));
     }
 
     @Operation(summary = "Delete an assignment by ID")

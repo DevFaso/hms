@@ -249,4 +249,111 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
     }
+
+    // =====================================================================
+    // POST /auth/me/change-password
+    // =====================================================================
+
+    @Test
+    void changeOwnPassword_notAuthenticated_returns401() throws Exception {
+        // SecurityContext is anonymous — no authenticated user
+        String body = """
+                {"currentPassword":"OldPass1!","newPassword":"NewPass99!"}
+                """;
+
+        mockMvc.perform(post("/auth/me/change-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void changeOwnPassword_wrongCurrentPassword_returns401() throws Exception {
+        authenticateAs("drjones");
+
+        when(userRepository.findByUsername("drjones"))
+                .thenReturn(java.util.Optional.of(buildUser("drjones")));
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenThrow(new BadCredentialsException("Bad credentials"));
+
+        String body = """
+                {"currentPassword":"WrongOld1!","newPassword":"NewPass99!"}
+                """;
+
+        mockMvc.perform(post("/auth/me/change-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Current password is incorrect."));
+    }
+
+    @Test
+    void changeOwnPassword_shortNewPassword_returns400() throws Exception {
+        authenticateAs("drjones");
+
+        when(userRepository.findByUsername("drjones"))
+                .thenReturn(java.util.Optional.of(buildUser("drjones")));
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(new UsernamePasswordAuthenticationToken("drjones", null));
+
+        String body = """
+                {"currentPassword":"CurrentPass1!","newPassword":"short"}
+                """;
+
+        mockMvc.perform(post("/auth/me/change-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("New password must be at least 8 characters."));
+    }
+
+    @Test
+    void changeOwnPassword_sameAsCurrentPassword_returns400() throws Exception {
+        authenticateAs("drjones");
+
+        when(userRepository.findByUsername("drjones"))
+                .thenReturn(java.util.Optional.of(buildUser("drjones")));
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(new UsernamePasswordAuthenticationToken("drjones", null));
+
+        String body = """
+                {"currentPassword":"SamePass1!","newPassword":"SamePass1!"}
+                """;
+
+        mockMvc.perform(post("/auth/me/change-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("New password must differ from the current password."));
+    }
+
+    @Test
+    void changeOwnPassword_success_returns200() throws Exception {
+        authenticateAs("drjones");
+
+        com.example.hms.model.User user = buildUser("drjones");
+        when(userRepository.findByUsername("drjones"))
+                .thenReturn(java.util.Optional.of(user));
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(new UsernamePasswordAuthenticationToken("drjones", null));
+
+        String body = """
+                {"currentPassword":"OldPass1!","newPassword":"BrandNew99!"}
+                """;
+
+        mockMvc.perform(post("/auth/me/change-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Password changed successfully."));
+    }
+
+    /** Builds a minimal User for mock stubs. */
+    private static com.example.hms.model.User buildUser(String username) {
+        com.example.hms.model.User u = new com.example.hms.model.User();
+        u.setId(java.util.UUID.randomUUID());
+        u.setUsername(username);
+        u.setEmail(username + "@example.com");
+        return u;
+    }
 }

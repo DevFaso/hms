@@ -37,4 +37,7 @@ public class JwtResponse {
     private boolean active;
     private String profilePictureUrl;
 
+    /** True when the user must change their password before accessing the application. */
+    private boolean forcePasswordChange;
+
 }

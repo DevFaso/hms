@@ -44,7 +44,8 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
             recentAuditLimit = 10; // sane default + safety cap
         }
 
-        long totalUsers = userRepository.count();
+        // Exclude soft-deleted rows from the total — they are not real users in the system.
+        long totalUsers = userRepository.countByIsDeletedFalse();
         long activeUsers = userRepository.countByIsActiveTrueAndIsDeletedFalse();
         long inactiveUsers = Math.max(totalUsers - activeUsers, 0);
 

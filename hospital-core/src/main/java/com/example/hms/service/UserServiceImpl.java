@@ -36,6 +36,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import com.example.hms.event.UserCreatedEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -52,6 +54,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.security.SecureRandom;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -69,6 +72,7 @@ public class UserServiceImpl implements UserService {
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
     private static final String ROLE_LAB_SCIENTIST = "ROLE_LAB_SCIENTIST";
     private static final String USER_NOT_FOUND_PREFIX = "User not found with ID: ";
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
 
     private final UserRepository userRepository;
@@ -83,6 +87,7 @@ public class UserServiceImpl implements UserService {
     private final AuditEventLogService auditEventLogService;
     private final StaffRepository staffRepository;
     private final JwtTokenProvider jwtTokenProvider;
+    private final ApplicationEventPublisher eventPublisher;
 
     /*
      * --------------------------------
@@ -135,7 +140,10 @@ public class UserServiceImpl implements UserService {
                     saved.getEmail(), e.getMessage());
         }
 
-        User reloaded = userRepository.findByIdWithRolesAndProfiles(saved.getId())
+        // Use plain findById — the @EntityGraph path "staffProfile.assignment.role"
+        // in findByIdWithRolesAndProfiles returns Optional.empty() in Hibernate 6
+        // when staffProfile is null (new patient users have no staff profile).
+        User reloaded = userRepository.findById(saved.getId())
                 .orElseThrow(() -> new IllegalStateException("User disappeared after save"));
         Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(reloaded);
 
@@ -273,10 +281,43 @@ public class UserServiceImpl implements UserService {
 
     final boolean newUserCreated = existingByIdentity.isEmpty() && existingByLicense.isEmpty();
 
-    final User user = existingByIdentity.or(() -> existingByLicense)
-        .orElseGet(() -> createNewUser(request, username, email, phone, roles));
+    // If this is a brand-new staff user, auto-generate a temporary password so that
+    // the admin does not need to communicate credentials out-of-band.  The plaintext
+    // is stored temporarily on the assignment entity and cleared once the email is sent.
+    final String[] tempPasswordHolder = new String[1]; // index 0 = temp plaintext password
 
-    if ((existingByIdentity.isPresent() || existingByLicense.isPresent())
+    final User user = existingByIdentity.or(() -> existingByLicense)
+        .orElseGet(() -> createNewUser(request, username, email, phone, isPatient, tempPasswordHolder));
+
+    // If the matched user was previously soft-deleted, resurrect them.
+    // Without this, a 201 is returned but the user remains isDeleted=true / isActive=false
+    // and never appears in any list (findAllActive filters isDeleted=false).
+    if (user.isDeleted()) {
+        log.info("[RESURRECT] Re-registering previously deleted user id={} username={}",
+                user.getId(), user.getUsername());
+        user.setDeleted(false);
+        user.setActive(true);
+        // Refresh personal details from the new request so the resurrected account is up to date.
+        if (request.getFirstName() != null) user.setFirstName(request.getFirstName());
+        if (request.getLastName()  != null) user.setLastName(request.getLastName());
+        if (phone != null)                  user.setPhoneNumber(phone);
+        if (email != null)                  user.setEmail(email);
+        // Re-hash the password if the caller supplied one; otherwise auto-generate.
+        String rawPw = request.getPassword();
+        boolean autoGen = rawPw == null || rawPw.isBlank();
+        if (autoGen) {
+            rawPw = generateTemporaryPassword();
+            tempPasswordHolder[0] = rawPw;
+        }
+        user.setPasswordHash(passwordEncoder.encode(rawPw));
+        LocalDateTime now = LocalDateTime.now();
+        user.setPasswordChangedAt(now);
+        user.setForcePasswordChange(autoGen || Boolean.TRUE.equals(request.getForcePasswordChange()));
+        user.setPasswordRotationForcedAt(user.isForcePasswordChange() ? now : null);
+        userRepository.save(user);
+    }
+
+    if (!user.isDeleted() && (existingByIdentity.isPresent() || existingByLicense.isPresent())
             && Boolean.TRUE.equals(request.getForcePasswordChange())) {
         user.setForcePasswordChange(true);
         user.setPasswordRotationForcedAt(LocalDateTime.now());
@@ -286,9 +327,26 @@ public class UserServiceImpl implements UserService {
     final List<UserRoleHospitalAssignment> ensuredAssignments =
         ensureRolesAndAssignments(user, roles, staffContextHospitalId);
 
+    // For new users with an auto-generated temp password, store the plaintext on each
+    // assignment so the email notification method can include it once and then clear it.
+    propagateTempPassword(newUserCreated, tempPasswordHolder[0], ensuredAssignments);
+
     if (newUserCreated) {
-    User actor = resolveCurrentActor().orElse(user);
-    recordUserCreationAudit(actor, user, ensuredAssignments);
+        User actor = resolveCurrentActor().orElse(user);
+        // Publish after-commit event so the audit runs once the new user is
+        // visible in the DB (avoids poisoning the outer transaction via REQUIRES_NEW
+        // trying to load an uncommitted user).
+        List<UUID> assignmentIdList = ensuredAssignments.stream()
+                .filter(Objects::nonNull)
+                .map(UserRoleHospitalAssignment::getId)
+                .filter(Objects::nonNull)
+                .toList();
+        eventPublisher.publishEvent(new UserCreatedEvent(
+                actor.getId(),
+                resolveUserDisplayName(actor),
+                user.getId(),
+                resolveUserDisplayName(user),
+                assignmentIdList));
     }
 
     // ---- 5) Upsert Staff when needed ----
@@ -297,8 +355,15 @@ public class UserServiceImpl implements UserService {
     }
 
     // ---- 6) Reload + map ----
-    final User reloaded = userRepository.findByIdWithRolesAndProfiles(user.getId())
-        .orElseThrow(() -> new IllegalStateException("User disappeared after save"));
+    // Use plain findById — the @EntityGraph path "staffProfile.assignment.role"
+    // in findByIdWithRolesAndProfiles returns Optional.empty() in Hibernate 6 when
+    // the user has no staffProfile yet (e.g. ADMIN role assigned to an existing user
+    // whose staff record hasn't been created yet).  Lazy fields load fine since we
+    // are still inside the @Transactional boundary.
+    log.debug("[RELOAD] fetching user by id={} after save", user.getId());
+    final User reloaded = userRepository.findById(user.getId())
+        .orElseThrow(() -> new IllegalStateException(
+            "User disappeared after save (id=" + user.getId() + ")"));
     final Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(reloaded);
 
     final long roleCount = assignmentRepository.countDistinctRolesByUserId(reloaded.getId());
@@ -326,6 +391,17 @@ public class UserServiceImpl implements UserService {
             result.add(ensureAssignmentSmart(user.getId(), r, staffContextHospitalId, !isPatientRole));
         }
         return result;
+    }
+
+    /**
+     * For brand-new users whose password was auto-generated: persist the plaintext
+     * on each assignment so the email notification can include it once, then clear it.
+     */
+    private void propagateTempPassword(boolean newUserCreated, String tempPlain,
+                                       List<UserRoleHospitalAssignment> assignments) {
+        if (!newUserCreated || tempPlain == null) return;
+        assignments.forEach(a -> a.setTempPlainPassword(tempPlain));
+        assignmentRepository.saveAll(assignments);
     }
 
     private Role resolveRoleByName(String name) {
@@ -390,17 +466,28 @@ public class UserServiceImpl implements UserService {
         return lic;
     }
 
-    private User createNewUser(AdminSignupRequest request, String username, String email, String phone, Set<Role> roles) {
+    private User createNewUser(AdminSignupRequest request, String username, String email, String phone,
+                               boolean isPatient, String[] tempPasswordOut) {
         User u = new User();
         u.setUsername(username);
         u.setEmail(email);
         LocalDateTime passwordSetAt = LocalDateTime.now();
-        u.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+
+        // For non-patient staff: auto-generate a temporary password when the caller hasn't
+        // supplied one (null / blank).  The plaintext is surfaced once via email; the user
+        // must change it on first login (forcePasswordChange=true).
+        String rawPassword = request.getPassword();
+        boolean isAutoGenerated = !isPatient && (rawPassword == null || rawPassword.isBlank());
+        if (isAutoGenerated) {
+            rawPassword = generateTemporaryPassword();
+            if (tempPasswordOut != null) {
+                tempPasswordOut[0] = rawPassword;
+            }
+        }
+        u.setPasswordHash(passwordEncoder.encode(rawPassword));
         u.setFirstName(request.getFirstName());
         u.setLastName(request.getLastName());
         u.setPhoneNumber(phone);
-
-        boolean isPatient = roles.stream().anyMatch(r -> ROLE_PATIENT.equalsIgnoreCase(r.getCode()));
 
         if (isPatient) {
             // Patient accounts start inactive — must verify email first
@@ -411,7 +498,9 @@ public class UserServiceImpl implements UserService {
             u.setActive(true);
         }
 
-        if (isPatient || Boolean.TRUE.equals(request.getForcePasswordChange())) {
+        // Force password change: patients must always change, staff with auto-generated
+        // temp passwords must change, and explicit admin request also triggers this.
+        if (isPatient || isAutoGenerated || Boolean.TRUE.equals(request.getForcePasswordChange())) {
             u.setForcePasswordChange(true);
         }
         u.setCreatedAt(passwordSetAt);
@@ -436,6 +525,30 @@ public class UserServiceImpl implements UserService {
         }
 
         return saved;
+    }
+
+    /**
+     * Generates a cryptographically random temporary password.
+     * Format: 3 uppercase + 3 digits + 3 lowercase + 1 special → e.g. {@code ABc123xyz!}
+     * Always satisfies typical "min 8 chars, mixed case, digit, special" policies.
+     */
+    private static String generateTemporaryPassword() {
+        String upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        String lower = "abcdefghjkmnpqrstuvwxyz";
+        String digits = "23456789";
+        String special = "!@#$%";
+        StringBuilder sb = new StringBuilder(12);
+        for (int i = 0; i < 3; i++) sb.append(upper.charAt(SECURE_RANDOM.nextInt(upper.length())));
+        for (int i = 0; i < 3; i++) sb.append(digits.charAt(SECURE_RANDOM.nextInt(digits.length())));
+        for (int i = 0; i < 3; i++) sb.append(lower.charAt(SECURE_RANDOM.nextInt(lower.length())));
+        sb.append(special.charAt(SECURE_RANDOM.nextInt(special.length())));
+        // Shuffle so the pattern isn't predictable
+        char[] chars = sb.toString().toCharArray();
+        for (int i = chars.length - 1; i > 0; i--) {
+            int j = SECURE_RANDOM.nextInt(i + 1);
+            char tmp = chars[i]; chars[i] = chars[j]; chars[j] = tmp;
+        }
+        return new String(chars);
     }
 
         private UUID resolveHospitalForRegistration(AdminSignupRequest request, Set<String> roleNames, boolean isPatient) {
@@ -480,52 +593,6 @@ public class UserServiceImpl implements UserService {
         return hospitalRepository.findById(provided)
                 .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_PREFIX + provided))
                 .getId();
-    }
-
-        private void recordUserCreationAudit(User actor, User created, List<UserRoleHospitalAssignment> assignments) {
-        if (created == null) {
-            return;
-        }
-        try {
-            UUID actorId = actor != null ? actor.getId() : created.getId();
-            UUID assignmentId = Optional.ofNullable(actor)
-                .map(this::resolveActorAssignmentId)
-                .orElseGet(() -> assignments.stream()
-                    .filter(Objects::nonNull)
-                    .map(UserRoleHospitalAssignment::getId)
-                    .filter(Objects::nonNull)
-                    .findFirst()
-                    .orElse(null));
-
-            Map<String, Object> details = new HashMap<>();
-            details.put("createdUserId", created.getId());
-            details.put("actorId", actorId);
-            details.put("roles", assignments.stream()
-                .filter(Objects::nonNull)
-                .map(UserRoleHospitalAssignment::getRole)
-                .filter(Objects::nonNull)
-                .map(Role::getCode)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList());
-
-            AuditEventRequestDTO auditEvent = AuditEventRequestDTO.builder()
-                .userId(actorId)
-                .assignmentId(assignmentId)
-                .userName(resolveUserDisplayName(actor != null ? actor : created))
-                .eventType(AuditEventType.USER_CREATE)
-                .eventDescription("New user account created")
-                .resourceId(created.getId() != null ? created.getId().toString() : null)
-                .resourceName(resolveUserDisplayName(created))
-                .entityType("USER")
-                .status(AuditStatus.SUCCESS)
-                .details(details)
-                .build();
-
-            auditEventLogService.logEvent(auditEvent);
-        } catch (RuntimeException ex) {
-            log.warn("⚠️ Failed to record user creation audit for user '{}': {}", created.getId(), ex.getMessage());
-        }
     }
 
     private void recordUserDeletionAudit(User deletedUser) {
@@ -907,6 +974,23 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
 
         log.info("Profile image updated for user {}: {} -> {}", userId, oldImageUrl, imageUrl);
+    }
+
+    @Override
+    @Transactional
+    public void changeOwnPassword(UUID userId, String newPassword) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + userId));
+
+        LocalDateTime now = LocalDateTime.now();
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setPasswordChangedAt(now);
+        user.setPasswordRotationWarningAt(null);
+        user.setPasswordRotationForcedAt(null);
+        user.setForcePasswordChange(false);
+        userRepository.save(user);
+
+        log.info("🔑 [CHANGE-PWD] Password changed via self-service for user='{}'", user.getUsername());
     }
 
 }

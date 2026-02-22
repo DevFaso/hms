@@ -60,4 +60,17 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V5: Add temp_plain_password to user_role_hospital_assignment
+         Stores the one-time plaintext temp credential for new staff users;
+         cleared (set to NULL) immediately after first successful
+         verifyAssignmentByCode call — never retained long-term.
+         ================================================================= -->
+    <changeSet id="V5-add-temp-plain-password" author="hms-team" runOnChange="false">
+        <sqlFile path="V5__add_temp_plain_password.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
