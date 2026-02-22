@@ -37,7 +37,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -342,13 +341,13 @@ class ConsultationServiceImplTest {
         @Test
         @DisplayName("returns active statuses when status is null")
         void returnsActiveWhenNull() {
-            when(consultationRepository.findByHospitalAndStatuses(eq(hospitalId), any()))
+            when(consultationRepository.findByHospitalAndStatuses(hospitalId, any()))
                     .thenReturn(List.of());
 
             List<ConsultationResponseDTO> result = service.getConsultationsForHospital(hospitalId, null);
 
             assertThat(result).isEmpty();
-            verify(consultationRepository).findByHospitalAndStatuses(eq(hospitalId), any());
+            verify(consultationRepository).findByHospitalAndStatuses(hospitalId, any());
         }
     }
 
@@ -594,14 +593,14 @@ class ConsultationServiceImplTest {
     @Test
     @DisplayName("getPendingConsultations returns REQUESTED and ACKNOWLEDGED")
     void getPendingConsultations() {
-        when(consultationRepository.findByHospitalAndStatuses(eq(hospitalId), any()))
+        when(consultationRepository.findByHospitalAndStatuses(hospitalId, any()))
                 .thenReturn(List.of());
 
         List<ConsultationResponseDTO> result = service.getPendingConsultations(hospitalId);
 
         assertThat(result).isEmpty();
-        verify(consultationRepository).findByHospitalAndStatuses(eq(hospitalId),
-                eq(Arrays.asList(ConsultationStatus.REQUESTED, ConsultationStatus.ACKNOWLEDGED)));
+        verify(consultationRepository).findByHospitalAndStatuses(hospitalId,
+                Arrays.asList(ConsultationStatus.REQUESTED, ConsultationStatus.ACKNOWLEDGED));
     }
 
     // ── getConsultationsForPatient ───────────────────────────────────────────
