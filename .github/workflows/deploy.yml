@@ -1,8 +1,6 @@
 name: Deploy to Railway
 
 on:
-  # Railway dev auto-deploys from develop via built-in integration.
-  # Use workflow_dispatch for manual deployments to any environment.
   workflow_dispatch:
     inputs:
       environment:
@@ -27,75 +25,106 @@ on:
 permissions:
   contents: read
 
+# ── Railway project & service/environment IDs ──────────────────────────────
+# Project: MediHub  bc9920fa-8753-434c-b812-3fc4b5473542
+#
+# Environments:
+#   prod  e524f68e-47fe-475b-a6e2-ac89b2a1053c
+#   uat   1a5c6418-b29d-4ad2-a48b-ee97f1fe91f1
+#   dev   6bfeb810-7066-4b1e-a517-a5b1ec9b6317
+#
+# Services:
+#   hms-backend-core   e9013e45-3f63-4534-b13a-7a771001b8e1  (prod backend)
+#   hms-backend-uat    d86bb1fc-970c-4573-9cae-7dd2dd539d1f
+#   hms-backend-dev    648fc1df-151b-4524-8d17-bd92a5317e16
+#   hms-frontend-prod  b306a9e8-36f9-477c-813c-c3bb119d2679
+#   hms-frontend-uat   042b8787-7455-4cd8-81db-8f4bf7375ca4
+#   hms-frontend-dev   9ad9ae6a-6438-4a27-be1f-858644d8955d
+# ───────────────────────────────────────────────────────────────────────────
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: ${{ github.event.inputs.environment }}
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Railway CLI
-        run: npm i -g @railway/cli --ignore-scripts
-
-      - name: Resolve Railway tokens and service names
-        id: config
+      - name: Resolve IDs and token
+        id: cfg
         env:
           HMS_PROD_TOKEN: ${{ secrets.HMS_PROD_TOKEN }}
-          HMS_UAT_TOKEN: ${{ secrets.HMS_UAT_TOKEN }}
-          HMS_DEV_TOKEN: ${{ secrets.HMS_DEV_TOKEN }}
+          HMS_UAT_TOKEN:  ${{ secrets.HMS_UAT_TOKEN }}
+          HMS_DEV_TOKEN:  ${{ secrets.HMS_DEV_TOKEN }}
         run: |
           ENV="${{ github.event.inputs.environment }}"
           SVC="${{ github.event.inputs.service }}"
           case "$ENV" in
             prod)
-              echo "backend_token=$HMS_PROD_TOKEN"    >> "$GITHUB_OUTPUT"
-              echo "frontend_token=$HMS_PROD_TOKEN"   >> "$GITHUB_OUTPUT"
-              echo "backend_service=hms-backend-core"               >> "$GITHUB_OUTPUT"
-              echo "frontend_service=hms-frontend-prod"             >> "$GITHUB_OUTPUT"
-              echo "railway_env=prod"                               >> "$GITHUB_OUTPUT"
+              TOKEN="$HMS_PROD_TOKEN"
+              ENV_ID="e524f68e-47fe-475b-a6e2-ac89b2a1053c"
+              BACKEND_SVC_ID="e9013e45-3f63-4534-b13a-7a771001b8e1"
+              FRONTEND_SVC_ID="b306a9e8-36f9-477c-813c-c3bb119d2679"
               ;;
             uat)
-              echo "backend_token=$HMS_UAT_TOKEN"     >> "$GITHUB_OUTPUT"
-              echo "frontend_token=$HMS_UAT_TOKEN"    >> "$GITHUB_OUTPUT"
-              echo "backend_service=hms-backend-uat"                >> "$GITHUB_OUTPUT"
-              echo "frontend_service=hms-frontend-uat"              >> "$GITHUB_OUTPUT"
-              echo "railway_env=uat"                               >> "$GITHUB_OUTPUT"
+              TOKEN="$HMS_UAT_TOKEN"
+              ENV_ID="1a5c6418-b29d-4ad2-a48b-ee97f1fe91f1"
+              BACKEND_SVC_ID="d86bb1fc-970c-4573-9cae-7dd2dd539d1f"
+              FRONTEND_SVC_ID="042b8787-7455-4cd8-81db-8f4bf7375ca4"
               ;;
             *)
-              echo "backend_token=$HMS_DEV_TOKEN"     >> "$GITHUB_OUTPUT"
-              echo "frontend_token=$HMS_DEV_TOKEN"    >> "$GITHUB_OUTPUT"
-              echo "backend_service=hms-backend-dev"                >> "$GITHUB_OUTPUT"
-              echo "frontend_service=hms-frontend-dev"              >> "$GITHUB_OUTPUT"
-              echo "railway_env=dev"                               >> "$GITHUB_OUTPUT"
+              TOKEN="$HMS_DEV_TOKEN"
+              ENV_ID="6bfeb810-7066-4b1e-a517-a5b1ec9b6317"
+              BACKEND_SVC_ID="648fc1df-151b-4524-8d17-bd92a5317e16"
+              FRONTEND_SVC_ID="9ad9ae6a-6438-4a27-be1f-858644d8955d"
               ;;
           esac
-          echo "env=$ENV"   >> "$GITHUB_OUTPUT"
-          echo "deploy=$SVC" >> "$GITHUB_OUTPUT"
+          echo "token=$TOKEN"               >> "$GITHUB_OUTPUT"
+          echo "env_id=$ENV_ID"             >> "$GITHUB_OUTPUT"
+          echo "backend_svc=$BACKEND_SVC_ID"  >> "$GITHUB_OUTPUT"
+          echo "frontend_svc=$FRONTEND_SVC_ID" >> "$GITHUB_OUTPUT"
+          echo "deploy=$SVC"                >> "$GITHUB_OUTPUT"
+          echo "env=$ENV"                   >> "$GITHUB_OUTPUT"
 
-      - name: Deploy backend to Railway (${{ steps.config.outputs.env }})
-        if: steps.config.outputs.deploy == 'both' || steps.config.outputs.deploy == 'backend'
-        run: |
-          echo "Railway CLI version: $(railway --version)"
-          echo "Deploying service: ${{ steps.config.outputs.backend_service }}"
-          echo "Environment: ${{ steps.config.outputs.railway_env }}"
-          railway up \
-            --service ${{ steps.config.outputs.backend_service }} \
-            --environment ${{ steps.config.outputs.railway_env }} \
-            --detach 2>&1 || (echo "Exit code: $?" && railway up --help && exit 1)
+      - name: Trigger backend redeploy (${{ steps.cfg.outputs.env }})
+        if: steps.cfg.outputs.deploy == 'both' || steps.cfg.outputs.deploy == 'backend'
         env:
-          RAILWAY_TOKEN: ${{ steps.config.outputs.backend_token }}
+          RAILWAY_TOKEN: ${{ steps.cfg.outputs.token }}
+        run: |
+          RESPONSE=$(curl -sf -X POST https://backboard.railway.com/graphql/v2 \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $RAILWAY_TOKEN" \
+            -d "{
+              \"query\": \"mutation { serviceInstanceRedeploy(serviceId: \\\"${{ steps.cfg.outputs.backend_svc }}\\\", environmentId: \\\"${{ steps.cfg.outputs.env_id }}\\\") }\",
+              \"variables\": {}
+            }")
+          echo "Response: $RESPONSE"
+          echo "$RESPONSE" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          if d.get('errors'):
+              print('ERROR:', d['errors'])
+              sys.exit(1)
+          print('Backend redeploy triggered:', d['data']['serviceInstanceRedeploy'])
+          "
 
-      - name: Deploy frontend to Railway (${{ steps.config.outputs.env }})
-        if: steps.config.outputs.deploy == 'both' || steps.config.outputs.deploy == 'frontend'
-        working-directory: hospital-portal
-        run: |
-          echo "Railway CLI version: $(railway --version)"
-          echo "Deploying service: ${{ steps.config.outputs.frontend_service }}"
-          echo "Environment: ${{ steps.config.outputs.railway_env }}"
-          railway up \
-            --service ${{ steps.config.outputs.frontend_service }} \
-            --environment ${{ steps.config.outputs.railway_env }} \
-            --detach 2>&1 || (echo "Exit code: $?" && railway up --help && exit 1)
+      - name: Trigger frontend redeploy (${{ steps.cfg.outputs.env }})
+        if: steps.cfg.outputs.deploy == 'both' || steps.cfg.outputs.deploy == 'frontend'
         env:
-          RAILWAY_TOKEN: ${{ steps.config.outputs.frontend_token }}
+          RAILWAY_TOKEN: ${{ steps.cfg.outputs.token }}
+        run: |
+          RESPONSE=$(curl -sf -X POST https://backboard.railway.com/graphql/v2 \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $RAILWAY_TOKEN" \
+            -d "{
+              \"query\": \"mutation { serviceInstanceRedeploy(serviceId: \\\"${{ steps.cfg.outputs.frontend_svc }}\\\", environmentId: \\\"${{ steps.cfg.outputs.env_id }}\\\") }\",
+              \"variables\": {}
+            }")
+          echo "Response: $RESPONSE"
+          echo "$RESPONSE" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          if d.get('errors'):
+              print('ERROR:', d['errors'])
+              sys.exit(1)
+          print('Frontend redeploy triggered:', d['data']['serviceInstanceRedeploy'])
+          "
+
