@@ -376,19 +376,35 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     private Department resolveDepartment(AppointmentRequestDTO request, Hospital hospital, Staff staff) {
+        // 1. Explicit departmentId in the request
         if (request.getDepartmentId() != null) {
             return departmentRepository.findById(request.getDepartmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("Department not found: " + request.getDepartmentId()));
-        } else if (request.getDepartmentCode() != null) {
+        }
+        // 2. departmentCode in the request
+        if (request.getDepartmentCode() != null) {
             return departmentRepository.findByHospitalIdAndCodeIgnoreCase(hospital.getId(), request.getDepartmentCode())
                 .orElseThrow(() -> new ResourceNotFoundException("Department not found for code: " + request.getDepartmentCode()));
-        } else if (request.getDepartmentName() != null) {
+        }
+        // 3. departmentName in the request
+        if (request.getDepartmentName() != null) {
             return departmentRepository.findByHospitalIdAndNameIgnoreCase(hospital.getId(), request.getDepartmentName())
                 .orElseThrow(() -> new ResourceNotFoundException("Department not found for name: " + request.getDepartmentName()));
-        } else if (staff.getDepartment() != null) {
+        }
+        // 4. Staff's own department (doctors/nurses usually have one)
+        if (staff.getDepartment() != null) {
             return staff.getDepartment();
         }
-        throw new BusinessException("Department could not be resolved. Please specify department.");
+        // 5. Fallback: first available department in the hospital
+        //    Covers roles like RECEPTIONIST that are not tied to a specific department.
+        List<Department> hospitalDepts = departmentRepository.findByHospitalId(hospital.getId());
+        if (!hospitalDepts.isEmpty()) {
+            log.debug("resolveDepartment: staff {} has no department; using first hospital department '{}'",
+                staff.getId(), hospitalDepts.get(0).getName());
+            return hospitalDepts.get(0);
+        }
+        throw new BusinessException("No departments found for hospital " + hospital.getId()
+            + ". Please add a department or specify departmentId in the request.");
     }
 
 
