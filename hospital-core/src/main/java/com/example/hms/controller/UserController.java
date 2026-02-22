@@ -71,7 +71,13 @@ public class UserController {
         final boolean isPatientOnly = effectiveRoles.size() == 1 &&
             (effectiveRoles.contains(ROLE_PATIENT) || effectiveRoles.contains("ROLE_PATIENT"));
 
-        if (!callerIsReceptionistOnly && !isPatientOnly && request.getHospitalId() == null) {
+        // SUPER_ADMIN is a global (platform-level) role — it has no hospital context.
+        // Skip the hospital-presence check so the request reaches the service, which
+        // correctly returns null for the hospitalId when registering a SUPER_ADMIN.
+        final boolean isGlobalRole = effectiveRoles.stream().anyMatch(r ->
+            "SUPER_ADMIN".equalsIgnoreCase(r) || "ROLE_SUPER_ADMIN".equalsIgnoreCase(r));
+
+        if (!callerIsReceptionistOnly && !isPatientOnly && !isGlobalRole && request.getHospitalId() == null) {
             ResponseEntity<UserResponseDTO> badRequest = resolveHospitalFromName(request);
             if (badRequest != null) return badRequest;
         }
