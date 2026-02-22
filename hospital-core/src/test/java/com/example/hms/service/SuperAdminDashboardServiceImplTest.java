@@ -52,7 +52,7 @@ class SuperAdminDashboardServiceImplTest {
 
     @Test
     void getSummary_success() {
-        when(userRepository.count()).thenReturn(100L);
+        when(userRepository.countByIsDeletedFalse()).thenReturn(100L);
         when(userRepository.countByIsActiveTrueAndIsDeletedFalse()).thenReturn(80L);
         when(hospitalRepository.count()).thenReturn(10L);
         when(hospitalRepository.countByActiveTrue()).thenReturn(8L);
@@ -86,7 +86,7 @@ class SuperAdminDashboardServiceImplTest {
 
     @Test
     void getSummary_zeroValues() {
-        when(userRepository.count()).thenReturn(0L);
+        when(userRepository.countByIsDeletedFalse()).thenReturn(0L);
         when(userRepository.countByIsActiveTrueAndIsDeletedFalse()).thenReturn(0L);
         when(hospitalRepository.count()).thenReturn(0L);
         when(hospitalRepository.countByActiveTrue()).thenReturn(0L);

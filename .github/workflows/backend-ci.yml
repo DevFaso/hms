@@ -46,9 +46,19 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build & Test
-        run: ./gradlew :hospital-core:clean :hospital-core:build
+        run: ./gradlew :hospital-core:clean :hospital-core:build --stacktrace
         env:
           SPRING_PROFILES_ACTIVE: test
+
+      - name: Print failed tests
+        if: failure()
+        run: |
+          find hospital-core/build/test-results -name "TEST-*.xml" \
+            | xargs grep -l 'failures="[^0]\|errors="[^0]"' 2>/dev/null \
+            | while read f; do
+                echo "=== FAILED: $f ===";
+                grep -A 20 '<failure\|<error' "$f" | head -60;
+              done
 
       - name: Generate Jacoco Report
         if: always()
