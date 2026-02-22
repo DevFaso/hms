@@ -44,6 +44,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class BillingInvoiceController {
 
+    private static final String STATUS = "status";
+
     private final BillingInvoiceService invoiceService;
     private final MessageSource messageSource;
     private final InvoiceEmailService invoiceEmailService;
@@ -156,13 +158,13 @@ public class BillingInvoiceController {
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         try {
             invoiceEmailService.emailInvoice(id, request);
-            return ResponseEntity.ok(Map.of("status", "SENT", "sentAt", java.time.OffsetDateTime.now()));
+            return ResponseEntity.ok(Map.of(STATUS, "SENT", "sentAt", java.time.OffsetDateTime.now()));
         } catch (org.springframework.mail.MailException ex) {
             return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(Map.of("status", "FAILED", "error", "Mail service unavailable"));
+                .body(Map.of(STATUS, "FAILED", "error", "Mail service unavailable"));
         } catch (Exception ex) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("status", "FAILED", "error", "Failed to send email"));
+                .body(Map.of(STATUS, "FAILED", "error", "Failed to send email"));
         }
     }
 }

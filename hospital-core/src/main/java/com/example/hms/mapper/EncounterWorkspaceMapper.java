@@ -133,7 +133,7 @@ public class EncounterWorkspaceMapper {
     public EncounterNoteRequestDTO toEncounterNoteUpdate(UUID encounterId,
                                                          Staff staff,
                                                          EncounterWorkspaceNoteUpdateRequestDTO request) {
-        EncounterNoteRequestDTO.EncounterNoteRequestDTOBuilder builder = EncounterNoteRequestDTO.builder()
+        EncounterNoteRequestDTO.EncounterNoteRequestDTOBuilder<?, ?> builder = EncounterNoteRequestDTO.builder()
             .template(request.getNoteTemplate())
             .subjective(sectionContent(request.getSections(), SECTION_SUBJECTIVE))
             .objective(sectionContent(request.getSections(), SECTION_OBJECTIVE))
