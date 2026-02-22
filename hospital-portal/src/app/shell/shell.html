@@ -16,14 +16,29 @@
     </div>
 
     <nav class="sidebar-nav">
-      @for (item of navItems(); track item.route) {
+      @for (item of navItems(); track item.route; let i = $index) {
         <a
           class="nav-item"
+          [class.dragging]="dragIndex() === i"
+          [class.drag-over]="dragOverIndex() === i && dragIndex() !== i"
           [routerLink]="item.route"
           routerLinkActive="active"
           [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' }"
+          draggable="true"
+          [attr.aria-grabbed]="dragIndex() === i"
           (click)="closeOverlays()"
+          (dragstart)="onDragStart($event, i)"
+          (dragover)="onDragOver($event, i)"
+          (dragleave)="onDragLeave()"
+          (drop)="onDrop($event, i)"
+          (dragend)="onDragEnd()"
         >
+          <span
+            class="drag-handle material-symbols-outlined"
+            title="Drag to reorder"
+            aria-hidden="true"
+            >drag_indicator</span
+          >
           <span class="material-symbols-outlined nav-icon">{{ item.icon }}</span>
           @if (!sidebarCollapsed()) {
             <span class="nav-label">{{ item.label }}</span>
