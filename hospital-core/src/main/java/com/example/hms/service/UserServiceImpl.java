@@ -912,6 +912,20 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    public void changeOwnPassword(UUID userId, String newPassword) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + userId));
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        user.setPasswordChangedAt(LocalDateTime.now());
+        user.setForcePasswordChange(false);
+        user.setPasswordRotationWarningAt(null);
+        user.setPasswordRotationForcedAt(null);
+        userRepository.save(user);
+        log.info("🔑 [CHANGE-PWD] Password updated and forcePasswordChange cleared for user={}", userId);
+    }
+
+    @Override
+    @Transactional
     public void updateProfileImage(UUID userId, String imageUrl) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
