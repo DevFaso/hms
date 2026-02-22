@@ -14,6 +14,15 @@ on:
           - dev
           - uat
           - prod
+      service:
+        description: 'Service to deploy'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - backend
+          - frontend
 
 permissions:
   contents: read
@@ -29,27 +38,42 @@ jobs:
       - name: Install Railway CLI
         run: npm i -g @railway/cli
 
-      - name: Resolve Railway token and service
-        id: token
+      - name: Resolve Railway tokens and service names
+        id: config
         run: |
           ENV="${{ github.event.inputs.environment }}"
+          SVC="${{ github.event.inputs.service }}"
           case "$ENV" in
             prod)
-              echo "railway_token=${{ secrets.HMS_PROD_TOKEN }}" >> "$GITHUB_OUTPUT"
-              echo "service=hospital-core" >> "$GITHUB_OUTPUT"
+              echo "backend_token=${{ secrets.HMS_PROD_TOKEN }}"    >> "$GITHUB_OUTPUT"
+              echo "frontend_token=${{ secrets.HMS_PROD_TOKEN }}"   >> "$GITHUB_OUTPUT"
+              echo "backend_service=hms-backend-prod"               >> "$GITHUB_OUTPUT"
+              echo "frontend_service=hms-frontend-prod"             >> "$GITHUB_OUTPUT"
               ;;
             uat)
-              echo "railway_token=${{ secrets.HMS_UAT_TOKEN }}" >> "$GITHUB_OUTPUT"
-              echo "service=hms-backend-uat" >> "$GITHUB_OUTPUT"
+              echo "backend_token=${{ secrets.HMS_UAT_TOKEN }}"     >> "$GITHUB_OUTPUT"
+              echo "frontend_token=${{ secrets.HMS_UAT_TOKEN }}"    >> "$GITHUB_OUTPUT"
+              echo "backend_service=hms-backend-uat"                >> "$GITHUB_OUTPUT"
+              echo "frontend_service=hms-frontend-uat"              >> "$GITHUB_OUTPUT"
               ;;
             *)
-              echo "railway_token=${{ secrets.HMS_DEV_TOKEN }}" >> "$GITHUB_OUTPUT"
-              echo "service=hms-backend-dev" >> "$GITHUB_OUTPUT"
+              echo "backend_token=${{ secrets.HMS_DEV_TOKEN }}"     >> "$GITHUB_OUTPUT"
+              echo "frontend_token=${{ secrets.HMS_DEV_TOKEN }}"    >> "$GITHUB_OUTPUT"
+              echo "backend_service=hms-backend-dev"                >> "$GITHUB_OUTPUT"
+              echo "frontend_service=hms-frontend-dev"              >> "$GITHUB_OUTPUT"
               ;;
           esac
-          echo "env=$ENV" >> "$GITHUB_OUTPUT"
+          echo "env=$ENV"   >> "$GITHUB_OUTPUT"
+          echo "deploy=$SVC" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy to Railway (${{ steps.token.outputs.env }})
-        run: railway up --service ${{ steps.token.outputs.service }}
+      - name: Deploy backend to Railway (${{ steps.config.outputs.env }})
+        if: steps.config.outputs.deploy == 'both' || steps.config.outputs.deploy == 'backend'
+        run: railway up --service ${{ steps.config.outputs.backend_service }}
         env:
-          RAILWAY_TOKEN: ${{ steps.token.outputs.railway_token }}
+          RAILWAY_TOKEN: ${{ steps.config.outputs.backend_token }}
+
+      - name: Deploy frontend to Railway (${{ steps.config.outputs.env }})
+        if: steps.config.outputs.deploy == 'both' || steps.config.outputs.deploy == 'frontend'
+        run: railway up --service ${{ steps.config.outputs.frontend_service }}
+        env:
+          RAILWAY_TOKEN: ${{ steps.config.outputs.frontend_token }}
