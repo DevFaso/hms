@@ -13,11 +13,10 @@ import com.example.hms.payload.dto.credential.UserMfaEnrollmentDTO;
 import com.example.hms.payload.dto.credential.UserMfaEnrollmentRequestDTO;
 import com.example.hms.payload.dto.credential.UserRecoveryContactDTO;
 import com.example.hms.payload.dto.credential.UserRecoveryContactRequestDTO;
+import com.example.hms.controller.support.AuthNotificationFacade;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.JwtTokenProvider;
-import com.example.hms.service.EmailService;
-import com.example.hms.service.PasswordResetService;
 import com.example.hms.service.UserCredentialLifecycleService;
 import com.example.hms.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -66,8 +65,7 @@ public class AuthController {
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
-    private final PasswordResetService passwordResetService;
-    private final EmailService emailService;
+    private final AuthNotificationFacade authNotification;
 
     private final UserService userService;
     private final UserCredentialLifecycleService userCredentialLifecycleService;
@@ -77,16 +75,14 @@ public class AuthController {
             UserService userService,
             AuthenticationManager authenticationManager,
             JwtTokenProvider jwtTokenProvider,
-            PasswordResetService passwordResetService,
-            EmailService emailService,
+            AuthNotificationFacade authNotification,
             UserCredentialLifecycleService userCredentialLifecycleService) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
         this.userService = userService;
         this.authenticationManager = authenticationManager;
         this.jwtTokenProvider = jwtTokenProvider;
-        this.passwordResetService = passwordResetService;
-        this.emailService = emailService;
+        this.authNotification = authNotification;
         this.userCredentialLifecycleService = userCredentialLifecycleService;
     }
 
@@ -296,7 +292,7 @@ public class AuthController {
                 "https://bitnesttechs.com/verify?email=%s&token=%s",
                 user.getEmail(), user.getActivationToken());
         try {
-            emailService.sendActivationEmail(user.getEmail(), activationLink);
+            authNotification.email().sendActivationEmail(user.getEmail(), activationLink);
             log.info("📧 Resent verification email to '{}'", user.getEmail());
         } catch (Exception e) {
             log.warn("⚠️ Failed to resend verification email to '{}': {}",
@@ -420,7 +416,7 @@ public class AuthController {
             HttpServletRequest request) {
         String ip = clientIp(request);
         try {
-            passwordResetService.requestReset(email, locale, ip);
+            authNotification.passwordReset().requestReset(email, locale, ip);
         } catch (ResourceNotFoundException e) {
             log.debug("Password reset requested for non-existent email: {}", email);
         }
@@ -430,7 +426,7 @@ public class AuthController {
     @PostMapping("/reset-password")
     public ResponseEntity<Void> legacyConfirmPasswordReset(@Valid @RequestBody PasswordResetConfirmDTO dto) {
         try {
-            passwordResetService.confirmReset(dto.getToken(), dto.getNewPassword());
+            authNotification.passwordReset().confirmReset(dto.getToken(), dto.getNewPassword());
         } catch (ResourceNotFoundException | IllegalStateException e) {
             log.debug("Password reset confirm failed: {}", e.getMessage());
         }

@@ -36,29 +36,33 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Railway CLI
-        run: npm i -g @railway/cli
+        run: npm i -g @railway/cli --ignore-scripts
 
       - name: Resolve Railway tokens and service names
         id: config
+        env:
+          HMS_PROD_TOKEN: ${{ secrets.HMS_PROD_TOKEN }}
+          HMS_UAT_TOKEN: ${{ secrets.HMS_UAT_TOKEN }}
+          HMS_DEV_TOKEN: ${{ secrets.HMS_DEV_TOKEN }}
         run: |
           ENV="${{ github.event.inputs.environment }}"
           SVC="${{ github.event.inputs.service }}"
           case "$ENV" in
             prod)
-              echo "backend_token=${{ secrets.HMS_PROD_TOKEN }}"    >> "$GITHUB_OUTPUT"
-              echo "frontend_token=${{ secrets.HMS_PROD_TOKEN }}"   >> "$GITHUB_OUTPUT"
+              echo "backend_token=$HMS_PROD_TOKEN"    >> "$GITHUB_OUTPUT"
+              echo "frontend_token=$HMS_PROD_TOKEN"   >> "$GITHUB_OUTPUT"
               echo "backend_service=hms-backend-prod"               >> "$GITHUB_OUTPUT"
               echo "frontend_service=hms-frontend-prod"             >> "$GITHUB_OUTPUT"
               ;;
             uat)
-              echo "backend_token=${{ secrets.HMS_UAT_TOKEN }}"     >> "$GITHUB_OUTPUT"
-              echo "frontend_token=${{ secrets.HMS_UAT_TOKEN }}"    >> "$GITHUB_OUTPUT"
+              echo "backend_token=$HMS_UAT_TOKEN"     >> "$GITHUB_OUTPUT"
+              echo "frontend_token=$HMS_UAT_TOKEN"    >> "$GITHUB_OUTPUT"
               echo "backend_service=hms-backend-uat"                >> "$GITHUB_OUTPUT"
               echo "frontend_service=hms-frontend-uat"              >> "$GITHUB_OUTPUT"
               ;;
             *)
-              echo "backend_token=${{ secrets.HMS_DEV_TOKEN }}"     >> "$GITHUB_OUTPUT"
-              echo "frontend_token=${{ secrets.HMS_DEV_TOKEN }}"    >> "$GITHUB_OUTPUT"
+              echo "backend_token=$HMS_DEV_TOKEN"     >> "$GITHUB_OUTPUT"
+              echo "frontend_token=$HMS_DEV_TOKEN"    >> "$GITHUB_OUTPUT"
               echo "backend_service=hms-backend-dev"                >> "$GITHUB_OUTPUT"
               echo "frontend_service=hms-frontend-dev"              >> "$GITHUB_OUTPUT"
               ;;
