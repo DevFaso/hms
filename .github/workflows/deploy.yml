@@ -53,18 +53,21 @@ jobs:
               echo "frontend_token=$HMS_PROD_TOKEN"   >> "$GITHUB_OUTPUT"
               echo "backend_service=hms-backend-core"               >> "$GITHUB_OUTPUT"
               echo "frontend_service=hms-frontend-prod"             >> "$GITHUB_OUTPUT"
+              echo "railway_env=prod"                               >> "$GITHUB_OUTPUT"
               ;;
             uat)
               echo "backend_token=$HMS_UAT_TOKEN"     >> "$GITHUB_OUTPUT"
               echo "frontend_token=$HMS_UAT_TOKEN"    >> "$GITHUB_OUTPUT"
               echo "backend_service=hms-backend-uat"                >> "$GITHUB_OUTPUT"
               echo "frontend_service=hms-frontend-uat"              >> "$GITHUB_OUTPUT"
+              echo "railway_env=uat"                               >> "$GITHUB_OUTPUT"
               ;;
             *)
               echo "backend_token=$HMS_DEV_TOKEN"     >> "$GITHUB_OUTPUT"
               echo "frontend_token=$HMS_DEV_TOKEN"    >> "$GITHUB_OUTPUT"
               echo "backend_service=hms-backend-dev"                >> "$GITHUB_OUTPUT"
               echo "frontend_service=hms-frontend-dev"              >> "$GITHUB_OUTPUT"
+              echo "railway_env=dev"                               >> "$GITHUB_OUTPUT"
               ;;
           esac
           echo "env=$ENV"   >> "$GITHUB_OUTPUT"
@@ -72,13 +75,21 @@ jobs:
 
       - name: Deploy backend to Railway (${{ steps.config.outputs.env }})
         if: steps.config.outputs.deploy == 'both' || steps.config.outputs.deploy == 'backend'
-        run: railway up --service ${{ steps.config.outputs.backend_service }} --detach
+        run: |
+          railway up \
+            --service ${{ steps.config.outputs.backend_service }} \
+            --environment ${{ steps.config.outputs.railway_env }} \
+            --detach
         env:
           RAILWAY_TOKEN: ${{ steps.config.outputs.backend_token }}
 
       - name: Deploy frontend to Railway (${{ steps.config.outputs.env }})
         if: steps.config.outputs.deploy == 'both' || steps.config.outputs.deploy == 'frontend'
         working-directory: hospital-portal
-        run: railway up --service ${{ steps.config.outputs.frontend_service }} --detach
+        run: |
+          railway up \
+            --service ${{ steps.config.outputs.frontend_service }} \
+            --environment ${{ steps.config.outputs.railway_env }} \
+            --detach
         env:
           RAILWAY_TOKEN: ${{ steps.config.outputs.frontend_token }}
