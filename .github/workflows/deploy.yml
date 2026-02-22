@@ -68,12 +68,13 @@ jobs:
 
       - name: Deploy backend to Railway (${{ steps.config.outputs.env }})
         if: steps.config.outputs.deploy == 'both' || steps.config.outputs.deploy == 'backend'
-        run: railway up --service ${{ steps.config.outputs.backend_service }}
+        run: railway up --service ${{ steps.config.outputs.backend_service }} --detach
         env:
           RAILWAY_TOKEN: ${{ steps.config.outputs.backend_token }}
 
       - name: Deploy frontend to Railway (${{ steps.config.outputs.env }})
         if: steps.config.outputs.deploy == 'both' || steps.config.outputs.deploy == 'frontend'
-        run: railway up --service ${{ steps.config.outputs.frontend_service }}
+        working-directory: hospital-portal
+        run: railway up --service ${{ steps.config.outputs.frontend_service }} --detach
         env:
           RAILWAY_TOKEN: ${{ steps.config.outputs.frontend_token }}
