@@ -47,9 +47,15 @@ export class StaffService {
   private readonly http = inject(HttpClient);
 
   list(hospitalId?: string): Observable<StaffResponse[]> {
-    let params = new HttpParams();
-    if (hospitalId) params = params.set('hospitalId', hospitalId);
-    return this.http.get<StaffResponse[]>('/staff', { params });
+    if (hospitalId) {
+      // Use the hospital-scoped active endpoint which filters correctly
+      return this.http
+        .get<{ content: StaffResponse[] }>(`/staff/hospital/${hospitalId}/active`, {
+          params: new HttpParams().set('size', '200'),
+        })
+        .pipe(map((page) => page.content ?? []));
+    }
+    return this.http.get<StaffResponse[]>('/staff');
   }
 
   getById(id: string): Observable<StaffResponse> {
