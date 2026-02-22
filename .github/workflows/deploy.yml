@@ -51,7 +51,7 @@ jobs:
             prod)
               echo "backend_token=$HMS_PROD_TOKEN"    >> "$GITHUB_OUTPUT"
               echo "frontend_token=$HMS_PROD_TOKEN"   >> "$GITHUB_OUTPUT"
-              echo "backend_service=hms-backend-prod"               >> "$GITHUB_OUTPUT"
+              echo "backend_service=hms-backend-core"               >> "$GITHUB_OUTPUT"
               echo "frontend_service=hms-frontend-prod"             >> "$GITHUB_OUTPUT"
               ;;
             uat)
