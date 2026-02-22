@@ -76,10 +76,13 @@ jobs:
       - name: Deploy backend to Railway (${{ steps.config.outputs.env }})
         if: steps.config.outputs.deploy == 'both' || steps.config.outputs.deploy == 'backend'
         run: |
+          echo "Railway CLI version: $(railway --version)"
+          echo "Deploying service: ${{ steps.config.outputs.backend_service }}"
+          echo "Environment: ${{ steps.config.outputs.railway_env }}"
           railway up \
             --service ${{ steps.config.outputs.backend_service }} \
             --environment ${{ steps.config.outputs.railway_env }} \
-            --detach
+            --detach 2>&1 || (echo "Exit code: $?" && railway up --help && exit 1)
         env:
           RAILWAY_TOKEN: ${{ steps.config.outputs.backend_token }}
 
@@ -87,9 +90,12 @@ jobs:
         if: steps.config.outputs.deploy == 'both' || steps.config.outputs.deploy == 'frontend'
         working-directory: hospital-portal
         run: |
+          echo "Railway CLI version: $(railway --version)"
+          echo "Deploying service: ${{ steps.config.outputs.frontend_service }}"
+          echo "Environment: ${{ steps.config.outputs.railway_env }}"
           railway up \
             --service ${{ steps.config.outputs.frontend_service }} \
             --environment ${{ steps.config.outputs.railway_env }} \
-            --detach
+            --detach 2>&1 || (echo "Exit code: $?" && railway up --help && exit 1)
         env:
           RAILWAY_TOKEN: ${{ steps.config.outputs.frontend_token }}
