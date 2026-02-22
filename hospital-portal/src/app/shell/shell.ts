@@ -8,6 +8,7 @@ import { ToastService } from '../core/toast.service';
 import { IdleService } from '../core/idle.service';
 import { NotificationService, Notification } from '../services/notification.service';
 import { LockScreenComponent } from '../lock-screen/lock-screen';
+import { NavOrderService } from './nav-order.service';
 
 interface NavItem {
   icon: string;
@@ -30,6 +31,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   protected readonly toast = inject(ToastService);
   private readonly notifService = inject(NotificationService);
   protected readonly idle = inject(IdleService);
+  private readonly navOrder = inject(NavOrderService);
   private notifSub?: Subscription;
 
   sidebarCollapsed = signal(false);
@@ -39,6 +41,12 @@ export class ShellComponent implements OnInit, OnDestroy {
   recentNotifications = signal<Notification[]>([]);
 
   userProfile = signal<LoginUserProfile | null>(null);
+
+  // ── Drag-and-drop state ──────────────────────────────────────
+  /** Index of the item being dragged */
+  dragIndex = signal<number | null>(null);
+  /** Index of the item currently being dragged over */
+  dragOverIndex = signal<number | null>(null);
 
   userName = computed(() => {
     const u = this.auth.currentProfile() ?? this.userProfile();
@@ -59,7 +67,8 @@ export class ShellComponent implements OnInit, OnDestroy {
     return u?.profileImageUrl ?? null;
   });
 
-  navItems = computed<NavItem[]>(() => {
+  /** Base permission-filtered list — source of truth before ordering */
+  private readonly baseNavItems = computed<NavItem[]>(() => {
     const items: NavItem[] = [
       { icon: 'dashboard', label: 'Dashboard', route: '/dashboard' },
       { icon: 'people', label: 'Patients', route: '/patients', permission: 'View Patient Records' },
@@ -149,11 +158,21 @@ export class ShellComponent implements OnInit, OnDestroy {
     );
   });
 
+  /**
+   * User-reordered nav items.
+   * Loaded from localStorage on init, then mutated in-place on each drop.
+   */
+  navItems = signal<NavItem[]>([]);
+
   ngOnInit(): void {
     this.userProfile.set(this.auth.getUserProfile());
-    this.loadNotifications();
 
-    // Start idle detection — lock screen after 10 minutes of inactivity
+    // Apply any saved order on top of the permission-filtered base list
+    const base = this.baseNavItems();
+    const saved = this.navOrder.load();
+    this.navItems.set(saved ? this.navOrder.applyOrder(base, saved) : base);
+
+    this.loadNotifications();
     this.idle.start();
 
     const username = this.auth.getSubject();
@@ -180,6 +199,59 @@ export class ShellComponent implements OnInit, OnDestroy {
       },
     });
   }
+
+  // ── Drag-and-drop handlers ───────────────────────────────────
+
+  onDragStart(event: DragEvent, index: number): void {
+    this.dragIndex.set(index);
+    // Required for Firefox
+    event.dataTransfer?.setData('text/plain', String(index));
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+    }
+  }
+
+  onDragOver(event: DragEvent, index: number): void {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+    this.dragOverIndex.set(index);
+  }
+
+  onDragLeave(): void {
+    this.dragOverIndex.set(null);
+  }
+
+  onDrop(event: DragEvent, dropIndex: number): void {
+    event.preventDefault();
+    const fromIndex = this.dragIndex();
+    if (fromIndex === null || fromIndex === dropIndex) {
+      this.resetDrag();
+      return;
+    }
+
+    this.navItems.update((items) => {
+      const reordered = [...items];
+      const [moved] = reordered.splice(fromIndex, 1);
+      reordered.splice(dropIndex, 0, moved);
+      this.navOrder.save(reordered.map((i) => i.route));
+      return reordered;
+    });
+
+    this.resetDrag();
+  }
+
+  onDragEnd(): void {
+    this.resetDrag();
+  }
+
+  private resetDrag(): void {
+    this.dragIndex.set(null);
+    this.dragOverIndex.set(null);
+  }
+
+  // ── Other handlers ───────────────────────────────────────────
 
   toggleSidebar(): void {
     this.sidebarCollapsed.update((v) => !v);
