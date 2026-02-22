@@ -1,0 +1,25 @@
+# Ignore frontend build artifacts
+hospital-portal/node_modules/
+hospital-portal/dist/
+hospital-portal/.angular/
+hospital-portal/coverage/
+hospital-portal/test-results/
+hospital-portal/playwright-report/
+
+# Ignore backend build artifacts
+hospital-core/build/
+build/
+
+# Ignore IDE / OS artifacts
+.idea/
+.vscode/
+*.iml
+**/.DS_Store
+
+# Ignore docs
+docs/
+http/
+
+# Ignore git internals
+.git/
+.github/
