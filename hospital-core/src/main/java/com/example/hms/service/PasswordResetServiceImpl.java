@@ -113,6 +113,10 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         resetToken.setConsumedAt(LocalDateTime.now());
         tokenRepository.save(resetToken);
 
+        // Send confirmation email so the user knows their password changed
+        String displayName = resolveDisplayName(user);
+        emailService.sendPasswordResetConfirmationEmail(user.getEmail(), displayName);
+
         log.info("✅ Password successfully reset for user: {}", user.getEmail());
     }
 
@@ -181,5 +185,15 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         String profileEnv = System.getenv("SPRING_PROFILES_ACTIVE");
         String combined = (profileProp + "," + (profileEnv != null ? profileEnv : "")).toLowerCase();
         return !combined.contains("prod");
+    }
+
+    private static String resolveDisplayName(User user) {
+        if (user == null) return "there";
+        String first = user.getFirstName() != null ? user.getFirstName().strip() : "";
+        String last  = user.getLastName()  != null ? user.getLastName().strip()  : "";
+        if (!first.isBlank() && !last.isBlank()) return first + " " + last;
+        if (!first.isBlank()) return first;
+        if (!last.isBlank())  return last;
+        return user.getEmail() != null ? user.getEmail() : "there";
     }
 }

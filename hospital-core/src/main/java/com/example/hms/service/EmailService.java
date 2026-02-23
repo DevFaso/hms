@@ -91,6 +91,8 @@ public interface EmailService {
     void sendActivationEmail(String to, String activationLink);
     void sendPasswordResetEmail(String to, String resetLink);
 
+    void sendPasswordResetConfirmationEmail(String to, String displayName);
+
     void sendUsernameReminderEmail(String toEmail, String username, Locale locale);
 
     void sendPasswordRotationReminderEmail(String to, String displayName, long daysRemaining, LocalDate dueOn);
