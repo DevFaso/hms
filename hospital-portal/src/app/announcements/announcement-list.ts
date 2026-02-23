@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AnnouncementService, AnnouncementResponse } from '../services/announcement.service';
 import { ToastService } from '../core/toast.service';
+import { AuthService } from '../auth/auth.service';
 
 @Component({
   selector: 'app-announcement-list',
@@ -14,6 +15,13 @@ import { ToastService } from '../core/toast.service';
 export class AnnouncementListComponent implements OnInit {
   private readonly announcementService = inject(AnnouncementService);
   private readonly toast = inject(ToastService);
+  private readonly auth = inject(AuthService);
+
+  /** True when the logged-in user has an admin-level role */
+  get canManage(): boolean {
+    const roles = this.auth.getUserProfile()?.roles ?? [];
+    return roles.some((r) => ['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN'].includes(r));
+  }
 
   announcements = signal<AnnouncementResponse[]>([]);
   filtered = signal<AnnouncementResponse[]>([]);

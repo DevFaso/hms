@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import java.util.Locale;
@@ -96,6 +97,82 @@ class PasswordResetServiceImplTest {
         verify(tokenRepository).save(resetToken);
         assertThat(user.getPasswordHash()).isEqualTo("encodedPwd");
         assertThat(resetToken.getConsumedAt()).isNotNull();
+        // confirmation email must be sent after a successful reset
+        verify(emailService).sendPasswordResetConfirmationEmail(eq("test@test.com"), anyString());
+    }
+
+    @Test
+    void confirmReset_sendsConfirmationEmail_withDisplayName() {
+        String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        user.setFirstName("Alice");
+        user.setLastName("Smith");
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+            .user(user)
+            .tokenHash(rawToken.toLowerCase())
+            .expiration(LocalDateTime.now().plusHours(1))
+            .build();
+
+        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
+
+        service.confirmReset(rawToken, "newPassword");
+
+        verify(emailService).sendPasswordResetConfirmationEmail("test@test.com", "Alice Smith");
+    }
+
+    @Test
+    void confirmReset_sendsConfirmationEmail_withFirstNameOnly() {
+        String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        user.setFirstName("Alice");
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+            .user(user)
+            .tokenHash(rawToken.toLowerCase())
+            .expiration(LocalDateTime.now().plusHours(1))
+            .build();
+
+        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
+
+        service.confirmReset(rawToken, "newPassword");
+
+        verify(emailService).sendPasswordResetConfirmationEmail("test@test.com", "Alice");
+    }
+
+    @Test
+    void confirmReset_sendsConfirmationEmail_fallsBackToEmail_whenNoName() {
+        String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        // no firstName or lastName set on user
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+            .user(user)
+            .tokenHash(rawToken.toLowerCase())
+            .expiration(LocalDateTime.now().plusHours(1))
+            .build();
+
+        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+        when(passwordEncoder.encode("newPassword")).thenReturn("encodedPwd");
+
+        service.confirmReset(rawToken, "newPassword");
+
+        // displayName falls back to the user's email address
+        verify(emailService).sendPasswordResetConfirmationEmail("test@test.com", "test@test.com");
+    }
+
+    @Test
+    void confirmReset_doesNotSendConfirmationEmail_whenTokenExpired() {
+        String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+        PasswordResetToken resetToken = PasswordResetToken.builder()
+            .user(user)
+            .tokenHash(rawToken.toLowerCase())
+            .expiration(LocalDateTime.now().minusHours(1))
+            .build();
+
+        when(tokenRepository.findByTokenHash(rawToken.toLowerCase())).thenReturn(Optional.of(resetToken));
+
+        assertThatThrownBy(() -> service.confirmReset(rawToken, "newPwd"))
+            .isInstanceOf(IllegalStateException.class);
+
+        // no confirmation email should be sent when the token is already expired
+        verify(emailService, never()).sendPasswordResetConfirmationEmail(anyString(), anyString());
     }
 
     @Test

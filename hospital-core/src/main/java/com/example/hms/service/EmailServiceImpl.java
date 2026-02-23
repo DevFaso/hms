@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -17,9 +18,16 @@ import java.util.Locale;
 @Slf4j
 public class EmailServiceImpl implements EmailService {
 
+    @Value("${app.frontend.base-url}")
+    private String frontendBaseUrl;
+
     private static final DateTimeFormatter HUMAN_DATE = DateTimeFormatter.ofPattern("MMMM d, yyyy");
-    private static final String LOGIN_URL = "https://yourapp.com/login";
     private static final String GENERIC_GREETING = "there";
+
+    /** Returns the app login URL, driven by the configured frontend base URL. */
+    private String loginUrl() {
+        return frontendBaseUrl + "/login";
+    }
 
     @Override
     public void sendAppointmentRescheduledEmail(String to, String patientName, String hospitalName, String staffName, String newAppointmentDate, String newAppointmentTime, String hospitalEmail, String hospitalPhone, String rescheduleLink, String cancelLink) {
@@ -121,107 +129,43 @@ public class EmailServiceImpl implements EmailService {
         String safeUserName = (userName != null && !userName.isBlank()) ? userName : GENERIC_GREETING;
         String safeRole = (roleDisplayName != null && !roleDisplayName.isBlank()) ? roleDisplayName : "the assigned role";
         String safeHospital = (hospitalDisplayName != null && !hospitalDisplayName.isBlank()) ? hospitalDisplayName : "our hospital network";
-
-        // Temporary credentials section (only for brand-new users)
-        String credentialsSection = "";
-        if (tempUsername != null && tempPassword != null) {
-            credentialsSection = """
-                <div style="background:#fef9c3;border:1px solid #fbbf24;border-radius:8px;padding:16px;margin:20px 0;">
-                  <h3 style="margin:0 0 8px;color:#92400e;">🔑 Your Temporary Login Credentials</h3>
-                  <p style="margin:4px 0;">Username: <strong style="font-family:monospace;">%s</strong></p>
-                  <p style="margin:4px 0;">Password: <strong style="font-family:monospace;">%s</strong></p>
-                  <p style="margin:8px 0 0;font-size:13px;color:#92400e;">
-                    ⚠️ You will be asked to change your password on first login.
-                    Keep these credentials safe and do not share them.
-                  </p>
-                </div>
-                """.formatted(escapeHtml(tempUsername), escapeHtml(tempPassword));
-        }
-
         String linkSection = "";
         if (profileCompletionUrl != null && !profileCompletionUrl.isBlank()) {
             linkSection = """
                 <p style="margin:24px 0;">
-                    <a href="%s" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;font-size:16px;font-weight:600;">Finish Profile Setup →</a>
+                    <a href="%s" style="background:#2563eb;color:#fff;padding:12px 18px;border-radius:6px;text-decoration:none;display:inline-block;">Finish profile setup</a>
                 </p>
-                <p style="font-size: 13px; color: #888;">If the button above doesn't work, copy and paste this link into your browser:<br />
-                <a href="%s" style="color:#2563eb;word-break:break-all;">%s</a></p>
+                <p style="font-size: 14px; color: #666;">If the button above doesn't work, copy and paste this link into your browser:<br /><a href="%s">%s</a></p>
                 """.formatted(profileCompletionUrl, profileCompletionUrl, profileCompletionUrl);
         }
 
+        String credentialsSection = "";
+        if (tempUsername != null && !tempUsername.isBlank() && tempPassword != null && !tempPassword.isBlank()) {
+            credentialsSection = """
+                <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;margin:16px 0;">
+                    <p style="margin:0 0 8px;font-weight:600;color:#0369a1;">Your Temporary Login Credentials</p>
+                    <p style="margin:4px 0;"><strong>Username:</strong> %s</p>
+                    <p style="margin:4px 0;"><strong>Temporary Password:</strong> <code style="background:#e0f2fe;padding:2px 6px;border-radius:4px;">%s</code></p>
+                    <p style="margin:8px 0 0;font-size:13px;color:#0369a1;">Please sign in and change your password immediately.</p>
+                </div>
+                """.formatted(tempUsername, tempPassword);
+        }
+
         String body = """
-            <!DOCTYPE html>
-            <html>
-            <body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Arial,sans-serif;">
-            <table width="100%%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:40px 0;">
-              <tr><td align="center">
-                <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.08);overflow:hidden;">
-                  <!-- Header -->
-                  <tr><td style="background:linear-gradient(135deg,#1e40af,#2563eb);padding:32px 40px;text-align:center;">
-                    <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:12px;padding:12px 20px;margin-bottom:16px;">
-                      <span style="color:#fff;font-size:22px;font-weight:700;letter-spacing:2px;">HMS</span>
-                    </div>
-                    <h1 style="margin:0;color:#fff;font-size:22px;font-weight:600;">New Role Assignment</h1>
-                    <p style="margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">Hospital Management System</p>
-                  </td></tr>
-                  <!-- Body -->
-                  <tr><td style="padding:40px;">
-                    <p style="margin:0 0 16px;font-size:16px;color:#1e293b;">Hi <strong>%s</strong>,</p>
-                    <p style="margin:0 0 24px;font-size:15px;color:#475569;">You have been assigned a new role in the hospital system.</p>
-                    <!-- Role / Hospital card -->
-                    <table width="100%%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;border-radius:8px;margin-bottom:28px;">
-                      <tr>
-                        <td style="padding:20px;">
-                          <table width="100%%" cellpadding="0" cellspacing="0">
-                            <tr>
-                              <td style="padding:6px 0;"><span style="color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Role</span></td>
-                              <td style="padding:6px 0;text-align:right;"><strong style="color:#1e293b;font-size:15px;">%s</strong></td>
-                            </tr>
-                            <tr>
-                              <td style="padding:6px 0;"><span style="color:#64748b;font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;">Organization</span></td>
-                              <td style="padding:6px 0;text-align:right;"><strong style="color:#1e293b;font-size:15px;">%s</strong></td>
-                            </tr>
-                          </table>
-                        </td>
-                      </tr>
-                    </table>
-                    %s
-                    <!-- Verification Code -->
-                    <p style="margin:0 0 12px;font-size:15px;color:#1e293b;font-weight:600;">Enter this code to confirm your assignment:</p>
-                    <div style="text-align:center;margin:0 0 28px;">
-                      <div style="display:inline-block;background:#eff6ff;border:2px solid #bfdbfe;border-radius:12px;padding:20px 40px;">
-                        <span style="font-size:38px;font-weight:800;letter-spacing:12px;color:#1e40af;font-family:monospace;">%s</span>
-                      </div>
-                      <p style="margin:10px 0 0;font-size:13px;color:#ef4444;font-weight:500;">⏱ This code expires soon. Do not share it.</p>
-                    </div>
-                    <!-- Reference -->
-                    <p style="margin:0 0 24px;font-size:13px;color:#94a3b8;">Assignment reference: <code style="background:#f1f5f9;padding:2px 6px;border-radius:4px;color:#475569;">%s</code></p>
-                    <!-- CTA -->
-                    %s
-                    <hr style="border:none;border-top:1px solid #e2e8f0;margin:28px 0;" />
-                    <p style="margin:0;font-size:13px;color:#94a3b8;">If you did not expect this assignment, please contact your hospital administrator immediately.</p>
-                  </td></tr>
-                  <!-- Footer -->
-                  <tr><td style="background:#f8fafc;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;">
-                    <p style="margin:0;font-size:12px;color:#94a3b8;">© Hospital Management System — Secure Notification</p>
-                  </td></tr>
-                </table>
-              </td></tr>
-            </table>
-            </body>
-            </html>
-            """.formatted(safeUserName, safeRole, safeHospital,
-                          credentialsSection,
-                          confirmationCode, assignmentCode, linkSection);
+            <h2>Confirm Your New Role Assignment</h2>
+            <p>Hi %s,</p>
+            <p>You have been assigned the role <strong>%s</strong> at <strong>%s</strong>.</p>
+            <p>Please confirm this assignment with the verification code below:</p>
+                <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">%s</p>
+            <p>Assignment reference: <strong>%s</strong></p>
+            <p>If you did not expect this assignment, please contact the hospital administrator immediately.</p>
+            %s
+            %s
+            <p style="color:#666">This code will expire soon for security purposes.</p>
+            """.formatted(safeUserName, safeRole, safeHospital, confirmationCode, assignmentCode, linkSection, credentialsSection);
 
-        sendHtml(List.of(to), List.of(), List.of(), "Action Required: Confirm Your Role Assignment at " + safeHospital, body);
+        sendHtml(List.of(to), List.of(), List.of(), "Action Required: Confirm Your Hospital Role Assignment", body);
         log.info("✅ Role assignment confirmation email sent to {}", to);
-    }
-
-    /** Minimal HTML-escape for safe inline display of user-supplied strings. */
-    private static String escapeHtml(String s) {
-        if (s == null) return "";
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;");
     }
 
     @Override
@@ -268,6 +212,81 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
+    public void sendPasswordResetConfirmationEmail(String to, String displayName) {
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        validateAddresses(List.of(to));
+        String safeName = (displayName != null && !displayName.isBlank()) ? displayName : GENERIC_GREETING;
+        String changedAt = java.time.LocalDateTime.now()
+            .format(java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' HH:mm"));
+        String body = """
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px;">
+              <div style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+                <!-- Header -->
+                <div style="background:linear-gradient(135deg,#065f46,#059669);padding:32px 40px;text-align:center;">
+                  <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;">
+                    ✅ Password Changed Successfully
+                  </h1>
+                  <p style="color:#a7f3d0;margin:8px 0 0;font-size:14px;">Hospital Management System</p>
+                </div>
+
+                <!-- Body -->
+                <div style="padding:36px 40px;">
+                  <p style="font-size:15px;color:#1e293b;margin:0 0 16px;">Hi %s,</p>
+                  <p style="font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;">
+                    Your account password was successfully reset on <strong>%s</strong>.
+                    You can now sign in with your new password.
+                  </p>
+
+                  <!-- CTA Button -->
+                  <div style="text-align:center;margin:32px 0;">
+                    <a href="%s"
+                       style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;
+                              text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;
+                              font-weight:600;letter-spacing:0.3px;">
+                      Sign In to Your Account
+                    </a>
+                  </div>
+
+                  <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 28px;"/>
+
+                  <!-- Security warning -->
+                  <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
+                    <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#991b1b;">🚨 Didn't make this change?</p>
+                    <p style="margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;">
+                      If you did <strong>not</strong> reset your password, your account may have been compromised.
+                      <strong>
+                        <a href="%s" style="color:#991b1b;">Sign in immediately</a>
+                      </strong>
+                      and contact your hospital administrator to secure your account.
+                    </p>
+                  </div>
+
+                  <!-- Tips -->
+                  <ul style="padding-left:20px;color:#64748b;font-size:13px;line-height:1.8;margin:0;">
+                    <li>Never share your password with anyone, including hospital staff.</li>
+                    <li>Use a unique password that you don't use on other sites.</li>
+                    <li>Enable any available two-factor authentication for extra security.</li>
+                  </ul>
+                </div>
+
+                <!-- Footer -->
+                <div style="background:#f1f5f9;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;">
+                  <p style="margin:0;font-size:12px;color:#94a3b8;">
+                    © %d Hospital Management System &nbsp;|&nbsp;
+                    This is an automated message — please do not reply.
+                  </p>
+                </div>
+
+              </div>
+            </div>
+            """.formatted(safeName, changedAt, loginUrl(), loginUrl(), java.time.Year.now().getValue());
+
+        sendHtml(List.of(to), List.of(), List.of(), "Your HMS Password Has Been Changed", body);
+        log.info("✅ Password reset confirmation email sent to {}", to);
+    }
+
+    @Override
     public void sendUsernameReminderEmail(String toEmail, String username, Locale locale) {
         var subject = subjectUsername(locale);
         var body = buildUsernameReminderEmailBody(username, locale);
@@ -292,8 +311,8 @@ public class EmailServiceImpl implements EmailService {
             HUMAN_DATE.format(dueOn),
             daysRemaining,
             daysRemaining == 1 ? "" : "s",
-            LOGIN_URL,
-            LOGIN_URL
+            loginUrl(),
+            loginUrl()
         );
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
         log.info("📧 Password rotation reminder sent to {} ({} day(s) remaining)", to, daysRemaining);
@@ -315,8 +334,8 @@ public class EmailServiceImpl implements EmailService {
             HUMAN_DATE.format(dueOn),
             daysOverdue,
             daysOverdue == 1 ? "" : "s",
-            LOGIN_URL,
-            LOGIN_URL
+            loginUrl(),
+            loginUrl()
         );
         sendHtml(List.of(to), List.of(), List.of(), subject, body);
         log.info("📧 Password rotation enforcement notice sent to {} ({} day(s) overdue)", to, daysOverdue);
@@ -332,7 +351,7 @@ public class EmailServiceImpl implements EmailService {
     }
 
     private String buildUsernameReminderEmailBody(String username, Locale locale) {
-        var loginUrl = LOGIN_URL;
+        var loginUrl = loginUrl();
         var lang = locale != null ? locale.getLanguage() : "en";
         return switch (lang) {
             case "fr" -> """
@@ -371,11 +390,72 @@ public class EmailServiceImpl implements EmailService {
 
     private String buildResetEmailBody(String link) {
         return """
-            <h2>Password Reset Request</h2>
-            <p>If you did not make this request, you can safely ignore this email.</p>
-            <p><a href="%s">Reset Password</a></p>
-            <p style="color:#666">This link will expire in 2 hours.</p>
-            """.formatted(link);
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px;">
+              <div style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+                <!-- Header -->
+                <div style="background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:32px 40px;text-align:center;">
+                  <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;">
+                    🔒 Password Reset Request
+                  </h1>
+                  <p style="color:#bfdbfe;margin:8px 0 0;font-size:14px;">Hospital Management System</p>
+                </div>
+
+                <!-- Body -->
+                <div style="padding:36px 40px;">
+                  <p style="font-size:15px;color:#1e293b;margin:0 0 16px;">Hello,</p>
+                  <p style="font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;">
+                    We received a request to reset the password for your account. Click the button below to choose a new password.
+                  </p>
+
+                  <!-- CTA Button -->
+                  <div style="text-align:center;margin:32px 0;">
+                    <a href="%s"
+                       style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;
+                              text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;
+                              font-weight:600;letter-spacing:0.3px;">
+                      Reset My Password
+                    </a>
+                  </div>
+
+                  <!-- Fallback link -->
+                  <p style="font-size:13px;color:#64748b;text-align:center;margin:0 0 32px;">
+                    Button not working? Copy and paste this link into your browser:<br/>
+                    <a href="%s" style="color:#2563eb;word-break:break-all;">%s</a>
+                  </p>
+
+                  <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 28px;"/>
+
+                  <!-- Security warning -->
+                  <div style="background:#fef9ec;border:1px solid #fcd34d;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
+                    <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#92400e;">⚠️ Didn't request this?</p>
+                    <p style="margin:0;font-size:14px;color:#78350f;line-height:1.6;">
+                      If you did <strong>not</strong> request a password reset, your account may be at risk.
+                      Please <strong>do not click the link above</strong> and immediately
+                      <a href="%s" style="color:#b45309;font-weight:600;">sign in to your account</a>
+                      to verify your security settings, or contact your hospital administrator.
+                    </p>
+                  </div>
+
+                  <!-- Expiry & tips -->
+                  <ul style="padding-left:20px;color:#64748b;font-size:13px;line-height:1.8;margin:0;">
+                    <li>This link expires in <strong>2 hours</strong>.</li>
+                    <li>The link can only be used <strong>once</strong>.</li>
+                    <li>Never share this link with anyone.</li>
+                  </ul>
+                </div>
+
+                <!-- Footer -->
+                <div style="background:#f1f5f9;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;">
+                  <p style="margin:0;font-size:12px;color:#94a3b8;">
+                    © %d Hospital Management System &nbsp;|&nbsp;
+                    This is an automated message — please do not reply.
+                  </p>
+                </div>
+
+              </div>
+            </div>
+            """.formatted(link, link, link, loginUrl(), java.time.Year.now().getValue());
     }
 
     private static void validateAddresses(List<String> addresses) {

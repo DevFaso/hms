@@ -39,6 +39,15 @@ export class Login implements OnInit {
     phoneNumber: '',
   };
 
+  /** Forgot-password state */
+  forgotPasswordMode = false;
+  forgotPasswordEmail = '';
+  forgotPasswordLoading = false;
+  forgotPasswordSuccess = '';
+
+  /** Forgot-username state */
+  forgotUsernameMode = false;
+
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
@@ -152,7 +161,6 @@ export class Login implements OnInit {
         staffId?: string;
         roleName?: string;
         active?: boolean;
-        forcePasswordChange?: boolean;
       }>('/auth/login', {
         username: this.username,
         password: this.password,
@@ -187,9 +195,7 @@ export class Login implements OnInit {
             this.auth.setUserProfile(profile);
           }
 
-          const dest = res.forcePasswordChange
-            ? '/force-change-password'
-            : this.auth.resolveLandingPath();
+          const dest = this.auth.resolveLandingPath();
           void this.router.navigateByUrl(dest);
           this.loading = false;
         },
@@ -207,5 +213,58 @@ export class Login implements OnInit {
 
   toggleBootstrapPasswordVisibility(): void {
     this.showBootstrapPassword = !this.showBootstrapPassword;
+  }
+
+  // ─── Forgot Password ────────────────────────────────────────────────────────
+
+  openForgotPassword(): void {
+    this.forgotPasswordMode = true;
+    this.forgotUsernameMode = false;
+    this.error = '';
+    this.forgotPasswordEmail = '';
+    this.forgotPasswordSuccess = '';
+  }
+
+  closeForgotPassword(): void {
+    this.forgotPasswordMode = false;
+    this.forgotPasswordSuccess = '';
+    this.error = '';
+  }
+
+  submitForgotPassword(): void {
+    if (!this.isBrowser || this.forgotPasswordLoading) return;
+    this.error = '';
+    this.forgotPasswordSuccess = '';
+    if (!this.forgotPasswordEmail) {
+      this.error = 'Please enter your email address.';
+      return;
+    }
+    this.forgotPasswordLoading = true;
+    this.http.post<void>('/auth/password/request', { email: this.forgotPasswordEmail }).subscribe({
+      next: () => {
+        this.forgotPasswordLoading = false;
+        this.forgotPasswordSuccess =
+          'If that email is registered, a password reset link has been sent. Please check your inbox.';
+      },
+      error: () => {
+        this.forgotPasswordLoading = false;
+        // Always show neutral message to avoid email enumeration
+        this.forgotPasswordSuccess =
+          'If that email is registered, a password reset link has been sent. Please check your inbox.';
+      },
+    });
+  }
+
+  // ─── Forgot Username ─────────────────────────────────────────────────────────
+
+  openForgotUsername(): void {
+    this.forgotUsernameMode = true;
+    this.forgotPasswordMode = false;
+    this.error = '';
+  }
+
+  closeForgotUsername(): void {
+    this.forgotUsernameMode = false;
+    this.error = '';
   }
 }
