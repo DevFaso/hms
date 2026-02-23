@@ -13,23 +13,6 @@ export const routes: Routes = [
     loadComponent: () => import('./login/login').then((m) => m.Login),
   },
 
-  // Role-assignment onboarding — public, no auth required (email link target)
-  {
-    path: 'onboarding/role-welcome',
-    loadComponent: () =>
-      import('./onboarding/role-welcome/role-welcome').then((m) => m.RoleWelcomeComponent),
-  },
-
-  // Force password change — shown after first login with temp credentials
-  {
-    path: 'force-change-password',
-    canActivate: [AuthGuard],
-    loadComponent: () =>
-      import('./force-change-password/force-change-password').then(
-        (m) => m.ForceChangePasswordComponent,
-      ),
-  },
-
   // Authenticated shell
   {
     path: '',
@@ -100,6 +83,11 @@ export const routes: Routes = [
             path: 'new',
             loadComponent: () =>
               import('./appointments/appointment-form').then((m) => m.AppointmentFormComponent),
+          },
+          {
+            path: ':id',
+            loadComponent: () =>
+              import('./appointments/appointment-detail').then((m) => m.AppointmentDetailComponent),
           },
         ],
       },
@@ -173,7 +161,7 @@ export const routes: Routes = [
           roles: [
             'ROLE_DOCTOR',
             'ROLE_NURSE',
-            'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_TECHNICIAN',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
@@ -204,11 +192,9 @@ export const routes: Routes = [
         loadComponent: () => import('./chat/chat').then((m) => m.ChatComponent),
       },
 
-      // Announcements (Admin)
+      // Announcements (all authenticated users can view; admins can also manage)
       {
         path: 'announcements',
-        canActivate: [RoleGuard],
-        data: { roles: ['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN'] },
         loadComponent: () =>
           import('./announcements/announcement-list').then((m) => m.AnnouncementListComponent),
       },
