@@ -297,11 +297,11 @@
             <span>{{ 'LOGIN.REMEMBER_ME' | translate }}</span>
           </label>
           <div class="forgot-links">
-            <a href="javascript:void(0)" class="forgot-link">{{
+            <a href="javascript:void(0)" class="forgot-link" (click)="openForgotPassword()">{{
               'LOGIN.FORGOT_PASSWORD' | translate
             }}</a>
             <span class="link-separator">·</span>
-            <a href="javascript:void(0)" class="forgot-link">{{
+            <a href="javascript:void(0)" class="forgot-link" (click)="openForgotUsername()">{{
               'LOGIN.FORGOT_USERNAME' | translate
             }}</a>
           </div>
@@ -323,3 +323,164 @@
     </div>
   </div>
 </div>
+
+<!-- ─── Forgot Password Overlay ────────────────────────────────────────────── -->
+@if (forgotPasswordMode) {
+  <div
+    class="fp-overlay"
+    (click)="closeForgotPassword()"
+    (keydown.escape)="closeForgotPassword()"
+    tabindex="-1"
+  >
+    <dialog
+      class="fp-card"
+      aria-labelledby="forgot-password-title"
+      [open]="forgotPasswordMode"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="closeForgotPassword()"
+      tabindex="-1"
+    >
+      <div class="fp-header">
+        <h2 id="forgot-password-title">Reset Password</h2>
+        <button class="fp-close" type="button" title="Close" (click)="closeForgotPassword()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+            />
+          </svg>
+        </button>
+      </div>
+
+      @if (forgotPasswordSuccess) {
+        <output class="fp-success">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"
+            />
+          </svg>
+          <span>{{ forgotPasswordSuccess }}</span>
+        </output>
+        <button type="button" class="btn-login fp-back-btn" (click)="closeForgotPassword()">
+          Back to Sign In
+        </button>
+      } @else {
+        <p class="fp-instruction">
+          Enter the email address associated with your account and we will send you a link to reset
+          your password.
+        </p>
+        @if (error) {
+          <div class="error-banner" role="alert">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path
+                d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+              />
+            </svg>
+            <span>{{ error }}</span>
+          </div>
+        }
+        <form (ngSubmit)="submitForgotPassword()" class="login-form">
+          <div class="form-group">
+            <label for="fp-email">Email Address</label>
+            <div class="input-wrapper">
+              <svg
+                class="input-icon"
+                width="20"
+                height="20"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path
+                  d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"
+                />
+              </svg>
+              <input
+                id="fp-email"
+                type="email"
+                [(ngModel)]="forgotPasswordEmail"
+                name="fpEmail"
+                autocomplete="email"
+                placeholder="you@example.com"
+                [disabled]="forgotPasswordLoading"
+                required
+              />
+            </div>
+          </div>
+          <button type="submit" class="btn-login" [disabled]="forgotPasswordLoading">
+            @if (forgotPasswordLoading) {
+              <span class="spinner"></span>
+              <span>Sending...</span>
+            } @else {
+              <span>Send Reset Link</span>
+            }
+          </button>
+          <button type="button" class="fp-cancel-link" (click)="closeForgotPassword()">
+            Back to Sign In
+          </button>
+        </form>
+      }
+    </dialog>
+  </div>
+}
+
+<!-- ─── Forgot Username Overlay ─────────────────────────────────────────────── -->
+@if (forgotUsernameMode) {
+  <div
+    class="fp-overlay"
+    (click)="closeForgotUsername()"
+    (keydown.escape)="closeForgotUsername()"
+    tabindex="-1"
+  >
+    <dialog
+      class="fp-card"
+      aria-labelledby="forgot-username-title"
+      [open]="forgotUsernameMode"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="closeForgotUsername()"
+      tabindex="-1"
+    >
+      <div class="fp-header">
+        <h2 id="forgot-username-title">Forgot Username</h2>
+        <button class="fp-close" type="button" title="Close" (click)="closeForgotUsername()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path
+              d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+            />
+          </svg>
+        </button>
+      </div>
+      <div class="fp-info-box">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+          <path
+            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"
+          />
+        </svg>
+        <div>
+          <p><strong>Username recovery is managed by your system administrator.</strong></p>
+          <p>
+            Please contact your hospital administrator or IT support — they can look up your account
+            using your name or email address.
+          </p>
+          <p class="fp-tip">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path
+                d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"
+              />
+            </svg>
+            <strong>Tip:</strong> If you know the email address on your account, you can use
+            <button
+              type="button"
+              class="fp-inline-link"
+              (click)="closeForgotUsername(); openForgotPassword()"
+            >
+              Reset Password
+            </button>
+            to regain access without needing your username.
+          </p>
+        </div>
+      </div>
+      <button type="button" class="btn-login fp-back-btn" (click)="closeForgotUsername()">
+        Back to Sign In
+      </button>
+    </dialog>
+  </div>
+}
