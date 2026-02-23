@@ -240,7 +240,7 @@ export class Login implements OnInit {
       return;
     }
     this.forgotPasswordLoading = true;
-    this.http.post<void>('/auth/request-reset', { email: this.forgotPasswordEmail }).subscribe({
+    this.http.post<void>('/auth/password/request', { email: this.forgotPasswordEmail }).subscribe({
       next: () => {
         this.forgotPasswordLoading = false;
         this.forgotPasswordSuccess =

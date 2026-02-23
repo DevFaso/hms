@@ -457,8 +457,24 @@
         <div>
           <p><strong>Username recovery is managed by your system administrator.</strong></p>
           <p>
-            Please contact your hospital administrator or IT support to retrieve your username. They
-            can look up your account using your name or email address.
+            Please contact your hospital administrator or IT support — they can look up your account
+            using your name or email address.
+          </p>
+          <p class="fp-tip">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path
+                d="M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"
+              />
+            </svg>
+            <strong>Tip:</strong> If you know the email address on your account, you can use
+            <button
+              type="button"
+              class="fp-inline-link"
+              (click)="closeForgotUsername(); openForgotPassword()"
+            >
+              Reset Password
+            </button>
+            to regain access without needing your username.
           </p>
         </div>
       </div>
