@@ -12,6 +12,11 @@ export const routes: Routes = [
     canActivate: [LoginRedirectGuard],
     loadComponent: () => import('./login/login').then((m) => m.Login),
   },
+  {
+    path: 'reset-password',
+    loadComponent: () =>
+      import('./reset-password/reset-password').then((m) => m.ResetPasswordComponent),
+  },
 
   // Authenticated shell
   {

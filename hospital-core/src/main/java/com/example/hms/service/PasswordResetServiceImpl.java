@@ -7,6 +7,7 @@ import com.example.hms.repository.PasswordResetTokenRepository;
 import com.example.hms.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +31,9 @@ public class PasswordResetServiceImpl implements PasswordResetService {
     private final PasswordResetTokenRepository tokenRepository;
     private final EmailService emailService;
     private final PasswordEncoder passwordEncoder;
+
+    @Value("${app.frontend.base-url}")
+    private String frontendBaseUrl;
 
     private static final int TOKEN_BYTES = 32; // 256-bit entropy
     private static final Pattern HEX_64 = Pattern.compile("^[0-9a-fA-F]{64}$");
@@ -72,7 +76,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
 
         tokenRepository.save(resetToken);
 
-        String resetLink = "https://yourapp.com/reset-password?token=" + rawToken;
+        String resetLink = frontendBaseUrl + "/reset-password?token=" + rawToken;
         emailService.sendPasswordResetEmail(user.getEmail(), resetLink);
 
         if (log.isDebugEnabled() && shouldLogRawToken()) {
