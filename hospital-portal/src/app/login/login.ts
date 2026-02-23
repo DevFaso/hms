@@ -240,21 +240,19 @@ export class Login implements OnInit {
       return;
     }
     this.forgotPasswordLoading = true;
-    this.http
-      .post<void>(`/auth/request-reset?email=${encodeURIComponent(this.forgotPasswordEmail)}`, null)
-      .subscribe({
-        next: () => {
-          this.forgotPasswordLoading = false;
-          this.forgotPasswordSuccess =
-            'If that email is registered, a password reset link has been sent. Please check your inbox.';
-        },
-        error: () => {
-          this.forgotPasswordLoading = false;
-          // Always show neutral message to avoid email enumeration
-          this.forgotPasswordSuccess =
-            'If that email is registered, a password reset link has been sent. Please check your inbox.';
-        },
-      });
+    this.http.post<void>('/auth/request-reset', { email: this.forgotPasswordEmail }).subscribe({
+      next: () => {
+        this.forgotPasswordLoading = false;
+        this.forgotPasswordSuccess =
+          'If that email is registered, a password reset link has been sent. Please check your inbox.';
+      },
+      error: () => {
+        this.forgotPasswordLoading = false;
+        // Always show neutral message to avoid email enumeration
+        this.forgotPasswordSuccess =
+          'If that email is registered, a password reset link has been sent. Please check your inbox.';
+      },
+    });
   }
 
   // ─── Forgot Username ─────────────────────────────────────────────────────────

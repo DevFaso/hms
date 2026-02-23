@@ -332,14 +332,16 @@
     (keydown.escape)="closeForgotPassword()"
     tabindex="-1"
   >
-    <div
+    <dialog
       class="fp-card"
+      aria-labelledby="forgot-password-title"
+      [open]="forgotPasswordMode"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeForgotPassword()"
       tabindex="-1"
     >
       <div class="fp-header">
-        <h2>Reset Password</h2>
+        <h2 id="forgot-password-title">Reset Password</h2>
         <button class="fp-close" type="button" title="Close" (click)="closeForgotPassword()">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <path
@@ -416,7 +418,7 @@
           </button>
         </form>
       }
-    </div>
+    </dialog>
   </div>
 }
 
@@ -428,14 +430,16 @@
     (keydown.escape)="closeForgotUsername()"
     tabindex="-1"
   >
-    <div
+    <dialog
       class="fp-card"
+      aria-labelledby="forgot-username-title"
+      [open]="forgotUsernameMode"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeForgotUsername()"
       tabindex="-1"
     >
       <div class="fp-header">
-        <h2>Forgot Username</h2>
+        <h2 id="forgot-username-title">Forgot Username</h2>
         <button class="fp-close" type="button" title="Close" (click)="closeForgotUsername()">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <path
@@ -461,6 +465,6 @@
       <button type="button" class="btn-login fp-back-btn" (click)="closeForgotUsername()">
         Back to Sign In
       </button>
-    </div>
+    </dialog>
   </div>
 }

@@ -12,6 +12,16 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { AuthService } from '../auth/auth.service';
 
+/** Roles permitted to update appointment status (confirm / complete / no-show). */
+const STATUS_UPDATE_ROLES: readonly string[] = [
+  'ROLE_DOCTOR',
+  'ROLE_NURSE',
+  'ROLE_MIDWIFE',
+  'ROLE_HOSPITAL_ADMIN',
+  'ROLE_ADMIN',
+  'ROLE_SUPER_ADMIN',
+];
+
 @Component({
   selector: 'app-appointment-detail',
   standalone: true,
@@ -63,14 +73,7 @@ export class AppointmentDetailComponent implements OnInit {
   }
 
   get canUpdateStatus(): boolean {
-    return (
-      this.currentUserRoles.includes('ROLE_DOCTOR') ||
-      this.currentUserRoles.includes('ROLE_NURSE') ||
-      this.currentUserRoles.includes('ROLE_MIDWIFE') ||
-      this.currentUserRoles.includes('ROLE_HOSPITAL_ADMIN') ||
-      this.currentUserRoles.includes('ROLE_ADMIN') ||
-      this.currentUserRoles.includes('ROLE_SUPER_ADMIN')
-    );
+    return STATUS_UPDATE_ROLES.some((r) => this.currentUserRoles.includes(r));
   }
 
   ngOnInit(): void {
@@ -135,6 +138,20 @@ export class AppointmentDetailComponent implements OnInit {
       this.toast.error('Please fill in all required fields.');
       return;
     }
+
+    const selectedDate = new Date(this.rescheduleDate);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (selectedDate < today) {
+      this.toast.error('Cannot schedule appointments in the past.');
+      return;
+    }
+
+    if (this.rescheduleEnd <= this.rescheduleStart) {
+      this.toast.error('End time must be after start time.');
+      return;
+    }
+
     this.saving.set(true);
     const req: AppointmentUpsertRequest = {
       appointmentDate: this.rescheduleDate,
