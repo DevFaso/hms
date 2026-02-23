@@ -120,7 +120,9 @@ public class EmailServiceImpl implements EmailService {
                                                     String hospitalDisplayName,
                                                     String confirmationCode,
                                                     String assignmentCode,
-                                                    String profileCompletionUrl) {
+                                                    String profileCompletionUrl,
+                                                    String tempUsername,
+                                                    String tempPassword) {
         validateAddresses(List.of(to));
         log.info("📧 Sending role assignment confirmation email to: {}", to);
 
@@ -137,6 +139,18 @@ public class EmailServiceImpl implements EmailService {
                 """.formatted(profileCompletionUrl, profileCompletionUrl, profileCompletionUrl);
         }
 
+        String credentialsSection = "";
+        if (tempUsername != null && !tempUsername.isBlank() && tempPassword != null && !tempPassword.isBlank()) {
+            credentialsSection = """
+                <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;padding:16px;margin:16px 0;">
+                    <p style="margin:0 0 8px;font-weight:600;color:#0369a1;">Your Temporary Login Credentials</p>
+                    <p style="margin:4px 0;"><strong>Username:</strong> %s</p>
+                    <p style="margin:4px 0;"><strong>Temporary Password:</strong> <code style="background:#e0f2fe;padding:2px 6px;border-radius:4px;">%s</code></p>
+                    <p style="margin:8px 0 0;font-size:13px;color:#0369a1;">Please sign in and change your password immediately.</p>
+                </div>
+                """.formatted(tempUsername, tempPassword);
+        }
+
         String body = """
             <h2>Confirm Your New Role Assignment</h2>
             <p>Hi %s,</p>
@@ -146,8 +160,9 @@ public class EmailServiceImpl implements EmailService {
             <p>Assignment reference: <strong>%s</strong></p>
             <p>If you did not expect this assignment, please contact the hospital administrator immediately.</p>
             %s
+            %s
             <p style="color:#666">This code will expire soon for security purposes.</p>
-            """.formatted(safeUserName, safeRole, safeHospital, confirmationCode, assignmentCode, linkSection);
+            """.formatted(safeUserName, safeRole, safeHospital, confirmationCode, assignmentCode, linkSection, credentialsSection);
 
         sendHtml(List.of(to), List.of(), List.of(), "Action Required: Confirm Your Hospital Role Assignment", body);
         log.info("✅ Role assignment confirmation email sent to {}", to);
