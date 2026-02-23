@@ -41,11 +41,12 @@
   <!-- Content -->
   @if (!loading() && appointment(); as appt) {
     <div class="detail-grid">
-
       <!-- Status Banner -->
       <div class="status-banner" [class]="getStatusClass(appt.status)">
         <span class="material-symbols-outlined">info</span>
-        <span>Status: <strong>{{ appt.status }}</strong></span>
+        <span
+          >Status: <strong>{{ appt.status }}</strong></span
+        >
 
         @if (canUpdateStatus) {
           <div class="status-actions">
@@ -169,7 +170,6 @@
           }
         </div>
       </div>
-
     </div>
   }
 </div>
@@ -282,7 +282,12 @@
         <button type="button" class="btn-secondary" (click)="closeCancelConfirm()">
           Keep Appointment
         </button>
-        <button type="button" class="btn-danger" (click)="executeCancel()" [disabled]="cancelling()">
+        <button
+          type="button"
+          class="btn-danger"
+          (click)="executeCancel()"
+          [disabled]="cancelling()"
+        >
           {{ cancelling() ? 'Cancelling...' : 'Yes, Cancel Appointment' }}
         </button>
       </div>

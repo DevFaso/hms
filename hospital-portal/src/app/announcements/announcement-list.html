@@ -59,7 +59,15 @@
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">campaign</span>
       <h3>No announcements found</h3>
-      <p>{{ searchTerm ? 'Try adjusting your search.' : (canManage ? 'Create your first announcement.' : 'No announcements yet.') }}</p>
+      <p>
+        {{
+          searchTerm
+            ? 'Try adjusting your search.'
+            : canManage
+              ? 'Create your first announcement.'
+              : 'No announcements yet.'
+        }}
+      </p>
     </div>
   }
 

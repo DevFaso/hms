@@ -20,9 +20,7 @@ export class AnnouncementListComponent implements OnInit {
   /** True when the logged-in user has an admin-level role */
   get canManage(): boolean {
     const roles = this.auth.getUserProfile()?.roles ?? [];
-    return roles.some((r) =>
-      ['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN'].includes(r),
-    );
+    return roles.some((r) => ['ROLE_SUPER_ADMIN', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN'].includes(r));
   }
 
   announcements = signal<AnnouncementResponse[]>([]);

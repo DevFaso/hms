@@ -408,7 +408,10 @@
   font-size: 0.9rem;
   line-height: 1.5;
 
-  svg { flex-shrink: 0; margin-top: 0.05rem; }
+  svg {
+    flex-shrink: 0;
+    margin-top: 0.05rem;
+  }
 }
 
 .fp-back-btn {
@@ -431,7 +434,9 @@
   padding: 0.25rem 0;
   text-align: center;
 
-  &:hover { color: #374151; }
+  &:hover {
+    color: #374151;
+  }
 }
 
 .fp-info-box {
@@ -443,14 +448,18 @@
   padding: 1rem 1.125rem;
   color: #1e40af;
 
-  svg { flex-shrink: 0; margin-top: 0.1rem; }
+  svg {
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
 
   p {
     font-size: 0.875rem;
     margin: 0 0 0.5rem;
     line-height: 1.55;
 
-    &:last-child { margin-bottom: 0; }
+    &:last-child {
+      margin-bottom: 0;
+    }
   }
 }
-
