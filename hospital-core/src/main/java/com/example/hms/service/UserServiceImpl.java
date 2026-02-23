@@ -261,12 +261,18 @@ public class UserServiceImpl implements UserService {
             default -> false;
         });
 
+        // Clinical roles require a medical licence; admin/management roles do not.
+        final boolean requiresLicense = roles.stream().anyMatch(role -> switch (role.getCode()) {
+            case ROLE_DOCTOR, ROLE_NURSE, ROLE_LAB_SCIENTIST, ROLE_PHARMACIST -> true;
+            default -> false;
+        });
+
         // ---- 3) Resolve/Create User ----
-        final String lic = resolveLicenseNumber(request, requiresStaff);
+        final String lic = resolveLicenseNumber(request, requiresLicense);
 
         final Optional<User> existingByIdentity = userRepository
                 .findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(username, email, phone);
-        final Optional<User> existingByLicense = requiresStaff
+        final Optional<User> existingByLicense = requiresLicense
                 ? staffRepository.findUserIdByLicense(lic).flatMap(userRepository::findById)
                 : Optional.empty();
 
