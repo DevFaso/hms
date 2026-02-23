@@ -2,12 +2,14 @@
   <div class="page-header">
     <div>
       <h1 class="page-title">Announcements</h1>
-      <p class="page-subtitle">Manage hospital-wide announcements and communications</p>
+      <p class="page-subtitle">Hospital-wide announcements and communications</p>
     </div>
-    <button class="btn-primary" (click)="openCreate()">
-      <span class="material-symbols-outlined">add</span>
-      New Announcement
-    </button>
+    @if (canManage) {
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span>
+        New Announcement
+      </button>
+    }
   </div>
 
   <div class="search-bar">
@@ -39,12 +41,14 @@
           </div>
           <p class="announcement-text">{{ a.text }}</p>
           <div class="announcement-actions">
-            <button class="action-link edit" title="Edit" (click)="openEdit(a)">
-              <span class="material-symbols-outlined">edit</span> Edit
-            </button>
-            <button class="action-link delete" title="Delete" (click)="confirmDelete(a)">
-              <span class="material-symbols-outlined">delete</span> Delete
-            </button>
+            @if (canManage) {
+              <button class="action-link edit" title="Edit" (click)="openEdit(a)">
+                <span class="material-symbols-outlined">edit</span> Edit
+              </button>
+              <button class="action-link delete" title="Delete" (click)="confirmDelete(a)">
+                <span class="material-symbols-outlined">delete</span> Delete
+              </button>
+            }
           </div>
         </div>
       }
@@ -55,7 +59,7 @@
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">campaign</span>
       <h3>No announcements found</h3>
-      <p>{{ searchTerm ? 'Try adjusting your search.' : 'Create your first announcement.' }}</p>
+      <p>{{ searchTerm ? 'Try adjusting your search.' : (canManage ? 'Create your first announcement.' : 'No announcements yet.') }}</p>
     </div>
   }
 

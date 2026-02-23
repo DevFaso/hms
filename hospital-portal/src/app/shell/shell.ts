@@ -138,13 +138,13 @@ export class ShellComponent implements OnInit, OnDestroy {
         permission: 'View Notifications',
       },
       { icon: 'chat', label: 'Messages', route: '/chat' },
+      { icon: 'campaign', label: 'Announcements', route: '/announcements' },
     ];
 
     if (this.permissions.hasPermission('*')) {
       items.push(
         { icon: 'local_hospital', label: 'Hospitals', route: '/hospitals' },
         { icon: 'corporate_fare', label: 'Organizations', route: '/organizations' },
-        { icon: 'campaign', label: 'Announcements', route: '/announcements' },
         { icon: 'manage_accounts', label: 'Users', route: '/users' },
         { icon: 'shield', label: 'Roles', route: '/roles' },
         { icon: 'hub', label: 'Platform', route: '/platform' },

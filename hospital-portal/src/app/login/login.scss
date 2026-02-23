@@ -334,3 +334,123 @@
     font-size: 1rem; // prevents iOS zoom on focus
   }
 }
+
+// ─── Forgot Password / Username Overlay ─────────────────────────────────────
+
+.fp-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+  padding: 1rem;
+}
+
+.fp-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.18);
+  width: 100%;
+  max-width: 420px;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.fp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #111827;
+    margin: 0;
+  }
+}
+
+.fp-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+  display: flex;
+  align-items: center;
+  padding: 0.25rem;
+  border-radius: 6px;
+
+  &:hover {
+    background: #f3f4f6;
+    color: #111827;
+  }
+}
+
+.fp-instruction {
+  font-size: 0.9rem;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.fp-success {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  padding: 0.875rem 1rem;
+  font-size: 0.9rem;
+  line-height: 1.5;
+
+  svg { flex-shrink: 0; margin-top: 0.05rem; }
+}
+
+.fp-back-btn {
+  width: 100%;
+  background: #f3f4f6;
+  color: #374151;
+
+  &:hover:not(:disabled) {
+    background: #e5e7eb;
+  }
+}
+
+.fp-cancel-link {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #6b7280;
+  text-decoration: underline;
+  padding: 0.25rem 0;
+  text-align: center;
+
+  &:hover { color: #374151; }
+}
+
+.fp-info-box {
+  display: flex;
+  gap: 0.875rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 10px;
+  padding: 1rem 1.125rem;
+  color: #1e40af;
+
+  svg { flex-shrink: 0; margin-top: 0.1rem; }
+
+  p {
+    font-size: 0.875rem;
+    margin: 0 0 0.5rem;
+    line-height: 1.55;
+
+    &:last-child { margin-bottom: 0; }
+  }
+}
+
