@@ -170,7 +170,12 @@
                   [(ngModel)]="createForm.username"
                   name="username"
                   required
+                  [class.input-error]="fieldErrors()['username']"
+                  (ngModelChange)="clearFieldError('username')"
                 />
+                @if (fieldErrors()['username']) {
+                  <span class="field-error-msg">{{ fieldErrors()['username'] }}</span>
+                }
               </div>
               <div class="field">
                 <label for="email">Email *</label>
@@ -180,7 +185,12 @@
                   [(ngModel)]="createForm.email"
                   name="email"
                   required
+                  [class.input-error]="fieldErrors()['email']"
+                  (ngModelChange)="clearFieldError('email')"
                 />
+                @if (fieldErrors()['email']) {
+                  <span class="field-error-msg">{{ fieldErrors()['email'] }}</span>
+                }
               </div>
             </div>
 
@@ -205,7 +215,12 @@
                   name="phoneNumber"
                   required
                   placeholder="+226 70 00 00 00"
+                  [class.input-error]="fieldErrors()['phone']"
+                  (ngModelChange)="clearFieldError('phone')"
                 />
+                @if (fieldErrors()['phone']) {
+                  <span class="field-error-msg">{{ fieldErrors()['phone'] }}</span>
+                }
               </div>
             </div>
 

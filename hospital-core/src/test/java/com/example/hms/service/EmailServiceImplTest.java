@@ -182,4 +182,62 @@ class EmailServiceImplTest {
                 .isInstanceOf(IllegalArgumentException.class);
         }
     }
+
+    // =========================================================================
+    // sendAdminWelcomeEmail
+    // =========================================================================
+
+    @Nested
+    @DisplayName("sendAdminWelcomeEmail")
+    class SendAdminWelcomeEmail {
+
+        @Test
+        @DisplayName("delegates to mailSender once for a fully populated request")
+        void sendsForFullRequest() {
+            stubMailSender();
+            emailService.sendAdminWelcomeEmail(
+                "admin@hospital.com", "Jane Doe", "janedoe",
+                "Temp@1234", "Hospital Admin", "City General Hospital");
+            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+        }
+
+        @Test
+        @DisplayName("succeeds when hospitalName is null (global / super-admin role)")
+        void sendsWithoutHospital() {
+            stubMailSender();
+            emailService.sendAdminWelcomeEmail(
+                "admin@hospital.com", "Jane Doe", "janedoe",
+                "Temp@1234", "Super Admin", null);
+            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+        }
+
+        @Test
+        @DisplayName("succeeds when displayName is null (falls back gracefully)")
+        void sendsWithNullDisplayName() {
+            stubMailSender();
+            emailService.sendAdminWelcomeEmail(
+                "admin@hospital.com", null, "janedoe",
+                "Temp@1234", "Doctor", "City Hospital");
+            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+        }
+
+        @Test
+        @DisplayName("throws IllegalArgumentException for null recipient")
+        void rejectsNullRecipient() {
+            assertThatThrownBy(() ->
+                emailService.sendAdminWelcomeEmail(
+                    null, "Jane Doe", "janedoe", "Temp@1234", "Admin", "Hospital"))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("throws IllegalArgumentException for malformed recipient email")
+        void rejectsInvalidRecipient() {
+            assertThatThrownBy(() ->
+                emailService.sendAdminWelcomeEmail(
+                    "not-an-email", "Jane Doe", "janedoe", "Temp@1234", "Admin", "Hospital"))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
 }
+

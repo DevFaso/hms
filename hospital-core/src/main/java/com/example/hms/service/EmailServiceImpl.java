@@ -474,5 +474,124 @@ public class EmailServiceImpl implements EmailService {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Admin-created user welcome email
+    // -------------------------------------------------------------------------
+
+    @Override
+    public void sendAdminWelcomeEmail(String to,
+                                      String displayName,
+                                      String username,
+                                      String tempPassword,
+                                      String roleName,
+                                      String hospitalName) {
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        validateAddresses(List.of(to));
+        log.info("📧 Sending admin welcome email to: {}", to);
+
+        String safeName     = (displayName  != null && !displayName.isBlank())  ? displayName  : GENERIC_GREETING;
+        String safeRole     = (roleName     != null && !roleName.isBlank())     ? roleName     : "your assigned role";
+        String safeHospital = (hospitalName != null && !hospitalName.isBlank()) ? hospitalName : null;
+        String safeUsername = (username     != null && !username.isBlank())     ? username     : "—";
+        String safePassword = (tempPassword != null && !tempPassword.isBlank()) ? tempPassword : "—";
+        String loginUrl     = loginUrl();
+        int year            = java.time.Year.now().getValue();
+
+        String hospitalLine = safeHospital != null
+            ? "<tr><td style='padding:6px 0;color:#64748b;font-weight:600;'>Hospital</td><td style='padding:6px 0 6px 16px;'>%s</td></tr>".formatted(safeHospital)
+            : "";
+
+        String body = """
+            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px;">
+              <div style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+
+                <!-- Header -->
+                <div style="background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:32px 40px;text-align:center;">
+                  <div style="font-size:36px;margin-bottom:8px;">🏥</div>
+                  <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:-0.5px;">
+                    Welcome to HMS
+                  </h1>
+                  <p style="color:#bfdbfe;margin:6px 0 0;font-size:14px;">
+                    Your account has been created
+                  </p>
+                </div>
+
+                <!-- Body -->
+                <div style="padding:32px 40px;">
+                  <p style="color:#1e293b;font-size:16px;margin-top:0;">Hi <strong>%s</strong>,</p>
+                  <p style="color:#475569;line-height:1.6;">
+                    A <strong>%s</strong> account has been created for you
+                    %s
+                    You can sign in immediately using the credentials below.
+                    You will be prompted to change your password on first login.
+                  </p>
+
+                  <!-- Credentials box -->
+                  <div style="background:#eff6ff;border:2px solid #bfdbfe;border-radius:10px;padding:20px 24px;margin:24px 0;">
+                    <p style="margin:0 0 12px;font-weight:700;color:#1e3a8a;font-size:14px;text-transform:uppercase;letter-spacing:0.5px;">
+                      Your Login Credentials
+                    </p>
+                    <table style="border-collapse:collapse;width:100%%;">
+                      <tr>
+                        <td style="padding:6px 0;color:#64748b;font-weight:600;">Username</td>
+                        <td style="padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;">%s</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 0;color:#64748b;font-weight:600;">Temp Password</td>
+                        <td style="padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;">%s</td>
+                      </tr>
+                      <tr>
+                        <td style="padding:6px 0;color:#64748b;font-weight:600;">Role</td>
+                        <td style="padding:6px 0 6px 16px;">%s</td>
+                      </tr>
+                      %s
+                    </table>
+                  </div>
+
+                  <!-- CTA -->
+                  <p style="text-align:center;margin:28px 0;">
+                    <a href="%s" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:600;display:inline-block;">
+                      Sign In to Your Account
+                    </a>
+                  </p>
+                  <p style="text-align:center;font-size:13px;color:#94a3b8;">
+                    Or copy this link:<br/>
+                    <a href="%s" style="color:#2563eb;">%s</a>
+                  </p>
+
+                  <!-- Security warning -->
+                  <div style="background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 16px;border-radius:0 8px 8px 0;margin-top:24px;">
+                    <p style="margin:0;font-size:14px;color:#92400e;">
+                      <strong>⚠ Security notice:</strong> This email contains a temporary password.
+                      Please sign in and change it immediately. Do not share this email with anyone.
+                      If you did not expect this account, contact your system administrator right away.
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Footer -->
+                <div style="background:#f1f5f9;padding:16px 40px;text-align:center;border-top:1px solid #e2e8f0;">
+                  <p style="margin:0;font-size:12px;color:#94a3b8;">
+                    © %d HMS · Hospital Management System · This is an automated message — please do not reply.
+                  </p>
+                </div>
+              </div>
+            </div>
+            """.formatted(
+                safeName,
+                safeRole,
+                safeHospital != null ? "at <strong>" + safeHospital + "</strong>. " : ". ",
+                safeUsername,
+                safePassword,
+                safeRole,
+                hospitalLine,
+                loginUrl, loginUrl, loginUrl,
+                year);
+
+        sendHtml(List.of(to), List.of(), List.of(),
+            "Welcome to HMS — Your Account Is Ready", body);
+        log.info("✅ Admin welcome email sent to {}", to);
+    }
 
 }
+

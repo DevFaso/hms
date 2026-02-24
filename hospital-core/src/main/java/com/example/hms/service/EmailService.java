@@ -99,5 +99,26 @@ public interface EmailService {
 
     void sendPasswordRotationForceChangeEmail(String to, String displayName, LocalDate dueOn, long daysOverdue);
 
+    /**
+     * Sent to a newly admin-created staff/admin user to welcome them, confirm
+     * the account exists, and provide their temporary login credentials so they
+     * can sign in and change their password on first login.
+     *
+     * @param to           recipient email address
+     * @param displayName  first + last name (or username as fallback)
+     * @param username     the account username
+     * @param tempPassword the plain-text temporary password (shown once)
+     * @param roleName     human-readable role label, e.g. "Hospital Admin"
+     * @param hospitalName hospital the user was assigned to (may be null for global roles)
+     */
+    void sendAdminWelcomeEmail(
+        String to,
+        String displayName,
+        String username,
+        String tempPassword,
+        String roleName,
+        String hospitalName
+    );
+
 }
 
