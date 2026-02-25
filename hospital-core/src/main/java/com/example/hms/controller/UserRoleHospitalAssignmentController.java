@@ -25,6 +25,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -180,11 +181,30 @@ public class UserRoleHospitalAssignmentController {
         return ResponseEntity.ok(assignmentService.verifyAssignmentByCode(assignmentCode, confirmationCode));
     }
 
-    @Operation(summary = "Delete an assignment by ID")
+    @Operation(
+        summary = "Deactivate an assignment (preferred over DELETE)",
+        description = "Soft-deactivates the assignment by setting active=false. " +
+                      "The record is preserved for audit and historical integrity. " +
+                      "Use this instead of DELETE whenever a staff member's role ends.")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
+    @PatchMapping("/{id}/deactivate")
+    public ResponseEntity<Void> deactivateAssignment(@PathVariable UUID id) {
+        log.info("🔒 Deactivating assignment ID {}", id);
+        assignmentService.deactivateAssignment(id);
+        return ResponseEntity.noContent().build();
+    }
+
+    @Operation(
+        summary = "Delete an assignment by ID",
+        description = "⚠️ DEPRECATED — hard-deletes the assignment row. " +
+                      "Prefer PATCH /{id}/deactivate to preserve audit history. " +
+                      "This endpoint will be removed in a future release.",
+        deprecated = true)
+    @Deprecated(since = "1.1", forRemoval = false)
     @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN','SUPER_ADMIN')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteAssignment(@PathVariable UUID id) {
-        log.warn("❌ Deleting assignment ID {}", id);
+        log.warn("⚠️ [DEPRECATED] Hard-deleting assignment ID {} — consider using PATCH /{id}/deactivate instead", id);
         assignmentService.deleteAssignment(id);
         return ResponseEntity.noContent().build();
     }

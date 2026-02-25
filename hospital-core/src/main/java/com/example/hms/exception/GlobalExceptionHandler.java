@@ -1,10 +1,12 @@
 package com.example.hms.exception;
 
+import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
@@ -100,6 +102,20 @@ public class GlobalExceptionHandler {
         body.put("path", request.getDescription(false).replace("uri=", ""));
 
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler({EntityNotFoundException.class, JpaObjectRetrievalFailureException.class})
+    @SuppressWarnings("java:S2629")
+    public ResponseEntity<Object> handleEntityNotFound(RuntimeException ex, WebRequest request) {
+        // A Hibernate proxy tried to load an entity that was deleted from the DB (dangling FK).
+        // Log the full detail for ops investigation but return a sanitised message to the caller.
+        log.error("Data integrity issue — referenced entity not found at path {}: {}",
+            request.getDescription(false), ex.getMessage(), ex);
+        return buildErrorResponse(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "A referenced record could not be found. This may indicate a data integrity issue. " +
+            "Please contact support if this persists.",
+            request);
     }
 
     @ExceptionHandler(RuntimeException.class)
