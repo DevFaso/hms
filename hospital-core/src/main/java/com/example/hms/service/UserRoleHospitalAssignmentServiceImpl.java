@@ -2,7 +2,6 @@ package com.example.hms.service;
 
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
-import com.example.hms.event.AssignmentCreatedEvent;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -31,13 +30,13 @@ import com.example.hms.specification.UserRoleHospitalAssignmentSpecification;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.RoleRepository;
+import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -160,7 +159,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private final EmailService emailService;
     private final AuditEventLogService auditEventLogService;
     private final AssignmentLinkService assignmentLinkService;
-    private final ApplicationEventPublisher eventPublisher;
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -168,6 +166,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private final UserRoleRepository userRoleRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final OrganizationRepository organizationRepository;
+    private final StaffRepository staffRepository;
     private final UserRoleHospitalAssignmentMapper mapper;
     private final MessageSource messageSource;
 
@@ -229,10 +228,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         syncLegacyRole(user, role);
         if (sendNotifications) {
-            // Publish an after-commit event so that email + SMS are only dispatched
-            // once the transaction has committed and the assignment row is visible.
-            // This prevents ghost links where the email is sent for a rolled-back assignment.
-            eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId()));
+            sendAssignmentEmailNotification(saved);
+            sendAssignmentSmsNotifications(saved);
         }
         recordAssignmentAudit(saved);
 
@@ -680,95 +677,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .build();
     }
 
-    /**
-     * Self-service verification — called by the ASSIGNEE from the onboarding email link.
-     * No authentication required. Verifies the 6-digit confirmation code sent to the assignee
-     * and marks the assignment as verified on success.
-     */
-    @Override
-    public UserRoleAssignmentPublicViewDTO verifyAssignmentByCode(String assignmentCode, String confirmationCode) {
-        Locale locale = Locale.getDefault();
-
-        String sanitizedCode = assignmentCode != null ? assignmentCode.trim() : null;
-        if (sanitizedCode == null || sanitizedCode.isBlank()) {
-            throw new ResourceNotFoundException(
-                messageSource.getMessage(MSG_ASSIGNMENT_NOT_FOUND_BY_CODE,
-                    new Object[]{assignmentCode},
-                    DEFAULT_ASSIGNMENT_NOT_FOUND_BY_CODE_PREFIX + assignmentCode,
-                    locale));
-        }
-
-        String sanitizedPin = confirmationCode != null ? confirmationCode.trim() : null;
-        if (sanitizedPin == null || sanitizedPin.isBlank()) {
-            throw new BusinessException(
-                messageSource.getMessage(MSG_ASSIGNMENT_INVALID_CODE, null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID, locale));
-        }
-
-        UserRoleHospitalAssignment assignment = assignmentRepository.findByAssignmentCode(sanitizedCode)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_ASSIGNMENT_NOT_FOUND_BY_CODE,
-                    new Object[]{sanitizedCode},
-                    DEFAULT_ASSIGNMENT_NOT_FOUND_BY_CODE_PREFIX + sanitizedCode,
-                    locale)));
-
-        if (assignment.getConfirmationVerifiedAt() != null) {
-            log.info("ℹ️ Assignment '{}' was already verified at {}", sanitizedCode, assignment.getConfirmationVerifiedAt());
-            return buildPublicView(assignment);
-        }
-
-        String expectedPin = assignment.getConfirmationCode();
-        if (expectedPin == null || !expectedPin.equalsIgnoreCase(sanitizedPin)) {
-            throw new BusinessException(
-                messageSource.getMessage(MSG_ASSIGNMENT_INVALID_CODE, null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID, locale));
-        }
-
-        assignment.setConfirmationVerifiedAt(LocalDateTime.now());
-        assignment.setActive(Boolean.TRUE);
-        UserRoleHospitalAssignment saved = assignmentRepository.save(assignment);
-
-        syncLegacyRole(saved.getUser(), saved.getRole());
-        recordAssignmentConfirmationAudit(saved, saved.getUser());
-
-        // Build the DTO before clearing so temp credentials are included in this
-        // one-time response.  After the DTO is constructed the plaintext is wiped
-        // from the database so it is never surfaced again.
-        UserRoleAssignmentPublicViewDTO result = buildPublicView(saved);
-        if (saved.getTempPlainPassword() != null) {
-            saved.setTempPlainPassword(null);
-            assignmentRepository.save(saved);
-            log.info("🔐 Temp credentials delivered via verify response for assignment '{}'; plaintext cleared.", sanitizedCode);
-        }
-
-        log.info("✅ Assignment '{}' self-verified by assignee", sanitizedCode);
-        return result;
-    }
-
-    private UserRoleAssignmentPublicViewDTO buildPublicView(UserRoleHospitalAssignment assignment) {
-        Role role = assignment.getRole();
-        Hospital hospital = assignment.getHospital();
-        User assignee = assignment.getUser();
-        String tempPlain = assignment.getTempPlainPassword();
-        return UserRoleAssignmentPublicViewDTO.builder()
-            .assignmentId(assignment.getId())
-            .assignmentCode(assignment.getAssignmentCode())
-            .roleName(role != null ? role.getName() : null)
-            .roleCode(role != null ? getRoleCode(role) : null)
-            .roleDescription(role != null ? role.getDescription() : null)
-            .hospitalName(hospital != null ? hospital.getName() : null)
-            .hospitalCode(hospital != null ? hospital.getCode() : null)
-            .hospitalAddress(hospital != null ? hospital.getAddress() : null)
-            .assigneeName(resolveDisplayName(assignee, null))
-            .confirmationVerified(assignment.getConfirmationVerifiedAt() != null)
-            .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
-            .profileCompletionUrl(assignmentLinkService.buildProfileCompletionUrl(assignment.getAssignmentCode()))
-            .profileChecklist(buildRoleProfileChecklist(role))
-            .tempUsername(tempPlain != null && assignee != null ? assignee.getUsername() : null)
-            .tempPassword(tempPlain)
-            .build();
-    }
-
     @Override
     public UserRoleAssignmentBulkImportResponseDTO bulkImportAssignments(UserRoleAssignmentBulkImportRequestDTO requestDTO) {
         Objects.requireNonNull(requestDTO, "Request must not be null");
@@ -823,6 +731,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                     new Object[]{id},
                     DEFAULT_ASSIGNMENT_NOT_FOUND_PREFIX + id,
                     locale));
+        }
+        // Prevent deletion if a Staff record still references this assignment.
+        // Deleting it would leave the staff row with a dangling FK and cause a 500
+        // on every /api/staff call that touches that row.
+        if (staffRepository.existsByAssignment_Id(id)) {
+            throw new ConflictException(
+                "Cannot delete assignment: one or more Staff records still reference it. " +
+                "Reassign or remove the linked staff first.");
         }
         assignmentRepository.deleteById(id);
         log.info("🗑️ Deleted assignment ID '{}'", id);
@@ -1374,34 +1290,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             : role.getName(); // fallback
     }
 
-    /**
-     * Converts a raw role code (e.g. {@code ROLE_SUPER_ADMIN}) into a human-readable
-     * display name (e.g. {@code Super Admin}) suitable for emails and UI labels.
-     * Falls back to the role's display name if set, otherwise strips the ROLE_ prefix
-     * and title-cases the remaining words.
-     */
-    private String beautifyRoleDisplay(Role role) {
-        if (role == null) return "Assigned Role";
-        // Prefer the role's configured name if it looks human-readable
-        String name = role.getName();
-        if (name != null && !name.isBlank() && !name.toUpperCase().equals(name)) {
-            return name.trim();
-        }
-        String code = getRoleCode(role);
-        if (code == null || code.isBlank()) return "Assigned Role";
-        // Strip ROLE_ prefix, replace _ with space, title-case each word
-        String stripped = code.replaceFirst("(?i)^ROLE_", "").replace("_", " ").toLowerCase();
-        String[] words = stripped.split(" ");
-        StringBuilder sb = new StringBuilder();
-        for (String word : words) {
-            if (!word.isEmpty()) {
-                if (!sb.isEmpty()) sb.append(" ");
-                sb.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
-            }
-        }
-        return sb.toString();
-    }
-
     private boolean isRoleCode(String actual, String expected) {
         if (actual == null || expected == null) {
             return false;
@@ -1549,13 +1437,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             }
 
             String userDisplayName = resolveDisplayName(user, email);
-            String roleDisplay = beautifyRoleDisplay(assignment.getRole());
+            String roleDisplay = assignment.getRole() != null ? getRoleCode(assignment.getRole()) : "assigned role";
             String hospitalDisplay = resolveHospitalName(assignment.getHospital());
             String profileCompletionUrl = assignmentLinkService.buildProfileCompletionUrl(assignment.getAssignmentCode());
-
-            // Capture temp credentials before clearing them from the DB
-            String tempUsername = user.getUsername();
-            String tempPlain = assignment.getTempPlainPassword();
 
             emailService.sendRoleAssignmentConfirmationEmail(
                 email,
@@ -1564,14 +1448,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 hospitalDisplay,
                 confirmationCode,
                 assignment.getAssignmentCode(),
-                profileCompletionUrl,
-                tempPlain != null ? tempUsername : null,
-                tempPlain
+                profileCompletionUrl
             );
-
-            if (tempPlain != null) {
-                log.info("🔐 Temp credentials included in onboarding email for assignment '{}'.", assignment.getId());
-            }
         } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to send assignment confirmation email for assignment '{}': {}", assignment.getId(), ex.getMessage());
         }
@@ -1717,21 +1595,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                     .build();
             })
             .toList();
-    }
-
-    @Override
-    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
-    public void sendNotifications(UUID assignmentId) {
-        Locale locale = Locale.getDefault();
-        UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_NOT_FOUND,
-                    new Object[]{assignmentId},
-                    DEFAULT_ASSIGNMENT_NOT_FOUND_PREFIX + assignmentId,
-                    locale)));
-        sendAssignmentEmailNotification(assignment);
-        sendAssignmentSmsNotifications(assignment);
     }
 
     private String resolveUserDisplayName(User user) {
