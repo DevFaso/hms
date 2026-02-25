@@ -745,6 +745,24 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     @Override
+    public void deactivateAssignment(UUID id) {
+        final Locale locale = Locale.getDefault();
+        UserRoleHospitalAssignment assignment = assignmentRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                messageSource.getMessage(MSG_ASSIGNMENT_NOT_FOUND,
+                    new Object[]{id},
+                    DEFAULT_ASSIGNMENT_NOT_FOUND_PREFIX + id,
+                    locale)));
+        if (Boolean.FALSE.equals(assignment.getActive())) {
+            log.info("⏭️ Assignment ID '{}' is already inactive — no change.", id);
+            return;
+        }
+        assignment.setActive(false);
+        assignmentRepository.save(assignment);
+        log.info("🔒 Deactivated assignment ID '{}' (soft — history preserved).", id);
+    }
+
+    @Override
     public void deleteAllAssignmentsForUser(UUID userId) {
         List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(userId);
         assignmentRepository.deleteAll(assignments);
