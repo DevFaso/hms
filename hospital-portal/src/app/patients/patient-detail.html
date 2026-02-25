@@ -85,15 +85,17 @@
       >
         Appointments
       </button>
-      <button
-        class="tab sharing-tab"
-        [class.active]="activeTab() === 'sharing'"
-        (click)="setTab('sharing')"
-        title="Cross-hospital record sharing"
-      >
-        <span class="material-symbols-outlined tab-icon">share</span>
-        Record Sharing
-      </button>
+      @if (canViewSharing()) {
+        <button
+          class="tab sharing-tab"
+          [class.active]="activeTab() === 'sharing'"
+          (click)="setTab('sharing')"
+          title="Cross-hospital record sharing"
+        >
+          <span class="material-symbols-outlined tab-icon">share</span>
+          Record Sharing
+        </button>
+      }
     </div>
 
     <!-- ═══ Overview Tab ═══ -->
@@ -429,9 +431,11 @@
                 <span class="material-symbols-outlined">search</span> Request Records
               }
             </button>
-            <button class="btn-outline" (click)="openGrantModal()" title="Grant sharing consent">
-              <span class="material-symbols-outlined">add_task</span> Grant Consent
-            </button>
+            @if (canManageConsents()) {
+              <button class="btn-outline" (click)="openGrantModal()" title="Grant sharing consent">
+                <span class="material-symbols-outlined">add_task</span> Grant Consent
+              </button>
+            }
           </div>
 
           @if (sharingError()) {
@@ -575,8 +579,8 @@
         }
       </div>
 
-      <!-- Grant Consent Modal -->
-      @if (showGrantModal()) {
+      <!-- Grant Consent Modal — only rendered for roles with Manage Patient Consents -->
+      @if (showGrantModal() && canManageConsents()) {
         <div
           class="modal-overlay"
           tabindex="-1"

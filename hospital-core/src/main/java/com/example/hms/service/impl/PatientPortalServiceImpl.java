@@ -37,6 +37,7 @@ import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
@@ -107,6 +108,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final DischargeSummaryService dischargeSummaryService;
     private final PatientPrimaryCareService primaryCareService;
     private final AuditEventLogService auditEventLogService;
+    private final PatientHospitalRegistrationRepository registrationRepository;
 
     // ── Identity resolution ──────────────────────────────────────────────
 
@@ -359,6 +361,17 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public PatientConsentResponseDTO grantMyConsent(Authentication auth, PortalConsentRequestDTO dto) {
         UUID patientId = resolvePatientId(auth);
 
+        // Security: ensure the patient is actually registered at the source hospital.
+        // Without this check, a patient could grant consent on behalf of a hospital
+        // they have never attended (privilege escalation / data fabrication).
+        boolean registeredAtSource = registrationRepository
+                .findByPatientIdAndHospitalIdAndActiveTrue(patientId, dto.getFromHospitalId())
+                .isPresent();
+        if (!registeredAtSource) {
+            throw new BusinessException(
+                    "You are not registered at the specified source hospital and cannot grant consent on its behalf.");
+        }
+
         PatientConsentRequestDTO consentRequest = PatientConsentRequestDTO.builder()
                 .patientId(patientId)
                 .fromHospitalId(dto.getFromHospitalId())
@@ -378,6 +391,17 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional
     public void revokeMyConsent(Authentication auth, UUID fromHospitalId, UUID toHospitalId) {
         UUID patientId = resolvePatientId(auth);
+
+        // Security: ensure the patient is registered at the source hospital
+        // before allowing them to revoke the consent.
+        boolean registeredAtSource = registrationRepository
+                .findByPatientIdAndHospitalIdAndActiveTrue(patientId, fromHospitalId)
+                .isPresent();
+        if (!registeredAtSource) {
+            throw new BusinessException(
+                    "You are not registered at the specified source hospital and cannot revoke consent on its behalf.");
+        }
+
         log.info("Patient {} revoking consent from hospital {} to hospital {}",
                 patientId, fromHospitalId, toHospitalId);
         consentService.revokeConsent(patientId, fromHospitalId, toHospitalId);

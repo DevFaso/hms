@@ -101,13 +101,24 @@ export class PatientDetailComponent implements OnInit {
     return this.permissions.hasPermission('Create Encounters');
   }
 
+  /** Whether the current user can view the Record Sharing tab */
+  canViewSharing(): boolean {
+    return this.permissions.hasAnyPermission('View Record Sharing', 'Manage Patient Consents', '*');
+  }
+
+  /** Whether the current user can grant or revoke patient consents */
+  canManageConsents(): boolean {
+    return this.permissions.hasPermission('Manage Patient Consents');
+  }
+
   setTab(tab: TabKey): void {
     this.activeTab.set(tab);
     if (tab === 'vitals' && this.canViewVitals() && this.vitals().length === 0) this.loadVitals();
     if (tab === 'encounters' && this.canViewEncounters() && this.encounters().length === 0)
       this.loadEncounters();
     if (tab === 'appointments' && this.appointments().length === 0) this.loadAppointments();
-    if (tab === 'sharing' && this.hospitals().length === 0) this.loadHospitals();
+    if (tab === 'sharing' && this.canViewSharing() && this.hospitals().length === 0)
+      this.loadHospitals();
   }
 
   private loadVitals(): void {

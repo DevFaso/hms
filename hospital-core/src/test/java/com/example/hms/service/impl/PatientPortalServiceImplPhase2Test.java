@@ -28,6 +28,7 @@ import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
@@ -107,6 +108,7 @@ class PatientPortalServiceImplPhase2Test {
     @Mock private DischargeSummaryService dischargeSummaryService;
     @Mock private PatientPrimaryCareService primaryCareService;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private PatientHospitalRegistrationRepository registrationRepository;
 
     @InjectMocks
     private PatientPortalServiceImpl service;
@@ -444,6 +446,9 @@ class PatientPortalServiceImplPhase2Test {
             UUID from = UUID.randomUUID();
             UUID to = UUID.randomUUID();
 
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(any(UUID.class), any(UUID.class)))
+                    .thenReturn(Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
+
             PortalConsentRequestDTO portalDto = PortalConsentRequestDTO.builder()
                     .fromHospitalId(from)
                     .toHospitalId(to)
@@ -475,6 +480,9 @@ class PatientPortalServiceImplPhase2Test {
             stubPatientResolution();
             UUID from = UUID.randomUUID();
             UUID to = UUID.randomUUID();
+
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(any(UUID.class), any(UUID.class)))
+                    .thenReturn(Optional.of(new com.example.hms.model.PatientHospitalRegistration()));
 
             service.revokeMyConsent(auth, from, to);
 
