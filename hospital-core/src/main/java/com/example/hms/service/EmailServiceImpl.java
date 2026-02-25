@@ -264,6 +264,52 @@ public class EmailServiceImpl implements EmailService {
     }
 
     @Override
+    public void sendAccountRestoredEmail(String to, String displayName) {
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        validateAddresses(List.of(to));
+        String safeName = (displayName != null && !displayName.isBlank()) ? displayName : GENERIC_GREETING;
+        String escapedName = escapeHtml(safeName);
+        String restoredAt = java.time.LocalDateTime.now()
+            .format(java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' HH:mm"));
+
+        String header = "<div style=\"background:linear-gradient(135deg,#1e40af,#2563eb);"
+            + "padding:32px 40px;text-align:center;\">"
+            + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;\">"
+            + "&#9989; Your Account Has Been Restored"
+            + "</h1>"
+            + "<p style=\"color:#bfdbfe;margin:8px 0 0;font-size:14px;\">Hospital Management System</p>"
+            + "</div>";
+
+        String bodyContent = "<div style=\"padding:36px 40px;\">"
+            + "<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">Hi " + escapedName + ",</p>"
+            + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
+            + "Your account was <strong>restored</strong> on <strong>" + restoredAt + "</strong> "
+            + "by a system administrator. You can now sign in as normal."
+            + "</p>"
+            + "<div style=\"text-align:center;margin:32px 0;\">"
+            + "<a href=\"" + loginUrl() + "\" style=\"display:inline-block;"
+            + "background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;"
+            + "text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;"
+            + "font-weight:600;letter-spacing:0.3px;\">Sign In to Your Account</a>"
+            + "</div>"
+            + "<hr style=\"border:none;border-top:1px solid #e2e8f0;margin:0 0 28px;\"/>"
+            + "<div style=\"background:#fef2f2;border:1px solid #fecaca;border-radius:8px;"
+            + "padding:16px 20px;margin-bottom:24px;\">"
+            + "<p style=\"margin:0 0 8px;font-size:14px;font-weight:700;color:#991b1b;\">"
+            + "&#128680; Didn't expect this?</p>"
+            + "<p style=\"margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;\">"
+            + "If you did <strong>not</strong> request your account to be restored, "
+            + "please contact your system administrator immediately and do <strong>not</strong> sign in."
+            + "</p>"
+            + "</div>"
+            + "</div>";
+
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter());
+        sendHtml(List.of(to), List.of(), List.of(), "Your HMS Account Has Been Restored", body);
+        log.info("✅ Account restored notification email sent to {}", to);
+    }
+
+    @Override
     public void sendUsernameReminderEmail(String toEmail, String username, Locale locale) {
         var subject = subjectUsername(locale);
         var body = buildUsernameReminderEmailBody(username, locale);

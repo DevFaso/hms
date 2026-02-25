@@ -795,6 +795,29 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    public void restoreUser(UUID id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
+
+        user.setDeleted(false);
+        user.setActive(true);
+        userRepository.save(user);
+
+        log.info("♻️ User restored with ID: {}", id);
+
+        String displayName = (user.getFirstName() != null && user.getLastName() != null)
+                ? user.getFirstName() + " " + user.getLastName()
+                : user.getUsername();
+        try {
+            emailService.sendAccountRestoredEmail(user.getEmail(), displayName);
+        } catch (Exception e) {
+            log.warn("⚠️ Failed to send account-restored notification to '{}': {}",
+                    user.getEmail(), e.getMessage());
+        }
+    }
+
+    @Override
+    @Transactional
     public UserResponseDTO updateUser(UUID id, UserRequestDTO dto) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));

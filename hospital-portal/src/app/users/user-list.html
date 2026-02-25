@@ -74,9 +74,20 @@
                   <button class="action-link edit" title="Edit" (click)="openEdit(user)">
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="action-link delete" title="Delete" (click)="confirmDelete(user)">
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+                  @if (user.deleted) {
+                    <button
+                      class="action-link restore"
+                      title="Restore user"
+                      (click)="restoreUser(user)"
+                      [disabled]="restoring()"
+                    >
+                      <span class="material-symbols-outlined">restore</span>
+                    </button>
+                  } @else {
+                    <button class="action-link delete" title="Delete" (click)="confirmDelete(user)">
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>

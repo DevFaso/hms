@@ -120,5 +120,14 @@ public interface EmailService {
         String hospitalName
     );
 
+    /**
+     * Sent immediately after an admin restores a soft-deleted account, so the
+     * account owner is informed and can report unauthorised access if needed.
+     *
+     * @param to          recipient email address
+     * @param displayName first + last name (or username as fallback)
+     */
+    void sendAccountRestoredEmail(String to, String displayName);
+
 }
 

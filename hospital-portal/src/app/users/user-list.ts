@@ -93,6 +93,9 @@ export class UserListComponent implements OnInit {
   deletingUser = signal<UserSummary | null>(null);
   deleting = signal(false);
 
+  // Restore
+  restoring = signal(false);
+
   /** Per-field validation error messages (from 400/409 backend responses). */
   fieldErrors = signal<Record<string, string>>({});
 
@@ -337,6 +340,21 @@ export class UserListComponent implements OnInit {
       error: (err) => {
         this.toast.error(err?.error?.message ?? 'Failed to delete user');
         this.deleting.set(false);
+      },
+    });
+  }
+
+  restoreUser(user: UserSummary): void {
+    this.restoring.set(true);
+    this.userService.restore(user.id).subscribe({
+      next: () => {
+        this.toast.success(`${user.firstName} ${user.lastName} has been restored.`);
+        this.restoring.set(false);
+        this.loadUsers(this.currentPage());
+      },
+      error: (err) => {
+        this.toast.error(err?.error?.message ?? 'Failed to restore user');
+        this.restoring.set(false);
       },
     });
   }
