@@ -80,13 +80,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     /* ---------- Search & paging ---------- */
 
     /**
-     * Lightweight search; uses EXISTS for role filter so we don't load roles.
-     * Map with a second step (findByIdWithRolesAndProfiles) if you need roles per item.
+     * Lightweight search across ALL users (including inactive/soft-deleted).
+     * Admins need full visibility. Uses EXISTS for role filter so we don't load roles.
      */
     @Query("""
         SELECT u FROM User u
-        WHERE u.isDeleted = false
-          AND ( :name IS NULL
+        WHERE ( :name IS NULL
                 OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :name, '%'))
                 OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', :name, '%'))
                 OR LOWER(u.username)               LIKE LOWER(CONCAT('%', :name, '%'))
@@ -110,7 +109,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                            Pageable pageable);
 
     /**
-     * Paged list of non-deleted users.
+     * Paged list of ALL users (including inactive and soft-deleted).
+     * Admins need full visibility — status is shown as a badge in the UI.
      * NOTE: @EntityGraph is intentionally omitted here — combining a collection-fetch
      * entity graph with a LIMIT/OFFSET paged query triggers Hibernate 6 warning
      * HHH90003004 ("firstResult/maxResults specified with collection fetch") and
@@ -118,7 +118,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      * UserMapper.toSummaryDTO accesses userRoles lazily which is fine inside the
      * surrounding @Transactional(readOnly = true) boundary.
      */
-    @Query("select u from User u where u.isDeleted = false")
+    @Query("select u from User u")
     Page<User> findAllActive(Pageable pageable);
 
   List<User> findByIsDeletedFalse();

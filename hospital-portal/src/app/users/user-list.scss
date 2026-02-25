@@ -56,6 +56,11 @@
     background: #fbe9e7;
     color: #c62828;
   }
+  &.deleted {
+    background: #f3f4f6;
+    color: #4b5563;
+    text-decoration: line-through;
+  }
 }
 
 .pagination {
