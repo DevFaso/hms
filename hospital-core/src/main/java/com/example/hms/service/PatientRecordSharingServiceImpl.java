@@ -1252,11 +1252,17 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         UUID sourceHospitalId = ctx.sourceHospital().getId();
         UUID toHospitalId     = ctx.requestingHospital().getId();
 
-        // For SAME_HOSPITAL there is no distinct consent — skip the consent-gated path
-        // and directly assemble the record for the hospital itself.
-        PatientRecordDTO patientRecord = ctx.isSelfServe()
-            ? buildPatientRecordNoConsent(patientId, sourceHospitalId, toHospitalId, ctx.patient())
-            : buildPatientRecord(patientId, sourceHospitalId, toHospitalId);
+        // Reuse already-resolved entities and consent from the ConsentContext —
+        // avoids a redundant DB round-trip that buildPatientRecord() would otherwise make.
+        PatientRecordDTO patientRecord = buildPatientRecordFromEntities(
+            patientId,
+            sourceHospitalId,
+            toHospitalId,
+            ctx.patient(),
+            ctx.sourceHospital(),
+            ctx.requestingHospital(),
+            ctx.consent()   // null for SAME_HOSPITAL; populated for INTRA_ORG / CROSS_ORG
+        );
 
         com.example.hms.model.Organization org =
             ctx.requestingHospital().getOrganization() != null

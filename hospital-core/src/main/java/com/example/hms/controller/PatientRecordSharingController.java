@@ -76,7 +76,7 @@ public class PatientRecordSharingController {
             """)
     @ApiResponse(responseCode = "200", description = "Record resolved and returned successfully.")
     @ApiResponse(responseCode = "404", description = "Patient or hospital not found.")
-    @ApiResponse(responseCode = "409", description = "No active consent found at any tier.")
+     @ApiResponse(responseCode = "400", description = "No active consent found at any tier.")
     @GetMapping("/resolve")
     @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<RecordShareResultDTO> resolveAndShare(

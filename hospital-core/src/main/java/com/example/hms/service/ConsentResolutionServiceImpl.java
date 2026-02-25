@@ -16,9 +16,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -92,11 +94,11 @@ public class ConsentResolutionServiceImpl implements ConsentResolutionService {
             return Optional.empty();
         }
 
-        List<UUID> patientHospitalIds = activeRegistrations(patient)
+        Set<UUID> patientHospitalIds = activeRegistrations(patient)
             .stream()
             .map(this::hospitalIdOf)
             .filter(Objects::nonNull)
-            .toList();
+            .collect(java.util.stream.Collectors.toCollection(HashSet::new));
 
         return hospitalRepository.findByOrganizationIdOrderByNameAsc(org.getId())
             .stream()

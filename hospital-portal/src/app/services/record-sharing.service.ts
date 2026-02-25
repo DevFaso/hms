@@ -82,14 +82,13 @@ export interface ConsentGrantRequest {
 
 export interface PatientConsentResponse {
   id: string;
-  patientId: string;
-  fromHospitalId: string;
-  toHospitalId: string;
+  patient: { id: string; firstName: string; lastName: string };
+  fromHospital: { id: string; name: string };
+  toHospital: { id: string; name: string };
   consentGiven: boolean;
   consentTimestamp: string;
   consentExpiration: string | null;
   purpose: string | null;
-  active: boolean;
 }
 
 // ── Service ──────────────────────────────────────────────────────────────────
@@ -129,7 +128,7 @@ export class RecordSharingService {
    * Grant a sharing consent from one hospital to another.
    */
   grantConsent(req: ConsentGrantRequest): Observable<PatientConsentResponse> {
-    return this.http.post<PatientConsentResponse>('/consents', req);
+    return this.http.post<PatientConsentResponse>('/patient-consents/grant', req);
   }
 
   /**
@@ -140,7 +139,7 @@ export class RecordSharingService {
       .set('patientId', patientId)
       .set('fromHospitalId', fromHospitalId)
       .set('toHospitalId', toHospitalId);
-    return this.http.delete<void>('/consents/revoke', { params });
+    return this.http.post<void>('/patient-consents/revoke', null, { params });
   }
 
   /**
