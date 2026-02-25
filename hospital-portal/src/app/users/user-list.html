@@ -45,7 +45,7 @@
             <tr>
               <td class="name-cell">
                 <div class="user-name-wrap">
-                  <div class="user-avatar" [class.inactive]="!user.active">
+                  <div class="user-avatar" [class.inactive]="!user.active || user.deleted">
                     {{ getInitials(user) }}
                   </div>
                   <div>
@@ -62,10 +62,11 @@
               <td>
                 <span
                   class="status-badge"
-                  [class.active]="user.active"
-                  [class.inactive]="!user.active"
+                  [class.active]="user.active && !user.deleted"
+                  [class.inactive]="!user.active && !user.deleted"
+                  [class.deleted]="user.deleted"
                 >
-                  {{ user.active ? 'Active' : 'Inactive' }}
+                  {{ user.deleted ? 'Deleted' : user.active ? 'Active' : 'Inactive' }}
                 </span>
               </td>
               <td>

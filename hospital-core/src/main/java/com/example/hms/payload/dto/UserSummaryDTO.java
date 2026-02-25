@@ -46,6 +46,9 @@ public class UserSummaryDTO {
     @Schema(description = "Whether the user is currently active")
     private boolean active;
 
+    @Schema(description = "Whether the user has been soft-deleted")
+    private boolean deleted;
+
     @Schema(description = "Primary role code (e.g., ROLE_SUPER_ADMIN)")
     private String roleName;
 

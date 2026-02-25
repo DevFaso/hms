@@ -229,6 +229,7 @@ public class UserMapper {
                 .lastName(user.getLastName())
                 .profileImageUrl(user.getProfileImageUrl())
                 .active(user.isActive())
+                .deleted(user.isDeleted())
                 .roleName(roleName)
                 .profileType(profileType)
                 .roleCount(roles.size())
