@@ -85,6 +85,15 @@
       >
         Appointments
       </button>
+      <button
+        class="tab sharing-tab"
+        [class.active]="activeTab() === 'sharing'"
+        (click)="setTab('sharing')"
+        title="Cross-hospital record sharing"
+      >
+        <span class="material-symbols-outlined tab-icon">share</span>
+        Record Sharing
+      </button>
     </div>
 
     <!-- ═══ Overview Tab ═══ -->
@@ -378,6 +387,278 @@
           <span class="material-symbols-outlined empty-icon">calendar_month</span>
           <h3>No appointments</h3>
           <p>Patient appointment history will appear here.</p>
+        </div>
+      }
+    }
+
+    <!-- ═══ Record Sharing Tab ═══ -->
+    @if (activeTab() === 'sharing') {
+      <div class="sharing-panel">
+        <!-- Request panel -->
+        <div class="sharing-request-card">
+          <h3><span class="material-symbols-outlined">share</span> Smart Record Request</h3>
+          <p class="sharing-hint">
+            Select the hospital requesting access. The system automatically resolves the fastest
+            consent path: <strong>Same-hospital</strong> → <strong>Intra-org</strong> →
+            <strong>Cross-org</strong>.
+          </p>
+
+          <div class="sharing-controls">
+            @if (hospitalsLoading()) {
+              <div class="spinner-sm"></div>
+            } @else {
+              <select
+                class="hospital-select"
+                [value]="selectedHospitalId()"
+                (change)="selectedHospitalId.set($any($event.target).value)"
+              >
+                <option value="">— Select requesting hospital —</option>
+                @for (h of hospitals(); track h.id) {
+                  <option [value]="h.id">{{ h.name }}</option>
+                }
+              </select>
+            }
+            <button
+              class="btn-primary"
+              (click)="requestRecords()"
+              [disabled]="sharingLoading() || !selectedHospitalId()"
+            >
+              @if (sharingLoading()) {
+                <span class="spinner-btn"></span> Resolving…
+              } @else {
+                <span class="material-symbols-outlined">search</span> Request Records
+              }
+            </button>
+            <button class="btn-outline" (click)="openGrantModal()" title="Grant sharing consent">
+              <span class="material-symbols-outlined">add_task</span> Grant Consent
+            </button>
+          </div>
+
+          @if (sharingError()) {
+            <div class="sharing-error">
+              <span class="material-symbols-outlined">error</span>
+              {{ sharingError() }}
+            </div>
+          }
+        </div>
+
+        <!-- Resolution result -->
+        @if (sharingResult(); as result) {
+          <div class="sharing-result">
+            <!-- Scope badge + provenance header -->
+            <div class="result-header">
+              <span [class]="scopeBadgeClass(result.shareScope)">
+                @if (result.shareScope === 'SAME_HOSPITAL') {
+                  <span class="material-symbols-outlined">home_health</span>
+                } @else if (result.shareScope === 'INTRA_ORG') {
+                  <span class="material-symbols-outlined">corporate_fare</span>
+                } @else {
+                  <span class="material-symbols-outlined">public</span>
+                }
+                {{ result.shareScopeLabel }}
+              </span>
+              <span class="result-timestamp"
+                >Resolved {{ result.resolvedAt | date: 'medium' }}</span
+              >
+            </div>
+
+            <!-- Provenance detail -->
+            <div class="provenance-grid">
+              <div class="provenance-item">
+                <span class="provenance-label">Source Hospital</span>
+                <span class="provenance-value">{{ result.resolvedFromHospitalName }}</span>
+              </div>
+              <div class="provenance-item">
+                <span class="provenance-label">Requesting Hospital</span>
+                <span class="provenance-value">{{ result.requestingHospitalName }}</span>
+              </div>
+              @if (result.organizationName) {
+                <div class="provenance-item">
+                  <span class="provenance-label">Organisation</span>
+                  <span class="provenance-value">{{ result.organizationName }}</span>
+                </div>
+              }
+              @if (result.consentId) {
+                <div class="provenance-item">
+                  <span class="provenance-label">Consent ID</span>
+                  <span class="provenance-value consent-id">{{ result.consentId }}</span>
+                </div>
+                <div class="provenance-item">
+                  <span class="provenance-label">Granted At</span>
+                  <span class="provenance-value">{{
+                    result.consentGrantedAt | date: 'mediumDate'
+                  }}</span>
+                </div>
+                @if (result.consentExpiresAt) {
+                  <div class="provenance-item">
+                    <span class="provenance-label">Expires</span>
+                    <span class="provenance-value">{{
+                      result.consentExpiresAt | date: 'mediumDate'
+                    }}</span>
+                  </div>
+                }
+                @if (result.consentPurpose) {
+                  <div class="provenance-item">
+                    <span class="provenance-label">Purpose</span>
+                    <span class="provenance-value">{{ result.consentPurpose }}</span>
+                  </div>
+                }
+              }
+            </div>
+
+            <!-- Export actions -->
+            <div class="export-actions">
+              <span class="export-label">Export record:</span>
+              <button class="btn-outline-sm" (click)="exportRecord('pdf')">
+                <span class="material-symbols-outlined">picture_as_pdf</span> PDF
+              </button>
+              <button class="btn-outline-sm" (click)="exportRecord('csv')">
+                <span class="material-symbols-outlined">table_chart</span> CSV
+              </button>
+            </div>
+
+            <!-- Summary stats -->
+            <div class="record-summary-grid">
+              <div class="summary-stat">
+                <span class="stat-count">{{ result.patientRecord.encounters?.length ?? 0 }}</span>
+                <span class="stat-label">Encounters</span>
+              </div>
+              <div class="summary-stat">
+                <span class="stat-count">{{ result.patientRecord.labOrders?.length ?? 0 }}</span>
+                <span class="stat-label">Lab Orders</span>
+              </div>
+              <div class="summary-stat">
+                <span class="stat-count">{{
+                  result.patientRecord.prescriptions?.length ?? 0
+                }}</span>
+                <span class="stat-label">Prescriptions</span>
+              </div>
+              <div class="summary-stat">
+                <span class="stat-count">{{
+                  result.patientRecord.allergiesDetailed?.length ?? 0
+                }}</span>
+                <span class="stat-label">Allergies</span>
+              </div>
+              <div class="summary-stat">
+                <span class="stat-count">{{ result.patientRecord.problems?.length ?? 0 }}</span>
+                <span class="stat-label">Problems</span>
+              </div>
+              <div class="summary-stat">
+                <span class="stat-count">{{
+                  result.patientRecord.surgicalHistory?.length ?? 0
+                }}</span>
+                <span class="stat-label">Surgical Hx</span>
+              </div>
+            </div>
+
+            <!-- Patient demographics from shared record -->
+            <div class="shared-demographics">
+              <h4>Patient Demographics (as recorded at {{ result.resolvedFromHospitalName }})</h4>
+              <div class="info-rows">
+                <div class="info-row">
+                  <span class="label">MRNs</span>
+                  <span class="value">{{
+                    result.patientRecord.hospitalMRNs?.join(', ') || '—'
+                  }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="label">Blood Type</span>
+                  <span class="value">{{ result.patientRecord.bloodType || '—' }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="label">Allergies</span>
+                  <span class="value">{{ result.patientRecord.allergies || 'None recorded' }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        }
+      </div>
+
+      <!-- Grant Consent Modal -->
+      @if (showGrantModal()) {
+        <div
+          class="modal-overlay"
+          tabindex="-1"
+          (click)="closeGrantModal()"
+          (keydown.escape)="closeGrantModal()"
+        >
+          <dialog
+            class="modal-card"
+            open
+            tabindex="-1"
+            aria-labelledby="grant-modal-title"
+            (click)="$event.stopPropagation()"
+            (keydown)="$event.stopPropagation()"
+          >
+            <div class="modal-header">
+              <h3><span class="material-symbols-outlined">add_task</span> Grant Sharing Consent</h3>
+              <button class="modal-close" (click)="closeGrantModal()" aria-label="Close">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div class="modal-body">
+              <label class="form-label">
+                From Hospital (source)
+                <select
+                  class="hospital-select"
+                  [value]="grantFromHospitalId()"
+                  (change)="grantFromHospitalId.set($any($event.target).value)"
+                >
+                  <option value="">— Select source hospital —</option>
+                  @for (h of hospitals(); track h.id) {
+                    <option [value]="h.id">{{ h.name }}</option>
+                  }
+                </select>
+              </label>
+              <label class="form-label">
+                To Hospital (requesting)
+                <select
+                  class="hospital-select"
+                  [value]="grantToHospitalId()"
+                  (change)="grantToHospitalId.set($any($event.target).value)"
+                >
+                  <option value="">— Select target hospital —</option>
+                  @for (h of hospitals(); track h.id) {
+                    <option [value]="h.id">{{ h.name }}</option>
+                  }
+                </select>
+              </label>
+              <label class="form-label">
+                Purpose (optional)
+                <input
+                  type="text"
+                  class="form-input"
+                  placeholder="e.g. Emergency consultation"
+                  [value]="grantPurpose()"
+                  (input)="grantPurpose.set($any($event.target).value)"
+                />
+              </label>
+              <label class="form-label">
+                Expiry Date (optional)
+                <input
+                  type="datetime-local"
+                  class="form-input"
+                  [value]="grantExpiry()"
+                  (input)="grantExpiry.set($any($event.target).value)"
+                />
+              </label>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-outline" (click)="closeGrantModal()">Cancel</button>
+              <button
+                class="btn-primary"
+                (click)="submitGrant()"
+                [disabled]="grantLoading() || !grantFromHospitalId() || !grantToHospitalId()"
+              >
+                @if (grantLoading()) {
+                  <span class="spinner-btn"></span> Saving…
+                } @else {
+                  Grant Consent
+                }
+              </button>
+            </div>
+          </dialog>
         </div>
       }
     }
