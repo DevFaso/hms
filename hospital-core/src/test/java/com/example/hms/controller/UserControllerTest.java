@@ -23,7 +23,10 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -133,5 +136,46 @@ class UserControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(req)))
             .andExpect(status().isBadRequest());
+    }
+
+    // -------------------------------------------------------------------------
+    // PATCH /users/{id}/restore
+    // -------------------------------------------------------------------------
+
+    @Test
+    void restoreUser_asHospitalAdmin_returns204() throws Exception {
+        UUID id = UUID.randomUUID();
+        doNothing().when(userService).restoreUser(any(UUID.class));
+
+        mockMvc.perform(patch("/users/{id}/restore", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .with(SecurityMockMvcRequestPostProcessors.user("admin")
+                    .authorities(AuthorityUtils.createAuthorityList("ROLE_HOSPITAL_ADMIN"))))
+            .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void restoreUser_asSuperAdmin_returns204() throws Exception {
+        UUID id = UUID.randomUUID();
+        doNothing().when(userService).restoreUser(any(UUID.class));
+
+        mockMvc.perform(patch("/users/{id}/restore", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .with(SecurityMockMvcRequestPostProcessors.user("superadmin")
+                    .authorities(AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN"))))
+            .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void restoreUser_serviceThrows_propagatesError() throws Exception {
+        UUID id = UUID.randomUUID();
+        doThrow(new com.example.hms.exception.ResourceNotFoundException("User not found: " + id))
+                .when(userService).restoreUser(any(UUID.class));
+
+        mockMvc.perform(patch("/users/{id}/restore", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .with(SecurityMockMvcRequestPostProcessors.user("superadmin")
+                    .authorities(AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN"))))
+            .andExpect(status().isNotFound());
     }
 }

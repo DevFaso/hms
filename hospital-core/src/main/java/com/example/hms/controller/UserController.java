@@ -16,6 +16,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -155,6 +156,14 @@ public class UserController {
     public ResponseEntity<MessageResponse> deleteUser(@PathVariable UUID id) {
         userService.deleteUser(id);
         return ResponseEntity.ok(new MessageResponse("User deleted successfully."));
+    }
+
+    @Operation(summary = "Restore a soft-deleted user")
+    @PatchMapping("/{id}/restore")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
+    public ResponseEntity<Void> restoreUser(@PathVariable UUID id) {
+        userService.restoreUser(id);
+        return ResponseEntity.noContent().build();
     }
 
     @Operation(summary = "Search users by name, role, or email with pagination (summary view)")

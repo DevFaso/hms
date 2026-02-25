@@ -80,4 +80,8 @@ export class UserService {
   delete(id: string): Observable<{ message: string }> {
     return this.http.delete<{ message: string }>(`/users/${id}`);
   }
+
+  restore(id: string): Observable<void> {
+    return this.http.patch<void>(`/users/${id}/restore`, {});
+  }
 }

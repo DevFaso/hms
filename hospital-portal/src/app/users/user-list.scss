@@ -311,6 +311,16 @@ fieldset.field {
       background: #fef2f2;
     }
   }
+  &.restore {
+    color: #16a34a;
+    &:hover {
+      background: #f0fdf4;
+    }
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
 }
 .delete-warning {
   text-align: center;

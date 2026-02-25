@@ -37,6 +37,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 
 @ExtendWith(MockitoExtension.class)
 class UserServiceImplTest {
@@ -372,6 +374,109 @@ class UserServiceImplTest {
         @DisplayName("null input returns 'User'")
         void nullReturnsUser() throws Exception {
             assertThat(invoke(null)).isEqualTo("User");
+        }
+    }
+
+    // =====================================================================
+    // deleteUser
+    // =====================================================================
+
+    @Nested
+    @DisplayName("deleteUser")
+    class DeleteUser {
+
+        @Test
+        @DisplayName("soft-deletes user: sets isDeleted=true, isActive=false and saves")
+        void softDeletesUser() {
+            user.setDeleted(false);
+            user.setActive(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            userService.deleteUser(userId);
+
+            assertThat(user.isDeleted()).isTrue();
+            assertThat(user.isActive()).isFalse();
+            verify(userRepository).save(user);
+        }
+
+        @Test
+        @DisplayName("throws ResourceNotFoundException when user does not exist")
+        void throwsWhenUserNotFound() {
+            when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> userService.deleteUser(userId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            verify(userRepository, never()).save(any());
+        }
+    }
+
+    // =====================================================================
+    // restoreUser
+    // =====================================================================
+
+    @Nested
+    @DisplayName("restoreUser")
+    class RestoreUser {
+
+        @Test
+        @DisplayName("restores a deleted user: sets isDeleted=false, isActive=true and saves")
+        void restoresUser() {
+            user.setDeleted(true);
+            user.setActive(false);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            doNothing().when(emailService).sendAccountRestoredEmail(any(), any());
+
+            userService.restoreUser(userId);
+
+            assertThat(user.isDeleted()).isFalse();
+            assertThat(user.isActive()).isTrue();
+            verify(userRepository).save(user);
+        }
+
+        @Test
+        @DisplayName("sends account-restored notification email after save")
+        void sendsNotificationEmail() {
+            user.setDeleted(true);
+            user.setActive(false);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            doNothing().when(emailService).sendAccountRestoredEmail(any(), any());
+
+            userService.restoreUser(userId);
+
+            verify(emailService).sendAccountRestoredEmail("test@example.com", "Test User");
+        }
+
+        @Test
+        @DisplayName("email failure does not roll back the restore (fire-and-forget)")
+        void emailFailureDoesNotRollBack() {
+            user.setDeleted(true);
+            user.setActive(false);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            doThrow(new RuntimeException("SMTP down"))
+                    .when(emailService).sendAccountRestoredEmail(any(), any());
+
+            // Must NOT throw — email failure is swallowed with a warning log
+            userService.restoreUser(userId);
+
+            assertThat(user.isDeleted()).isFalse();
+            verify(userRepository).save(user);
+        }
+
+        @Test
+        @DisplayName("throws ResourceNotFoundException when user does not exist")
+        void throwsWhenUserNotFound() {
+            when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> userService.restoreUser(userId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            verify(userRepository, never()).save(any());
+            verify(emailService, never()).sendAccountRestoredEmail(any(), any());
         }
     }
 }

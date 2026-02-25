@@ -239,5 +239,54 @@ class EmailServiceImplTest {
                 .isInstanceOf(IllegalArgumentException.class);
         }
     }
+
+    // =========================================================================
+    // sendAccountRestoredEmail
+    // =========================================================================
+
+    @Nested
+    @DisplayName("sendAccountRestoredEmail")
+    class SendAccountRestoredEmail {
+
+        @Test
+        @DisplayName("delegates to mailSender once for a valid named recipient")
+        void sendsForNamedRecipient() {
+            stubMailSender();
+            emailService.sendAccountRestoredEmail("user@example.com", "John Doe");
+            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+        }
+
+        @Test
+        @DisplayName("delegates to mailSender once when displayName is blank (falls back to 'there')")
+        void sendsWithBlankDisplayName() {
+            stubMailSender();
+            emailService.sendAccountRestoredEmail("user@example.com", "");
+            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+        }
+
+        @Test
+        @DisplayName("delegates to mailSender once when displayName is null (falls back to 'there')")
+        void sendsWithNullDisplayName() {
+            stubMailSender();
+            emailService.sendAccountRestoredEmail("user@example.com", null);
+            verify(mailSender, times(1)).send(any(MimeMessagePreparator.class));
+        }
+
+        @Test
+        @DisplayName("throws IllegalArgumentException for null recipient")
+        void rejectsNullRecipient() {
+            assertThatThrownBy(() ->
+                emailService.sendAccountRestoredEmail(null, "John Doe"))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+
+        @Test
+        @DisplayName("throws IllegalArgumentException for malformed recipient email")
+        void rejectsInvalidRecipient() {
+            assertThatThrownBy(() ->
+                emailService.sendAccountRestoredEmail("not-an-email", "John Doe"))
+                .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
 }
 
