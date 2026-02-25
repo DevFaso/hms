@@ -216,6 +216,7 @@ public class EmailServiceImpl implements EmailService {
         if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
         validateAddresses(List.of(to));
         String safeName = (displayName != null && !displayName.isBlank()) ? displayName : GENERIC_GREETING;
+        String escapedName = escapeHtml(safeName);
         String changedAt = java.time.LocalDateTime.now()
             .format(java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' HH:mm"));
 
@@ -228,7 +229,7 @@ public class EmailServiceImpl implements EmailService {
             + "</div>";
 
         String bodyContent = "<div style=\"padding:36px 40px;\">"
-            + "<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">Hi " + safeName + ",</p>"
+            + "<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">Hi " + escapedName + ",</p>"
             + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
             + "Your account password was successfully reset on <strong>" + changedAt + "</strong>."
             + " You can now sign in with your new password."
@@ -416,6 +417,19 @@ public class EmailServiceImpl implements EmailService {
     // -------------------------------------------------------------------------
 
     /**
+     * Escapes user-supplied values before embedding them in HTML email bodies
+     * to prevent HTML injection.
+     */
+    private static String escapeHtml(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#x27;");
+    }
+
+    /**
      * Wraps {@code content} in the standard outer email container:
      * a full-width light-grey background with a centred white card.
      */
@@ -476,12 +490,18 @@ public class EmailServiceImpl implements EmailService {
         String safePassword = (tempPassword != null && !tempPassword.isBlank()) ? tempPassword : "\u2014";
         String loginUrl     = loginUrl();
 
-        String hospitalLine = safeHospital != null
+        String escapedName     = escapeHtml(safeName);
+        String escapedRole     = escapeHtml(safeRole);
+        String escapedHospital = safeHospital != null ? escapeHtml(safeHospital) : null;
+        String escapedUsername = escapeHtml(safeUsername);
+        String escapedPassword = escapeHtml(safePassword);
+
+        String hospitalLine = escapedHospital != null
             ? "<tr><td style='padding:6px 0;color:#64748b;font-weight:600;'>Hospital</td>"
-              + "<td style='padding:6px 0 6px 16px;'>" + safeHospital + "</td></tr>"
+              + "<td style='padding:6px 0 6px 16px;'>" + escapedHospital + "</td></tr>"
             : "";
-        String atHospital = safeHospital != null
-            ? "at <strong>" + safeHospital + "</strong>. "
+        String atHospital = escapedHospital != null
+            ? "at <strong>" + escapedHospital + "</strong>. "
             : ". ";
 
         String header = "<div style=\"background:linear-gradient(135deg,#1e3a5f,#2563eb);"
@@ -493,9 +513,9 @@ public class EmailServiceImpl implements EmailService {
             + "</div>";
 
         String bodyContent = "<div style=\"padding:32px 40px;\">"
-            + "<p style=\"color:#1e293b;font-size:16px;margin-top:0;\">Hi <strong>" + safeName + "</strong>,</p>"
+            + "<p style=\"color:#1e293b;font-size:16px;margin-top:0;\">Hi <strong>" + escapedName + "</strong>,</p>"
             + "<p style=\"color:#475569;line-height:1.6;\">"
-            + "A <strong>" + safeRole + "</strong> account has been created for you " + atHospital
+            + "A <strong>" + escapedRole + "</strong> account has been created for you " + atHospital
             + "You can sign in immediately using the credentials below. "
             + "You will be prompted to change your password on first login."
             + "</p>"
@@ -506,12 +526,12 @@ public class EmailServiceImpl implements EmailService {
             + "<table style=\"border-collapse:collapse;width:100%;\">"
             + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">Username</td>"
             + "<td style=\"padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;\">"
-            + safeUsername + "</td></tr>"
+            + escapedUsername + "</td></tr>"
             + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">Temp Password</td>"
             + "<td style=\"padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;\">"
-            + safePassword + "</td></tr>"
+            + escapedPassword + "</td></tr>"
             + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">Role</td>"
-            + "<td style=\"padding:6px 0 6px 16px;\">" + safeRole + "</td></tr>"
+            + "<td style=\"padding:6px 0 6px 16px;\">" + escapedRole + "</td></tr>"
             + hospitalLine
             + "</table></div>"
             + "<p style=\"text-align:center;margin:28px 0;\">"

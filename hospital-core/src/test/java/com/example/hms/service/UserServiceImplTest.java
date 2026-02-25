@@ -34,6 +34,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -246,6 +247,7 @@ class UserServiceImplTest {
             // Expect some downstream exception — but NOT a ConflictException
             assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
                 .isNotInstanceOf(ConflictException.class);
+            verify(userRepository, never()).existsByUsername(any());
         }
 
         @Test
@@ -259,6 +261,7 @@ class UserServiceImplTest {
             // Will fail downstream (roles), but NOT with a phone ConflictException
             assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
                 .isNotInstanceOf(ConflictException.class);
+            verify(userRepository, never()).existsByPhoneNumber(any());
         }
     }
 

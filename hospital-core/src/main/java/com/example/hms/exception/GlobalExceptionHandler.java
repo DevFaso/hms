@@ -38,7 +38,7 @@ public class GlobalExceptionHandler {
         String message = raw;
         if (raw != null && raw.contains(":")) {
             int idx = raw.indexOf(':');
-            field = raw.substring(0, idx);
+            field = raw.substring(0, idx).trim();
             message = raw.substring(idx + 1).trim();
         }
         Map<String, Object> body = new LinkedHashMap<>();

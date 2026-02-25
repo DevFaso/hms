@@ -150,6 +150,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     );
 
     @Query("select (count(u) > 0) from User u where u.phoneNumber = :phone")
-    boolean existsByPhoneNumber(@Param("phone") String phone);
+    Boolean existsByPhoneNumber(@Param("phone") String phone);
 
 }

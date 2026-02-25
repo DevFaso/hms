@@ -249,7 +249,7 @@ public class UserServiceImpl implements UserService {
         if (email != null && Boolean.TRUE.equals(userRepository.existsByEmail(email))) {
             throw new ConflictException("email:Email '" + email + "' is already registered.");
         }
-        if (phone != null && !phone.isBlank() && userRepository.existsByPhoneNumber(phone)) {
+        if (phone != null && !phone.isBlank() && Boolean.TRUE.equals(userRepository.existsByPhoneNumber(phone))) {
             throw new ConflictException("phone:Phone number '" + phone + "' is already registered.");
         }
 
@@ -441,7 +441,8 @@ public class UserServiceImpl implements UserService {
         if (roleCode == null) return "User";
         String stripped = roleCode.startsWith("ROLE_") ? roleCode.substring(5) : roleCode;
         return java.util.Arrays.stream(stripped.split("_"))
-            .map(w -> w.isEmpty() ? w : Character.toUpperCase(w.charAt(0)) + w.substring(1).toLowerCase())
+            .filter(w -> !w.isEmpty())
+            .map(w -> Character.toUpperCase(w.charAt(0)) + w.substring(1).toLowerCase())
             .collect(java.util.stream.Collectors.joining(" "));
     }
 

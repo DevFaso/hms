@@ -146,7 +146,12 @@
                   [(ngModel)]="createForm.firstName"
                   name="firstName"
                   required
+                  [class.input-error]="fieldErrors()['firstName']"
+                  (ngModelChange)="clearFieldError('firstName')"
                 />
+                @if (fieldErrors()['firstName']) {
+                  <span class="field-error-msg">{{ fieldErrors()['firstName'] }}</span>
+                }
               </div>
               <div class="field">
                 <label for="lastName">Last Name *</label>
@@ -156,7 +161,12 @@
                   [(ngModel)]="createForm.lastName"
                   name="lastName"
                   required
+                  [class.input-error]="fieldErrors()['lastName']"
+                  (ngModelChange)="clearFieldError('lastName')"
                 />
+                @if (fieldErrors()['lastName']) {
+                  <span class="field-error-msg">{{ fieldErrors()['lastName'] }}</span>
+                }
               </div>
             </div>
 
@@ -204,7 +214,12 @@
                   [(ngModel)]="createForm.password"
                   name="password"
                   required
+                  [class.input-error]="fieldErrors()['password']"
+                  (ngModelChange)="clearFieldError('password')"
                 />
+                @if (fieldErrors()['password']) {
+                  <span class="field-error-msg">{{ fieldErrors()['password'] }}</span>
+                }
               </div>
               <div class="field">
                 <label for="phoneNumber">Phone Number *</label>
@@ -255,7 +270,12 @@
                   name="licenseNumber"
                   required
                   placeholder="Medical license number"
+                  [class.input-error]="fieldErrors()['licenseNumber']"
+                  (ngModelChange)="clearFieldError('licenseNumber')"
                 />
+                @if (fieldErrors()['licenseNumber']) {
+                  <span class="field-error-msg">{{ fieldErrors()['licenseNumber'] }}</span>
+                }
                 <span class="hint-text"
                   >Required for medical roles (Doctor, Nurse, Lab Scientist, Pharmacist)</span
                 >
