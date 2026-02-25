@@ -265,9 +265,7 @@ export class UserListComponent implements OnInit {
 
     op.subscribe({
       next: () => {
-        this.toast.success(
-          existing ? 'User updated' : 'User created successfully.',
-        );
+        this.toast.success(existing ? 'User updated' : 'User created successfully.');
         this.showCreate.set(false);
         this.saving.set(false);
         this.editing.set(null);
