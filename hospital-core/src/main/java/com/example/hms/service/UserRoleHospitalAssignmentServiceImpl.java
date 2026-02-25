@@ -678,6 +678,60 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     @Override
+    public UserRoleAssignmentPublicViewDTO verifyAssignmentByCode(String assignmentCode, String confirmationCode) {
+        Locale locale = Locale.getDefault();
+        String sanitizedCode = assignmentCode != null ? assignmentCode.trim() : null;
+        String sanitizedConfirmation = confirmationCode != null ? confirmationCode.trim() : null;
+
+        if (sanitizedCode == null || sanitizedCode.isBlank()) {
+            throw new ResourceNotFoundException(
+                messageSource.getMessage(
+                    MSG_ASSIGNMENT_NOT_FOUND_BY_CODE,
+                    new Object[]{assignmentCode},
+                    DEFAULT_ASSIGNMENT_NOT_FOUND_BY_CODE_PREFIX + assignmentCode,
+                    locale));
+        }
+        if (sanitizedConfirmation == null || sanitizedConfirmation.isBlank()) {
+            throw new BusinessException(
+                messageSource.getMessage(
+                    MSG_ASSIGNMENT_INVALID_CODE,
+                    null,
+                    DEFAULT_CONFIRMATION_CODE_INVALID,
+                    locale));
+        }
+
+        UserRoleHospitalAssignment assignment = assignmentRepository.findByAssignmentCode(sanitizedCode)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                messageSource.getMessage(
+                    MSG_ASSIGNMENT_NOT_FOUND_BY_CODE,
+                    new Object[]{sanitizedCode},
+                    DEFAULT_ASSIGNMENT_NOT_FOUND_BY_CODE_PREFIX + sanitizedCode,
+                    locale)));
+
+        // Idempotent: already verified → return current public view
+        if (assignment.getConfirmationVerifiedAt() != null) {
+            log.info("⏭️ Assignment '{}' is already verified — returning current public view.", sanitizedCode);
+            return getAssignmentPublicView(sanitizedCode);
+        }
+
+        String expectedCode = assignment.getConfirmationCode();
+        if (expectedCode == null || !expectedCode.equalsIgnoreCase(sanitizedConfirmation)) {
+            throw new BusinessException(
+                messageSource.getMessage(
+                    MSG_ASSIGNMENT_INVALID_CODE,
+                    null,
+                    DEFAULT_CONFIRMATION_CODE_INVALID,
+                    locale));
+        }
+
+        assignment.setConfirmationVerifiedAt(LocalDateTime.now());
+        assignmentRepository.save(assignment);
+        log.info("✅ Assignment '{}' self-verified by assignee.", sanitizedCode);
+
+        return getAssignmentPublicView(sanitizedCode);
+    }
+
+    @Override
     public UserRoleAssignmentBulkImportResponseDTO bulkImportAssignments(UserRoleAssignmentBulkImportRequestDTO requestDTO) {
         Objects.requireNonNull(requestDTO, "Request must not be null");
         String csvContent = requestDTO.getCsvContent();
