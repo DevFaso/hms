@@ -21,7 +21,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -69,10 +68,9 @@ public class OrganizationController {
         
         Page<Organization> organizations;
         if (active != null && active) {
-            List<Organization> activeOrgs = organizationRepository.findByActiveTrue();
-            organizations = new PageImpl<>(activeOrgs, pageable, activeOrgs.size());
+            organizations = organizationRepository.findAllActiveWithHospitals(pageable);
         } else {
-            organizations = organizationRepository.findAll(pageable);
+            organizations = organizationRepository.findAllWithHospitals(pageable);
         }
 
         Page<OrganizationResponseDTO> responsePage = organizations.map(organizationMapper::toResponseDTO);
