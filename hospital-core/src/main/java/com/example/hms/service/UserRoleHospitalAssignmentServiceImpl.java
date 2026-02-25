@@ -1466,7 +1466,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 hospitalDisplay,
                 confirmationCode,
                 assignment.getAssignmentCode(),
-                profileCompletionUrl
+                profileCompletionUrl,
+                null,  // tempUsername — not applicable for existing-user assignments
+                null   // tempPassword — not applicable for existing-user assignments
             );
         } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to send assignment confirmation email for assignment '{}': {}", assignment.getId(), ex.getMessage());
@@ -1587,6 +1589,21 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             }
         }
         return DEFAULT_PROFILE_CHECKLIST;
+    }
+
+    @Override
+    public void sendNotifications(UUID assignmentId) {
+        Locale locale = Locale.getDefault();
+        UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                messageSource.getMessage(
+                    MSG_ASSIGNMENT_NOT_FOUND,
+                    new Object[]{assignmentId},
+                    DEFAULT_ASSIGNMENT_NOT_FOUND_PREFIX + assignmentId,
+                    locale)));
+        log.info("📧 Sending notifications for assignment '{}'", assignmentId);
+        sendAssignmentEmailNotification(assignment);
+        sendAssignmentSmsNotifications(assignment);
     }
 
     @Override
