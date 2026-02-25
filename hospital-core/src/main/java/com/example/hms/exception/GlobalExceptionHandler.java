@@ -29,6 +29,28 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), request);
     }
 
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<Object> handleConflictException(ConflictException ex, WebRequest request) {
+        // Convention: message may be prefixed with "field:" to identify the offending field.
+        // e.g. "email:Email 'x@y.com' is already registered."
+        String raw = ex.getMessage();
+        String field = null;
+        String message = raw;
+        if (raw != null && raw.contains(":")) {
+            int idx = raw.indexOf(':');
+            field = raw.substring(0, idx).trim();
+            message = raw.substring(idx + 1).trim();
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", LocalDateTime.now());
+        body.put("status", HttpStatus.CONFLICT.value());
+        body.put("error", "Conflict");
+        body.put("message", message);
+        if (field != null) body.put("field", field);
+        body.put("path", request.getDescription(false).replace("uri=", ""));
+        return new ResponseEntity<>(body, HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<Object> handleBusinessException(BusinessException ex, WebRequest request) {
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);

@@ -93,6 +93,9 @@ export class UserListComponent implements OnInit {
   deletingUser = signal<UserSummary | null>(null);
   deleting = signal(false);
 
+  /** Per-field validation error messages (from 400/409 backend responses). */
+  fieldErrors = signal<Record<string, string>>({});
+
   // Lookup data for dropdowns
   availableRoles = signal<RoleResponse[]>([]);
   availableHospitals = signal<{ id: string; name: string }[]>([]);
@@ -180,6 +183,7 @@ export class UserListComponent implements OnInit {
     this.createForm = this.freshForm();
     this.selectedRoles = [];
     this.editing.set(null);
+    this.fieldErrors.set({});
     this.showCreate.set(true);
   }
 
@@ -195,12 +199,14 @@ export class UserListComponent implements OnInit {
       roleNames: user.roleName ? [user.roleName] : [],
     };
     this.selectedRoles = user.roleName ? [user.roleName] : [];
+    this.fieldErrors.set({});
     this.showCreate.set(true);
   }
 
   closeCreate(): void {
     this.showCreate.set(false);
     this.editing.set(null);
+    this.fieldErrors.set({});
   }
 
   onRoleToggle(roleCode: string, checked: boolean): void {
@@ -239,7 +245,7 @@ export class UserListComponent implements OnInit {
     }
 
     this.createForm.roleNames = [...this.selectedRoles];
-
+    this.fieldErrors.set({});
     this.saving.set(true);
     const existing = this.editing();
 
@@ -259,17 +265,51 @@ export class UserListComponent implements OnInit {
 
     op.subscribe({
       next: () => {
-        this.toast.success(existing ? 'User updated' : 'User created');
+        this.toast.success(existing ? 'User updated' : 'User created successfully.');
         this.showCreate.set(false);
         this.saving.set(false);
         this.editing.set(null);
+        this.fieldErrors.set({});
         this.loadUsers();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Operation failed');
         this.saving.set(false);
+        const body = err?.error;
+        const status = err?.status;
+
+        // 409 Conflict — duplicate field detected by the backend
+        if (status === 409 && body?.field) {
+          this.fieldErrors.update((prev) => ({
+            ...prev,
+            [body.field]: body.message ?? 'Already in use',
+          }));
+          this.toast.error(
+            body.message ?? 'A conflict was detected. Please review the highlighted fields.',
+          );
+          return;
+        }
+
+        // 400 with fieldErrors map (from @Valid / Bean Validation)
+        if (status === 400 && body?.fieldErrors) {
+          this.fieldErrors.set(body.fieldErrors as Record<string, string>);
+          this.toast.error('Please fix the highlighted fields and try again.');
+          return;
+        }
+
+        // Generic fallback
+        this.toast.error(body?.message ?? 'Operation failed. Please try again.');
       },
     });
+  }
+
+  /** Call from (ngModelChange) on each input to clear its per-field error immediately. */
+  clearFieldError(field: string): void {
+    const current = this.fieldErrors();
+    if (current[field]) {
+      const updated = { ...current };
+      delete updated[field];
+      this.fieldErrors.set(updated);
+    }
   }
 
   confirmDelete(user: UserSummary): void {

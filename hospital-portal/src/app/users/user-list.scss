@@ -339,3 +339,24 @@ fieldset.field {
     cursor: default;
   }
 }
+
+// ── Field-level validation errors ─────────────────────────────────────────────
+input.input-error,
+select.input-error {
+  border-color: #dc2626 !important;
+  background: #fef2f2;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+
+  &:focus {
+    outline-color: #dc2626;
+  }
+}
+
+.field-error-msg {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: #dc2626;
+  font-weight: 500;
+  line-height: 1.3;
+}

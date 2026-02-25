@@ -149,4 +149,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
         String username, String email, String phoneNumber
     );
 
+    @Query("select (count(u) > 0) from User u where u.phoneNumber = :phone")
+    Boolean existsByPhoneNumber(@Param("phone") String phone);
+
 }

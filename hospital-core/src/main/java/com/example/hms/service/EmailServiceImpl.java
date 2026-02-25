@@ -216,71 +216,48 @@ public class EmailServiceImpl implements EmailService {
         if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
         validateAddresses(List.of(to));
         String safeName = (displayName != null && !displayName.isBlank()) ? displayName : GENERIC_GREETING;
+        String escapedName = escapeHtml(safeName);
         String changedAt = java.time.LocalDateTime.now()
             .format(java.time.format.DateTimeFormatter.ofPattern("MMMM d, yyyy 'at' HH:mm"));
-        String body = """
-            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px;">
-              <div style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
 
-                <!-- Header -->
-                <div style="background:linear-gradient(135deg,#065f46,#059669);padding:32px 40px;text-align:center;">
-                  <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;">
-                    ✅ Password Changed Successfully
-                  </h1>
-                  <p style="color:#a7f3d0;margin:8px 0 0;font-size:14px;">Hospital Management System</p>
-                </div>
+        String header = "<div style=\"background:linear-gradient(135deg,#065f46,#059669);"
+            + "padding:32px 40px;text-align:center;\">"
+            + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;\">"
+            + "&#9989; Password Changed Successfully"
+            + "</h1>"
+            + "<p style=\"color:#a7f3d0;margin:8px 0 0;font-size:14px;\">Hospital Management System</p>"
+            + "</div>";
 
-                <!-- Body -->
-                <div style="padding:36px 40px;">
-                  <p style="font-size:15px;color:#1e293b;margin:0 0 16px;">Hi %s,</p>
-                  <p style="font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;">
-                    Your account password was successfully reset on <strong>%s</strong>.
-                    You can now sign in with your new password.
-                  </p>
+        String bodyContent = "<div style=\"padding:36px 40px;\">"
+            + "<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">Hi " + escapedName + ",</p>"
+            + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
+            + "Your account password was successfully reset on <strong>" + changedAt + "</strong>."
+            + " You can now sign in with your new password."
+            + "</p>"
+            + "<div style=\"text-align:center;margin:32px 0;\">"
+            + "<a href=\"" + loginUrl() + "\" style=\"display:inline-block;"
+            + "background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;"
+            + "text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;"
+            + "font-weight:600;letter-spacing:0.3px;\">Sign In to Your Account</a>"
+            + "</div>"
+            + "<hr style=\"border:none;border-top:1px solid #e2e8f0;margin:0 0 28px;\"/>"
+            + "<div style=\"background:#fef2f2;border:1px solid #fecaca;border-radius:8px;"
+            + "padding:16px 20px;margin-bottom:24px;\">"
+            + "<p style=\"margin:0 0 8px;font-size:14px;font-weight:700;color:#991b1b;\">"
+            + "&#128680; Didn't make this change?</p>"
+            + "<p style=\"margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;\">"
+            + "If you did <strong>not</strong> reset your password, your account may have been compromised. "
+            + "<strong><a href=\"" + loginUrl() + "\" style=\"color:#991b1b;\">Sign in immediately</a></strong>"
+            + " and contact your hospital administrator to secure your account."
+            + "</p></div>"
+            + "<ul style=\"padding-left:20px;color:#64748b;font-size:13px;line-height:1.8;margin:0;\">"
+            + "<li>Never share your password with anyone, including hospital staff.</li>"
+            + "<li>Use a unique password that you don't use on other sites.</li>"
+            + "<li>Enable any available two-factor authentication for extra security.</li>"
+            + "</ul>"
+            + "</div>";
 
-                  <!-- CTA Button -->
-                  <div style="text-align:center;margin:32px 0;">
-                    <a href="%s"
-                       style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;
-                              text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;
-                              font-weight:600;letter-spacing:0.3px;">
-                      Sign In to Your Account
-                    </a>
-                  </div>
-
-                  <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 28px;"/>
-
-                  <!-- Security warning -->
-                  <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
-                    <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#991b1b;">🚨 Didn't make this change?</p>
-                    <p style="margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;">
-                      If you did <strong>not</strong> reset your password, your account may have been compromised.
-                      <strong>
-                        <a href="%s" style="color:#991b1b;">Sign in immediately</a>
-                      </strong>
-                      and contact your hospital administrator to secure your account.
-                    </p>
-                  </div>
-
-                  <!-- Tips -->
-                  <ul style="padding-left:20px;color:#64748b;font-size:13px;line-height:1.8;margin:0;">
-                    <li>Never share your password with anyone, including hospital staff.</li>
-                    <li>Use a unique password that you don't use on other sites.</li>
-                    <li>Enable any available two-factor authentication for extra security.</li>
-                  </ul>
-                </div>
-
-                <!-- Footer -->
-                <div style="background:#f1f5f9;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;">
-                  <p style="margin:0;font-size:12px;color:#94a3b8;">
-                    © %d Hospital Management System &nbsp;|&nbsp;
-                    This is an automated message — please do not reply.
-                  </p>
-                </div>
-
-              </div>
-            </div>
-            """.formatted(safeName, changedAt, loginUrl(), loginUrl(), java.time.Year.now().getValue());
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter());
 
         sendHtml(List.of(to), List.of(), List.of(), "Your HMS Password Has Been Changed", body);
         log.info("✅ Password reset confirmation email sent to {}", to);
@@ -389,73 +366,90 @@ public class EmailServiceImpl implements EmailService {
     }
 
     private String buildResetEmailBody(String link) {
-        return """
-            <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#f8fafc;padding:24px;">
-              <div style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        String header = "<div style=\"background:linear-gradient(135deg,#1e3a5f,#2563eb);"
+            + "padding:32px 40px;text-align:center;\">"
+            + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;\">"
+            + "&#128274; Password Reset Request"
+            + "</h1>"
+            + "<p style=\"color:#bfdbfe;margin:8px 0 0;font-size:14px;\">Hospital Management System</p>"
+            + "</div>";
 
-                <!-- Header -->
-                <div style="background:linear-gradient(135deg,#1e3a5f,#2563eb);padding:32px 40px;text-align:center;">
-                  <h1 style="color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:0.5px;">
-                    🔒 Password Reset Request
-                  </h1>
-                  <p style="color:#bfdbfe;margin:8px 0 0;font-size:14px;">Hospital Management System</p>
-                </div>
+        String bodyContent = "<div style=\"padding:36px 40px;\">"
+            + "<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">Hello,</p>"
+            + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
+            + "We received a request to reset the password for your account. "
+            + "Click the button below to choose a new password."
+            + "</p>"
+            + "<div style=\"text-align:center;margin:32px 0;\">"
+            + "<a href=\"" + link + "\" style=\"display:inline-block;"
+            + "background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;"
+            + "text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;"
+            + "font-weight:600;letter-spacing:0.3px;\">Reset My Password</a>"
+            + "</div>"
+            + "<p style=\"font-size:13px;color:#64748b;text-align:center;margin:0 0 32px;\">"
+            + "Button not working? Copy and paste this link into your browser:<br/>"
+            + "<a href=\"" + link + "\" style=\"color:#2563eb;word-break:break-all;\">" + link + "</a>"
+            + "</p>"
+            + "<hr style=\"border:none;border-top:1px solid #e2e8f0;margin:0 0 28px;\"/>"
+            + "<div style=\"background:#fef9ec;border:1px solid #fcd34d;border-radius:8px;"
+            + "padding:16px 20px;margin-bottom:24px;\">"
+            + "<p style=\"margin:0 0 8px;font-size:14px;font-weight:700;color:#92400e;\">"
+            + "&#9888;&#65039; Didn't request this?</p>"
+            + "<p style=\"margin:0;font-size:14px;color:#78350f;line-height:1.6;\">"
+            + "If you did <strong>not</strong> request a password reset, your account may be at risk. "
+            + "Please <strong>do not click the link above</strong> and immediately "
+            + "<a href=\"" + loginUrl() + "\" style=\"color:#b45309;font-weight:600;\">"
+            + "sign in to your account</a> to verify your security settings, "
+            + "or contact your hospital administrator."
+            + "</p></div>"
+            + "<ul style=\"padding-left:20px;color:#64748b;font-size:13px;line-height:1.8;margin:0;\">"
+            + "<li>This link expires in <strong>2 hours</strong>.</li>"
+            + "<li>The link can only be used <strong>once</strong>.</li>"
+            + "<li>Never share this link with anyone.</li>"
+            + "</ul>"
+            + "</div>";
 
-                <!-- Body -->
-                <div style="padding:36px 40px;">
-                  <p style="font-size:15px;color:#1e293b;margin:0 0 16px;">Hello,</p>
-                  <p style="font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;">
-                    We received a request to reset the password for your account. Click the button below to choose a new password.
-                  </p>
+        return htmlEmailWrapper(header + bodyContent + htmlEmailFooter());
+    }
 
-                  <!-- CTA Button -->
-                  <div style="text-align:center;margin:32px 0;">
-                    <a href="%s"
-                       style="display:inline-block;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;
-                              text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;
-                              font-weight:600;letter-spacing:0.3px;">
-                      Reset My Password
-                    </a>
-                  </div>
+    // -------------------------------------------------------------------------
+    // Shared HTML building blocks
+    // -------------------------------------------------------------------------
 
-                  <!-- Fallback link -->
-                  <p style="font-size:13px;color:#64748b;text-align:center;margin:0 0 32px;">
-                    Button not working? Copy and paste this link into your browser:<br/>
-                    <a href="%s" style="color:#2563eb;word-break:break-all;">%s</a>
-                  </p>
+    /**
+     * Escapes user-supplied values before embedding them in HTML email bodies
+     * to prevent HTML injection.
+     */
+    private static String escapeHtml(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#x27;");
+    }
 
-                  <hr style="border:none;border-top:1px solid #e2e8f0;margin:0 0 28px;"/>
+    /**
+     * Wraps {@code content} in the standard outer email container:
+     * a full-width light-grey background with a centred white card.
+     */
+    private static String htmlEmailWrapper(String content) {
+        return "<div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto;"
+             + "background:#f8fafc;padding:24px;\">"
+             + "<div style=\"background:#ffffff;border-radius:12px;overflow:hidden;"
+             + "box-shadow:0 2px 8px rgba(0,0,0,0.08);\">"
+             + content
+             + "</div></div>";
+    }
 
-                  <!-- Security warning -->
-                  <div style="background:#fef9ec;border:1px solid #fcd34d;border-radius:8px;padding:16px 20px;margin-bottom:24px;">
-                    <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#92400e;">⚠️ Didn't request this?</p>
-                    <p style="margin:0;font-size:14px;color:#78350f;line-height:1.6;">
-                      If you did <strong>not</strong> request a password reset, your account may be at risk.
-                      Please <strong>do not click the link above</strong> and immediately
-                      <a href="%s" style="color:#b45309;font-weight:600;">sign in to your account</a>
-                      to verify your security settings, or contact your hospital administrator.
-                    </p>
-                  </div>
-
-                  <!-- Expiry & tips -->
-                  <ul style="padding-left:20px;color:#64748b;font-size:13px;line-height:1.8;margin:0;">
-                    <li>This link expires in <strong>2 hours</strong>.</li>
-                    <li>The link can only be used <strong>once</strong>.</li>
-                    <li>Never share this link with anyone.</li>
-                  </ul>
-                </div>
-
-                <!-- Footer -->
-                <div style="background:#f1f5f9;padding:20px 40px;text-align:center;border-top:1px solid #e2e8f0;">
-                  <p style="margin:0;font-size:12px;color:#94a3b8;">
-                    © %d Hospital Management System &nbsp;|&nbsp;
-                    This is an automated message — please do not reply.
-                  </p>
-                </div>
-
-              </div>
-            </div>
-            """.formatted(link, link, link, loginUrl(), java.time.Year.now().getValue());
+    /** Returns the standard email footer HTML (year is resolved at call-time). */
+    private static String htmlEmailFooter() {
+        return "<div style=\"background:#f1f5f9;padding:20px 40px;text-align:center;"
+             + "border-top:1px solid #e2e8f0;\">"
+             + "<p style=\"margin:0;font-size:12px;color:#94a3b8;\">"
+             + "\u00a9 " + java.time.Year.now().getValue() + " Hospital Management System"
+             + " &nbsp;|&nbsp; This is an automated message \u2014 please do not reply."
+             + "</p></div>";
     }
 
     private static void validateAddresses(List<String> addresses) {
@@ -474,5 +468,93 @@ public class EmailServiceImpl implements EmailService {
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Admin-created user welcome email
+    // -------------------------------------------------------------------------
+
+    @Override
+    public void sendAdminWelcomeEmail(String to,
+                                      String displayName,
+                                      String username,
+                                      String tempPassword,
+                                      String roleName,
+                                      String hospitalName) {
+        if (to == null) throw new IllegalArgumentException("Recipient address must not be null");
+        validateAddresses(List.of(to));
+        log.info("📧 Sending admin welcome email to: {}", to);
+
+        String safeName     = (displayName  != null && !displayName.isBlank())  ? displayName  : GENERIC_GREETING;
+        String safeRole     = (roleName     != null && !roleName.isBlank())     ? roleName     : "your assigned role";
+        String safeHospital = (hospitalName != null && !hospitalName.isBlank()) ? hospitalName : null;
+        String safeUsername = (username     != null && !username.isBlank())     ? username     : "\u2014";
+        String safePassword = (tempPassword != null && !tempPassword.isBlank()) ? tempPassword : "\u2014";
+        String loginUrl     = loginUrl();
+
+        String escapedName     = escapeHtml(safeName);
+        String escapedRole     = escapeHtml(safeRole);
+        String escapedHospital = safeHospital != null ? escapeHtml(safeHospital) : null;
+        String escapedUsername = escapeHtml(safeUsername);
+        String escapedPassword = escapeHtml(safePassword);
+
+        String hospitalLine = escapedHospital != null
+            ? "<tr><td style='padding:6px 0;color:#64748b;font-weight:600;'>Hospital</td>"
+              + "<td style='padding:6px 0 6px 16px;'>" + escapedHospital + "</td></tr>"
+            : "";
+        String atHospital = escapedHospital != null
+            ? "at <strong>" + escapedHospital + "</strong>. "
+            : ". ";
+
+        String header = "<div style=\"background:linear-gradient(135deg,#1e3a5f,#2563eb);"
+            + "padding:32px 40px;text-align:center;\">"
+            + "<div style=\"font-size:36px;margin-bottom:8px;\">&#127973;</div>"
+            + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;letter-spacing:-0.5px;\">"
+            + "Welcome to HMS</h1>"
+            + "<p style=\"color:#bfdbfe;margin:6px 0 0;font-size:14px;\">Your account has been created</p>"
+            + "</div>";
+
+        String bodyContent = "<div style=\"padding:32px 40px;\">"
+            + "<p style=\"color:#1e293b;font-size:16px;margin-top:0;\">Hi <strong>" + escapedName + "</strong>,</p>"
+            + "<p style=\"color:#475569;line-height:1.6;\">"
+            + "A <strong>" + escapedRole + "</strong> account has been created for you " + atHospital
+            + "You can sign in immediately using the credentials below. "
+            + "You will be prompted to change your password on first login."
+            + "</p>"
+            + "<div style=\"background:#eff6ff;border:2px solid #bfdbfe;border-radius:10px;"
+            + "padding:20px 24px;margin:24px 0;\">"
+            + "<p style=\"margin:0 0 12px;font-weight:700;color:#1e3a8a;font-size:14px;"
+            + "text-transform:uppercase;letter-spacing:0.5px;\">Your Login Credentials</p>"
+            + "<table style=\"border-collapse:collapse;width:100%;\">"
+            + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">Username</td>"
+            + "<td style=\"padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;\">"
+            + escapedUsername + "</td></tr>"
+            + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">Temp Password</td>"
+            + "<td style=\"padding:6px 0 6px 16px;font-family:monospace;font-size:16px;color:#1e293b;\">"
+            + escapedPassword + "</td></tr>"
+            + "<tr><td style=\"padding:6px 0;color:#64748b;font-weight:600;\">Role</td>"
+            + "<td style=\"padding:6px 0 6px 16px;\">" + escapedRole + "</td></tr>"
+            + hospitalLine
+            + "</table></div>"
+            + "<p style=\"text-align:center;margin:28px 0;\">"
+            + "<a href=\"" + loginUrl + "\" style=\"background:#2563eb;color:#ffffff;"
+            + "text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;"
+            + "font-weight:600;display:inline-block;\">Sign In to Your Account</a></p>"
+            + "<p style=\"text-align:center;font-size:13px;color:#94a3b8;\">Or copy this link:<br/>"
+            + "<a href=\"" + loginUrl + "\" style=\"color:#2563eb;\">" + loginUrl + "</a></p>"
+            + "<div style=\"background:#fef3c7;border-left:4px solid #f59e0b;padding:14px 16px;"
+            + "border-radius:0 8px 8px 0;margin-top:24px;\">"
+            + "<p style=\"margin:0;font-size:14px;color:#92400e;\">"
+            + "<strong>&#9888; Security notice:</strong> This email contains a temporary password. "
+            + "Please sign in and change it immediately. Do not share this email with anyone. "
+            + "If you did not expect this account, contact your system administrator right away."
+            + "</p></div>"
+            + "</div>";
+
+        String body = htmlEmailWrapper(header + bodyContent + htmlEmailFooter());
+
+        sendHtml(List.of(to), List.of(), List.of(),
+            "Welcome to HMS \u2014 Your Account Is Ready", body);
+        log.info("✅ Admin welcome email sent to {}", to);
+    }
 
 }
+
