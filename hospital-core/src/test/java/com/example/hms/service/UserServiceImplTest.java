@@ -15,6 +15,7 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.JwtTokenProvider;
+import com.example.hms.utility.UserDisplayUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -262,67 +263,61 @@ class UserServiceImplTest {
     }
 
     // =====================================================================
-    // resolveDisplayName (private static) — tested via reflection
+    // resolveDisplayName — tested via UserDisplayUtil (extracted utility)
     // =====================================================================
 
     @Nested
     @DisplayName("resolveDisplayName")
     class ResolveDisplayName {
 
-        private String invoke(User u) throws Exception {
-            Method m = UserServiceImpl.class.getDeclaredMethod("resolveDisplayName", User.class);
-            m.setAccessible(true);
-            return (String) m.invoke(null, u);
-        }
-
         @Test
         @DisplayName("returns 'firstName lastName' when both are set")
-        void fullName() throws Exception {
+        void fullName() {
             User u = new User();
             u.setFirstName("Jane");
             u.setLastName("Doe");
-            assertThat(invoke(u)).isEqualTo("Jane Doe");
+            assertThat(UserDisplayUtil.resolveDisplayName(u)).isEqualTo("Jane Doe");
         }
 
         @Test
         @DisplayName("returns firstName alone when lastName is blank")
-        void firstNameOnly() throws Exception {
+        void firstNameOnly() {
             User u = new User();
             u.setFirstName("Jane");
             u.setLastName("");
-            assertThat(invoke(u)).isEqualTo("Jane");
+            assertThat(UserDisplayUtil.resolveDisplayName(u)).isEqualTo("Jane");
         }
 
         @Test
         @DisplayName("returns lastName alone when firstName is blank")
-        void lastNameOnly() throws Exception {
+        void lastNameOnly() {
             User u = new User();
             u.setFirstName("");
             u.setLastName("Doe");
-            assertThat(invoke(u)).isEqualTo("Doe");
+            assertThat(UserDisplayUtil.resolveDisplayName(u)).isEqualTo("Doe");
         }
 
         @Test
         @DisplayName("returns username when both names are blank")
-        void fallsBackToUsername() throws Exception {
+        void fallsBackToUsername() {
             User u = new User();
             u.setFirstName("");
             u.setLastName("");
             u.setUsername("janedoe");
-            assertThat(invoke(u)).isEqualTo("janedoe");
+            assertThat(UserDisplayUtil.resolveDisplayName(u)).isEqualTo("janedoe");
         }
 
         @Test
         @DisplayName("returns 'there' when user is null")
-        void nullUserReturnsDefault() throws Exception {
-            assertThat(invoke(null)).isEqualTo("there");
+        void nullUserReturnsDefault() {
+            assertThat(UserDisplayUtil.resolveDisplayName(null)).isEqualTo("there");
         }
 
         @Test
         @DisplayName("returns 'there' when all name fields and username are null")
-        void allNullReturnsDefault() throws Exception {
+        void allNullReturnsDefault() {
             User u = new User(); // firstName, lastName, username all null
-            assertThat(invoke(u)).isEqualTo("there");
+            assertThat(UserDisplayUtil.resolveDisplayName(u)).isEqualTo("there");
         }
     }
 

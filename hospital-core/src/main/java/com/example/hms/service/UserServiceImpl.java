@@ -8,6 +8,7 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.UserMapper;
+import com.example.hms.utility.UserDisplayUtil;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
@@ -29,6 +30,7 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
+import com.example.hms.security.JwtTokenHolder;
 import com.example.hms.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -309,7 +311,7 @@ public class UserServiceImpl implements UserService {
 
         // ---- 7) Welcome email for brand-new non-patient users (fire-and-forget) ----
         if (newUserCreated && !isPatient) {
-            final String displayName = resolveDisplayName(user);
+            final String displayName = UserDisplayUtil.resolveDisplayName(user);
             final String roleName    = roles.stream()
                     .map(r -> formatRoleLabel(r.getCode()))
                     .findFirst().orElse("User");
@@ -432,17 +434,6 @@ public class UserServiceImpl implements UserService {
         }
 
         staffRepository.save(staff);
-    }
-
-    /** Returns a presentable name for the user, falling back to username then 'there'. */
-    private static String resolveDisplayName(User user) {
-        if (user == null) return "there";
-        String first = user.getFirstName() != null ? user.getFirstName().strip() : "";
-        String last  = user.getLastName()  != null ? user.getLastName().strip()  : "";
-        if (!first.isBlank() && !last.isBlank()) return first + " " + last;
-        if (!first.isBlank()) return first;
-        if (!last.isBlank())  return last;
-        return user.getUsername() != null ? user.getUsername() : "there";
     }
 
     /** Converts ROLE_HOSPITAL_ADMIN → "Hospital Admin". */
@@ -699,7 +690,7 @@ public class UserServiceImpl implements UserService {
 
     private UUID extractHospitalIdFromJwt() {
         try {
-            String jwt = resolveCurrentJwt();
+            String jwt = JwtTokenHolder.getToken();
             if (jwt == null || jwt.isBlank())
                 return null;
 
@@ -719,23 +710,6 @@ public class UserServiceImpl implements UserService {
         return null;
     }
 
-    private String resolveCurrentJwt() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return null;
-        }
-
-        Object credentials = authentication.getCredentials();
-        if (credentials instanceof String token && !token.isBlank()) {
-            return token;
-        }
-
-        if (credentials != null) {
-            String value = credentials.toString();
-            return value.isBlank() ? null : value;
-        }
-        return null;
-    }
 
     @Transactional(readOnly = true)
     public long getUserDistinctRoleCount(UUID userId) {
