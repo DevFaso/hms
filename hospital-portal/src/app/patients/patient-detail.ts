@@ -101,7 +101,24 @@ export class PatientDetailComponent implements OnInit {
     return this.permissions.hasPermission('Create Encounters');
   }
 
+  /** Whether the current user can view the Record Sharing tab */
+  canViewSharing(): boolean {
+    return this.permissions.hasAnyPermission('View Record Sharing', 'Manage Patient Consents', '*');
+  }
+
+  /** Whether the current user can grant or revoke patient consents */
+  canManageConsents(): boolean {
+    return this.permissions.hasPermission('Manage Patient Consents');
+  }
+
   setTab(tab: TabKey): void {
+    // Prevent navigating to the sharing tab when the user lacks permission.
+    // Falls back to the overview tab so component state is never left on an
+    // unauthorised panel, even when setTab() is called programmatically.
+    if (tab === 'sharing' && !this.canViewSharing()) {
+      this.activeTab.set('overview');
+      return;
+    }
     this.activeTab.set(tab);
     if (tab === 'vitals' && this.canViewVitals() && this.vitals().length === 0) this.loadVitals();
     if (tab === 'encounters' && this.canViewEncounters() && this.encounters().length === 0)
