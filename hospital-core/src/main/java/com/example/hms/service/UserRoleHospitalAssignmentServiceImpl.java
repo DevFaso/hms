@@ -708,10 +708,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                     DEFAULT_ASSIGNMENT_NOT_FOUND_BY_CODE_PREFIX + sanitizedCode,
                     locale)));
 
-        // Idempotent: already verified → return current public view
+        // Idempotent: already verified → build DTO from existing state (no save)
         if (assignment.getConfirmationVerifiedAt() != null) {
             log.info("⏭️ Assignment '{}' is already verified — returning current public view.", sanitizedCode);
-            return getAssignmentPublicView(sanitizedCode);
+            return buildPublicViewDTO(assignment, null, null);
         }
 
         String expectedCode = assignment.getConfirmationCode();
@@ -724,11 +724,47 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                     locale));
         }
 
+        // Capture one-time temp credentials BEFORE clearing them
+        String tempUsername = assignment.getUser() != null ? assignment.getUser().getUsername() : null;
+        String tempPassword = assignment.getTempPlainPassword();
+
         assignment.setConfirmationVerifiedAt(LocalDateTime.now());
+        // Clear plaintext temp password from DB — one-time exposure only
+        assignment.setTempPlainPassword(null);
         assignmentRepository.save(assignment);
         log.info("✅ Assignment '{}' self-verified by assignee.", sanitizedCode);
 
-        return getAssignmentPublicView(sanitizedCode);
+        // Include credentials if this was a new-user assignment (temp creds were set)
+        String exposedUsername = tempPassword != null ? tempUsername : null;
+        return buildPublicViewDTO(assignment, exposedUsername, tempPassword);
+    }
+
+    /**
+     * Builds a {@link UserRoleAssignmentPublicViewDTO} directly from the given assignment entity,
+     * optionally injecting one-time temp credentials.
+     */
+    private UserRoleAssignmentPublicViewDTO buildPublicViewDTO(
+            UserRoleHospitalAssignment assignment, String tempUsername, String tempPassword) {
+        Role role = assignment.getRole();
+        Hospital hospital = assignment.getHospital();
+        User assignee = assignment.getUser();
+        return UserRoleAssignmentPublicViewDTO.builder()
+            .assignmentId(assignment.getId())
+            .assignmentCode(assignment.getAssignmentCode())
+            .roleName(role != null ? role.getName() : null)
+            .roleCode(role != null ? getRoleCode(role) : null)
+            .roleDescription(role != null ? role.getDescription() : null)
+            .hospitalName(hospital != null ? hospital.getName() : null)
+            .hospitalCode(hospital != null ? hospital.getCode() : null)
+            .hospitalAddress(hospital != null ? hospital.getAddress() : null)
+            .assigneeName(resolveDisplayName(assignee, null))
+            .confirmationVerified(assignment.getConfirmationVerifiedAt() != null)
+            .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
+            .profileCompletionUrl(assignmentLinkService.buildProfileCompletionUrl(assignment.getAssignmentCode()))
+            .profileChecklist(buildRoleProfileChecklist(role))
+            .tempUsername(tempUsername)
+            .tempPassword(tempPassword)
+            .build();
     }
 
     @Override
