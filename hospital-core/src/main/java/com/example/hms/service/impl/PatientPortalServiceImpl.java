@@ -360,17 +360,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional
     public PatientConsentResponseDTO grantMyConsent(Authentication auth, PortalConsentRequestDTO dto) {
         UUID patientId = resolvePatientId(auth);
-
-        // Security: ensure the patient is actually registered at the source hospital.
-        // Without this check, a patient could grant consent on behalf of a hospital
-        // they have never attended (privilege escalation / data fabrication).
-        boolean registeredAtSource = registrationRepository
-                .findByPatientIdAndHospitalIdAndActiveTrue(patientId, dto.getFromHospitalId())
-                .isPresent();
-        if (!registeredAtSource) {
-            throw new BusinessException(
-                    "You are not registered at the specified source hospital and cannot grant consent on its behalf.");
-        }
+        requireHospitalRegistration(patientId, dto.getFromHospitalId());
 
         PatientConsentRequestDTO consentRequest = PatientConsentRequestDTO.builder()
                 .patientId(patientId)
@@ -391,16 +381,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional
     public void revokeMyConsent(Authentication auth, UUID fromHospitalId, UUID toHospitalId) {
         UUID patientId = resolvePatientId(auth);
-
-        // Security: ensure the patient is registered at the source hospital
-        // before allowing them to revoke the consent.
-        boolean registeredAtSource = registrationRepository
-                .findByPatientIdAndHospitalIdAndActiveTrue(patientId, fromHospitalId)
-                .isPresent();
-        if (!registeredAtSource) {
-            throw new BusinessException(
-                    "You are not registered at the specified source hospital and cannot revoke consent on its behalf.");
-        }
+        requireHospitalRegistration(patientId, fromHospitalId);
 
         log.info("Patient {} revoking consent from hospital {} to hospital {}",
                 patientId, fromHospitalId, toHospitalId);
@@ -625,6 +606,24 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private void requirePatientOwnership(Appointment appointment, UUID patientId) {
         if (!appointment.getPatient().getId().equals(patientId)) {
             throw new AccessDeniedException("This appointment does not belong to you");
+        }
+    }
+
+    /**
+     * Verify that the patient has an active registration at the given hospital.
+     * Used by both grantMyConsent() and revokeMyConsent() to prevent a patient
+     * from fabricating or revoking consent on behalf of a hospital they have
+     * never attended (IDOR / privilege escalation).
+     *
+     * @throws BusinessException (HTTP 400) when no active registration is found.
+     */
+    private void requireHospitalRegistration(UUID patientId, UUID hospitalId) {
+        boolean registered = registrationRepository
+                .findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)
+                .isPresent();
+        if (!registered) {
+            throw new BusinessException(
+                    "You are not registered at the specified source hospital and cannot manage consent on its behalf.");
         }
     }
 

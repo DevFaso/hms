@@ -394,7 +394,7 @@
     }
 
     <!-- ═══ Record Sharing Tab ═══ -->
-    @if (activeTab() === 'sharing') {
+    @if (activeTab() === 'sharing' && canViewSharing()) {
       <div class="sharing-panel">
         <!-- Request panel -->
         <div class="sharing-request-card">

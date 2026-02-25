@@ -112,13 +112,19 @@ export class PatientDetailComponent implements OnInit {
   }
 
   setTab(tab: TabKey): void {
+    // Prevent navigating to the sharing tab when the user lacks permission.
+    // Falls back to the overview tab so component state is never left on an
+    // unauthorised panel, even when setTab() is called programmatically.
+    if (tab === 'sharing' && !this.canViewSharing()) {
+      this.activeTab.set('overview');
+      return;
+    }
     this.activeTab.set(tab);
     if (tab === 'vitals' && this.canViewVitals() && this.vitals().length === 0) this.loadVitals();
     if (tab === 'encounters' && this.canViewEncounters() && this.encounters().length === 0)
       this.loadEncounters();
     if (tab === 'appointments' && this.appointments().length === 0) this.loadAppointments();
-    if (tab === 'sharing' && this.canViewSharing() && this.hospitals().length === 0)
-      this.loadHospitals();
+    if (tab === 'sharing' && this.hospitals().length === 0) this.loadHospitals();
   }
 
   private loadVitals(): void {
