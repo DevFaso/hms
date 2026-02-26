@@ -862,6 +862,18 @@
   font-weight: 500;
 }
 
+.page-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  color: #94a3b8;
+  font-size: 0.875rem;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 // ── Extra table cell helpers ─────────────────────────────────
 .name-stack {
   display: flex;
@@ -1071,13 +1083,6 @@
   text-overflow: ellipsis;
   color: #475569;
   font-size: 0.85rem;
-}
-
-// ── filter-toggle-btn has-filters modifier ────────────────────
-.filter-toggle-btn.has-filters {
-  border-color: #2563eb;
-  color: #2563eb;
-  background: #eff6ff;
 }
 
 // ── Dashboard: quick links grid ───────────────────────────────

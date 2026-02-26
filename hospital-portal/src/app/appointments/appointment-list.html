@@ -105,7 +105,7 @@
           type="date"
           class="filter-select"
           [(ngModel)]="dateFrom"
-          [max]="dateTo || todayIso()"
+          [max]="dateTo || undefined"
           (ngModelChange)="onFilterChange()"
           title="Filter from date"
         />
@@ -215,6 +215,13 @@
               (keydown.enter)="sort('patient')"
               tabindex="0"
               scope="col"
+              [attr.aria-sort]="
+                sortField() === 'patient'
+                  ? sortDir() === 'asc'
+                    ? 'ascending'
+                    : 'descending'
+                  : 'none'
+              "
             >
               Patient
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('patient') }}</span>
@@ -225,6 +232,13 @@
               (keydown.enter)="sort('doctor')"
               tabindex="0"
               scope="col"
+              [attr.aria-sort]="
+                sortField() === 'doctor'
+                  ? sortDir() === 'asc'
+                    ? 'ascending'
+                    : 'descending'
+                  : 'none'
+              "
             >
               Doctor
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('doctor') }}</span>
@@ -235,6 +249,9 @@
               (keydown.enter)="sort('date')"
               tabindex="0"
               scope="col"
+              [attr.aria-sort]="
+                sortField() === 'date' ? (sortDir() === 'asc' ? 'ascending' : 'descending') : 'none'
+              "
             >
               Date &amp; Time
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('date') }}</span>
@@ -247,6 +264,13 @@
               (keydown.enter)="sort('status')"
               tabindex="0"
               scope="col"
+              [attr.aria-sort]="
+                sortField() === 'status'
+                  ? sortDir() === 'asc'
+                    ? 'ascending'
+                    : 'descending'
+                  : 'none'
+              "
             >
               Status
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('status') }}</span>
@@ -303,16 +327,69 @@
             [disabled]="currentPage() === 0"
             (click)="goToPage(currentPage() - 1)"
             title="Previous"
+            aria-label="Previous page"
           >
             <span class="material-symbols-outlined">chevron_left</span>
           </button>
-          @for (p of [].constructor(totalPages); track $index) {
+          @if (totalPages <= 7) {
+            @for (p of [].constructor(totalPages); track $index) {
+              <button
+                class="page-btn page-num"
+                [class.active]="$index === currentPage()"
+                (click)="goToPage($index)"
+                [attr.aria-label]="'Page ' + ($index + 1)"
+                [attr.aria-current]="$index === currentPage() ? 'page' : null"
+              >
+                {{ $index + 1 }}
+              </button>
+            }
+          } @else {
+            <!-- First page -->
             <button
               class="page-btn page-num"
-              [class.active]="$index === currentPage()"
-              (click)="goToPage($index)"
+              [class.active]="currentPage() === 0"
+              (click)="goToPage(0)"
+              aria-label="Page 1"
+              [attr.aria-current]="currentPage() === 0 ? 'page' : null"
             >
-              {{ $index + 1 }}
+              1
+            </button>
+            <!-- Leading ellipsis -->
+            @if (currentPage() > 3) {
+              <span class="page-ellipsis">…</span>
+            }
+            <!-- Middle pages window -->
+            @for (p of [].constructor(totalPages); track $index) {
+              @if (
+                $index > 0 &&
+                $index < totalPages - 1 &&
+                $index >= currentPage() - 2 &&
+                $index <= currentPage() + 2
+              ) {
+                <button
+                  class="page-btn page-num"
+                  [class.active]="$index === currentPage()"
+                  (click)="goToPage($index)"
+                  [attr.aria-label]="'Page ' + ($index + 1)"
+                  [attr.aria-current]="$index === currentPage() ? 'page' : null"
+                >
+                  {{ $index + 1 }}
+                </button>
+              }
+            }
+            <!-- Trailing ellipsis -->
+            @if (currentPage() < totalPages - 4) {
+              <span class="page-ellipsis">…</span>
+            }
+            <!-- Last page -->
+            <button
+              class="page-btn page-num"
+              [class.active]="currentPage() === totalPages - 1"
+              (click)="goToPage(totalPages - 1)"
+              [attr.aria-label]="'Page ' + totalPages"
+              [attr.aria-current]="currentPage() === totalPages - 1 ? 'page' : null"
+            >
+              {{ totalPages }}
             </button>
           }
           <button
@@ -320,6 +397,7 @@
             [disabled]="currentPage() >= totalPages - 1"
             (click)="goToPage(currentPage() + 1)"
             title="Next"
+            aria-label="Next page"
           >
             <span class="material-symbols-outlined">chevron_right</span>
           </button>

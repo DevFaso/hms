@@ -406,9 +406,13 @@
                   <span class="item-primary">{{ patient.firstName }} {{ patient.lastName }}</span>
                   <span class="item-secondary">
                     @if (patient.mrn) {
-                      MRN {{ patient.mrn }} ·
+                      MRN {{ patient.mrn }}
+                      @if (patient.hospitalName) {
+                        · {{ patient.hospitalName }}
+                      }
+                    } @else {
+                      {{ patient.hospitalName || '' }}
                     }
-                    {{ patient.hospitalName || '' }}
                   </span>
                 </div>
               </a>

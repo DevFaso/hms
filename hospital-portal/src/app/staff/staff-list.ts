@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { StaffService, StaffResponse, StaffUpsertRequest } from '../services/staff.service';
@@ -213,15 +213,15 @@ export class StaffListComponent implements OnInit {
     return [this.deptFilter, this.employmentTypeFilter, this.jobTitleFilter].filter(Boolean).length;
   }
 
-  get uniqueDepartments(): string[] {
-    return [
+  uniqueDepartments = computed(() =>
+    [
       ...new Set(
         this.staff()
           .map((s) => s.departmentName)
           .filter(Boolean) as string[],
       ),
-    ].sort((a, b) => a.localeCompare(b));
-  }
+    ].sort((a, b) => a.localeCompare(b)),
+  );
 
   // ---------- Create ----------
   openCreate(): void {

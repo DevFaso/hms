@@ -59,7 +59,7 @@
           (ngModelChange)="applyFilter()"
         >
           <option value="">All Departments</option>
-          @for (dept of uniqueDepartments; track dept) {
+          @for (dept of uniqueDepartments(); track dept) {
             <option [value]="dept">{{ dept }}</option>
           }
         </select>
@@ -76,7 +76,7 @@
         >
           <option value="">All Types</option>
           @for (et of employmentTypes; track et) {
-            <option [value]="et">{{ et.replace('_', ' ') }}</option>
+            <option [value]="et">{{ et.replaceAll('_', ' ') }}</option>
           }
         </select>
       </div>
