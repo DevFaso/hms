@@ -2,7 +2,13 @@
   <div class="page-header">
     <div>
       <h1 class="page-title">Patients</h1>
-      <p class="page-subtitle">Manage patient records and registrations</p>
+      <p class="page-subtitle">
+        @if (!loading()) {
+          {{ filtered().length }} of {{ patients().length }} patient{{ patients().length !== 1 ? 's' : '' }}
+        } @else {
+          Manage patient records and registrations
+        }
+      </p>
     </div>
     @if (canCreate) {
       <a routerLink="/patients/new" class="btn-primary">
@@ -12,16 +18,127 @@
     }
   </div>
 
-  <!-- Search -->
-  <div class="search-bar">
-    <span class="material-symbols-outlined search-icon">search</span>
-    <input
-      type="text"
-      placeholder="Search by name, email, or MRN..."
-      [(ngModel)]="searchTerm"
-      (ngModelChange)="applyFilter()"
-    />
+  <!-- Search + Filter toolbar -->
+  <div class="filter-toolbar">
+    <div class="search-bar toolbar-search">
+      <span class="material-symbols-outlined search-icon">search</span>
+      <input
+        type="text"
+        placeholder="Search by name, email, phone, or MRN..."
+        [value]="searchTerm"
+        (input)="onSearchChange($any($event.target).value)"
+      />
+      @if (searchTerm) {
+        <button class="search-clear" title="Clear search" (click)="onSearchChange('')">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      }
+    </div>
+
+    <button
+      class="filter-toggle-btn"
+      [class.has-filters]="activeFilterCount > 0"
+      (click)="showFilters.set(!showFilters())"
+      title="Toggle filters"
+    >
+      <span class="material-symbols-outlined">tune</span>
+      Filters
+      @if (activeFilterCount > 0) {
+        <span class="filter-badge">{{ activeFilterCount }}</span>
+      }
+    </button>
   </div>
+
+  <!-- Expanded filter row -->
+  @if (showFilters()) {
+    <div class="filter-row">
+      <div class="filter-group">
+        <label class="filter-label" for="genderFilter">Gender</label>
+        <select id="genderFilter" class="filter-select" title="Filter by gender" [(ngModel)]="genderFilter" (ngModelChange)="onFilterChange()">
+          <option value="">All</option>
+          @for (g of genderOptions; track g) {
+            <option [value]="g">{{ formatGender(g) }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label" for="statusFilter">Status</label>
+        <select id="statusFilter" class="filter-select" title="Filter by status" [(ngModel)]="statusFilter" (ngModelChange)="onFilterChange()">
+          <option value="">All</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label" for="bloodTypeFilter">Blood Type</label>
+        <select id="bloodTypeFilter" class="filter-select" title="Filter by blood type" [(ngModel)]="bloodTypeFilter" (ngModelChange)="onFilterChange()">
+          <option value="">All</option>
+          @for (bt of bloodTypes; track bt) {
+            <option [value]="bt">{{ bt }}</option>
+          }
+        </select>
+      </div>
+
+      @if (hospitals().length > 0) {
+        <div class="filter-group">
+          <label class="filter-label" for="hospitalFilter">Hospital</label>
+          <select id="hospitalFilter" class="filter-select" title="Filter by hospital" [(ngModel)]="hospitalFilter" (ngModelChange)="onFilterChange()">
+            <option value="">All Hospitals</option>
+            @for (h of hospitals(); track h.id) {
+              <option [value]="h.id">{{ h.name }}</option>
+            }
+          </select>
+        </div>
+      }
+
+      @if (activeFilterCount > 0) {
+        <button class="clear-filters-btn" (click)="clearFilters()">
+          <span class="material-symbols-outlined">filter_alt_off</span>
+          Clear All
+        </button>
+      }
+    </div>
+  }
+
+  <!-- Active filter chips -->
+  @if (activeFilterCount > 0) {
+    <div class="active-chips">
+      @if (genderFilter) {
+        <span class="filter-chip">
+          Gender: {{ formatGender(genderFilter) }}
+          <button class="chip-remove" (click)="removeFilter('gender')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </span>
+      }
+      @if (statusFilter) {
+        <span class="filter-chip">
+          Status: {{ statusFilter | titlecase }}
+          <button class="chip-remove" (click)="removeFilter('status')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </span>
+      }
+      @if (bloodTypeFilter) {
+        <span class="filter-chip">
+          Blood: {{ bloodTypeFilter }}
+          <button class="chip-remove" (click)="removeFilter('bloodType')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </span>
+      }
+      @if (hospitalFilter) {
+        <span class="filter-chip">
+          Hospital: {{ hospitalName(hospitalFilter) }}
+          <button class="chip-remove" (click)="removeFilter('hospital')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </span>
+      }
+    </div>
+  }
 
   <!-- Loading -->
   @if (loading()) {
@@ -32,45 +149,71 @@
   }
 
   <!-- Table -->
-  @if (!loading() && filtered().length > 0) {
+  @if (!loading() && pagedFiltered.length > 0) {
     <div class="table-wrapper">
       <table class="data-table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>MRN</th>
-            <th>Email</th>
-            <th>Phone</th>
-            <th>Gender</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th class="sortable-th" (click)="sort('name')" (keydown.enter)="sort('name')" tabindex="0" scope="col">
+              Name
+              <span class="material-symbols-outlined sort-icon">{{ sortIcon('name') }}</span>
+            </th>
+            <th class="sortable-th" (click)="sort('mrn')" (keydown.enter)="sort('mrn')" tabindex="0" scope="col">
+              MRN
+              <span class="material-symbols-outlined sort-icon">{{ sortIcon('mrn') }}</span>
+            </th>
+            <th scope="col">Email</th>
+            <th scope="col">Phone</th>
+            <th class="sortable-th" (click)="sort('gender')" (keydown.enter)="sort('gender')" tabindex="0" scope="col">
+              Gender
+              <span class="material-symbols-outlined sort-icon">{{ sortIcon('gender') }}</span>
+            </th>
+            <th scope="col">Blood Type</th>
+            <th class="sortable-th" (click)="sort('status')" (keydown.enter)="sort('status')" tabindex="0" scope="col">
+              Status
+              <span class="material-symbols-outlined sort-icon">{{ sortIcon('status') }}</span>
+            </th>
+            <th scope="col">Actions</th>
           </tr>
         </thead>
         <tbody>
-          @for (patient of filtered(); track patient.id) {
+          @for (patient of pagedFiltered; track patient.id) {
             <tr>
               <td class="name-cell">
                 <div class="avatar-sm">
                   {{ patient.firstName.charAt(0) }}{{ patient.lastName.charAt(0) }}
                 </div>
-                <span>{{ patient.firstName }} {{ patient.lastName }}</span>
+                <div class="name-stack">
+                  <span class="name-primary">{{ patient.firstName }} {{ patient.lastName }}</span>
+                  @if (patient.hospitalName) {
+                    <span class="name-sub">{{ patient.hospitalName }}</span>
+                  }
+                </div>
               </td>
-              <td>{{ patient.mrn ?? '—' }}</td>
+              <td><code class="mrn-code">{{ patient.mrn ?? '—' }}</code></td>
               <td>{{ patient.email }}</td>
               <td>{{ patient.phoneNumberPrimary ?? '—' }}</td>
-              <td>{{ patient.gender ?? '—' }}</td>
+              <td>{{ patient.gender ? formatGender(patient.gender) : '—' }}</td>
+              <td>
+                @if (patient.bloodType) {
+                  <span class="blood-badge">{{ patient.bloodType }}</span>
+                } @else {
+                  —
+                }
+              </td>
               <td>
                 <span
-                  class="status-badge"
+                  class="status-badge with-dot"
                   [class.active]="patient.active"
                   [class.inactive]="!patient.active"
                 >
+                  <span class="status-dot"></span>
                   {{ patient.active ? 'Active' : 'Inactive' }}
                 </span>
               </td>
               <td>
-                <a [routerLink]="['/patients', patient.id]" class="action-link">
-                  <span class="material-symbols-outlined">visibility</span>
+                <a [routerLink]="['/patients', patient.id]" class="action-link" title="View patient">
+                  <span class="material-symbols-outlined">arrow_forward</span>
                 </a>
               </td>
             </tr>
@@ -78,6 +221,42 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Pagination -->
+    @if (totalPages > 1) {
+      <div class="pagination-row">
+        <span class="pagination-info">
+          Showing {{ currentPage() * pageSize + 1 }}–{{ ((currentPage() + 1) * pageSize) < filtered().length ? ((currentPage() + 1) * pageSize) : filtered().length }} of {{ filtered().length }}
+        </span>
+        <div class="pagination-controls">
+          <button
+            class="page-btn"
+            [disabled]="currentPage() === 0"
+            (click)="goToPage(currentPage() - 1)"
+            title="Previous page"
+          >
+            <span class="material-symbols-outlined">chevron_left</span>
+          </button>
+          @for (p of [].constructor(totalPages); track $index) {
+            <button
+              class="page-btn page-num"
+              [class.active]="$index === currentPage()"
+              (click)="goToPage($index)"
+            >
+              {{ $index + 1 }}
+            </button>
+          }
+          <button
+            class="page-btn"
+            [disabled]="currentPage() >= totalPages - 1"
+            (click)="goToPage(currentPage() + 1)"
+            title="Next page"
+          >
+            <span class="material-symbols-outlined">chevron_right</span>
+          </button>
+        </div>
+      </div>
+    }
   }
 
   <!-- Empty -->
@@ -86,9 +265,12 @@
       <span class="material-symbols-outlined empty-icon">people</span>
       <h3>No patients found</h3>
       <p>
-        {{
-          searchTerm ? 'Try adjusting your search.' : 'Register your first patient to get started.'
-        }}
+        @if (searchTerm || activeFilterCount > 0) {
+          Try adjusting your search or filters.
+          <button class="link-btn" (click)="clearFilters()">Clear all filters</button>
+        } @else {
+          Register your first patient to get started.
+        }
       </p>
     </div>
   }

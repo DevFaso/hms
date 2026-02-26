@@ -2,7 +2,13 @@
   <div class="page-header">
     <div>
       <h1 class="page-title">Staff</h1>
-      <p class="page-subtitle">View and manage hospital staff members</p>
+      <p class="page-subtitle">
+        @if (!loading()) {
+          {{ filtered().length }} staff member{{ filtered().length !== 1 ? 's' : '' }}
+        } @else {
+          View and manage hospital staff members
+        }
+      </p>
     </div>
     <button class="btn-primary" (click)="openCreate()">
       <span class="material-symbols-outlined">add</span>
@@ -10,15 +16,125 @@
     </button>
   </div>
 
-  <div class="search-bar">
-    <span class="material-symbols-outlined search-icon">search</span>
-    <input
-      type="text"
-      placeholder="Search by name, email, or specialization..."
-      [(ngModel)]="searchTerm"
-      (ngModelChange)="applyFilter()"
-    />
+  <!-- Filter toolbar -->
+  <div class="filter-toolbar">
+    <div class="search-bar toolbar-search">
+      <span class="material-symbols-outlined search-icon">search</span>
+      <input
+        type="text"
+        placeholder="Search by name, email, department..."
+        [value]="searchTerm"
+        (input)="searchTerm = $any($event.target).value; applyFilter()"
+      />
+      @if (searchTerm) {
+        <button class="search-clear" title="Clear search" (click)="searchTerm = ''; applyFilter()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      }
+    </div>
+
+    <button
+      class="filter-toggle-btn"
+      [class.has-filters]="activeFilterCount > 0"
+      (click)="showFilters.set(!showFilters())"
+      title="More filters"
+    >
+      <span class="material-symbols-outlined">tune</span>
+      Filters
+      @if (activeFilterCount > 0) {
+        <span class="filter-badge">{{ activeFilterCount }}</span>
+      }
+    </button>
   </div>
+
+  @if (showFilters()) {
+    <div class="filter-row">
+      <div class="filter-group">
+        <label class="filter-label" for="staffDept">Department</label>
+        <select
+          id="staffDept"
+          class="filter-select"
+          title="Filter by department"
+          [(ngModel)]="deptFilter"
+          (ngModelChange)="applyFilter()"
+        >
+          <option value="">All Departments</option>
+          @for (dept of uniqueDepartments; track dept) {
+            <option [value]="dept">{{ dept }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label" for="staffEmploy">Employment Type</label>
+        <select
+          id="staffEmploy"
+          class="filter-select"
+          title="Filter by employment type"
+          [(ngModel)]="employmentTypeFilter"
+          (ngModelChange)="applyFilter()"
+        >
+          <option value="">All Types</option>
+          @for (et of employmentTypes; track et) {
+            <option [value]="et">{{ et.replace('_', ' ') }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label" for="staffTitle">Job Title</label>
+        <select
+          id="staffTitle"
+          class="filter-select"
+          title="Filter by job title"
+          [(ngModel)]="jobTitleFilter"
+          (ngModelChange)="applyFilter()"
+        >
+          <option value="">All Titles</option>
+          @for (jt of jobTitles; track jt) {
+            <option [value]="jt">{{ jt.replaceAll('_', ' ') }}</option>
+          }
+        </select>
+      </div>
+
+      @if (activeFilterCount > 0) {
+        <button class="clear-filters-btn" (click)="clearFilters()">
+          <span class="material-symbols-outlined">filter_alt_off</span>
+          Clear All
+        </button>
+      }
+    </div>
+  }
+
+  <!-- Active chips -->
+  @if (deptFilter || employmentTypeFilter || jobTitleFilter) {
+    <div class="active-chips">
+      @if (deptFilter) {
+        <span class="filter-chip">
+          {{ deptFilter }}
+          <button class="chip-remove" (click)="deptFilter = ''; applyFilter()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </span>
+      }
+      @if (employmentTypeFilter) {
+        <span class="filter-chip">
+          {{ employmentTypeFilter.replace('_', ' ') }}
+          <button class="chip-remove" (click)="employmentTypeFilter = ''; applyFilter()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </span>
+      }
+      @if (jobTitleFilter) {
+        <span class="filter-chip">
+          {{ jobTitleFilter.replaceAll('_', ' ') }}
+          <button class="chip-remove" (click)="jobTitleFilter = ''; applyFilter()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </span>
+      }
+    </div>
+  }
 
   @if (loading()) {
     <div class="loading-state">
@@ -65,7 +181,14 @@
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">badge</span>
       <h3>No staff found</h3>
-      <p>{{ searchTerm ? 'Try adjusting your search.' : 'Register your first staff member.' }}</p>
+      <p>
+        @if (searchTerm || activeFilterCount > 0) {
+          Try adjusting your search or filters.
+          <button class="link-btn" (click)="clearFilters()">Clear all filters</button>
+        } @else {
+          Register your first staff member.
+        }
+      </p>
     </div>
   }
 

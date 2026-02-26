@@ -2,7 +2,13 @@
   <div class="page-header">
     <div>
       <h1 class="page-title">Users</h1>
-      <p class="page-subtitle">Manage system users and access</p>
+      <p class="page-subtitle">
+        @if (!loading()) {
+          {{ filtered().length }} user{{ filtered().length !== 1 ? 's' : '' }} · {{ totalElements() }} total
+        } @else {
+          Manage system users and access
+        }
+      </p>
     </div>
     <button class="btn-primary" (click)="openCreate()">
       <span class="material-symbols-outlined">person_add</span>
@@ -10,15 +16,70 @@
     </button>
   </div>
 
-  <div class="search-bar">
-    <span class="material-symbols-outlined search-icon">search</span>
-    <input
-      type="text"
-      placeholder="Search by name, email, role..."
-      [(ngModel)]="searchTerm"
-      (ngModelChange)="applyFilter()"
-    />
+  <!-- Filter toolbar -->
+  <div class="filter-toolbar">
+    <div class="search-bar toolbar-search">
+      <span class="material-symbols-outlined search-icon">search</span>
+      <input
+        type="text"
+        placeholder="Search by name, email, username..."
+        [value]="searchTerm"
+        (input)="searchTerm = $any($event.target).value; applyFilter()"
+      />
+      @if (searchTerm) {
+        <button class="search-clear" title="Clear search" (click)="searchTerm = ''; applyFilter()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      }
+    </div>
+
+    <!-- Status quick pills -->
+    <div class="status-pills">
+      <button class="status-pill" [class.active]="!statusFilter" (click)="statusFilter = ''; applyFilter()">All</button>
+      <button class="status-pill active-pill" [class.active]="statusFilter === 'active'" (click)="statusFilter = 'active'; applyFilter()">Active</button>
+      <button class="status-pill inactive-pill" [class.active]="statusFilter === 'inactive'" (click)="statusFilter = 'inactive'; applyFilter()">Inactive</button>
+      <button class="status-pill deleted-pill" [class.active]="statusFilter === 'deleted'" (click)="statusFilter = 'deleted'; applyFilter()">Deleted</button>
+    </div>
+
+    <button
+      class="filter-toggle-btn"
+      [class.has-filters]="activeFilterCount > 0"
+      (click)="showFilters.set(!showFilters())"
+      title="More filters"
+    >
+      <span class="material-symbols-outlined">tune</span>
+      Filters
+      @if (activeFilterCount > 0) {
+        <span class="filter-badge">{{ activeFilterCount }}</span>
+      }
+    </button>
   </div>
+
+  @if (showFilters()) {
+    <div class="filter-row">
+      <div class="filter-group">
+        <label class="filter-label" for="userRoleFilter">Role</label>
+        <select
+          id="userRoleFilter"
+          class="filter-select"
+          title="Filter by role"
+          [(ngModel)]="roleFilter"
+          (ngModelChange)="applyFilter()"
+        >
+          <option value="">All Roles</option>
+          @for (role of availableRoles(); track role.id) {
+            <option [value]="role.name">{{ role.name }}</option>
+          }
+        </select>
+      </div>
+      @if (activeFilterCount > 0) {
+        <button class="clear-filters-btn" (click)="clearFilters()">
+          <span class="material-symbols-outlined">filter_alt_off</span>
+          Clear All
+        </button>
+      }
+    </div>
+  }
 
   @if (loading()) {
     <div class="loading-state">
@@ -121,7 +182,14 @@
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">manage_accounts</span>
       <h3>No users found</h3>
-      <p>{{ searchTerm ? 'Try adjusting your search.' : 'Register a new user to get started.' }}</p>
+      <p>
+        @if (searchTerm || activeFilterCount > 0 || statusFilter) {
+          Try adjusting your search or filters.
+          <button class="link-btn" (click)="clearFilters()">Clear all filters</button>
+        } @else {
+          Register a new user to get started.
+        }
+      </p>
     </div>
   }
 

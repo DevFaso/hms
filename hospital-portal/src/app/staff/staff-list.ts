@@ -1,7 +1,6 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { StaffService, StaffResponse, StaffUpsertRequest } from '../services/staff.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { UserService, UserSummary } from '../services/user.service';
@@ -10,7 +9,7 @@ import { ToastService } from '../core/toast.service';
 @Component({
   selector: 'app-staff-list',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule],
   templateUrl: './staff-list.html',
   styleUrl: './staff-list.scss',
 })
@@ -24,6 +23,12 @@ export class StaffListComponent implements OnInit {
   filtered = signal<StaffResponse[]>([]);
   searchTerm = '';
   loading = signal(true);
+
+  /* Filter state */
+  deptFilter = '';
+  employmentTypeFilter = '';
+  jobTitleFilter = '';
+  showFilters = signal(false);
 
   hospitals = signal<HospitalResponse[]>([]);
   users = signal<UserSummary[]>([]);
@@ -172,20 +177,44 @@ export class StaffListComponent implements OnInit {
 
   applyFilter(): void {
     const term = this.searchTerm.toLowerCase().trim();
-    if (!term) {
-      this.filtered.set(this.staff());
-      return;
+    let result = this.staff();
+
+    if (this.deptFilter) {
+      result = result.filter((s) => s.departmentName === this.deptFilter);
     }
-    this.filtered.set(
-      this.staff().filter(
+    if (this.employmentTypeFilter) {
+      result = result.filter((s) => s.employmentType === this.employmentTypeFilter);
+    }
+    if (this.jobTitleFilter) {
+      result = result.filter((s) => s.jobTitle === this.jobTitleFilter);
+    }
+    if (term) {
+      result = result.filter(
         (s) =>
           s.name.toLowerCase().includes(term) ||
           s.email.toLowerCase().includes(term) ||
           (s.departmentName?.toLowerCase().includes(term) ?? false) ||
           (s.jobTitle?.toLowerCase().includes(term) ?? false) ||
           (s.roleName?.toLowerCase().includes(term) ?? false),
-      ),
-    );
+      );
+    }
+    this.filtered.set(result);
+  }
+
+  clearFilters(): void {
+    this.searchTerm = '';
+    this.deptFilter = '';
+    this.employmentTypeFilter = '';
+    this.jobTitleFilter = '';
+    this.applyFilter();
+  }
+
+  get activeFilterCount(): number {
+    return [this.deptFilter, this.employmentTypeFilter, this.jobTitleFilter].filter(Boolean).length;
+  }
+
+  get uniqueDepartments(): string[] {
+    return [...new Set(this.staff().map((s) => s.departmentName).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b));
   }
 
   // ---------- Create ----------
