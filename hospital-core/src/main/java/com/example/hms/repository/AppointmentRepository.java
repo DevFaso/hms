@@ -43,6 +43,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
 
     List<Appointment> findByAppointmentDateBetween(LocalDateTime startDate, LocalDateTime endDate);
 
+    long countByAppointmentDateBetween(LocalDateTime startDate, LocalDateTime endDate);
+
     List<Appointment> findByPatient_IdAndAppointmentDateAfter(UUID patientId, LocalDate date);
 
     List<Appointment> findByStaff_IdAndAppointmentDateAfter(UUID staffId, LocalDate date); // ✅ Fixed

@@ -70,10 +70,10 @@ class SuperAdminDashboardServiceImplTest {
         when(assignmentRepository.countByHospitalIsNull()).thenReturn(10L);
         when(assignmentRepository.countByHospitalIsNullAndActiveTrue()).thenReturn(8L);
         when(organizationRepository.count()).thenReturn(3L);
-        when(organizationRepository.findByActiveTrue()).thenReturn(List.of());
+        when(organizationRepository.countByActiveTrue()).thenReturn(2L);
         when(departmentRepository.count()).thenReturn(12L);
-        when(appointmentRepository.findByAppointmentDateBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
-            .thenReturn(List.of());
+        when(appointmentRepository.countByAppointmentDateBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
+            .thenReturn(5L);
 
         AuditEventLog auditLog = AuditEventLog.builder()
             .eventType(AuditEventType.USER_CREATE)
@@ -99,9 +99,6 @@ class SuperAdminDashboardServiceImplTest {
     @Test
     void getSummary_zeroValues() {
         // All count() calls return 0L by default — only stub non-primitive return types
-        when(organizationRepository.findByActiveTrue()).thenReturn(List.of());
-        when(appointmentRepository.findByAppointmentDateBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
-            .thenReturn(List.of());
         when(auditEventLogRepository.findAllByOrderByEventTimestampDesc(any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
 

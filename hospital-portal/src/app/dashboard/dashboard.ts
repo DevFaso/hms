@@ -101,6 +101,18 @@ export class DashboardComponent implements OnInit {
     const profile = this.auth.getUserProfile();
     this.userName.set(profile?.firstName ?? profile?.username ?? 'User');
 
+    // Set role flags eagerly from auth token — don't wait for API responses
+    this.isSuperAdmin.set(this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']));
+    this.isClinician.set(
+      this.auth.hasAnyRole([
+        'ROLE_DOCTOR',
+        'ROLE_PHYSICIAN',
+        'ROLE_SURGEON',
+        'ROLE_NURSE',
+        'ROLE_MIDWIFE',
+      ]),
+    );
+
     this.loadDashboardData();
   }
 
@@ -118,10 +130,12 @@ export class DashboardComponent implements OnInit {
         next: (summary) => {
           this.adminSummary.set(summary);
           this.recentAuditEvents.set(summary.recentAuditEvents ?? []);
-          this.isSuperAdmin.set(true);
           done();
         },
-        error: () => done(),
+        error: (err) => {
+          console.error('[Dashboard] Failed to load super-admin summary:', err);
+          done();
+        },
       });
     }
 
@@ -142,10 +156,12 @@ export class DashboardComponent implements OnInit {
           this.inboxCounts.set(dashboard.inboxCounts ?? null);
           this.onCallStatus.set(dashboard.onCallStatus ?? null);
           this.roomedPatients.set(dashboard.roomedPatients ?? []);
-          this.isClinician.set(true);
           done();
         },
-        error: () => done(),
+        error: (err) => {
+          console.error('[Dashboard] Failed to load clinical dashboard:', err);
+          done();
+        },
       });
     }
 

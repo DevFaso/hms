@@ -61,7 +61,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         long inactiveHospitals = Math.max(totalHospitals - activeHospitals, 0);
 
         long totalOrganizations = organizationRepository.count();
-        long activeOrganizations = organizationRepository.findByActiveTrue().size();
+        long activeOrganizations = organizationRepository.countByActiveTrue();
 
         long totalDepartments = departmentRepository.count();
 
@@ -73,11 +73,11 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         long globalAssignments = assignmentRepository.countByHospitalIsNull();
         long activeGlobalAssignments = assignmentRepository.countByHospitalIsNullAndActiveTrue();
 
-        // Today's appointments count (system-wide)
+        // Today's appointments count (system-wide) — DB-level COUNT, no entity loading
         LocalDateTime todayStart = LocalDate.now().atStartOfDay();
         LocalDateTime todayEnd = LocalDate.now().atTime(LocalTime.MAX);
         long todayAppointmentsCount = appointmentRepository
-                .findByAppointmentDateBetween(todayStart, todayEnd).size();
+                .countByAppointmentDateBetween(todayStart, todayEnd);
 
         // Fetch recent audit events (simple page order by createdAt / eventTimestamp desc) if repository has method
     var page = auditEventLogRepository.findAllByOrderByEventTimestampDesc(PageRequest.of(0, recentAuditLimit));

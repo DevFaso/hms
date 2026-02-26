@@ -21,6 +21,8 @@ public interface OrganizationRepository extends JpaRepository<Organization, UUID
 
     List<Organization> findByActiveTrue();
 
+    long countByActiveTrue();
+
     @Query("SELECT o FROM Organization o WHERE o.active = true AND o.type = :type")
     List<Organization> findActiveByType(@Param("type") OrganizationType type);
 
