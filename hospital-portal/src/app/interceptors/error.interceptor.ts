@@ -12,13 +12,13 @@ import { AuthService } from '../auth/auth.service';
  * away from the current page.
  */
 const SILENT_403_PATTERNS = [
-  /\/hospitals(\?|$|\/$)/,         // GET /hospitals (list for dropdown)
-  /\/hospitals\/[^/]+(\?|$)/,      // GET /hospitals/:id
-  /\/departments(\?|$|\/)/,        // GET /departments
-  /\/organizations(\?|$|\/)/,      // GET /organizations
-  /\/staff(\?|$|\/)/,              // GET /staff (dropdown)
-  /\/roles(\?|$|\/)/,              // GET /roles (dropdown)
-  /\/notifications(\?|$|\/)/,      // GET /notifications (notification panel)
+  /\/hospitals(\?|$|\/$)/, // GET /hospitals (list for dropdown)
+  /\/hospitals\/[^/]+(\?|$)/, // GET /hospitals/:id
+  /\/departments(\?|$|\/)/, // GET /departments
+  /\/organizations(\?|$|\/)/, // GET /organizations
+  /\/staff(\?|$|\/)/, // GET /staff (dropdown)
+  /\/roles(\?|$|\/)/, // GET /roles (dropdown)
+  /\/notifications(\?|$|\/)/, // GET /notifications (notification panel)
 ];
 
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
