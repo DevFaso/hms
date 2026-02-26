@@ -19,6 +19,9 @@ public class SuperAdminSummaryDTO {
     private long totalHospitals;
     private long activeHospitals;
     private long inactiveHospitals;
+    private long totalOrganizations;
+    private long activeOrganizations;
+    private long totalDepartments;
     private long totalPatients;
     private long totalRoles;
     private long totalAssignments;
@@ -26,6 +29,7 @@ public class SuperAdminSummaryDTO {
     private long inactiveAssignments;
     private long globalAssignments;
     private long activeGlobalAssignments;
+    private long todayAppointmentsCount;
     private LocalDateTime generatedAt;
 
     private List<RecentAuditEventDTO> recentAuditEvents;

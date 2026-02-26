@@ -149,8 +149,11 @@ export class DashboardComponent implements OnInit {
       });
     }
 
-    // Today's appointments
-    if (this.permissions.hasPermission('View Appointments')) {
+    // Today's appointments — only needed for non-super-admin roles (fallback card + metric)
+    if (
+      !this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']) &&
+      this.permissions.hasPermission('View Appointments')
+    ) {
       pending++;
       const today = new Date().toISOString().split('T')[0];
       this.appointmentService.list({ fromDate: today, toDate: today }).subscribe({
@@ -162,8 +165,11 @@ export class DashboardComponent implements OnInit {
       });
     }
 
-    // Recent patients
-    if (this.permissions.hasPermission('View Patient Records')) {
+    // Recent patients — only needed for fallback card (non-super-admin, non-clinician)
+    if (
+      !this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']) &&
+      this.permissions.hasPermission('View Patient Records')
+    ) {
       pending++;
       this.patientService.list().subscribe({
         next: (patients) => {

@@ -5,8 +5,11 @@ import com.example.hms.payload.dto.EncounterResponseDTO;
 import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.StaffAvailabilityResponseDTO;
 import com.example.hms.payload.dto.SuperAdminSummaryDTO;
+import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.AuditEventLogRepository;
+import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.StaffAvailabilityRepository;
@@ -18,7 +21,9 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.Locale;
 
@@ -32,6 +37,9 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
     private final RoleRepository roleRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogRepository auditEventLogRepository;
+    private final OrganizationRepository organizationRepository;
+    private final DepartmentRepository departmentRepository;
+    private final AppointmentRepository appointmentRepository;
     private final EncounterService encounterService;
     private final StaffAvailabilityRepository staffAvailabilityRepository;
     private final StaffAvailabilityMapper staffAvailabilityMapper;
@@ -44,14 +52,18 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
             recentAuditLimit = 10; // sane default + safety cap
         }
 
-        // Exclude soft-deleted rows from the total — they are not real users in the system.
-        long totalUsers = userRepository.countByIsDeletedFalse();
+        long totalUsers = userRepository.count();
         long activeUsers = userRepository.countByIsActiveTrueAndIsDeletedFalse();
         long inactiveUsers = Math.max(totalUsers - activeUsers, 0);
 
         long totalHospitals = hospitalRepository.count();
         long activeHospitals = hospitalRepository.countByActiveTrue();
         long inactiveHospitals = Math.max(totalHospitals - activeHospitals, 0);
+
+        long totalOrganizations = organizationRepository.count();
+        long activeOrganizations = organizationRepository.findByActiveTrue().size();
+
+        long totalDepartments = departmentRepository.count();
 
         long totalPatients = patientRepository.count();
         long totalRoles = roleRepository.count();
@@ -60,6 +72,12 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         long inactiveAssignments = Math.max(totalAssignments - activeAssignments, 0);
         long globalAssignments = assignmentRepository.countByHospitalIsNull();
         long activeGlobalAssignments = assignmentRepository.countByHospitalIsNullAndActiveTrue();
+
+        // Today's appointments count (system-wide)
+        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
+        LocalDateTime todayEnd = LocalDate.now().atTime(LocalTime.MAX);
+        long todayAppointmentsCount = appointmentRepository
+                .findByAppointmentDateBetween(todayStart, todayEnd).size();
 
         // Fetch recent audit events (simple page order by createdAt / eventTimestamp desc) if repository has method
     var page = auditEventLogRepository.findAllByOrderByEventTimestampDesc(PageRequest.of(0, recentAuditLimit));
@@ -86,6 +104,9 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
             .totalHospitals(totalHospitals)
             .activeHospitals(activeHospitals)
             .inactiveHospitals(inactiveHospitals)
+            .totalOrganizations(totalOrganizations)
+            .activeOrganizations(activeOrganizations)
+            .totalDepartments(totalDepartments)
             .totalPatients(totalPatients)
             .totalRoles(totalRoles)
             .totalAssignments(totalAssignments)
@@ -93,6 +114,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
             .inactiveAssignments(inactiveAssignments)
             .globalAssignments(globalAssignments)
             .activeGlobalAssignments(activeGlobalAssignments)
+            .todayAppointmentsCount(todayAppointmentsCount)
             .recentAuditEvents(recent)
             .generatedAt(LocalDateTime.now())
             .build();

@@ -131,6 +131,14 @@
     background: #fef3c7;
     color: #92400e;
   }
+  &.orgs {
+    background: #eff6ff;
+    color: #2563eb;
+  }
+  &.depts {
+    background: #f0fdf4;
+    color: #16a34a;
+  }
   &.roles {
     background: #e0e7ff;
     color: #3730a3;
@@ -140,8 +148,12 @@
     color: #9d174d;
   }
   &.appointments {
-    background: #d1fae5;
-    color: #065f46;
+    background: #ecfdf5;
+    color: #059669;
+  }
+  &.audit {
+    background: #f0f9ff;
+    color: #0369a1;
   }
 }
 

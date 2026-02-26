@@ -24,46 +24,70 @@
       <a class="metric-card" routerLink="/patients">
         <span class="material-symbols-outlined metric-icon patients">people</span>
         <div class="metric-body">
-          <span class="metric-value">{{ s.totalPatients }}</span
-          ><span class="metric-label">Total Patients</span>
+          <span class="metric-value">{{ s.totalPatients }}</span>
+          <span class="metric-label">Total Patients</span>
         </div>
       </a>
       <a class="metric-card" routerLink="/users">
         <span class="material-symbols-outlined metric-icon users">group</span>
         <div class="metric-body">
-          <span class="metric-value">{{ s.activeUsers }}</span
-          ><span class="metric-label">Active Users</span
-          ><span class="metric-sub">of {{ s.totalUsers }} total</span>
+          <span class="metric-value">{{ s.activeUsers }}</span>
+          <span class="metric-label">Active Users</span>
+          <span class="metric-sub">of {{ s.totalUsers }} total</span>
         </div>
       </a>
       <a class="metric-card" routerLink="/hospitals">
         <span class="material-symbols-outlined metric-icon hospitals">local_hospital</span>
         <div class="metric-body">
-          <span class="metric-value">{{ s.activeHospitals }}</span
-          ><span class="metric-label">Active Hospitals</span
-          ><span class="metric-sub">of {{ s.totalHospitals }} total</span>
+          <span class="metric-value">{{ s.activeHospitals }}</span>
+          <span class="metric-label">Active Hospitals</span>
+          <span class="metric-sub">of {{ s.totalHospitals }} total</span>
+        </div>
+      </a>
+      <a class="metric-card" routerLink="/organizations">
+        <span class="material-symbols-outlined metric-icon orgs">corporate_fare</span>
+        <div class="metric-body">
+          <span class="metric-value">{{ s.activeOrganizations }}</span>
+          <span class="metric-label">Organizations</span>
+          <span class="metric-sub">of {{ s.totalOrganizations }} total</span>
+        </div>
+      </a>
+      <a class="metric-card" routerLink="/departments">
+        <span class="material-symbols-outlined metric-icon depts">domain</span>
+        <div class="metric-body">
+          <span class="metric-value">{{ s.totalDepartments }}</span>
+          <span class="metric-label">Departments</span>
         </div>
       </a>
       <div class="metric-card">
         <span class="material-symbols-outlined metric-icon roles">verified_user</span>
         <div class="metric-body">
-          <span class="metric-value">{{ s.totalRoles }}</span
-          ><span class="metric-label">Roles</span>
+          <span class="metric-value">{{ s.totalRoles }}</span>
+          <span class="metric-label">Roles</span>
         </div>
       </div>
       <div class="metric-card">
         <span class="material-symbols-outlined metric-icon assignments">assignment_ind</span>
         <div class="metric-body">
-          <span class="metric-value">{{ s.activeAssignments }}</span
-          ><span class="metric-label">Active Assignments</span
-          ><span class="metric-sub">of {{ s.totalAssignments }} total</span>
+          <span class="metric-value">{{ s.activeAssignments }}</span>
+          <span class="metric-label">Active Assignments</span>
+          <span class="metric-sub">of {{ s.totalAssignments }} total</span>
         </div>
       </div>
       <a class="metric-card" routerLink="/appointments">
         <span class="material-symbols-outlined metric-icon appointments">calendar_month</span>
         <div class="metric-body">
-          <span class="metric-value">{{ todayAppointments().length }}</span
-          ><span class="metric-label">Today's Appointments</span>
+          <span class="metric-value">{{ s.todayAppointmentsCount }}</span>
+          <span class="metric-label">Today's Appointments</span>
+          <span class="metric-sub">system-wide</span>
+        </div>
+      </a>
+      <a class="metric-card" routerLink="/audit-logs">
+        <span class="material-symbols-outlined metric-icon audit">policy</span>
+        <div class="metric-body">
+          <span class="metric-value">{{ recentAuditEvents().length }}</span>
+          <span class="metric-label">Recent Audit Events</span>
+          <span class="metric-sub">last 10</span>
         </div>
       </a>
     </section>
