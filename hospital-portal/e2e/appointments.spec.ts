@@ -22,18 +22,18 @@ test.describe('Appointments Module', () => {
     });
 
     test('displays search bar and status filter', async ({ page }) => {
-      await expect(page.locator('.filter-search input')).toBeVisible();
-      await expect(page.locator('.filter-select')).toBeVisible();
+      await expect(page.getByRole('textbox', { name: /search/i })).toBeVisible();
+      await expect(page.locator('.status-pills')).toBeVisible();
     });
 
     test('status filter has all options', async ({ page }) => {
-      const options = page.locator('.filter-select option');
-      const texts = await options.allTextContents();
-      expect(texts).toContain('All Statuses');
-      expect(texts).toContain('Scheduled');
-      expect(texts).toContain('Confirmed');
-      expect(texts).toContain('Completed');
-      expect(texts).toContain('Cancelled');
+      const pills = page.locator('.status-pills .status-pill');
+      const texts = await pills.allTextContents();
+      expect(texts.map((t) => t.trim())).toContain('All');
+      expect(texts.map((t) => t.trim())).toContain('Scheduled');
+      expect(texts.map((t) => t.trim())).toContain('Confirmed');
+      expect(texts.map((t) => t.trim())).toContain('Completed');
+      expect(texts.map((t) => t.trim())).toContain('Cancelled');
     });
 
     test('loads appointment data (table or empty state)', async ({ page }) => {
@@ -61,7 +61,7 @@ test.describe('Appointments Module', () => {
         timeout: 15_000,
       });
 
-      const searchInput = page.locator('.filter-search input');
+      const searchInput = page.getByRole('textbox', { name: /search/i });
       const rows = page.locator('.data-table tbody tr');
       const initialCount = await rows.count();
 
@@ -78,8 +78,8 @@ test.describe('Appointments Module', () => {
         timeout: 15_000,
       });
 
-      const filter = page.locator('.filter-select');
-      await filter.selectOption('CANCELLED');
+      const filter = page.locator('.status-pills .status-pill', { hasText: 'Cancelled' });
+      await filter.click();
       await page.waitForTimeout(500);
       // Should filter or show different results
     });
