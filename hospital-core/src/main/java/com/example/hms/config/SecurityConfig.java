@@ -217,13 +217,23 @@ public class SecurityConfig {
                             .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
 
                 // Hospitals / Staff / Departments / Roles (specific before broad)
+                // GET /hospitals and /hospitals/{id} — readable by all clinical roles
+                .requestMatchers(HttpMethod.GET, "/hospitals", "/hospitals/")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR)
                 .requestMatchers(HttpMethod.GET, "/hospitals/{id}")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR)
-                .requestMatchers(HttpMethod.GET, "/hospitals", "/hospitals/")
+                .requestMatchers(HttpMethod.GET, "/hospitals/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR)
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/me/hospital")
                 .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
-                .requestMatchers("/hospitals/**")
+                // POST/PUT/DELETE /hospitals/** — super admin only
+                .requestMatchers(HttpMethod.POST, "/hospitals/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.PUT, "/hospitals/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.PATCH, "/hospitals/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.DELETE, "/hospitals/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN)
 
                 // Organizations and security management
