@@ -218,11 +218,11 @@ public class SecurityConfig {
 
                 // Hospitals / Staff / Departments / Roles (specific before broad)
                 .requestMatchers(HttpMethod.GET, "/hospitals/{id}")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR)
                 .requestMatchers(HttpMethod.GET, "/hospitals", "/hospitals/")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR)
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/me/hospital")
-                .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
                 .requestMatchers("/hospitals/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN)
 
@@ -255,8 +255,8 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
                 .requestMatchers("/roles/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
-                .requestMatchers("/chat/send/**")
-                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_STAFF, ROLE_PATIENT, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE)
+                .requestMatchers("/chat/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST, ROLE_STAFF, ROLE_PATIENT)
 
                 // Patient portal — self-service endpoints (MyChart equivalent)
                 .requestMatchers(HttpMethod.GET, API_ME_PATIENT_PATTERN)
