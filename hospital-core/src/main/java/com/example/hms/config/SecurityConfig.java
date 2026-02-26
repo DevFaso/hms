@@ -190,7 +190,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, API_PATIENTS, API_PATIENTS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.POST, API_PATIENTS)
-                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
                 .requestMatchers(HttpMethod.POST, API_PATIENT_VITALS, API_PATIENT_VITALS_PATTERN)
                 .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.GET, API_PATIENT_VITALS, API_PATIENT_VITALS_PATTERN)
@@ -212,9 +212,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, API_REGISTRATIONS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
 
-                            // Allow receptionist to register patients via admin-register
+                            // Allow all clinical staff to register patients via admin-register
                             .requestMatchers(HttpMethod.POST, "/users/admin-register")
-                            .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
+                            .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
 
                 // Hospitals / Staff / Departments / Roles (specific before broad)
                 // GET /hospitals and /hospitals/{id} — readable by all clinical roles
