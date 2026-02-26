@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
 import static com.example.hms.config.SecurityConstants.ROLE_HOSPITAL_ADMIN;
 import static com.example.hms.config.SecurityConstants.ROLE_MIDWIFE;
 import static com.example.hms.config.SecurityConstants.ROLE_NURSE;
@@ -47,7 +48,7 @@ public class HospitalController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('" + ROLE_SUPER_ADMIN + "') or hasAuthority('" + ROLE_HOSPITAL_ADMIN + "') or hasAuthority('" + ROLE_RECEPTIONIST + "') or hasAuthority('" + ROLE_NURSE + "') or hasAuthority('" + ROLE_MIDWIFE + "')")
+    @PreAuthorize("hasAuthority('" + ROLE_SUPER_ADMIN + "') or hasAuthority('" + ROLE_HOSPITAL_ADMIN + "') or hasAuthority('" + ROLE_RECEPTIONIST + "') or hasAuthority('" + ROLE_DOCTOR + "') or hasAuthority('" + ROLE_NURSE + "') or hasAuthority('" + ROLE_MIDWIFE + "')")
     public ResponseEntity<List<HospitalResponseDTO>> getAllHospitals(
             @RequestParam(name = "organizationId", required = false) UUID organizationId,
             @RequestParam(name = "unassignedOnly", required = false) Boolean unassignedOnly,
@@ -59,14 +60,14 @@ public class HospitalController {
     }
 
     @GetMapping("/organization/{organizationId}")
-    @PreAuthorize("hasAuthority('" + ROLE_SUPER_ADMIN + "') or hasAuthority('" + ROLE_HOSPITAL_ADMIN + "')")
+    @PreAuthorize("hasAuthority('" + ROLE_SUPER_ADMIN + "') or hasAuthority('" + ROLE_HOSPITAL_ADMIN + "') or hasAuthority('" + ROLE_DOCTOR + "') or hasAuthority('" + ROLE_NURSE + "') or hasAuthority('" + ROLE_MIDWIFE + "')")
     public ResponseEntity<List<HospitalResponseDTO>> getHospitalsByOrganization(@PathVariable UUID organizationId,
                                                                                Locale locale) {
         return ResponseEntity.ok(hospitalService.getHospitalsByOrganization(organizationId, locale));
     }
 
     @GetMapping("/with-departments")
-    @PreAuthorize("hasAuthority('" + ROLE_SUPER_ADMIN + "') or hasAuthority('" + ROLE_HOSPITAL_ADMIN + "')")
+    @PreAuthorize("hasAuthority('" + ROLE_SUPER_ADMIN + "') or hasAuthority('" + ROLE_HOSPITAL_ADMIN + "') or hasAuthority('" + ROLE_DOCTOR + "') or hasAuthority('" + ROLE_NURSE + "') or hasAuthority('" + ROLE_MIDWIFE + "')")
     public ResponseEntity<List<HospitalWithDepartmentsDTO>> getHospitalsWithDepartments(
             @RequestParam(name = "hospitalQuery", required = false) String hospitalQuery,
             @RequestParam(name = "departmentQuery", required = false) String departmentQuery,
@@ -85,7 +86,7 @@ public class HospitalController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAuthority('" + ROLE_SUPER_ADMIN + "') or hasAuthority('" + ROLE_HOSPITAL_ADMIN + "')")
+    @PreAuthorize("hasAuthority('" + ROLE_SUPER_ADMIN + "') or hasAuthority('" + ROLE_HOSPITAL_ADMIN + "') or hasAuthority('" + ROLE_RECEPTIONIST + "') or hasAuthority('" + ROLE_DOCTOR + "') or hasAuthority('" + ROLE_NURSE + "') or hasAuthority('" + ROLE_MIDWIFE + "')")
     public ResponseEntity<HospitalResponseDTO> getHospitalById(@PathVariable UUID id, Locale locale) {
         return ResponseEntity.ok(hospitalService.getHospitalById(id, locale));
     }
