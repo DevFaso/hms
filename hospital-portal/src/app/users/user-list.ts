@@ -80,6 +80,11 @@ export class UserListComponent implements OnInit {
   loading = signal(true);
   searchTerm = '';
 
+  /* Filter state */
+  roleFilter = '';
+  statusFilter = '';
+  showFilters = signal(false);
+
   currentPage = signal(0);
   totalPages = signal(0);
   totalElements = signal(0);
@@ -162,20 +167,40 @@ export class UserListComponent implements OnInit {
 
   applyFilter(): void {
     const term = this.searchTerm.toLowerCase().trim();
-    if (!term) {
-      this.filtered.set(this.users());
-      return;
+    let result = this.users();
+
+    if (this.roleFilter) {
+      result = result.filter((u) => u.roleName === this.roleFilter);
     }
-    this.filtered.set(
-      this.users().filter(
+    if (this.statusFilter === 'active') {
+      result = result.filter((u) => u.active && !u.deleted);
+    } else if (this.statusFilter === 'inactive') {
+      result = result.filter((u) => !u.active && !u.deleted);
+    } else if (this.statusFilter === 'deleted') {
+      result = result.filter((u) => u.deleted);
+    }
+    if (term) {
+      result = result.filter(
         (u) =>
           u.username.toLowerCase().includes(term) ||
           u.email.toLowerCase().includes(term) ||
           u.firstName.toLowerCase().includes(term) ||
           u.lastName.toLowerCase().includes(term) ||
           (u.roleName?.toLowerCase().includes(term) ?? false),
-      ),
-    );
+      );
+    }
+    this.filtered.set(result);
+  }
+
+  clearFilters(): void {
+    this.searchTerm = '';
+    this.roleFilter = '';
+    this.statusFilter = '';
+    this.applyFilter();
+  }
+
+  get activeFilterCount(): number {
+    return [this.roleFilter, this.statusFilter].filter(Boolean).length;
   }
 
   getInitials(u: UserSummary): string {

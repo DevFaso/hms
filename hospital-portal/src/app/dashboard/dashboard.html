@@ -266,6 +266,49 @@
     </section>
   }
 
+  <!-- ══════ SUPER-ADMIN QUICK LINKS ══════ -->
+  @if (isSuperAdmin()) {
+    <section class="quick-links-section">
+      <h2 class="section-title">
+        <span class="material-symbols-outlined">grid_view</span> Quick Navigation
+      </h2>
+      <div class="quick-links-grid">
+        <a class="quick-link-card" routerLink="/organizations">
+          <span class="material-symbols-outlined ql-icon ql-org">corporate_fare</span>
+          <span class="ql-label">Organizations</span>
+        </a>
+        <a class="quick-link-card" routerLink="/hospitals">
+          <span class="material-symbols-outlined ql-icon ql-hospital">local_hospital</span>
+          <span class="ql-label">Hospitals</span>
+        </a>
+        <a class="quick-link-card" routerLink="/departments">
+          <span class="material-symbols-outlined ql-icon ql-dept">domain</span>
+          <span class="ql-label">Departments</span>
+        </a>
+        <a class="quick-link-card" routerLink="/roles">
+          <span class="material-symbols-outlined ql-icon ql-roles">verified_user</span>
+          <span class="ql-label">Roles &amp; Permissions</span>
+        </a>
+        <a class="quick-link-card" routerLink="/users">
+          <span class="material-symbols-outlined ql-icon ql-users">group</span>
+          <span class="ql-label">Users</span>
+        </a>
+        <a class="quick-link-card" routerLink="/audit-logs">
+          <span class="material-symbols-outlined ql-icon ql-audit">history</span>
+          <span class="ql-label">Audit Logs</span>
+        </a>
+        <a class="quick-link-card" routerLink="/patients">
+          <span class="material-symbols-outlined ql-icon ql-patients">people</span>
+          <span class="ql-label">Patients</span>
+        </a>
+        <a class="quick-link-card" routerLink="/appointments">
+          <span class="material-symbols-outlined ql-icon ql-appts">calendar_month</span>
+          <span class="ql-label">Appointments</span>
+        </a>
+      </div>
+    </section>
+  }
+
   <!-- ══════ RECENT AUDIT EVENTS (super-admin) ══════ -->
   @if (recentAuditEvents().length > 0) {
     <section class="audit-section">
@@ -330,14 +373,19 @@
             <a routerLink="/appointments" class="view-all">View All →</a>
           </div>
           <div class="card-body">
-            @for (appt of todayAppointments(); track $index) {
-              <div class="list-item">
-                <div class="item-avatar"><span class="material-symbols-outlined">event</span></div>
-                <div class="item-info">
-                  <span class="item-primary">Appointment</span
-                  ><span class="item-secondary">Scheduled</span>
+            @for (appt of todayAppointments(); track appt.id) {
+              <a class="list-item" [routerLink]="['/appointments', appt.id]">
+                <div class="item-avatar">
+                  {{ appt.patientName.charAt(0) }}
                 </div>
-              </div>
+                <div class="item-info">
+                  <span class="item-primary">{{ appt.patientName }}</span>
+                  <span class="item-secondary"
+                    >{{ appt.startTime }} · Dr. {{ appt.staffName }}</span
+                  >
+                </div>
+                <span [class]="getApptStatusClass(appt.status)">{{ appt.status | titlecase }}</span>
+              </a>
             }
           </div>
         </section>
@@ -349,14 +397,25 @@
             <a routerLink="/patients" class="view-all">View All →</a>
           </div>
           <div class="card-body">
-            @for (patient of recentPatients(); track $index) {
-              <div class="list-item">
-                <div class="item-avatar"><span class="material-symbols-outlined">person</span></div>
-                <div class="item-info">
-                  <span class="item-primary">Patient Record</span
-                  ><span class="item-secondary">Registered</span>
+            @for (patient of recentPatients(); track patient.id) {
+              <a class="list-item" [routerLink]="['/patients', patient.id]">
+                <div class="item-avatar">
+                  {{ patient.firstName.charAt(0) }}{{ patient.lastName.charAt(0) }}
                 </div>
-              </div>
+                <div class="item-info">
+                  <span class="item-primary">{{ patient.firstName }} {{ patient.lastName }}</span>
+                  <span class="item-secondary">
+                    @if (patient.mrn) {
+                      MRN {{ patient.mrn }}
+                      @if (patient.hospitalName) {
+                        · {{ patient.hospitalName }}
+                      }
+                    } @else {
+                      {{ patient.hospitalName || '' }}
+                    }
+                  </span>
+                </div>
+              </a>
             }
           </div>
         </section>

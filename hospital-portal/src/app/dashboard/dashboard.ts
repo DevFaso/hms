@@ -3,8 +3,8 @@ import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
-import { AppointmentService } from '../services/appointment.service';
-import { PatientService } from '../services/patient.service';
+import { AppointmentService, AppointmentResponse } from '../services/appointment.service';
+import { PatientService, PatientResponse } from '../services/patient.service';
 import {
   DashboardService,
   SuperAdminSummary,
@@ -59,8 +59,8 @@ export class DashboardComponent implements OnInit {
   roomedPatients = signal<RoomedPatient[]>([]);
 
   /* Fallback data */
-  todayAppointments = signal<unknown[]>([]);
-  recentPatients = signal<unknown[]>([]);
+  todayAppointments = signal<AppointmentResponse[]>([]);
+  recentPatients = signal<PatientResponse[]>([]);
 
   isSuperAdmin = signal(false);
   isClinician = signal(false);
@@ -237,6 +237,23 @@ export class DashboardComponent implements OnInit {
         return 'kpi-trend trend-down';
       default:
         return 'kpi-trend trend-stable';
+    }
+  }
+
+  getApptStatusClass(status: string): string {
+    switch (status) {
+      case 'SCHEDULED':
+      case 'CONFIRMED':
+        return 'status-badge scheduled';
+      case 'COMPLETED':
+        return 'status-badge completed';
+      case 'CANCELLED':
+      case 'NO_SHOW':
+        return 'status-badge cancelled';
+      case 'IN_PROGRESS':
+        return 'status-badge in-progress';
+      default:
+        return 'status-badge';
     }
   }
 }
