@@ -1,270 +1,377 @@
 <div class="dashboard">
-  <!-- Welcome Banner -->
-  <section class="welcome-banner">
-    <div class="welcome-text">
-      <h1>{{ greeting() }}, {{ userName() }}!</h1>
-      <p>Here's an overview of your hospital management system.</p>
-    </div>
-    <div class="welcome-date">
-      <span class="material-symbols-outlined">calendar_today</span>
-      <span>{{ today }}</span>
-    </div>
-  </section>
 
-  @if (loading()) {
-    <div class="loading-state">
-      <div class="spinner"></div>
-      <p>Loading dashboard...</p>
-    </div>
-  }
-
-  <!-- ══════ SUPER-ADMIN METRICS ══════ -->
-  @if (adminSummary(); as s) {
-    <section class="metrics-grid">
-      <a class="metric-card" routerLink="/patients">
-        <span class="material-symbols-outlined metric-icon patients">people</span>
-        <div class="metric-body">
-          <span class="metric-value">{{ s.totalPatients }}</span>
-          <span class="metric-label">Total Patients</span>
-        </div>
-      </a>
-      <a class="metric-card" routerLink="/users">
-        <span class="material-symbols-outlined metric-icon users">group</span>
-        <div class="metric-body">
-          <span class="metric-value">{{ s.activeUsers }}</span>
-          <span class="metric-label">Active Users</span>
-          <span class="metric-sub">of {{ s.totalUsers }} total</span>
-        </div>
-      </a>
-      <a class="metric-card" routerLink="/hospitals">
-        <span class="material-symbols-outlined metric-icon hospitals">local_hospital</span>
-        <div class="metric-body">
-          <span class="metric-value">{{ s.activeHospitals }}</span>
-          <span class="metric-label">Active Hospitals</span>
-          <span class="metric-sub">of {{ s.totalHospitals }} total</span>
-        </div>
-      </a>
-      <a class="metric-card" routerLink="/organizations">
-        <span class="material-symbols-outlined metric-icon orgs">corporate_fare</span>
-        <div class="metric-body">
-          <span class="metric-value">{{ s.activeOrganizations }}</span>
-          <span class="metric-label">Organizations</span>
-          <span class="metric-sub">of {{ s.totalOrganizations }} total</span>
-        </div>
-      </a>
-      <a class="metric-card" routerLink="/departments">
-        <span class="material-symbols-outlined metric-icon depts">domain</span>
-        <div class="metric-body">
-          <span class="metric-value">{{ s.totalDepartments }}</span>
-          <span class="metric-label">Departments</span>
-        </div>
-      </a>
-      <div class="metric-card">
-        <span class="material-symbols-outlined metric-icon roles">verified_user</span>
-        <div class="metric-body">
-          <span class="metric-value">{{ s.totalRoles }}</span>
-          <span class="metric-label">Roles</span>
-        </div>
+  <!-- DOCTOR HERO HEADER -->
+  <header class="hero-header">
+    <div class="hero-left">
+      <div class="hero-greeting">
+        <span class="greeting-tag">{{ greeting() }}</span>
+        <h1 class="hero-name">{{ userTitle() }} {{ userName() }}</h1>
+        <p class="hero-sub">
+          <span class="material-symbols-outlined">calendar_today</span>
+          {{ todayLabel }}
+        </p>
       </div>
-      <div class="metric-card">
-        <span class="material-symbols-outlined metric-icon assignments">assignment_ind</span>
-        <div class="metric-body">
-          <span class="metric-value">{{ s.activeAssignments }}</span>
-          <span class="metric-label">Active Assignments</span>
-          <span class="metric-sub">of {{ s.totalAssignments }} total</span>
+      <div class="hero-meta">
+        <div class="live-clock">
+          <span class="material-symbols-outlined">schedule</span>
+          <span class="clock-time">{{ currentTime() }}</span>
         </div>
-      </div>
-      <a class="metric-card" routerLink="/appointments">
-        <span class="material-symbols-outlined metric-icon appointments">calendar_month</span>
-        <div class="metric-body">
-          <span class="metric-value">{{ s.todayAppointmentsCount }}</span>
-          <span class="metric-label">Today's Appointments</span>
-          <span class="metric-sub">system-wide</span>
-        </div>
-      </a>
-      <a class="metric-card" routerLink="/audit-logs">
-        <span class="material-symbols-outlined metric-icon audit">policy</span>
-        <div class="metric-body">
-          <span class="metric-value">{{ recentAuditEvents().length }}</span>
-          <span class="metric-label">Recent Audit Events</span>
-          <span class="metric-sub">last 10</span>
-        </div>
-      </a>
-    </section>
-  }
-
-  <!-- ══════ CLINICAL KPIs ══════ -->
-  @if (kpis().length > 0) {
-    <section class="kpi-section">
-      <h2 class="section-title">
-        <span class="material-symbols-outlined">monitoring</span> Clinical KPIs
-      </h2>
-      <div class="kpi-grid">
-        @for (kpi of kpis(); track kpi.key) {
-          <div class="kpi-card">
-            <div class="kpi-top">
-              <span class="kpi-value"
-                >{{ kpi.value }}<small class="kpi-unit">{{ kpi.unit }}</small></span
-              >
-              @if (kpi.trend) {
-                <span class="kpi-trend" [class]="getTrendClass(kpi.trend)">
-                  <span class="material-symbols-outlined">{{ getTrendIcon(kpi.trend) }}</span>
-                  @if (kpi.deltaNum) {
-                    <span>{{ kpi.deltaNum > 0 ? '+' : '' }}{{ kpi.deltaNum }}</span>
-                  }
-                </span>
-              }
-            </div>
-            <span class="kpi-label">{{ kpi.label }}</span>
+        @if (onCallStatus(); as oc) {
+          <div class="oncall-pill" [class.oncall-active]="oc.isOnCall">
+            <span class="oncall-dot"></span>
+            {{ oc.isOnCall ? 'On Call' : 'Off Duty' }}
+            @if (oc.isOnCall && oc.shiftEnd) {
+              <span class="oncall-until">until {{ oc.shiftEnd | date:'shortTime' }}</span>
+            }
           </div>
         }
       </div>
-    </section>
-  }
+    </div>
 
-  <!-- ══════ INBOX + ON-CALL ══════ -->
-  @if (inboxCounts() || onCallStatus()) {
-    <div class="status-row">
-      @if (inboxCounts(); as ic) {
-        <div class="inbox-card">
-          <h3 class="card-title"><span class="material-symbols-outlined">inbox</span> Inbox</h3>
-          <div class="inbox-grid">
-            <div class="inbox-item">
-              <span class="inbox-count">{{ ic.unreadMessages }}</span
-              ><span class="inbox-label">Messages</span>
-            </div>
-            <div class="inbox-item">
-              <span class="inbox-count">{{ ic.pendingResults }}</span
-              ><span class="inbox-label">Pending Results</span>
-            </div>
-            <div class="inbox-item">
-              <span class="inbox-count">{{ ic.pendingRefills }}</span
-              ><span class="inbox-label">Refill Requests</span>
-            </div>
-            <div class="inbox-item">
-              <span class="inbox-count">{{ ic.tasksToComplete }}</span
-              ><span class="inbox-label">Tasks</span>
-            </div>
-            <div class="inbox-item">
-              <span class="inbox-count">{{ ic.documentsToSign }}</span
-              ><span class="inbox-label">Documents to Sign</span>
-            </div>
-          </div>
+    <div class="hero-right">
+      <div class="progress-ring-wrap">
+        <svg class="progress-ring" width="88" height="88" viewBox="0 0 88 88">
+          <circle class="ring-track" cx="44" cy="44" r="34" />
+          <circle
+            class="ring-fill"
+            cx="44" cy="44" r="34"
+            [style.stroke-dasharray]="'213.63'"
+            [style.stroke-dashoffset]="progressOffset()"
+          />
+        </svg>
+        <div class="ring-label">
+          <span class="ring-pct">{{ scheduleProgress() }}<small>%</small></span>
+          <span class="ring-sub">Done</span>
         </div>
+      </div>
+      <div class="ring-caption">Schedule<br>Progress</div>
+    </div>
+
+    <div class="hero-actions">
+      @if (permissions.hasPermission('Create Appointments')) {
+        <a class="hero-btn hero-btn-primary" routerLink="/appointments/new">
+          <span class="material-symbols-outlined">calendar_add_on</span>
+          New Appointment
+        </a>
       }
-      @if (onCallStatus(); as oc) {
-        <div class="oncall-card" [class.on-call]="oc.isOnCall">
-          <h3 class="card-title">
-            <span class="material-symbols-outlined">phone_in_talk</span> On-Call Status
-          </h3>
-          <div class="oncall-status">
-            <span class="oncall-badge" [class.active]="oc.isOnCall">{{
-              oc.isOnCall ? 'On Call' : 'Off Duty'
-            }}</span>
-          </div>
-          @if (oc.isOnCall) {
-            <div class="oncall-details">
-              <div class="oncall-field">
-                <span class="oncall-label">Shift</span
-                ><span
-                  >{{ oc.shiftStart | date: 'shortTime' }} –
-                  {{ oc.shiftEnd | date: 'shortTime' }}</span
-                >
-              </div>
-              @if (oc.backupProvider) {
-                <div class="oncall-field">
-                  <span class="oncall-label">Backup</span><span>{{ oc.backupProvider }}</span>
-                </div>
-              }
-              @if (oc.coveringFor && oc.coveringFor.length > 0) {
-                <div class="oncall-field">
-                  <span class="oncall-label">Covering for</span
-                  ><span>{{ oc.coveringFor.join(', ') }}</span>
-                </div>
-              }
-            </div>
-          }
-        </div>
+      @if (permissions.hasPermission('Create Encounters')) {
+        <a class="hero-btn hero-btn-secondary" routerLink="/encounters/new">
+          <span class="material-symbols-outlined">stethoscope</span>
+          Start Encounter
+        </a>
       }
+      <button class="hero-btn hero-btn-ghost" (click)="refreshDashboard()" title="Refresh dashboard">
+        <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- CRITICAL ALERT BANNER -->
+  @if (criticalAlerts().length > 0) {
+    <div class="critical-banner">
+      <span class="material-symbols-outlined critical-pulse">emergency</span>
+      <strong>{{ criticalAlerts().length }} Critical Alert{{ criticalAlerts().length > 1 ? 's' : '' }} Require Immediate Attention</strong>
+      <div class="critical-names">
+        @for (a of criticalAlerts(); track a.id) {
+          <span class="critical-chip">{{ a.patientName }}</span>
+        }
+      </div>
+      <a class="critical-link" href="#alerts-section">Review Now</a>
     </div>
   }
 
-  <!-- ══════ CLINICAL ALERTS ══════ -->
-  @if (alerts().length > 0) {
-    <section class="alerts-section">
-      <h2 class="section-title">
-        <span class="material-symbols-outlined">notification_important</span> Clinical Alerts
-      </h2>
-      <div class="alerts-list">
-        @for (alert of alerts(); track alert.id) {
-          <div
-            class="alert-item"
-            [class]="getAlertSeverityClass(alert.severity)"
-            [class.acknowledged]="alert.acknowledged"
-          >
-            <div class="alert-icon">
-              <span class="material-symbols-outlined">{{ alert.icon || 'warning' }}</span>
+  <!-- STAT STRIP -->
+  <section class="stat-strip">
+    @if (loading()) {
+      @for (i of [1,2,3,4,5,6]; track i) {
+        <div class="stat-card skeleton-card">
+          <div class="skel skel-icon"></div>
+          <div class="skel-body">
+            <div class="skel skel-val"></div>
+            <div class="skel skel-label"></div>
+          </div>
+        </div>
+      }
+    } @else {
+      @for (stat of statCards(); track stat.key) {
+        <a
+          class="stat-card"
+          [class.stat-card-alert]="stat.key === 'alerts' && criticalAlerts().length > 0"
+          [routerLink]="stat.route ?? null"
+          [style.--stat-color]="stat.color"
+          [style.--stat-bg]="stat.bgColor"
+        >
+          <div class="stat-icon-wrap">
+            <span class="material-symbols-outlined stat-icon">{{ stat.icon }}</span>
+          </div>
+          <div class="stat-body">
+            <span class="stat-value">{{ stat.value }}</span>
+            <span class="stat-label">{{ stat.label }}</span>
+            @if (stat.trend && stat.delta !== undefined && stat.delta !== 0) {
+              <span [class]="getTrendClass(stat.trend)">
+                <span class="material-symbols-outlined">{{ getTrendIcon(stat.trend) }}</span>
+                {{ stat.delta > 0 ? '+' : '' }}{{ stat.delta }}
+              </span>
+            }
+          </div>
+        </a>
+      }
+    }
+  </section>
+
+  <!-- MAIN GRID: Schedule + Right column -->
+  @if (isClinician()) {
+    <div class="main-grid">
+
+      <!-- TODAY'S SCHEDULE -->
+      <section class="schedule-panel card">
+        <div class="card-head">
+          <div class="card-title-group">
+            <span class="material-symbols-outlined card-title-icon" style="color:#2563eb">calendar_clock</span>
+            <h2 class="card-title">Today's Schedule</h2>
+            <span class="count-badge">{{ todayAppointments().length }}</span>
+          </div>
+          <a routerLink="/appointments" class="card-link">View All</a>
+        </div>
+
+        @if (scheduleLoading()) {
+          <div class="schedule-skeleton">
+            @for (i of [1,2,3,4]; track i) {
+              <div class="sched-skel-row">
+                <div class="skel skel-time"></div>
+                <div class="skel-lines">
+                  <div class="skel skel-name"></div>
+                  <div class="skel skel-reason"></div>
+                </div>
+              </div>
+            }
+          </div>
+        } @else if (scheduleSlots().length === 0) {
+          <div class="empty-schedule">
+            <span class="material-symbols-outlined empty-icon">event_available</span>
+            <p>No appointments scheduled for today</p>
+            @if (permissions.hasPermission('Create Appointments')) {
+              <a routerLink="/appointments/new" class="empty-cta">Schedule one now</a>
+            }
+          </div>
+        } @else {
+          <div class="schedule-list">
+            @for (slot of scheduleSlots(); track slot.id) {
+              <a [routerLink]="['/appointments', slot.id]" class="sched-row" [class.sched-row-now]="slot.isNow">
+                @if (slot.isNow) {
+                  <div class="sched-now-bar"></div>
+                }
+                <div class="sched-time">
+                  <span class="time-val">{{ slot.time }}</span>
+                </div>
+                <div class="sched-avatar" [style.background]="getAvatarColor(slot.patientName)">
+                  {{ getPatientInitials(slot.patientName) }}
+                </div>
+                <div class="sched-info">
+                  <span class="sched-name">{{ slot.patientName }}</span>
+                  <span class="sched-reason">{{ slot.reason || '—' }}</span>
+                </div>
+                <span [class]="getApptStatusClass(slot.status)">
+                  {{ getApptStatusLabel(slot.status) }}
+                </span>
+              </a>
+            }
+          </div>
+          <div class="schedule-summary">
+            <span class="sum-item sum-done">
+              <span class="material-symbols-outlined">task_alt</span>{{ completedToday() }} Done
+            </span>
+            <span class="sum-divider"></span>
+            <span class="sum-item sum-active">
+              <span class="material-symbols-outlined">person_play</span>{{ inProgressNow() }} Active
+            </span>
+            <span class="sum-divider"></span>
+            <span class="sum-item sum-pending">
+              <span class="material-symbols-outlined">pending</span>{{ pendingToday() }} Pending
+            </span>
+          </div>
+        }
+      </section>
+
+      <!-- RIGHT COLUMN -->
+      <div class="right-col">
+
+        @if (inboxCounts(); as ic) {
+          <section class="card inbox-card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon" style="color:#0891b2">mark_email_unread</span>
+                <h2 class="card-title">Inbox</h2>
+                @if (totalInboxCount() > 0) {
+                  <span class="count-badge count-badge-red">{{ totalInboxCount() }}</span>
+                }
+              </div>
+              <a routerLink="/chat" class="card-link">Open</a>
             </div>
-            <div class="alert-body">
-              <div class="alert-top">
-                <span class="alert-severity">{{ alert.severity }}</span>
-                <span class="alert-time">{{ alert.timestamp | date: 'short' }}</span>
+            <div class="inbox-items">
+              <a routerLink="/chat" class="inbox-row">
+                <div class="inbox-row-icon" style="background:#dbeafe;color:#1d4ed8">
+                  <span class="material-symbols-outlined">chat</span>
+                </div>
+                <span class="inbox-row-label">Unread Messages</span>
+                <span class="inbox-row-count" [class.count-hot]="ic.unreadMessages > 0">{{ ic.unreadMessages }}</span>
+              </a>
+              <a routerLink="/lab" class="inbox-row">
+                <div class="inbox-row-icon" style="background:#fee2e2;color:#b91c1c">
+                  <span class="material-symbols-outlined">science</span>
+                </div>
+                <span class="inbox-row-label">Pending Lab Results</span>
+                <span class="inbox-row-count" [class.count-hot]="ic.pendingResults > 0">{{ ic.pendingResults }}</span>
+              </a>
+              <a routerLink="/prescriptions" class="inbox-row">
+                <div class="inbox-row-icon" style="background:#fef3c7;color:#b45309">
+                  <span class="material-symbols-outlined">medication</span>
+                </div>
+                <span class="inbox-row-label">Refill Requests</span>
+                <span class="inbox-row-count" [class.count-hot]="ic.pendingRefills > 0">{{ ic.pendingRefills }}</span>
+              </a>
+              <div class="inbox-row">
+                <div class="inbox-row-icon" style="background:#ede9fe;color:#6d28d9">
+                  <span class="material-symbols-outlined">checklist</span>
+                </div>
+                <span class="inbox-row-label">Tasks to Complete</span>
+                <span class="inbox-row-count" [class.count-hot]="ic.tasksToComplete > 0">{{ ic.tasksToComplete }}</span>
+              </div>
+              <div class="inbox-row">
+                <div class="inbox-row-icon" style="background:#d1fae5;color:#065f46">
+                  <span class="material-symbols-outlined">draw</span>
+                </div>
+                <span class="inbox-row-label">Documents to Sign</span>
+                <span class="inbox-row-count" [class.count-hot]="ic.documentsToSign > 0">{{ ic.documentsToSign }}</span>
+              </div>
+            </div>
+          </section>
+        }
+
+        @if (roomedPatients().length > 0) {
+          <section class="card roomed-card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon" style="color:#d97706">hotel</span>
+                <h2 class="card-title">Roomed Patients</h2>
+                <span class="count-badge">{{ roomedPatients().length }}</span>
+              </div>
+            </div>
+            <div class="roomed-list">
+              @for (pt of roomedPatients(); track pt.id) {
+                <div class="roomed-row">
+                  <div class="roomed-avatar" [style.background]="getAvatarColor(pt.patientName)">
+                    {{ getPatientInitials(pt.patientName) }}
+                  </div>
+                  <div class="roomed-info">
+                    <div class="roomed-top">
+                      <strong class="roomed-name">{{ pt.patientName }}</strong>
+                      <span [class]="getTriageClass(pt.triageStatus)">{{ pt.triageStatus | titlecase }}</span>
+                    </div>
+                    <div class="roomed-meta">
+                      <span><span class="material-symbols-outlined">meeting_room</span>{{ pt.room }}</span>
+                      <span>{{ pt.age }}{{ pt.sex ? '/' + pt.sex.charAt(0) : '' }}</span>
+                      <span class="mrn-tag">{{ pt.mrn }}</span>
+                    </div>
+                    @if (pt.chiefComplaint) {
+                      <span class="roomed-complaint">{{ pt.chiefComplaint }}</span>
+                    }
+                    @if (pt.prepStatus) {
+                      <div class="prep-row">
+                        <span class="prep-chip" [class.prep-done]="pt.prepStatus.labsDrawn">
+                          <span class="material-symbols-outlined">{{ pt.prepStatus.labsDrawn ? 'check_circle' : 'radio_button_unchecked' }}</span>Labs
+                        </span>
+                        <span class="prep-chip" [class.prep-done]="pt.prepStatus.imagingOrdered">
+                          <span class="material-symbols-outlined">{{ pt.prepStatus.imagingOrdered ? 'check_circle' : 'radio_button_unchecked' }}</span>Imaging
+                        </span>
+                        <span class="prep-chip" [class.prep-done]="pt.prepStatus.consentSigned">
+                          <span class="material-symbols-outlined">{{ pt.prepStatus.consentSigned ? 'check_circle' : 'radio_button_unchecked' }}</span>Consent
+                        </span>
+                      </div>
+                    }
+                    <div class="wait-bar">
+                      <span class="material-symbols-outlined wait-icon">hourglass_top</span>
+                      <span class="wait-val">{{ pt.waitTimeMinutes }}m wait</span>
+                    </div>
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+        }
+
+        @if (recentPatients().length > 0) {
+          <section class="card recent-patients-card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon" style="color:#059669">group</span>
+                <h2 class="card-title">Recent Patients</h2>
+              </div>
+              <a routerLink="/patients" class="card-link">All Patients</a>
+            </div>
+            <div class="patient-list">
+              @for (p of recentPatients(); track p.id) {
+                <a [routerLink]="['/patients', p.id]" class="patient-row">
+                  <div class="patient-avatar" [style.background]="getAvatarColor(p.firstName + p.lastName)">
+                    {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
+                  </div>
+                  <div class="patient-info">
+                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-meta">
+                      @if (p.mrn) { <span class="mrn-tag">{{ p.mrn }}</span> }
+                      @if (p.dateOfBirth) { <span>{{ p.dateOfBirth | date:'mediumDate' }}</span> }
+                    </span>
+                  </div>
+                  <span class="material-symbols-outlined chevron">chevron_right</span>
+                </a>
+              }
+            </div>
+          </section>
+        }
+
+      </div>
+    </div>
+  }
+
+  <!-- CLINICAL ALERTS -->
+  @if (alerts().length > 0) {
+    <section class="alerts-section" id="alerts-section">
+      <div class="section-head">
+        <div class="section-title-group">
+          <span class="material-symbols-outlined section-icon" style="color:#dc2626">notification_important</span>
+          <h2 class="section-title">Clinical Alerts</h2>
+          @if (unacknowledgedAlerts().length > 0) {
+            <span class="count-badge count-badge-red">{{ unacknowledgedAlerts().length }}</span>
+          }
+        </div>
+      </div>
+      <div class="alerts-grid">
+        @for (alert of alerts(); track alert.id) {
+          <div [class]="getAlertSeverityClass(alert.severity)" [class.is-acknowledged]="alert.acknowledged">
+            <div class="alert-icon-wrap">
+              <span class="material-symbols-outlined">{{ getAlertIcon(alert.severity) }}</span>
+            </div>
+            <div class="alert-content">
+              <div class="alert-header-row">
+                <span class="alert-sev-pill" [class]="'sev-' + (alert.severity | lowercase)">{{ alert.severity }}</span>
+                <span class="alert-time">{{ alert.timestamp | date:'shortTime' }}</span>
               </div>
               <strong class="alert-title">{{ alert.title }}</strong>
-              <p class="alert-message">{{ alert.message }}</p>
+              <p class="alert-msg">{{ alert.message }}</p>
               @if (alert.patientName) {
-                <span class="alert-patient">Patient: {{ alert.patientName }}</span>
+                <a [routerLink]="['/patients', alert.patientId]" class="alert-patient-link">
+                  <span class="material-symbols-outlined">person</span>{{ alert.patientName }}
+                </a>
               }
             </div>
             @if (alert.actionRequired && !alert.acknowledged) {
-              <button
-                class="alert-ack-btn"
-                title="Acknowledge alert"
-                (click)="acknowledgeAlert(alert.id)"
-              >
+              <button class="ack-btn" (click)="acknowledgeAlert(alert.id)" title="Acknowledge">
                 <span class="material-symbols-outlined">check_circle</span>
+                <span class="ack-label">Acknowledge</span>
               </button>
-            }
-          </div>
-        }
-      </div>
-    </section>
-  }
-
-  <!-- ══════ ROOMED PATIENTS ══════ -->
-  @if (roomedPatients().length > 0) {
-    <section class="roomed-section">
-      <h2 class="section-title">
-        <span class="material-symbols-outlined">hotel</span> Roomed Patients
-      </h2>
-      <div class="roomed-grid">
-        @for (pt of roomedPatients(); track pt.id) {
-          <div class="roomed-card">
-            <div class="roomed-header">
-              <div>
-                <strong>{{ pt.patientName }}</strong>
-                <span class="roomed-mrn">MRN {{ pt.mrn }}</span>
-              </div>
-              <span class="triage-badge" [class]="getTriageClass(pt.triageStatus)">{{
-                pt.triageStatus | titlecase
-              }}</span>
-            </div>
-            <div class="roomed-meta">
-              <span><span class="material-symbols-outlined">meeting_room</span> {{ pt.room }}</span>
-              <span>{{ pt.age }}{{ pt.sex ? '/' + pt.sex.charAt(0) : '' }}</span>
-              <span
-                ><span class="material-symbols-outlined">schedule</span> {{ pt.waitTimeMinutes }}m
-                wait</span
-              >
-            </div>
-            @if (pt.chiefComplaint) {
-              <div class="roomed-complaint">{{ pt.chiefComplaint }}</div>
-            }
-            @if (pt.prepStatus) {
-              <div class="prep-badges">
-                <span class="prep-badge" [class.done]="pt.prepStatus.labsDrawn">Labs</span>
-                <span class="prep-badge" [class.done]="pt.prepStatus.imagingOrdered">Imaging</span>
-                <span class="prep-badge" [class.done]="pt.prepStatus.consentSigned">Consent</span>
+            } @else if (alert.acknowledged) {
+              <div class="acked-badge">
+                <span class="material-symbols-outlined">verified</span>
               </div>
             }
           </div>
@@ -273,181 +380,196 @@
     </section>
   }
 
-  <!-- Quick Actions -->
+  <!-- QUICK ACTIONS -->
   @if (quickActions().length > 0) {
-    <section class="quick-actions">
-      <h2 class="section-title">Quick Actions</h2>
-      <div class="actions-row">
+    <section class="quick-actions-section">
+      <div class="section-head">
+        <div class="section-title-group">
+          <span class="material-symbols-outlined section-icon" style="color:#7c3aed">bolt</span>
+          <h2 class="section-title">Quick Actions</h2>
+        </div>
+      </div>
+      <div class="qa-grid">
         @for (action of quickActions(); track action.label) {
-          <a class="action-btn" [routerLink]="action.route">
-            <span class="material-symbols-outlined" [style.color]="action.color">{{
-              action.icon
-            }}</span>
-            <span>{{ action.label }}</span>
+          <a class="qa-card" [routerLink]="action.route" [style.--qa-color]="action.color" [style.--qa-bg]="action.bgColor">
+            <div class="qa-icon-wrap">
+              <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
+            </div>
+            <span class="qa-label">{{ action.label }}</span>
+            <span class="qa-desc">{{ action.description }}</span>
           </a>
         }
       </div>
     </section>
   }
 
-  <!-- ══════ SUPER-ADMIN QUICK LINKS ══════ -->
-  @if (isSuperAdmin()) {
-    <section class="quick-links-section">
-      <h2 class="section-title">
-        <span class="material-symbols-outlined">grid_view</span> Quick Navigation
-      </h2>
-      <div class="quick-links-grid">
-        <a class="quick-link-card" routerLink="/organizations">
-          <span class="material-symbols-outlined ql-icon ql-org">corporate_fare</span>
-          <span class="ql-label">Organizations</span>
+  <!-- SUPER-ADMIN SECTION -->
+  @if (adminSummary(); as s) {
+    <section class="admin-section">
+      <div class="section-head">
+        <div class="section-title-group">
+          <span class="material-symbols-outlined section-icon" style="color:#2563eb">monitoring</span>
+          <h2 class="section-title">System Overview</h2>
+        </div>
+      </div>
+      <div class="admin-grid">
+        <a class="admin-card" routerLink="/patients">
+          <span class="material-symbols-outlined admin-icon" style="color:#1e40af;background:#dbeafe">people</span>
+          <span class="admin-val">{{ s.totalPatients }}</span>
+          <span class="admin-label">Total Patients</span>
         </a>
-        <a class="quick-link-card" routerLink="/hospitals">
-          <span class="material-symbols-outlined ql-icon ql-hospital">local_hospital</span>
-          <span class="ql-label">Hospitals</span>
+        <a class="admin-card" routerLink="/users">
+          <span class="material-symbols-outlined admin-icon" style="color:#065f46;background:#d1fae5">group</span>
+          <span class="admin-val">{{ s.activeUsers }}</span>
+          <span class="admin-label">Active Users</span>
+          <span class="admin-sub">of {{ s.totalUsers }} total</span>
         </a>
-        <a class="quick-link-card" routerLink="/departments">
-          <span class="material-symbols-outlined ql-icon ql-dept">domain</span>
-          <span class="ql-label">Departments</span>
+        <a class="admin-card" routerLink="/hospitals">
+          <span class="material-symbols-outlined admin-icon" style="color:#92400e;background:#fef3c7">local_hospital</span>
+          <span class="admin-val">{{ s.activeHospitals }}</span>
+          <span class="admin-label">Active Hospitals</span>
+          <span class="admin-sub">of {{ s.totalHospitals }} total</span>
         </a>
-        <a class="quick-link-card" routerLink="/roles">
-          <span class="material-symbols-outlined ql-icon ql-roles">verified_user</span>
-          <span class="ql-label">Roles &amp; Permissions</span>
+        <a class="admin-card" routerLink="/organizations">
+          <span class="material-symbols-outlined admin-icon" style="color:#2563eb;background:#eff6ff">corporate_fare</span>
+          <span class="admin-val">{{ s.activeOrganizations }}</span>
+          <span class="admin-label">Organizations</span>
+          <span class="admin-sub">of {{ s.totalOrganizations }} total</span>
         </a>
-        <a class="quick-link-card" routerLink="/users">
-          <span class="material-symbols-outlined ql-icon ql-users">group</span>
-          <span class="ql-label">Users</span>
+        <a class="admin-card" routerLink="/departments">
+          <span class="material-symbols-outlined admin-icon" style="color:#16a34a;background:#f0fdf4">domain</span>
+          <span class="admin-val">{{ s.totalDepartments }}</span>
+          <span class="admin-label">Departments</span>
         </a>
-        <a class="quick-link-card" routerLink="/audit-logs">
-          <span class="material-symbols-outlined ql-icon ql-audit">history</span>
-          <span class="ql-label">Audit Logs</span>
+        <a class="admin-card" routerLink="/appointments">
+          <span class="material-symbols-outlined admin-icon" style="color:#059669;background:#ecfdf5">calendar_month</span>
+          <span class="admin-val">{{ s.todayAppointmentsCount }}</span>
+          <span class="admin-label">Today's Appointments</span>
         </a>
-        <a class="quick-link-card" routerLink="/patients">
-          <span class="material-symbols-outlined ql-icon ql-patients">people</span>
-          <span class="ql-label">Patients</span>
+        <a class="admin-card" routerLink="/audit-logs">
+          <span class="material-symbols-outlined admin-icon" style="color:#0369a1;background:#f0f9ff">policy</span>
+          <span class="admin-val">{{ recentAuditEvents().length }}</span>
+          <span class="admin-label">Audit Events</span>
         </a>
-        <a class="quick-link-card" routerLink="/appointments">
-          <span class="material-symbols-outlined ql-icon ql-appts">calendar_month</span>
-          <span class="ql-label">Appointments</span>
-        </a>
+        <div class="admin-card">
+          <span class="material-symbols-outlined admin-icon" style="color:#3730a3;background:#e0e7ff">verified_user</span>
+          <span class="admin-val">{{ s.totalRoles }}</span>
+          <span class="admin-label">Roles</span>
+        </div>
       </div>
     </section>
-  }
 
-  <!-- ══════ RECENT AUDIT EVENTS (super-admin) ══════ -->
-  @if (recentAuditEvents().length > 0) {
-    <section class="audit-section">
-      <div class="audit-header">
-        <h2 class="section-title">
-          <span class="material-symbols-outlined">history</span> Recent Audit Events
-        </h2>
-        <a routerLink="/audit-logs" class="view-all">View All →</a>
+    <section class="admin-nav-section">
+      <div class="section-head">
+        <div class="section-title-group">
+          <span class="material-symbols-outlined section-icon" style="color:#64748b">grid_view</span>
+          <h2 class="section-title">Quick Navigation</h2>
+        </div>
       </div>
-      <div class="audit-table-wrap">
-        <table class="audit-table">
-          <thead>
-            <tr>
-              <th scope="col">Event</th>
-              <th scope="col">User</th>
-              <th scope="col">Resource</th>
-              <th scope="col">Hospital</th>
-              <th scope="col">Time</th>
-              <th scope="col">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (evt of recentAuditEvents(); track evt.id) {
-              <tr>
-                <td>
-                  <span class="event-type">{{ evt.eventType }}</span>
-                </td>
-                <td>{{ evt.userName || '—' }}</td>
-                <td>
-                  <div class="cell-primary">{{ evt.resourceName || '—' }}</div>
-                  <div class="cell-secondary">{{ evt.entityType }}</div>
-                </td>
-                <td>{{ evt.hospitalName || '—' }}</td>
-                <td class="date-cell">{{ evt.eventTimestamp | date: 'short' }}</td>
-                <td>
-                  <span
-                    [class]="
-                      evt.status === 'SUCCESS'
-                        ? 'audit-status audit-success'
-                        : 'audit-status audit-failure'
-                    "
-                    >{{ evt.status }}</span
-                  >
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
+      <div class="admin-nav-grid">
+        <a class="admin-nav-card" routerLink="/organizations"><span class="material-symbols-outlined" style="color:#2563eb">corporate_fare</span>Organizations</a>
+        <a class="admin-nav-card" routerLink="/hospitals"><span class="material-symbols-outlined" style="color:#92400e">local_hospital</span>Hospitals</a>
+        <a class="admin-nav-card" routerLink="/departments"><span class="material-symbols-outlined" style="color:#16a34a">domain</span>Departments</a>
+        <a class="admin-nav-card" routerLink="/roles"><span class="material-symbols-outlined" style="color:#3730a3">shield</span>Roles</a>
+        <a class="admin-nav-card" routerLink="/users"><span class="material-symbols-outlined" style="color:#065f46">group</span>Users</a>
+        <a class="admin-nav-card" routerLink="/patients"><span class="material-symbols-outlined" style="color:#2563eb">people</span>Patients</a>
+        <a class="admin-nav-card" routerLink="/appointments"><span class="material-symbols-outlined" style="color:#059669">calendar_month</span>Appointments</a>
+        <a class="admin-nav-card" routerLink="/audit-logs"><span class="material-symbols-outlined" style="color:#0369a1">history</span>Audit Logs</a>
       </div>
     </section>
-  }
 
-  <!-- ══════ FALLBACK: Today's Appointments & Patients ══════ -->
-  @if (!isSuperAdmin() && !isClinician() && !loading()) {
-    <div class="dashboard-grid">
-      @if (todayAppointments().length > 0) {
-        <section class="dashboard-card">
-          <div class="card-header">
-            <h3>
-              <span class="material-symbols-outlined">calendar_month</span> Today's Appointments
-            </h3>
-            <a routerLink="/appointments" class="view-all">View All →</a>
+    @if (recentAuditEvents().length > 0) {
+      <section class="audit-section">
+        <div class="section-head">
+          <div class="section-title-group">
+            <span class="material-symbols-outlined section-icon" style="color:#0369a1">history</span>
+            <h2 class="section-title">Recent Audit Events</h2>
           </div>
-          <div class="card-body">
+          <a routerLink="/audit-logs" class="card-link">View All</a>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Event</th><th>User</th><th>Resource</th><th>Hospital</th><th>Time</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (evt of recentAuditEvents(); track evt.id) {
+                <tr>
+                  <td><span class="event-type-badge">{{ evt.eventType }}</span></td>
+                  <td>{{ evt.userName || '—' }}</td>
+                  <td>
+                    <div class="cell-primary">{{ evt.resourceName || '—' }}</div>
+                    <div class="cell-secondary">{{ evt.entityType }}</div>
+                  </td>
+                  <td>{{ evt.hospitalName || '—' }}</td>
+                  <td class="cell-time">{{ evt.eventTimestamp | date:'short' }}</td>
+                  <td>
+                    <span [class]="evt.status === 'SUCCESS' ? 'status-pill pill-success' : 'status-pill pill-fail'">{{ evt.status }}</span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    }
+  }
+
+  <!-- FALLBACK -->
+  @if (!isSuperAdmin() && !isClinician() && !loading()) {
+    <div class="fallback-grid">
+      @if (todayAppointments().length > 0) {
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon" style="color:#2563eb">calendar_month</span>
+              <h2 class="card-title">Today's Appointments</h2>
+            </div>
+            <a routerLink="/appointments" class="card-link">View All</a>
+          </div>
+          <div class="schedule-list">
             @for (appt of todayAppointments(); track appt.id) {
-              <a class="list-item" [routerLink]="['/appointments', appt.id]">
-                <div class="item-avatar">
-                  {{ appt.patientName.charAt(0) }}
+              <a [routerLink]="['/appointments', appt.id]" class="sched-row">
+                <div class="sched-avatar" [style.background]="getAvatarColor(appt.patientName)">{{ getPatientInitials(appt.patientName) }}</div>
+                <div class="sched-info">
+                  <span class="sched-name">{{ appt.patientName }}</span>
+                  <span class="sched-reason">{{ appt.startTime }}</span>
                 </div>
-                <div class="item-info">
-                  <span class="item-primary">{{ appt.patientName }}</span>
-                  <span class="item-secondary"
-                    >{{ appt.startTime }} · Dr. {{ appt.staffName }}</span
-                  >
-                </div>
-                <span [class]="getApptStatusClass(appt.status)">{{ appt.status | titlecase }}</span>
+                <span [class]="getApptStatusClass(appt.status)">{{ getApptStatusLabel(appt.status) }}</span>
               </a>
             }
           </div>
         </section>
       }
       @if (recentPatients().length > 0) {
-        <section class="dashboard-card">
-          <div class="card-header">
-            <h3><span class="material-symbols-outlined">people</span> Recent Patients</h3>
-            <a routerLink="/patients" class="view-all">View All →</a>
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon" style="color:#059669">people</span>
+              <h2 class="card-title">Recent Patients</h2>
+            </div>
+            <a routerLink="/patients" class="card-link">All Patients</a>
           </div>
-          <div class="card-body">
-            @for (patient of recentPatients(); track patient.id) {
-              <a class="list-item" [routerLink]="['/patients', patient.id]">
-                <div class="item-avatar">
-                  {{ patient.firstName.charAt(0) }}{{ patient.lastName.charAt(0) }}
+          <div class="patient-list">
+            @for (p of recentPatients(); track p.id) {
+              <a [routerLink]="['/patients', p.id]" class="patient-row">
+                <div class="patient-avatar" [style.background]="getAvatarColor(p.firstName + p.lastName)">{{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}</div>
+                <div class="patient-info">
+                  <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                  <span class="patient-meta">@if (p.mrn) { <span class="mrn-tag">{{ p.mrn }}</span> }</span>
                 </div>
-                <div class="item-info">
-                  <span class="item-primary">{{ patient.firstName }} {{ patient.lastName }}</span>
-                  <span class="item-secondary">
-                    @if (patient.mrn) {
-                      MRN {{ patient.mrn }}
-                      @if (patient.hospitalName) {
-                        · {{ patient.hospitalName }}
-                      }
-                    } @else {
-                      {{ patient.hospitalName || '' }}
-                    }
-                  </span>
-                </div>
+                <span class="material-symbols-outlined chevron">chevron_right</span>
               </a>
             }
           </div>
         </section>
       }
       @if (todayAppointments().length === 0 && recentPatients().length === 0) {
-        <section class="dashboard-card empty-card">
+        <section class="card empty-card">
           <div class="empty-state">
-            <span class="material-symbols-outlined empty-icon">dashboard</span>
+            <span class="material-symbols-outlined empty-icon-lg">medical_services</span>
             <h3>Welcome to HMS</h3>
             <p>Your dashboard will populate as you start using the system.</p>
           </div>
@@ -455,4 +577,5 @@
       }
     </div>
   }
+
 </div>
