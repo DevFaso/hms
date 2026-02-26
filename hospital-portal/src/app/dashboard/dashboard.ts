@@ -538,8 +538,14 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   getAvatarColor(name: string): string {
     const colors = [
-      '#2563eb', '#059669', '#7c3aed', '#d97706',
-      '#dc2626', '#0891b2', '#db2777', '#65a30d',
+      '#2563eb',
+      '#059669',
+      '#7c3aed',
+      '#d97706',
+      '#dc2626',
+      '#0891b2',
+      '#db2777',
+      '#65a30d',
     ];
     let hash = 0;
     for (let i = 0; i < (name?.length ?? 0); i++) {
