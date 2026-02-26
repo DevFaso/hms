@@ -50,7 +50,8 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
   hospitals = signal<HospitalResponse[]>([]);
 
   get activeFilterCount(): number {
-    return [this.statusFilter, this.dateFrom, this.dateTo, this.hospitalFilter].filter(Boolean).length;
+    return [this.statusFilter, this.dateFrom, this.dateTo, this.hospitalFilter].filter(Boolean)
+      .length;
   }
 
   get pagedFiltered(): AppointmentResponse[] {
@@ -89,7 +90,9 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
     this.appointmentService.list().subscribe({
       next: (data) => {
         // Sort newest-first by default
-        this.appointments.set(data.sort((a, b) => b.appointmentDate.localeCompare(a.appointmentDate)));
+        this.appointments.set(
+          data.sort((a, b) => b.appointmentDate.localeCompare(a.appointmentDate)),
+        );
         this.applyFilter();
         this.loading.set(false);
       },
@@ -103,7 +106,9 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
   loadHospitals(): void {
     this.hospitalService.list().subscribe({
       next: (h) => this.hospitals.set(h),
-      error: () => {/* silent */},
+      error: () => {
+        /* silent */
+      },
     });
   }
 
@@ -138,11 +143,21 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
     const dir = this.sortDir() === 'asc' ? 1 : -1;
     result = [...result].sort((a, b) => {
       switch (field) {
-        case 'patient': return dir * a.patientName.localeCompare(b.patientName);
-        case 'doctor':  return dir * a.staffName.localeCompare(b.staffName);
-        case 'date':    return dir * `${a.appointmentDate}T${a.startTime}`.localeCompare(`${b.appointmentDate}T${b.startTime}`);
-        case 'status':  return dir * a.status.localeCompare(b.status);
-        default:        return 0;
+        case 'patient':
+          return dir * a.patientName.localeCompare(b.patientName);
+        case 'doctor':
+          return dir * a.staffName.localeCompare(b.staffName);
+        case 'date':
+          return (
+            dir *
+            `${a.appointmentDate}T${a.startTime}`.localeCompare(
+              `${b.appointmentDate}T${b.startTime}`,
+            )
+          );
+        case 'status':
+          return dir * a.status.localeCompare(b.status);
+        default:
+          return 0;
       }
     });
 
@@ -181,9 +196,9 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
   }
 
   removeFilter(key: 'status' | 'dateFrom' | 'dateTo' | 'hospital'): void {
-    if (key === 'status')   this.statusFilter = '';
+    if (key === 'status') this.statusFilter = '';
     if (key === 'dateFrom') this.dateFrom = '';
-    if (key === 'dateTo')   this.dateTo = '';
+    if (key === 'dateTo') this.dateTo = '';
     if (key === 'hospital') this.hospitalFilter = '';
     this.currentPage.set(0);
     this.applyFilter();
@@ -197,12 +212,17 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
     const base = 'status-badge ';
     switch (status) {
       case 'SCHEDULED':
-      case 'CONFIRMED':   return base + 'scheduled';
-      case 'COMPLETED':   return base + 'completed';
+      case 'CONFIRMED':
+        return base + 'scheduled';
+      case 'COMPLETED':
+        return base + 'completed';
       case 'CANCELLED':
-      case 'NO_SHOW':     return base + 'cancelled';
-      case 'IN_PROGRESS': return base + 'in-progress';
-      default:            return base;
+      case 'NO_SHOW':
+        return base + 'cancelled';
+      case 'IN_PROGRESS':
+        return base + 'in-progress';
+      default:
+        return base;
     }
   }
 

@@ -214,7 +214,13 @@ export class StaffListComponent implements OnInit {
   }
 
   get uniqueDepartments(): string[] {
-    return [...new Set(this.staff().map((s) => s.departmentName).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b));
+    return [
+      ...new Set(
+        this.staff()
+          .map((s) => s.departmentName)
+          .filter(Boolean) as string[],
+      ),
+    ].sort((a, b) => a.localeCompare(b));
   }
 
   // ---------- Create ----------

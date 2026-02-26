@@ -604,9 +604,13 @@
       padding: 2px;
       border-radius: 4px;
 
-      &:hover { color: #374151; }
+      &:hover {
+        color: #374151;
+      }
 
-      .material-symbols-outlined { font-size: 18px; }
+      .material-symbols-outlined {
+        font-size: 18px;
+      }
     }
   }
 }
@@ -623,10 +627,14 @@
   font-weight: 500;
   color: #374151;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
   white-space: nowrap;
 
-  .material-symbols-outlined { font-size: 18px; }
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
 
   &:hover {
     border-color: #2563eb;
@@ -713,9 +721,13 @@
   transition: background 0.15s;
   align-self: flex-end;
 
-  .material-symbols-outlined { font-size: 16px; }
+  .material-symbols-outlined {
+    font-size: 16px;
+  }
 
-  &:hover { background: #fef2f2; }
+  &:hover {
+    background: #fef2f2;
+  }
 }
 
 // ── Active filter chips ──────────────────────────────────────
@@ -749,9 +761,13 @@
     border-radius: 50%;
     transition: background 0.12s;
 
-    &:hover { background: rgba(59, 130, 246, 0.15); }
+    &:hover {
+      background: rgba(59, 130, 246, 0.15);
+    }
 
-    .material-symbols-outlined { font-size: 14px; }
+    .material-symbols-outlined {
+      font-size: 14px;
+    }
   }
 }
 
@@ -815,9 +831,13 @@
   color: #374151;
   font-size: 0.8125rem;
   cursor: pointer;
-  transition: background 0.12s, border-color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
 
-  .material-symbols-outlined { font-size: 18px; }
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
 
   &:hover:not([disabled]) {
     background: #eff6ff;
@@ -907,7 +927,9 @@
   padding: 0;
   margin-left: 0.25rem;
 
-  &:hover { color: #1d4ed8; }
+  &:hover {
+    color: #1d4ed8;
+  }
 }
 
 // ── Appointment status pills (quick filter bar) ───────────────
@@ -930,7 +952,10 @@
   transition: all 0.15s;
   white-space: nowrap;
 
-  &:hover { border-color: #94a3b8; color: #334155; }
+  &:hover {
+    border-color: #94a3b8;
+    color: #334155;
+  }
 
   &.active {
     background: #1e40af;
@@ -938,16 +963,40 @@
     color: #fff;
   }
 
-  &.scheduled.active  { background: #3b82f6; border-color: #3b82f6; }
-  &.confirmed.active  { background: #0ea5e9; border-color: #0ea5e9; }
-  &.in-progress.active { background: #f59e0b; border-color: #f59e0b; }
-  &.completed.active  { background: #10b981; border-color: #10b981; }
-  &.cancelled.active  { background: #ef4444; border-color: #ef4444; }
+  &.scheduled.active {
+    background: #3b82f6;
+    border-color: #3b82f6;
+  }
+  &.confirmed.active {
+    background: #0ea5e9;
+    border-color: #0ea5e9;
+  }
+  &.in-progress.active {
+    background: #f59e0b;
+    border-color: #f59e0b;
+  }
+  &.completed.active {
+    background: #10b981;
+    border-color: #10b981;
+  }
+  &.cancelled.active {
+    background: #ef4444;
+    border-color: #ef4444;
+  }
 
   // user list
-  &.active-pill.active   { background: #10b981; border-color: #10b981; }
-  &.inactive-pill.active { background: #f59e0b; border-color: #f59e0b; }
-  &.deleted-pill.active  { background: #ef4444; border-color: #ef4444; }
+  &.active-pill.active {
+    background: #10b981;
+    border-color: #10b981;
+  }
+  &.inactive-pill.active {
+    background: #f59e0b;
+    border-color: #f59e0b;
+  }
+  &.deleted-pill.active {
+    background: #ef4444;
+    border-color: #ef4444;
+  }
 }
 
 // ── Date shortcuts inside filter-row ─────────────────────────
@@ -1061,7 +1110,7 @@
   cursor: pointer;
 
   &:hover {
-    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
     border-color: #2563eb;
     transform: translateY(-2px);
   }
@@ -1071,14 +1120,38 @@
     border-radius: 10px;
     padding: 0.45rem;
 
-    &.ql-org      { background: #eff6ff; color: #2563eb; }
-    &.ql-hospital { background: #fef2f2; color: #dc2626; }
-    &.ql-dept     { background: #f0fdf4; color: #16a34a; }
-    &.ql-roles    { background: #faf5ff; color: #7c3aed; }
-    &.ql-users    { background: #fff7ed; color: #ea580c; }
-    &.ql-audit    { background: #f0f9ff; color: #0369a1; }
-    &.ql-patients { background: #f0fdf4; color: #059669; }
-    &.ql-appts    { background: #fefce8; color: #ca8a04; }
+    &.ql-org {
+      background: #eff6ff;
+      color: #2563eb;
+    }
+    &.ql-hospital {
+      background: #fef2f2;
+      color: #dc2626;
+    }
+    &.ql-dept {
+      background: #f0fdf4;
+      color: #16a34a;
+    }
+    &.ql-roles {
+      background: #faf5ff;
+      color: #7c3aed;
+    }
+    &.ql-users {
+      background: #fff7ed;
+      color: #ea580c;
+    }
+    &.ql-audit {
+      background: #f0f9ff;
+      color: #0369a1;
+    }
+    &.ql-patients {
+      background: #f0fdf4;
+      color: #059669;
+    }
+    &.ql-appts {
+      background: #fefce8;
+      color: #ca8a04;
+    }
   }
 
   .ql-label {

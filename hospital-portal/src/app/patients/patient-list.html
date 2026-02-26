@@ -4,7 +4,9 @@
       <h1 class="page-title">Patients</h1>
       <p class="page-subtitle">
         @if (!loading()) {
-          {{ filtered().length }} of {{ patients().length }} patient{{ patients().length !== 1 ? 's' : '' }}
+          {{ filtered().length }} of {{ patients().length }} patient{{
+            patients().length !== 1 ? 's' : ''
+          }}
         } @else {
           Manage patient records and registrations
         }
@@ -54,7 +56,13 @@
     <div class="filter-row">
       <div class="filter-group">
         <label class="filter-label" for="genderFilter">Gender</label>
-        <select id="genderFilter" class="filter-select" title="Filter by gender" [(ngModel)]="genderFilter" (ngModelChange)="onFilterChange()">
+        <select
+          id="genderFilter"
+          class="filter-select"
+          title="Filter by gender"
+          [(ngModel)]="genderFilter"
+          (ngModelChange)="onFilterChange()"
+        >
           <option value="">All</option>
           @for (g of genderOptions; track g) {
             <option [value]="g">{{ formatGender(g) }}</option>
@@ -64,7 +72,13 @@
 
       <div class="filter-group">
         <label class="filter-label" for="statusFilter">Status</label>
-        <select id="statusFilter" class="filter-select" title="Filter by status" [(ngModel)]="statusFilter" (ngModelChange)="onFilterChange()">
+        <select
+          id="statusFilter"
+          class="filter-select"
+          title="Filter by status"
+          [(ngModel)]="statusFilter"
+          (ngModelChange)="onFilterChange()"
+        >
           <option value="">All</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
@@ -73,7 +87,13 @@
 
       <div class="filter-group">
         <label class="filter-label" for="bloodTypeFilter">Blood Type</label>
-        <select id="bloodTypeFilter" class="filter-select" title="Filter by blood type" [(ngModel)]="bloodTypeFilter" (ngModelChange)="onFilterChange()">
+        <select
+          id="bloodTypeFilter"
+          class="filter-select"
+          title="Filter by blood type"
+          [(ngModel)]="bloodTypeFilter"
+          (ngModelChange)="onFilterChange()"
+        >
           <option value="">All</option>
           @for (bt of bloodTypes; track bt) {
             <option [value]="bt">{{ bt }}</option>
@@ -84,7 +104,13 @@
       @if (hospitals().length > 0) {
         <div class="filter-group">
           <label class="filter-label" for="hospitalFilter">Hospital</label>
-          <select id="hospitalFilter" class="filter-select" title="Filter by hospital" [(ngModel)]="hospitalFilter" (ngModelChange)="onFilterChange()">
+          <select
+            id="hospitalFilter"
+            class="filter-select"
+            title="Filter by hospital"
+            [(ngModel)]="hospitalFilter"
+            (ngModelChange)="onFilterChange()"
+          >
             <option value="">All Hospitals</option>
             @for (h of hospitals(); track h.id) {
               <option [value]="h.id">{{ h.name }}</option>
@@ -154,22 +180,46 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th class="sortable-th" (click)="sort('name')" (keydown.enter)="sort('name')" tabindex="0" scope="col">
+            <th
+              class="sortable-th"
+              (click)="sort('name')"
+              (keydown.enter)="sort('name')"
+              tabindex="0"
+              scope="col"
+            >
               Name
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('name') }}</span>
             </th>
-            <th class="sortable-th" (click)="sort('mrn')" (keydown.enter)="sort('mrn')" tabindex="0" scope="col">
+            <th
+              class="sortable-th"
+              (click)="sort('mrn')"
+              (keydown.enter)="sort('mrn')"
+              tabindex="0"
+              scope="col"
+            >
               MRN
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('mrn') }}</span>
             </th>
             <th scope="col">Email</th>
             <th scope="col">Phone</th>
-            <th class="sortable-th" (click)="sort('gender')" (keydown.enter)="sort('gender')" tabindex="0" scope="col">
+            <th
+              class="sortable-th"
+              (click)="sort('gender')"
+              (keydown.enter)="sort('gender')"
+              tabindex="0"
+              scope="col"
+            >
               Gender
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('gender') }}</span>
             </th>
             <th scope="col">Blood Type</th>
-            <th class="sortable-th" (click)="sort('status')" (keydown.enter)="sort('status')" tabindex="0" scope="col">
+            <th
+              class="sortable-th"
+              (click)="sort('status')"
+              (keydown.enter)="sort('status')"
+              tabindex="0"
+              scope="col"
+            >
               Status
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('status') }}</span>
             </th>
@@ -190,7 +240,9 @@
                   }
                 </div>
               </td>
-              <td><code class="mrn-code">{{ patient.mrn ?? '—' }}</code></td>
+              <td>
+                <code class="mrn-code">{{ patient.mrn ?? '—' }}</code>
+              </td>
               <td>{{ patient.email }}</td>
               <td>{{ patient.phoneNumberPrimary ?? '—' }}</td>
               <td>{{ patient.gender ? formatGender(patient.gender) : '—' }}</td>
@@ -212,7 +264,11 @@
                 </span>
               </td>
               <td>
-                <a [routerLink]="['/patients', patient.id]" class="action-link" title="View patient">
+                <a
+                  [routerLink]="['/patients', patient.id]"
+                  class="action-link"
+                  title="View patient"
+                >
                   <span class="material-symbols-outlined">arrow_forward</span>
                 </a>
               </td>
@@ -226,7 +282,12 @@
     @if (totalPages > 1) {
       <div class="pagination-row">
         <span class="pagination-info">
-          Showing {{ currentPage() * pageSize + 1 }}–{{ ((currentPage() + 1) * pageSize) < filtered().length ? ((currentPage() + 1) * pageSize) : filtered().length }} of {{ filtered().length }}
+          Showing {{ currentPage() * pageSize + 1 }}–{{
+            (currentPage() + 1) * pageSize < filtered().length
+              ? (currentPage() + 1) * pageSize
+              : filtered().length
+          }}
+          of {{ filtered().length }}
         </span>
         <div class="pagination-controls">
           <button

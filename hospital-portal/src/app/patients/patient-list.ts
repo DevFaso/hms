@@ -109,7 +109,9 @@ export class PatientListComponent implements OnInit, OnDestroy {
   loadHospitals(): void {
     this.hospitalService.list().subscribe({
       next: (h) => this.hospitals.set(h),
-      error: () => {/* silent */},
+      error: () => {
+        /* silent */
+      },
     });
   }
 
@@ -128,9 +130,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
       );
     }
     if (this.genderFilter) {
-      result = result.filter(
-        (p) => (p.gender ?? '').toUpperCase() === this.genderFilter,
-      );
+      result = result.filter((p) => (p.gender ?? '').toUpperCase() === this.genderFilter);
     }
     if (this.statusFilter === 'active') result = result.filter((p) => p.active);
     if (this.statusFilter === 'inactive') result = result.filter((p) => !p.active);
@@ -147,7 +147,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
     result = [...result].sort((a, b) => {
       switch (field) {
         case 'name':
-          return dir * (`${a.firstName} ${a.lastName}`).localeCompare(`${b.firstName} ${b.lastName}`);
+          return dir * `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
         case 'mrn':
           return dir * (a.mrn ?? '').localeCompare(b.mrn ?? '');
         case 'gender':
@@ -155,7 +155,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
         case 'status':
           return dir * ((a.active ? 1 : 0) - (b.active ? 1 : 0));
         case 'createdAt':
-          return dir * ((a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+          return dir * (a.createdAt ?? '').localeCompare(b.createdAt ?? '');
         default:
           return 0;
       }

@@ -157,7 +157,8 @@ export class DashboardComponent implements OnInit {
         next: (appts) => {
           this.todayAppointments.set(appts.slice(0, 8));
           done();
-        },        error: () => done(),
+        },
+        error: () => done(),
       });
     }
 
@@ -242,12 +243,17 @@ export class DashboardComponent implements OnInit {
   getApptStatusClass(status: string): string {
     switch (status) {
       case 'SCHEDULED':
-      case 'CONFIRMED':   return 'status-badge scheduled';
-      case 'COMPLETED':   return 'status-badge completed';
+      case 'CONFIRMED':
+        return 'status-badge scheduled';
+      case 'COMPLETED':
+        return 'status-badge completed';
       case 'CANCELLED':
-      case 'NO_SHOW':     return 'status-badge cancelled';
-      case 'IN_PROGRESS': return 'status-badge in-progress';
-      default:            return 'status-badge';
+      case 'NO_SHOW':
+        return 'status-badge cancelled';
+      case 'IN_PROGRESS':
+        return 'status-badge in-progress';
+      default:
+        return 'status-badge';
     }
   }
 }

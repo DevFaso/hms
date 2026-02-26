@@ -41,32 +41,44 @@
         class="status-pill"
         [class.active]="!statusFilter"
         (click)="statusFilter = ''; onFilterChange()"
-      >All</button>
+      >
+        All
+      </button>
       <button
         class="status-pill scheduled"
         [class.active]="statusFilter === 'SCHEDULED'"
         (click)="statusFilter = 'SCHEDULED'; onFilterChange()"
-      >Scheduled</button>
+      >
+        Scheduled
+      </button>
       <button
         class="status-pill confirmed"
         [class.active]="statusFilter === 'CONFIRMED'"
         (click)="statusFilter = 'CONFIRMED'; onFilterChange()"
-      >Confirmed</button>
+      >
+        Confirmed
+      </button>
       <button
         class="status-pill in-progress"
         [class.active]="statusFilter === 'IN_PROGRESS'"
         (click)="statusFilter = 'IN_PROGRESS'; onFilterChange()"
-      >In Progress</button>
+      >
+        In Progress
+      </button>
       <button
         class="status-pill completed"
         [class.active]="statusFilter === 'COMPLETED'"
         (click)="statusFilter = 'COMPLETED'; onFilterChange()"
-      >Completed</button>
+      >
+        Completed
+      </button>
       <button
         class="status-pill cancelled"
         [class.active]="statusFilter === 'CANCELLED'"
         (click)="statusFilter = 'CANCELLED'; onFilterChange()"
-      >Cancelled</button>
+      >
+        Cancelled
+      </button>
     </div>
 
     <button
@@ -134,8 +146,15 @@
       <div class="filter-group date-shortcuts">
         <span class="filter-label" aria-hidden="true">Quick Date</span>
         <div class="shortcut-btns">
-          <button class="shortcut-btn" (click)="dateFrom = todayIso(); dateTo = todayIso(); onFilterChange()">Today</button>
-          <button class="shortcut-btn" (click)="dateFrom = ''; dateTo = ''; onFilterChange()">All</button>
+          <button
+            class="shortcut-btn"
+            (click)="dateFrom = todayIso(); dateTo = todayIso(); onFilterChange()"
+          >
+            Today
+          </button>
+          <button class="shortcut-btn" (click)="dateFrom = ''; dateTo = ''; onFilterChange()">
+            All
+          </button>
         </div>
       </div>
 
@@ -190,21 +209,45 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th class="sortable-th" (click)="sort('patient')" (keydown.enter)="sort('patient')" tabindex="0" scope="col">
+            <th
+              class="sortable-th"
+              (click)="sort('patient')"
+              (keydown.enter)="sort('patient')"
+              tabindex="0"
+              scope="col"
+            >
               Patient
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('patient') }}</span>
             </th>
-            <th class="sortable-th" (click)="sort('doctor')" (keydown.enter)="sort('doctor')" tabindex="0" scope="col">
+            <th
+              class="sortable-th"
+              (click)="sort('doctor')"
+              (keydown.enter)="sort('doctor')"
+              tabindex="0"
+              scope="col"
+            >
               Doctor
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('doctor') }}</span>
             </th>
-            <th class="sortable-th" (click)="sort('date')" (keydown.enter)="sort('date')" tabindex="0" scope="col">
+            <th
+              class="sortable-th"
+              (click)="sort('date')"
+              (keydown.enter)="sort('date')"
+              tabindex="0"
+              scope="col"
+            >
               Date &amp; Time
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('date') }}</span>
             </th>
             <th scope="col">Reason</th>
             <th scope="col">Hospital</th>
-            <th class="sortable-th" (click)="sort('status')" (keydown.enter)="sort('status')" tabindex="0" scope="col">
+            <th
+              class="sortable-th"
+              (click)="sort('status')"
+              (keydown.enter)="sort('status')"
+              tabindex="0"
+              scope="col"
+            >
               Status
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('status') }}</span>
             </th>
@@ -229,7 +272,11 @@
                 <span [class]="getStatusClass(appt.status)">{{ formatStatus(appt.status) }}</span>
               </td>
               <td>
-                <a [routerLink]="['/appointments', appt.id]" class="action-link" title="View appointment">
+                <a
+                  [routerLink]="['/appointments', appt.id]"
+                  class="action-link"
+                  title="View appointment"
+                >
                   <span class="material-symbols-outlined">arrow_forward</span>
                 </a>
               </td>
@@ -243,10 +290,20 @@
     @if (totalPages > 1) {
       <div class="pagination-row">
         <span class="pagination-info">
-          Showing {{ currentPage() * pageSize + 1 }}–{{ ((currentPage() + 1) * pageSize) < filtered().length ? ((currentPage() + 1) * pageSize) : filtered().length }} of {{ filtered().length }}
+          Showing {{ currentPage() * pageSize + 1 }}–{{
+            (currentPage() + 1) * pageSize < filtered().length
+              ? (currentPage() + 1) * pageSize
+              : filtered().length
+          }}
+          of {{ filtered().length }}
         </span>
         <div class="pagination-controls">
-          <button class="page-btn" [disabled]="currentPage() === 0" (click)="goToPage(currentPage() - 1)" title="Previous">
+          <button
+            class="page-btn"
+            [disabled]="currentPage() === 0"
+            (click)="goToPage(currentPage() - 1)"
+            title="Previous"
+          >
             <span class="material-symbols-outlined">chevron_left</span>
           </button>
           @for (p of [].constructor(totalPages); track $index) {
@@ -254,9 +311,16 @@
               class="page-btn page-num"
               [class.active]="$index === currentPage()"
               (click)="goToPage($index)"
-            >{{ $index + 1 }}</button>
+            >
+              {{ $index + 1 }}
+            </button>
           }
-          <button class="page-btn" [disabled]="currentPage() >= totalPages - 1" (click)="goToPage(currentPage() + 1)" title="Next">
+          <button
+            class="page-btn"
+            [disabled]="currentPage() >= totalPages - 1"
+            (click)="goToPage(currentPage() + 1)"
+            title="Next"
+          >
             <span class="material-symbols-outlined">chevron_right</span>
           </button>
         </div>

@@ -4,7 +4,8 @@
       <h1 class="page-title">Users</h1>
       <p class="page-subtitle">
         @if (!loading()) {
-          {{ filtered().length }} user{{ filtered().length !== 1 ? 's' : '' }} · {{ totalElements() }} total
+          {{ filtered().length }} user{{ filtered().length !== 1 ? 's' : '' }} ·
+          {{ totalElements() }} total
         } @else {
           Manage system users and access
         }
@@ -35,10 +36,34 @@
 
     <!-- Status quick pills -->
     <div class="status-pills">
-      <button class="status-pill" [class.active]="!statusFilter" (click)="statusFilter = ''; applyFilter()">All</button>
-      <button class="status-pill active-pill" [class.active]="statusFilter === 'active'" (click)="statusFilter = 'active'; applyFilter()">Active</button>
-      <button class="status-pill inactive-pill" [class.active]="statusFilter === 'inactive'" (click)="statusFilter = 'inactive'; applyFilter()">Inactive</button>
-      <button class="status-pill deleted-pill" [class.active]="statusFilter === 'deleted'" (click)="statusFilter = 'deleted'; applyFilter()">Deleted</button>
+      <button
+        class="status-pill"
+        [class.active]="!statusFilter"
+        (click)="statusFilter = ''; applyFilter()"
+      >
+        All
+      </button>
+      <button
+        class="status-pill active-pill"
+        [class.active]="statusFilter === 'active'"
+        (click)="statusFilter = 'active'; applyFilter()"
+      >
+        Active
+      </button>
+      <button
+        class="status-pill inactive-pill"
+        [class.active]="statusFilter === 'inactive'"
+        (click)="statusFilter = 'inactive'; applyFilter()"
+      >
+        Inactive
+      </button>
+      <button
+        class="status-pill deleted-pill"
+        [class.active]="statusFilter === 'deleted'"
+        (click)="statusFilter = 'deleted'; applyFilter()"
+      >
+        Deleted
+      </button>
     </div>
 
     <button

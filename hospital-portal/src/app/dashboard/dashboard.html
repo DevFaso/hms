@@ -380,7 +380,9 @@
                 </div>
                 <div class="item-info">
                   <span class="item-primary">{{ appt.patientName }}</span>
-                  <span class="item-secondary">{{ appt.startTime }} · Dr. {{ appt.staffName }}</span>
+                  <span class="item-secondary"
+                    >{{ appt.startTime }} · Dr. {{ appt.staffName }}</span
+                  >
                 </div>
                 <span [class]="getApptStatusClass(appt.status)">{{ appt.status | titlecase }}</span>
               </a>
@@ -403,7 +405,10 @@
                 <div class="item-info">
                   <span class="item-primary">{{ patient.firstName }} {{ patient.lastName }}</span>
                   <span class="item-secondary">
-                    @if (patient.mrn) { MRN {{ patient.mrn }} · }{{ patient.hospitalName || '' }}
+                    @if (patient.mrn) {
+                      MRN {{ patient.mrn }} ·
+                    }
+                    {{ patient.hospitalName || '' }}
                   </span>
                 </div>
               </a>
