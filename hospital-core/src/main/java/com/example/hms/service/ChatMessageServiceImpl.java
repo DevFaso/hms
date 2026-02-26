@@ -222,8 +222,10 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             UUID senderId = (UUID) row[1];
             UUID recipientId = (UUID) row[2];
             String content = (String) row[3];
-            LocalDateTime timestamp = ((java.sql.Timestamp) row[4]).toLocalDateTime();
-            boolean read = (boolean) row[5];
+            LocalDateTime timestamp = row[4] instanceof java.sql.Timestamp ts
+                    ? ts.toLocalDateTime()
+                    : (LocalDateTime) row[4];
+            boolean read = Boolean.TRUE.equals(row[5]);
 
             UUID otherUserId = senderId.equals(userId) ? recipientId : senderId;
 
