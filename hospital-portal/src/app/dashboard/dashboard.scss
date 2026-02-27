@@ -536,13 +536,20 @@ $shadow-md:
 // MAIN GRID
 // ─────────────────────────────────────────────────────────────────────────────
 .main-grid {
-  display: grid;
-  grid-template-columns: 1fr 380px;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
   gap: 20px;
-  align-items: start;
+
+  .schedule-panel {
+    flex: 1 1 0;
+    min-width: 0;
+  }
 }
 
 .right-col {
+  flex: 0 0 380px;
+  width: 380px;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -620,11 +627,7 @@ $shadow-md:
 // SCHEDULE PANEL
 // ─────────────────────────────────────────────────────────────────────────────
 .schedule-panel {
-  align-self: start;
-
-  .card {
-    height: auto;
-  }
+  height: fit-content;
 }
 
 .schedule-list {
@@ -1181,9 +1184,6 @@ $shadow-md:
 // ─────────────────────────────────────────────────────────────────────────────
 // CLINICAL ALERTS
 // ─────────────────────────────────────────────────────────────────────────────
-.alerts-section {
-}
-
 .alerts-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
@@ -1388,9 +1388,6 @@ $shadow-md:
 // ─────────────────────────────────────────────────────────────────────────────
 // QUICK ACTIONS
 // ─────────────────────────────────────────────────────────────────────────────
-.quick-actions-section {
-}
-
 .qa-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
@@ -1450,11 +1447,6 @@ $shadow-md:
 // ─────────────────────────────────────────────────────────────────────────────
 // SUPER-ADMIN SECTION
 // ─────────────────────────────────────────────────────────────────────────────
-.admin-section,
-.admin-nav-section,
-.audit-section {
-}
-
 .admin-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
@@ -1681,10 +1673,17 @@ $shadow-md:
 
 @media (max-width: 1024px) {
   .main-grid {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+
+    .schedule-panel {
+      flex: none;
+      width: 100%;
+    }
   }
 
   .right-col {
+    flex: none;
+    width: 100%;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     gap: 16px;
