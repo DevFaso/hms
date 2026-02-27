@@ -58,7 +58,7 @@ setup('authenticate as SuperAdmin', async ({ page }) => {
 
   // Wait for navigation to dashboard (post-login redirect)
   await page.waitForURL('**/dashboard', { timeout: 15_000 });
-  await expect(page.locator('.welcome-banner')).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('.hero-header')).toBeVisible({ timeout: 10_000 });
 
   // Persist storage state (localStorage with auth_token + user_profile)
   await page.context().storageState({ path: AUTH_FILE });

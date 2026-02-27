@@ -154,8 +154,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
         color: '#2563eb',
         bgColor: '#dbeafe',
         route: '/appointments',
-        trend: 'up',
-        delta: 2,
       },
       {
         key: 'completed',

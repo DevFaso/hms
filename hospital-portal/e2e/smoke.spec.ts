@@ -44,7 +44,7 @@ test.describe('Smoke Tests', () => {
     await page.locator('#password').fill('TempPass123!');
     await page.locator('button[type="submit"]').click();
     await page.waitForURL('**/dashboard', { timeout: 15_000 });
-    await expect(page.locator('.welcome-banner')).toBeVisible({ timeout: 10_000 });
+    await expect(page.locator('.hero-header')).toBeVisible({ timeout: 10_000 });
     await context.close();
   });
 
@@ -54,7 +54,7 @@ test.describe('Smoke Tests', () => {
       'Skipped locally: requires live backend. Set SMOKE_BASE_URL to enable.',
     );
     await page.goto('/dashboard', { waitUntil: 'networkidle' });
-    await expect(page.locator('.welcome-banner')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.hero-header')).toBeVisible({ timeout: 15_000 });
   });
 
   test('sidebar navigation is present', async ({ page }) => {

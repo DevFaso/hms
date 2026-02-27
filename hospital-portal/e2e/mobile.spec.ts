@@ -25,7 +25,7 @@ test.describe('Mobile Responsive', () => {
 
   test('dashboard renders at mobile viewport', async ({ page }) => {
     await page.goto('/dashboard', { waitUntil: 'networkidle' });
-    await expect(page.locator('.welcome-banner')).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.hero-header')).toBeVisible({ timeout: 15_000 });
   });
 
   test('mobile menu toggle is visible', async ({ page }) => {

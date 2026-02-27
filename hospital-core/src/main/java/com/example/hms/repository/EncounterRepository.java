@@ -83,4 +83,7 @@ public interface EncounterRepository
     Optional<Encounter> findByIdAndHospital_Id(@org.springframework.lang.NonNull UUID id, UUID hospitalId);
 
     Optional<Encounter> findByCode(String code);
+
+    // Find active (in-progress) encounters for a specific doctor — used for "roomed patients"
+    List<Encounter> findByStaff_IdAndStatus(UUID staffId, EncounterStatus status);
 }

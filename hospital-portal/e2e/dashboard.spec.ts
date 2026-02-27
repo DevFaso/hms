@@ -13,10 +13,12 @@ test.describe('Dashboard', () => {
   test.describe('Welcome Banner', () => {
     test('displays welcome banner with user name', async ({ dashboardPage }) => {
       await dashboardPage.expectDashboardLoaded();
-      const heading = await dashboardPage.welcomeHeading.textContent();
-      expect(heading).toBeTruthy();
-      // Should contain a greeting like "Good morning, System Administrator!"
-      expect(heading).toMatch(/(Good morning|Good afternoon|Good evening|Hello|Welcome)/i);
+      // Greeting ("Good Morning / Good Afternoon / Good Evening") is in .greeting-tag
+      const greeting = await dashboardPage.greetingTag.textContent();
+      expect(greeting).toMatch(/(Good morning|Good afternoon|Good evening|Hello|Welcome)/i);
+      // The h1 contains the user's name
+      const name = await dashboardPage.welcomeHeading.textContent();
+      expect(name?.trim()).toBeTruthy();
     });
 
     test('displays current date', async ({ dashboardPage }) => {
@@ -37,7 +39,7 @@ test.describe('Dashboard', () => {
       await dashboardPage.expectDashboardLoaded();
       // Wait for metrics to load
       await page.waitForTimeout(2000);
-      const metricValues = page.locator('.metric-value');
+      const metricValues = page.locator('.stat-value');
       const count = await metricValues.count();
       if (count > 0) {
         const firstValue = await metricValues.first().textContent();
@@ -48,8 +50,8 @@ test.describe('Dashboard', () => {
     test('Total Patients metric card links to /patients', async ({ page, dashboardPage }) => {
       await dashboardPage.expectDashboardLoaded();
       await page.waitForTimeout(2000);
-      const patientsCard = page.locator('a.metric-card', {
-        has: page.locator('.metric-label:text("Total Patients")'),
+      const patientsCard = page.locator('a.stat-card', {
+        has: page.locator('.stat-label:text("Total Patients")'),
       });
       if ((await patientsCard.count()) > 0) {
         await patientsCard.click();
@@ -60,8 +62,8 @@ test.describe('Dashboard', () => {
     test('Active Users metric card links to /users', async ({ page, dashboardPage }) => {
       await dashboardPage.expectDashboardLoaded();
       await page.waitForTimeout(2000);
-      const usersCard = page.locator('a.metric-card', {
-        has: page.locator('.metric-label:text("Active Users")'),
+      const usersCard = page.locator('a.stat-card', {
+        has: page.locator('.stat-label:text("Active Users")'),
       });
       if ((await usersCard.count()) > 0) {
         await usersCard.click();
@@ -94,12 +96,12 @@ test.describe('Dashboard', () => {
       await page.goto('/dashboard');
 
       // Either loading state or content should be visible
-      const hasLoading = await page.locator('.loading-state').count();
-      const hasContent = await page.locator('.welcome-banner').count();
+      const hasLoading = await page.locator('.skeleton-card').count();
+      const hasContent = await page.locator('.hero-header').count();
       expect(hasLoading + hasContent).toBeGreaterThan(0);
 
       // Eventually content should appear
-      await expect(page.locator('.welcome-banner')).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator('.hero-header')).toBeVisible({ timeout: 15_000 });
     });
   });
 });

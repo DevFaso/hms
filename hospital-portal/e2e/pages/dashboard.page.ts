@@ -9,6 +9,7 @@ export class DashboardPage {
   /* ── Locators ── */
   readonly welcomeBanner: Locator;
   readonly welcomeHeading: Locator;
+  readonly greetingTag: Locator;
   readonly welcomeDate: Locator;
   readonly metricsGrid: Locator;
   readonly metricCards: Locator;
@@ -20,16 +21,17 @@ export class DashboardPage {
 
   constructor(page: Page) {
     this.page = page;
-    this.welcomeBanner = page.locator('.welcome-banner');
-    this.welcomeHeading = page.locator('.welcome-text h1');
-    this.welcomeDate = page.locator('.welcome-date');
-    this.metricsGrid = page.locator('.metrics-grid');
-    this.metricCards = page.locator('.metric-card');
-    this.loadingState = page.locator('.loading-state');
-    this.kpiSection = page.locator('.kpi-section');
-    this.kpiCards = page.locator('.kpi-card');
+    this.welcomeBanner = page.locator('.hero-header');
+    this.welcomeHeading = page.locator('.hero-name');
+    this.greetingTag = page.locator('.greeting-tag');
+    this.welcomeDate = page.locator('.hero-sub');
+    this.metricsGrid = page.locator('.stat-strip');
+    this.metricCards = page.locator('.stat-card');
+    this.loadingState = page.locator('.skeleton-card');
+    this.kpiSection = page.locator('.stat-strip');
+    this.kpiCards = page.locator('.stat-card');
     this.inboxCard = page.locator('.inbox-card');
-    this.appointmentsSection = page.locator('.appointments-section, .today-appointments');
+    this.appointmentsSection = page.locator('.schedule-panel');
   }
 
   /** Navigate to dashboard */
@@ -42,8 +44,8 @@ export class DashboardPage {
     // Wait for loading to disappear or for content to appear
     await this.page.waitForFunction(
       () => {
-        const loading = document.querySelector('.loading-state');
-        const welcome = document.querySelector('.welcome-banner');
+        const loading = document.querySelector('.skeleton-card');
+        const welcome = document.querySelector('.hero-header');
         return !loading || getComputedStyle(loading).display === 'none' || welcome;
       },
       { timeout: 15_000 },
@@ -58,10 +60,10 @@ export class DashboardPage {
 
   /** Get a specific metric card value by label text */
   async getMetricValue(label: string): Promise<string> {
-    const card = this.page.locator(`.metric-card`, {
-      has: this.page.locator(`.metric-label:text("${label}")`),
+    const card = this.page.locator(`.stat-card`, {
+      has: this.page.locator(`.stat-label:text("${label}")`),
     });
-    return (await card.locator('.metric-value').textContent()) ?? '';
+    return (await card.locator('.stat-value').textContent()) ?? '';
   }
 
   /** Assert metrics grid is visible with at least n cards */
@@ -73,8 +75,8 @@ export class DashboardPage {
 
   /** Click on a metric card link */
   async clickMetric(label: string): Promise<void> {
-    const card = this.page.locator(`a.metric-card`, {
-      has: this.page.locator(`.metric-label:text("${label}")`),
+    const card = this.page.locator(`a.stat-card`, {
+      has: this.page.locator(`.stat-label:text("${label}")`),
     });
     await card.click();
   }

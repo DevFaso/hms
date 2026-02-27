@@ -620,6 +620,11 @@ $shadow-md:
 // SCHEDULE PANEL
 // ─────────────────────────────────────────────────────────────────────────────
 .schedule-panel {
+  align-self: start;
+
+  .card {
+    height: auto;
+  }
 }
 
 .schedule-list {
