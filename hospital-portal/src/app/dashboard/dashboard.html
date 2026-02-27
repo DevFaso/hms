@@ -129,151 +129,94 @@
     }
   </section>
 
-  <!-- MAIN GRID: Schedule + Right column -->
+  <!-- CLINICIAN TWO-COLUMN WORKSPACE -->
   @if (isClinician()) {
-    <div class="main-grid">
-      <!-- TODAY'S SCHEDULE -->
-      <section class="schedule-panel card">
-        <div class="card-head">
-          <div class="card-title-group">
-            <span class="material-symbols-outlined card-title-icon" style="color: #2563eb"
-              >calendar_clock</span
-            >
-            <h2 class="card-title">Today's Schedule</h2>
-            <span class="count-badge">{{ todayAppointments().length }}</span>
-          </div>
-          <a routerLink="/appointments" class="card-link">View All</a>
-        </div>
-
-        @if (scheduleLoading()) {
-          <div class="schedule-skeleton">
-            @for (i of [1, 2, 3, 4]; track i) {
-              <div class="sched-skel-row">
-                <div class="skel skel-time"></div>
-                <div class="skel-lines">
-                  <div class="skel skel-name"></div>
-                  <div class="skel skel-reason"></div>
-                </div>
-              </div>
-            }
-          </div>
-        } @else if (scheduleSlots().length === 0) {
-          <div class="empty-schedule">
-            <span class="material-symbols-outlined empty-icon">event_available</span>
-            <p>No appointments scheduled for today</p>
-            @if (permissions.hasPermission('Create Appointments')) {
-              <a routerLink="/appointments/new" class="empty-cta">Schedule one now</a>
-            }
-          </div>
-        } @else {
-          <div class="schedule-list">
-            @for (slot of scheduleSlots(); track slot.id) {
-              <a
-                [routerLink]="['/appointments', slot.id]"
-                class="sched-row"
-                [class.sched-row-now]="slot.isNow"
+    <div class="clinical-workspace">
+      <!-- ── LEFT COLUMN: Schedule + Roomed + Quick Actions ── -->
+      <div class="workspace-left">
+        <!-- TODAY'S SCHEDULE -->
+        <section class="schedule-panel card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon" style="color: #2563eb"
+                >calendar_clock</span
               >
-                @if (slot.isNow) {
-                  <div class="sched-now-bar"></div>
-                }
-                <div class="sched-time">
-                  <span class="time-val">{{ slot.time }}</span>
-                </div>
-                <div class="sched-avatar" [style.background]="getAvatarColor(slot.patientName)">
-                  {{ getPatientInitials(slot.patientName) }}
-                </div>
-                <div class="sched-info">
-                  <span class="sched-name">{{ slot.patientName }}</span>
-                  <span class="sched-reason">{{ slot.reason || '—' }}</span>
-                </div>
-                <span [class]="getApptStatusClass(slot.status)">
-                  {{ getApptStatusLabel(slot.status) }}
-                </span>
-              </a>
-            }
+              <h2 class="card-title">Today's Schedule</h2>
+              <span class="count-badge">{{ todayAppointments().length }}</span>
+            </div>
+            <div class="card-head-right">
+              <span class="schedule-date-pill">{{ todayLabel }}</span>
+              <a routerLink="/appointments" class="card-link">View All</a>
+            </div>
           </div>
-          <div class="schedule-summary">
-            <span class="sum-item sum-done">
-              <span class="material-symbols-outlined">task_alt</span>{{ completedToday() }} Done
-            </span>
-            <span class="sum-divider"></span>
-            <span class="sum-item sum-active">
-              <span class="material-symbols-outlined">person_play</span>{{ inProgressNow() }} Active
-            </span>
-            <span class="sum-divider"></span>
-            <span class="sum-item sum-pending">
-              <span class="material-symbols-outlined">pending</span>{{ pendingToday() }} Pending
-            </span>
-          </div>
-        }
-      </section>
 
-      <!-- RIGHT COLUMN -->
-      <div class="right-col">
-        @if (inboxCounts(); as ic) {
-          <section class="card inbox-card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon" style="color: #0891b2"
-                  >mark_email_unread</span
+          @if (scheduleLoading()) {
+            <div class="schedule-skeleton">
+              @for (i of [1, 2, 3, 4]; track i) {
+                <div class="sched-skel-row">
+                  <div class="skel skel-time"></div>
+                  <div class="skel-lines">
+                    <div class="skel skel-name"></div>
+                    <div class="skel skel-reason"></div>
+                  </div>
+                </div>
+              }
+            </div>
+          } @else if (scheduleSlots().length === 0) {
+            <div class="empty-schedule">
+              <span class="material-symbols-outlined empty-icon">event_available</span>
+              <p>No appointments scheduled for today</p>
+              @if (permissions.hasPermission('Create Appointments')) {
+                <a routerLink="/appointments/new" class="empty-cta">
+                  <span class="material-symbols-outlined">add_circle</span>Schedule one now
+                </a>
+              }
+            </div>
+          } @else {
+            <div class="schedule-list">
+              @for (slot of scheduleSlots(); track slot.id) {
+                <a
+                  [routerLink]="['/appointments', slot.id]"
+                  class="sched-row"
+                  [class.sched-row-now]="slot.isNow"
                 >
-                <h2 class="card-title">Inbox</h2>
-                @if (totalInboxCount() > 0) {
-                  <span class="count-badge count-badge-red">{{ totalInboxCount() }}</span>
-                }
-              </div>
-              <a routerLink="/chat" class="card-link">Open</a>
+                  @if (slot.isNow) {
+                    <div class="sched-now-bar"></div>
+                  }
+                  <div class="sched-time">
+                    <span class="time-val">{{ slot.time }}</span>
+                  </div>
+                  <div class="sched-avatar" [style.background]="getAvatarColor(slot.patientName)">
+                    {{ getPatientInitials(slot.patientName) }}
+                  </div>
+                  <div class="sched-info">
+                    <span class="sched-name">{{ slot.patientName }}</span>
+                    <span class="sched-reason">{{ slot.reason || 'General visit' }}</span>
+                  </div>
+                  <span [class]="getApptStatusClass(slot.status)">
+                    {{ getApptStatusLabel(slot.status) }}
+                  </span>
+                </a>
+              }
             </div>
-            <div class="inbox-items">
-              <a routerLink="/chat" class="inbox-row">
-                <div class="inbox-row-icon" style="background: #dbeafe; color: #1d4ed8">
-                  <span class="material-symbols-outlined">chat</span>
-                </div>
-                <span class="inbox-row-label">Unread Messages</span>
-                <span class="inbox-row-count" [class.count-hot]="ic.unreadMessages > 0">{{
-                  ic.unreadMessages
-                }}</span>
-              </a>
-              <a routerLink="/lab" class="inbox-row">
-                <div class="inbox-row-icon" style="background: #fee2e2; color: #b91c1c">
-                  <span class="material-symbols-outlined">science</span>
-                </div>
-                <span class="inbox-row-label">Pending Lab Results</span>
-                <span class="inbox-row-count" [class.count-hot]="ic.pendingResults > 0">{{
-                  ic.pendingResults
-                }}</span>
-              </a>
-              <a routerLink="/prescriptions" class="inbox-row">
-                <div class="inbox-row-icon" style="background: #fef3c7; color: #b45309">
-                  <span class="material-symbols-outlined">medication</span>
-                </div>
-                <span class="inbox-row-label">Refill Requests</span>
-                <span class="inbox-row-count" [class.count-hot]="ic.pendingRefills > 0">{{
-                  ic.pendingRefills
-                }}</span>
-              </a>
-              <div class="inbox-row">
-                <div class="inbox-row-icon" style="background: #ede9fe; color: #6d28d9">
-                  <span class="material-symbols-outlined">checklist</span>
-                </div>
-                <span class="inbox-row-label">Tasks to Complete</span>
-                <span class="inbox-row-count" [class.count-hot]="ic.tasksToComplete > 0">{{
-                  ic.tasksToComplete
-                }}</span>
-              </div>
-              <div class="inbox-row">
-                <div class="inbox-row-icon" style="background: #d1fae5; color: #065f46">
-                  <span class="material-symbols-outlined">draw</span>
-                </div>
-                <span class="inbox-row-label">Documents to Sign</span>
-                <span class="inbox-row-count" [class.count-hot]="ic.documentsToSign > 0">{{
-                  ic.documentsToSign
-                }}</span>
-              </div>
+            <div class="schedule-summary">
+              <span class="sum-item sum-done">
+                <span class="material-symbols-outlined">task_alt</span>{{ completedToday() }} Done
+              </span>
+              <span class="sum-divider"></span>
+              <span class="sum-item sum-active">
+                <span class="material-symbols-outlined">person_play</span>{{ inProgressNow() }}
+                Active
+              </span>
+              <span class="sum-divider"></span>
+              <span class="sum-item sum-pending">
+                <span class="material-symbols-outlined">pending</span>{{ pendingToday() }} Pending
+              </span>
             </div>
-          </section>
-        }
+          }
+        </section>
 
+        <!-- ROOMED PATIENTS (left col, below schedule) -->
         @if (roomedPatients().length > 0) {
           <section class="card roomed-card">
             <div class="card-head">
@@ -342,6 +285,169 @@
           </section>
         }
 
+        <!-- CLINICAL ALERTS (left col, inline) -->
+        @if (alerts().length > 0) {
+          <section class="card alerts-inline-card" id="alerts-section">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon" style="color: #dc2626"
+                  >notification_important</span
+                >
+                <h2 class="card-title">Clinical Alerts</h2>
+                @if (unacknowledgedAlerts().length > 0) {
+                  <span class="count-badge count-badge-red">{{
+                    unacknowledgedAlerts().length
+                  }}</span>
+                }
+              </div>
+            </div>
+            <div class="alerts-inline-list">
+              @for (alert of alerts(); track alert.id) {
+                <div
+                  [class]="getAlertSeverityClass(alert.severity)"
+                  [class.is-acknowledged]="alert.acknowledged"
+                >
+                  <div class="alert-icon-wrap">
+                    <span class="material-symbols-outlined">{{
+                      getAlertIcon(alert.severity)
+                    }}</span>
+                  </div>
+                  <div class="alert-content">
+                    <div class="alert-header-row">
+                      <span
+                        class="alert-sev-pill"
+                        [class]="'sev-' + (alert.severity | lowercase)"
+                        >{{ alert.severity }}</span
+                      >
+                      <span class="alert-time">{{ alert.timestamp | date: 'shortTime' }}</span>
+                    </div>
+                    <strong class="alert-title">{{ alert.title }}</strong>
+                    <p class="alert-msg">{{ alert.message }}</p>
+                    @if (alert.patientName) {
+                      <a [routerLink]="['/patients', alert.patientId]" class="alert-patient-link">
+                        <span class="material-symbols-outlined">person</span>{{ alert.patientName }}
+                      </a>
+                    }
+                  </div>
+                  @if (alert.actionRequired && !alert.acknowledged) {
+                    <button
+                      class="ack-btn"
+                      (click)="acknowledgeAlert(alert.id)"
+                      title="Acknowledge"
+                    >
+                      <span class="material-symbols-outlined">check_circle</span>
+                      <span class="ack-label">Acknowledge</span>
+                    </button>
+                  } @else if (alert.acknowledged) {
+                    <div class="acked-badge">
+                      <span class="material-symbols-outlined">verified</span>
+                    </div>
+                  }
+                </div>
+              }
+            </div>
+          </section>
+        }
+
+        <!-- QUICK ACTIONS (left col, always last — no gap possible) -->
+        @if (quickActions().length > 0) {
+          <section class="card quick-actions-card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon" style="color: #7c3aed"
+                  >bolt</span
+                >
+                <h2 class="card-title">Quick Actions</h2>
+              </div>
+            </div>
+            <div class="qa-grid">
+              @for (action of quickActions(); track action.label) {
+                <a
+                  class="qa-card"
+                  [routerLink]="action.route"
+                  [style.--qa-color]="action.color"
+                  [style.--qa-bg]="action.bgColor"
+                >
+                  <div class="qa-icon-wrap">
+                    <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
+                  </div>
+                  <span class="qa-label">{{ action.label }}</span>
+                  <span class="qa-desc">{{ action.description }}</span>
+                </a>
+              }
+            </div>
+          </section>
+        }
+      </div>
+
+      <!-- ── RIGHT SIDEBAR: Inbox + Recent Patients ── -->
+      <aside class="workspace-right">
+        <!-- INBOX -->
+        @if (inboxCounts(); as ic) {
+          <section class="card inbox-card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon" style="color: #0891b2"
+                  >mark_email_unread</span
+                >
+                <h2 class="card-title">Inbox</h2>
+                @if (totalInboxCount() > 0) {
+                  <span class="count-badge count-badge-red">{{ totalInboxCount() }}</span>
+                }
+              </div>
+              <a routerLink="/chat" class="card-link">Open</a>
+            </div>
+            <div class="inbox-items">
+              <a routerLink="/chat" class="inbox-row">
+                <div class="inbox-row-icon" style="background: #dbeafe; color: #1d4ed8">
+                  <span class="material-symbols-outlined">chat</span>
+                </div>
+                <span class="inbox-row-label">Unread Messages</span>
+                <span class="inbox-row-count" [class.count-hot]="ic.unreadMessages > 0">{{
+                  ic.unreadMessages
+                }}</span>
+              </a>
+              <a routerLink="/lab" class="inbox-row">
+                <div class="inbox-row-icon" style="background: #fee2e2; color: #b91c1c">
+                  <span class="material-symbols-outlined">science</span>
+                </div>
+                <span class="inbox-row-label">Pending Lab Results</span>
+                <span class="inbox-row-count" [class.count-hot]="ic.pendingResults > 0">{{
+                  ic.pendingResults
+                }}</span>
+              </a>
+              <a routerLink="/prescriptions" class="inbox-row">
+                <div class="inbox-row-icon" style="background: #fef3c7; color: #b45309">
+                  <span class="material-symbols-outlined">medication</span>
+                </div>
+                <span class="inbox-row-label">Refill Requests</span>
+                <span class="inbox-row-count" [class.count-hot]="ic.pendingRefills > 0">{{
+                  ic.pendingRefills
+                }}</span>
+              </a>
+              <div class="inbox-row">
+                <div class="inbox-row-icon" style="background: #ede9fe; color: #6d28d9">
+                  <span class="material-symbols-outlined">checklist</span>
+                </div>
+                <span class="inbox-row-label">Tasks to Complete</span>
+                <span class="inbox-row-count" [class.count-hot]="ic.tasksToComplete > 0">{{
+                  ic.tasksToComplete
+                }}</span>
+              </div>
+              <div class="inbox-row">
+                <div class="inbox-row-icon" style="background: #d1fae5; color: #065f46">
+                  <span class="material-symbols-outlined">draw</span>
+                </div>
+                <span class="inbox-row-label">Documents to Sign</span>
+                <span class="inbox-row-count" [class.count-hot]="ic.documentsToSign > 0">{{
+                  ic.documentsToSign
+                }}</span>
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- RECENT PATIENTS -->
         @if (recentPatients().length > 0) {
           <section class="card recent-patients-card">
             <div class="card-head">
@@ -379,90 +485,8 @@
             </div>
           </section>
         }
-      </div>
+      </aside>
     </div>
-  }
-
-  <!-- CLINICAL ALERTS -->
-  @if (alerts().length > 0) {
-    <section class="alerts-section" id="alerts-section">
-      <div class="section-head">
-        <div class="section-title-group">
-          <span class="material-symbols-outlined section-icon" style="color: #dc2626"
-            >notification_important</span
-          >
-          <h2 class="section-title">Clinical Alerts</h2>
-          @if (unacknowledgedAlerts().length > 0) {
-            <span class="count-badge count-badge-red">{{ unacknowledgedAlerts().length }}</span>
-          }
-        </div>
-      </div>
-      <div class="alerts-grid">
-        @for (alert of alerts(); track alert.id) {
-          <div
-            [class]="getAlertSeverityClass(alert.severity)"
-            [class.is-acknowledged]="alert.acknowledged"
-          >
-            <div class="alert-icon-wrap">
-              <span class="material-symbols-outlined">{{ getAlertIcon(alert.severity) }}</span>
-            </div>
-            <div class="alert-content">
-              <div class="alert-header-row">
-                <span class="alert-sev-pill" [class]="'sev-' + (alert.severity | lowercase)">{{
-                  alert.severity
-                }}</span>
-                <span class="alert-time">{{ alert.timestamp | date: 'shortTime' }}</span>
-              </div>
-              <strong class="alert-title">{{ alert.title }}</strong>
-              <p class="alert-msg">{{ alert.message }}</p>
-              @if (alert.patientName) {
-                <a [routerLink]="['/patients', alert.patientId]" class="alert-patient-link">
-                  <span class="material-symbols-outlined">person</span>{{ alert.patientName }}
-                </a>
-              }
-            </div>
-            @if (alert.actionRequired && !alert.acknowledged) {
-              <button class="ack-btn" (click)="acknowledgeAlert(alert.id)" title="Acknowledge">
-                <span class="material-symbols-outlined">check_circle</span>
-                <span class="ack-label">Acknowledge</span>
-              </button>
-            } @else if (alert.acknowledged) {
-              <div class="acked-badge">
-                <span class="material-symbols-outlined">verified</span>
-              </div>
-            }
-          </div>
-        }
-      </div>
-    </section>
-  }
-
-  <!-- QUICK ACTIONS -->
-  @if (quickActions().length > 0) {
-    <section class="quick-actions-section">
-      <div class="section-head">
-        <div class="section-title-group">
-          <span class="material-symbols-outlined section-icon" style="color: #7c3aed">bolt</span>
-          <h2 class="section-title">Quick Actions</h2>
-        </div>
-      </div>
-      <div class="qa-grid">
-        @for (action of quickActions(); track action.label) {
-          <a
-            class="qa-card"
-            [routerLink]="action.route"
-            [style.--qa-color]="action.color"
-            [style.--qa-bg]="action.bgColor"
-          >
-            <div class="qa-icon-wrap">
-              <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
-            </div>
-            <span class="qa-label">{{ action.label }}</span>
-            <span class="qa-desc">{{ action.description }}</span>
-          </a>
-        }
-      </div>
-    </section>
   }
 
   <!-- SUPER-ADMIN SECTION -->

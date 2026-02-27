@@ -533,21 +533,26 @@ $shadow-md:
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN GRID
+// CLINICAL WORKSPACE — true two-column, no orphan sections
 // ─────────────────────────────────────────────────────────────────────────────
-.main-grid {
+.clinical-workspace {
   display: flex;
   flex-direction: row;
   align-items: flex-start;
   gap: 20px;
-
-  .schedule-panel {
-    flex: 1 1 0;
-    min-width: 0;
-  }
 }
 
-.right-col {
+// Left column: Schedule + Roomed + Alerts + Quick Actions (all stacked)
+.workspace-left {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+// Right sidebar: fixed-width, Inbox + Recent Patients
+.workspace-right {
   flex: 0 0 380px;
   width: 380px;
   display: flex;
@@ -626,8 +631,53 @@ $shadow-md:
 // ─────────────────────────────────────────────────────────────────────────────
 // SCHEDULE PANEL
 // ─────────────────────────────────────────────────────────────────────────────
-.schedule-panel {
-  height: fit-content;
+// No height override needed — workspace-left flex-column sizes each card
+// naturally to its content. Keeping the comment as a navigation anchor.
+
+// ── CARD HEAD RIGHT GROUP ─────────────────────────────────────────────────────
+.card-head-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+// ── SCHEDULE DATE PILL ────────────────────────────────────────────────────────
+.schedule-date-pill {
+  font-size: 11px;
+  font-weight: 600;
+  color: $text-sub;
+  background: #f8fafc;
+  border: 1px solid $border;
+  border-radius: 20px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+
+// ── QUICK ACTIONS CARD and ALERTS INLINE CARD ────────────────────────────────
+// Both use the standard .card + .card-head styles — no overrides needed.
+
+.alerts-inline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 4px 0;
+
+  > div {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 20px;
+    border-bottom: 1px solid $border;
+    transition: background 0.15s;
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    &:hover {
+      background: #fafafa;
+    }
+  }
 }
 
 .schedule-list {
@@ -1672,16 +1722,15 @@ $shadow-md:
 }
 
 @media (max-width: 1024px) {
-  .main-grid {
+  .clinical-workspace {
     flex-direction: column;
-
-    .schedule-panel {
-      flex: none;
-      width: 100%;
-    }
   }
 
-  .right-col {
+  .workspace-left {
+    width: 100%;
+  }
+
+  .workspace-right {
     flex: none;
     width: 100%;
     display: grid;
