@@ -184,10 +184,10 @@
           <div class="field-row two-col">
             <div class="field">
               <label for="hospitalSel">Hospital</label>
-              @if (selectedStaff()?.hospitalId) {
+              @if (lockedHospitalId || selectedStaff()?.hospitalId) {
                 <div class="locked-field">
                   <span class="material-symbols-outlined">lock</span>
-                  {{ selectedStaff()!.hospitalName }}
+                  {{ lockedHospitalId ? lockedHospitalName : selectedStaff()!.hospitalName }}
                 </div>
               } @else {
                 <select

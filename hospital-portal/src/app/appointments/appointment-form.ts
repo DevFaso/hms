@@ -9,6 +9,7 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 
 interface DeptOption {
   id: string;
@@ -29,6 +30,7 @@ export class AppointmentFormComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly roleContext = inject(RoleContextService);
 
   saving = signal(false);
 
@@ -55,6 +57,17 @@ export class AppointmentFormComponent implements OnInit {
   departments = signal<DeptOption[]>([]);
   selectedHospitalId = signal('');
 
+  /** Non-null when the logged-in user is scoped to a specific hospital */
+  get lockedHospitalId(): string | null {
+    return this.roleContext.activeHospitalId;
+  }
+
+  get lockedHospitalName(): string {
+    const id = this.lockedHospitalId;
+    if (!id) return '';
+    return this.hospitals().find((h) => h.id === id)?.name ?? id;
+  }
+
   form: AppointmentUpsertRequest = {
     appointmentDate: '',
     startTime: '',
@@ -65,7 +78,23 @@ export class AppointmentFormComponent implements OnInit {
   };
 
   ngOnInit(): void {
-    this.hospitalService.list().subscribe((h) => this.hospitals.set(h));
+    const lockedId = this.roleContext.activeHospitalId;
+    if (lockedId) {
+      // Non-SUPER_ADMIN: locked to their hospital — pre-load just that hospital for name display
+      this.hospitalService.list().subscribe((h) => {
+        this.hospitals.set(h);
+      });
+      this.selectedHospitalId.set(lockedId);
+      this.form.hospitalId = lockedId;
+      this.staffService.list(lockedId).subscribe((list) => {
+        this.allStaff = list;
+        this.staffLoaded = true;
+        this.setDeptsFromStaff(lockedId);
+      });
+    } else {
+      // SUPER_ADMIN: load all hospitals; staff loaded lazily on first search
+      this.hospitalService.list().subscribe((h) => this.hospitals.set(h));
+    }
     this.initPatientSearch();
     this.initStaffSearch();
   }
@@ -126,7 +155,11 @@ export class AppointmentFormComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((_q) => {
           this.staffSearchLoading.set(true);
-          if (!this.staffLoaded) return this.staffService.list();
+          if (!this.staffLoaded) {
+            // Respect hospital lock: only load staff for the active hospital
+            const hospitalId = this.roleContext.activeHospitalId ?? undefined;
+            return this.staffService.list(hospitalId);
+          }
           return [this.allStaff];
         }),
       )
