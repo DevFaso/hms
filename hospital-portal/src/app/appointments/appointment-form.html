@@ -184,10 +184,10 @@
           <div class="field-row two-col">
             <div class="field">
               <label for="hospitalSel">Hospital</label>
-              @if (lockedHospitalId || selectedStaff()?.hospitalId) {
+              @if (isReceptionist) {
                 <div class="locked-field">
                   <span class="material-symbols-outlined">lock</span>
-                  {{ lockedHospitalId ? lockedHospitalName : selectedStaff()!.hospitalName }}
+                  {{ lockedHospital?.name ?? lockedHospitalId }}
                 </div>
               } @else {
                 <select
@@ -197,7 +197,7 @@
                   name="hospital"
                 >
                   <option value="">Select hospital…</option>
-                  @for (h of hospitals(); track h.id) {
+                  @for (h of hospitalOptions; track h.id) {
                     <option [value]="h.id">{{ h.name }}</option>
                   }
                 </select>

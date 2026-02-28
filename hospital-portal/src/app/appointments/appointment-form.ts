@@ -54,6 +54,20 @@ export class AppointmentFormComponent implements OnInit {
 
   // ── Hospital + Department dropdowns ─────────────────────
   hospitals = signal<HospitalResponse[]>([]);
+  get isReceptionist(): boolean {
+    return this.roleContext.isReceptionist();
+  }
+  get lockedHospital(): HospitalResponse | null {
+    const id = this.lockedHospitalId;
+    if (!id) return null;
+    return this.hospitals().find((h) => h.id === id) ?? null;
+  }
+  get hospitalOptions(): HospitalResponse[] {
+    if (this.isReceptionist) {
+      return this.lockedHospital ? [this.lockedHospital] : [];
+    }
+    return this.hospitals();
+  }
   departments = signal<DeptOption[]>([]);
   selectedHospitalId = signal('');
 
@@ -79,21 +93,19 @@ export class AppointmentFormComponent implements OnInit {
 
   ngOnInit(): void {
     const lockedId = this.roleContext.activeHospitalId;
+    this.hospitalService.list().subscribe((h) => {
+      this.hospitals.set(h);
+      if (lockedId) {
+        this.selectedHospitalId.set(lockedId);
+        this.form.hospitalId = lockedId;
+      }
+    });
     if (lockedId) {
-      // Non-SUPER_ADMIN: locked to their hospital — pre-load just that hospital for name display
-      this.hospitalService.list().subscribe((h) => {
-        this.hospitals.set(h);
-      });
-      this.selectedHospitalId.set(lockedId);
-      this.form.hospitalId = lockedId;
       this.staffService.list(lockedId).subscribe((list) => {
         this.allStaff = list;
         this.staffLoaded = true;
         this.setDeptsFromStaff(lockedId);
       });
-    } else {
-      // SUPER_ADMIN: load all hospitals; staff loaded lazily on first search
-      this.hospitalService.list().subscribe((h) => this.hospitals.set(h));
     }
     this.initPatientSearch();
     this.initStaffSearch();
