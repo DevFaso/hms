@@ -210,6 +210,33 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return 'hero-gradient-default';
   });
 
+  /**
+   * Single authoritative view selector — prevents multiple dashboard sections
+   * rendering simultaneously when a user has more than one role.
+   * Priority matches heroGradientClass / roleLabel ordering.
+   */
+  activeView = computed<
+    | 'superadmin'
+    | 'hospitaladmin'
+    | 'doctor'
+    | 'nurse'
+    | 'receptionist'
+    | 'lab'
+    | 'pharmacist'
+    | 'radiologist'
+    | 'fallback'
+  >(() => {
+    if (this.isSuperAdmin()) return 'superadmin';
+    if (this.isHospitalAdmin()) return 'hospitaladmin';
+    if (this.isDoctor()) return 'doctor';
+    if (this.isNurse() || this.isMidwife()) return 'nurse';
+    if (this.isReceptionist()) return 'receptionist';
+    if (this.isLabScientist()) return 'lab';
+    if (this.isPharmacist()) return 'pharmacist';
+    if (this.isRadiologist()) return 'radiologist';
+    return 'fallback';
+  });
+
   // ── Role display label ────────────────────────────────────────
   roleLabel = computed(() => {
     if (this.isSuperAdmin()) return 'Super Administrator';

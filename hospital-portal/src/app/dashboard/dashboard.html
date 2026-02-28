@@ -163,7 +163,7 @@
   <!-- ══════════════════════════════════════════
        ① SUPER-ADMIN DASHBOARD
        ══════════════════════════════════════════ -->
-  @if (!loading() && isSuperAdmin()) {
+  @if (!loading() && activeView() === 'superadmin') {
     @if (adminSummary(); as s) {
       <section class="stat-strip">
         <a class="stat-card" routerLink="/patients">
@@ -334,7 +334,7 @@
   <!-- ══════════════════════════════════════════
        ② HOSPITAL ADMIN DASHBOARD
        ══════════════════════════════════════════ -->
-  @if (!loading() && isHospitalAdmin() && !isSuperAdmin()) {
+  @if (!loading() && activeView() === 'hospitaladmin') {
     <section class="stat-strip">
       <a class="stat-card" routerLink="/appointments">
         <div class="stat-icon-wrap">
@@ -536,7 +536,7 @@
   <!-- ══════════════════════════════════════════
        ③ DOCTOR DASHBOARD
        ══════════════════════════════════════════ -->
-  @if (!loading() && isDoctor()) {
+  @if (!loading() && activeView() === 'doctor') {
     <section class="stat-strip">
       @for (stat of statCards(); track stat.key) {
         <a
@@ -912,7 +912,7 @@
   <!-- ══════════════════════════════════════════
        ④ NURSE / MIDWIFE DASHBOARD
        ══════════════════════════════════════════ -->
-  @if (!loading() && (isNurse() || isMidwife())) {
+  @if (!loading() && activeView() === 'nurse') {
     <section class="stat-strip">
       <a class="stat-card" routerLink="/appointments">
         <div class="stat-icon-wrap">
@@ -1209,7 +1209,7 @@
   <!-- ══════════════════════════════════════════
        ⑤ RECEPTIONIST DASHBOARD
        ══════════════════════════════════════════ -->
-  @if (!loading() && isReceptionist()) {
+  @if (!loading() && activeView() === 'receptionist') {
     <section class="stat-strip">
       <a class="stat-card" routerLink="/appointments">
         <div class="stat-icon-wrap">
@@ -1363,7 +1363,7 @@
   <!-- ══════════════════════════════════════════
        ⑥ LAB SCIENTIST DASHBOARD
        ══════════════════════════════════════════ -->
-  @if (!loading() && isLabScientist()) {
+  @if (!loading() && activeView() === 'lab') {
     <section class="stat-strip">
       <a class="stat-card" routerLink="/lab">
         <div class="stat-icon-wrap">
@@ -1480,7 +1480,7 @@
   <!-- ══════════════════════════════════════════
        ⑦ PHARMACIST DASHBOARD
        ══════════════════════════════════════════ -->
-  @if (!loading() && isPharmacist()) {
+  @if (!loading() && activeView() === 'pharmacist') {
     <section class="stat-strip">
       <a class="stat-card" routerLink="/prescriptions">
         <div class="stat-icon-wrap">
@@ -1597,7 +1597,7 @@
   <!-- ══════════════════════════════════════════
        ⑧ RADIOLOGIST DASHBOARD
        ══════════════════════════════════════════ -->
-  @if (!loading() && isRadiologist()) {
+  @if (!loading() && activeView() === 'radiologist') {
     <section class="stat-strip">
       <a class="stat-card" routerLink="/imaging">
         <div class="stat-icon-wrap">
@@ -1714,18 +1714,7 @@
   <!-- ══════════════════════════════════════════
        FALLBACK
        ══════════════════════════════════════════ -->
-  @if (
-    !loading() &&
-    !isSuperAdmin() &&
-    !isHospitalAdmin() &&
-    !isDoctor() &&
-    !isNurse() &&
-    !isMidwife() &&
-    !isReceptionist() &&
-    !isLabScientist() &&
-    !isPharmacist() &&
-    !isRadiologist()
-  ) {
+  @if (!loading() && activeView() === 'fallback') {
     <div class="fallback-grid">
       @if (todayAppointments().length > 0) {
         <section class="card">
