@@ -110,8 +110,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                            Pageable pageable);
 
 
-    @Query("select u from User u")
-    Page<User> findAllActive(Pageable pageable);
+    @Query("select u from User u where u.isDeleted = false")
+    Page<User> findAllPaged(Pageable pageable);
 
   List<User> findByIsDeletedFalse();
 

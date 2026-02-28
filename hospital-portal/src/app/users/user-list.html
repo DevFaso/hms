@@ -339,11 +339,11 @@
                   name="phoneNumber"
                   required
                   placeholder="+226 70 00 00 00"
-                  [class.input-error]="fieldErrors()['phone']"
-                  (ngModelChange)="clearFieldError('phone')"
+                  [class.input-error]="fieldErrors()['phoneNumber']"
+                  (ngModelChange)="clearFieldError('phoneNumber')"
                 />
-                @if (fieldErrors()['phone']) {
-                  <span class="field-error-msg">{{ fieldErrors()['phone'] }}</span>
+                @if (fieldErrors()['phoneNumber']) {
+                  <span class="field-error-msg">{{ fieldErrors()['phoneNumber'] }}</span>
                 }
               </div>
             </div>

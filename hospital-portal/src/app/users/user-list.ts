@@ -1,6 +1,8 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subject, takeUntil } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { UserService, UserSummary, AdminRegisterRequest } from '../services/user.service';
 import { RoleService, RoleResponse } from '../services/role.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
@@ -69,11 +71,14 @@ const SPECIALIZATIONS = [
   templateUrl: './user-list.html',
   styleUrl: './user-list.scss',
 })
-export class UserListComponent implements OnInit {
+export class UserListComponent implements OnInit, OnDestroy {
   private readonly userService = inject(UserService);
   private readonly roleService = inject(RoleService);
   private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
+
+  private readonly searchSubject = new Subject<string>();
+  private readonly destroy$ = new Subject<void>();
 
   users = signal<UserSummary[]>([]);
   filtered = signal<UserSummary[]>([]);
@@ -123,6 +128,12 @@ export class UserListComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.searchSubject
+      .pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.currentPage.set(0);
+        this.loadUsers(0);
+      });
     this.loadUsers();
     this.loadRoles();
     this.loadHospitals();
@@ -205,10 +216,14 @@ export class UserListComponent implements OnInit {
     this.applyFilter();
   }
 
-  /** Called when the search input changes (debounced via HTML) — reloads from backend. */
+  /** Called when the search input changes — debounced 300 ms before reloading from backend. */
   onSearchChange(): void {
-    this.currentPage.set(0);
-    this.loadUsers(0);
+    this.searchSubject.next(this.searchTerm);
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   clearFilters(): void {

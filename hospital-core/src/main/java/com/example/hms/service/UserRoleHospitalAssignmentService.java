@@ -57,8 +57,8 @@ public interface UserRoleHospitalAssignmentService {
     void deleteAssignment(UUID id);
 
     /**
-     * Soft-deactivate an assignment: sets {@code active = false} and records an
-     * {@code endDate}. The record is preserved for audit and historical integrity.
+     * Soft-deactivate an assignment: sets {@code active = false}.
+     * The record is preserved for audit and historical integrity.
      * This is the preferred alternative to hard-deleting assignments.
      */
     void deactivateAssignment(UUID id);

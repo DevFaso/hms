@@ -52,7 +52,7 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
             recentAuditLimit = 10; // sane default + safety cap
         }
 
-        long totalUsers = userRepository.count();
+        long totalUsers = userRepository.countByIsDeletedFalse();
         long activeUsers = userRepository.countByIsActiveTrueAndIsDeletedFalse();
         long inactiveUsers = Math.max(totalUsers - activeUsers, 0);
 
