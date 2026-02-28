@@ -8,6 +8,8 @@ import jakarta.persistence.OneToMany;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.EqualsAndHashCode;
@@ -102,10 +104,21 @@ public class User extends BaseEntity {
     private Set<Appointment> createdAppointments = new HashSet<>();
 
     /** Patient/Staff 1:1 profiles */
-    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    // @NotFound(IGNORE) prevents Hibernate from throwing "More than one row with the given
+    // identifier" when the staff/patient table has duplicate user_id rows (DB data issue).
+    // It forces an outer-join load instead of a secondary unique-key SELECT, so Hibernate
+    // returns the first matched row (or null) rather than exploding.
+    // NOTE: @NotFound is incompatible with orphanRemoval; orphan deletion is handled by
+    // the owning side (Staff.user / Patient.user). ALL cascade operations except orphanRemoval
+    // are kept so test fixtures that build User → Patient/Staff graphs still work.
+    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY,
+              cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REFRESH, CascadeType.DETACH, CascadeType.REMOVE})
+    @NotFound(action = NotFoundAction.IGNORE)
     private Patient patientProfile;
 
-    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY,
+              cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REFRESH, CascadeType.DETACH, CascadeType.REMOVE})
+    @NotFound(action = NotFoundAction.IGNORE)
     private Staff staffProfile;
 
     @Builder.Default
