@@ -5,6 +5,7 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.event.AssignmentCreatedEvent;
 import com.example.hms.mapper.UserRoleHospitalAssignmentMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
@@ -37,6 +38,7 @@ import com.example.hms.repository.UserRoleRepository;
 import com.example.hms.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -169,6 +171,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private final StaffRepository staffRepository;
     private final UserRoleHospitalAssignmentMapper mapper;
     private final MessageSource messageSource;
+    private final ApplicationEventPublisher eventPublisher;
 
     /* ===================== Create ===================== */
 
@@ -228,8 +231,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         syncLegacyRole(user, role);
         if (sendNotifications) {
-            sendAssignmentEmailNotification(saved);
-            sendAssignmentSmsNotifications(saved);
+            // Publish an after-commit event so that email + SMS are only dispatched
+            // once the transaction has committed and the assignment row is visible.
+            // This prevents ghost links where the email is sent for a rolled-back assignment.
+            eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId()));
         }
         recordAssignmentAudit(saved);
 
@@ -561,8 +566,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         UserRoleHospitalAssignment saved = assignmentRepository.save(assignment);
         if (resendNotifications) {
-            sendAssignmentEmailNotification(saved);
-            sendAssignmentSmsNotifications(saved);
+            eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId()));
         }
         recordAssignmentAudit(saved);
         log.info("🔁 Regenerated assignment code for assignment '{}'", assignmentId);

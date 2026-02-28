@@ -38,7 +38,9 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         // Only redirect to the error page for page-level 403s.
         // Auxiliary / dropdown requests (hospitals list, etc.) are silenced
         // so they don't eject the user from their current view.
-        const isSilent = SILENT_403_PATTERNS.some((pattern) => pattern.test(req.url));
+        const isSilent =
+          (req.method === 'GET' || req.method === 'HEAD') &&
+          SILENT_403_PATTERNS.some((pattern) => pattern.test(req.url));
         if (!isSilent) {
           void router.navigate(['/error/403']);
         }

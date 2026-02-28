@@ -62,9 +62,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findActiveByEmailOrPhone(@Param("identifier") String identifier);
 
     /* ---------- Rich fetch for mapping a single user (roles + profiles) ---------- */
-    // NOTE: avoid deep nested paths like "staffProfile.assignment.role" — in Hibernate 6
-    // the @Query + @EntityGraph combination returns Optional.empty() when the intermediate
-    // association (staffProfile) is null, even though the user row exists.
+  
     @EntityGraph(attributePaths = {
         "userRoles", "userRoles.role",
         "staffProfile",
@@ -79,10 +77,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     /* ---------- Search & paging ---------- */
 
-    /**
-     * Lightweight search across ALL users (including inactive/soft-deleted).
-     * Admins need full visibility. Uses EXISTS for role filter so we don't load roles.
-     */
+
     @Query("""
         SELECT u FROM User u
         WHERE ( :name IS NULL
@@ -101,6 +96,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                       AND a.active = true
                       AND (LOWER(r.code) = LOWER(:role) OR LOWER(r.name) = LOWER(:role))
                 )
+                OR EXISTS (
+                    SELECT 1 FROM UserRole ur
+                    JOIN ur.role r2
+                    WHERE ur.user = u
+                      AND (LOWER(r2.code) = LOWER(:role) OR LOWER(r2.name) = LOWER(:role))
+                )
               )
         """)
     Page<User> searchUsers(@Param("name") String name,
@@ -108,18 +109,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                            @Param("email") String email,
                            Pageable pageable);
 
-    /**
-     * Paged list of ALL users (including inactive and soft-deleted).
-     * Admins need full visibility — status is shown as a badge in the UI.
-     * NOTE: @EntityGraph is intentionally omitted here — combining a collection-fetch
-     * entity graph with a LIMIT/OFFSET paged query triggers Hibernate 6 warning
-     * HHH90003004 ("firstResult/maxResults specified with collection fetch") and
-     * causes incorrect pagination (full table loaded in memory, then sliced).
-     * UserMapper.toSummaryDTO accesses userRoles lazily which is fine inside the
-     * surrounding @Transactional(readOnly = true) boundary.
-     */
-    @Query("select u from User u")
-    Page<User> findAllActive(Pageable pageable);
+
+    @Query("select u from User u where u.isDeleted = false")
+    Page<User> findAllPaged(Pageable pageable);
 
   List<User> findByIsDeletedFalse();
 

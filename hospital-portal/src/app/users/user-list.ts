@@ -1,6 +1,8 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subject, takeUntil } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { UserService, UserSummary, AdminRegisterRequest } from '../services/user.service';
 import { RoleService, RoleResponse } from '../services/role.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
@@ -69,11 +71,14 @@ const SPECIALIZATIONS = [
   templateUrl: './user-list.html',
   styleUrl: './user-list.scss',
 })
-export class UserListComponent implements OnInit {
+export class UserListComponent implements OnInit, OnDestroy {
   private readonly userService = inject(UserService);
   private readonly roleService = inject(RoleService);
   private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
+
+  private readonly searchSubject = new Subject<string>();
+  private readonly destroy$ = new Subject<void>();
 
   users = signal<UserSummary[]>([]);
   filtered = signal<UserSummary[]>([]);
@@ -123,6 +128,12 @@ export class UserListComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.searchSubject
+      .pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.currentPage.set(0);
+        this.loadUsers(0);
+      });
     this.loadUsers();
     this.loadRoles();
     this.loadHospitals();
@@ -130,12 +141,27 @@ export class UserListComponent implements OnInit {
 
   loadUsers(page = 0): void {
     this.loading.set(true);
-    this.userService.list(page, 20).subscribe({
+
+    // Use server-side search when a role filter or search term is active;
+    // fall back to the plain list endpoint when no filters are applied.
+    const term = this.searchTerm.trim();
+    const hasServerFilter = !!this.roleFilter || !!term;
+
+    const request$ = hasServerFilter
+      ? this.userService.search(page, 20, {
+          ...(this.roleFilter ? { role: this.roleFilter } : {}),
+          ...(term ? { name: term } : {}),
+        })
+      : this.userService.list(page, 20);
+
+    request$.subscribe({
       next: (res) => {
         this.users.set(res.content);
         this.currentPage.set(res.number);
         this.totalPages.set(res.totalPages);
         this.totalElements.set(res.totalElements);
+        // Client-side status filter (active/inactive/deleted) is still applied
+        // locally because the search endpoint doesn't expose those params.
         this.applyFilter();
         this.loading.set(false);
       },
@@ -166,12 +192,9 @@ export class UserListComponent implements OnInit {
   }
 
   applyFilter(): void {
-    const term = this.searchTerm.toLowerCase().trim();
+    // Role and search-term filtering is handled server-side via loadUsers().
+    // Here we only apply the client-side status filter on the already-loaded page.
     let result = this.users();
-
-    if (this.roleFilter) {
-      result = result.filter((u) => u.roleName === this.roleFilter);
-    }
     if (this.statusFilter === 'active') {
       result = result.filter((u) => u.active && !u.deleted);
     } else if (this.statusFilter === 'inactive') {
@@ -179,24 +202,36 @@ export class UserListComponent implements OnInit {
     } else if (this.statusFilter === 'deleted') {
       result = result.filter((u) => u.deleted);
     }
-    if (term) {
-      result = result.filter(
-        (u) =>
-          u.username.toLowerCase().includes(term) ||
-          u.email.toLowerCase().includes(term) ||
-          u.firstName.toLowerCase().includes(term) ||
-          u.lastName.toLowerCase().includes(term) ||
-          (u.roleName?.toLowerCase().includes(term) ?? false),
-      );
-    }
     this.filtered.set(result);
+  }
+
+  /** Called when the role filter dropdown changes — reloads from backend page 0. */
+  onRoleFilterChange(): void {
+    this.currentPage.set(0);
+    this.loadUsers(0);
+  }
+
+  /** Called when the status filter dropdown changes — client-side only re-filter. */
+  onStatusFilterChange(): void {
+    this.applyFilter();
+  }
+
+  /** Called when the search input changes — debounced 300 ms before reloading from backend. */
+  onSearchChange(): void {
+    this.searchSubject.next(this.searchTerm);
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   clearFilters(): void {
     this.searchTerm = '';
     this.roleFilter = '';
     this.statusFilter = '';
-    this.applyFilter();
+    this.currentPage.set(0);
+    this.loadUsers(0);
   }
 
   get activeFilterCount(): number {

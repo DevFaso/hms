@@ -761,7 +761,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserSummaryDTO> getAllUsers(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> users = userRepository.findAllActive(pageable);
+        Page<User> users = userRepository.findAllPaged(pageable);
         return users.map(userMapper::toSummaryDTO);
     }
 
@@ -805,9 +805,7 @@ public class UserServiceImpl implements UserService {
 
         log.info("♻️ User restored with ID: {}", id);
 
-        String displayName = (user.getFirstName() != null && user.getLastName() != null)
-                ? user.getFirstName() + " " + user.getLastName()
-                : user.getUsername();
+        String displayName = UserDisplayUtil.resolveDisplayName(user);
         try {
             emailService.sendAccountRestoredEmail(user.getEmail(), displayName);
         } catch (Exception e) {
