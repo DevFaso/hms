@@ -29,6 +29,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -72,7 +73,7 @@ class SuperAdminDashboardServiceImplTest {
         when(organizationRepository.count()).thenReturn(3L);
         when(organizationRepository.countByActiveTrue()).thenReturn(2L);
         when(departmentRepository.count()).thenReturn(12L);
-        when(appointmentRepository.countByAppointmentDateBetween(any(LocalDateTime.class), any(LocalDateTime.class)))
+        when(appointmentRepository.countByAppointmentDateBetween(any(LocalDate.class), any(LocalDate.class)))
             .thenReturn(5L);
 
         AuditEventLog auditLog = AuditEventLog.builder()

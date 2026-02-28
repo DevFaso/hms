@@ -8,7 +8,6 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -41,9 +40,9 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
 
     List<Appointment> findByHospital_Id(UUID hospitalId);
 
-    List<Appointment> findByAppointmentDateBetween(LocalDateTime startDate, LocalDateTime endDate);
+    List<Appointment> findByAppointmentDateBetween(LocalDate startDate, LocalDate endDate);
 
-    long countByAppointmentDateBetween(LocalDateTime startDate, LocalDateTime endDate);
+    long countByAppointmentDateBetween(LocalDate startDate, LocalDate endDate);
 
     List<Appointment> findByPatient_IdAndAppointmentDateAfter(UUID patientId, LocalDate date);
 
@@ -61,4 +60,12 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
 
     List<Appointment> findByHospital_IdOrderByAppointmentDateDesc(UUID hospitalId);
     List<Appointment> findAllByHospitalIdIn(Set<UUID> allowedHospitals);
+
+    /**
+     * Returns all appointments with DISTINCT applied at the JPQL level.
+     * This guards against Hibernate "More than one row with the given identifier" errors
+     * that can occur when a joined association (e.g. Staff) appears in multiple result rows.
+     */
+    @Query("SELECT DISTINCT a FROM Appointment a")
+    List<Appointment> findAllDistinct();
 }

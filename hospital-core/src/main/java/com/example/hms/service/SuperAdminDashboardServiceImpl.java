@@ -23,7 +23,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.Locale;
 
@@ -74,10 +73,8 @@ public class SuperAdminDashboardServiceImpl implements SuperAdminDashboardServic
         long activeGlobalAssignments = assignmentRepository.countByHospitalIsNullAndActiveTrue();
 
         // Today's appointments count (system-wide) — DB-level COUNT, no entity loading
-        LocalDateTime todayStart = LocalDate.now().atStartOfDay();
-        LocalDateTime todayEnd = LocalDate.now().atTime(LocalTime.MAX);
         long todayAppointmentsCount = appointmentRepository
-                .countByAppointmentDateBetween(todayStart, todayEnd);
+                .countByAppointmentDateBetween(LocalDate.now(), LocalDate.now());
 
         // Fetch recent audit events (simple page order by createdAt / eventTimestamp desc) if repository has method
     var page = auditEventLogRepository.findAllByOrderByEventTimestampDesc(PageRequest.of(0, recentAuditLimit));
