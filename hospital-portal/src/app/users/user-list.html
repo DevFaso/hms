@@ -25,10 +25,14 @@
         type="text"
         placeholder="Search by name, email, username..."
         [value]="searchTerm"
-        (input)="searchTerm = $any($event.target).value; applyFilter()"
+        (input)="searchTerm = $any($event.target).value; onSearchChange()"
       />
       @if (searchTerm) {
-        <button class="search-clear" title="Clear search" (click)="searchTerm = ''; applyFilter()">
+        <button
+          class="search-clear"
+          title="Clear search"
+          (click)="searchTerm = ''; onSearchChange()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       }
@@ -39,28 +43,28 @@
       <button
         class="status-pill"
         [class.active]="!statusFilter"
-        (click)="statusFilter = ''; applyFilter()"
+        (click)="statusFilter = ''; onStatusFilterChange()"
       >
         All
       </button>
       <button
         class="status-pill active-pill"
         [class.active]="statusFilter === 'active'"
-        (click)="statusFilter = 'active'; applyFilter()"
+        (click)="statusFilter = 'active'; onStatusFilterChange()"
       >
         Active
       </button>
       <button
         class="status-pill inactive-pill"
         [class.active]="statusFilter === 'inactive'"
-        (click)="statusFilter = 'inactive'; applyFilter()"
+        (click)="statusFilter = 'inactive'; onStatusFilterChange()"
       >
         Inactive
       </button>
       <button
         class="status-pill deleted-pill"
         [class.active]="statusFilter === 'deleted'"
-        (click)="statusFilter = 'deleted'; applyFilter()"
+        (click)="statusFilter = 'deleted'; onStatusFilterChange()"
       >
         Deleted
       </button>
@@ -89,7 +93,7 @@
           class="filter-select"
           title="Filter by role"
           [(ngModel)]="roleFilter"
-          (ngModelChange)="applyFilter()"
+          (ngModelChange)="onRoleFilterChange()"
         >
           <option value="">All Roles</option>
           @for (role of availableRoles(); track role.id) {

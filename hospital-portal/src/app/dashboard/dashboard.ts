@@ -1,13 +1,13 @@
 import {
-  Component,
-  inject,
-  OnInit,
-  OnDestroy,
-  signal,
-  computed,
   ChangeDetectionStrategy,
+  Component,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  signal,
 } from '@angular/core';
-import { CommonModule, DatePipe } from '@angular/common';
+import { CommonModule, DatePipe, TitleCasePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
@@ -23,6 +23,8 @@ import {
   OnCallStatus,
   RoomedPatient,
 } from '../services/dashboard.service';
+
+// ── Local interfaces ────────────────────────────────────────────────────────
 
 interface QuickAction {
   icon: string;
@@ -55,15 +57,27 @@ interface StatCard {
   suffix?: string;
 }
 
+interface NavTile {
+  icon: string;
+  label: string;
+  route: string;
+  color: string;
+  bg: string;
+  count?: number;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink, DatePipe],
+  imports: [CommonModule, RouterLink, DatePipe, TitleCasePipe],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DashboardComponent implements OnInit, OnDestroy {
+  // ── DI ───────────────────────────────────────────────────────
   private readonly auth = inject(AuthService);
   readonly permissions = inject(PermissionService);
   private readonly appointmentService = inject(AppointmentService);
@@ -73,9 +87,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // ── Time & Identity ──────────────────────────────────────────
   greeting = signal('');
   userName = signal('');
-  userTitle = signal('Dr.');
+  userTitle = signal('');
   currentTime = signal(this.formatTime(new Date()));
-  todayLabel = new Date().toLocaleDateString('en-US', {
+  readonly todayLabel = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
@@ -87,17 +101,30 @@ export class DashboardComponent implements OnInit, OnDestroy {
   loading = signal(true);
   scheduleLoading = signal(true);
 
-  // ── Role flags ───────────────────────────────────────────────
+  // ── Role flags (signals) ─────────────────────────────────────
   isSuperAdmin = signal(false);
-  isClinician = signal(false);
+  isHospitalAdmin = signal(false);
   isDoctor = signal(false);
   isNurse = signal(false);
+  isMidwife = signal(false);
+  isReceptionist = signal(false);
+  isLabScientist = signal(false);
+  isPharmacist = signal(false);
+  isRadiologist = signal(false);
 
-  // ── Super-admin data ─────────────────────────────────────────
+  /** True for DOCTOR / NURSE / MIDWIFE — gets clinical workspace layout */
+  isClinician = computed(() => this.isDoctor() || this.isNurse() || this.isMidwife());
+
+  /** True for anyone who has View Appointments permission but is not a clinician */
+  isSchedulingRole = computed(
+    () => !this.isClinician() && this.permissions.hasPermission('View Appointments'),
+  );
+
+  // ── Super-Admin data ─────────────────────────────────────────
   adminSummary = signal<SuperAdminSummary | null>(null);
   recentAuditEvents = signal<RecentAuditEvent[]>([]);
 
-  // ── Clinical dashboard data ───────────────────────────────────
+  // ── Clinical Dashboard data ───────────────────────────────────
   kpis = signal<DashboardKPI[]>([]);
   alerts = signal<ClinicalAlert[]>([]);
   inboxCounts = signal<InboxCounts | null>(null);
@@ -108,7 +135,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   todayAppointments = signal<AppointmentResponse[]>([]);
   recentPatients = signal<PatientResponse[]>([]);
 
-  // ── Derived/computed ─────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────
+  // COMPUTED — DERIVED STATE
+  // ────────────────────────────────────────────────────────────
+
   scheduleSlots = computed<ScheduleSlot[]>(() => {
     const now = new Date();
     const nowMins = now.getHours() * 60 + now.getMinutes();
@@ -143,75 +173,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     () => this.todayAppointments().filter((a) => a.status === 'IN_PROGRESS').length,
   );
 
-  /** The main stat strip for the doctor hero section */
-  statCards = computed<StatCard[]>(() => {
-    const cards: StatCard[] = [
-      {
-        key: 'total_today',
-        label: "Today's Patients",
-        value: this.todayAppointments().length,
-        icon: 'group',
-        color: '#2563eb',
-        bgColor: '#dbeafe',
-        route: '/appointments',
-      },
-      {
-        key: 'completed',
-        label: 'Completed',
-        value: this.completedToday(),
-        icon: 'task_alt',
-        color: '#059669',
-        bgColor: '#d1fae5',
-        route: '/appointments',
-      },
-      {
-        key: 'in_progress',
-        label: 'In Progress',
-        value: this.inProgressNow(),
-        icon: 'person_play',
-        color: '#d97706',
-        bgColor: '#fef3c7',
-        route: '/appointments',
-      },
-      {
-        key: 'pending',
-        label: 'Pending',
-        value: this.pendingToday(),
-        icon: 'pending',
-        color: '#7c3aed',
-        bgColor: '#ede9fe',
-        route: '/appointments',
-      },
-      {
-        key: 'alerts',
-        label: 'Active Alerts',
-        value: this.unacknowledgedAlerts().length,
-        icon: 'notification_important',
-        color: this.criticalAlerts().length > 0 ? '#dc2626' : '#ea580c',
-        bgColor: this.criticalAlerts().length > 0 ? '#fee2e2' : '#ffedd5',
-      },
-      {
-        key: 'inbox',
-        label: 'Inbox Items',
-        value: this.totalInboxCount(),
-        icon: 'mark_email_unread',
-        color: '#0891b2',
-        bgColor: '#cffafe',
-        route: '/chat',
-      },
-    ];
-
-    // Merge KPI data if available
-    const kpiMap = new Map(this.kpis().map((k) => [k.key, k]));
-    return cards.map((c) => {
-      const kpi = kpiMap.get(c.key);
-      if (kpi) {
-        return { ...c, value: kpi.value, trend: kpi.trend, delta: kpi.deltaNum };
-      }
-      return c;
-    });
-  });
-
   totalInboxCount = computed(() => {
     const ic = this.inboxCounts();
     if (!ic) return 0;
@@ -224,111 +185,405 @@ export class DashboardComponent implements OnInit, OnDestroy {
     );
   });
 
-  /** Day completion percentage for the progress ring */
   scheduleProgress = computed(() => {
     const total = this.todayAppointments().length;
     if (total === 0) return 0;
     return Math.round((this.completedToday() / total) * 100);
   });
 
-  /** Circumference-based stroke-dashoffset for SVG progress ring */
   progressOffset = computed(() => {
     const radius = 34;
     const circ = 2 * Math.PI * radius;
     return circ - (this.scheduleProgress() / 100) * circ;
   });
 
-  quickActions = computed<QuickAction[]>(() => {
-    const actions: QuickAction[] = [];
-    if (this.permissions.hasPermission('Register Patients')) {
-      actions.push({
-        icon: 'person_add',
-        label: 'Register Patient',
-        description: 'Onboard a new patient',
-        route: '/patients/new',
+  // ── Hero gradient class (role-specific) ─────────────────────
+  heroGradientClass = computed(() => {
+    if (this.isSuperAdmin()) return 'hero-gradient-superadmin';
+    if (this.isHospitalAdmin()) return 'hero-gradient-hospital-admin';
+    if (this.isDoctor()) return 'hero-gradient-doctor';
+    if (this.isNurse() || this.isMidwife()) return 'hero-gradient-nurse';
+    if (this.isReceptionist()) return 'hero-gradient-receptionist';
+    if (this.isLabScientist()) return 'hero-gradient-lab';
+    if (this.isPharmacist()) return 'hero-gradient-pharmacist';
+    if (this.isRadiologist()) return 'hero-gradient-radiologist';
+    return 'hero-gradient-default';
+  });
+
+  // ── Role display label ────────────────────────────────────────
+  roleLabel = computed(() => {
+    if (this.isSuperAdmin()) return 'Super Administrator';
+    if (this.isHospitalAdmin()) return 'Hospital Administrator';
+    if (this.isDoctor()) return 'Physician';
+    if (this.isMidwife()) return 'Midwife';
+    if (this.isNurse()) return 'Nurse';
+    if (this.isReceptionist()) return 'Front Desk';
+    if (this.isLabScientist()) return 'Lab Scientist';
+    if (this.isPharmacist()) return 'Pharmacist';
+    if (this.isRadiologist()) return 'Radiologist';
+    return 'Staff';
+  });
+
+  // ── Stat strip (doctor / clinical) ──────────────────────────
+  statCards = computed<StatCard[]>(() => {
+    const base: StatCard[] = [
+      {
+        key: 'total_today',
+        label: "Today's Patients",
+        value: this.todayAppointments().length,
+        icon: 'group',
         color: '#2563eb',
-        bgColor: '#dbeafe',
-      });
-    }
-    if (this.permissions.hasPermission('Create Appointments')) {
-      actions.push({
-        icon: 'calendar_add_on',
-        label: 'New Appointment',
-        description: 'Schedule a visit',
-        route: '/appointments/new',
-        color: '#059669',
-        bgColor: '#d1fae5',
-      });
-    }
-    if (this.permissions.hasPermission('Create Encounters')) {
-      actions.push({
-        icon: 'stethoscope',
-        label: 'Start Encounter',
-        description: 'Begin a clinical encounter',
-        route: '/encounters/new',
-        color: '#7c3aed',
-        bgColor: '#ede9fe',
-      });
-    }
-    if (this.permissions.hasPermission('Create Prescriptions')) {
-      actions.push({
-        icon: 'medication',
-        label: 'Write Rx',
-        description: 'Prescribe medication',
-        route: '/prescriptions/new',
-        color: '#0891b2',
-        bgColor: '#cffafe',
-      });
-    }
-    if (this.permissions.hasPermission('View Lab')) {
-      actions.push({
-        icon: 'science',
-        label: 'Lab Orders',
-        description: 'Order lab tests',
-        route: '/lab',
-        color: '#dc2626',
-        bgColor: '#fee2e2',
-      });
-    }
-    if (this.permissions.hasPermission('Request Imaging Studies')) {
-      actions.push({
-        icon: 'radiology',
-        label: 'Imaging',
-        description: 'Request imaging studies',
-        route: '/imaging',
-        color: '#d97706',
-        bgColor: '#fef3c7',
-      });
-    }
-    if (this.permissions.hasPermission('View Billing')) {
-      actions.push({
-        icon: 'receipt_long',
-        label: 'Billing',
-        description: 'Manage billing',
-        route: '/billing',
-        color: '#64748b',
-        bgColor: '#f1f5f9',
-      });
+        bgColor: '#eff6ff',
+        route: '/appointments',
+      },
+      {
+        key: 'completed',
+        label: 'Completed',
+        value: this.completedToday(),
+        icon: 'task_alt',
+        color: '#2563eb',
+        bgColor: '#eff6ff',
+        route: '/appointments',
+      },
+      {
+        key: 'in_progress',
+        label: 'In Progress',
+        value: this.inProgressNow(),
+        icon: 'person_play',
+        color: '#2563eb',
+        bgColor: '#eff6ff',
+        route: '/appointments',
+      },
+      {
+        key: 'pending',
+        label: 'Pending',
+        value: this.pendingToday(),
+        icon: 'pending',
+        color: '#2563eb',
+        bgColor: '#eff6ff',
+        route: '/appointments',
+      },
+      {
+        key: 'alerts',
+        label: 'Active Alerts',
+        value: this.unacknowledgedAlerts().length,
+        icon: 'notification_important',
+        color: this.criticalAlerts().length > 0 ? '#dc2626' : '#2563eb',
+        bgColor: this.criticalAlerts().length > 0 ? '#fee2e2' : '#eff6ff',
+      },
+      {
+        key: 'inbox',
+        label: 'Inbox Items',
+        value: this.totalInboxCount(),
+        icon: 'mark_email_unread',
+        color: '#2563eb',
+        bgColor: '#eff6ff',
+        route: '/chat',
+      },
+    ];
+
+    const kpiMap = new Map(this.kpis().map((k) => [k.key, k]));
+    return base.map((c) => {
+      const kpi = kpiMap.get(c.key);
+      return kpi ? { ...c, value: kpi.value, trend: kpi.trend, delta: kpi.deltaNum } : c;
+    });
+  });
+
+  // ── Quick Actions (permission-gated) ─────────────────────────
+  quickActions = computed<QuickAction[]>(() => {
+    const all: [string, QuickAction][] = [
+      [
+        'Register Patients',
+        {
+          icon: 'person_add',
+          label: 'Register Patient',
+          description: 'Onboard a new patient',
+          route: '/patients/new',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Create Appointments',
+        {
+          icon: 'calendar_add_on',
+          label: 'New Appointment',
+          description: 'Schedule a visit',
+          route: '/appointments/new',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Create Encounters',
+        {
+          icon: 'stethoscope',
+          label: 'Start Encounter',
+          description: 'Begin a clinical encounter',
+          route: '/encounters/new',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Create Prescriptions',
+        {
+          icon: 'medication',
+          label: 'Write Rx',
+          description: 'Prescribe medication',
+          route: '/prescriptions/new',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'View Lab',
+        {
+          icon: 'science',
+          label: 'Lab Orders',
+          description: 'Order lab tests',
+          route: '/lab',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Request Imaging Studies',
+        {
+          icon: 'radiology',
+          label: 'Imaging',
+          description: 'Request imaging studies',
+          route: '/imaging',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'View Billing',
+        {
+          icon: 'receipt_long',
+          label: 'Billing',
+          description: 'Manage billing',
+          route: '/billing',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'View Prescriptions',
+        {
+          icon: 'local_pharmacy',
+          label: 'Prescriptions',
+          description: 'View & dispense prescriptions',
+          route: '/prescriptions',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Dispense Medications',
+        {
+          icon: 'medication_liquid',
+          label: 'Dispense Rx',
+          description: 'Dispense medications',
+          route: '/prescriptions',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Process Lab Tests',
+        {
+          icon: 'biotech',
+          label: 'Process Lab',
+          description: 'Process pending lab tests',
+          route: '/lab',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Document Nursing Notes',
+        {
+          icon: 'edit_note',
+          label: 'Nursing Notes',
+          description: 'Document patient notes',
+          route: '/encounters',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Check-in Patients',
+        {
+          icon: 'how_to_reg',
+          label: 'Check-in',
+          description: 'Check in a patient',
+          route: '/appointments',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+    ];
+
+    const seen = new Set<string>();
+    const actions: QuickAction[] = [];
+    for (const [perm, action] of all) {
+      if (!seen.has(action.route) && this.permissions.hasPermission(perm)) {
+        seen.add(action.route);
+        actions.push(action);
+        if (actions.length >= 6) break;
+      }
     }
     return actions;
   });
 
-  // ── Lifecycle ─────────────────────────────────────────────────
+  // ── Super-Admin navigation tiles ─────────────────────────────
+  adminNavTiles = computed<NavTile[]>(() => [
+    {
+      icon: 'corporate_fare',
+      label: 'Organizations',
+      route: '/organizations',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'local_hospital',
+      label: 'Hospitals',
+      route: '/hospitals',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'domain',
+      label: 'Departments',
+      route: '/departments',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'shield',
+      label: 'Roles',
+      route: '/roles',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    { icon: 'group', label: 'Users', route: '/users', color: '#2563eb', bg: '#eff6ff' },
+    {
+      icon: 'people',
+      label: 'Patients',
+      route: '/patients',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'calendar_month',
+      label: 'Appointments',
+      route: '/appointments',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'history',
+      label: 'Audit Logs',
+      route: '/audit-logs',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'tune',
+      label: 'Platform Config',
+      route: '/platform',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'flag',
+      label: 'Feature Flags',
+      route: '/feature-flags',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'analytics',
+      label: 'Analytics',
+      route: '/dashboard',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'notifications',
+      label: 'Notifications',
+      route: '/notifications',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+  ]);
+
+  // ── Hospital Admin navigation tiles ──────────────────────────
+  hospitalAdminNavTiles = computed<NavTile[]>(() => [
+    {
+      icon: 'group',
+      label: 'Staff',
+      route: '/staff',
+      color: '#2563eb',
+      bg: '#eff6ff',
+      count: undefined,
+    },
+    {
+      icon: 'people',
+      label: 'Patients',
+      route: '/patients',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'calendar_month',
+      label: 'Appointments',
+      route: '/appointments',
+      color: '#2563eb',
+      bg: '#eff6ff',
+      count: this.todayAppointments().length,
+    },
+    {
+      icon: 'domain',
+      label: 'Departments',
+      route: '/departments',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'receipt_long',
+      label: 'Billing',
+      route: '/billing',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    { icon: 'policy', label: 'Audit Logs', route: '/audit-logs', color: '#2563eb', bg: '#eff6ff' },
+  ]);
+
+  // ────────────────────────────────────────────────────────────
+  // LIFECYCLE
+  // ────────────────────────────────────────────────────────────
+
   ngOnInit(): void {
     this.initGreeting();
     this.initProfile();
     this.loadDashboardData();
 
-    // Live clock — update every minute
     this.clockInterval = setInterval(() => {
       this.currentTime.set(this.formatTime(new Date()));
-      this.initGreeting(); // greeting changes at 12:00 and 17:00
+      this.initGreeting();
     }, 60_000);
   }
 
   ngOnDestroy(): void {
     if (this.clockInterval) clearInterval(this.clockInterval);
   }
+
+  // ────────────────────────────────────────────────────────────
+  // PRIVATE INITIALIZERS
+  // ────────────────────────────────────────────────────────────
 
   private initGreeting(): void {
     const h = new Date().getHours();
@@ -341,40 +596,40 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const profile = this.auth.getUserProfile();
     const first = profile?.firstName ?? '';
     const last = profile?.lastName ?? '';
-    this.userName.set(first || last ? `${first} ${last}`.trim() : (profile?.username ?? 'Doctor'));
+    this.userName.set(first || last ? `${first} ${last}`.trim() : (profile?.username ?? 'User'));
 
-    const roles = profile?.roles ?? [];
-    const isDoc =
-      this.auth.hasAnyRole(['ROLE_DOCTOR']) ||
-      roles.some((r) => r.toLowerCase().includes('doctor'));
-    const isMid = this.auth.hasAnyRole(['ROLE_MIDWIFE']);
-    if (isDoc) this.userTitle.set('Dr.');
-    else if (isMid) this.userTitle.set('Mid.');
-    else this.userTitle.set('');
-
+    // Set role flags
     this.isSuperAdmin.set(this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']));
+    this.isHospitalAdmin.set(this.auth.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN']));
     this.isDoctor.set(this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON']));
-    this.isNurse.set(this.auth.hasAnyRole(['ROLE_NURSE', 'ROLE_MIDWIFE']));
-    this.isClinician.set(
-      this.auth.hasAnyRole([
-        'ROLE_DOCTOR',
-        'ROLE_PHYSICIAN',
-        'ROLE_SURGEON',
-        'ROLE_NURSE',
-        'ROLE_MIDWIFE',
-      ]),
-    );
+    this.isNurse.set(this.auth.hasAnyRole(['ROLE_NURSE']));
+    this.isMidwife.set(this.auth.hasAnyRole(['ROLE_MIDWIFE']));
+    this.isReceptionist.set(this.auth.hasAnyRole(['ROLE_RECEPTIONIST']));
+    this.isLabScientist.set(this.auth.hasAnyRole(['ROLE_LAB_SCIENTIST']));
+    this.isPharmacist.set(this.auth.hasAnyRole(['ROLE_PHARMACIST']));
+    this.isRadiologist.set(this.auth.hasAnyRole(['ROLE_RADIOLOGIST']));
+
+    // Title prefix
+    if (this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON'])) {
+      this.userTitle.set('Dr.');
+    } else if (this.auth.hasAnyRole(['ROLE_MIDWIFE'])) {
+      this.userTitle.set('Mid.');
+    } else {
+      this.userTitle.set('');
+    }
   }
 
   private loadDashboardData(): void {
     this.loading.set(true);
     this.scheduleLoading.set(true);
+
     let pending = 0;
     const done = () => {
       if (--pending <= 0) this.loading.set(false);
     };
 
-    if (this.auth.hasAnyRole(['ROLE_SUPER_ADMIN'])) {
+    // Super-admin summary
+    if (this.isSuperAdmin()) {
       pending++;
       this.dashboardService.getSummary().subscribe({
         next: (s) => {
@@ -382,18 +637,36 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.recentAuditEvents.set(s.recentAuditEvents ?? []);
           done();
         },
-        error: () => done(),
+        error: () => {
+          // Set an empty fallback so the dashboard renders with zeros instead of blank
+          this.adminSummary.set({
+            totalPatients: 0,
+            totalUsers: 0,
+            activeUsers: 0,
+            inactiveUsers: 0,
+            totalHospitals: 0,
+            activeHospitals: 0,
+            inactiveHospitals: 0,
+            totalOrganizations: 0,
+            activeOrganizations: 0,
+            totalDepartments: 0,
+            totalRoles: 0,
+            totalAssignments: 0,
+            activeAssignments: 0,
+            inactiveAssignments: 0,
+            globalAssignments: 0,
+            activeGlobalAssignments: 0,
+            todayAppointmentsCount: 0,
+            generatedAt: new Date().toISOString(),
+            recentAuditEvents: [],
+          });
+          done();
+        },
       });
     }
 
-    const clinicalRoles = [
-      'ROLE_DOCTOR',
-      'ROLE_PHYSICIAN',
-      'ROLE_SURGEON',
-      'ROLE_NURSE',
-      'ROLE_MIDWIFE',
-    ];
-    if (this.auth.hasAnyRole(clinicalRoles)) {
+    // Clinical dashboard (doctor / nurse / midwife)
+    if (this.isClinician()) {
       pending++;
       this.dashboardService.getClinicalDashboard().subscribe({
         next: (d) => {
@@ -408,13 +681,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
       });
     }
 
-    // Always load today's appointments for clinical users
+    // Today's appointments (for roles that can see them)
     if (this.permissions.hasPermission('View Appointments')) {
       pending++;
       const today = new Date().toISOString().split('T')[0];
       this.appointmentService.list({ fromDate: today, toDate: today }).subscribe({
         next: (appts) => {
-          // Sort by start time ascending
           const sorted = [...appts].sort((a, b) => a.startTime.localeCompare(b.startTime));
           this.todayAppointments.set(sorted);
           this.scheduleLoading.set(false);
@@ -429,6 +701,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.scheduleLoading.set(false);
     }
 
+    // Recent patients (for roles with patient visibility)
     if (this.permissions.hasPermission('View Patient Records')) {
       pending++;
       this.patientService.list().subscribe({
@@ -446,7 +719,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ── Actions ───────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────
+  // ACTIONS
+  // ────────────────────────────────────────────────────────────
+
   acknowledgeAlert(alertId: string): void {
     this.dashboardService.acknowledgeAlert(alertId).subscribe({
       next: () =>
@@ -460,7 +736,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadDashboardData();
   }
 
-  // ── Style helpers ─────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────
+  // TEMPLATE HELPERS
+  // ────────────────────────────────────────────────────────────
+
   getAlertSeverityClass(severity: string): string {
     const map: Record<string, string> = {
       CRITICAL: 'severity-critical',
@@ -529,7 +808,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   getPatientInitials(name: string): string {
-    const parts = name?.trim().split(' ') ?? [];
+    const parts = (name ?? '').trim().split(' ');
     if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
     return (parts[0]?.[0] ?? '?').toUpperCase();
   }
@@ -550,6 +829,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
       hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
     return colors[Math.abs(hash) % colors.length];
+  }
+
+  /** Format an ISO/HH:mm time string as 12-hour for display */
+  formatApptTime(time: string): string {
+    if (!time) return '';
+    const [h, m] = time.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const hour = h % 12 || 12;
+    return `${hour}:${String(m).padStart(2, '0')} ${ampm}`;
   }
 
   private formatTime(d: Date): string {

@@ -65,6 +65,22 @@ export class UserService {
     return this.http.get<UserSummaryPage>('/users', { params });
   }
 
+  /**
+   * Server-side search with optional filters. Uses the /users/search endpoint
+   * which supports name, role, and email query params with pagination.
+   */
+  search(
+    page = 0,
+    size = 20,
+    filters: { name?: string; role?: string; email?: string } = {},
+  ): Observable<UserSummaryPage> {
+    let params = new HttpParams().set('page', String(page)).set('size', String(size));
+    if (filters.name) params = params.set('name', filters.name);
+    if (filters.role) params = params.set('role', filters.role);
+    if (filters.email) params = params.set('email', filters.email);
+    return this.http.get<UserSummaryPage>('/users/search', { params });
+  }
+
   getById(id: string): Observable<UserDetail> {
     return this.http.get<UserDetail>(`/users/${id}`);
   }
