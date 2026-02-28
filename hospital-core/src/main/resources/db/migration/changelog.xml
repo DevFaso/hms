@@ -61,6 +61,30 @@
     </changeSet>
 
     <!-- =================================================================
+         V5: Add temp_plain_password column to user_role_hospital_assignment
+         Stores the auto-generated plaintext credential only until the user
+         verifies their assignment code; cleared immediately after use.
+         ================================================================= -->
+    <changeSet id="V5-add-temp-plain-password" author="hms-team" runOnChange="false">
+        <sqlFile path="V5__add_temp_plain_password.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V6: Repair soft-deleted users who still have active role assignments
+         Restores is_deleted=false / is_active=true for any user who is
+         soft-deleted but owns at least one active UserRoleHospitalAssignment.
+         ================================================================= -->
+    <changeSet id="V6-repair-soft-deleted-active-users" author="hms-team" runOnChange="false">
+        <sqlFile path="V6__repair_soft_deleted_active_users.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
          V7: Make chat_messages.assignment_id nullable
          SUPER_ADMIN and users without hospital context may send direct
          messages. assignment is left null in that path; the initial
@@ -68,6 +92,21 @@
          ================================================================= -->
     <changeSet id="V7-chat-assignment-nullable" author="hms-team" runOnChange="false">
         <sqlFile path="V7__chat_assignment_nullable.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V8: Fix duplicate staff rows + normalize legacy enum values
+         - Deduplicates hospital.staff by keeping the latest row per user_id
+         - Re-points departments.head_of_department_staff_id to canonical row
+         - Adds UNIQUE INDEX ON hospital.staff(user_id)
+         - Normalizes REGISTERED → ADMITTED in patient_hospital_registrations
+         - Normalizes LAB_SCIENTIST → LABORATORY_SCIENTIST in staff
+         ================================================================= -->
+    <changeSet id="V8-fix-staff-unique-normalize-stay-status" author="hms-team" runOnChange="false">
+        <sqlFile path="V8__fix_staff_unique_and_normalize_stay_status.sql"
                  relativeToChangelogFile="true"
                  splitStatements="true"
                  stripComments="true"/>
