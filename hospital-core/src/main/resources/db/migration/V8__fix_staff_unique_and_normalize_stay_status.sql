@@ -48,3 +48,12 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_staff_user_id
 UPDATE clinical.patient_hospital_registrations
 SET    stay_status = 'ADMITTED'
 WHERE  stay_status = 'REGISTERED';
+
+-- -----------------------------------------------------------------
+-- 4. Normalize legacy job_title value LAB_SCIENTIST → LABORATORY_SCIENTIST
+--    The Java enum was extended with LAB_SCIENTIST for read-compatibility,
+--    but new staff records should use the canonical LABORATORY_SCIENTIST value.
+-- -----------------------------------------------------------------
+UPDATE hospital.staff
+SET    job_title = 'LABORATORY_SCIENTIST'
+WHERE  job_title = 'LAB_SCIENTIST';
