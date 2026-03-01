@@ -95,7 +95,10 @@ export class AppointmentService {
   }
 
   updateStatus(id: string, action: string): Observable<AppointmentResponse> {
-    return this.http.patch<AppointmentResponse>(`${this.baseUrl}/${id}/status`, { action });
+    // Backend exposes PUT /{id}/status?action=... (not PATCH, not a request body).
+    // Using http.patch() or sending action in the body caused 401/405 in production.
+    const params = new HttpParams().set('action', action);
+    return this.http.put<AppointmentResponse>(`${this.baseUrl}/${id}/status`, null, { params });
   }
 
   delete(id: string): Observable<void> {

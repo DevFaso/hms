@@ -32,6 +32,29 @@ public class FileUploadService {
     @Value("${app.upload.dir:uploads}")
     private String uploadDir;
 
+    /**
+     * Public base URL for file links returned to the browser.
+     * <p>
+     * Set this to your public-facing domain, e.g.
+     * {@code https://hms.dev.bitnesttechs.com} so that the browser can reach the
+     * uploaded files through the Nginx reverse-proxy, not through an internal
+     * Railway hostname that is unreachable from the public internet.
+     * <p>
+     * The value is intentionally left <em>empty</em> by default so that the
+     * {@link #buildPublicUrl} method falls back to
+     * {@link ServletUriComponentsBuilder#fromCurrentContextPath()} when running
+     * locally (where no public URL is configured).  In production you must set
+     * this environment variable / Spring property.
+     */
+    @Value("${app.public-base-url:}")
+    private String publicBaseUrl;
+
+    /**
+     * Legacy fallback used only when there is no active request context AND
+     * {@code app.public-base-url} is not configured.  Kept for backward
+     * compatibility with unit-tests and background jobs that call upload helpers
+     * outside of an HTTP request thread.
+     */
     @Value("${app.backend.base-url:http://localhost:8081}")
     private String backendBaseUrl;
 
@@ -268,13 +291,23 @@ public class FileUploadService {
     private String buildPublicUrl(String relativePath) {
         String normalized = relativePath.startsWith("/") ? relativePath : "/" + relativePath;
 
+        // Prefer the explicitly configured public URL (e.g. https://hms.dev.bitnesttechs.com).
+        // This avoids leaking the internal Railway hostname to the browser.
+        if (publicBaseUrl != null && !publicBaseUrl.isBlank()) {
+            return UriComponentsBuilder.fromUriString(publicBaseUrl)
+                    .path(normalized)
+                    .build()
+                    .toUriString();
+        }
+
+        // Inside an active HTTP request context (local dev) use the current origin.
         try {
             return ServletUriComponentsBuilder.fromCurrentContextPath()
                     .path(normalized)
                     .build()
                     .toUriString();
         } catch (IllegalStateException ex) {
-            // No request context (e.g., async execution) – fall back to configured backend base URL
+            // No request context (e.g., async execution) – fall back to backend base URL.
             return UriComponentsBuilder.fromUriString(backendBaseUrl)
                     .path(normalized)
                     .build()
