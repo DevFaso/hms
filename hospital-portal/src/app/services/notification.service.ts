@@ -44,12 +44,21 @@ export class NotificationService {
   connectWebSocket(username: string): void {
     const WS =
       typeof globalThis !== 'undefined' && globalThis.WebSocket ? globalThis.WebSocket : undefined;
-    if (WS) {
-      this.ws = new WS(`ws://localhost:8081/ws/notifications?user=${username}`);
-      this.ws.onmessage = (event) => {
-        this.notificationSubject.next(JSON.parse(event.data as string) as Notification);
-      };
-    }
+    if (!WS) return;
+
+    // Derive the WebSocket URL from the current page origin so it works in
+    // every environment (local dev, staging, production) without hardcoding.
+    // Use wss:// when the page is served over HTTPS, ws:// otherwise.
+    const loc =
+      typeof globalThis !== 'undefined' && globalThis.location ? globalThis.location : null;
+    const wsProto = loc?.protocol === 'https:' ? 'wss' : 'ws';
+    const wsHost = loc?.host ?? 'localhost';
+    const wsUrl = `${wsProto}://${wsHost}/ws/notifications?user=${username}`;
+
+    this.ws = new WS(wsUrl);
+    this.ws.onmessage = (event) => {
+      this.notificationSubject.next(JSON.parse(event.data as string) as Notification);
+    };
   }
 
   getNotificationStream(): Observable<Notification> {

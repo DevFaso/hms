@@ -100,13 +100,40 @@ export class AuthService {
     if (!this.isBrowser) return;
     try {
       const toStore = { ...profile };
-      if (toStore.profileImageUrl && !toStore.profileImageUrl.startsWith('http')) {
-        toStore.profileImageUrl = `${globalThis.location.origin}${toStore.profileImageUrl}`;
+      if (toStore.profileImageUrl) {
+        toStore.profileImageUrl = this.normalizeImageUrl(toStore.profileImageUrl);
       }
       localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(toStore));
       this.currentProfile.set(toStore);
     } catch {
       // Storage error
+    }
+  }
+
+  /**
+   * Normalises a profile image URL so it always resolves through the public
+   * Nginx proxy, regardless of whether the backend returned:
+   *   - a relative path  ("/api/uploads/...")          → kept as-is
+   *   - the public origin ("https://hms.dev.../api/…") → kept as-is
+   *   - an internal Railway URL ("http://patient-stillness.railway.internal:8080/api/…")
+   *     → rewritten to a relative "/api/uploads/…" path
+   */
+  private normalizeImageUrl(url: string): string {
+    // Already relative — good.
+    if (!url.startsWith('http')) return url;
+
+    const publicOrigin = this.isBrowser ? globalThis.location.origin : '';
+
+    // Already pointing at the public origin — good.
+    if (publicOrigin && url.startsWith(publicOrigin)) return url;
+
+    // Internal / mismatched origin: extract the path component and keep it
+    // relative so the request goes through Nginx → backend.
+    try {
+      const parsed = new URL(url);
+      return parsed.pathname + (parsed.search || '');
+    } catch {
+      return url;
     }
   }
 
