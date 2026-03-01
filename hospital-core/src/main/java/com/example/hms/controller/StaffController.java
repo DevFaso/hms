@@ -155,7 +155,7 @@ public class StaffController {
 
     @Operation(summary = "Paged staff by hospital (active only)")
     @GetMapping("/hospital/{hospitalId}/active")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<Page<StaffResponseDTO>> pageByHospitalActive(
         @PathVariable UUID hospitalId,
         @ParameterObject Pageable pageable) {
