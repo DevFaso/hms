@@ -2,7 +2,11 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { Client, IMessage } from '@stomp/stompjs';
-import * as SockJS from 'sockjs-client';
+// sockjs-client is a CommonJS module. Importing it as a namespace (`import * as`)
+// does NOT give the constructor when esModuleInterop is off (Angular default).
+// We use require() inside the factory so the bundler wraps it correctly at runtime.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const SockJS = require('sockjs-client') as new (url: string) => WebSocket;
 
 export interface Notification {
   id: string;
@@ -59,7 +63,7 @@ export class NotificationService {
 
     this.stompClient = new Client({
       // SockJS factory — required because the backend endpoint uses .withSockJS()
-      webSocketFactory: () => new SockJS(sockUrl) as WebSocket,
+      webSocketFactory: () => new SockJS(sockUrl),
       // Reconnect automatically every 5 s if the connection drops
       reconnectDelay: 5000,
       onConnect: () => {
