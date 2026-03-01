@@ -2,7 +2,7 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { forkJoin, of, Subject } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { AppointmentService, AppointmentUpsertRequest } from '../services/appointment.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -97,34 +97,27 @@ export class AppointmentFormComponent implements OnInit {
 
   ngOnInit(): void {
     const lockedId = this.lockedHospitalId;
-    const permittedIds = this.roleContext.permittedHospitalIds;
 
     if (lockedId) {
-      // Single-hospital user: fetch only their one hospital — no dropdown needed
+      // Scoped user (all non-admin staff, single-hospital admins):
+      // locked to one hospital — never show a dropdown.
       this.hospitalService.getById(lockedId).subscribe((h) => {
         this.hospitals.set([h]);
         this.selectedHospitalId.set(lockedId);
         this.form.hospitalId = lockedId;
-        // Ensure the interceptor sends the correct X-Hospital-Id
+        // Ensure the interceptor sends the correct X-Hospital-Id for this user.
         this.roleContext.activeHospitalId = lockedId;
         this.loadDepartmentsFor(lockedId);
       });
 
-      // Load staff for the locked hospital once
+      // Load staff for the locked hospital once.
       this.staffService.list(lockedId).subscribe((list) => {
         this.allStaff = list;
         this.staffLoaded = true;
         this.setDeptsFromStaff(lockedId);
       });
-    } else if (permittedIds.length > 1) {
-      // Multi-hospital user (e.g. receptionist assigned to 2+ hospitals):
-      // Fetch each permitted hospital by ID so the dropdown is scoped to their
-      // assignments only — never expose hospitals they don't belong to.
-      forkJoin(permittedIds.map((id) => this.hospitalService.getById(id))).subscribe((results) => {
-        this.hospitals.set(results);
-      });
     } else {
-      // Unrestricted user (admin, super-admin): load all hospitals
+      // Multi-hospital admin: load all hospitals for the dropdown.
       this.hospitalService.list().subscribe((h) => {
         this.hospitals.set(h);
       });

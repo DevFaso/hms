@@ -217,6 +217,17 @@ export class AuthService {
     return (p.uid as string) ?? (p.id as string) ?? null;
   }
 
+  /**
+   * Returns true when the user holds a role that is allowed to span multiple
+   * hospitals (Super Admin and Hospital Admin).  All other roles (doctor, nurse,
+   * receptionist, …) are always scoped to a single hospital — the one they are
+   * currently signed into.
+   */
+  isAdminRole(): boolean {
+    const roles = this.getRoles();
+    return roles.some((r) => r === 'ROLE_SUPER_ADMIN' || r === 'ROLE_HOSPITAL_ADMIN');
+  }
+
   getHospitalId(): string | null {
     const ctx = this.roleContext.activeHospitalId;
     if (ctx) return ctx;
@@ -225,17 +236,32 @@ export class AuthService {
   }
 
   /**
-   * Returns all hospital IDs the current user is permitted to access,
-   * decoded from the JWT's "hospitalIds" claim.
+   * Returns the hospital IDs this user is permitted to access.
+   *
+   * - Admin roles (SUPER_ADMIN, HOSPITAL_ADMIN): returns the full `hospitalIds[]`
+   *   array from the JWT so they can manage/switch between hospitals.
+   * - All other roles (receptionist, doctor, nurse, …): always returns only
+   *   `[primaryHospitalId]`.  These users are locked to the hospital they signed
+   *   into and must never see or select a different one.
    */
   getPermittedHospitalIds(): string[] {
     const p = this.decodePayload();
     if (!p) return [];
+
+    const primary = (p['primaryHospitalId'] as string) ?? (p.hospitalId as string) ?? null;
+
+    // Non-admin staff are always locked to exactly one hospital — their primary.
+    if (!this.isAdminRole()) {
+      return primary ? [primary] : [];
+    }
+
+    // Admin roles get the full list so they can operate across hospitals.
     const raw = p['hospitalIds'];
-    if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === 'string');
-    // Fallback: single primaryHospitalId claim (old tokens / single-hospital users)
-    const single = (p['primaryHospitalId'] as string) ?? (p.hospitalId as string) ?? null;
-    return single ? [single] : [];
+    if (Array.isArray(raw)) {
+      const list = raw.filter((v): v is string => typeof v === 'string');
+      if (list.length > 0) return list;
+    }
+    return primary ? [primary] : [];
   }
 
   hasAnyRole(expected: string[]): boolean {

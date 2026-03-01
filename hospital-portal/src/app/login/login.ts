@@ -186,8 +186,8 @@ export class Login implements OnInit {
           const permittedIds = this.auth.getPermittedHospitalIds();
           this.roleContext.setPermittedHospitalIds(permittedIds);
 
-          // Only lock to a single hospital when the user belongs to exactly one.
-          // Multi-hospital users select their working hospital per-form.
+          // Non-admin staff always resolve to exactly one hospital (their primary).
+          // Admin roles with a single hospital also get locked here.
           if (permittedIds.length === 1) {
             this.roleContext.activeHospitalId = permittedIds[0];
           }

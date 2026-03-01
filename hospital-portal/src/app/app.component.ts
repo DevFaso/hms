@@ -36,9 +36,8 @@ export class AppComponent implements OnInit {
       const permittedIds = this.auth.getPermittedHospitalIds();
       this.roleContext.setPermittedHospitalIds(permittedIds);
 
-      // Only pre-set activeHospitalId when the user belongs to exactly one
-      // hospital. Multi-hospital users select their working hospital in-form;
-      // the form calls roleContext.activeHospitalId = selectedId at that point.
+      // Non-admin staff always get exactly one permitted hospital (their primary).
+      // Admin roles may have multiple; for single-hospital admins we still pre-lock.
       if (permittedIds.length === 1) {
         this.roleContext.activeHospitalId = permittedIds[0];
       }
