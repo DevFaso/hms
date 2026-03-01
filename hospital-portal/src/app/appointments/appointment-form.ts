@@ -94,22 +94,25 @@ export class AppointmentFormComponent implements OnInit {
   ngOnInit(): void {
     const lockedId = this.roleContext.activeHospitalId;
 
-    this.hospitalService.list().subscribe((h) => {
-      this.hospitals.set(h);
-      if (lockedId) {
-        // Lock hospital immediately — no user interaction needed
+    if (lockedId) {
+      // Scoped user: fetch only the locked hospital — don't load all hospitals
+      this.hospitalService.getById(lockedId).subscribe((h) => {
+        this.hospitals.set([h]);
         this.selectedHospitalId.set(lockedId);
         this.form.hospitalId = lockedId;
-        // Load departments right away for the locked hospital
         this.loadDepartmentsFor(lockedId);
-      }
-    });
+      });
 
-    if (lockedId) {
+      // Load staff for the locked hospital once
       this.staffService.list(lockedId).subscribe((list) => {
         this.allStaff = list;
         this.staffLoaded = true;
         this.setDeptsFromStaff(lockedId);
+      });
+    } else {
+      // Unrestricted user: load all hospitals for the dropdown
+      this.hospitalService.list().subscribe((h) => {
+        this.hospitals.set(h);
       });
     }
 
@@ -252,7 +255,11 @@ export class AppointmentFormComponent implements OnInit {
     // Departments come from staff already loaded — derive unique dept list
     if (this.staffLoaded) {
       this.setDeptsFromStaff(hospitalId);
+    } else if (this.roleContext.activeHospitalId) {
+      // Staff for the locked hospital is being loaded in ngOnInit — wait for it
+      // (setDeptsFromStaff will be called once staffLoaded is set)
     } else {
+      // Unrestricted user selected a hospital: fetch staff for that hospital
       this.staffService.list(hospitalId).subscribe((list) => {
         if (!this.staffLoaded) {
           this.allStaff = [...this.allStaff, ...list];

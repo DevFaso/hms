@@ -8,14 +8,14 @@ import { test, expect } from './fixtures/test-fixtures';
 test.describe('Admin Modules', () => {
   test.describe('Organizations', () => {
     test('displays organizations page', async ({ page }) => {
-      await page.goto('/organizations', { waitUntil: 'networkidle' });
+      await page.goto('/organizations', { waitUntil: 'domcontentloaded' });
       expect(page.url()).not.toContain('/login');
       const content = page.locator('.page-container, .page-title');
       await expect(content.first()).toBeVisible({ timeout: 10_000 });
     });
 
     test('organizations page loads data or empty state', async ({ page }) => {
-      await page.goto('/organizations', { waitUntil: 'networkidle' });
+      await page.goto('/organizations', { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => !document.querySelector('.loading-state'), {
         timeout: 15_000,
       });
@@ -29,14 +29,14 @@ test.describe('Admin Modules', () => {
 
   test.describe('Users', () => {
     test('displays users page', async ({ page }) => {
-      await page.goto('/users', { waitUntil: 'networkidle' });
+      await page.goto('/users', { waitUntil: 'domcontentloaded' });
       expect(page.url()).not.toContain('/login');
       const content = page.locator('.page-container, .page-title');
       await expect(content.first()).toBeVisible({ timeout: 10_000 });
     });
 
     test('users page has search functionality', async ({ page }) => {
-      await page.goto('/users', { waitUntil: 'networkidle' });
+      await page.goto('/users', { waitUntil: 'domcontentloaded' });
       const searchInput = page.locator(
         '.search-bar input, input[type="text"][placeholder*="earch"]',
       );
@@ -48,7 +48,7 @@ test.describe('Admin Modules', () => {
 
   test.describe('Roles', () => {
     test('displays roles page', async ({ page }) => {
-      await page.goto('/roles', { waitUntil: 'networkidle' });
+      await page.goto('/roles', { waitUntil: 'domcontentloaded' });
       expect(page.url()).not.toContain('/login');
       const content = page.locator('.page-container, .page-title');
       await expect(content.first()).toBeVisible({ timeout: 10_000 });
@@ -57,7 +57,7 @@ test.describe('Admin Modules', () => {
 
   test.describe('Platform', () => {
     test('displays platform page', async ({ page }) => {
-      await page.goto('/platform', { waitUntil: 'networkidle' });
+      await page.goto('/platform', { waitUntil: 'domcontentloaded' });
       expect(page.url()).not.toContain('/login');
       const content = page.locator('.page-container, .page-title, .platform');
       await expect(content.first()).toBeVisible({ timeout: 10_000 });
@@ -66,7 +66,7 @@ test.describe('Admin Modules', () => {
 
   test.describe('Audit Logs', () => {
     test('displays audit logs page', async ({ page }) => {
-      await page.goto('/audit-logs', { waitUntil: 'networkidle' });
+      await page.goto('/audit-logs', { waitUntil: 'domcontentloaded' });
       expect(page.url()).not.toContain('/login');
       const content = page.locator('.page-container, .page-title');
       await expect(content.first()).toBeVisible({ timeout: 10_000 });
@@ -75,7 +75,7 @@ test.describe('Admin Modules', () => {
 
   test.describe('Administration', () => {
     test('displays admin page', async ({ page }) => {
-      await page.goto('/admin', { waitUntil: 'networkidle' });
+      await page.goto('/admin', { waitUntil: 'domcontentloaded' });
       expect(page.url()).not.toContain('/login');
       const content = page.locator('.page-container, .page-title, body');
       await expect(content.first()).toBeVisible({ timeout: 10_000 });

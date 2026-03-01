@@ -8,7 +8,7 @@ import { test, expect } from './fixtures/test-fixtures';
 test.describe('Appointments Module', () => {
   test.describe('Appointment List', () => {
     test.beforeEach(async ({ page }) => {
-      await page.goto('/appointments', { waitUntil: 'networkidle' });
+      await page.goto('/appointments', { waitUntil: 'domcontentloaded' });
     });
 
     test('displays appointments page with title', async ({ page }) => {

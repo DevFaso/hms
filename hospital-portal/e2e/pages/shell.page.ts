@@ -64,7 +64,7 @@ export class ShellPage {
       await this.page.waitForTimeout(300); // animation
     }
     await navItem.click();
-    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForLoadState('domcontentloaded');
   }
 
   /** Get the nav item locator by label text */

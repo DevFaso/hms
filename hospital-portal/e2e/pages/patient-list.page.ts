@@ -30,7 +30,7 @@ export class PatientListPage {
 
   /** Navigate to patients list */
   async goto(): Promise<void> {
-    await this.page.goto('/patients', { waitUntil: 'networkidle' });
+    await this.page.goto('/patients', { waitUntil: 'domcontentloaded' });
   }
 
   /** Wait for list to finish loading */

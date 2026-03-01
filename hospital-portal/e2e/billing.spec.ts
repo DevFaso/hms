@@ -7,7 +7,7 @@ import { test, expect } from './fixtures/test-fixtures';
 
 test.describe('Billing Module', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/billing', { waitUntil: 'networkidle' });
+    await page.goto('/billing', { waitUntil: 'domcontentloaded' });
   });
 
   test('displays billing page with title', async ({ page }) => {

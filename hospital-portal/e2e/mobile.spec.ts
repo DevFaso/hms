@@ -15,7 +15,7 @@ test.describe('Mobile Responsive', () => {
       viewport: { width: 393, height: 851 },
     });
     const page = await context.newPage();
-    await page.goto('/login', { waitUntil: 'networkidle' });
+    await page.goto('/login', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('.login-card')).toBeVisible();
     await expect(page.locator('#username')).toBeVisible();
     await expect(page.locator('#password')).toBeVisible();
@@ -24,12 +24,12 @@ test.describe('Mobile Responsive', () => {
   });
 
   test('dashboard renders at mobile viewport', async ({ page }) => {
-    await page.goto('/dashboard', { waitUntil: 'networkidle' });
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('.hero-header')).toBeVisible({ timeout: 15_000 });
   });
 
   test('mobile menu toggle is visible', async ({ page }) => {
-    await page.goto('/dashboard', { waitUntil: 'networkidle' });
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
     const mobileToggle = page.locator('.mobile-toggle');
     // On mobile viewports, the mobile toggle should be visible or the sidebar collapsed
     const isToggleVisible = await mobileToggle.isVisible().catch(() => false);
@@ -38,12 +38,12 @@ test.describe('Mobile Responsive', () => {
   });
 
   test('patients page renders at mobile viewport', async ({ page }) => {
-    await page.goto('/patients', { waitUntil: 'networkidle' });
+    await page.goto('/patients', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('main .page-title')).toBeVisible({ timeout: 10_000 });
   });
 
   test('topbar is visible at mobile viewport', async ({ page }) => {
-    await page.goto('/dashboard', { waitUntil: 'networkidle' });
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('header.topbar')).toBeVisible();
   });
 });

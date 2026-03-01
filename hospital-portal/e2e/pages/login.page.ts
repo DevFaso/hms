@@ -36,7 +36,7 @@ export class LoginPage {
 
   /** Navigate to login page */
   async goto(): Promise<void> {
-    await this.page.goto('/login', { waitUntil: 'networkidle' });
+    await this.page.goto('/login', { waitUntil: 'domcontentloaded' });
   }
 
   /** Fill username and password */

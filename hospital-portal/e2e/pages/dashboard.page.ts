@@ -36,7 +36,7 @@ export class DashboardPage {
 
   /** Navigate to dashboard */
   async goto(): Promise<void> {
-    await this.page.goto('/dashboard', { waitUntil: 'networkidle' });
+    await this.page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
   }
 
   /** Wait for dashboard to fully load */
