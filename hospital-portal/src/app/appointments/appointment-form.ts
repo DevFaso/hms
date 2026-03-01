@@ -93,13 +93,18 @@ export class AppointmentFormComponent implements OnInit {
 
   ngOnInit(): void {
     const lockedId = this.roleContext.activeHospitalId;
+
     this.hospitalService.list().subscribe((h) => {
       this.hospitals.set(h);
       if (lockedId) {
+        // Lock hospital immediately — no user interaction needed
         this.selectedHospitalId.set(lockedId);
         this.form.hospitalId = lockedId;
+        // Load departments right away for the locked hospital
+        this.loadDepartmentsFor(lockedId);
       }
     });
+
     if (lockedId) {
       this.staffService.list(lockedId).subscribe((list) => {
         this.allStaff = list;
@@ -107,6 +112,7 @@ export class AppointmentFormComponent implements OnInit {
         this.setDeptsFromStaff(lockedId);
       });
     }
+
     this.initPatientSearch();
     this.initStaffSearch();
   }

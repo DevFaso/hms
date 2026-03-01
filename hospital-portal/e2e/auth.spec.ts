@@ -1,15 +1,6 @@
-/**
- * Auth E2E Tests – Login, logout, session management, validation.
- *
- * These tests run WITHOUT stored auth state (no-auth project)
- * so they test the actual login flow from scratch.
- *
- * Login Flow tests mock the backend API so they work without a live server.
- */
 import { test, expect } from '@playwright/test';
 import { LoginPage } from './pages/login.page';
 
-/** Fake JWT – structurally valid (3 dot-separated parts), not cryptographically verified */
 const FAKE_JWT =
   'eyJhbGciOiJIUzM4NCJ9' +
   '.eyJzdWIiOiJzdXBlcmFkbWluIiwicm9sZXMiOlsiUk9MRV9TVVBFUl9BRE1JTiJdLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6OTk5OTk5OTk5OX0' +
@@ -35,6 +26,11 @@ test.describe('Authentication', () => {
 
   test.beforeEach(async ({ page }) => {
     loginPage = new LoginPage(page);
+    await page.goto('/');
+    await page.evaluate(() => {
+      localStorage.clear();
+      sessionStorage.clear();
+    });
     await loginPage.goto();
   });
 
@@ -103,10 +99,19 @@ test.describe('Authentication', () => {
   });
 
   test.describe('Login Flow', () => {
-    // Mock the backend so these tests work without a live Spring Boot server.
-    // They test Angular's login flow behaviour (token storage, redirect) not the API itself.
     test.beforeEach(async ({ page }) => {
-      await page.route('**/auth/login', async (route) => {
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
+      await page.route('**/auth/bootstrap-status', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ allowed: false }),
+        }),
+      );
+      await page.route('**/api/**', (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }),
+      );
+      await page.route('**/api/auth/login', async (route) => {
         const body = route.request().postDataJSON() as { username?: string };
         if (body?.username === 'superadmin') {
           await route.fulfill({
@@ -126,7 +131,7 @@ test.describe('Authentication', () => {
 
     test('successful login redirects to dashboard', async ({ page }) => {
       await loginPage.fillCredentials('superadmin', 'TempPass123!');
-      await Promise.all([page.waitForResponse('**/auth/login'), loginPage.submit()]);
+      await Promise.all([page.waitForResponse('**/api/auth/login'), loginPage.submit()]);
 
       await page.waitForURL('**/dashboard', { timeout: 15_000 });
       await expect(page.locator('.hero-header')).toBeVisible({ timeout: 10_000 });
@@ -134,8 +139,10 @@ test.describe('Authentication', () => {
 
     test('stores auth token in localStorage after login', async ({ page }) => {
       await loginPage.fillCredentials('superadmin', 'TempPass123!');
-      await Promise.all([page.waitForResponse('**/auth/login'), loginPage.submit()]);
+      await Promise.all([page.waitForResponse('**/api/auth/login'), loginPage.submit()]);
       await page.waitForURL('**/dashboard', { timeout: 15_000 });
+      // Wait for dashboard to fully render — confirms no redirect back to /login occurred
+      await expect(page.locator('.hero-header')).toBeVisible({ timeout: 10_000 });
 
       const token = await page.evaluate(() => localStorage.getItem('auth_token'));
       expect(token).toBeTruthy();
@@ -144,8 +151,10 @@ test.describe('Authentication', () => {
 
     test('stores user profile in localStorage after login', async ({ page }) => {
       await loginPage.fillCredentials('superadmin', 'TempPass123!');
-      await Promise.all([page.waitForResponse('**/auth/login'), loginPage.submit()]);
+      await Promise.all([page.waitForResponse('**/api/auth/login'), loginPage.submit()]);
       await page.waitForURL('**/dashboard', { timeout: 15_000 });
+      // Wait for dashboard to fully render — confirms no redirect back to /login occurred
+      await expect(page.locator('.hero-header')).toBeVisible({ timeout: 10_000 });
 
       const profile = await page.evaluate(() => {
         const raw = localStorage.getItem('user_profile');
@@ -164,8 +173,7 @@ test.describe('Authentication', () => {
     });
 
     test('login button shows spinner during request', async ({ page }) => {
-      // Override the mock to add a delay so the spinner is observable
-      await page.route('**/auth/login', async (route) => {
+      await page.route('**/api/auth/login', async (route) => {
         await new Promise((r) => setTimeout(r, 1000));
         await route.fulfill({
           status: 200,
@@ -179,6 +187,9 @@ test.describe('Authentication', () => {
 
       // Spinner should appear while loading
       await expect(loginPage.spinner).toBeVisible({ timeout: 2_000 });
+
+      // Wait for navigation to finish so the delayed mock doesn't bleed into the next test
+      await page.waitForURL('**/dashboard', { timeout: 10_000 });
     });
   });
 
