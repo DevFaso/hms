@@ -2,7 +2,7 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { Subject } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { AppointmentService, AppointmentUpsertRequest } from '../services/appointment.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -177,11 +177,15 @@ export class AppointmentFormComponent implements OnInit {
         switchMap((_q) => {
           this.staffSearchLoading.set(true);
           if (!this.staffLoaded) {
-            // Respect hospital lock: only load staff for the active hospital
-            const hospitalId = this.roleContext.activeHospitalId ?? undefined;
-            return this.staffService.list(hospitalId);
+            // FIX 1 — locked users: ngOnInit exclusively owns the staff API call.
+            // Never fire a second concurrent request from the search path.
+            if (this.roleContext.activeHospitalId) {
+              return of(this.allStaff);
+            }
+            // Unrestricted user only — safe to fetch all staff here.
+            return this.staffService.list();
           }
-          return [this.allStaff];
+          return of(this.allStaff);
         }),
       )
       .subscribe({
@@ -218,12 +222,21 @@ export class AppointmentFormComponent implements OnInit {
   }
 
   selectStaff(s: StaffResponse): void {
+    // FIX 2 — boundary guard: hard-reject any staff record whose hospitalId
+    // does not match the locked hospital. Write nothing, load nothing.
+    const locked = this.lockedHospitalId;
+    if (locked && s.hospitalId && s.hospitalId !== locked) {
+      this.toast.error('Cannot assign staff from another hospital');
+      return;
+    }
+
     this.selectedStaff.set(s);
     this.form.staffId = s.id;
     delete this.form.staffEmail;
     this.staffDropdownOpen.set(false);
     this.staffQuery.set('');
-    // Auto-fill hospital when staff is selected
+    // Auto-fill hospital when staff is selected (unrestricted users only —
+    // locked users already have selectedHospitalId set from ngOnInit)
     if (s.hospitalId && !this.selectedHospitalId()) {
       this.selectedHospitalId.set(s.hospitalId);
       this.form.hospitalId = s.hospitalId;
@@ -252,6 +265,13 @@ export class AppointmentFormComponent implements OnInit {
   }
 
   private loadDepartmentsFor(hospitalId: string): void {
+    // FIX 3 — boundary guard: a locked user can never load departments for a
+    // foreign hospital regardless of which code path calls this method.
+    const locked = this.lockedHospitalId;
+    if (locked && hospitalId !== locked) {
+      return;
+    }
+
     // Departments come from staff already loaded — derive unique dept list
     if (this.staffLoaded) {
       this.setDeptsFromStaff(hospitalId);
