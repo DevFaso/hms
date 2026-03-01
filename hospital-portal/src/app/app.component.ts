@@ -32,9 +32,15 @@ export class AppComponent implements OnInit {
     if (token && !this.auth.isExpired(token)) {
       const roles = this.auth.getRoles();
       this.roleContext.setRoles(roles);
-      const hospitalId = this.auth.getHospitalId();
-      if (hospitalId) {
-        this.roleContext.activeHospitalId = hospitalId;
+
+      const permittedIds = this.auth.getPermittedHospitalIds();
+      this.roleContext.setPermittedHospitalIds(permittedIds);
+
+      // Only pre-set activeHospitalId when the user belongs to exactly one
+      // hospital. Multi-hospital users select their working hospital in-form;
+      // the form calls roleContext.activeHospitalId = selectedId at that point.
+      if (permittedIds.length === 1) {
+        this.roleContext.activeHospitalId = permittedIds[0];
       }
     }
   }

@@ -182,9 +182,14 @@ export class Login implements OnInit {
           // on all subsequent requests (including the very first one after redirect).
           const jwtRoles = this.auth.getRoles();
           this.roleContext.setRoles(jwtRoles);
-          const hospitalId = this.auth.getHospitalId();
-          if (hospitalId) {
-            this.roleContext.activeHospitalId = hospitalId;
+
+          const permittedIds = this.auth.getPermittedHospitalIds();
+          this.roleContext.setPermittedHospitalIds(permittedIds);
+
+          // Only lock to a single hospital when the user belongs to exactly one.
+          // Multi-hospital users select their working hospital per-form.
+          if (permittedIds.length === 1) {
+            this.roleContext.activeHospitalId = permittedIds[0];
           }
 
           if (res.id && res.username) {

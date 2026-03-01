@@ -221,7 +221,21 @@ export class AuthService {
     const ctx = this.roleContext.activeHospitalId;
     if (ctx) return ctx;
     const p = this.decodePayload();
-    return p?.hospitalId ?? null;
+    return (p?.['primaryHospitalId'] as string) ?? (p?.hospitalId as string) ?? null;
+  }
+
+  /**
+   * Returns all hospital IDs the current user is permitted to access,
+   * decoded from the JWT's "hospitalIds" claim.
+   */
+  getPermittedHospitalIds(): string[] {
+    const p = this.decodePayload();
+    if (!p) return [];
+    const raw = p['hospitalIds'];
+    if (Array.isArray(raw)) return raw.filter((v): v is string => typeof v === 'string');
+    // Fallback: single primaryHospitalId claim (old tokens / single-hospital users)
+    const single = (p['primaryHospitalId'] as string) ?? (p.hospitalId as string) ?? null;
+    return single ? [single] : [];
   }
 
   hasAnyRole(expected: string[]): boolean {
