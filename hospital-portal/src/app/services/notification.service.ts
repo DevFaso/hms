@@ -1,6 +1,8 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
+import { Client, IMessage } from '@stomp/stompjs';
+import * as SockJS from 'sockjs-client';
 
 export interface Notification {
   id: string;
@@ -21,7 +23,7 @@ export interface NotificationPage {
 
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
-  private ws: WebSocket | null = null;
+  private stompClient: Client | null = null;
   private readonly notificationSubject = new Subject<Notification>();
   private readonly http = inject(HttpClient);
 
@@ -41,24 +43,41 @@ export class NotificationService {
     return this.http.put<void>(`/notifications/${id}/read`, {});
   }
 
+  /**
+   * Opens a STOMP-over-SockJS connection to /ws-chat and subscribes to
+   * /topic/notifications, filtering messages for the given username.
+   *
+   * The backend uses Spring WebSocket (STOMP broker) which requires the
+   * SockJS handshake — a raw WebSocket to an arbitrary path does not work.
+   */
   connectWebSocket(username: string): void {
-    const WS =
-      typeof globalThis !== 'undefined' && globalThis.WebSocket ? globalThis.WebSocket : undefined;
-    if (!WS) return;
+    if (typeof globalThis === 'undefined' || !globalThis.WebSocket) return;
 
-    // Derive the WebSocket URL from the current page origin so it works in
-    // every environment (local dev, staging, production) without hardcoding.
-    // Use wss:// when the page is served over HTTPS, ws:// otherwise.
-    const loc =
-      typeof globalThis !== 'undefined' && globalThis.location ? globalThis.location : null;
-    const wsProto = loc?.protocol === 'https:' ? 'wss' : 'ws';
-    const wsHost = loc?.host ?? 'localhost';
-    const wsUrl = `${wsProto}://${wsHost}/ws/notifications?user=${username}`;
+    // Build the SockJS URL pointing at /api/ws-chat (context path included).
+    // Using a relative URL so it works in every environment automatically.
+    const sockUrl = '/api/ws-chat';
 
-    this.ws = new WS(wsUrl);
-    this.ws.onmessage = (event) => {
-      this.notificationSubject.next(JSON.parse(event.data as string) as Notification);
-    };
+    this.stompClient = new Client({
+      // SockJS factory — required because the backend endpoint uses .withSockJS()
+      webSocketFactory: () => new SockJS(sockUrl) as WebSocket,
+      // Reconnect automatically every 5 s if the connection drops
+      reconnectDelay: 5000,
+      onConnect: () => {
+        this.stompClient?.subscribe('/topic/notifications', (frame: IMessage) => {
+          try {
+            const notification = JSON.parse(frame.body) as Notification;
+            // Only emit notifications addressed to the current user
+            if (!notification.recipientUsername || notification.recipientUsername === username) {
+              this.notificationSubject.next(notification);
+            }
+          } catch {
+            // Malformed frame — ignore
+          }
+        });
+      },
+    });
+
+    this.stompClient.activate();
   }
 
   getNotificationStream(): Observable<Notification> {
@@ -66,7 +85,7 @@ export class NotificationService {
   }
 
   disconnectWebSocket(): void {
-    this.ws?.close();
-    this.ws = null;
+    this.stompClient?.deactivate().catch(() => undefined);
+    this.stompClient = null;
   }
 }
