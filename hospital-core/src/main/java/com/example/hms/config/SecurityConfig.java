@@ -311,6 +311,12 @@ public class SecurityConfig {
                 // Public access to uploaded profile images (served as static assets)
                 .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
 
+                // SockJS / STOMP WebSocket handshake — must be permitted without a JWT.
+                // SockJS performs an unauthenticated HTTP GET /ws-chat/info to negotiate
+                // the transport before the STOMP CONNECT frame (which carries the token)
+                // is sent.  Blocking it here causes a 401 before the connection can open.
+                .requestMatchers("/ws-chat/**").permitAll()
+
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())
