@@ -58,3 +58,8 @@ app:
   # Public base URL for uploaded file links returned to the browser.
   # Set PUBLIC_BASE_URL=https://hms-uat.dev.bitnesttechs.com in Railway env vars.
   public-base-url: ${PUBLIC_BASE_URL:}
+  # Directory where uploaded files are stored.
+  # On Railway, set APP_UPLOAD_DIR to the persistent-volume mount path
+  # (e.g. /data/uploads) so files survive redeployments.
+  upload:
+    dir: ${APP_UPLOAD_DIR:uploads}

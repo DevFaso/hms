@@ -1,0 +1,93 @@
+{
+  "properties": [
+    {
+      "name": "app.upload.dir",
+      "type": "java.lang.String",
+      "description": "Base directory for uploaded files (profile images, attachments, etc.). Set APP_UPLOAD_DIR to a persistent-volume mount path in production so files survive redeployments.",
+      "defaultValue": "uploads"
+    },
+    {
+      "name": "app.public-base-url",
+      "type": "java.lang.String",
+      "description": "Public-facing base URL prepended to uploaded file paths returned to the browser. Set PUBLIC_BASE_URL to the production domain (e.g. https://hms.dev.bitnesttechs.com).",
+      "defaultValue": ""
+    },
+    {
+      "name": "app.backend.base-url",
+      "type": "java.lang.String",
+      "description": "Backend base URL used as a fallback when building file URLs outside an HTTP request context.",
+      "defaultValue": "http://localhost:8081"
+    },
+    {
+      "name": "app.frontend.base-url",
+      "type": "java.lang.String",
+      "description": "Frontend base URL used for links in outbound emails and notifications.",
+      "defaultValue": "https://hms.dev.bitnesttechs.com"
+    },
+    {
+      "name": "app.cors.allowed-origins",
+      "type": "java.lang.String",
+      "description": "Comma-separated list of allowed CORS origins. Set CORS_ALLOWED_ORIGINS in production.",
+      "defaultValue": "http://localhost:4200"
+    },
+    {
+      "name": "app.jwt.secret",
+      "type": "java.lang.String",
+      "description": "HMAC secret used to sign and verify JWT tokens. Must be at least 256 bits in production."
+    },
+    {
+      "name": "app.jwt.access-token-expiration-ms",
+      "type": "java.lang.Long",
+      "description": "JWT access token lifetime in milliseconds.",
+      "defaultValue": 86400000
+    },
+    {
+      "name": "app.jwt.refresh-token-expiration-ms",
+      "type": "java.lang.Long",
+      "description": "JWT refresh token lifetime in milliseconds.",
+      "defaultValue": 172800000
+    },
+    {
+      "name": "app.kafka.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable or disable Kafka integration.",
+      "defaultValue": false
+    },
+    {
+      "name": "app.kafka.chat-topic",
+      "type": "java.lang.String",
+      "description": "Kafka topic name for chat messages.",
+      "defaultValue": "hms.chat"
+    },
+    {
+      "name": "app.kafka.empi-identity-topic",
+      "type": "java.lang.String",
+      "description": "Kafka topic name for EMPI identity events.",
+      "defaultValue": "hms.empi.identity"
+    },
+    {
+      "name": "app.kafka.patient-movement-topic",
+      "type": "java.lang.String",
+      "description": "Kafka topic name for patient movement events.",
+      "defaultValue": "hms.patient.movement"
+    },
+    {
+      "name": "app.kafka.platform-registry-topic",
+      "type": "java.lang.String",
+      "description": "Kafka topic name for platform registry events.",
+      "defaultValue": "hms.platform.registry"
+    },
+    {
+      "name": "app.seed.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable or disable Java-based seed data runners.",
+      "defaultValue": false
+    },
+    {
+      "name": "app.seed.synthetic.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable or disable synthetic (demo) data seeding.",
+      "defaultValue": false
+    }
+  ]
+}
