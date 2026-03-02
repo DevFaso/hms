@@ -20,6 +20,8 @@ public interface UserService {
 
     void deleteUser(UUID id);
 
+    void restoreUser(UUID id);
+
     Page<UserSummaryDTO> getAllUsers(int page, int size);
 
     Page<UserSummaryDTO> searchUsers(String name, String role, String email, int page, int size);

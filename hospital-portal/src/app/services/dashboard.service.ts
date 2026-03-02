@@ -11,6 +11,9 @@ export interface SuperAdminSummary {
   totalHospitals: number;
   activeHospitals: number;
   inactiveHospitals: number;
+  totalOrganizations: number;
+  activeOrganizations: number;
+  totalDepartments: number;
   totalPatients: number;
   totalRoles: number;
   totalAssignments: number;
@@ -18,6 +21,7 @@ export interface SuperAdminSummary {
   inactiveAssignments: number;
   globalAssignments: number;
   activeGlobalAssignments: number;
+  todayAppointmentsCount: number;
   generatedAt: string;
   recentAuditEvents: RecentAuditEvent[];
 }

@@ -5,6 +5,7 @@ import com.example.hms.model.PasswordResetToken;
 import com.example.hms.model.User;
 import com.example.hms.repository.PasswordResetTokenRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.utility.UserDisplayUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -114,7 +115,7 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         tokenRepository.save(resetToken);
 
         // Send confirmation email so the user knows their password changed
-        String displayName = resolveDisplayName(user);
+        String displayName = UserDisplayUtil.resolveDisplayName(user);
         emailService.sendPasswordResetConfirmationEmail(user.getEmail(), displayName);
 
         log.info("✅ Password successfully reset for user: {}", user.getEmail());
@@ -187,13 +188,4 @@ public class PasswordResetServiceImpl implements PasswordResetService {
         return !combined.contains("prod");
     }
 
-    private static String resolveDisplayName(User user) {
-        if (user == null) return "there";
-        String first = user.getFirstName() != null ? user.getFirstName().strip() : "";
-        String last  = user.getLastName()  != null ? user.getLastName().strip()  : "";
-        if (!first.isBlank() && !last.isBlank()) return first + " " + last;
-        if (!first.isBlank()) return first;
-        if (!last.isBlank())  return last;
-        return user.getEmail() != null ? user.getEmail() : "there";
-    }
 }

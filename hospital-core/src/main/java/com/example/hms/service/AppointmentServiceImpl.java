@@ -591,7 +591,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         User user = getUserOrThrow(username);
 
         if (isSuperAdmin(user)) {
-            return appointmentRepository.findAll().stream()
+            return appointmentRepository.findAllDistinct().stream()
                 .map(appointmentMapper::toAppointmentResponseDTO)
                 .toList();
         }

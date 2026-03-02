@@ -28,6 +28,9 @@ export class PermissionService {
       'Request Consultations',
       'Create Treatment Plans',
       'Create Referrals',
+      // Consent & record sharing
+      'View Record Sharing',
+      'Manage Patient Consents',
       // Admin
       'View Staff',
       'Manage Staff',
@@ -59,6 +62,9 @@ export class PermissionService {
       'Request Consultations',
       'Create Treatment Plans',
       'Create Referrals',
+      // Consent & record sharing
+      'View Record Sharing',
+      'Manage Patient Consents',
       // Lab / Lab orders
       'Order Lab Tests',
       'View Lab',
@@ -81,6 +87,8 @@ export class PermissionService {
       'Create Treatment Plans',
       'Create Referrals',
       'Admit Patients',
+      // Record sharing (read-only — cannot manage consents)
+      'View Record Sharing',
       // Vitals / meds
       'Update Vital Signs',
       'Administer Medications',
@@ -101,6 +109,8 @@ export class PermissionService {
       'Create Prescriptions',
       'Create Referrals',
       'Create Treatment Plans',
+      // Record sharing (read-only — cannot manage consents)
+      'View Record Sharing',
       // Maternity-specific
       'Perform Prenatal Assessments',
       'Create Birth Plans',

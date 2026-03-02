@@ -118,8 +118,8 @@ public class GeneralReferralController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
-    @Operation(summary = "List all referrals across all hospitals (super admin)")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @Operation(summary = "List all referrals")
     public ResponseEntity<List<GeneralReferralResponseDTO>> getAllReferrals(
         @RequestParam(required = false) String status
     ) {

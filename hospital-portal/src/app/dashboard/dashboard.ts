@@ -1,10 +1,18 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+import { CommonModule, DatePipe, TitleCasePipe } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
-import { AppointmentService } from '../services/appointment.service';
-import { PatientService } from '../services/patient.service';
+import { AppointmentService, AppointmentResponse } from '../services/appointment.service';
+import { PatientService, PatientResponse } from '../services/patient.service';
 import {
   DashboardService,
   SuperAdminSummary,
@@ -16,227 +24,850 @@ import {
   RoomedPatient,
 } from '../services/dashboard.service';
 
+// ── Local interfaces ────────────────────────────────────────────────────────
+
 interface QuickAction {
   icon: string;
   label: string;
   route: string;
   color: string;
+  bgColor: string;
+  description: string;
 }
+
+interface ScheduleSlot {
+  time: string;
+  patientName: string;
+  reason: string;
+  status: AppointmentResponse['status'];
+  id: string;
+  isNow: boolean;
+}
+
+interface StatCard {
+  key: string;
+  label: string;
+  value: number | string;
+  icon: string;
+  color: string;
+  bgColor: string;
+  route?: string;
+  trend?: 'up' | 'down' | 'stable';
+  delta?: number;
+  suffix?: string;
+}
+
+interface NavTile {
+  icon: string;
+  label: string;
+  route: string;
+  color: string;
+  bg: string;
+  count?: number;
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, DatePipe, TitleCasePipe],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class DashboardComponent implements OnInit {
+export class DashboardComponent implements OnInit, OnDestroy {
+  // ── DI ───────────────────────────────────────────────────────
   private readonly auth = inject(AuthService);
-  private readonly permissions = inject(PermissionService);
+  readonly permissions = inject(PermissionService);
   private readonly appointmentService = inject(AppointmentService);
   private readonly patientService = inject(PatientService);
   private readonly dashboardService = inject(DashboardService);
 
+  // ── Time & Identity ──────────────────────────────────────────
   greeting = signal('');
   userName = signal('');
-  today = new Date().toLocaleDateString('en-US', {
+  userTitle = signal('');
+  currentTime = signal(this.formatTime(new Date()));
+  readonly todayLabel = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
-  loading = signal(true);
+  private clockInterval?: ReturnType<typeof setInterval>;
 
-  /* Super-admin data */
+  // ── Loading States ───────────────────────────────────────────
+  loading = signal(true);
+  scheduleLoading = signal(true);
+
+  // ── Role flags (signals) ─────────────────────────────────────
+  isSuperAdmin = signal(false);
+  isHospitalAdmin = signal(false);
+  isDoctor = signal(false);
+  isNurse = signal(false);
+  isMidwife = signal(false);
+  isReceptionist = signal(false);
+  isLabScientist = signal(false);
+  isPharmacist = signal(false);
+  isRadiologist = signal(false);
+
+  /** True for DOCTOR / NURSE / MIDWIFE — gets clinical workspace layout */
+  isClinician = computed(() => this.isDoctor() || this.isNurse() || this.isMidwife());
+
+  /** True for anyone who has View Appointments permission but is not a clinician */
+  isSchedulingRole = computed(
+    () => !this.isClinician() && this.permissions.hasPermission('View Appointments'),
+  );
+
+  // ── Super-Admin data ─────────────────────────────────────────
   adminSummary = signal<SuperAdminSummary | null>(null);
   recentAuditEvents = signal<RecentAuditEvent[]>([]);
 
-  /* Clinical dashboard data */
+  // ── Clinical Dashboard data ───────────────────────────────────
   kpis = signal<DashboardKPI[]>([]);
   alerts = signal<ClinicalAlert[]>([]);
   inboxCounts = signal<InboxCounts | null>(null);
   onCallStatus = signal<OnCallStatus | null>(null);
   roomedPatients = signal<RoomedPatient[]>([]);
 
-  /* Fallback data */
-  todayAppointments = signal<unknown[]>([]);
-  recentPatients = signal<unknown[]>([]);
+  // ── Schedule & Patients ───────────────────────────────────────
+  todayAppointments = signal<AppointmentResponse[]>([]);
+  recentPatients = signal<PatientResponse[]>([]);
 
-  isSuperAdmin = signal(false);
-  isClinician = signal(false);
+  // ────────────────────────────────────────────────────────────
+  // COMPUTED — DERIVED STATE
+  // ────────────────────────────────────────────────────────────
 
-  quickActions = computed<QuickAction[]>(() => {
-    const actions: QuickAction[] = [];
-    if (this.permissions.hasPermission('Register Patients')) {
-      actions.push({
-        icon: 'person_add',
-        label: 'Register Patient',
-        route: '/patients/new',
+  scheduleSlots = computed<ScheduleSlot[]>(() => {
+    const now = new Date();
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+    return this.todayAppointments().map((appt) => {
+      const [h, m] = appt.startTime.split(':').map(Number);
+      const slotMins = h * 60 + (m || 0);
+      return {
+        id: appt.id,
+        time: appt.startTime,
+        patientName: appt.patientName,
+        reason: appt.reason ?? '',
+        status: appt.status,
+        isNow: appt.status === 'IN_PROGRESS' || Math.abs(slotMins - nowMins) < 30,
+      };
+    });
+  });
+
+  unacknowledgedAlerts = computed(() => this.alerts().filter((a) => !a.acknowledged));
+  criticalAlerts = computed(() =>
+    this.unacknowledgedAlerts().filter((a) => a.severity === 'CRITICAL'),
+  );
+
+  completedToday = computed(
+    () => this.todayAppointments().filter((a) => a.status === 'COMPLETED').length,
+  );
+  pendingToday = computed(
+    () =>
+      this.todayAppointments().filter((a) => a.status === 'SCHEDULED' || a.status === 'CONFIRMED')
+        .length,
+  );
+  inProgressNow = computed(
+    () => this.todayAppointments().filter((a) => a.status === 'IN_PROGRESS').length,
+  );
+
+  totalInboxCount = computed(() => {
+    const ic = this.inboxCounts();
+    if (!ic) return 0;
+    return (
+      (ic.unreadMessages ?? 0) +
+      (ic.pendingRefills ?? 0) +
+      (ic.pendingResults ?? 0) +
+      (ic.tasksToComplete ?? 0) +
+      (ic.documentsToSign ?? 0)
+    );
+  });
+
+  scheduleProgress = computed(() => {
+    const total = this.todayAppointments().length;
+    if (total === 0) return 0;
+    return Math.round((this.completedToday() / total) * 100);
+  });
+
+  progressOffset = computed(() => {
+    const radius = 34;
+    const circ = 2 * Math.PI * radius;
+    return circ - (this.scheduleProgress() / 100) * circ;
+  });
+
+  // ── Hero gradient class (role-specific) ─────────────────────
+  heroGradientClass = computed(() => {
+    if (this.isSuperAdmin()) return 'hero-gradient-superadmin';
+    if (this.isHospitalAdmin()) return 'hero-gradient-hospital-admin';
+    if (this.isDoctor()) return 'hero-gradient-doctor';
+    if (this.isNurse() || this.isMidwife()) return 'hero-gradient-nurse';
+    if (this.isReceptionist()) return 'hero-gradient-receptionist';
+    if (this.isLabScientist()) return 'hero-gradient-lab';
+    if (this.isPharmacist()) return 'hero-gradient-pharmacist';
+    if (this.isRadiologist()) return 'hero-gradient-radiologist';
+    return 'hero-gradient-default';
+  });
+
+  /**
+   * Single authoritative view selector — prevents multiple dashboard sections
+   * rendering simultaneously when a user has more than one role.
+   * Priority matches heroGradientClass / roleLabel ordering.
+   */
+  activeView = computed<
+    | 'superadmin'
+    | 'hospitaladmin'
+    | 'doctor'
+    | 'nurse'
+    | 'receptionist'
+    | 'lab'
+    | 'pharmacist'
+    | 'radiologist'
+    | 'fallback'
+  >(() => {
+    if (this.isSuperAdmin()) return 'superadmin';
+    if (this.isHospitalAdmin()) return 'hospitaladmin';
+    if (this.isDoctor()) return 'doctor';
+    if (this.isNurse() || this.isMidwife()) return 'nurse';
+    if (this.isReceptionist()) return 'receptionist';
+    if (this.isLabScientist()) return 'lab';
+    if (this.isPharmacist()) return 'pharmacist';
+    if (this.isRadiologist()) return 'radiologist';
+    return 'fallback';
+  });
+
+  // ── Role display label ────────────────────────────────────────
+  roleLabel = computed(() => {
+    if (this.isSuperAdmin()) return 'Super Administrator';
+    if (this.isHospitalAdmin()) return 'Hospital Administrator';
+    if (this.isDoctor()) return 'Physician';
+    if (this.isMidwife()) return 'Midwife';
+    if (this.isNurse()) return 'Nurse';
+    if (this.isReceptionist()) return 'Front Desk';
+    if (this.isLabScientist()) return 'Lab Scientist';
+    if (this.isPharmacist()) return 'Pharmacist';
+    if (this.isRadiologist()) return 'Radiologist';
+    return 'Staff';
+  });
+
+  // ── Stat strip (doctor / clinical) ──────────────────────────
+  statCards = computed<StatCard[]>(() => {
+    const base: StatCard[] = [
+      {
+        key: 'total_today',
+        label: "Today's Patients",
+        value: this.todayAppointments().length,
+        icon: 'group',
         color: '#2563eb',
-      });
-    }
-    if (this.permissions.hasPermission('Create Appointments')) {
-      actions.push({
-        icon: 'event',
-        label: 'New Appointment',
-        route: '/appointments/new',
-        color: '#059669',
-      });
-    }
-    if (this.permissions.hasPermission('View Lab')) {
-      actions.push({ icon: 'science', label: 'Lab Orders', route: '/lab', color: '#7c3aed' });
-    }
-    if (this.permissions.hasPermission('View Billing')) {
-      actions.push({ icon: 'receipt_long', label: 'Billing', route: '/billing', color: '#d97706' });
+        bgColor: '#eff6ff',
+        route: '/appointments',
+      },
+      {
+        key: 'completed',
+        label: 'Completed',
+        value: this.completedToday(),
+        icon: 'task_alt',
+        color: '#2563eb',
+        bgColor: '#eff6ff',
+        route: '/appointments',
+      },
+      {
+        key: 'in_progress',
+        label: 'In Progress',
+        value: this.inProgressNow(),
+        icon: 'person_play',
+        color: '#2563eb',
+        bgColor: '#eff6ff',
+        route: '/appointments',
+      },
+      {
+        key: 'pending',
+        label: 'Pending',
+        value: this.pendingToday(),
+        icon: 'pending',
+        color: '#2563eb',
+        bgColor: '#eff6ff',
+        route: '/appointments',
+      },
+      {
+        key: 'alerts',
+        label: 'Active Alerts',
+        value: this.unacknowledgedAlerts().length,
+        icon: 'notification_important',
+        color: this.criticalAlerts().length > 0 ? '#dc2626' : '#2563eb',
+        bgColor: this.criticalAlerts().length > 0 ? '#fee2e2' : '#eff6ff',
+      },
+      {
+        key: 'inbox',
+        label: 'Inbox Items',
+        value: this.totalInboxCount(),
+        icon: 'mark_email_unread',
+        color: '#2563eb',
+        bgColor: '#eff6ff',
+        route: '/chat',
+      },
+    ];
+
+    const kpiMap = new Map(this.kpis().map((k) => [k.key, k]));
+    return base.map((c) => {
+      const kpi = kpiMap.get(c.key);
+      return kpi ? { ...c, value: kpi.value, trend: kpi.trend, delta: kpi.deltaNum } : c;
+    });
+  });
+
+  // ── Quick Actions (permission-gated) ─────────────────────────
+  quickActions = computed<QuickAction[]>(() => {
+    const all: [string, QuickAction][] = [
+      [
+        'Register Patients',
+        {
+          icon: 'person_add',
+          label: 'Register Patient',
+          description: 'Onboard a new patient',
+          route: '/patients/new',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Create Appointments',
+        {
+          icon: 'calendar_add_on',
+          label: 'New Appointment',
+          description: 'Schedule a visit',
+          route: '/appointments/new',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Create Encounters',
+        {
+          icon: 'stethoscope',
+          label: 'Start Encounter',
+          description: 'Begin a clinical encounter',
+          route: '/encounters/new',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Create Prescriptions',
+        {
+          icon: 'medication',
+          label: 'Write Rx',
+          description: 'Prescribe medication',
+          route: '/prescriptions/new',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'View Lab',
+        {
+          icon: 'science',
+          label: 'Lab Orders',
+          description: 'Order lab tests',
+          route: '/lab',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Request Imaging Studies',
+        {
+          icon: 'radiology',
+          label: 'Imaging',
+          description: 'Request imaging studies',
+          route: '/imaging',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'View Billing',
+        {
+          icon: 'receipt_long',
+          label: 'Billing',
+          description: 'Manage billing',
+          route: '/billing',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'View Prescriptions',
+        {
+          icon: 'local_pharmacy',
+          label: 'Prescriptions',
+          description: 'View & dispense prescriptions',
+          route: '/prescriptions',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Dispense Medications',
+        {
+          icon: 'medication_liquid',
+          label: 'Dispense Rx',
+          description: 'Dispense medications',
+          route: '/prescriptions',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Process Lab Tests',
+        {
+          icon: 'biotech',
+          label: 'Process Lab',
+          description: 'Process pending lab tests',
+          route: '/lab',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Document Nursing Notes',
+        {
+          icon: 'edit_note',
+          label: 'Nursing Notes',
+          description: 'Document patient notes',
+          route: '/encounters',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+      [
+        'Check-in Patients',
+        {
+          icon: 'how_to_reg',
+          label: 'Check-in',
+          description: 'Check in a patient',
+          route: '/appointments',
+          color: '#2563eb',
+          bgColor: '#eff6ff',
+        },
+      ],
+    ];
+
+    const seen = new Set<string>();
+    const actions: QuickAction[] = [];
+    for (const [perm, action] of all) {
+      if (!seen.has(action.route) && this.permissions.hasPermission(perm)) {
+        seen.add(action.route);
+        actions.push(action);
+        if (actions.length >= 6) break;
+      }
     }
     return actions;
   });
 
+  // ── Super-Admin navigation tiles ─────────────────────────────
+  adminNavTiles = computed<NavTile[]>(() => [
+    {
+      icon: 'corporate_fare',
+      label: 'Organizations',
+      route: '/organizations',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'local_hospital',
+      label: 'Hospitals',
+      route: '/hospitals',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'domain',
+      label: 'Departments',
+      route: '/departments',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'shield',
+      label: 'Roles',
+      route: '/roles',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    { icon: 'group', label: 'Users', route: '/users', color: '#2563eb', bg: '#eff6ff' },
+    {
+      icon: 'people',
+      label: 'Patients',
+      route: '/patients',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'calendar_month',
+      label: 'Appointments',
+      route: '/appointments',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'history',
+      label: 'Audit Logs',
+      route: '/audit-logs',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'tune',
+      label: 'Platform Config',
+      route: '/platform',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'flag',
+      label: 'Feature Flags',
+      route: '/feature-flags',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'analytics',
+      label: 'Analytics',
+      route: '/dashboard',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'notifications',
+      label: 'Notifications',
+      route: '/notifications',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+  ]);
+
+  // ── Hospital Admin navigation tiles ──────────────────────────
+  hospitalAdminNavTiles = computed<NavTile[]>(() => [
+    {
+      icon: 'group',
+      label: 'Staff',
+      route: '/staff',
+      color: '#2563eb',
+      bg: '#eff6ff',
+      count: undefined,
+    },
+    {
+      icon: 'people',
+      label: 'Patients',
+      route: '/patients',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'calendar_month',
+      label: 'Appointments',
+      route: '/appointments',
+      color: '#2563eb',
+      bg: '#eff6ff',
+      count: this.todayAppointments().length,
+    },
+    {
+      icon: 'domain',
+      label: 'Departments',
+      route: '/departments',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'receipt_long',
+      label: 'Billing',
+      route: '/billing',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    { icon: 'policy', label: 'Audit Logs', route: '/audit-logs', color: '#2563eb', bg: '#eff6ff' },
+  ]);
+
+  // ────────────────────────────────────────────────────────────
+  // LIFECYCLE
+  // ────────────────────────────────────────────────────────────
+
   ngOnInit(): void {
-    const hour = new Date().getHours();
-    if (hour < 12) this.greeting.set('Good Morning');
-    else if (hour < 17) this.greeting.set('Good Afternoon');
-    else this.greeting.set('Good Evening');
-
-    const profile = this.auth.getUserProfile();
-    this.userName.set(profile?.firstName ?? profile?.username ?? 'User');
-
+    this.initGreeting();
+    this.initProfile();
     this.loadDashboardData();
+
+    this.clockInterval = setInterval(() => {
+      this.currentTime.set(this.formatTime(new Date()));
+      this.initGreeting();
+    }, 60_000);
+  }
+
+  ngOnDestroy(): void {
+    if (this.clockInterval) clearInterval(this.clockInterval);
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // PRIVATE INITIALIZERS
+  // ────────────────────────────────────────────────────────────
+
+  private initGreeting(): void {
+    const h = new Date().getHours();
+    if (h < 12) this.greeting.set('Good Morning');
+    else if (h < 17) this.greeting.set('Good Afternoon');
+    else this.greeting.set('Good Evening');
+  }
+
+  private initProfile(): void {
+    const profile = this.auth.getUserProfile();
+    const first = profile?.firstName ?? '';
+    const last = profile?.lastName ?? '';
+    this.userName.set(first || last ? `${first} ${last}`.trim() : (profile?.username ?? 'User'));
+
+    // Set role flags
+    this.isSuperAdmin.set(this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']));
+    this.isHospitalAdmin.set(this.auth.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN']));
+    this.isDoctor.set(this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON']));
+    this.isNurse.set(this.auth.hasAnyRole(['ROLE_NURSE']));
+    this.isMidwife.set(this.auth.hasAnyRole(['ROLE_MIDWIFE']));
+    this.isReceptionist.set(this.auth.hasAnyRole(['ROLE_RECEPTIONIST']));
+    this.isLabScientist.set(this.auth.hasAnyRole(['ROLE_LAB_SCIENTIST']));
+    this.isPharmacist.set(this.auth.hasAnyRole(['ROLE_PHARMACIST']));
+    this.isRadiologist.set(this.auth.hasAnyRole(['ROLE_RADIOLOGIST']));
+
+    // Title prefix
+    if (this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON'])) {
+      this.userTitle.set('Dr.');
+    } else if (this.auth.hasAnyRole(['ROLE_MIDWIFE'])) {
+      this.userTitle.set('Mid.');
+    } else {
+      this.userTitle.set('');
+    }
   }
 
   private loadDashboardData(): void {
     this.loading.set(true);
+    this.scheduleLoading.set(true);
+
     let pending = 0;
     const done = () => {
       if (--pending <= 0) this.loading.set(false);
     };
 
-    // Super-admin summary — only call if user has the SUPER_ADMIN role
-    if (this.auth.hasAnyRole(['ROLE_SUPER_ADMIN'])) {
+    // Super-admin summary
+    if (this.isSuperAdmin()) {
       pending++;
       this.dashboardService.getSummary().subscribe({
-        next: (summary) => {
-          this.adminSummary.set(summary);
-          this.recentAuditEvents.set(summary.recentAuditEvents ?? []);
-          this.isSuperAdmin.set(true);
+        next: (s) => {
+          this.adminSummary.set(s);
+          this.recentAuditEvents.set(s.recentAuditEvents ?? []);
           done();
         },
-        error: () => done(),
+        error: () => {
+          // Set an empty fallback so the dashboard renders with zeros instead of blank
+          this.adminSummary.set({
+            totalPatients: 0,
+            totalUsers: 0,
+            activeUsers: 0,
+            inactiveUsers: 0,
+            totalHospitals: 0,
+            activeHospitals: 0,
+            inactiveHospitals: 0,
+            totalOrganizations: 0,
+            activeOrganizations: 0,
+            totalDepartments: 0,
+            totalRoles: 0,
+            totalAssignments: 0,
+            activeAssignments: 0,
+            inactiveAssignments: 0,
+            globalAssignments: 0,
+            activeGlobalAssignments: 0,
+            todayAppointmentsCount: 0,
+            generatedAt: new Date().toISOString(),
+            recentAuditEvents: [],
+          });
+          done();
+        },
       });
     }
 
-    // Clinical dashboard — only call if user is a clinician
-    const clinicalRoles = [
-      'ROLE_DOCTOR',
-      'ROLE_PHYSICIAN',
-      'ROLE_SURGEON',
-      'ROLE_NURSE',
-      'ROLE_MIDWIFE',
-    ];
-    if (this.auth.hasAnyRole(clinicalRoles)) {
+    // Clinical dashboard (doctor / nurse / midwife)
+    if (this.isClinician()) {
       pending++;
       this.dashboardService.getClinicalDashboard().subscribe({
-        next: (dashboard) => {
-          this.kpis.set(dashboard.kpis ?? []);
-          this.alerts.set(dashboard.alerts ?? []);
-          this.inboxCounts.set(dashboard.inboxCounts ?? null);
-          this.onCallStatus.set(dashboard.onCallStatus ?? null);
-          this.roomedPatients.set(dashboard.roomedPatients ?? []);
-          this.isClinician.set(true);
+        next: (d) => {
+          this.kpis.set(d.kpis ?? []);
+          this.alerts.set(d.alerts ?? []);
+          this.inboxCounts.set(d.inboxCounts ?? null);
+          this.onCallStatus.set(d.onCallStatus ?? null);
+          this.roomedPatients.set(d.roomedPatients ?? []);
           done();
         },
         error: () => done(),
       });
     }
 
-    // Today's appointments
+    // Today's appointments (for roles that can see them)
     if (this.permissions.hasPermission('View Appointments')) {
       pending++;
       const today = new Date().toISOString().split('T')[0];
       this.appointmentService.list({ fromDate: today, toDate: today }).subscribe({
         next: (appts) => {
-          this.todayAppointments.set(appts.slice(0, 8));
+          const sorted = [...appts].sort((a, b) => a.startTime.localeCompare(b.startTime));
+          this.todayAppointments.set(sorted);
+          this.scheduleLoading.set(false);
           done();
         },
-        error: () => done(),
+        error: () => {
+          this.scheduleLoading.set(false);
+          done();
+        },
       });
+    } else {
+      this.scheduleLoading.set(false);
     }
 
-    // Recent patients
+    // Recent patients (for roles with patient visibility)
     if (this.permissions.hasPermission('View Patient Records')) {
       pending++;
       this.patientService.list().subscribe({
         next: (patients) => {
-          this.recentPatients.set(patients.slice(0, 5));
+          this.recentPatients.set(patients.slice(0, 6));
           done();
         },
         error: () => done(),
       });
     }
 
-    // If no async tasks were scheduled, release the loading state immediately
     if (pending === 0) {
       this.loading.set(false);
+      this.scheduleLoading.set(false);
     }
   }
+
+  // ────────────────────────────────────────────────────────────
+  // ACTIONS
+  // ────────────────────────────────────────────────────────────
 
   acknowledgeAlert(alertId: string): void {
     this.dashboardService.acknowledgeAlert(alertId).subscribe({
-      next: () => {
+      next: () =>
         this.alerts.update((list) =>
           list.map((a) => (a.id === alertId ? { ...a, acknowledged: true } : a)),
-        );
-      },
+        ),
     });
   }
 
+  refreshDashboard(): void {
+    this.loadDashboardData();
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // TEMPLATE HELPERS
+  // ────────────────────────────────────────────────────────────
+
   getAlertSeverityClass(severity: string): string {
-    switch (severity) {
-      case 'CRITICAL':
-        return 'alert-item severity-critical';
-      case 'URGENT':
-        return 'alert-item severity-urgent';
-      case 'WARNING':
-        return 'alert-item severity-warning';
-      case 'INFO':
-        return 'alert-item severity-info';
-      default:
-        return 'alert-item';
-    }
+    const map: Record<string, string> = {
+      CRITICAL: 'severity-critical',
+      URGENT: 'severity-urgent',
+      WARNING: 'severity-warning',
+      INFO: 'severity-info',
+    };
+    return `alert-item ${map[severity] ?? ''}`;
+  }
+
+  getAlertIcon(severity: string): string {
+    const map: Record<string, string> = {
+      CRITICAL: 'emergency',
+      URGENT: 'warning',
+      WARNING: 'info',
+      INFO: 'info_i',
+    };
+    return map[severity] ?? 'notification_important';
   }
 
   getTriageClass(status: string): string {
-    switch (status) {
-      case 'TRIAGED':
-        return 'triage-badge triage-triaged';
-      case 'READY_FOR_PROVIDER':
-        return 'triage-badge triage-ready';
-      case 'TRIAGE_IN_PROGRESS':
-        return 'triage-badge triage-progress';
-      default:
-        return 'triage-badge triage-default';
-    }
+    const map: Record<string, string> = {
+      TRIAGED: 'triage-triaged',
+      READY_FOR_PROVIDER: 'triage-ready',
+      TRIAGE_IN_PROGRESS: 'triage-progress',
+    };
+    return `triage-badge ${map[status] ?? 'triage-default'}`;
+  }
+
+  getApptStatusClass(status: string): string {
+    const map: Record<string, string> = {
+      SCHEDULED: 'status-scheduled',
+      CONFIRMED: 'status-confirmed',
+      COMPLETED: 'status-completed',
+      CANCELLED: 'status-cancelled',
+      NO_SHOW: 'status-noshow',
+      IN_PROGRESS: 'status-inprogress',
+      REQUESTED: 'status-requested',
+    };
+    return `appt-status ${map[status] ?? ''}`;
+  }
+
+  getApptStatusLabel(status: string): string {
+    const map: Record<string, string> = {
+      SCHEDULED: 'Scheduled',
+      CONFIRMED: 'Confirmed',
+      COMPLETED: 'Done',
+      CANCELLED: 'Cancelled',
+      NO_SHOW: 'No Show',
+      IN_PROGRESS: 'In Progress',
+      REQUESTED: 'Requested',
+    };
+    return map[status] ?? status;
   }
 
   getTrendIcon(trend: string): string {
-    switch (trend) {
-      case 'up':
-        return 'trending_up';
-      case 'down':
-        return 'trending_down';
-      default:
-        return 'trending_flat';
-    }
+    if (trend === 'up') return 'trending_up';
+    if (trend === 'down') return 'trending_down';
+    return 'trending_flat';
   }
 
   getTrendClass(trend: string): string {
-    switch (trend) {
-      case 'up':
-        return 'kpi-trend trend-up';
-      case 'down':
-        return 'kpi-trend trend-down';
-      default:
-        return 'kpi-trend trend-stable';
+    if (trend === 'up') return 'trend-pill trend-up';
+    if (trend === 'down') return 'trend-pill trend-down';
+    return 'trend-pill trend-stable';
+  }
+
+  getPatientInitials(name: string): string {
+    const parts = (name ?? '').trim().split(' ');
+    if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+    return (parts[0]?.[0] ?? '?').toUpperCase();
+  }
+
+  getAvatarColor(name: string): string {
+    const colors = [
+      '#2563eb',
+      '#059669',
+      '#7c3aed',
+      '#d97706',
+      '#dc2626',
+      '#0891b2',
+      '#db2777',
+      '#65a30d',
+    ];
+    let hash = 0;
+    for (let i = 0; i < (name?.length ?? 0); i++) {
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
+    return colors[Math.abs(hash) % colors.length];
+  }
+
+  /** Format an ISO/HH:mm time string as 12-hour for display */
+  formatApptTime(time: string): string {
+    if (!time) return '';
+    const [h, m] = time.split(':').map(Number);
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const hour = h % 12 || 12;
+    return `${hour}:${String(m).padStart(2, '0')} ${ampm}`;
+  }
+
+  private formatTime(d: Date): string {
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   }
 }

@@ -8,7 +8,16 @@ import { test, expect } from './fixtures/test-fixtures';
 test.describe('Staff Module', () => {
   test.describe('Staff List', () => {
     test.beforeEach(async ({ page }) => {
-      await page.goto('/staff', { waitUntil: 'networkidle' });
+      await page.goto('/staff', { waitUntil: 'domcontentloaded' });
+      // Wait until the Angular component finishes its initial data fetch:
+      // either a staff-grid, an empty-state, or no loading-state is present.
+      await page.waitForFunction(
+        () =>
+          !document.querySelector('.loading-state') ||
+          !!document.querySelector('.staff-grid') ||
+          !!document.querySelector('.empty-state'),
+        { timeout: 15_000 },
+      );
     });
 
     test('displays staff page with title', async ({ page }) => {
@@ -23,25 +32,12 @@ test.describe('Staff Module', () => {
     });
 
     test('loads staff data (grid or empty state)', async ({ page }) => {
-      // Wait for loading to complete
-      await page.waitForFunction(
-        () =>
-          !document.querySelector('.loading-state') ||
-          document.querySelector('.staff-grid') ||
-          document.querySelector('.empty-state'),
-        { timeout: 15_000 },
-      );
-
       const hasGrid = await page.locator('.staff-grid').count();
       const hasEmpty = await page.locator('.empty-state').count();
       expect(hasGrid + hasEmpty).toBeGreaterThan(0);
     });
 
     test('staff cards show name and role', async ({ page }) => {
-      await page.waitForFunction(() => !document.querySelector('.loading-state'), {
-        timeout: 15_000,
-      });
-
       const cards = page.locator('.staff-card');
       if ((await cards.count()) > 0) {
         const firstCard = cards.first();
@@ -51,10 +47,6 @@ test.describe('Staff Module', () => {
     });
 
     test('search filters staff list', async ({ page }) => {
-      await page.waitForFunction(() => !document.querySelector('.loading-state'), {
-        timeout: 15_000,
-      });
-
       const searchInput = page.locator('.search-bar input');
       const cards = page.locator('.staff-card');
       const initialCount = await cards.count();
@@ -68,10 +60,6 @@ test.describe('Staff Module', () => {
     });
 
     test('clicking edit on a staff card opens the edit modal', async ({ page }) => {
-      await page.waitForFunction(() => !document.querySelector('.loading-state'), {
-        timeout: 15_000,
-      });
-
       const cards = page.locator('.staff-card');
       if ((await cards.count()) > 0) {
         await cards.first().getByTitle('Edit').click();

@@ -62,7 +62,7 @@ public class PatientConsentController {
 
     @PostMapping("/grant")
     @Operation(summary = "Grant or Update Patient Consent", description = "Grants or updates patient consent for sharing records between hospitals.")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR')")
     public ResponseEntity<PatientConsentResponseDTO> grantConsent(
             @Valid @RequestBody PatientConsentRequestDTO requestDTO
     ) {
@@ -121,7 +121,7 @@ public class PatientConsentController {
 
     @PostMapping("/revoke")
     @Operation(summary = "Revoke Patient Consent", description = "Revokes patient consent for sharing records between specific hospitals.")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR')")
     public ResponseEntity<Void> revokeConsent(
             @RequestParam @NotNull UUID patientId,
             @RequestParam @NotNull UUID fromHospitalId,

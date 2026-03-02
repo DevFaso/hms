@@ -53,6 +53,8 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
 
     Optional<Staff> findFirstByUserIdOrderByCreatedAtAsc(UUID userId);
 
+    boolean existsByAssignment_Id(UUID assignmentId);
+
     @Query("select s.user.id from Staff s where lower(s.licenseNumber) = lower(:license)")
     Optional<UUID> findUserIdByLicense(@Param("license") String license);
 

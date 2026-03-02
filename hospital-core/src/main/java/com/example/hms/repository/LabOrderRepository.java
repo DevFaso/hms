@@ -35,4 +35,7 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     );
 
     boolean existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(UUID id, UUID id1, @NotNull LocalDateTime orderDatetime);
+
+    // Count lab orders placed by a specific ordering staff with a given status
+    long countByOrderingStaff_IdAndStatus(UUID staffId, LabOrderStatus status);
 }

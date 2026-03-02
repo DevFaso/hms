@@ -73,20 +73,32 @@ public class ChatMessageServiceImpl implements ChatMessageService {
 
         UserRoleHospitalAssignment assignment = null;
         if (!isSuperAdmin) {
-            // Resolve hospital by name using HospitalRepository
+            // Resolve hospital by name when explicitly provided
             com.example.hms.model.Hospital hospital = null;
             if (dto.getHospitalName() != null && !dto.getHospitalName().isBlank()) {
                 hospital = hospitalRepository.findByNameIgnoreCase(dto.getHospitalName())
                     .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + dto.getHospitalName()));
             }
 
-            validateSenderAssignment(sender.getId(), hospital != null ? hospital.getId() : null);
-
-            assignment = getSenderAssignment(
-                sender.getId(),
-                hospital != null ? hospital.getId() : null,
-                dto.getRoleCode()
-            );
+            if (hospital != null) {
+                // Hospital context provided: verify sender is assigned to that hospital
+                validateSenderHospitalAssignment(sender.getId(), hospital.getId());
+                // Attempt to resolve a specific role assignment when roleCode is given
+                if (dto.getRoleCode() != null && !dto.getRoleCode().isBlank()) {
+                    assignment = getSenderAssignment(sender.getId(), hospital.getId(), dto.getRoleCode());
+                } else {
+                    // No role code — find any active assignment for this user in the hospital
+                    assignment = userRoleHospitalAssignmentRepository
+                        .findFirstByUser_IdAndHospital_IdAndActiveTrue(sender.getId(), hospital.getId())
+                        .orElse(null);
+                }
+            } else {
+                // No hospital context provided — just ensure the sender is a legitimate active user
+                if (!userRoleHospitalAssignmentRepository.existsByUserIdAndActiveTrue(sender.getId())) {
+                    throw new SecurityException("Sender has no active role assignment in the system.");
+                }
+                // assignment stays null — cross-hospital / general chat
+            }
         }
 
         ChatMessage message = ChatMessage.builder()
@@ -109,7 +121,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             .anyMatch(a -> "ROLE_SUPER_ADMIN".equals(a.getAuthority()));
     }
 
-    private void validateSenderAssignment(UUID senderId, UUID hospitalId) {
+    private void validateSenderHospitalAssignment(UUID senderId, UUID hospitalId) {
         boolean exists = userRoleHospitalAssignmentRepository
             .existsByUserIdAndHospitalIdAndActiveTrue(senderId, hospitalId);
         if (!exists) {
@@ -210,8 +222,10 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             UUID senderId = (UUID) row[1];
             UUID recipientId = (UUID) row[2];
             String content = (String) row[3];
-            LocalDateTime timestamp = ((java.sql.Timestamp) row[4]).toLocalDateTime();
-            boolean read = (boolean) row[5];
+            LocalDateTime timestamp = row[4] instanceof java.sql.Timestamp ts
+                    ? ts.toLocalDateTime()
+                    : (LocalDateTime) row[4];
+            boolean read = Boolean.TRUE.equals(row[5]);
 
             UUID otherUserId = senderId.equals(userId) ? recipientId : senderId;
 

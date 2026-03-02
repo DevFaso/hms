@@ -2,7 +2,14 @@
   <div class="page-header">
     <div>
       <h1 class="page-title">Users</h1>
-      <p class="page-subtitle">Manage system users and access</p>
+      <p class="page-subtitle">
+        @if (!loading()) {
+          {{ filtered().length }} user{{ filtered().length !== 1 ? 's' : '' }} ·
+          {{ totalElements() }} total
+        } @else {
+          Manage system users and access
+        }
+      </p>
     </div>
     <button class="btn-primary" (click)="openCreate()">
       <span class="material-symbols-outlined">person_add</span>
@@ -10,15 +17,98 @@
     </button>
   </div>
 
-  <div class="search-bar">
-    <span class="material-symbols-outlined search-icon">search</span>
-    <input
-      type="text"
-      placeholder="Search by name, email, role..."
-      [(ngModel)]="searchTerm"
-      (ngModelChange)="applyFilter()"
-    />
+  <!-- Filter toolbar -->
+  <div class="filter-toolbar">
+    <div class="search-bar toolbar-search">
+      <span class="material-symbols-outlined search-icon">search</span>
+      <input
+        type="text"
+        placeholder="Search by name, email, username..."
+        [value]="searchTerm"
+        (input)="searchTerm = $any($event.target).value; onSearchChange()"
+      />
+      @if (searchTerm) {
+        <button
+          class="search-clear"
+          title="Clear search"
+          (click)="searchTerm = ''; onSearchChange()"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      }
+    </div>
+
+    <!-- Status quick pills -->
+    <div class="status-pills">
+      <button
+        class="status-pill"
+        [class.active]="!statusFilter"
+        (click)="statusFilter = ''; onStatusFilterChange()"
+      >
+        All
+      </button>
+      <button
+        class="status-pill active-pill"
+        [class.active]="statusFilter === 'active'"
+        (click)="statusFilter = 'active'; onStatusFilterChange()"
+      >
+        Active
+      </button>
+      <button
+        class="status-pill inactive-pill"
+        [class.active]="statusFilter === 'inactive'"
+        (click)="statusFilter = 'inactive'; onStatusFilterChange()"
+      >
+        Inactive
+      </button>
+      <button
+        class="status-pill deleted-pill"
+        [class.active]="statusFilter === 'deleted'"
+        (click)="statusFilter = 'deleted'; onStatusFilterChange()"
+      >
+        Deleted
+      </button>
+    </div>
+
+    <button
+      class="filter-toggle-btn"
+      [class.has-filters]="activeFilterCount > 0"
+      (click)="showFilters.set(!showFilters())"
+      title="More filters"
+    >
+      <span class="material-symbols-outlined">tune</span>
+      Filters
+      @if (activeFilterCount > 0) {
+        <span class="filter-badge">{{ activeFilterCount }}</span>
+      }
+    </button>
   </div>
+
+  @if (showFilters()) {
+    <div class="filter-row">
+      <div class="filter-group">
+        <label class="filter-label" for="userRoleFilter">Role</label>
+        <select
+          id="userRoleFilter"
+          class="filter-select"
+          title="Filter by role"
+          [(ngModel)]="roleFilter"
+          (ngModelChange)="onRoleFilterChange()"
+        >
+          <option value="">All Roles</option>
+          @for (role of availableRoles(); track role.id) {
+            <option [value]="role.name">{{ role.name }}</option>
+          }
+        </select>
+      </div>
+      @if (activeFilterCount > 0) {
+        <button class="clear-filters-btn" (click)="clearFilters()">
+          <span class="material-symbols-outlined">filter_alt_off</span>
+          Clear All
+        </button>
+      }
+    </div>
+  }
 
   @if (loading()) {
     <div class="loading-state">
@@ -45,7 +135,7 @@
             <tr>
               <td class="name-cell">
                 <div class="user-name-wrap">
-                  <div class="user-avatar" [class.inactive]="!user.active">
+                  <div class="user-avatar" [class.inactive]="!user.active || user.deleted">
                     {{ getInitials(user) }}
                   </div>
                   <div>
@@ -62,10 +152,11 @@
               <td>
                 <span
                   class="status-badge"
-                  [class.active]="user.active"
-                  [class.inactive]="!user.active"
+                  [class.active]="user.active && !user.deleted"
+                  [class.inactive]="!user.active && !user.deleted"
+                  [class.deleted]="user.deleted"
                 >
-                  {{ user.active ? 'Active' : 'Inactive' }}
+                  {{ user.deleted ? 'Deleted' : user.active ? 'Active' : 'Inactive' }}
                 </span>
               </td>
               <td>
@@ -73,9 +164,20 @@
                   <button class="action-link edit" title="Edit" (click)="openEdit(user)">
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="action-link delete" title="Delete" (click)="confirmDelete(user)">
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+                  @if (user.deleted) {
+                    <button
+                      class="action-link restore"
+                      title="Restore user"
+                      (click)="restoreUser(user)"
+                      [disabled]="restoring()"
+                    >
+                      <span class="material-symbols-outlined">restore</span>
+                    </button>
+                  } @else {
+                    <button class="action-link delete" title="Delete" (click)="confirmDelete(user)">
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>
@@ -109,7 +211,14 @@
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">manage_accounts</span>
       <h3>No users found</h3>
-      <p>{{ searchTerm ? 'Try adjusting your search.' : 'Register a new user to get started.' }}</p>
+      <p>
+        @if (searchTerm || activeFilterCount > 0 || statusFilter) {
+          Try adjusting your search or filters.
+          <button class="link-btn" (click)="clearFilters()">Clear all filters</button>
+        } @else {
+          Register a new user to get started.
+        }
+      </p>
     </div>
   }
 
@@ -146,7 +255,12 @@
                   [(ngModel)]="createForm.firstName"
                   name="firstName"
                   required
+                  [class.input-error]="fieldErrors()['firstName']"
+                  (ngModelChange)="clearFieldError('firstName')"
                 />
+                @if (fieldErrors()['firstName']) {
+                  <span class="field-error-msg">{{ fieldErrors()['firstName'] }}</span>
+                }
               </div>
               <div class="field">
                 <label for="lastName">Last Name *</label>
@@ -156,7 +270,12 @@
                   [(ngModel)]="createForm.lastName"
                   name="lastName"
                   required
+                  [class.input-error]="fieldErrors()['lastName']"
+                  (ngModelChange)="clearFieldError('lastName')"
                 />
+                @if (fieldErrors()['lastName']) {
+                  <span class="field-error-msg">{{ fieldErrors()['lastName'] }}</span>
+                }
               </div>
             </div>
 
@@ -170,7 +289,12 @@
                   [(ngModel)]="createForm.username"
                   name="username"
                   required
+                  [class.input-error]="fieldErrors()['username']"
+                  (ngModelChange)="clearFieldError('username')"
                 />
+                @if (fieldErrors()['username']) {
+                  <span class="field-error-msg">{{ fieldErrors()['username'] }}</span>
+                }
               </div>
               <div class="field">
                 <label for="email">Email *</label>
@@ -180,7 +304,12 @@
                   [(ngModel)]="createForm.email"
                   name="email"
                   required
+                  [class.input-error]="fieldErrors()['email']"
+                  (ngModelChange)="clearFieldError('email')"
                 />
+                @if (fieldErrors()['email']) {
+                  <span class="field-error-msg">{{ fieldErrors()['email'] }}</span>
+                }
               </div>
             </div>
 
@@ -194,7 +323,12 @@
                   [(ngModel)]="createForm.password"
                   name="password"
                   required
+                  [class.input-error]="fieldErrors()['password']"
+                  (ngModelChange)="clearFieldError('password')"
                 />
+                @if (fieldErrors()['password']) {
+                  <span class="field-error-msg">{{ fieldErrors()['password'] }}</span>
+                }
               </div>
               <div class="field">
                 <label for="phoneNumber">Phone Number *</label>
@@ -205,7 +339,12 @@
                   name="phoneNumber"
                   required
                   placeholder="+226 70 00 00 00"
+                  [class.input-error]="fieldErrors()['phoneNumber']"
+                  (ngModelChange)="clearFieldError('phoneNumber')"
                 />
+                @if (fieldErrors()['phoneNumber']) {
+                  <span class="field-error-msg">{{ fieldErrors()['phoneNumber'] }}</span>
+                }
               </div>
             </div>
 
@@ -240,7 +379,12 @@
                   name="licenseNumber"
                   required
                   placeholder="Medical license number"
+                  [class.input-error]="fieldErrors()['licenseNumber']"
+                  (ngModelChange)="clearFieldError('licenseNumber')"
                 />
+                @if (fieldErrors()['licenseNumber']) {
+                  <span class="field-error-msg">{{ fieldErrors()['licenseNumber'] }}</span>
+                }
                 <span class="hint-text"
                   >Required for medical roles (Doctor, Nurse, Lab Scientist, Pharmacist)</span
                 >

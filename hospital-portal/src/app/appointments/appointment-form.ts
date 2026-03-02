@@ -2,13 +2,14 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { Subject } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { AppointmentService, AppointmentUpsertRequest } from '../services/appointment.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 
 interface DeptOption {
   id: string;
@@ -29,6 +30,7 @@ export class AppointmentFormComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
+  private readonly roleContext = inject(RoleContextService);
 
   saving = signal(false);
 
@@ -52,8 +54,37 @@ export class AppointmentFormComponent implements OnInit {
 
   // ── Hospital + Department dropdowns ─────────────────────
   hospitals = signal<HospitalResponse[]>([]);
+  get isReceptionist(): boolean {
+    return this.roleContext.isReceptionist();
+  }
+  get lockedHospital(): HospitalResponse | null {
+    const id = this.lockedHospitalId;
+    if (!id) return null;
+    return this.hospitals().find((h) => h.id === id) ?? null;
+  }
+  get hospitalOptions(): HospitalResponse[] {
+    if (this.isReceptionist) {
+      return this.lockedHospital ? [this.lockedHospital] : [];
+    }
+    return this.hospitals();
+  }
   departments = signal<DeptOption[]>([]);
   selectedHospitalId = signal('');
+
+  /** Non-null when the logged-in user is scoped to a specific hospital */
+  get lockedHospitalId(): string | null {
+    const permitted = this.roleContext.permittedHospitalIds;
+    // Only lock when the user belongs to exactly one hospital.
+    // Multi-hospital users select their hospital in the dropdown.
+    if (permitted.length === 1) return permitted[0];
+    return null;
+  }
+
+  get lockedHospitalName(): string {
+    const id = this.lockedHospitalId;
+    if (!id) return '';
+    return this.hospitals().find((h) => h.id === id)?.name ?? id;
+  }
 
   form: AppointmentUpsertRequest = {
     appointmentDate: '',
@@ -65,7 +96,33 @@ export class AppointmentFormComponent implements OnInit {
   };
 
   ngOnInit(): void {
-    this.hospitalService.list().subscribe((h) => this.hospitals.set(h));
+    const lockedId = this.lockedHospitalId;
+
+    if (lockedId) {
+      // Scoped user (all non-admin staff, single-hospital admins):
+      // locked to one hospital — never show a dropdown.
+      this.hospitalService.getById(lockedId).subscribe((h) => {
+        this.hospitals.set([h]);
+        this.selectedHospitalId.set(lockedId);
+        this.form.hospitalId = lockedId;
+        // Ensure the interceptor sends the correct X-Hospital-Id for this user.
+        this.roleContext.activeHospitalId = lockedId;
+        this.loadDepartmentsFor(lockedId);
+      });
+
+      // Load staff for the locked hospital once.
+      this.staffService.list(lockedId).subscribe((list) => {
+        this.allStaff = list;
+        this.staffLoaded = true;
+        this.setDeptsFromStaff(lockedId);
+      });
+    } else {
+      // Multi-hospital admin: load all hospitals for the dropdown.
+      this.hospitalService.list().subscribe((h) => {
+        this.hospitals.set(h);
+      });
+    }
+
     this.initPatientSearch();
     this.initStaffSearch();
   }
@@ -126,8 +183,16 @@ export class AppointmentFormComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((_q) => {
           this.staffSearchLoading.set(true);
-          if (!this.staffLoaded) return this.staffService.list();
-          return [this.allStaff];
+          if (!this.staffLoaded) {
+            // Single-hospital users: ngOnInit exclusively owns the staff API call.
+            // Never fire a second concurrent request from the search path.
+            if (this.lockedHospitalId) {
+              return of(this.allStaff);
+            }
+            // Unrestricted / multi-hospital user only — safe to fetch staff here.
+            return this.staffService.list();
+          }
+          return of(this.allStaff);
         }),
       )
       .subscribe({
@@ -164,12 +229,22 @@ export class AppointmentFormComponent implements OnInit {
   }
 
   selectStaff(s: StaffResponse): void {
+    // Boundary guard: reject staff not belonging to the currently selected hospital.
+    // For single-hospital users, lockedHospitalId is non-null.
+    // For multi-hospital users, check against the form's selected hospital.
+    const activeHospital = this.form.hospitalId ?? this.lockedHospitalId;
+    if (activeHospital && s.hospitalId && s.hospitalId !== activeHospital) {
+      this.toast.error('Cannot assign staff from another hospital');
+      return;
+    }
+
     this.selectedStaff.set(s);
     this.form.staffId = s.id;
     delete this.form.staffEmail;
     this.staffDropdownOpen.set(false);
     this.staffQuery.set('');
-    // Auto-fill hospital when staff is selected
+    // Auto-fill hospital when staff is selected (unrestricted users only —
+    // locked users already have selectedHospitalId set from ngOnInit)
     if (s.hospitalId && !this.selectedHospitalId()) {
       this.selectedHospitalId.set(s.hospitalId);
       this.form.hospitalId = s.hospitalId;
@@ -194,14 +269,28 @@ export class AppointmentFormComponent implements OnInit {
     this.form.hospitalId = hospitalId || undefined;
     this.form.departmentId = undefined;
     this.departments.set([]);
+    // Update active hospital so the auth interceptor sends the correct
+    // X-Hospital-Id header on subsequent API calls (POST /api/appointments, etc.)
+    this.roleContext.activeHospitalId = hospitalId || null;
     if (hospitalId) this.loadDepartmentsFor(hospitalId);
   }
 
   private loadDepartmentsFor(hospitalId: string): void {
+    // FIX 3 — boundary guard: a locked user can never load departments for a
+    // foreign hospital regardless of which code path calls this method.
+    const locked = this.lockedHospitalId;
+    if (locked && hospitalId !== locked) {
+      return;
+    }
+
     // Departments come from staff already loaded — derive unique dept list
     if (this.staffLoaded) {
       this.setDeptsFromStaff(hospitalId);
+    } else if (this.lockedHospitalId) {
+      // Staff for the single locked hospital is being loaded in ngOnInit — wait for it
+      // (setDeptsFromStaff will be called once staffLoaded is set)
     } else {
+      // Unrestricted / multi-hospital user selected a hospital: fetch staff for it
       this.staffService.list(hospitalId).subscribe((list) => {
         if (!this.staffLoaded) {
           this.allStaff = [...this.allStaff, ...list];

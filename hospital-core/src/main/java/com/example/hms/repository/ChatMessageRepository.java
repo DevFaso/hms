@@ -51,6 +51,9 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
     // 3. Count unread messages from one user to another
     int countBySenderAndRecipientAndReadFalse(User sender, User recipient);
 
+    // Count all unread messages where the user is the recipient
+    long countByRecipient_IdAndReadFalse(UUID recipientId);
+
     // 4. Find unread messages from sender to recipient
     @Query("""
         SELECT m FROM ChatMessage m

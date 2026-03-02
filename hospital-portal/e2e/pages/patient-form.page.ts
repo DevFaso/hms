@@ -44,7 +44,7 @@ export class PatientFormPage {
 
   /** Navigate to patient form */
   async goto(): Promise<void> {
-    await this.page.goto('/patients/new', { waitUntil: 'networkidle' });
+    await this.page.goto('/patients/new', { waitUntil: 'domcontentloaded' });
   }
 
   /** Assert form page is loaded */

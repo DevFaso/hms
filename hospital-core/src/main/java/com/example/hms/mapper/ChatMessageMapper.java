@@ -17,12 +17,17 @@ public class ChatMessageMapper {
         ChatMessageResponseDTO dto = new ChatMessageResponseDTO();
         dto.setId(message.getId() != null ? message.getId().toString() : null);
         dto.setContent(message.getContent());
-        dto.setTimestamp(message.getTimestamp() != null ? message.getTimestamp().toString() : null);
+
+        // sentAt is the authoritative delivery time; fall back to legacy timestamp field
+        LocalDateTime ts = message.getSentAt() != null ? message.getSentAt() : message.getTimestamp();
+        dto.setTimestamp(ts != null ? ts.toString() : null);
+
         dto.setRead(message.isRead());
 
         populateSenderInfo(dto, message.getSender());
         populateRecipientInfo(dto, message.getRecipient());
 
+        // Resolve hospitalName from the assignment context (null for context-free messages)
         if (message.getAssignment() != null && message.getAssignment().getHospital() != null) {
             dto.setHospitalName(message.getAssignment().getHospital().getName());
         }
@@ -35,6 +40,7 @@ public class ChatMessageMapper {
         dto.setSenderId(sender.getId() != null ? sender.getId().toString() : null);
         dto.setSenderName(resolveFullName(sender));
         dto.setSenderRole(resolvePrimaryRole(sender));
+        dto.setSenderProfilePictureUrl(sender.getProfileImageUrl());
     }
 
     private void populateRecipientInfo(ChatMessageResponseDTO dto, User recipient) {
@@ -42,6 +48,7 @@ public class ChatMessageMapper {
         dto.setRecipientId(recipient.getId() != null ? recipient.getId().toString() : null);
         dto.setRecipientName(resolveFullName(recipient));
         dto.setRecipientRole(resolvePrimaryRole(recipient));
+        dto.setRecipientProfilePictureUrl(recipient.getProfileImageUrl());
         if (recipient.getStaffProfile() != null && recipient.getStaffProfile().getDepartment() != null) {
             dto.setRecipientDepartmentName(recipient.getStaffProfile().getDepartment().getName());
         }

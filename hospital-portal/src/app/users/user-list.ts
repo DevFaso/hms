@@ -1,6 +1,8 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subject, takeUntil } from 'rxjs';
+import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { UserService, UserSummary, AdminRegisterRequest } from '../services/user.service';
 import { RoleService, RoleResponse } from '../services/role.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
@@ -69,16 +71,24 @@ const SPECIALIZATIONS = [
   templateUrl: './user-list.html',
   styleUrl: './user-list.scss',
 })
-export class UserListComponent implements OnInit {
+export class UserListComponent implements OnInit, OnDestroy {
   private readonly userService = inject(UserService);
   private readonly roleService = inject(RoleService);
   private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
 
+  private readonly searchSubject = new Subject<string>();
+  private readonly destroy$ = new Subject<void>();
+
   users = signal<UserSummary[]>([]);
   filtered = signal<UserSummary[]>([]);
   loading = signal(true);
   searchTerm = '';
+
+  /* Filter state */
+  roleFilter = '';
+  statusFilter = '';
+  showFilters = signal(false);
 
   currentPage = signal(0);
   totalPages = signal(0);
@@ -92,6 +102,12 @@ export class UserListComponent implements OnInit {
   showDeleteConfirm = signal(false);
   deletingUser = signal<UserSummary | null>(null);
   deleting = signal(false);
+
+  // Restore
+  restoring = signal(false);
+
+  /** Per-field validation error messages (from 400/409 backend responses). */
+  fieldErrors = signal<Record<string, string>>({});
 
   // Lookup data for dropdowns
   availableRoles = signal<RoleResponse[]>([]);
@@ -112,6 +128,12 @@ export class UserListComponent implements OnInit {
   }
 
   ngOnInit(): void {
+    this.searchSubject
+      .pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.currentPage.set(0);
+        this.loadUsers(0);
+      });
     this.loadUsers();
     this.loadRoles();
     this.loadHospitals();
@@ -119,12 +141,27 @@ export class UserListComponent implements OnInit {
 
   loadUsers(page = 0): void {
     this.loading.set(true);
-    this.userService.list(page, 20).subscribe({
+
+    // Use server-side search when a role filter or search term is active;
+    // fall back to the plain list endpoint when no filters are applied.
+    const term = this.searchTerm.trim();
+    const hasServerFilter = !!this.roleFilter || !!term;
+
+    const request$ = hasServerFilter
+      ? this.userService.search(page, 20, {
+          ...(this.roleFilter ? { role: this.roleFilter } : {}),
+          ...(term ? { name: term } : {}),
+        })
+      : this.userService.list(page, 20);
+
+    request$.subscribe({
       next: (res) => {
         this.users.set(res.content);
         this.currentPage.set(res.number);
         this.totalPages.set(res.totalPages);
         this.totalElements.set(res.totalElements);
+        // Client-side status filter (active/inactive/deleted) is still applied
+        // locally because the search endpoint doesn't expose those params.
         this.applyFilter();
         this.loading.set(false);
       },
@@ -155,21 +192,50 @@ export class UserListComponent implements OnInit {
   }
 
   applyFilter(): void {
-    const term = this.searchTerm.toLowerCase().trim();
-    if (!term) {
-      this.filtered.set(this.users());
-      return;
+    // Role and search-term filtering is handled server-side via loadUsers().
+    // Here we only apply the client-side status filter on the already-loaded page.
+    let result = this.users();
+    if (this.statusFilter === 'active') {
+      result = result.filter((u) => u.active && !u.deleted);
+    } else if (this.statusFilter === 'inactive') {
+      result = result.filter((u) => !u.active && !u.deleted);
+    } else if (this.statusFilter === 'deleted') {
+      result = result.filter((u) => u.deleted);
     }
-    this.filtered.set(
-      this.users().filter(
-        (u) =>
-          u.username.toLowerCase().includes(term) ||
-          u.email.toLowerCase().includes(term) ||
-          u.firstName.toLowerCase().includes(term) ||
-          u.lastName.toLowerCase().includes(term) ||
-          (u.roleName?.toLowerCase().includes(term) ?? false),
-      ),
-    );
+    this.filtered.set(result);
+  }
+
+  /** Called when the role filter dropdown changes — reloads from backend page 0. */
+  onRoleFilterChange(): void {
+    this.currentPage.set(0);
+    this.loadUsers(0);
+  }
+
+  /** Called when the status filter dropdown changes — client-side only re-filter. */
+  onStatusFilterChange(): void {
+    this.applyFilter();
+  }
+
+  /** Called when the search input changes — debounced 300 ms before reloading from backend. */
+  onSearchChange(): void {
+    this.searchSubject.next(this.searchTerm);
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  clearFilters(): void {
+    this.searchTerm = '';
+    this.roleFilter = '';
+    this.statusFilter = '';
+    this.currentPage.set(0);
+    this.loadUsers(0);
+  }
+
+  get activeFilterCount(): number {
+    return [this.roleFilter, this.statusFilter].filter(Boolean).length;
   }
 
   getInitials(u: UserSummary): string {
@@ -180,6 +246,7 @@ export class UserListComponent implements OnInit {
     this.createForm = this.freshForm();
     this.selectedRoles = [];
     this.editing.set(null);
+    this.fieldErrors.set({});
     this.showCreate.set(true);
   }
 
@@ -195,12 +262,14 @@ export class UserListComponent implements OnInit {
       roleNames: user.roleName ? [user.roleName] : [],
     };
     this.selectedRoles = user.roleName ? [user.roleName] : [];
+    this.fieldErrors.set({});
     this.showCreate.set(true);
   }
 
   closeCreate(): void {
     this.showCreate.set(false);
     this.editing.set(null);
+    this.fieldErrors.set({});
   }
 
   onRoleToggle(roleCode: string, checked: boolean): void {
@@ -239,7 +308,7 @@ export class UserListComponent implements OnInit {
     }
 
     this.createForm.roleNames = [...this.selectedRoles];
-
+    this.fieldErrors.set({});
     this.saving.set(true);
     const existing = this.editing();
 
@@ -259,17 +328,51 @@ export class UserListComponent implements OnInit {
 
     op.subscribe({
       next: () => {
-        this.toast.success(existing ? 'User updated' : 'User created');
+        this.toast.success(existing ? 'User updated' : 'User created successfully.');
         this.showCreate.set(false);
         this.saving.set(false);
         this.editing.set(null);
+        this.fieldErrors.set({});
         this.loadUsers();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Operation failed');
         this.saving.set(false);
+        const body = err?.error;
+        const status = err?.status;
+
+        // 409 Conflict — duplicate field detected by the backend
+        if (status === 409 && body?.field) {
+          this.fieldErrors.update((prev) => ({
+            ...prev,
+            [body.field]: body.message ?? 'Already in use',
+          }));
+          this.toast.error(
+            body.message ?? 'A conflict was detected. Please review the highlighted fields.',
+          );
+          return;
+        }
+
+        // 400 with fieldErrors map (from @Valid / Bean Validation)
+        if (status === 400 && body?.fieldErrors) {
+          this.fieldErrors.set(body.fieldErrors as Record<string, string>);
+          this.toast.error('Please fix the highlighted fields and try again.');
+          return;
+        }
+
+        // Generic fallback
+        this.toast.error(body?.message ?? 'Operation failed. Please try again.');
       },
     });
+  }
+
+  /** Call from (ngModelChange) on each input to clear its per-field error immediately. */
+  clearFieldError(field: string): void {
+    const current = this.fieldErrors();
+    if (current[field]) {
+      const updated = { ...current };
+      delete updated[field];
+      this.fieldErrors.set(updated);
+    }
   }
 
   confirmDelete(user: UserSummary): void {
@@ -297,6 +400,21 @@ export class UserListComponent implements OnInit {
       error: (err) => {
         this.toast.error(err?.error?.message ?? 'Failed to delete user');
         this.deleting.set(false);
+      },
+    });
+  }
+
+  restoreUser(user: UserSummary): void {
+    this.restoring.set(true);
+    this.userService.restore(user.id).subscribe({
+      next: () => {
+        this.toast.success(`${user.firstName} ${user.lastName} has been restored.`);
+        this.restoring.set(false);
+        this.loadUsers(this.currentPage());
+      },
+      error: (err) => {
+        this.toast.error(err?.error?.message ?? 'Failed to restore user');
+        this.restoring.set(false);
       },
     });
   }

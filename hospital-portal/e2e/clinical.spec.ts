@@ -26,7 +26,7 @@ test.describe('Clinical Modules', () => {
           // Monitor for console errors during page load
         });
 
-        await page.goto(mod.path, { waitUntil: 'networkidle' });
+        await page.goto(mod.path, { waitUntil: 'domcontentloaded' });
 
         // Should not redirect to login
         expect(page.url()).not.toContain('/login');
@@ -37,7 +37,7 @@ test.describe('Clinical Modules', () => {
       });
 
       test(`${mod.title} page displays title or heading`, async ({ page }) => {
-        await page.goto(mod.path, { waitUntil: 'networkidle' });
+        await page.goto(mod.path, { waitUntil: 'domcontentloaded' });
 
         // Wait for loading to finish
         await page.waitForFunction(() => !document.querySelector('.loading-state'), {
@@ -50,7 +50,7 @@ test.describe('Clinical Modules', () => {
       });
 
       test(`${mod.title} shows data or empty state`, async ({ page }) => {
-        await page.goto(mod.path, { waitUntil: 'networkidle' });
+        await page.goto(mod.path, { waitUntil: 'domcontentloaded' });
 
         await page.waitForFunction(() => !document.querySelector('.loading-state'), {
           timeout: 15_000,

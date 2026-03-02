@@ -6,9 +6,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.stereotype.Repository;
 import com.example.hms.enums.AuditStatus;
 
+import jakarta.persistence.QueryHint;
 import java.util.List;
 import java.util.UUID;
 
@@ -22,10 +24,27 @@ public interface AuditEventLogRepository extends JpaRepository<AuditEventLog, UU
     Page<AuditEventLog> findByEntityTypeIgnoreCaseAndResourceId(
         String entityType, String resourceId, Pageable pageable);
 
-
     Page<AuditEventLog> findByEventTypeAndStatus(AuditEventType type, AuditStatus status, Pageable pageable);
 
-    /** Ordered descending by eventTimestamp (index advisable). */
+    /**
+     * Override the default findAll(Pageable) with an explicit DISTINCT query so that
+     * Hibernate does not trigger a secondary unique-key lookup on Staff when the
+     * hospital.staff table contains duplicate rows for the same PK.
+     * The passDistinctThrough=false hint removes SQL DISTINCT (which breaks pagination
+     * count) and deduplicates in-memory instead.
+     */
+    @Override
+    @Query("SELECT DISTINCT a FROM AuditEventLog a ORDER BY a.eventTimestamp DESC")
+    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
+    Page<AuditEventLog> findAll(Pageable pageable);
+
+    /**
+     * Ordered descending by eventTimestamp — used by SuperAdminDashboardServiceImpl.
+     * Explicit JPQL DISTINCT prevents the 'More than one row with the given identifier'
+     * Hibernate error when navigating to User (which has a OneToOne Staff back-ref).
+     */
+    @Query("SELECT DISTINCT a FROM AuditEventLog a ORDER BY a.eventTimestamp DESC")
+    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
     Page<AuditEventLog> findAllByOrderByEventTimestampDesc(Pageable pageable);
 
     /** Aggregate count of audit events grouped by event type (database-level). */

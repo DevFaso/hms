@@ -1,5 +1,6 @@
 /* Global styles */
 @use '@angular/material' as mat;
+@use 'app/shared/styles/page-common';
 
 /* ── Design tokens (CSS custom properties) ── */
 :root {

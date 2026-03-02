@@ -37,6 +37,7 @@ import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
@@ -107,6 +108,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final DischargeSummaryService dischargeSummaryService;
     private final PatientPrimaryCareService primaryCareService;
     private final AuditEventLogService auditEventLogService;
+    private final PatientHospitalRegistrationRepository registrationRepository;
 
     // ── Identity resolution ──────────────────────────────────────────────
 
@@ -358,6 +360,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional
     public PatientConsentResponseDTO grantMyConsent(Authentication auth, PortalConsentRequestDTO dto) {
         UUID patientId = resolvePatientId(auth);
+        requireHospitalRegistration(patientId, dto.getFromHospitalId());
 
         PatientConsentRequestDTO consentRequest = PatientConsentRequestDTO.builder()
                 .patientId(patientId)
@@ -378,6 +381,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional
     public void revokeMyConsent(Authentication auth, UUID fromHospitalId, UUID toHospitalId) {
         UUID patientId = resolvePatientId(auth);
+        requireHospitalRegistration(patientId, fromHospitalId);
+
         log.info("Patient {} revoking consent from hospital {} to hospital {}",
                 patientId, fromHospitalId, toHospitalId);
         consentService.revokeConsent(patientId, fromHospitalId, toHospitalId);
@@ -601,6 +606,24 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private void requirePatientOwnership(Appointment appointment, UUID patientId) {
         if (!appointment.getPatient().getId().equals(patientId)) {
             throw new AccessDeniedException("This appointment does not belong to you");
+        }
+    }
+
+    /**
+     * Verify that the patient has an active registration at the given hospital.
+     * Used by both grantMyConsent() and revokeMyConsent() to prevent a patient
+     * from fabricating or revoking consent on behalf of a hospital they have
+     * never attended (IDOR / privilege escalation).
+     *
+     * @throws BusinessException (HTTP 400) when no active registration is found.
+     */
+    private void requireHospitalRegistration(UUID patientId, UUID hospitalId) {
+        boolean registered = registrationRepository
+                .findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId)
+                .isPresent();
+        if (!registered) {
+            throw new BusinessException(
+                    "You are not registered at the specified source hospital and cannot manage consent on its behalf.");
         }
     }
 

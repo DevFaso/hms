@@ -10,12 +10,17 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.StaffMinimalDTO;
 import com.example.hms.payload.dto.StaffRequestDTO;
 import com.example.hms.payload.dto.StaffResponseDTO;
+import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 import java.util.Objects;
 
 @Component
 public class StaffMapper {
+
+    private static final Logger log = LoggerFactory.getLogger(StaffMapper.class);
 
     public StaffResponseDTO toStaffDTO(Staff staff) {
         if (staff == null) return null;
@@ -27,9 +32,17 @@ public class StaffMapper {
         populateHospitalInfo(dto, staff.getHospital());
         populateDepartmentInfo(dto, staff.getDepartment(), staff.getId());
 
-        if (staff.getAssignment() != null && staff.getAssignment().getRole() != null) {
-            dto.setRoleCode(staff.getAssignment().getRole().getCode());
-            dto.setRoleName(staff.getAssignment().getRole().getName());
+        try {
+            UserRoleHospitalAssignment assignment = staff.getAssignment();
+            if (assignment != null && assignment.getRole() != null) {
+                dto.setRoleCode(assignment.getRole().getCode());
+                dto.setRoleName(assignment.getRole().getName());
+            }
+        } catch (EntityNotFoundException e) {
+            // The assignment row was hard-deleted while the staff row still references it.
+            // Log a warning but continue — the rest of the DTO is still valid.
+            log.warn("⚠️ Staff {} has a dangling assignment FK (deleted assignment). " +
+                     "Role info will be empty. DB cleanup required.", staff.getId());
         }
         dto.setJobTitle(staff.getJobTitle());
         dto.setEmploymentType(staff.getEmploymentType());

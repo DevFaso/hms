@@ -178,41 +178,47 @@
           }
         </div>
 
-        <!-- Location -->
+        <!-- LOCATION -->
         <div class="form-section">
-          <h3>Location</h3>
-          <div class="field-row two-col">
-            <div class="field">
-              <label for="hospitalSel">Hospital</label>
-              @if (selectedStaff()?.hospitalId) {
+          <h3 class="section-title">LOCATION</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="hospital">Hospital</label>
+
+              <!-- LOCKED: receptionist or any hospital-scoped role -->
+              @if (lockedHospitalId) {
                 <div class="locked-field">
-                  <span class="material-symbols-outlined">lock</span>
-                  {{ selectedStaff()!.hospitalName }}
+                  <span class="lock-icon">🔒</span>
+                  <span>{{ lockedHospitalName }}</span>
+                  <input type="hidden" id="hospital" [value]="lockedHospitalId" />
                 </div>
               } @else {
+                <!-- FREE CHOICE: super admin or roles not scoped to a hospital -->
                 <select
-                  id="hospitalSel"
-                  [value]="selectedHospitalId()"
-                  (change)="onHospitalChange($any($event.target).value)"
-                  name="hospital"
+                  id="hospital"
+                  class="form-select"
+                  [ngModel]="selectedHospitalId()"
+                  (ngModelChange)="onHospitalChange($event)"
+                  name="hospitalId"
                 >
-                  <option value="">Select hospital…</option>
+                  <option value="">Select hospital...</option>
                   @for (h of hospitals(); track h.id) {
                     <option [value]="h.id">{{ h.name }}</option>
                   }
                 </select>
               }
             </div>
-            <div class="field">
-              <label for="deptSel">Department</label>
-              <select id="deptSel" [(ngModel)]="form.departmentId" name="departmentId">
-                <option value="">
-                  @if (selectedHospitalId() || selectedStaff()?.hospitalId) {
-                    Any department
-                  } @else {
-                    Select hospital first
-                  }
-                </option>
+
+            <div class="form-group">
+              <label class="form-label" for="department">Department</label>
+              <select
+                id="department"
+                class="form-select"
+                [(ngModel)]="form.departmentId"
+                name="departmentId"
+                [disabled]="!selectedHospitalId()"
+              >
+                <option value="">Select department...</option>
                 @for (d of departments(); track d.id) {
                   <option [value]="d.id">{{ d.name }}</option>
                 }
