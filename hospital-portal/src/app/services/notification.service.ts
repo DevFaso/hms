@@ -31,6 +31,11 @@ export class NotificationService {
   private readonly notificationSubject = new Subject<Notification>();
   private readonly http = inject(HttpClient);
 
+  /** Exponential-backoff state for WebSocket reconnection */
+  private reconnectAttempts = 0;
+  private readonly maxReconnectDelay = 60_000; // cap at 60 s
+  private readonly baseReconnectDelay = 5_000;  // start at 5 s
+
   getNotifications(params?: {
     read?: boolean;
     page?: number;
@@ -51,22 +56,31 @@ export class NotificationService {
    * Opens a STOMP-over-SockJS connection to /ws-chat and subscribes to
    * /topic/notifications, filtering messages for the given username.
    *
-   * The backend uses Spring WebSocket (STOMP broker) which requires the
-   * SockJS handshake — a raw WebSocket to an arbitrary path does not work.
+   * Uses exponential backoff for reconnection (5 s → 10 s → 20 s → … → 60 s)
+   * to avoid hammering the backend when it is down or restarting.
    */
   connectWebSocket(username: string): void {
     if (typeof globalThis === 'undefined' || !globalThis.WebSocket) return;
 
     // Build the SockJS URL pointing at /api/ws-chat (context path included).
-    // Using a relative URL so it works in every environment automatically.
     const sockUrl = '/api/ws-chat';
 
     this.stompClient = new Client({
       // SockJS factory — required because the backend endpoint uses .withSockJS()
       webSocketFactory: () => new SockJS(sockUrl),
-      // Reconnect automatically every 5 s if the connection drops
-      reconnectDelay: 5000,
+
+      // Start with baseReconnectDelay; double on each failure up to the cap.
+      // STOMP calls reconnectDelay as a property each time it needs the value,
+      // so returning a getter function gives us live-updated backoff.
+      reconnectDelay: this.baseReconnectDelay,
+
       onConnect: () => {
+        // Reset backoff on successful connection
+        this.reconnectAttempts = 0;
+        if (this.stompClient) {
+          this.stompClient.reconnectDelay = this.baseReconnectDelay;
+        }
+
         this.stompClient?.subscribe('/topic/notifications', (frame: IMessage) => {
           try {
             const notification = JSON.parse(frame.body) as Notification;
@@ -78,6 +92,42 @@ export class NotificationService {
             // Malformed frame — ignore
           }
         });
+      },
+
+      onDisconnect: () => {
+        // Increase backoff for next reconnect attempt
+        this.reconnectAttempts++;
+        const nextDelay = Math.min(
+          this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
+          this.maxReconnectDelay
+        );
+        if (this.stompClient) {
+          this.stompClient.reconnectDelay = nextDelay;
+        }
+      },
+
+      onStompError: () => {
+        // STOMP-level error — apply same backoff escalation
+        this.reconnectAttempts++;
+        const nextDelay = Math.min(
+          this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
+          this.maxReconnectDelay
+        );
+        if (this.stompClient) {
+          this.stompClient.reconnectDelay = nextDelay;
+        }
+      },
+
+      onWebSocketError: () => {
+        // Transport-level error (e.g. backend is down) — same backoff
+        this.reconnectAttempts++;
+        const nextDelay = Math.min(
+          this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
+          this.maxReconnectDelay
+        );
+        if (this.stompClient) {
+          this.stompClient.reconnectDelay = nextDelay;
+        }
       },
     });
 
@@ -91,5 +141,6 @@ export class NotificationService {
   disconnectWebSocket(): void {
     this.stompClient?.deactivate().catch(() => undefined);
     this.stompClient = null;
+    this.reconnectAttempts = 0;
   }
 }
