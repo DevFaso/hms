@@ -20,5 +20,5 @@ WHERE  u.is_deleted = true
            SELECT 1
            FROM   security.user_role_hospital_assignment a
            WHERE  a.user_id = u.id
-             AND  a.active  = true
+             AND  a.is_active = true
        );
