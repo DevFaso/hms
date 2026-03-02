@@ -176,7 +176,7 @@ $sidebar-active: #2563eb;
 .avatar-sm {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: 50%;
   background: linear-gradient(135deg, $primary, $primary-dark);
   color: #fff;
   display: flex;
@@ -314,7 +314,7 @@ $sidebar-active: #2563eb;
 .avatar {
   width: 32px;
   height: 32px;
-  border-radius: 8px;
+  border-radius: 50%;
   background: linear-gradient(135deg, $primary, $primary-dark);
   color: #fff;
   display: flex;
@@ -329,7 +329,7 @@ $sidebar-active: #2563eb;
 .avatar-lg {
   width: 42px;
   height: 42px;
-  border-radius: 10px;
+  border-radius: 50%;
   background: linear-gradient(135deg, $primary, $primary-dark);
   color: #fff;
   display: flex;
