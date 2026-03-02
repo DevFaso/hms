@@ -8,6 +8,7 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.UserMapper;
+import com.example.hms.utility.UserDisplayUtil;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
@@ -29,6 +30,7 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
+import com.example.hms.security.JwtTokenHolder;
 import com.example.hms.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -240,6 +242,17 @@ public class UserServiceImpl implements UserService {
         final String phone = request.getPhoneNumber();
         final String username = request.getUsername();
 
+        // ---- 0a) Strict duplicate checks — fail fast with field-specific 409 ----
+        if (username != null && Boolean.TRUE.equals(userRepository.existsByUsername(username))) {
+            throw new ConflictException("username:Username '" + username + "' is already taken.");
+        }
+        if (email != null && Boolean.TRUE.equals(userRepository.existsByEmail(email))) {
+            throw new ConflictException("email:Email '" + email + "' is already registered.");
+        }
+        if (phone != null && !phone.isBlank() && Boolean.TRUE.equals(userRepository.existsByPhoneNumber(phone))) {
+            throw new ConflictException("phone:Phone number '" + phone + "' is already registered.");
+        }
+
         final Set<String> roleNames = Optional.ofNullable(request.getRoleNames())
                 .filter(s -> !s.isEmpty())
                 .orElseThrow(() -> new IllegalArgumentException("At least one role must be provided."));
@@ -261,12 +274,18 @@ public class UserServiceImpl implements UserService {
             default -> false;
         });
 
+        // Clinical roles require a medical licence; admin/management roles do not.
+        final boolean requiresLicense = roles.stream().anyMatch(role -> switch (role.getCode()) {
+            case ROLE_DOCTOR, ROLE_NURSE, ROLE_LAB_SCIENTIST, ROLE_PHARMACIST -> true;
+            default -> false;
+        });
+
         // ---- 3) Resolve/Create User ----
-        final String lic = resolveLicenseNumber(request, requiresStaff);
+        final String lic = resolveLicenseNumber(request, requiresLicense);
 
         final Optional<User> existingByIdentity = userRepository
                 .findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(username, email, phone);
-        final Optional<User> existingByLicense = requiresStaff
+        final Optional<User> existingByLicense = requiresLicense
                 ? staffRepository.findUserIdByLicense(lic).flatMap(userRepository::findById)
                 : Optional.empty();
 
@@ -288,7 +307,30 @@ public class UserServiceImpl implements UserService {
         }
 
         // ---- 6) Reload + map ----
-        return reloadAndMap(user.getId());
+        final UserResponseDTO result = reloadAndMap(user.getId());
+
+        // ---- 7) Welcome email for brand-new non-patient users (fire-and-forget) ----
+        if (newUserCreated && !isPatient) {
+            final String displayName = UserDisplayUtil.resolveDisplayName(user);
+            final String roleName    = roles.stream()
+                    .map(r -> formatRoleLabel(r.getCode()))
+                    .findFirst().orElse("User");
+            final String hospitalName = staffContextHospitalId != null
+                    ? hospitalRepository.findById(staffContextHospitalId)
+                          .map(Hospital::getName).orElse(null)
+                    : null;
+            try {
+                emailService.sendAdminWelcomeEmail(
+                    user.getEmail(), displayName,
+                    user.getUsername(), request.getPassword(),
+                    roleName, hospitalName);
+                log.info("📧 Welcome email dispatched to new user '{}'", user.getUsername());
+            } catch (Exception e) {
+                log.warn("⚠️ Failed to send welcome email to '{}': {}", user.getUsername(), e.getMessage());
+            }
+        }
+
+        return result;
     }
 
     /** Apply force-password-change flags only when re-registering an existing user. */
@@ -394,7 +436,17 @@ public class UserServiceImpl implements UserService {
         staffRepository.save(staff);
     }
 
-        private String resolveLicenseNumber(AdminSignupRequest request, boolean requiresStaff) {
+    /** Converts ROLE_HOSPITAL_ADMIN → "Hospital Admin". */
+    private static String formatRoleLabel(String roleCode) {
+        if (roleCode == null) return "User";
+        String stripped = roleCode.startsWith("ROLE_") ? roleCode.substring(5) : roleCode;
+        return java.util.Arrays.stream(stripped.split("_"))
+            .filter(w -> !w.isEmpty())
+            .map(w -> Character.toUpperCase(w.charAt(0)) + w.substring(1).toLowerCase())
+            .collect(java.util.stream.Collectors.joining(" "));
+    }
+
+    private String resolveLicenseNumber(AdminSignupRequest request, boolean requiresStaff) {
         String lic = requiresStaff
                 ? Optional.ofNullable(request.getLicenseNumber()).map(String::trim).orElse("")
                 : "";
@@ -639,7 +691,7 @@ public class UserServiceImpl implements UserService {
 
     private UUID extractHospitalIdFromJwt() {
         try {
-            String jwt = resolveCurrentJwt();
+            String jwt = JwtTokenHolder.getToken();
             if (jwt == null || jwt.isBlank())
                 return null;
 
@@ -659,23 +711,6 @@ public class UserServiceImpl implements UserService {
         return null;
     }
 
-    private String resolveCurrentJwt() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return null;
-        }
-
-        Object credentials = authentication.getCredentials();
-        if (credentials instanceof String token && !token.isBlank()) {
-            return token;
-        }
-
-        if (credentials != null) {
-            String value = credentials.toString();
-            return value.isBlank() ? null : value;
-        }
-        return null;
-    }
 
     @Transactional(readOnly = true)
     public long getUserDistinctRoleCount(UUID userId) {
@@ -726,7 +761,7 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public Page<UserSummaryDTO> getAllUsers(int page, int size) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
-        Page<User> users = userRepository.findAllActive(pageable);
+        Page<User> users = userRepository.findAllPaged(pageable);
         return users.map(userMapper::toSummaryDTO);
     }
 
@@ -756,6 +791,27 @@ public class UserServiceImpl implements UserService {
 
         log.info("🗑️ User soft-deleted with ID: {}", id);
         recordUserDeletionAudit(user);
+    }
+
+    @Override
+    @Transactional
+    public void restoreUser(UUID id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
+
+        user.setDeleted(false);
+        user.setActive(true);
+        userRepository.save(user);
+
+        log.info("♻️ User restored with ID: {}", id);
+
+        String displayName = UserDisplayUtil.resolveDisplayName(user);
+        try {
+            emailService.sendAccountRestoredEmail(user.getEmail(), displayName);
+        } catch (Exception e) {
+            log.warn("⚠️ Failed to send account-restored notification to '{}': {}",
+                    user.getEmail(), e.getMessage());
+        }
     }
 
     @Override

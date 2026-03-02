@@ -49,8 +49,8 @@ public class AdmissionController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
-    @Operation(summary = "List all admissions", description = "Retrieve all admissions across all hospitals (super admin only)")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @Operation(summary = "List all admissions", description = "Retrieve all admissions across all hospitals")
     public ResponseEntity<List<AdmissionResponseDTO>> listAllAdmissions(
         @RequestParam(required = false) String status,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,

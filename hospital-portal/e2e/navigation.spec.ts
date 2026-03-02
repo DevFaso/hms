@@ -7,7 +7,7 @@ import { test, expect } from './fixtures/test-fixtures';
 
 test.describe('Shell & Navigation', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/dashboard', { waitUntil: 'networkidle' });
+    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
   });
 
   test.describe('Shell Rendering', () => {

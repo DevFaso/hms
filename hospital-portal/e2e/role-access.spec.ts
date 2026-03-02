@@ -37,7 +37,7 @@ test.describe('Role-Based Access Control', () => {
 
     for (const route of protectedRoutes) {
       test(`can access ${route.title} at ${route.path}`, async ({ page }) => {
-        await page.goto(route.path, { waitUntil: 'networkidle' });
+        await page.goto(route.path, { waitUntil: 'domcontentloaded' });
 
         // Should NOT be redirected to login or 403
         const url = page.url();
@@ -53,13 +53,13 @@ test.describe('Role-Based Access Control', () => {
 
   test.describe('Error Pages', () => {
     test('403 error page exists and renders', async ({ page }) => {
-      await page.goto('/error/403', { waitUntil: 'networkidle' });
+      await page.goto('/error/403', { waitUntil: 'domcontentloaded' });
       const content = page.locator('body');
       await expect(content).toBeVisible();
     });
 
     test('404 error page exists and renders', async ({ page }) => {
-      await page.goto('/error/404', { waitUntil: 'networkidle' });
+      await page.goto('/error/404', { waitUntil: 'domcontentloaded' });
       const content = page.locator('body');
       await expect(content).toBeVisible();
     });

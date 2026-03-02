@@ -21,6 +21,8 @@ public interface OrganizationRepository extends JpaRepository<Organization, UUID
 
     List<Organization> findByActiveTrue();
 
+    long countByActiveTrue();
+
     @Query("SELECT o FROM Organization o WHERE o.active = true AND o.type = :type")
     List<Organization> findActiveByType(@Param("type") OrganizationType type);
 
@@ -32,4 +34,16 @@ public interface OrganizationRepository extends JpaRepository<Organization, UUID
     @EntityGraph(attributePaths = "hospitals")
     @Query("SELECT o FROM Organization o WHERE o.id = :organizationId")
     Optional<Organization> findByIdWithHospitals(@Param("organizationId") UUID organizationId);
+
+    @EntityGraph(attributePaths = "hospitals")
+    @Query(value = "SELECT o FROM Organization o",
+           countQuery = "SELECT COUNT(o) FROM Organization o")
+    org.springframework.data.domain.Page<Organization> findAllWithHospitals(
+            org.springframework.data.domain.Pageable pageable);
+
+    @EntityGraph(attributePaths = "hospitals")
+    @Query(value = "SELECT o FROM Organization o WHERE o.active = true",
+           countQuery = "SELECT COUNT(o) FROM Organization o WHERE o.active = true")
+    org.springframework.data.domain.Page<Organization> findAllActiveWithHospitals(
+            org.springframework.data.domain.Pageable pageable);
 }

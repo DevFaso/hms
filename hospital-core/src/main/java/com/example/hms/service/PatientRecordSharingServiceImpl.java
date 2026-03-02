@@ -149,6 +149,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
     private final AuditEventLogRepository auditRepository;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
+    private final ConsentResolutionService consentResolutionService;
 
     private final Map<String, Boolean> tableAvailabilityCache = new ConcurrentHashMap<>();
 
@@ -195,6 +196,26 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             ? consent.getToHospital()
             : hospitalRepository.findById(toHospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Target hospital not found."));
+
+        return buildPatientRecordFromEntities(patientId, fromHospitalId, toHospitalId, patient, fromHospital, toHospital, consent);
+    }
+
+    /**
+     * Core data-assembly pipeline, usable with or without a consent row.
+     * Pass {@code null} for {@code consent} for SAME_HOSPITAL self-serve access.
+     */
+    @SuppressWarnings("java:S107") // intentionally many params — avoids a 200-line duplicate
+    private PatientRecordDTO buildPatientRecordFromEntities(
+            UUID patientId, UUID fromHospitalId, UUID toHospitalId,
+            Patient patient, Hospital fromHospital, Hospital toHospital) {
+        return buildPatientRecordFromEntities(patientId, fromHospitalId, toHospitalId, patient, fromHospital, toHospital, null);
+    }
+
+    @SuppressWarnings("java:S107")
+    private PatientRecordDTO buildPatientRecordFromEntities(
+            UUID patientId, UUID fromHospitalId, UUID toHospitalId,
+            Patient patient, Hospital fromHospital, Hospital toHospital,
+            PatientConsent consent) {
 
         Map<UUID, String> mrnByHospital = buildHospitalMrnMap(patient);
 
@@ -366,10 +387,10 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             .emergencyContactRelationship(patient.getEmergencyContactRelationship())
             .hospitalMRNs(Set.copyOf(mrnByHospital.values()))
             .hospitalMrnMap(new LinkedHashMap<>(mrnByHospital))
-            .consentId(consent.getId())
-            .consentTimestamp(consent.getConsentTimestamp())
-            .consentExpiration(consent.getConsentExpiration())
-            .consentPurpose(consent.getPurpose())
+            .consentId(consent != null ? consent.getId() : null)
+            .consentTimestamp(consent != null ? consent.getConsentTimestamp() : null)
+            .consentExpiration(consent != null ? consent.getConsentExpiration() : null)
+            .consentPurpose(consent != null ? consent.getPurpose() : null)
             .fromHospitalId(fromHospital.getId())
             .fromHospitalName(fromHospital.getName())
             .toHospitalId(toHospital.getId())
@@ -1175,8 +1196,8 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             auditPayload.put("patientId", patient.getId());
             auditPayload.put("fromHospitalId", fromHospitalId);
             auditPayload.put("toHospitalId", toHospitalId);
-            auditPayload.put("consentId", consent.getId());
-            auditPayload.put("consentExpiresAt", consent.getConsentExpiration());
+            auditPayload.put("consentId", consent != null ? consent.getId() : "SELF_SERVE");
+            auditPayload.put("consentExpiresAt", consent != null ? consent.getConsentExpiration() : null);
             auditPayload.put("encounterCount", dto.getEncounters().size());
             auditPayload.put("treatmentCount", dto.getTreatments().size());
             auditPayload.put("labOrderCount", dto.getLabOrders().size());
@@ -1203,7 +1224,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
                     "Shared patient record from hospital %s to %s using consent %s",
                     fromHospitalId,
                     toHospitalId,
-                    consent.getId()
+                    consent != null ? consent.getId() : "SELF_SERVE"
                 ))
                 .resourceId(patient.getId().toString())
                 .entityType("PATIENT")
@@ -1216,6 +1237,75 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException e) {
             log.warn("Failed to serialize audit log details: {}", e.getMessage());
         }
+    }
+
+    // ── Smart resolver ─────────────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.RecordShareResultDTO resolveAndShare(
+            UUID patientId, UUID requestingHospitalId) {
+
+        ConsentResolutionService.ConsentContext ctx =
+            consentResolutionService.resolve(patientId, requestingHospitalId);
+
+        UUID sourceHospitalId = ctx.sourceHospital().getId();
+        UUID toHospitalId     = ctx.requestingHospital().getId();
+
+        // Reuse already-resolved entities and consent from the ConsentContext —
+        // avoids a redundant DB round-trip that buildPatientRecord() would otherwise make.
+        PatientRecordDTO patientRecord = buildPatientRecordFromEntities(
+            patientId,
+            sourceHospitalId,
+            toHospitalId,
+            ctx.patient(),
+            ctx.sourceHospital(),
+            ctx.requestingHospital(),
+            ctx.consent()   // null for SAME_HOSPITAL; populated for INTRA_ORG / CROSS_ORG
+        );
+
+        com.example.hms.model.Organization org =
+            ctx.requestingHospital().getOrganization() != null
+                ? ctx.requestingHospital().getOrganization()
+                : (ctx.sourceHospital().getOrganization());
+
+        com.example.hms.model.PatientConsent consent = ctx.consent();
+
+        return com.example.hms.payload.dto.RecordShareResultDTO.builder()
+            .shareScope(ctx.scope())
+            .shareScopeLabel(ctx.scope().getLabel())
+            .resolvedFromHospitalId(ctx.sourceHospital().getId())
+            .resolvedFromHospitalName(ctx.sourceHospital().getName())
+            .requestingHospitalId(ctx.requestingHospital().getId())
+            .requestingHospitalName(ctx.requestingHospital().getName())
+            .organizationId(org != null ? org.getId() : null)
+            .organizationName(org != null ? org.getName() : null)
+            .consentId(consent != null ? consent.getId() : null)
+            .consentGrantedAt(consent != null ? consent.getConsentTimestamp() : null)
+            .consentExpiresAt(consent != null ? consent.getConsentExpiration() : null)
+            .consentPurpose(consent != null ? consent.getPurpose() : null)
+            .consentActive(consent == null || consent.isConsentActive())
+            .resolvedAt(java.time.LocalDateTime.now())
+            .patientRecord(patientRecord)
+            .build();
+    }
+
+    /**
+     * Assemble patient record skipping the consent lookup — used for SAME_HOSPITAL
+     * where the requesting hospital already owns the records.
+     */
+    private PatientRecordDTO buildPatientRecordNoConsent(
+            UUID patientId, UUID fromHospitalId, UUID toHospitalId, com.example.hms.model.Patient patient) {
+
+        Hospital fromHospital = hospitalRepository.findById(fromHospitalId)
+            .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("Source hospital not found."));
+        Hospital toHospital = hospitalRepository.findById(toHospitalId)
+            .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("Target hospital not found."));
+
+        // Delegate directly to the internal assembly logic by constructing a synthetic
+        // "self-consent" view — reuse the data-assembly pipeline without hitting the DB
+        // for a consent row that intentionally doesn't exist.
+        return buildPatientRecordFromEntities(patientId, fromHospitalId, toHospitalId, patient, fromHospital, toHospital);
     }
 
 }

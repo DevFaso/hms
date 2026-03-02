@@ -2,7 +2,13 @@
   <div class="page-header">
     <div>
       <h1 class="page-title">Appointments</h1>
-      <p class="page-subtitle">Schedule and manage patient appointments</p>
+      <p class="page-subtitle">
+        @if (!loading()) {
+          {{ filtered().length }} appointment{{ filtered().length !== 1 ? 's' : '' }}
+        } @else {
+          Schedule and manage patient appointments
+        }
+      </p>
     </div>
     @if (canCreate) {
       <a routerLink="/appointments/new" class="btn-primary">
@@ -12,32 +18,184 @@
     }
   </div>
 
-  <!-- Filters -->
-  <div class="filter-row">
-    <div class="search-bar filter-search">
+  <!-- Search + filter toolbar -->
+  <div class="filter-toolbar">
+    <div class="search-bar toolbar-search">
       <span class="material-symbols-outlined search-icon">search</span>
       <input
         type="text"
-        placeholder="Search by patient, doctor, or reason..."
-        [(ngModel)]="searchTerm"
-        (ngModelChange)="applyFilter()"
+        placeholder="Search by patient, doctor, reason, or hospital..."
+        [value]="searchTerm"
+        (input)="onSearchChange($any($event.target).value)"
       />
+      @if (searchTerm) {
+        <button class="search-clear" title="Clear search" (click)="onSearchChange('')">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      }
     </div>
-    <select
-      class="filter-select"
-      title="Filter by status"
-      [(ngModel)]="statusFilter"
-      (ngModelChange)="applyFilter()"
+
+    <!-- Quick status filter pills -->
+    <div class="status-pills">
+      <button
+        class="status-pill"
+        [class.active]="!statusFilter"
+        (click)="statusFilter = ''; onFilterChange()"
+      >
+        All
+      </button>
+      <button
+        class="status-pill scheduled"
+        [class.active]="statusFilter === 'SCHEDULED'"
+        (click)="statusFilter = 'SCHEDULED'; onFilterChange()"
+      >
+        Scheduled
+      </button>
+      <button
+        class="status-pill confirmed"
+        [class.active]="statusFilter === 'CONFIRMED'"
+        (click)="statusFilter = 'CONFIRMED'; onFilterChange()"
+      >
+        Confirmed
+      </button>
+      <button
+        class="status-pill in-progress"
+        [class.active]="statusFilter === 'IN_PROGRESS'"
+        (click)="statusFilter = 'IN_PROGRESS'; onFilterChange()"
+      >
+        In Progress
+      </button>
+      <button
+        class="status-pill completed"
+        [class.active]="statusFilter === 'COMPLETED'"
+        (click)="statusFilter = 'COMPLETED'; onFilterChange()"
+      >
+        Completed
+      </button>
+      <button
+        class="status-pill cancelled"
+        [class.active]="statusFilter === 'CANCELLED'"
+        (click)="statusFilter = 'CANCELLED'; onFilterChange()"
+      >
+        Cancelled
+      </button>
+    </div>
+
+    <button
+      class="filter-toggle-btn"
+      [class.has-filters]="activeFilterCount > 0"
+      (click)="showFilters.set(!showFilters())"
+      title="More filters"
     >
-      <option value="">All Statuses</option>
-      <option value="SCHEDULED">Scheduled</option>
-      <option value="CONFIRMED">Confirmed</option>
-      <option value="IN_PROGRESS">In Progress</option>
-      <option value="COMPLETED">Completed</option>
-      <option value="CANCELLED">Cancelled</option>
-      <option value="NO_SHOW">No Show</option>
-    </select>
+      <span class="material-symbols-outlined">tune</span>
+      More
+      @if (activeFilterCount > 0) {
+        <span class="filter-badge">{{ activeFilterCount }}</span>
+      }
+    </button>
   </div>
+
+  <!-- Expanded filter row -->
+  @if (showFilters()) {
+    <div class="filter-row">
+      <div class="filter-group">
+        <label class="filter-label" for="apptDateFrom">From Date</label>
+        <input
+          id="apptDateFrom"
+          type="date"
+          class="filter-select"
+          [(ngModel)]="dateFrom"
+          [max]="dateTo || undefined"
+          (ngModelChange)="onFilterChange()"
+          title="Filter from date"
+        />
+      </div>
+
+      <div class="filter-group">
+        <label class="filter-label" for="apptDateTo">To Date</label>
+        <input
+          id="apptDateTo"
+          type="date"
+          class="filter-select"
+          [(ngModel)]="dateTo"
+          [min]="dateFrom"
+          (ngModelChange)="onFilterChange()"
+          title="Filter to date"
+        />
+      </div>
+
+      @if (hospitals().length > 0) {
+        <div class="filter-group">
+          <label class="filter-label" for="apptHospital">Hospital</label>
+          <select
+            id="apptHospital"
+            class="filter-select"
+            title="Filter by hospital"
+            [(ngModel)]="hospitalFilter"
+            (ngModelChange)="onFilterChange()"
+          >
+            <option value="">All Hospitals</option>
+            @for (h of hospitals(); track h.id) {
+              <option [value]="h.id">{{ h.name }}</option>
+            }
+          </select>
+        </div>
+      }
+
+      <!-- Today / This Week shortcuts -->
+      <div class="filter-group date-shortcuts">
+        <span class="filter-label" aria-hidden="true">Quick Date</span>
+        <div class="shortcut-btns">
+          <button
+            class="shortcut-btn"
+            (click)="dateFrom = todayIso(); dateTo = todayIso(); onFilterChange()"
+          >
+            Today
+          </button>
+          <button class="shortcut-btn" (click)="dateFrom = ''; dateTo = ''; onFilterChange()">
+            All
+          </button>
+        </div>
+      </div>
+
+      @if (activeFilterCount > 0) {
+        <button class="clear-filters-btn" (click)="clearFilters()">
+          <span class="material-symbols-outlined">filter_alt_off</span>
+          Clear All
+        </button>
+      }
+    </div>
+  }
+
+  <!-- Active chips -->
+  @if (dateFrom || dateTo || hospitalFilter) {
+    <div class="active-chips">
+      @if (dateFrom) {
+        <span class="filter-chip">
+          From: {{ dateFrom }}
+          <button class="chip-remove" (click)="removeFilter('dateFrom')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </span>
+      }
+      @if (dateTo) {
+        <span class="filter-chip">
+          To: {{ dateTo }}
+          <button class="chip-remove" (click)="removeFilter('dateTo')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </span>
+      }
+      @if (hospitalFilter) {
+        <span class="filter-chip">
+          {{ hospitalName(hospitalFilter) }}
+          <button class="chip-remove" (click)="removeFilter('hospital')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </span>
+      }
+    </div>
+  }
 
   @if (loading()) {
     <div class="loading-state">
@@ -46,36 +204,104 @@
     </div>
   }
 
-  @if (!loading() && filtered().length > 0) {
+  @if (!loading() && pagedFiltered.length > 0) {
     <div class="table-wrapper">
       <table class="data-table">
         <thead>
           <tr>
-            <th>Patient</th>
-            <th>Doctor</th>
-            <th>Date</th>
-            <th>Time</th>
-            <th>Reason</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th
+              class="sortable-th"
+              (click)="sort('patient')"
+              (keydown.enter)="sort('patient')"
+              tabindex="0"
+              scope="col"
+              [attr.aria-sort]="
+                sortField() === 'patient'
+                  ? sortDir() === 'asc'
+                    ? 'ascending'
+                    : 'descending'
+                  : 'none'
+              "
+            >
+              Patient
+              <span class="material-symbols-outlined sort-icon">{{ sortIcon('patient') }}</span>
+            </th>
+            <th
+              class="sortable-th"
+              (click)="sort('doctor')"
+              (keydown.enter)="sort('doctor')"
+              tabindex="0"
+              scope="col"
+              [attr.aria-sort]="
+                sortField() === 'doctor'
+                  ? sortDir() === 'asc'
+                    ? 'ascending'
+                    : 'descending'
+                  : 'none'
+              "
+            >
+              Doctor
+              <span class="material-symbols-outlined sort-icon">{{ sortIcon('doctor') }}</span>
+            </th>
+            <th
+              class="sortable-th"
+              (click)="sort('date')"
+              (keydown.enter)="sort('date')"
+              tabindex="0"
+              scope="col"
+              [attr.aria-sort]="
+                sortField() === 'date' ? (sortDir() === 'asc' ? 'ascending' : 'descending') : 'none'
+              "
+            >
+              Date &amp; Time
+              <span class="material-symbols-outlined sort-icon">{{ sortIcon('date') }}</span>
+            </th>
+            <th scope="col">Reason</th>
+            <th scope="col">Hospital</th>
+            <th
+              class="sortable-th"
+              (click)="sort('status')"
+              (keydown.enter)="sort('status')"
+              tabindex="0"
+              scope="col"
+              [attr.aria-sort]="
+                sortField() === 'status'
+                  ? sortDir() === 'asc'
+                    ? 'ascending'
+                    : 'descending'
+                  : 'none'
+              "
+            >
+              Status
+              <span class="material-symbols-outlined sort-icon">{{ sortIcon('status') }}</span>
+            </th>
+            <th scope="col">Actions</th>
           </tr>
         </thead>
         <tbody>
-          @for (appt of filtered(); track appt.id) {
+          @for (appt of pagedFiltered; track appt.id) {
             <tr>
-              <td>{{ appt.patientName }}</td>
+              <td class="name-cell">
+                <div class="avatar-sm">{{ appt.patientName.charAt(0) }}</div>
+                <span>{{ appt.patientName }}</span>
+              </td>
               <td>{{ appt.staffName }}</td>
-              <td>{{ appt.appointmentDate }}</td>
-              <td>{{ appt.startTime }} – {{ appt.endTime }}</td>
-              <td>{{ appt.reason }}</td>
+              <td class="date-cell">
+                <span class="date-primary">{{ appt.appointmentDate }}</span>
+                <span class="date-time">{{ appt.startTime }} – {{ appt.endTime }}</span>
+              </td>
+              <td class="reason-cell" [title]="appt.reason">{{ appt.reason }}</td>
+              <td>{{ appt.hospitalName }}</td>
               <td>
-                <span class="status-badge" [class]="getStatusClass(appt.status)">
-                  {{ appt.status }}
-                </span>
+                <span [class]="getStatusClass(appt.status)">{{ formatStatus(appt.status) }}</span>
               </td>
               <td>
-                <a [routerLink]="['/appointments', appt.id]" class="action-link">
-                  <span class="material-symbols-outlined">visibility</span>
+                <a
+                  [routerLink]="['/appointments', appt.id]"
+                  class="action-link"
+                  title="View appointment"
+                >
+                  <span class="material-symbols-outlined">arrow_forward</span>
                 </a>
               </td>
             </tr>
@@ -83,6 +309,101 @@
         </tbody>
       </table>
     </div>
+
+    <!-- Pagination -->
+    @if (totalPages > 1) {
+      <div class="pagination-row">
+        <span class="pagination-info">
+          Showing {{ currentPage() * pageSize + 1 }}–{{
+            (currentPage() + 1) * pageSize < filtered().length
+              ? (currentPage() + 1) * pageSize
+              : filtered().length
+          }}
+          of {{ filtered().length }}
+        </span>
+        <div class="pagination-controls">
+          <button
+            class="page-btn"
+            [disabled]="currentPage() === 0"
+            (click)="goToPage(currentPage() - 1)"
+            title="Previous"
+            aria-label="Previous page"
+          >
+            <span class="material-symbols-outlined">chevron_left</span>
+          </button>
+          @if (totalPages <= 7) {
+            @for (p of [].constructor(totalPages); track $index) {
+              <button
+                class="page-btn page-num"
+                [class.active]="$index === currentPage()"
+                (click)="goToPage($index)"
+                [attr.aria-label]="'Page ' + ($index + 1)"
+                [attr.aria-current]="$index === currentPage() ? 'page' : null"
+              >
+                {{ $index + 1 }}
+              </button>
+            }
+          } @else {
+            <!-- First page -->
+            <button
+              class="page-btn page-num"
+              [class.active]="currentPage() === 0"
+              (click)="goToPage(0)"
+              aria-label="Page 1"
+              [attr.aria-current]="currentPage() === 0 ? 'page' : null"
+            >
+              1
+            </button>
+            <!-- Leading ellipsis -->
+            @if (currentPage() > 3) {
+              <span class="page-ellipsis">…</span>
+            }
+            <!-- Middle pages window -->
+            @for (p of [].constructor(totalPages); track $index) {
+              @if (
+                $index > 0 &&
+                $index < totalPages - 1 &&
+                $index >= currentPage() - 2 &&
+                $index <= currentPage() + 2
+              ) {
+                <button
+                  class="page-btn page-num"
+                  [class.active]="$index === currentPage()"
+                  (click)="goToPage($index)"
+                  [attr.aria-label]="'Page ' + ($index + 1)"
+                  [attr.aria-current]="$index === currentPage() ? 'page' : null"
+                >
+                  {{ $index + 1 }}
+                </button>
+              }
+            }
+            <!-- Trailing ellipsis -->
+            @if (currentPage() < totalPages - 4) {
+              <span class="page-ellipsis">…</span>
+            }
+            <!-- Last page -->
+            <button
+              class="page-btn page-num"
+              [class.active]="currentPage() === totalPages - 1"
+              (click)="goToPage(totalPages - 1)"
+              [attr.aria-label]="'Page ' + totalPages"
+              [attr.aria-current]="currentPage() === totalPages - 1 ? 'page' : null"
+            >
+              {{ totalPages }}
+            </button>
+          }
+          <button
+            class="page-btn"
+            [disabled]="currentPage() >= totalPages - 1"
+            (click)="goToPage(currentPage() + 1)"
+            title="Next"
+            aria-label="Next page"
+          >
+            <span class="material-symbols-outlined">chevron_right</span>
+          </button>
+        </div>
+      </div>
+    }
   }
 
   @if (!loading() && filtered().length === 0) {
@@ -90,11 +411,12 @@
       <span class="material-symbols-outlined empty-icon">calendar_month</span>
       <h3>No appointments found</h3>
       <p>
-        {{
-          searchTerm || statusFilter
-            ? 'Try adjusting your filters.'
-            : 'Schedule your first appointment.'
-        }}
+        @if (searchTerm || activeFilterCount > 0 || statusFilter) {
+          Try adjusting your search or filters.
+          <button class="link-btn" (click)="clearFilters()">Clear all filters</button>
+        } @else {
+          Schedule your first appointment to get started.
+        }
       </p>
     </div>
   }

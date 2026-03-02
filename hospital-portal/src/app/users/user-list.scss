@@ -56,6 +56,11 @@
     background: #fbe9e7;
     color: #c62828;
   }
+  &.deleted {
+    background: #f3f4f6;
+    color: #4b5563;
+    text-decoration: line-through;
+  }
 }
 
 .pagination {
@@ -306,6 +311,16 @@ fieldset.field {
       background: #fef2f2;
     }
   }
+  &.restore {
+    color: #16a34a;
+    &:hover {
+      background: #f0fdf4;
+    }
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
 }
 .delete-warning {
   text-align: center;
@@ -338,4 +353,25 @@ fieldset.field {
     opacity: 0.5;
     cursor: default;
   }
+}
+
+// ── Field-level validation errors ─────────────────────────────────────────────
+input.input-error,
+select.input-error {
+  border-color: #dc2626 !important;
+  background: #fef2f2;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.15);
+
+  &:focus {
+    outline-color: #dc2626;
+  }
+}
+
+.field-error-msg {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.78rem;
+  color: #dc2626;
+  font-weight: 500;
+  line-height: 1.3;
 }

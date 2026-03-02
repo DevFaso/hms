@@ -7,7 +7,7 @@
  * Uses a mocked login response so this setup does not require the
  * Spring Boot backend to be running locally.
  */
-import { test as setup, expect } from '@playwright/test';
+import { test as setup } from '@playwright/test';
 import path from 'node:path';
 
 const AUTH_FILE = path.join(__dirname, '.auth/user.json');
@@ -43,8 +43,9 @@ setup('authenticate as SuperAdmin', async ({ page }) => {
     });
   });
 
-  // Navigate to login
-  await page.goto('/login', { waitUntil: 'networkidle' });
+  // Navigate to login — domcontentloaded is sufficient; networkidle can hang
+  // when background polling keeps connections open.
+  await page.goto('/login', { waitUntil: 'domcontentloaded' });
 
   // Fill credentials
   await page.locator('#username').fill('superadmin');
@@ -58,8 +59,17 @@ setup('authenticate as SuperAdmin', async ({ page }) => {
 
   // Wait for navigation to dashboard (post-login redirect)
   await page.waitForURL('**/dashboard', { timeout: 15_000 });
-  await expect(page.locator('.welcome-banner')).toBeVisible({ timeout: 10_000 });
 
-  // Persist storage state (localStorage with auth_token + user_profile)
+  // Persist storage state BEFORE any UI assertion so the auth file is always
+  // written even when the dashboard is slow to render under parallel load.
   await page.context().storageState({ path: AUTH_FILE });
+
+  // Soft readiness check — wait for the shell to mount (header or main content)
+  await page
+    .locator('.hero-header, main, .dashboard')
+    .first()
+    .waitFor({ state: 'visible', timeout: 10_000 })
+    .catch(() => {
+      // Dashboard may still be loading; auth state is already saved — continue.
+    });
 });

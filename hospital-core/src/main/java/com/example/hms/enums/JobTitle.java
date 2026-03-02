@@ -14,6 +14,7 @@ public enum JobTitle {
     TECHNICIAN("Technician"),
     PHARMACIST("Pharmacist"),
     LAB_TECHNICIAN("Lab Technician"),
+    LAB_SCIENTIST("Lab Scientist"),     // Legacy DB value — canonical form is LABORATORY_SCIENTIST
     RECEPTIONIST("Receptionist"),
     SURGEON("Surgeon"),
     HOSPITAL_ADMINISTRATOR("Hospital Administrator"),

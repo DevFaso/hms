@@ -113,7 +113,7 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
   position: relative;
   background: $bg-card;
   border-radius: $radius;
-  overflow: hidden;
+  overflow: visible; // must not clip the avatar that overlaps the banner edge
   box-shadow: $shadow;
   margin-bottom: 0;
 
@@ -121,6 +121,8 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
     height: 140px;
     background: linear-gradient(135deg, $primary 0%, #162e6b 50%, $purple 100%);
     position: relative;
+    border-radius: $radius $radius 0 0; // keep banner corners rounded
+    overflow: hidden; // confine the radial-gradient overlays to the banner area
     &::after {
       content: '';
       position: absolute;

@@ -141,6 +141,25 @@
   display: inline-block;
 }
 
+.locked-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: not-allowed;
+
+  .lock-icon {
+    font-size: 13px;
+    opacity: 0.6;
+  }
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

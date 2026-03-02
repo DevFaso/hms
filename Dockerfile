@@ -30,15 +30,22 @@ FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /app
 
-# Create non-root user
+# Create non-root user that the JVM will run as after the entrypoint drops
+# privileges.  UID 10001 is used to avoid collisions with well-known system UIDs.
 RUN useradd -u 10001 -r -s /sbin/nologin appuser
 
 COPY --from=build /app/hospital-core/build/libs/*.jar app.jar
 
-RUN chown -R appuser:appuser /app
-USER appuser
+# Copy the entrypoint script that fixes volume-mount ownership at startup.
+# It runs as root, chowns the uploads directory to appuser, then execs the
+# JVM as appuser — so the running process is still unprivileged.
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh \
+    && mkdir -p /app/uploads \
+    && chown -R appuser:appuser /app
 
+# Run the entrypoint as root so it can chown the (possibly volume-mounted)
+# uploads directory, then drop to appuser inside the script.
 EXPOSE 8081
 
-# Railway injects PORT env var — use shell form so $PORT expands
-ENTRYPOINT exec java -Dserver.port=${PORT:-8081} -jar app.jar
+ENTRYPOINT ["/entrypoint.sh"]

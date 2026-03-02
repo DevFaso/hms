@@ -6,6 +6,7 @@ import { Router, RouterModule } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 
 import { AuthService, type LoginUserProfile } from '../auth/auth.service';
+import { RoleContextService } from '../core/role-context.service';
 
 @Component({
   selector: 'app-login',
@@ -51,6 +52,7 @@ export class Login implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly isBrowser = isPlatformBrowser(this.platformId);
 
@@ -175,6 +177,20 @@ export class Login implements OnInit {
           }
 
           this.auth.setToken(token, this.remember);
+
+          // Hydrate role context immediately so the interceptor sends X-Hospital-Id
+          // on all subsequent requests (including the very first one after redirect).
+          const jwtRoles = this.auth.getRoles();
+          this.roleContext.setRoles(jwtRoles);
+
+          const permittedIds = this.auth.getPermittedHospitalIds();
+          this.roleContext.setPermittedHospitalIds(permittedIds);
+
+          // Non-admin staff always resolve to exactly one hospital (their primary).
+          // Admin roles with a single hospital also get locked here.
+          if (permittedIds.length === 1) {
+            this.roleContext.activeHospitalId = permittedIds[0];
+          }
 
           if (res.id && res.username) {
             const profile: LoginUserProfile = {

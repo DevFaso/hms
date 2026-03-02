@@ -71,8 +71,8 @@ public class ConsultationController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
-    @Operation(summary = "List all consultations across all hospitals (super admin)")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @Operation(summary = "List all consultations")
     public ResponseEntity<List<ConsultationResponseDTO>> getAllConsultations(
         @RequestParam(required = false) ConsultationStatus status
     ) {

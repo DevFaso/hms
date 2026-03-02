@@ -139,7 +139,7 @@ class PasswordResetServiceImplTest {
     }
 
     @Test
-    void confirmReset_sendsConfirmationEmail_fallsBackToEmail_whenNoName() {
+    void confirmReset_sendsConfirmationEmail_fallsBackToUsername_whenNoName() {
         String rawToken = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
         // no firstName or lastName set on user
         PasswordResetToken resetToken = PasswordResetToken.builder()
@@ -153,8 +153,8 @@ class PasswordResetServiceImplTest {
 
         service.confirmReset(rawToken, "newPassword");
 
-        // displayName falls back to the user's email address
-        verify(emailService).sendPasswordResetConfirmationEmail("test@test.com", "test@test.com");
+        // UserDisplayUtil falls back to username when no first/last name is set
+        verify(emailService).sendPasswordResetConfirmationEmail("test@test.com", "testuser");
     }
 
     @Test

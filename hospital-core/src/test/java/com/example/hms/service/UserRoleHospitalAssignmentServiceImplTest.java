@@ -108,7 +108,6 @@ class UserRoleHospitalAssignmentServiceImplTest {
         when(assignmentRepository.findByAssignmentCode(VALID_CODE))
             .thenReturn(Optional.of(assignment));
         when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(userRoleRepository.existsByUserIdAndRoleId(any(), any())).thenReturn(false);
 
         UserRoleAssignmentPublicViewDTO dto = service.verifyAssignmentByCode(VALID_CODE, VALID_PIN);
 
@@ -176,7 +175,6 @@ class UserRoleHospitalAssignmentServiceImplTest {
         when(assignmentRepository.findByAssignmentCode(VALID_CODE))
             .thenReturn(Optional.of(assignment));
         when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        when(userRoleRepository.existsByUserIdAndRoleId(any(), any())).thenReturn(false);
 
         UserRoleAssignmentPublicViewDTO dto = service.verifyAssignmentByCode(VALID_CODE, VALID_PIN);
 

@@ -9,8 +9,12 @@ import com.example.hms.payload.dto.EncounterResponseDTO;
 import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.StaffAvailabilityResponseDTO;
 import com.example.hms.payload.dto.SuperAdminSummaryDTO;
+import com.example.hms.model.Appointment;
+import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.AuditEventLogRepository;
+import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.StaffAvailabilityRepository;
@@ -25,6 +29,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -43,6 +48,9 @@ class SuperAdminDashboardServiceImplTest {
     @Mock private RoleRepository roleRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private AuditEventLogRepository auditEventLogRepository;
+    @Mock private OrganizationRepository organizationRepository;
+    @Mock private DepartmentRepository departmentRepository;
+    @Mock private AppointmentRepository appointmentRepository;
     @Mock private EncounterService encounterService;
     @Mock private StaffAvailabilityRepository staffAvailabilityRepository;
     @Mock private StaffAvailabilityMapper staffAvailabilityMapper;
@@ -62,6 +70,11 @@ class SuperAdminDashboardServiceImplTest {
         when(assignmentRepository.countByActiveTrue()).thenReturn(150L);
         when(assignmentRepository.countByHospitalIsNull()).thenReturn(10L);
         when(assignmentRepository.countByHospitalIsNullAndActiveTrue()).thenReturn(8L);
+        when(organizationRepository.count()).thenReturn(3L);
+        when(organizationRepository.countByActiveTrue()).thenReturn(2L);
+        when(departmentRepository.count()).thenReturn(12L);
+        when(appointmentRepository.countByAppointmentDateBetween(any(LocalDate.class), any(LocalDate.class)))
+            .thenReturn(5L);
 
         AuditEventLog auditLog = AuditEventLog.builder()
             .eventType(AuditEventType.USER_CREATE)
@@ -86,16 +99,7 @@ class SuperAdminDashboardServiceImplTest {
 
     @Test
     void getSummary_zeroValues() {
-        when(userRepository.countByIsDeletedFalse()).thenReturn(0L);
-        when(userRepository.countByIsActiveTrueAndIsDeletedFalse()).thenReturn(0L);
-        when(hospitalRepository.count()).thenReturn(0L);
-        when(hospitalRepository.countByActiveTrue()).thenReturn(0L);
-        when(patientRepository.count()).thenReturn(0L);
-        when(roleRepository.count()).thenReturn(0L);
-        when(assignmentRepository.count()).thenReturn(0L);
-        when(assignmentRepository.countByActiveTrue()).thenReturn(0L);
-        when(assignmentRepository.countByHospitalIsNull()).thenReturn(0L);
-        when(assignmentRepository.countByHospitalIsNullAndActiveTrue()).thenReturn(0L);
+        // All count() calls return 0L by default — only stub non-primitive return types
         when(auditEventLogRepository.findAllByOrderByEventTimestampDesc(any(Pageable.class)))
             .thenReturn(new PageImpl<>(List.of()));
 

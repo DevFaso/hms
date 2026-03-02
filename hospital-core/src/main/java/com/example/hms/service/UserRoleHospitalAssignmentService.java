@@ -51,8 +51,17 @@ public interface UserRoleHospitalAssignmentService {
 
     /**
      * Delete a single assignment by ID.
+     * @deprecated Prefer {@link #deactivateAssignment(UUID)} to preserve history.
      */
+    @Deprecated(since = "1.1", forRemoval = false)
     void deleteAssignment(UUID id);
+
+    /**
+     * Soft-deactivate an assignment: sets {@code active = false}.
+     * The record is preserved for audit and historical integrity.
+     * This is the preferred alternative to hard-deleting assignments.
+     */
+    void deactivateAssignment(UUID id);
 
     /**
      * Delete all assignments for a specific user.

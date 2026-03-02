@@ -43,7 +43,7 @@ public class AppointmentController {
 
     // ---- LIST BY PATIENT USERNAME ----
     @GetMapping("/patients/username/{patientUsername}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE', 'PATIENT')")
     public ResponseEntity<List<AppointmentResponseDTO>> getAppointmentsByPatientUsername(
         @PathVariable String patientUsername,
     @RequestHeader(name = "Accept-Language", required = false) String lang,
@@ -93,7 +93,7 @@ public class AppointmentController {
 
     // ---- STATUS ----
     @PutMapping("/{id}/status")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE')")
     public ResponseEntity<AppointmentResponseDTO> updateAppointmentStatus(
         @PathVariable UUID id,
         @RequestParam(name = "action") String action,
@@ -167,7 +167,7 @@ public class AppointmentController {
 
     // ---- LIST BY PATIENT ----
     @GetMapping("/patients/{patientId}")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'PATIENT')")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE', 'PATIENT')")
     public ResponseEntity<List<AppointmentResponseDTO>> getAppointmentsByPatientId(
         @PathVariable UUID patientId,
     @RequestHeader(name = "Accept-Language", required = false) String lang,

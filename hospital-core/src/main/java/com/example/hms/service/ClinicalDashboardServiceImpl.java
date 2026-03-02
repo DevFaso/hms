@@ -1,34 +1,54 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.EncounterStatus;
+import com.example.hms.enums.LabOrderStatus;
+import com.example.hms.enums.RefillStatus;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.clinical.ClinicalAlertDTO;
 import com.example.hms.payload.dto.clinical.ClinicalDashboardResponseDTO;
 import com.example.hms.payload.dto.clinical.DashboardKPI;
 import com.example.hms.payload.dto.clinical.InboxCountsDTO;
 import com.example.hms.payload.dto.clinical.OnCallStatusDTO;
 import com.example.hms.payload.dto.clinical.RoomedPatientDTO;
+import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.ChatMessageRepository;
+import com.example.hms.repository.DigitalSignatureRepository;
+import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.LabOrderRepository;
+import com.example.hms.repository.RefillRequestRepository;
+import com.example.hms.repository.StaffRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Period;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 /**
- * Implementation of Clinical Dashboard Service
- * Phase 1: Basic implementation with sample data
- * Future phases will add real database queries
+ * Implementation of Clinical Dashboard Service.
+ * Provides real-time data sourced from the database.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
+
+    private final StaffRepository staffRepository;
+    private final AppointmentRepository appointmentRepository;
+    private final ChatMessageRepository chatMessageRepository;
+    private final RefillRequestRepository refillRequestRepository;
+    private final LabOrderRepository labOrderRepository;
+    private final DigitalSignatureRepository digitalSignatureRepository;
+    private final EncounterRepository encounterRepository;
 
     @Override
     public ClinicalDashboardResponseDTO getClinicalDashboard(UUID userId) {
@@ -46,63 +66,58 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
     @Override
     public List<ClinicalAlertDTO> getCriticalAlerts(UUID userId, int hours) {
         log.info("Fetching critical alerts for user: {} within {} hours", userId, hours);
-
-        // Phase 2: Replace with real database queries
-        // For now, return sample data
-        List<ClinicalAlertDTO> alerts = new ArrayList<>();
-
-        // Sample critical lab result
-        alerts.add(ClinicalAlertDTO.builder()
-                .id(UUID.randomUUID())
-                .severity("CRITICAL")
-                .type("LAB_CRITICAL")
-                .title("Critical Potassium Level")
-                .message("Patient John Doe - K+ 6.5 mmol/L (Critical High)")
-                .patientId(UUID.randomUUID())
-                .patientName("John Doe")
-                .timestamp(LocalDateTime.now().minusHours(2))
-                .actionRequired(true)
-                .acknowledged(false)
-                .icon("🔴")
-                .build());
-
-        // Sample abnormal vitals
-        alerts.add(ClinicalAlertDTO.builder()
-                .id(UUID.randomUUID())
-                .severity("URGENT")
-                .type("VITAL_ABNORMAL")
-                .title("Abnormal Blood Pressure")
-                .message("Patient Jane Smith - BP 180/110 mmHg")
-                .patientId(UUID.randomUUID())
-                .patientName("Jane Smith")
-                .timestamp(LocalDateTime.now().minusHours(1))
-                .actionRequired(true)
-                .acknowledged(false)
-                .icon("⚠️")
-                .build());
-
-        return alerts;
+        // No real alert subsystem exists yet — return empty list rather than fake data
+        return Collections.emptyList();
     }
 
     @Override
     @Transactional
     public void acknowledgeAlert(UUID alertId, UUID userId) {
         log.info("Acknowledging alert: {} by user: {}", alertId, userId);
-        // Phase 2: Update alert status in database
-        // For now, just log
+        // No alert persistence layer yet — no-op
     }
 
     @Override
     public InboxCountsDTO getInboxCounts(UUID userId) {
         log.info("Fetching inbox counts for user: {}", userId);
 
-        // Phase 2: Replace with real database queries
+        // Unread chat messages sent to this user
+        long unreadMessages = chatMessageRepository.countByRecipient_IdAndReadFalse(userId);
+
+        // Pending refill requests for prescriptions belonging to this doctor's staff record
+        long pendingRefills = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId)
+                .map(staff -> refillRequestRepository
+                        .countByPrescription_Staff_IdAndStatus(staff.getId(), RefillStatus.REQUESTED))
+                .orElse(0L);
+
+        // Lab orders placed by this doctor's staff record that are still pending / in-progress
+        long pendingResults = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId)
+                .map(staff -> labOrderRepository
+                        .countByOrderingStaff_IdAndStatus(staff.getId(), LabOrderStatus.PENDING)
+                        + labOrderRepository
+                        .countByOrderingStaff_IdAndStatus(staff.getId(), LabOrderStatus.IN_PROGRESS))
+                .orElse(0L);
+
+        // Active in-progress encounters assigned to this doctor (open "tasks")
+        long tasksToComplete = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId)
+                .map(staff -> (long) encounterRepository
+                        .findByStaff_IdAndStatus(staff.getId(), EncounterStatus.IN_PROGRESS).size())
+                .orElse(0L);
+
+        // Documents awaiting signature by this doctor's staff record
+        // DigitalSignature.signedBy links to Staff, so we look up the staff id first
+        long documentsToSign = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId)
+                .map(staff -> digitalSignatureRepository
+                        .countBySignedBy_IdAndStatus(staff.getId(),
+                                com.example.hms.enums.SignatureStatus.PENDING))
+                .orElse(0L);
+
         return InboxCountsDTO.builder()
-                .unreadMessages(5)
-                .pendingRefills(3)
-                .pendingResults(2)
-                .tasksToComplete(7)
-                .documentsToSign(1)
+                .unreadMessages((int) Math.min(unreadMessages, Integer.MAX_VALUE))
+                .pendingRefills((int) Math.min(pendingRefills, Integer.MAX_VALUE))
+                .pendingResults((int) Math.min(pendingResults, Integer.MAX_VALUE))
+                .tasksToComplete((int) Math.min(tasksToComplete, Integer.MAX_VALUE))
+                .documentsToSign((int) Math.min(documentsToSign, Integer.MAX_VALUE))
                 .build();
     }
 
@@ -110,92 +125,118 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
     public List<RoomedPatientDTO> getRoomedPatients(UUID userId) {
         log.info("Fetching roomed patients for user: {}", userId);
 
-        // Phase 2: Replace with real encounter queries
-        List<RoomedPatientDTO> patients = new ArrayList<>();
-
-        // Sample roomed patient
-        Map<String, Object> vitals = new HashMap<>();
-        vitals.put("temperature", 98.6);
-        vitals.put("bloodPressure", "120/80");
-        vitals.put("heartRate", 75);
-        vitals.put("oxygenSaturation", 98);
-
-        patients.add(RoomedPatientDTO.builder()
-                .id(UUID.randomUUID())
-                .encounterId(UUID.randomUUID())
-                .patientName("John Doe")
-                .age(45)
-                .sex("M")
-                .mrn("MRN-12345")
-                .room("ER-101")
-                .triageStatus("TRIAGED")
-                .chiefComplaint("Chest pain")
-                .waitTimeMinutes(15)
-                .arrivalTime(LocalDateTime.now().minusMinutes(45))
-                .vitals(vitals)
-                .flags(Arrays.asList("Diabetes", "Hypertension"))
-                .prepStatus(RoomedPatientDTO.PrepStatusDTO.builder()
-                        .labsDrawn(true)
-                        .imagingOrdered(false)
-                        .consentSigned(true)
-                        .build())
-                .build());
-
-        return patients;
+        return staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId)
+                .map(staff -> {
+                    List<Encounter> active = encounterRepository
+                            .findByStaff_IdAndStatus(staff.getId(), EncounterStatus.IN_PROGRESS);
+                    List<RoomedPatientDTO> result = new ArrayList<>();
+                    for (Encounter enc : active) {
+                        Patient p = enc.getPatient();
+                        if (p == null) continue;
+                        String name = p.getFirstName() + " " + p.getLastName();
+                        int age = p.getDateOfBirth() != null
+                                ? Period.between(p.getDateOfBirth(), LocalDate.now()).getYears()
+                                : 0;
+                        long waitMinutes = enc.getEncounterDate() != null
+                                ? java.time.Duration.between(enc.getEncounterDate(), LocalDateTime.now()).toMinutes()
+                                : 0;
+                        result.add(RoomedPatientDTO.builder()
+                                .id(p.getId())
+                                .encounterId(enc.getId())
+                                .patientName(name)
+                                .age(age)
+                                .sex(p.getGender())
+                                .mrn(p.getId().toString())
+                                .chiefComplaint(enc.getNotes())
+                                .waitTimeMinutes((int) Math.min(waitMinutes, Integer.MAX_VALUE))
+                                .arrivalTime(enc.getEncounterDate())
+                                .flags(Collections.emptyList())
+                                .prepStatus(RoomedPatientDTO.PrepStatusDTO.builder()
+                                        .labsDrawn(false)
+                                        .imagingOrdered(false)
+                                        .consentSigned(false)
+                                        .build())
+                                .build());
+                    }
+                    return result;
+                })
+                .orElse(Collections.emptyList());
     }
 
     @Override
     public OnCallStatusDTO getOnCallStatus(UUID userId) {
         log.info("Fetching on-call status for user: {}", userId);
-
-        // Phase 2: Replace with real schedule queries
+        // No scheduling/on-call system yet — always not on call
         return OnCallStatusDTO.builder()
                 .isOnCall(false)
                 .build();
     }
 
     /**
-     * Generate KPI metrics for the dashboard
+     * Generate KPI metrics for the dashboard from real database data.
      */
-    @SuppressWarnings("java:S1172") // userId will be used in Phase 2 for real KPI calculation
     private List<DashboardKPI> generateKPIs(UUID userId) {
-        // Phase 2: Calculate real KPIs from database
         List<DashboardKPI> kpis = new ArrayList<>();
 
-        kpis.add(DashboardKPI.builder()
-                .key("patients_today")
-                .label("Patients Today")
-                .value(12)
-                .unit("patients")
-                .deltaNum(2.0)
-                .trend("up")
-                .build());
+        // Resolve the primary staff record for this user
+        java.util.Optional<Staff> staffOpt = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId);
+
+        // --- Patients / Appointments today ---
+        int appointmentsToday = staffOpt
+                .map(staff -> appointmentRepository
+                        .findByStaff_IdAndAppointmentDate(staff.getId(), LocalDate.now()).size())
+                .orElse(0);
 
         kpis.add(DashboardKPI.builder()
                 .key("appointments")
-                .label("Appointments")
-                .value(15)
+                .label("Appointments Today")
+                .value(appointmentsToday)
                 .unit("scheduled")
-                .deltaNum(-1.0)
-                .trend("down")
+                .trend("stable")
                 .build());
+
+        // --- Pending lab results ---
+        long pendingLabs = staffOpt
+                .map(staff -> labOrderRepository
+                        .countByOrderingStaff_IdAndStatus(staff.getId(), LabOrderStatus.PENDING)
+                        + labOrderRepository
+                        .countByOrderingStaff_IdAndStatus(staff.getId(), LabOrderStatus.IN_PROGRESS))
+                .orElse(0L);
 
         kpis.add(DashboardKPI.builder()
                 .key("pending_results")
                 .label("Pending Results")
-                .value(8)
+                .value((int) Math.min(pendingLabs, Integer.MAX_VALUE))
                 .unit("results")
-                .deltaNum(3.0)
-                .trend("up")
+                .trend(pendingLabs > 0 ? "up" : "stable")
                 .build());
+
+        // --- Active encounters (patients currently being seen) ---
+        int activeEncounters = staffOpt
+                .map(staff -> encounterRepository
+                        .findByStaff_IdAndStatus(staff.getId(), EncounterStatus.IN_PROGRESS).size())
+                .orElse(0);
+
+        kpis.add(DashboardKPI.builder()
+                .key("patients_today")
+                .label("Active Patients")
+                .value(activeEncounters)
+                .unit("patients")
+                .trend("stable")
+                .build());
+
+        // --- Pending refill requests ---
+        long pendingRefills = staffOpt
+                .map(staff -> refillRequestRepository
+                        .countByPrescription_Staff_IdAndStatus(staff.getId(), RefillStatus.REQUESTED))
+                .orElse(0L);
 
         kpis.add(DashboardKPI.builder()
                 .key("tasks")
-                .label("Tasks")
-                .value(5)
-                .unit("tasks")
-                .deltaNum(0.0)
-                .trend("stable")
+                .label("Refill Requests")
+                .value((int) Math.min(pendingRefills, Integer.MAX_VALUE))
+                .unit("requests")
+                .trend(pendingRefills > 0 ? "up" : "stable")
                 .build());
 
         return kpis;

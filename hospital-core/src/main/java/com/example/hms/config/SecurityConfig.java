@@ -190,7 +190,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, API_PATIENTS, API_PATIENTS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.POST, API_PATIENTS)
-                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
                 .requestMatchers(HttpMethod.POST, API_PATIENT_VITALS, API_PATIENT_VITALS_PATTERN)
                 .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.GET, API_PATIENT_VITALS, API_PATIENT_VITALS_PATTERN)
@@ -212,18 +212,28 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, API_REGISTRATIONS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
 
-                            // Allow receptionist to register patients via admin-register
+                            // Allow all clinical staff to register patients via admin-register
                             .requestMatchers(HttpMethod.POST, "/users/admin-register")
-                            .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
+                            .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
 
                 // Hospitals / Staff / Departments / Roles (specific before broad)
-                .requestMatchers(HttpMethod.GET, "/hospitals/{id}")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE)
+                // GET /hospitals and /hospitals/{id} — readable by all clinical roles
                 .requestMatchers(HttpMethod.GET, "/hospitals", "/hospitals/")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR)
+                .requestMatchers(HttpMethod.GET, "/hospitals/{id}")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR)
+                .requestMatchers(HttpMethod.GET, "/hospitals/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR)
                 .requestMatchers(org.springframework.http.HttpMethod.GET, "/me/hospital")
-                .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
-                .requestMatchers("/hospitals/**")
+                .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                // POST/PUT/DELETE /hospitals/** — super admin only
+                .requestMatchers(HttpMethod.POST, "/hospitals/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.PUT, "/hospitals/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.PATCH, "/hospitals/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.DELETE, "/hospitals/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN)
 
                 // Organizations and security management
@@ -248,15 +258,15 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, API_STAFF_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
                 .requestMatchers(HttpMethod.GET, "/departments/**")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST)
                 .requestMatchers(HttpMethod.POST, "/departments/filter")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST)
                 .requestMatchers("/departments/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
                 .requestMatchers("/roles/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
-                .requestMatchers("/chat/send/**")
-                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_STAFF, ROLE_PATIENT, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE)
+                .requestMatchers("/chat/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST, ROLE_STAFF, ROLE_PATIENT)
 
                 // Patient portal — self-service endpoints (MyChart equivalent)
                 .requestMatchers(HttpMethod.GET, API_ME_PATIENT_PATTERN)
@@ -300,6 +310,12 @@ public class SecurityConfig {
 
                 // Public access to uploaded profile images (served as static assets)
                 .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
+
+                // SockJS / STOMP WebSocket handshake — must be permitted without a JWT.
+                // SockJS performs an unauthenticated HTTP GET /ws-chat/info to negotiate
+                // the transport before the STOMP CONNECT frame (which carries the token)
+                // is sent.  Blocking it here causes a 401 before the connection can open.
+                .requestMatchers("/ws-chat/**").permitAll()
 
                 .anyRequest().authenticated()
             )
