@@ -4,11 +4,11 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 healthcheckPath = "/api/actuator/health"
-healthcheckTimeout = 120
+healthcheckTimeout = 180
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
 [deploy.healthcheck]
 path = "/api/actuator/health"
 interval = 30
-timeout = 10
+timeout = 30

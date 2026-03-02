@@ -34,7 +34,7 @@ export class NotificationService {
   /** Exponential-backoff state for WebSocket reconnection */
   private reconnectAttempts = 0;
   private readonly maxReconnectDelay = 60_000; // cap at 60 s
-  private readonly baseReconnectDelay = 5_000;  // start at 5 s
+  private readonly baseReconnectDelay = 5_000; // start at 5 s
 
   getNotifications(params?: {
     read?: boolean;
@@ -99,7 +99,7 @@ export class NotificationService {
         this.reconnectAttempts++;
         const nextDelay = Math.min(
           this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-          this.maxReconnectDelay
+          this.maxReconnectDelay,
         );
         if (this.stompClient) {
           this.stompClient.reconnectDelay = nextDelay;
@@ -111,7 +111,7 @@ export class NotificationService {
         this.reconnectAttempts++;
         const nextDelay = Math.min(
           this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-          this.maxReconnectDelay
+          this.maxReconnectDelay,
         );
         if (this.stompClient) {
           this.stompClient.reconnectDelay = nextDelay;
@@ -123,7 +123,7 @@ export class NotificationService {
         this.reconnectAttempts++;
         const nextDelay = Math.min(
           this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-          this.maxReconnectDelay
+          this.maxReconnectDelay,
         );
         if (this.stompClient) {
           this.stompClient.reconnectDelay = nextDelay;
