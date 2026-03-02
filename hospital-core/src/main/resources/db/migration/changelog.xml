@@ -78,6 +78,12 @@
          soft-deleted but owns at least one active UserRoleHospitalAssignment.
          ================================================================= -->
     <changeSet id="V6-repair-soft-deleted-active-users" author="hms-team" runOnChange="false">
+        <!-- validCheckSum: accept the old hash (a.active = true) that was already
+             recorded in DATABASECHANGELOG on the dev/uat DB before the column-name
+             typo was corrected to a.is_active.  The new hash is accepted automatically.
+             Old:  9:675be9a24a8d91736e78ec3f93922422
+             New:  9:fd056d3ca3f30133f1ca8fff983343fa  -->
+        <validCheckSum>9:675be9a24a8d91736e78ec3f93922422</validCheckSum>
         <sqlFile path="V6__repair_soft_deleted_active_users.sql"
                  relativeToChangelogFile="true"
                  splitStatements="true"
