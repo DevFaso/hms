@@ -59,3 +59,10 @@ volumes:
   pgdata:
   pgdata_dev:
   pgdata_uat:
+  # Named volume for backend uploaded files (profile images, attachments, etc.).
+  # To use this locally, mount it in your backend service:
+  #   volumes:
+  #     - hms_uploads:/app/uploads
+  # On Railway, add a Persistent Volume in the backend service settings and
+  # set APP_UPLOAD_DIR to the mount path (e.g. /data/uploads).
+  hms_uploads:

@@ -35,7 +35,12 @@ RUN useradd -u 10001 -r -s /sbin/nologin appuser
 
 COPY --from=build /app/hospital-core/build/libs/*.jar app.jar
 
-RUN chown -R appuser:appuser /app
+# Create the uploads directory before switching to the non-root user so
+# appuser has write permission.  In production (Railway) this directory
+# should be backed by a persistent volume mounted at /app/uploads (or at
+# whatever path APP_UPLOAD_DIR points to) so that uploaded files survive
+# redeployments.
+RUN mkdir -p /app/uploads && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8081

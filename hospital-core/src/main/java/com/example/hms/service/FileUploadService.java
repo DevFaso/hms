@@ -293,8 +293,13 @@ public class FileUploadService {
 
         // Prefer the explicitly configured public URL (e.g. https://hms.dev.bitnesttechs.com).
         // This avoids leaking the internal Railway hostname to the browser.
+        // The Spring Boot context-path is "/api", so the resource handler registered at
+        // "/uploads/**" is reachable from the browser at "/api/uploads/**" (via Nginx which
+        // proxies /api/ → backend).  We therefore prepend "/api" here so every generated URL
+        // includes the correct context-path prefix.
         if (publicBaseUrl != null && !publicBaseUrl.isBlank()) {
             return UriComponentsBuilder.fromUriString(publicBaseUrl)
+                    .path("/api")
                     .path(normalized)
                     .build()
                     .toUriString();
