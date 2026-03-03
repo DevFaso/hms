@@ -12,7 +12,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -122,8 +124,11 @@ public class LabResultController {
             @PathVariable UUID id,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         labResultService.deleteLabResult(id, locale);
-        String message = messageSource.getMessage("labresult.deleted", new Object[]{id}, locale);
-        return ResponseEntity.ok(message);
+        String rawMessage = messageSource.getMessage("labresult.deleted", new Object[]{id}, locale);
+        String safeMessage = HtmlUtils.htmlEscape(rawMessage);
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(safeMessage);
     }
 
     // ==================== Enhanced Trending Endpoints (Story #5) ====================

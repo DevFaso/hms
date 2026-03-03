@@ -15,7 +15,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -161,8 +163,11 @@ public class AppointmentController {
     ) {
     Locale locale = parseLocale(lang);
         appointmentService.deleteAppointment(id, locale, getUsername(authentication));
-        String message = messageSource.getMessage("appointment.deleted", new Object[]{id}, locale);
-        return ResponseEntity.ok(message);
+        String rawMessage = messageSource.getMessage("appointment.deleted", new Object[]{id}, locale);
+        String safeMessage = HtmlUtils.htmlEscape(rawMessage);
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(safeMessage);
     }
 
     // ---- LIST BY PATIENT ----

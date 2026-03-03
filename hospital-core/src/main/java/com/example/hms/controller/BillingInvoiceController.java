@@ -20,6 +20,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -136,7 +137,11 @@ public class BillingInvoiceController {
         @PathVariable UUID id,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         invoiceService.deleteInvoice(id, locale);
-        return ResponseEntity.ok(messageSource.getMessage("billinginvoice.deleted", new Object[]{id}, locale));
+        String rawMessage = messageSource.getMessage("billinginvoice.deleted", new Object[]{id}, locale);
+        String safeMessage = HtmlUtils.htmlEscape(rawMessage);
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(safeMessage);
     }
 
     @PostMapping("/search")
