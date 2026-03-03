@@ -2,11 +2,6 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { Client, IMessage } from '@stomp/stompjs';
-// sockjs-client is a CommonJS module. Importing it as a namespace (`import * as`)
-// does NOT give the constructor when esModuleInterop is off (Angular default).
-// We use require() inside the factory so the bundler wraps it correctly at runtime.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const SockJS = require('sockjs-client') as new (url: string) => WebSocket;
 
 export interface Notification {
   id: string;
@@ -58,6 +53,9 @@ export class NotificationService {
    *
    * Uses exponential backoff for reconnection (5 s → 10 s → 20 s → … → 60 s)
    * to avoid hammering the backend when it is down or restarting.
+   *
+   * sockjs-client is a CommonJS module; it is loaded lazily via dynamic import
+   * so that Vite's ESM bundler does not crash at module evaluation time.
    */
   connectWebSocket(username: string): void {
     if (typeof globalThis === 'undefined' || !globalThis.WebSocket) return;
@@ -65,73 +63,79 @@ export class NotificationService {
     // Build the SockJS URL pointing at /api/ws-chat (context path included).
     const sockUrl = '/api/ws-chat';
 
-    this.stompClient = new Client({
-      // SockJS factory — required because the backend endpoint uses .withSockJS()
-      webSocketFactory: () => new SockJS(sockUrl),
+    // Lazily import sockjs-client to avoid "Dynamic require is not supported"
+    // crashes in Vite/ESM at module evaluation time.
+    void import('sockjs-client')
+      .then((mod) => {
+        // The CJS default export may be wrapped under `.default` by ESM interop.
+        const SockJSCtor = (mod.default ?? mod) as new (url: string) => WebSocket;
 
-      // Start with baseReconnectDelay; double on each failure up to the cap.
-      // STOMP calls reconnectDelay as a property each time it needs the value,
-      // so returning a getter function gives us live-updated backoff.
-      reconnectDelay: this.baseReconnectDelay,
+        this.stompClient = new Client({
+          webSocketFactory: () => new SockJSCtor(sockUrl),
 
-      onConnect: () => {
-        // Reset backoff on successful connection
-        this.reconnectAttempts = 0;
-        if (this.stompClient) {
-          this.stompClient.reconnectDelay = this.baseReconnectDelay;
-        }
+          reconnectDelay: this.baseReconnectDelay,
 
-        this.stompClient?.subscribe('/topic/notifications', (frame: IMessage) => {
-          try {
-            const notification = JSON.parse(frame.body) as Notification;
-            // Only emit notifications addressed to the current user
-            if (!notification.recipientUsername || notification.recipientUsername === username) {
-              this.notificationSubject.next(notification);
+          onConnect: () => {
+            this.reconnectAttempts = 0;
+            if (this.stompClient) {
+              this.stompClient.reconnectDelay = this.baseReconnectDelay;
             }
-          } catch {
-            // Malformed frame — ignore
-          }
+
+            this.stompClient?.subscribe('/topic/notifications', (frame: IMessage) => {
+              try {
+                const notification = JSON.parse(frame.body) as Notification;
+                if (
+                  !notification.recipientUsername ||
+                  notification.recipientUsername === username
+                ) {
+                  this.notificationSubject.next(notification);
+                }
+              } catch {
+                // Malformed frame — ignore
+              }
+            });
+          },
+
+          onDisconnect: () => {
+            this.reconnectAttempts++;
+            const nextDelay = Math.min(
+              this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
+              this.maxReconnectDelay,
+            );
+            if (this.stompClient) {
+              this.stompClient.reconnectDelay = nextDelay;
+            }
+          },
+
+          onStompError: () => {
+            this.reconnectAttempts++;
+            const nextDelay = Math.min(
+              this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
+              this.maxReconnectDelay,
+            );
+            if (this.stompClient) {
+              this.stompClient.reconnectDelay = nextDelay;
+            }
+          },
+
+          onWebSocketError: () => {
+            this.reconnectAttempts++;
+            const nextDelay = Math.min(
+              this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
+              this.maxReconnectDelay,
+            );
+            if (this.stompClient) {
+              this.stompClient.reconnectDelay = nextDelay;
+            }
+          },
         });
-      },
 
-      onDisconnect: () => {
-        // Increase backoff for next reconnect attempt
-        this.reconnectAttempts++;
-        const nextDelay = Math.min(
-          this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-          this.maxReconnectDelay,
-        );
-        if (this.stompClient) {
-          this.stompClient.reconnectDelay = nextDelay;
-        }
-      },
-
-      onStompError: () => {
-        // STOMP-level error — apply same backoff escalation
-        this.reconnectAttempts++;
-        const nextDelay = Math.min(
-          this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-          this.maxReconnectDelay,
-        );
-        if (this.stompClient) {
-          this.stompClient.reconnectDelay = nextDelay;
-        }
-      },
-
-      onWebSocketError: () => {
-        // Transport-level error (e.g. backend is down) — same backoff
-        this.reconnectAttempts++;
-        const nextDelay = Math.min(
-          this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-          this.maxReconnectDelay,
-        );
-        if (this.stompClient) {
-          this.stompClient.reconnectDelay = nextDelay;
-        }
-      },
-    });
-
-    this.stompClient.activate();
+        this.stompClient.activate();
+      })
+      .catch(() => {
+        // SockJS unavailable (e.g. bundler environment without CJS support) —
+        // real-time notifications will be disabled; the rest of the app is unaffected.
+      });
   }
 
   getNotificationStream(): Observable<Notification> {

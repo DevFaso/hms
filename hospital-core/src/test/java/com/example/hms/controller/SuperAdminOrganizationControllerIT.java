@@ -1,6 +1,7 @@
 package com.example.hms.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -64,6 +65,7 @@ class SuperAdminOrganizationControllerIT extends com.example.hms.BaseIT {
         );
 
         mockMvc.perform(post("/api/super-admin/organizations")
+                .with(csrf())
                 .contextPath("/api")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(payload)))
@@ -90,6 +92,7 @@ class SuperAdminOrganizationControllerIT extends com.example.hms.BaseIT {
 
         mockMvc.perform(post("/api/super-admin/organizations/{organizationId}/hospitals/{hospitalId}",
                 organization.getId(), hospital.getId())
+                .with(csrf())
                 .contextPath("/api"))
             .andExpect(status().isOk());
 
@@ -117,6 +120,7 @@ class SuperAdminOrganizationControllerIT extends com.example.hms.BaseIT {
 
         mockMvc.perform(delete("/api/super-admin/organizations/{organizationId}/hospitals/{hospitalId}",
                 organization.getId(), hospital.getId())
+                .with(csrf())
                 .contextPath("/api"))
             .andExpect(status().isOk());
 

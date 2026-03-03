@@ -25,6 +25,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -34,6 +35,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -460,6 +462,38 @@ public class AuthController {
     @GetMapping("/ping")
     public ResponseEntity<Object> ping() {
         return ResponseEntity.ok(new MessageResponse("pong"));
+    }
+
+    /**
+     * CSRF token bootstrap endpoint.
+     *
+     * Angular (or any SPA) must call {@code GET /auth/csrf-token} at application
+     * startup (before the first mutating request). Spring Security writes the
+     * {@code XSRF-TOKEN} cookie on this response. Subsequent POST/PUT/PATCH/DELETE
+     * requests must echo the cookie value back via the {@code X-XSRF-TOKEN} header
+     * (handled by {@code CsrfInterceptor} on the frontend).
+     *
+     * The endpoint is publicly accessible (no authentication required) because
+     * it must work before login.
+     */
+    @Operation(
+        summary = "CSRF Token Bootstrap",
+        description = "Returns an empty 204 response that causes Spring Security to set the XSRF-TOKEN cookie. " +
+                      "Call this once at SPA startup before any state-mutating requests.",
+        responses = @ApiResponse(responseCode = "204", description = "CSRF cookie issued.")
+    )
+    @GetMapping("/csrf-token")
+    public ResponseEntity<Void> csrfToken(
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        // Accessing the CsrfToken attribute forces Spring Security's
+        // CookieCsrfTokenRepository to write the XSRF-TOKEN Set-Cookie header.
+        CsrfToken token = (CsrfToken) request.getAttribute(CsrfToken.class.getName());
+        if (token != null) {
+            // Touch the token to ensure the deferred token is loaded and cookie is written.
+            token.getToken();
+        }
+        return ResponseEntity.noContent().build();
     }
 
     private static String clientIp(HttpServletRequest request) {

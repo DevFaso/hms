@@ -26,6 +26,16 @@ test.describe('Authentication', () => {
 
   test.beforeEach(async ({ page }) => {
     loginPage = new LoginPage(page);
+    // Stub backend calls that the login page makes on load so tests that do not
+    // need a live server work in isolation (CSRF bootstrap + bootstrap-status).
+    await page.route('**/api/auth/csrf-token', (route) => route.fulfill({ status: 204 }));
+    await page.route('**/api/auth/bootstrap-status', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ allowed: false }),
+      }),
+    );
     await page.goto('/');
     await page.evaluate(() => {
       localStorage.clear();
@@ -101,16 +111,19 @@ test.describe('Authentication', () => {
   test.describe('Login Flow', () => {
     test.beforeEach(async ({ page }) => {
       await page.unrouteAll({ behavior: 'ignoreErrors' });
-      await page.route('**/auth/bootstrap-status', (route) =>
+      // Playwright is LIFO — register catch-all first, specific routes last.
+      await page.route('**/api/**', (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }),
+      );
+      await page.route('**/api/auth/csrf-token', (route) => route.fulfill({ status: 204 }));
+      await page.route('**/api/auth/bootstrap-status', (route) =>
         route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ allowed: false }),
         }),
       );
-      await page.route('**/api/**', (route) =>
-        route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }),
-      );
+      // Login mock registered LAST so it overrides the catch-all (LIFO).
       await page.route('**/api/auth/login', async (route) => {
         const body = route.request().postDataJSON() as { username?: string };
         if (body?.username === 'superadmin') {
@@ -173,6 +186,21 @@ test.describe('Authentication', () => {
     });
 
     test('login button shows spinner during request', async ({ page }) => {
+      // Override the login mock from inner beforeEach to add a delay.
+      // unrouteAll + re-register ensures we get a fresh handler with the delay.
+      await page.unrouteAll({ behavior: 'ignoreErrors' });
+      // LIFO: catch-all first, specific routes last.
+      await page.route('**/api/**', (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }),
+      );
+      await page.route('**/api/auth/csrf-token', (route) => route.fulfill({ status: 204 }));
+      await page.route('**/api/auth/bootstrap-status', (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ allowed: false }),
+        }),
+      );
       await page.route('**/api/auth/login', async (route) => {
         await new Promise((r) => setTimeout(r, 1000));
         await route.fulfill({
