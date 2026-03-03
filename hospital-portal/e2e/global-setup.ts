@@ -34,8 +34,33 @@ const MOCK_LOGIN_RESPONSE = {
 };
 
 setup('authenticate as SuperAdmin', async ({ page }) => {
-  // Mock the login API so setup works without a live backend
-  await page.route('**/auth/login', async (route) => {
+  // Playwright route handlers are LIFO (last registered = first matched).
+  // Register the catch-all FIRST so specific mocks registered later take priority.
+
+  // Catch-all: return empty paginated response for all /api/** calls so the
+  // Angular error interceptor never fires a redirect to /login.
+  await page.route('**/api/**', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ content: [], totalElements: 0, totalPages: 0, size: 20, number: 0 }),
+    }),
+  );
+
+  // Bootstrap-status (called by login page on init) — overrides catch-all.
+  await page.route('**/api/auth/bootstrap-status', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ allowed: false }),
+    }),
+  );
+
+  // CSRF token endpoint so the SPA bootstrap call does not block — overrides catch-all.
+  await page.route('**/api/auth/csrf-token', (route) => route.fulfill({ status: 204 }));
+
+  // Login mock — registered LAST so it wins over the catch-all (LIFO).
+  await page.route('**/api/auth/login', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -53,7 +78,7 @@ setup('authenticate as SuperAdmin', async ({ page }) => {
 
   // Submit and wait for the mocked login response + redirect
   await Promise.all([
-    page.waitForResponse('**/auth/login'),
+    page.waitForResponse('**/api/auth/login'),
     page.locator('button[type="submit"]').click(),
   ]);
 

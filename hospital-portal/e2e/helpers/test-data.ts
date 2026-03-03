@@ -17,8 +17,14 @@ export function uniqueUsername(prefix = 'testuser'): string {
 }
 
 export function uniquePhone(): string {
-  const num = Math.floor(1000000000 + Math.random() * 9000000000);
-  return `+1-${String(num).slice(0, 3)}-${String(num).slice(3, 6)}-${String(num).slice(6)}`;
+  // Use cryptographically secure randomness (CWE-338 / CodeQL js/insecure-randomness).
+  // crypto.getRandomValues is available in both Node ≥ 15 and modern browsers.
+  const buf = new Uint32Array(1);
+  crypto.getRandomValues(buf);
+  // Map the 32-bit value into a 10-digit number in the range [1_000_000_000, 9_999_999_999].
+  const num = 1_000_000_000 + (buf[0] % 9_000_000_000);
+  const digits = String(num);
+  return `+1-${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
 export function createPatientData(

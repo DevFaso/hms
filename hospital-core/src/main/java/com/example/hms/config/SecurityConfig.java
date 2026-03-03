@@ -19,8 +19,9 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper;
@@ -76,6 +77,8 @@ public class SecurityConfig {
     private static final String API_ME_PATIENT_PATTERN = "/me/patient/**";
     private static final String API_STAFF = "/staff";
     private static final String API_STAFF_PATTERN = API_STAFF + "/**";
+    private static final String API_HOSPITALS = "/hospitals";
+    private static final String API_HOSPITALS_PATTERN = API_HOSPITALS + "/**";
 
     private final HospitalUserDetailsService userDetailsService;
     private final JwtAuthenticationEntryPoint unauthorizedHandler;
@@ -149,13 +152,42 @@ public class SecurityConfig {
     // Chain #1 — Primary API security (all paths inside context-path /api)
     // =====================================================================
 
+    /**
+     * Primary API security filter chain.
+     *
+     * <p>CSRF strategy: Double-Submit Cookie pattern. Spring Security writes an
+     * {@code XSRF-TOKEN} cookie (HttpOnly=false) on the first GET response so the
+     * Angular SPA can read it. Angular's {@code CsrfInterceptor} echoes the value
+     * back as {@code X-XSRF-TOKEN} on every state-mutating request. Read-only HTTP
+     * verbs (GET/HEAD/OPTIONS/TRACE) are exempt as they cannot cause side effects.
+     * Pure Bearer-token requests are inherently CSRF-safe, but the cookie repository
+     * adds defence-in-depth for any future form/cookie authentication path and fully
+     * satisfies OWASP and CodeQL (java/spring-disabled-csrf-protection) requirements.
+     */
     @Bean
     @Order(1)
     public SecurityFilterChain apiSecurity(HttpSecurity http) throws Exception {
+        var csrfTokenRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        // Explicitly set cookie path to "/" so the XSRF-TOKEN cookie is visible
+        // to the Angular SPA served at "/", regardless of the server context-path
+        // (/api). Without this, the cookie inherits the context-path and the SPA
+        // cannot read it from document.cookie, causing 403s on mutating requests.
+        csrfTokenRepo.setCookiePath("/");
+        var csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
+
         http
             .securityMatcher("/**")
             .cors(c -> {})
-            .csrf(AbstractHttpConfigurer::disable) // NOSONAR — stateless JWT API, no session/cookie auth
+            .csrf(csrf -> csrf
+                .csrfTokenRepository(csrfTokenRepo)
+                .csrfTokenRequestHandler(csrfRequestHandler)
+                .ignoringRequestMatchers(
+                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "GET"),
+                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "HEAD"),
+                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "OPTIONS"),
+                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "TRACE")
+                )
+            )
             .exceptionHandling(ex -> ex
                 .authenticationEntryPoint(unauthorizedHandler)
                 .accessDeniedHandler((req, res, e) -> res.sendError(HttpServletResponse.SC_FORBIDDEN))
@@ -172,7 +204,8 @@ public class SecurityConfig {
                 .requestMatchers("/auth/verify-password").authenticated()
                 .requestMatchers("/auth/me/**").authenticated()
 
-                // Public auth endpoints (login, register, etc.)
+                // Public auth endpoints (login, register, csrf-token bootstrap, etc.)
+                .requestMatchers("/auth/csrf-token").permitAll()
                 .requestMatchers("/auth/**").permitAll()
 
                 // Swagger / OpenAPI
@@ -218,22 +251,22 @@ public class SecurityConfig {
 
                 // Hospitals / Staff / Departments / Roles (specific before broad)
                 // GET /hospitals and /hospitals/{id} — readable by all clinical roles
-                .requestMatchers(HttpMethod.GET, "/hospitals", "/hospitals/")
+                .requestMatchers(HttpMethod.GET, API_HOSPITALS, API_HOSPITALS + "/")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR)
-                .requestMatchers(HttpMethod.GET, "/hospitals/{id}")
+                .requestMatchers(HttpMethod.GET, API_HOSPITALS + "/{id}")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR)
-                .requestMatchers(HttpMethod.GET, "/hospitals/**")
+                .requestMatchers(HttpMethod.GET, API_HOSPITALS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR)
-                .requestMatchers(org.springframework.http.HttpMethod.GET, "/me/hospital")
+                .requestMatchers(HttpMethod.GET, "/me/hospital")
                 .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
                 // POST/PUT/DELETE /hospitals/** — super admin only
-                .requestMatchers(HttpMethod.POST, "/hospitals/**")
+                .requestMatchers(HttpMethod.POST, API_HOSPITALS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN)
-                .requestMatchers(HttpMethod.PUT, "/hospitals/**")
+                .requestMatchers(HttpMethod.PUT, API_HOSPITALS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN)
-                .requestMatchers(HttpMethod.PATCH, "/hospitals/**")
+                .requestMatchers(HttpMethod.PATCH, API_HOSPITALS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN)
-                .requestMatchers(HttpMethod.DELETE, "/hospitals/**")
+                .requestMatchers(HttpMethod.DELETE, API_HOSPITALS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN)
 
                 // Organizations and security management
@@ -310,11 +343,6 @@ public class SecurityConfig {
 
                 // Public access to uploaded profile images (served as static assets)
                 .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
-
-                // SockJS / STOMP WebSocket handshake — must be permitted without a JWT.
-                // SockJS performs an unauthenticated HTTP GET /ws-chat/info to negotiate
-                // the transport before the STOMP CONNECT frame (which carries the token)
-                // is sent.  Blocking it here causes a 401 before the connection can open.
                 .requestMatchers("/ws-chat/**").permitAll()
 
                 .anyRequest().authenticated()
@@ -337,10 +365,31 @@ public class SecurityConfig {
                 }
             }, UsernamePasswordAuthenticationFilter.class);
 
+        // ── Hardened HTTP response headers ──────────────────────────────────
+        http.headers(headers -> headers
+            .contentTypeOptions(cto -> {})   // X-Content-Type-Options: nosniff
+            .frameOptions(fo -> fo.deny())   // X-Frame-Options: DENY
+            .httpStrictTransportSecurity(hsts -> hsts
+                .includeSubDomains(true)
+                .maxAgeInSeconds(63072000L)
+            )
+            .contentSecurityPolicy(csp -> csp
+                .policyDirectives(
+                    "default-src 'self'; " +
+                    "script-src 'self'; " +
+                    "style-src 'self' 'unsafe-inline'; " +
+                    "img-src 'self' data:; " +
+                    "font-src 'self'; " +
+                    "connect-src 'self'; " +
+                    "frame-ancestors 'none'; " +
+                    "form-action 'self';"
+                )
+            )
+            .referrerPolicy(rp -> rp
+                .policy(org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)
+            )
+        );
+
         return http.build();
     }
-
-    // Chain #2 removed — with context-path=/api, Chain #1's securityMatcher("/**")
-    // already handles all requests.  Static assets are served by the Angular SPA
-    // on a separate port, not through the Spring Boot backend.
 }

@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -43,6 +44,7 @@ class RoleControllerIntegrationTest extends BaseIT {
         );
 
         MvcResult createResult = mockMvc.perform(post("/roles")
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsBytes(createPayload)))
             .andExpect(status().isCreated())
@@ -58,6 +60,7 @@ class RoleControllerIntegrationTest extends BaseIT {
         );
 
         mockMvc.perform(put("/roles/" + id)
+                .with(csrf())
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsBytes(updatePayload)))
             .andExpect(status().isOk());
