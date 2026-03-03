@@ -185,7 +185,8 @@ public class SecurityConfig {
                     new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "GET"),
                     new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "HEAD"),
                     new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "OPTIONS"),
-                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "TRACE")
+                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "TRACE"),
+                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/chat/**")
                 )
             )
             .exceptionHandling(ex -> ex
@@ -199,6 +200,8 @@ public class SecurityConfig {
 
                 // Credential / token endpoints require authentication
                 .requestMatchers("/auth/credentials/**").authenticated()
+                // /auth/token/refresh is public — called when access token has already expired
+                .requestMatchers(HttpMethod.POST, "/auth/token/refresh").permitAll()
                 .requestMatchers("/auth/token/**").authenticated()
                 .requestMatchers("/auth/logout").authenticated()
                 .requestMatchers("/auth/verify-password").authenticated()
