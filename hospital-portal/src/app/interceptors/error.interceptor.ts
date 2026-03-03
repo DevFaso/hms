@@ -21,6 +21,16 @@ const SILENT_403_PATTERNS = [
   /\/notifications(\?|$|\/)/, // GET /notifications (notification panel)
 ];
 
+/**
+ * Fire-and-forget requests that should NOT trigger a logout or redirect on 401.
+ * These are best-effort background calls; a 401 here means the token expired
+ * between the triggering request (which succeeded) and this side-effect call.
+ * The user should remain on their current page; the primary action succeeded.
+ */
+const SILENT_401_PATTERNS = [
+  /\/chat\/mark-read\//, // PUT /chat/mark-read/{sender}/{recipient} — best-effort read receipt
+];
+
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const router = inject(Router);
   const auth = inject(AuthService);
@@ -28,9 +38,13 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
       if (error.status === 401) {
-        // Don't auto-logout on failed lock-screen password verification
+        // Don't auto-logout on failed lock-screen password verification.
+        // Also skip logout for best-effort background calls (e.g. mark-read)
+        // where the token may have expired between the triggering request and
+        // this side-effect call — the user should stay on their current page.
         const isVerifyPassword = req.url.includes('/auth/verify-password');
-        if (!isVerifyPassword) {
+        const isSilentBackground = SILENT_401_PATTERNS.some((p) => p.test(req.url));
+        if (!isVerifyPassword && !isSilentBackground) {
           auth.logout();
           void router.navigate(['/login']);
         }
