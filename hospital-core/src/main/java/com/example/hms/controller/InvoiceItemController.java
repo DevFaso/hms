@@ -74,10 +74,13 @@ public class InvoiceItemController {
     @DeleteMapping("/{id}")
     @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Delete Invoice Item")
-    public ResponseEntity<String> deleteInvoiceItem(
+    public ResponseEntity<Object> deleteInvoiceItem(
         @PathVariable UUID id,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         invoiceItemService.deleteInvoiceItem(id, locale);
-        return ResponseEntity.ok(messageSource.getMessage("invoiceitem.deleted", new Object[]{id}, locale));
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.TEXT_PLAIN)
+                .body(org.springframework.web.util.HtmlUtils.htmlEscape(
+                        messageSource.getMessage("invoiceitem.deleted", new Object[]{id}, locale)));
     }
 }
