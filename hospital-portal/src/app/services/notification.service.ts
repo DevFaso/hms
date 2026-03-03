@@ -84,7 +84,10 @@ export class NotificationService {
             this.stompClient?.subscribe('/topic/notifications', (frame: IMessage) => {
               try {
                 const notification = JSON.parse(frame.body) as Notification;
-                if (!notification.recipientUsername || notification.recipientUsername === username) {
+                if (
+                  !notification.recipientUsername ||
+                  notification.recipientUsername === username
+                ) {
                   this.notificationSubject.next(notification);
                 }
               } catch {
