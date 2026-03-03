@@ -93,7 +93,9 @@ export class ChatComponent implements OnInit {
     this.chatService.getHistory(this.currentUserId, conv.conversationUserId).subscribe({
       next: (msgs) => {
         this.messages.set(msgs ?? []);
-        this.chatService.markRead(conv.conversationUserId, this.currentUserId).subscribe();
+        this.chatService
+          .markRead(conv.conversationUserId, this.currentUserId)
+          .subscribe({ error: (_e) => _e });
         // Update unread count in sidebar
         this.conversations.update((list) =>
           list.map((c) =>
