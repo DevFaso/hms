@@ -148,30 +148,10 @@ public class SecurityConfig {
         return source;
     }
 
-    // =====================================================================
-    // Chain #1 — Primary API security (all paths inside context-path /api)
-    // =====================================================================
-
-    /**
-     * Primary API security filter chain.
-     *
-     * <p>CSRF strategy: Double-Submit Cookie pattern. Spring Security writes an
-     * {@code XSRF-TOKEN} cookie (HttpOnly=false) on the first GET response so the
-     * Angular SPA can read it. Angular's {@code CsrfInterceptor} echoes the value
-     * back as {@code X-XSRF-TOKEN} on every state-mutating request. Read-only HTTP
-     * verbs (GET/HEAD/OPTIONS/TRACE) are exempt as they cannot cause side effects.
-     * Pure Bearer-token requests are inherently CSRF-safe, but the cookie repository
-     * adds defence-in-depth for any future form/cookie authentication path and fully
-     * satisfies OWASP and CodeQL (java/spring-disabled-csrf-protection) requirements.
-     */
     @Bean
     @Order(1)
     public SecurityFilterChain apiSecurity(HttpSecurity http) throws Exception {
         var csrfTokenRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
-        // Explicitly set cookie path to "/" so the XSRF-TOKEN cookie is visible
-        // to the Angular SPA served at "/", regardless of the server context-path
-        // (/api). Without this, the cookie inherits the context-path and the SPA
-        // cannot read it from document.cookie, causing 403s on mutating requests.
         csrfTokenRepo.setCookiePath("/");
         var csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
 
