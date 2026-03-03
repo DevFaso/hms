@@ -31,6 +31,14 @@ export class NotificationService {
   private readonly maxReconnectDelay = 60_000; // cap at 60 s
   private readonly baseReconnectDelay = 5_000; // start at 5 s
 
+  /**
+   * Monotonically increasing generation counter. Incremented on every
+   * connectWebSocket() and disconnectWebSocket() call. The async .then()
+   * callback captures the generation at call-time and bails out if it has
+   * become stale — preventing a reconnect after logout / component destroy.
+   */
+  private connectGeneration = 0;
+
   getNotifications(params?: {
     read?: boolean;
     page?: number;
@@ -63,10 +71,19 @@ export class NotificationService {
     // Build the SockJS URL pointing at /api/ws-chat (context path included).
     const sockUrl = '/api/ws-chat';
 
+    // Capture the generation *before* the async gap. If disconnectWebSocket()
+    // is called while the import() is in flight, the generation increments and
+    // the stale .then() callback bails out without creating a new client.
+    const generation = ++this.connectGeneration;
+
     // Lazily import sockjs-client to avoid "Dynamic require is not supported"
     // crashes in Vite/ESM at module evaluation time.
     void import('sockjs-client')
       .then((mod) => {
+        // Bail out if this connect attempt has been superseded by a disconnect
+        // (or a subsequent connect) that occurred while the import was resolving.
+        if (generation !== this.connectGeneration) return;
+
         // The CJS default export may be wrapped under `.default` by ESM interop.
         const SockJSCtor = (mod.default ?? mod) as new (url: string) => WebSocket;
 
@@ -143,6 +160,8 @@ export class NotificationService {
   }
 
   disconnectWebSocket(): void {
+    // Invalidate any in-flight connectWebSocket() async chain before tearing down.
+    this.connectGeneration++;
     this.stompClient?.deactivate().catch(() => undefined);
     this.stompClient = null;
     this.reconnectAttempts = 0;

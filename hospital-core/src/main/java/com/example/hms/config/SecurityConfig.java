@@ -168,6 +168,11 @@ public class SecurityConfig {
     @Order(1)
     public SecurityFilterChain apiSecurity(HttpSecurity http) throws Exception {
         var csrfTokenRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        // Explicitly set cookie path to "/" so the XSRF-TOKEN cookie is visible
+        // to the Angular SPA served at "/", regardless of the server context-path
+        // (/api). Without this, the cookie inherits the context-path and the SPA
+        // cannot read it from document.cookie, causing 403s on mutating requests.
+        csrfTokenRepo.setCookiePath("/");
         var csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
 
         http

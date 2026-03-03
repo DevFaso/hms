@@ -29,8 +29,8 @@ export class AppComponent implements OnInit {
   private readonly http = inject(HttpClient);
 
   ngOnInit(): void {
-    // Bootstrap the XSRF-TOKEN cookie from the server so that the Angular
-    // CsrfInterceptor can attach X-XSRF-TOKEN on subsequent mutating requests.
+    // Bootstrap the XSRF-TOKEN cookie from the server so that the custom
+    // CSRF interceptor can attach X-XSRF-TOKEN on subsequent mutating requests.
     // This is a fire-and-forget GET; errors are intentionally swallowed because
     // the app can function (degraded CSRF protection) even if the backend is
     // temporarily unreachable during bootstrap.

@@ -40,12 +40,27 @@ export const csrfInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, ne
     return next(req);
   }
 
+  // Never attach the CSRF token to cross-origin requests — doing so would
+  // leak it to third-party endpoints. Relative URLs are always same-origin;
+  // absolute URLs are only safe when their origin matches the current page.
+  if (req.url.startsWith('http://') || req.url.startsWith('https://')) {
+    try {
+      const reqOrigin = new URL(req.url).origin;
+      if (globalThis.window !== undefined && reqOrigin !== globalThis.window.location.origin) {
+        return next(req);
+      }
+    } catch {
+      // Malformed URL — skip the token rather than leaking it.
+      return next(req);
+    }
+  }
+
   const token = getCookieValue('XSRF-TOKEN');
   if (!token) {
     return next(req);
   }
 
-  // Clone and attach the token — never send it on cross-origin requests.
+  // Clone and attach the token — only reached for same-origin mutating requests.
   const secured = req.clone({
     setHeaders: { 'X-XSRF-TOKEN': token },
   });
