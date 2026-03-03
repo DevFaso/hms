@@ -13,7 +13,9 @@ import org.springframework.context.MessageSource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -88,7 +90,10 @@ public class PrescriptionController {
         @PathVariable UUID id,
         Locale locale) {
         prescriptionService.deletePrescription(id, locale);
-        String message = messageSource.getMessage("prescription.deleted", new Object[]{id}, locale);
-        return ResponseEntity.ok(message);
+        String rawMessage = messageSource.getMessage("prescription.deleted", new Object[]{id}, locale);
+        String safeMessage = HtmlUtils.htmlEscape(rawMessage);
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(safeMessage);
     }
 }

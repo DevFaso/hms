@@ -10,7 +10,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -110,7 +112,10 @@ public class PatientInsuranceController {
         Locale locale
     ) {
         patientInsuranceService.deletePatientInsurance(insuranceId, locale);
-        String msg = messageSource.getMessage("patientinsurance.deleted", new Object[]{insuranceId}, locale);
-        return ResponseEntity.ok(msg);
+        String rawMsg = messageSource.getMessage("patientinsurance.deleted", new Object[]{insuranceId}, locale);
+        String safeMsg = HtmlUtils.htmlEscape(rawMsg);
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(safeMsg);
     }
 }
