@@ -1,8 +1,22 @@
-import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import {
+  HttpInterceptorFn,
+  HttpErrorResponse,
+  HttpHandlerFn,
+  HttpRequest,
+  HttpEvent,
+} from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { catchError, throwError } from 'rxjs';
-
+import {
+  BehaviorSubject,
+  EMPTY,
+  Observable,
+  catchError,
+  filter,
+  switchMap,
+  take,
+  throwError,
+} from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 
 /**
@@ -22,14 +36,74 @@ const SILENT_403_PATTERNS = [
 ];
 
 /**
- * Fire-and-forget requests that should NOT trigger a logout or redirect on 401.
- * These are best-effort background calls; a 401 here means the token expired
- * between the triggering request (which succeeded) and this side-effect call.
- * The user should remain on their current page; the primary action succeeded.
+ * Fire-and-forget requests that should NOT trigger a logout or redirect on 401
+ * even if the silent refresh below also fails.  These are best-effort background
+ * calls where failing silently is preferable to ejecting the user.
  */
 const SILENT_401_PATTERNS = [
   /\/chat\/mark-read\//, // PUT /chat/mark-read/{sender}/{recipient} — best-effort read receipt
 ];
+
+/**
+ * Token refresh state — shared across concurrent requests so only ONE refresh
+ * call goes to the server at a time (all others queue and retry with the new token).
+ */
+let isRefreshing = false;
+const refreshDone$ = new BehaviorSubject<string | null>(null);
+
+/**
+ * Attempt a silent token refresh and then replay the original request.
+ * Returns EMPTY (swallows the error) if the refresh also fails AND the URL
+ * matches a SILENT_401_PATTERNS entry.
+ */
+function tryRefreshAndRetry(
+  req: HttpRequest<unknown>,
+  next: HttpHandlerFn,
+  auth: AuthService,
+  router: Router,
+): Observable<HttpEvent<unknown>> {
+  const isSilentBackground = SILENT_401_PATTERNS.some((p) => p.test(req.url));
+
+  if (!isRefreshing) {
+    isRefreshing = true;
+    refreshDone$.next(null); // reset
+
+    return auth.refreshTokenRequest().pipe(
+      switchMap((tokens) => {
+        isRefreshing = false;
+        auth.setToken(tokens.accessToken);
+        if (tokens.refreshToken) {
+          auth.setRefreshToken(tokens.refreshToken);
+        }
+        refreshDone$.next(tokens.accessToken);
+
+        // Replay the original request with the new token
+        const retried = req.clone({
+          setHeaders: { Authorization: `Bearer ${tokens.accessToken}` },
+        });
+        return next(retried);
+      }),
+      catchError((refreshError) => {
+        isRefreshing = false;
+        refreshDone$.next(null);
+        // Refresh token is also expired / invalid → full logout
+        auth.logout();
+        void router.navigate(['/login']);
+        return isSilentBackground ? EMPTY : throwError(() => refreshError);
+      }),
+    );
+  }
+
+  // Another request is already refreshing — wait for the new token then retry
+  return refreshDone$.pipe(
+    filter((t): t is string => t !== null),
+    take(1),
+    switchMap((newToken) => {
+      const retried = req.clone({ setHeaders: { Authorization: `Bearer ${newToken}` } });
+      return next(retried);
+    }),
+  );
+}
 
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const router = inject(Router);
@@ -38,11 +112,19 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
       if (error.status === 401) {
-        // Don't auto-logout on failed lock-screen password verification.
-        // Also skip logout for best-effort background calls (e.g. mark-read)
-        // where the token may have expired between the triggering request and
-        // this side-effect call — the user should stay on their current page.
+        // Never try to refresh the refresh-token request itself — that would
+        // cause infinite recursion and means the session is truly over.
+        const isRefreshCall = req.url.includes('/auth/token/refresh');
         const isVerifyPassword = req.url.includes('/auth/verify-password');
+
+        if (!isRefreshCall && !isVerifyPassword && auth.getRefreshToken()) {
+          // We have a refresh token — attempt silent renewal and replay.
+          return tryRefreshAndRetry(req, next, auth, router);
+        }
+
+        // No refresh token (or this IS the refresh call / verify-password).
+        // Fall back to the previous behaviour: silent-fail for background calls,
+        // logout+redirect for everything else.
         const isSilentBackground = SILENT_401_PATTERNS.some((p) => p.test(req.url));
         if (!isVerifyPassword && !isSilentBackground) {
           auth.logout();

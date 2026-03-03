@@ -1,11 +1,37 @@
-import { HttpInterceptorFn } from '@angular/common/http';
+import { HttpEvent, HttpHandlerFn, HttpInterceptorFn, HttpRequest } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { EMPTY } from 'rxjs';
+import { EMPTY, Observable } from 'rxjs';
 
 import { environment } from '../../environments/environment';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
+
+/**
+ * Handle an expired access token before the request is sent.
+ *
+ * - No refresh token available → logout immediately and cancel the request.
+ * - Refresh token available → let the request go through (the error interceptor
+ *   will catch the 401 and transparently refresh + retry).
+ *
+ * Returns an Observable when the caller should return that observable instead of
+ * proceeding with normal token attachment.
+ */
+function handleExpiredToken(
+  auth: AuthService,
+  router: Router,
+  modified: HttpRequest<unknown>,
+  next: HttpHandlerFn,
+): Observable<HttpEvent<unknown>> {
+  if (!auth.getRefreshToken()) {
+    auth.logout();
+    void router.navigate(['/login']);
+    return EMPTY;
+  }
+  // Refresh token exists — send the request as-is (without attaching the
+  // expired bearer). The error interceptor will handle the 401 refresh cycle.
+  return next(modified);
+}
 
 export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
   const auth = inject(AuthService);
@@ -21,13 +47,8 @@ export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
     return next(req);
   }
 
-  // Normalize path
-  let path = req.url;
-
-  // Prevent double /api/api prefix
-  if (/^\/?api\//i.test(path)) {
-    path = path.replace(/^\/?api\//i, '/');
-  }
+  // Normalize path — prevent double /api/api prefix
+  const path = /^\/?api\//i.test(req.url) ? req.url.replace(/^\/?api\//i, '/') : req.url;
 
   // Build final URL
   const finalUrl = `${environment.apiBase}${path.startsWith('/') ? path : '/' + path}`;
@@ -36,17 +57,13 @@ export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
 
   // Add Authorization header for API requests (skip auth endpoints)
   if (!/\/auth\/login(?:[/?#]|$)/i.test(modified.url)) {
-    const headers: Record<string, string> = {};
     const token = auth.getToken();
 
-    // If we have a token and it is expired, proactively redirect to login
-    // instead of sending a request we know will fail with 401.
     if (token && auth.isExpired(token)) {
-      auth.logout();
-      void router.navigate(['/login']);
-      return EMPTY;
+      return handleExpiredToken(auth, router, modified, next);
     }
 
+    const headers: Record<string, string> = {};
     if (token && !modified.headers.has('Authorization')) {
       headers['Authorization'] = `Bearer ${token}`;
     }

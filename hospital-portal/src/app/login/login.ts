@@ -178,6 +178,12 @@ export class Login implements OnInit {
 
           this.auth.setToken(token, this.remember);
 
+          // Persist the refresh token so the error interceptor can silently
+          // renew the access token when it expires, avoiding logout mid-session.
+          if (res.refreshToken) {
+            this.auth.setRefreshToken(res.refreshToken, this.remember);
+          }
+
           // Hydrate role context immediately so the interceptor sends X-Hospital-Id
           // on all subsequent requests (including the very first one after redirect).
           const jwtRoles = this.auth.getRoles();
