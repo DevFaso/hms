@@ -248,4 +248,32 @@ class AuthControllerTest {
                         .content(objectMapper.writeValueAsString(req)))
                 .andExpect(status().isBadRequest());
     }
+
+    // =====================================================================
+    // GET /auth/csrf-token  (CSRF bootstrap)
+    // =====================================================================
+
+    @Test
+    void csrfToken_withTokenAttribute_returns204() throws Exception {
+        // Simulate Spring Security having set the CSRF token attribute on the request.
+        // The endpoint touches token.getToken() so the CookieCsrfTokenRepository writes
+        // the XSRF-TOKEN Set-Cookie header, then returns 204 No Content.
+        org.springframework.security.web.csrf.DefaultCsrfToken csrfToken =
+            new org.springframework.security.web.csrf.DefaultCsrfToken(
+                "X-XSRF-TOKEN", "_csrf", "test-csrf-value");
+
+        mockMvc.perform(get("/auth/csrf-token")
+                        .requestAttr(
+                            org.springframework.security.web.csrf.CsrfToken.class.getName(),
+                            csrfToken))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void csrfToken_withoutTokenAttribute_returns204() throws Exception {
+        // When filters are disabled (as in this WebMvcTest slice) the attribute is absent.
+        // The endpoint must handle null gracefully and still return 204.
+        mockMvc.perform(get("/auth/csrf-token"))
+                .andExpect(status().isNoContent());
+    }
 }

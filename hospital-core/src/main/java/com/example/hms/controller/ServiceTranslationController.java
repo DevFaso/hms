@@ -25,6 +25,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+import org.springframework.http.MediaType;
+import org.springframework.web.util.HtmlUtils;
+
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 
@@ -98,13 +101,21 @@ public class ServiceTranslationController {
                     @ApiResponse(responseCode = "404", description = "Translation not found.")
             }
     )
-    @DeleteMapping("/{id}")
+    @DeleteMapping(value = "/{id}", produces = MediaType.TEXT_PLAIN_VALUE)
     @PreAuthorize("hasRole('HOSPITAL_ADMIN')")
     public ResponseEntity<String> deleteTranslation(
             @Parameter(description = "Translation ID") @PathVariable UUID id,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
         translationService.deleteTranslation(id, locale);
-        String message = messageSource.getMessage("translation.deleted", new Object[]{id}, locale);
-        return ResponseEntity.ok(message);
+        // UUID.toString() is safe (hex + hyphens only), but we HTML-encode both
+        // the static message and the interpolated id to prevent any reflected-XSS
+        // path that could be triggered if the message template were ever tampered
+        // with, and to satisfy CodeQL's java/xss taint-flow check definitively.
+        String rawMessage = messageSource.getMessage("translation.deleted", new Object[]{id}, locale);
+        String safeMessage = HtmlUtils.htmlEscape(rawMessage);
+        return ResponseEntity
+                .ok()
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(safeMessage);
     }
 }

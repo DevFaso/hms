@@ -6,12 +6,13 @@ import { provideTranslateHttpLoader } from '@ngx-translate/http-loader';
 
 import { routes } from './app.routes';
 import { apiPrefixInterceptor } from './interceptors/auth.interceptor';
+import { csrfInterceptor } from './interceptors/csrf.interceptor';
 import { errorInterceptor } from './interceptors/error.interceptor';
 
 export const appConfig: ApplicationConfig = {
   providers: [
     provideRouter(routes),
-    provideHttpClient(withInterceptors([apiPrefixInterceptor, errorInterceptor])),
+    provideHttpClient(withInterceptors([apiPrefixInterceptor, csrfInterceptor, errorInterceptor])),
     provideTranslateService({
       fallbackLang: 'en',
     }),
