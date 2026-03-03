@@ -1,9 +1,12 @@
 import { isPlatformBrowser } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, PLATFORM_ID, signal } from '@angular/core';
+import { Observable } from 'rxjs';
 
 import { RoleContextService } from '../core/role-context.service';
 
 const ACCESS_TOKEN_KEY = 'auth_token';
+const REFRESH_TOKEN_KEY = 'auth_refresh_token';
 const USER_PROFILE_KEY = 'user_profile';
 
 export interface LoginUserProfile {
@@ -55,6 +58,7 @@ export class AuthService {
 
   private readonly roleContext = inject(RoleContextService);
   private readonly platformId = inject(PLATFORM_ID);
+  private readonly http = inject(HttpClient);
   private readonly isBrowser = isPlatformBrowser(this.platformId);
 
   /** Reactive signal that updates whenever setUserProfile() is called. */
@@ -93,6 +97,55 @@ export class AuthService {
     } catch {
       // Storage not available
     }
+  }
+
+  // ---------- Refresh Token ----------
+  getRefreshToken(): string | null {
+    if (!this.isBrowser) return null;
+    try {
+      return (
+        localStorage.getItem(REFRESH_TOKEN_KEY) || sessionStorage.getItem(REFRESH_TOKEN_KEY) || null
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  setRefreshToken(token: string, remember = true): void {
+    if (!this.isBrowser) return;
+    try {
+      if (remember) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, token);
+      } else {
+        sessionStorage.setItem(REFRESH_TOKEN_KEY, token);
+      }
+    } catch {
+      // Storage not available
+    }
+  }
+
+  clearRefreshToken(): void {
+    if (!this.isBrowser) return;
+    try {
+      localStorage.removeItem(REFRESH_TOKEN_KEY);
+      sessionStorage.removeItem(REFRESH_TOKEN_KEY);
+    } catch {
+      // Storage not available
+    }
+  }
+
+  /**
+   * Call POST /api/auth/token/refresh with the stored refresh token.
+   * Returns an Observable of the new token pair.
+   * Note: this uses a direct URL with /api prefix so the apiPrefixInterceptor
+   * does not add a second prefix. We explicitly avoid the interceptor chain
+   * that would check for an expired access token (which is why we're here).
+   */
+  refreshTokenRequest(): Observable<{ accessToken: string; refreshToken: string }> {
+    const refreshToken = this.getRefreshToken();
+    return this.http.post<{ accessToken: string; refreshToken: string }>('/auth/token/refresh', {
+      refreshToken,
+    });
   }
 
   // ---------- User Profile ----------
@@ -302,6 +355,7 @@ export class AuthService {
 
   logout(): void {
     this.clearToken();
+    this.clearRefreshToken();
     this.clearUserProfile();
     // Clear idle lock state so the lock screen doesn't appear on next login
     if (this.isBrowser) {

@@ -276,4 +276,143 @@ class AuthControllerTest {
         mockMvc.perform(get("/auth/csrf-token"))
                 .andExpect(status().isNoContent());
     }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // POST /auth/token/refresh
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    @Test
+    void refreshToken_nullBody_returns401() throws Exception {
+        // Sending {} (no refreshToken key) → body.get("refreshToken") == null → 401
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Refresh token is required."));
+    }
+
+    @Test
+    void refreshToken_blankToken_returns401() throws Exception {
+        // refreshToken present but empty string → isBlank() == true → 401
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Refresh token is required."));
+    }
+
+    @Test
+    void refreshToken_missingBody_returns401() throws Exception {
+        // No body at all (required=false) → body == null → 401
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Refresh token is required."));
+    }
+
+    @Test
+    void refreshToken_invalidToken_returns401() throws Exception {
+        // validateToken() returns false → token invalid/expired → 401
+        when(jwtTokenProvider.validateToken("bad.token.here")).thenReturn(false);
+
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"bad.token.here\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message")
+                        .value(org.hamcrest.Matchers.containsString("invalid or has expired")));
+    }
+
+    @Test
+    void refreshToken_userNotFound_returns401() throws Exception {
+        // Valid token but no matching user → 401
+        when(jwtTokenProvider.validateToken("valid.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.getUsernameFromJWT("valid.refresh.token"))
+                .thenReturn("ghost@example.com");
+        when(userRepository.findByUsername("ghost@example.com"))
+                .thenReturn(java.util.Optional.empty());
+
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"valid.refresh.token\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("User account not found or inactive."));
+    }
+
+    @Test
+    void refreshToken_inactiveUser_returns401() throws Exception {
+        // Valid token, user found but isActive == false → 401
+        com.example.hms.model.User inactiveUser = com.example.hms.model.User.builder()
+                .username("inactive@example.com")
+                .build();
+        // Override @Builder.Default isActive=true → use toBuilder
+        inactiveUser = inactiveUser.toBuilder().isActive(false).build();
+
+        when(jwtTokenProvider.validateToken("valid.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.getUsernameFromJWT("valid.refresh.token"))
+                .thenReturn("inactive@example.com");
+        when(userRepository.findByUsername("inactive@example.com"))
+                .thenReturn(java.util.Optional.of(inactiveUser));
+
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"valid.refresh.token\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("User account not found or inactive."));
+    }
+
+    @Test
+    void refreshToken_validToken_returns200WithNewTokens() throws Exception {
+        // Happy-path: valid token, active user, active assignment → 200 with new tokens
+        java.util.UUID userId = java.util.UUID.randomUUID();
+        com.example.hms.model.User activeUser = com.example.hms.model.User.builder()
+                .username("doctor@example.com")
+                .build();
+        // id is in BaseEntity; set via reflection since there's no setter
+        org.springframework.test.util.ReflectionTestUtils.setField(activeUser, "id", userId);
+
+        com.example.hms.model.Role role = com.example.hms.model.Role.builder()
+                .code("ROLE_DOCTOR")
+                .build();
+        com.example.hms.model.UserRoleHospitalAssignment assignment =
+                com.example.hms.model.UserRoleHospitalAssignment.builder()
+                        .user(activeUser)
+                        .role(role)
+                        .active(true)
+                        .assignedAt(java.time.LocalDateTime.now())
+                        .build();
+
+        long nowMs      = System.currentTimeMillis();
+        long accessExp  = nowMs + 86_400_000L;   // +24 h
+        long refreshExp = nowMs + 7 * 86_400_000L; // +7 d
+
+        when(jwtTokenProvider.validateToken("old.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.getUsernameFromJWT("old.refresh.token"))
+                .thenReturn("doctor@example.com");
+        when(userRepository.findByUsername("doctor@example.com"))
+                .thenReturn(java.util.Optional.of(activeUser));
+        when(assignmentRepository.findByUser(activeUser))
+                .thenReturn(java.util.Set.of(assignment));
+        when(jwtTokenProvider.generateAccessToken(
+                org.mockito.ArgumentMatchers.any(
+                        com.example.hms.security.TokenUserDescriptor.class)))
+                .thenReturn("new.access.token");
+        when(jwtTokenProvider.generateRefreshToken(
+                org.mockito.ArgumentMatchers.any(
+                        org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class)))
+                .thenReturn("new.refresh.token");
+        when(jwtTokenProvider.getExpiration("new.access.token"))
+                .thenReturn(new java.util.Date(accessExp));
+        when(jwtTokenProvider.getExpiration("new.refresh.token"))
+                .thenReturn(new java.util.Date(refreshExp));
+
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"refreshToken\":\"old.refresh.token\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("new.access.token"))
+                .andExpect(jsonPath("$.refreshToken").value("new.refresh.token"))
+                .andExpect(jsonPath("$.accessTokenExpiresAt").value(accessExp))
+                .andExpect(jsonPath("$.refreshTokenExpiresAt").value(refreshExp));
+    }
 }

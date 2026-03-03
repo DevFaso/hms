@@ -314,6 +314,85 @@ public class AuthController {
     }
 
     /**
+     * Silent token refresh.
+     *
+     * <p>Accepts a still-valid refresh token and issues a new short-lived access token.
+     * The refresh token itself is also rotated so each use produces a fresh pair.
+     * This endpoint is intentionally <strong>public</strong> (no JWT required) because
+     * it is called precisely when the access token has expired.
+     *
+     * <p>Security rationale: the refresh token is signed with the same HMAC-SHA secret and
+     * carries its own {@code exp} claim, so a tampered or expired refresh token is rejected
+     * by {@link JwtTokenProvider#validateToken}.
+     */
+    @PostMapping("/token/refresh")
+    @Operation(
+        summary = "Refresh access token",
+        description = "Exchange a valid refresh token for a new access token + rotated refresh token.")
+    @ApiResponse(responseCode = "200", description = "Tokens refreshed")
+    @ApiResponse(responseCode = "401", description = "Refresh token missing, invalid, or expired")
+    public ResponseEntity<Object> refreshToken(
+            @RequestBody(required = false) java.util.Map<String, String> body) {
+
+        String refreshToken = body != null ? body.get("refreshToken") : null;
+        if (refreshToken == null || refreshToken.isBlank()) {
+            log.warn("🔄 [REFRESH] Missing refreshToken in request body");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Refresh token is required."));
+        }
+
+        if (!jwtTokenProvider.validateToken(refreshToken)) {
+            log.warn("🔄 [REFRESH] Invalid or expired refresh token");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Refresh token is invalid or has expired. Please log in again."));
+        }
+
+        String username = jwtTokenProvider.getUsernameFromJWT(refreshToken);
+        var user = userRepository.findByUsername(username).orElse(null);
+        if (user == null || !user.isActive()) {
+            log.warn("🔄 [REFRESH] User '{}' not found or inactive", username);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("User account not found or inactive."));
+        }
+
+        // Resolve current roles from tenant assignments (authoritative source)
+        List<String> roles = assignmentRepository.findByUser(user).stream()
+                .filter(a -> Boolean.TRUE.equals(a.getActive()))
+                .map(a -> a.getRole().getCode())
+                .distinct()
+                .toList();
+
+        var descriptor = new com.example.hms.security.TokenUserDescriptor(user.getId(), username, roles);
+        String newAccessToken  = jwtTokenProvider.generateAccessToken(descriptor);
+
+        // Rotate the refresh token so each use yields a fresh one
+        var refreshAuth = new UsernamePasswordAuthenticationToken(
+                new com.example.hms.security.CustomUserDetails(user,
+                        roles.stream()
+                             .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                             .collect(java.util.stream.Collectors.toSet())),
+                null,
+                roles.stream()
+                     .map(org.springframework.security.core.authority.SimpleGrantedAuthority::new)
+                     .toList());
+        String newRefreshToken = jwtTokenProvider.generateRefreshToken(refreshAuth);
+
+        long nowMs      = System.currentTimeMillis();
+        long accessExp  = jwtTokenProvider.getExpiration(newAccessToken).getTime();
+        long refreshExp = jwtTokenProvider.getExpiration(newRefreshToken).getTime();
+
+        log.info("🔄 [REFRESH] Tokens rotated for user='{}'", username);
+
+        return ResponseEntity.ok(JwtResponse.builder()
+                .accessToken(newAccessToken)
+                .refreshToken(newRefreshToken)
+                .issuedAt(nowMs)
+                .accessTokenExpiresAt(accessExp)
+                .refreshTokenExpiresAt(refreshExp)
+                .build());
+    }
+
+    /**
      * Verify current user's password without issuing new tokens.
      * Used by the lock-screen to re-authenticate when the session is idle.
      * Requires a valid JWT (user is already logged in but screen is locked).
