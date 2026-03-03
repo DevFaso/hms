@@ -7,7 +7,16 @@ import {
 } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { Router } from '@angular/router';
-import { BehaviorSubject, EMPTY, Observable, catchError, filter, switchMap, take, throwError } from 'rxjs';
+import {
+  BehaviorSubject,
+  EMPTY,
+  Observable,
+  catchError,
+  filter,
+  switchMap,
+  take,
+  throwError,
+} from 'rxjs';
 import { AuthService } from '../auth/auth.service';
 
 /**
@@ -69,7 +78,9 @@ function tryRefreshAndRetry(
         refreshDone$.next(tokens.accessToken);
 
         // Replay the original request with the new token
-        const retried = req.clone({ setHeaders: { Authorization: `Bearer ${tokens.accessToken}` } });
+        const retried = req.clone({
+          setHeaders: { Authorization: `Bearer ${tokens.accessToken}` },
+        });
         return next(retried);
       }),
       catchError((refreshError) => {
@@ -103,7 +114,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
       if (error.status === 401) {
         // Never try to refresh the refresh-token request itself — that would
         // cause infinite recursion and means the session is truly over.
-        const isRefreshCall  = req.url.includes('/auth/token/refresh');
+        const isRefreshCall = req.url.includes('/auth/token/refresh');
         const isVerifyPassword = req.url.includes('/auth/verify-password');
 
         if (!isRefreshCall && !isVerifyPassword && auth.getRefreshToken()) {

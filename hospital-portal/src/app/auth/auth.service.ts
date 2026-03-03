@@ -104,9 +104,7 @@ export class AuthService {
     if (!this.isBrowser) return null;
     try {
       return (
-        localStorage.getItem(REFRESH_TOKEN_KEY) ||
-        sessionStorage.getItem(REFRESH_TOKEN_KEY) ||
-        null
+        localStorage.getItem(REFRESH_TOKEN_KEY) || sessionStorage.getItem(REFRESH_TOKEN_KEY) || null
       );
     } catch {
       return null;
@@ -145,10 +143,9 @@ export class AuthService {
    */
   refreshTokenRequest(): Observable<{ accessToken: string; refreshToken: string }> {
     const refreshToken = this.getRefreshToken();
-    return this.http.post<{ accessToken: string; refreshToken: string }>(
-      '/auth/token/refresh',
-      { refreshToken },
-    );
+    return this.http.post<{ accessToken: string; refreshToken: string }>('/auth/token/refresh', {
+      refreshToken,
+    });
   }
 
   // ---------- User Profile ----------
