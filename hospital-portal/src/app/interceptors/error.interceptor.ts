@@ -76,9 +76,16 @@ function tryRefreshAndRetry(
   }
 
   return refreshDone$.pipe(
-    filter((t): t is string => t !== null && t !== '__REFRESH_FAILED__'),
+    filter((t): t is string => t !== null),
     take(1),
-    switchMap((newToken) => next(cloneWithToken(req, newToken))),
+    switchMap((newToken) => {
+      if (newToken === '__REFRESH_FAILED__') {
+        return throwError(
+          () => new HttpErrorResponse({ status: 401, statusText: 'Refresh failed' }),
+        );
+      }
+      return next(cloneWithToken(req, newToken));
+    }),
   );
 }
 

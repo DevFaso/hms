@@ -29,10 +29,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     List<Appointment> findByPatientPhoneNumberAndHospitalId(@Param("phone") String phone, @Param("hospitalId") UUID hospitalId);
 
     @Query("SELECT a FROM Appointment a JOIN a.patient.hospitalRegistrations r WHERE r.mrn = :mrn")
-    List<Appointment> findByPatientMri(@Param("mrn") String mrn);
+    List<Appointment> findByPatientMrn(@Param("mrn") String mrn);
 
     @Query("SELECT a FROM Appointment a JOIN a.patient.hospitalRegistrations r WHERE r.mrn = :mrn AND a.hospital.id = :hospitalId")
-    List<Appointment> findByPatientMriAndHospitalId(@Param("mrn") String mrn, @Param("hospitalId") UUID hospitalId);
+    List<Appointment> findByPatientMrnAndHospitalId(@Param("mrn") String mrn, @Param("hospitalId") UUID hospitalId);
 
     @Query("SELECT a FROM Appointment a WHERE a.staff.licenseNumber = :number")
     List<Appointment> findByStaffNumber(@Param("number") String number);

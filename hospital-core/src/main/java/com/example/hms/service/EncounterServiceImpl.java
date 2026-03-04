@@ -132,13 +132,13 @@ public class EncounterServiceImpl implements EncounterService {
             throw new BusinessException(messageSource.getMessage(MSG_ENCOUNTER_STAFF_INVALID, null, locale));
         }
 
+        // SECURITY: Determine caller's active hospital once to avoid repeated lookups
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         return encounterRepository.findByStaff_Id(staffId).stream()
-            .filter(e -> {
-                // SECURITY: Only return encounters within caller's active hospital
-                UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-                return activeHospitalId == null // super-admin
-                    || (e.getHospital() != null && activeHospitalId.equals(e.getHospital().getId()));
-            })
+            .filter(e ->
+                activeHospitalId == null // super-admin
+                    || (e.getHospital() != null && activeHospitalId.equals(e.getHospital().getId()))
+            )
             .map(encounterMapper::toEncounterResponseDTO)
             .toList();
     }

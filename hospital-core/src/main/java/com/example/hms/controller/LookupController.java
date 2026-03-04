@@ -56,16 +56,16 @@ public class LookupController {
         return ResponseEntity.ok(appointments.stream().map(this::toAppointmentSummaryDTO).toList());
     }
 
-    // Lookup appointments by patient MRI
+    // Lookup appointments by patient MRN
     @GetMapping("/appointment/patient/mri/{mri}")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientMri(@PathVariable String mri) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<Appointment> appointments;
         if (activeHospitalId != null) {
-            appointments = appointmentRepository.findByPatientMriAndHospitalId(mri, activeHospitalId);
+            appointments = appointmentRepository.findByPatientMrnAndHospitalId(mri, activeHospitalId);
         } else {
-            appointments = appointmentRepository.findByPatientMri(mri);
+            appointments = appointmentRepository.findByPatientMrn(mri);
         }
         return ResponseEntity.ok(appointments.stream().map(this::toAppointmentSummaryDTO).toList());
     }

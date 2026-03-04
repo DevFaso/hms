@@ -710,8 +710,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             log.warn("getAppointmentsByDoctorId: no active hospital context, returning empty");
             return List.of();
         }
-        return appointmentRepository.findByStaff_Id(staffId).stream()
-            .filter(a -> a.getHospital() != null && a.getHospital().getId().equals(activeHospitalId))
+        return appointmentRepository.findByHospital_IdAndStaff_Id(activeHospitalId, staffId).stream()
             .map(appointmentMapper::toAppointmentResponseDTO)
             .toList();
     }

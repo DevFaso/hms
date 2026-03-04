@@ -176,7 +176,9 @@ public class LabOrderServiceImpl implements LabOrderService {
 
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (labOrder.getHospital() != null && !labOrder.getHospital().getId().equals(hospitalId)) {
+        if (hospitalId != null
+                && labOrder.getHospital() != null
+                && !labOrder.getHospital().getId().equals(hospitalId)) {
             throw new ResourceNotFoundException("laborder.notfound");
         }
 
@@ -186,9 +188,14 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Override
     @Transactional(readOnly = true)
     public List<LabOrderResponseDTO> getAllLabOrders(Locale locale) {
-        // ── Hospital scope enforcement: never return unscoped data ──
+        // ── Hospital scope enforcement: scope to hospital when non-superadmin ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        return labOrderRepository.findByHospital_Id(hospitalId).stream()
+        if (hospitalId != null) {
+            return labOrderRepository.findByHospital_Id(hospitalId).stream()
+                .map(labOrderMapper::toLabOrderResponseDTO)
+                .toList();
+        }
+        return labOrderRepository.findAll().stream()
             .map(labOrderMapper::toLabOrderResponseDTO)
             .toList();
     }
@@ -201,7 +208,9 @@ public class LabOrderServiceImpl implements LabOrderService {
 
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (labOrder.getHospital() != null && !labOrder.getHospital().getId().equals(hospitalId)) {
+        if (hospitalId != null
+                && labOrder.getHospital() != null
+                && !labOrder.getHospital().getId().equals(hospitalId)) {
             throw new ResourceNotFoundException("laborder.notfound");
         }
 
@@ -220,7 +229,12 @@ public class LabOrderServiceImpl implements LabOrderService {
     public List<LabOrderResponseDTO> getLabOrdersByPatientId(UUID patientId, Locale locale) {
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        return labOrderRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+        if (hospitalId != null) {
+            return labOrderRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+                .map(labOrderMapper::toLabOrderResponseDTO)
+                .toList();
+        }
+        return labOrderRepository.findByPatient_Id(patientId).stream()
             .map(labOrderMapper::toLabOrderResponseDTO)
             .toList();
     }
@@ -230,7 +244,12 @@ public class LabOrderServiceImpl implements LabOrderService {
     public List<LabOrderResponseDTO> getLabOrdersByStaffId(UUID staffId, Locale locale) {
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        return labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, hospitalId).stream()
+        if (hospitalId != null) {
+            return labOrderRepository.findByOrderingStaff_IdAndHospital_Id(staffId, hospitalId).stream()
+                .map(labOrderMapper::toLabOrderResponseDTO)
+                .toList();
+        }
+        return labOrderRepository.findByOrderingStaff_Id(staffId).stream()
             .map(labOrderMapper::toLabOrderResponseDTO)
             .toList();
     }
@@ -240,8 +259,13 @@ public class LabOrderServiceImpl implements LabOrderService {
     public List<LabOrderResponseDTO> getLabOrdersByLabTestDefinitionId(UUID labTestDefinitionId, Locale locale) {
         // Lab test definitions are global (not hospital-scoped), but results should still be scoped
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        return labOrderRepository.findByLabTestDefinition_Id(labTestDefinitionId).stream()
-            .filter(lo -> lo.getHospital() != null && lo.getHospital().getId().equals(hospitalId))
+        List<LabOrder> orders = labOrderRepository.findByLabTestDefinition_Id(labTestDefinitionId);
+        if (hospitalId != null) {
+            orders = orders.stream()
+                .filter(lo -> lo.getHospital() != null && lo.getHospital().getId().equals(hospitalId))
+                .toList();
+        }
+        return orders.stream()
             .map(labOrderMapper::toLabOrderResponseDTO)
             .toList();
     }
@@ -251,7 +275,12 @@ public class LabOrderServiceImpl implements LabOrderService {
     public List<LabOrderResponseDTO> getLabOrdersByStatus(LabOrderStatus status, Locale locale) {
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        return labOrderRepository.findByStatusAndHospital_Id(status, hospitalId).stream()
+        if (hospitalId != null) {
+            return labOrderRepository.findByStatusAndHospital_Id(status, hospitalId).stream()
+                .map(labOrderMapper::toLabOrderResponseDTO)
+                .toList();
+        }
+        return labOrderRepository.findByStatus(status).stream()
             .map(labOrderMapper::toLabOrderResponseDTO)
             .toList();
     }

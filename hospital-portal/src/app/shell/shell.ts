@@ -177,7 +177,7 @@ export class ShellComponent implements OnInit, OnDestroy {
 
     const username = this.auth.getSubject();
     if (username) {
-      this.notifService.connectWebSocket(username);
+      this.notifService.connectWebSocket();
       this.notifSub = this.notifService.getNotificationStream().subscribe((n) => {
         this.recentNotifications.update((list) => [n, ...list].slice(0, 10));
         this.unreadCount.update((c) => c + 1);

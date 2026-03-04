@@ -93,7 +93,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (prescription.getHospital() != null && !prescription.getHospital().getId().equals(hospitalId)) {
+        if (hospitalId != null
+                && prescription.getHospital() != null
+                && !prescription.getHospital().getId().equals(hospitalId)) {
             // Return 404 (not 403) to avoid info leakage
             throw new ResourceNotFoundException("prescription.notfound");
         }
@@ -108,18 +110,33 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
 
         if (patientId != null) {
-            return prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId, pageable)
+            if (hospitalId != null) {
+                return prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId, pageable)
+                    .map(prescriptionMapper::toResponseDTO);
+            }
+            return prescriptionRepository.findByPatient_Id(patientId, pageable)
                 .map(prescriptionMapper::toResponseDTO);
         }
         if (staffId != null) {
-            return prescriptionRepository.findByStaff_IdAndHospital_Id(staffId, hospitalId, pageable)
+            if (hospitalId != null) {
+                return prescriptionRepository.findByStaff_IdAndHospital_Id(staffId, hospitalId, pageable)
+                    .map(prescriptionMapper::toResponseDTO);
+            }
+            return prescriptionRepository.findByStaff_Id(staffId, pageable)
                 .map(prescriptionMapper::toResponseDTO);
         }
         if (encounterId != null) {
-            return prescriptionRepository.findByEncounter_IdAndHospital_Id(encounterId, hospitalId, pageable)
+            if (hospitalId != null) {
+                return prescriptionRepository.findByEncounter_IdAndHospital_Id(encounterId, hospitalId, pageable)
+                    .map(prescriptionMapper::toResponseDTO);
+            }
+            return prescriptionRepository.findByEncounter_Id(encounterId, pageable)
                 .map(prescriptionMapper::toResponseDTO);
         }
-        return prescriptionRepository.findByHospital_Id(hospitalId, pageable).map(prescriptionMapper::toResponseDTO);
+        if (hospitalId != null) {
+            return prescriptionRepository.findByHospital_Id(hospitalId, pageable).map(prescriptionMapper::toResponseDTO);
+        }
+        return prescriptionRepository.findAll(pageable).map(prescriptionMapper::toResponseDTO);
     }
 
     @Override
@@ -167,7 +184,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (prescription.getHospital() != null && !prescription.getHospital().getId().equals(hospitalId)) {
+        if (hospitalId != null
+                && prescription.getHospital() != null
+                && !prescription.getHospital().getId().equals(hospitalId)) {
             throw new ResourceNotFoundException("prescription.notfound");
         }
 
@@ -179,7 +198,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     public java.util.List<PrescriptionResponseDTO> getPrescriptionsByPatientId(UUID patientId, Locale locale) {
         // ── Hospital scope enforcement ──
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        return prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+        if (hospitalId != null) {
+            return prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
+                .map(prescriptionMapper::toResponseDTO)
+                .toList();
+        }
+        return prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged()).stream()
             .map(prescriptionMapper::toResponseDTO)
             .toList();
     }
