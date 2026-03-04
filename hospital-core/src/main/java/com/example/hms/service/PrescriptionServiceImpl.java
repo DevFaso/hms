@@ -376,10 +376,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private void handleAllergyConflict(Patient patient, PatientAllergy allergy, String medicationName, Boolean forceOverride) {
         String severityStr = allergy.getSeverity() != null ? allergy.getSeverity().name() : "UNKNOWN";
         String reaction = allergy.getReaction() != null ? allergy.getReaction() : "unspecified reaction";
-        
+
         logger.warn("ALLERGY ALERT: Patient {} has documented allergy to '{}' (severity: {}, reaction: {}). " +
                    "Attempted to prescribe '{}'. Override: {}",
-                   patient.getId(), allergy.getAllergenDisplay(), severityStr, reaction, medicationName, forceOverride);
+                   patient.getId(), sanitizeLog(allergy.getAllergenDisplay()), severityStr,
+                   sanitizeLog(reaction), sanitizeLog(medicationName), forceOverride);
         
         if (isSevereAllergy(allergy.getSeverity()) && !Boolean.TRUE.equals(forceOverride)) {
             throw new BusinessException(
@@ -398,6 +399,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         return severity == com.example.hms.enums.AllergySeverity.SEVERE 
             || severity == com.example.hms.enums.AllergySeverity.LIFE_THREATENING;
+    }
+
+    /** Strip newline/carriage-return characters to prevent log-injection attacks (S5145). */
+    private static String sanitizeLog(String value) {
+        if (value == null) return null;
+        return value.replaceAll("[\r\n\t]", "_");
     }
 }
 

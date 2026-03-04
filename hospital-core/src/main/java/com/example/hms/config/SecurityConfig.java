@@ -150,6 +150,9 @@ public class SecurityConfig {
 
     @Bean
     @Order(1)
+    @SuppressWarnings({"java:S3330", "java:S4502"})
+    // S3330: XSRF-TOKEN cookie intentionally lacks HttpOnly so Angular's HttpClient can read it for CSRF protection.
+    // S4502: CSRF is deliberately disabled only for idempotent HTTP methods (GET/HEAD/OPTIONS/TRACE) and WebSocket /chat/** — all mutating endpoints still enforce CSRF.
     public SecurityFilterChain apiSecurity(HttpSecurity http) throws Exception {
         var csrfTokenRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfTokenRepo.setCookiePath("/");

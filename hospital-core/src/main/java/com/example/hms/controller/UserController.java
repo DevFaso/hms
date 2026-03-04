@@ -83,9 +83,6 @@ public class UserController {
             if (badRequest != null) return badRequest;
         }
 
-        log.info("[ADMIN REGISTER] normalized -> username={}, email={}, roles={}, hospitalId={}",
-            request.getUsername(), request.getEmail(), request.getRoleNames(), request.getHospitalId());
-
         UserResponseDTO dto = userService.createUserWithRolesAndHospital(request);
         return ResponseEntity.created(URI.create("/users/" + dto.getId())).body(dto);
     }
@@ -120,7 +117,7 @@ public class UserController {
         if (request.getHospitalName() != null && !request.getHospitalName().isBlank()) {
             var hospital = hospitalRepository.findByName(request.getHospitalName()).orElse(null);
             if (hospital == null) {
-                log.warn("[ADMIN REGISTER] Hospital not found for name: {}", request.getHospitalName());
+                log.warn("[ADMIN REGISTER] Hospital not found for provided hospital name.");
                 return ResponseEntity.badRequest().build();
             }
             request.setHospitalId(hospital.getId());

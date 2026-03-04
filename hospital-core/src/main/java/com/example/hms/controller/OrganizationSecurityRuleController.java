@@ -1,7 +1,9 @@
 package com.example.hms.controller;
 
-import com.example.hms.model.OrganizationSecurityRule;
+import com.example.hms.payload.dto.OrganizationSecurityRuleRequestDTO;
+import com.example.hms.payload.dto.OrganizationSecurityRuleResponseDTO;
 import com.example.hms.service.OrganizationSecurityRuleService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,24 +27,27 @@ public class OrganizationSecurityRuleController {
     private final OrganizationSecurityRuleService ruleService;
 
     @GetMapping
-    public ResponseEntity<List<OrganizationSecurityRule>> getAllRules() {
-        return ResponseEntity.ok(ruleService.getAllRules());
+    public ResponseEntity<List<OrganizationSecurityRuleResponseDTO>> getAllRules() {
+        return ResponseEntity.ok(ruleService.getAllRulesAsDto());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<OrganizationSecurityRule> getRuleById(@PathVariable UUID id) {
-        OrganizationSecurityRule rule = ruleService.getRuleById(id);
-        return rule != null ? ResponseEntity.ok(rule) : ResponseEntity.notFound().build();
+    public ResponseEntity<OrganizationSecurityRuleResponseDTO> getRuleById(@PathVariable UUID id) {
+        OrganizationSecurityRuleResponseDTO dto = ruleService.getRuleByIdAsDto(id);
+        return ResponseEntity.ok(dto);
     }
 
     @PostMapping
-    public ResponseEntity<OrganizationSecurityRule> createRule(@RequestBody OrganizationSecurityRule rule) {
-        return ResponseEntity.ok(ruleService.createRule(rule));
+    public ResponseEntity<OrganizationSecurityRuleResponseDTO> createRule(
+            @Valid @RequestBody OrganizationSecurityRuleRequestDTO request) {
+        return ResponseEntity.ok(ruleService.createRuleFromDto(request));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<OrganizationSecurityRule> updateRule(@PathVariable UUID id, @RequestBody OrganizationSecurityRule rule) {
-        return ResponseEntity.ok(ruleService.updateRule(id, rule));
+    public ResponseEntity<OrganizationSecurityRuleResponseDTO> updateRule(
+            @PathVariable UUID id,
+            @Valid @RequestBody OrganizationSecurityRuleRequestDTO request) {
+        return ResponseEntity.ok(ruleService.updateRuleFromDto(id, request));
     }
 
     @DeleteMapping("/{id}")
@@ -51,3 +56,4 @@ public class OrganizationSecurityRuleController {
         return ResponseEntity.noContent().build();
     }
 }
+

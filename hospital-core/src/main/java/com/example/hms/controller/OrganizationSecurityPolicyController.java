@@ -1,7 +1,9 @@
 package com.example.hms.controller;
 
-import com.example.hms.model.OrganizationSecurityPolicy;
+import com.example.hms.payload.dto.OrganizationSecurityPolicyRequestDTO;
+import com.example.hms.payload.dto.OrganizationSecurityPolicyResponseDTO;
 import com.example.hms.service.OrganizationSecurityPolicyService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -25,24 +27,27 @@ public class OrganizationSecurityPolicyController {
     private final OrganizationSecurityPolicyService policyService;
 
     @GetMapping
-    public ResponseEntity<List<OrganizationSecurityPolicy>> getAllPolicies() {
-        return ResponseEntity.ok(policyService.getAllPolicies());
+    public ResponseEntity<List<OrganizationSecurityPolicyResponseDTO>> getAllPolicies() {
+        return ResponseEntity.ok(policyService.getAllPoliciesAsDto());
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<OrganizationSecurityPolicy> getPolicyById(@PathVariable UUID id) {
-        OrganizationSecurityPolicy policy = policyService.getPolicyById(id);
-        return policy != null ? ResponseEntity.ok(policy) : ResponseEntity.notFound().build();
+    public ResponseEntity<OrganizationSecurityPolicyResponseDTO> getPolicyById(@PathVariable UUID id) {
+        OrganizationSecurityPolicyResponseDTO dto = policyService.getPolicyByIdAsDto(id);
+        return ResponseEntity.ok(dto);
     }
 
     @PostMapping
-    public ResponseEntity<OrganizationSecurityPolicy> createPolicy(@RequestBody OrganizationSecurityPolicy policy) {
-        return ResponseEntity.ok(policyService.createPolicy(policy));
+    public ResponseEntity<OrganizationSecurityPolicyResponseDTO> createPolicy(
+            @Valid @RequestBody OrganizationSecurityPolicyRequestDTO request) {
+        return ResponseEntity.ok(policyService.createPolicyFromDto(request));
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<OrganizationSecurityPolicy> updatePolicy(@PathVariable UUID id, @RequestBody OrganizationSecurityPolicy policy) {
-        return ResponseEntity.ok(policyService.updatePolicy(id, policy));
+    public ResponseEntity<OrganizationSecurityPolicyResponseDTO> updatePolicy(
+            @PathVariable UUID id,
+            @Valid @RequestBody OrganizationSecurityPolicyRequestDTO request) {
+        return ResponseEntity.ok(policyService.updatePolicyFromDto(id, request));
     }
 
     @DeleteMapping("/{id}")
@@ -51,3 +56,4 @@ public class OrganizationSecurityPolicyController {
         return ResponseEntity.noContent().build();
     }
 }
+
