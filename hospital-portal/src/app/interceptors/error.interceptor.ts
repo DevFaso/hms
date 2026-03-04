@@ -85,6 +85,9 @@ function tryRefreshAndRetry(
       }),
       catchError((refreshError) => {
         isRefreshing = false;
+        // Emit a sentinel so any queued requests unblock and get redirected
+        // instead of hanging indefinitely waiting for a non-null token.
+        refreshDone$.next('__REFRESH_FAILED__');
         refreshDone$.next(null);
         // Refresh token is also expired / invalid → full logout
         auth.logout();
@@ -94,9 +97,10 @@ function tryRefreshAndRetry(
     );
   }
 
-  // Another request is already refreshing — wait for the new token then retry
+  // Another request is already refreshing — wait for the new token then retry.
+  // Filter out the failure sentinel so we only proceed with a real token.
   return refreshDone$.pipe(
-    filter((t): t is string => t !== null),
+    filter((t): t is string => t !== null && t !== '__REFRESH_FAILED__'),
     take(1),
     switchMap((newToken) => {
       const retried = req.clone({ setHeaders: { Authorization: `Bearer ${newToken}` } });
