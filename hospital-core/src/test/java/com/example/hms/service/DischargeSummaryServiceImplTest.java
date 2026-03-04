@@ -243,4 +243,101 @@ class DischargeSummaryServiceImplTest {
         assertThatThrownBy(() -> service.deleteDischargeSummary(summaryId, staffId))
             .isInstanceOf(BusinessException.class);
     }
+
+    // ── enforceHospitalScope: cross-hospital → 404 ────────────────────
+
+    @Test void getDischargeSummaryById_crossHospital_throws() {
+        UUID otherHospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospitalId);
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        assertThatThrownBy(() -> service.getDischargeSummaryById(summaryId, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test void getDischargeSummaryById_sameHospital_success() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
+        assertThat(service.getDischargeSummaryById(summaryId, Locale.ENGLISH).getId()).isEqualTo(summaryId);
+    }
+
+    @Test void updateDischargeSummary_crossHospital_throws() {
+        UUID otherHospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospitalId);
+        DischargeSummaryRequestDTO req = buildRequest();
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        assertThatThrownBy(() -> service.updateDischargeSummary(summaryId, req, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test void finalizeDischargeSummary_crossHospital_throws() {
+        UUID otherHospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospitalId);
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        assertThatThrownBy(() -> service.finalizeDischargeSummary(summaryId, "Dr. Sig", staffId, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test void getDischargeSummaryByEncounter_crossHospital_throws() {
+        UUID otherHospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospitalId);
+        when(dischargeSummaryRepository.findByEncounter_Id(encounterId)).thenReturn(Optional.of(summary));
+        assertThatThrownBy(() -> service.getDischargeSummaryByEncounter(encounterId, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test void deleteDischargeSummary_crossHospital_throws() {
+        UUID otherHospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospitalId);
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        assertThatThrownBy(() -> service.deleteDischargeSummary(summaryId, staffId))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ── Scoped list queries: activeHospitalId non-null ─────────────────
+
+    @Test void getDischargeSummariesByPatient_scoped() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dischargeSummaryRepository.findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientId, hospitalId))
+            .thenReturn(List.of(summary));
+        when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
+        assertThat(service.getDischargeSummariesByPatient(patientId, Locale.ENGLISH)).hasSize(1);
+    }
+
+    @Test void getDischargeSummariesByProvider_scoped() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dischargeSummaryRepository.findByDischargingProvider_IdAndHospital_IdOrderByDischargeDateDesc(staffId, hospitalId))
+            .thenReturn(List.of(summary));
+        when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
+        assertThat(service.getDischargeSummariesByProvider(staffId, Locale.ENGLISH)).hasSize(1);
+    }
+
+    // ── effectiveHospitalId override: activeHospitalId overrides param ─
+
+    @Test void getDischargeSummariesByHospitalAndDateRange_scopedOverride() {
+        UUID otherHospitalId = UUID.randomUUID();
+        LocalDate start = LocalDate.now().minusDays(30);
+        LocalDate end = LocalDate.now();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dischargeSummaryRepository.findByHospitalAndDateRange(hospitalId, start, end)).thenReturn(List.of(summary));
+        when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
+        // passes otherHospitalId but activeHospitalId overrides it
+        assertThat(service.getDischargeSummariesByHospitalAndDateRange(otherHospitalId, start, end, Locale.ENGLISH)).hasSize(1);
+    }
+
+    @Test void getUnfinalizedDischargeSummaries_scopedOverride() {
+        UUID otherHospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dischargeSummaryRepository.findUnfinalizedByHospital(hospitalId)).thenReturn(List.of(summary));
+        when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
+        assertThat(service.getUnfinalizedDischargeSummaries(otherHospitalId, Locale.ENGLISH)).hasSize(1);
+    }
+
+    @Test void getDischargeSummariesWithPendingResults_scopedOverride() {
+        UUID otherHospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dischargeSummaryRepository.findWithPendingTestResults(hospitalId)).thenReturn(List.of(summary));
+        when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
+        assertThat(service.getDischargeSummariesWithPendingResults(otherHospitalId, Locale.ENGLISH)).hasSize(1);
+    }
 }

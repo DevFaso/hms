@@ -770,4 +770,91 @@ class TreatmentPlanServiceImplTest {
         assertThat(result).isNotNull();
         assertThat(followUp.getAssignedStaff()).isEqualTo(assignedStaff);
     }
+
+    // ── Tenant isolation tests ──
+
+    @Test
+    void getById_crossHospital_throws404() {
+        UUID otherHospitalId = UUID.randomUUID();
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospitalId);
+
+        assertThatThrownBy(() -> service.getById(planId))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void getById_sameHospital_success() {
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(treatmentPlanMapper.toResponseDTO(plan)).thenReturn(responseDTO);
+
+        assertThat(service.getById(planId)).isNotNull();
+    }
+
+    @Test
+    void getById_superAdmin_noFilter() {
+        when(treatmentPlanRepository.findById(planId)).thenReturn(Optional.of(plan));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(treatmentPlanMapper.toResponseDTO(plan)).thenReturn(responseDTO);
+
+        assertThat(service.getById(planId)).isNotNull();
+    }
+
+    @Test
+    void listByPatient_scopedToHospital() {
+        UUID activeHospId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<TreatmentPlan> page = new PageImpl<>(List.of(plan));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(treatmentPlanRepository.findAllByPatientIdAndHospitalId(patientId, activeHospId, pageable))
+                .thenReturn(page);
+        when(treatmentPlanMapper.toResponseDTO(plan)).thenReturn(responseDTO);
+
+        Page<TreatmentPlanResponseDTO> result = service.listByPatient(patientId, pageable);
+        assertThat(result.getContent()).hasSize(1);
+    }
+
+    @Test
+    void listByHospital_scopedOverridesParam() {
+        UUID paramHospId = UUID.randomUUID();
+        UUID activeHospId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<TreatmentPlan> page = new PageImpl<>(List.of(plan));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(treatmentPlanRepository.findAllByHospitalId(activeHospId, pageable)).thenReturn(page);
+        when(treatmentPlanMapper.toResponseDTO(plan)).thenReturn(responseDTO);
+
+        Page<TreatmentPlanResponseDTO> result = service.listByHospital(paramHospId, null, pageable);
+        assertThat(result.getContent()).hasSize(1);
+    }
+
+    @Test
+    void listAll_scopedToHospital() {
+        UUID activeHospId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<TreatmentPlan> page = new PageImpl<>(List.of(plan));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(treatmentPlanRepository.findAllByHospitalId(activeHospId, pageable)).thenReturn(page);
+        when(treatmentPlanMapper.toResponseDTO(plan)).thenReturn(responseDTO);
+
+        Page<TreatmentPlanResponseDTO> result = service.listAll(null, pageable);
+        assertThat(result.getContent()).hasSize(1);
+    }
+
+    @Test
+    void listAll_superAdmin_allPlans() {
+        Pageable pageable = PageRequest.of(0, 10);
+        Page<TreatmentPlan> page = new PageImpl<>(List.of(plan));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(treatmentPlanRepository.findAll(pageable)).thenReturn(page);
+        when(treatmentPlanMapper.toResponseDTO(plan)).thenReturn(responseDTO);
+
+        Page<TreatmentPlanResponseDTO> result = service.listAll(null, pageable);
+        assertThat(result.getContent()).hasSize(1);
+    }
 }

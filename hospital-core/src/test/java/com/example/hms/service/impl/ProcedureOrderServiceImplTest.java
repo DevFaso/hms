@@ -177,4 +177,64 @@ class ProcedureOrderServiceImplTest {
         when(procedureOrderRepository.findByHospital_IdAndStatusAndConsentObtainedFalse(hospitalId, ProcedureOrderStatus.SCHEDULED)).thenReturn(List.of(o));
         assertThat(service.getPendingConsentOrders(hospitalId)).hasSize(1);
     }
+
+    // ── Tenant isolation tests ──
+
+    @Test void getProcedureOrder_crossHospital_throws404() {
+        UUID otherHospId = UUID.randomUUID();
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospId);
+
+        assertThatThrownBy(() -> service.getProcedureOrder(orderId))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test void getProcedureOrder_sameHospital_success() {
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        ProcedureOrderResponseDTO result = service.getProcedureOrder(orderId);
+        assertThat(result).isNotNull();
+    }
+
+    @Test void getProcedureOrdersForPatient_scopedToHospital() {
+        UUID activeHospId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(procedureOrderRepository.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(patientId, activeHospId)).thenReturn(List.of());
+
+        assertThat(service.getProcedureOrdersForPatient(patientId)).isEmpty();
+    }
+
+    @Test void getProcedureOrdersForHospital_scopedOverridesParam() {
+        UUID activeHospId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(procedureOrderRepository.findByHospital_IdOrderByOrderedAtDesc(activeHospId)).thenReturn(List.of());
+
+        assertThat(service.getProcedureOrdersForHospital(hospitalId, null)).isEmpty();
+    }
+
+    @Test void getProcedureOrdersOrderedBy_scopedToHospital() {
+        UUID activeHospId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(procedureOrderRepository.findByOrderingProvider_IdAndHospital_IdOrderByOrderedAtDesc(staffId, activeHospId)).thenReturn(List.of());
+
+        assertThat(service.getProcedureOrdersOrderedBy(staffId)).isEmpty();
+    }
+
+    @Test void getProcedureOrdersScheduledBetween_scopedOverridesParam() {
+        UUID activeHospId = UUID.randomUUID();
+        LocalDateTime start = LocalDateTime.now(); LocalDateTime end = start.plusDays(7);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(procedureOrderRepository.findByHospital_IdAndScheduledDatetimeBetween(activeHospId, start, end)).thenReturn(List.of());
+
+        assertThat(service.getProcedureOrdersScheduledBetween(hospitalId, start, end)).isEmpty();
+    }
+
+    @Test void getPendingConsentOrders_scopedOverridesParam() {
+        UUID activeHospId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(procedureOrderRepository.findByHospital_IdAndStatusAndConsentObtainedFalse(activeHospId, ProcedureOrderStatus.SCHEDULED)).thenReturn(List.of());
+
+        assertThat(service.getPendingConsentOrders(hospitalId)).isEmpty();
+    }
 }

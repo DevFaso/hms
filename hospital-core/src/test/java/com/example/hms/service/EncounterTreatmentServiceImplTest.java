@@ -225,5 +225,60 @@ class EncounterTreatmentServiceImplTest {
 
             assertThat(result).isEmpty();
         }
+
+        @Test
+        @DisplayName("throws ResourceNotFoundException when encounter not found")
+        void throwsWhenEncounterNotFound() {
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.getTreatmentsByEncounter(encounterId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("throws 404 when encounter belongs to different hospital")
+        void throwsWhenCrossHospitalAccess() {
+            UUID otherHospitalId = UUID.randomUUID();
+            com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+            hospital.setId(UUID.randomUUID());
+            encounter.setHospital(hospital);
+
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospitalId);
+
+            assertThatThrownBy(() -> service.getTreatmentsByEncounter(encounterId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("succeeds when encounter belongs to same hospital")
+        void succeedsWhenSameHospital() {
+            UUID myHospitalId = UUID.randomUUID();
+            com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+            hospital.setId(myHospitalId);
+            encounter.setHospital(hospital);
+
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(myHospitalId);
+            when(encounterTreatmentRepository.findByEncounter_Id(encounterId)).thenReturn(List.of());
+
+            List<EncounterTreatmentResponseDTO> result = service.getTreatmentsByEncounter(encounterId);
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("super admin bypasses hospital filter")
+        void superAdminBypassesFilter() {
+            com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+            hospital.setId(UUID.randomUUID());
+            encounter.setHospital(hospital);
+
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(encounterTreatmentRepository.findByEncounter_Id(encounterId)).thenReturn(List.of());
+
+            List<EncounterTreatmentResponseDTO> result = service.getTreatmentsByEncounter(encounterId);
+            assertThat(result).isEmpty();
+        }
     }
 }

@@ -194,4 +194,92 @@ class ConsultationServiceImplTest {
         when(consultationRepository.findByHospitalAndStatuses(eq(hospitalId), any())).thenReturn(List.of());
         assertThat(service.getPendingConsultations(hospitalId)).isEmpty();
     }
+
+    // ── Tenant isolation tests ──
+
+    @Test void getConsultation_crossHospital_throws404() {
+        UUID otherHospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospitalId);
+        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.REQUESTED)));
+        assertThatThrownBy(() -> service.getConsultation(consultationId)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test void getConsultation_sameHospital_success() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.REQUESTED)));
+        ConsultationResponseDTO result = service.getConsultation(consultationId);
+        assertThat(result).isNotNull();
+    }
+
+    @Test void getConsultation_superAdmin_noFilter() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.REQUESTED)));
+        ConsultationResponseDTO result = service.getConsultation(consultationId);
+        assertThat(result).isNotNull();
+    }
+
+    @Test void getConsultationsForPatient_scopedToHospital() {
+        UUID otherHospId = UUID.randomUUID();
+        Hospital otherHosp = new Hospital(); otherHosp.setId(otherHospId);
+        Consultation ownHosp = buildConsultation(ConsultationStatus.REQUESTED); ownHosp.setId(UUID.randomUUID());
+        Consultation otherHospConsult = Consultation.builder().patient(patient).hospital(otherHosp).status(ConsultationStatus.REQUESTED).build();
+        otherHospConsult.setId(UUID.randomUUID());
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(consultationRepository.findByPatient_IdOrderByRequestedAtDesc(patientId)).thenReturn(List.of(ownHosp, otherHospConsult));
+
+        List<ConsultationResponseDTO> result = service.getConsultationsForPatient(patientId);
+        assertThat(result).hasSize(1);
+    }
+
+    @Test void getConsultationsForPatient_superAdmin_noFilter() {
+        Consultation c1 = buildConsultation(ConsultationStatus.REQUESTED); c1.setId(UUID.randomUUID());
+        Consultation c2 = buildConsultation(ConsultationStatus.COMPLETED); c2.setId(UUID.randomUUID());
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(consultationRepository.findByPatient_IdOrderByRequestedAtDesc(patientId)).thenReturn(List.of(c1, c2));
+
+        assertThat(service.getConsultationsForPatient(patientId)).hasSize(2);
+    }
+
+    @Test void getAllConsultations_scopedToHospital_withStatus() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(consultationRepository.findByHospital_IdAndStatusOrderByRequestedAtDesc(hospitalId, ConsultationStatus.REQUESTED))
+            .thenReturn(List.of(buildConsultation(ConsultationStatus.REQUESTED)));
+
+        assertThat(service.getAllConsultations(ConsultationStatus.REQUESTED)).hasSize(1);
+    }
+
+    @Test void getAllConsultations_superAdmin_withStatus() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(consultationRepository.findByStatusOrderByRequestedAtDesc(ConsultationStatus.REQUESTED)).thenReturn(List.of());
+
+        assertThat(service.getAllConsultations(ConsultationStatus.REQUESTED)).isEmpty();
+    }
+
+    @Test void getAllConsultations_superAdmin_noStatus() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(consultationRepository.findAllByOrderByRequestedAtDesc()).thenReturn(List.of());
+
+        assertThat(service.getAllConsultations(null)).isEmpty();
+    }
+
+    @Test void getConsultationsRequestedBy_scopedToHospital() {
+        UUID otherHospId = UUID.randomUUID();
+        Hospital otherHosp = new Hospital(); otherHosp.setId(otherHospId);
+        Consultation ownHosp = buildConsultation(ConsultationStatus.REQUESTED); ownHosp.setId(UUID.randomUUID());
+        Consultation otherHospConsult = Consultation.builder().patient(patient).hospital(otherHosp).status(ConsultationStatus.REQUESTED).build();
+        otherHospConsult.setId(UUID.randomUUID());
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(consultationRepository.findByRequestingProvider_IdOrderByRequestedAtDesc(staffId)).thenReturn(List.of(ownHosp, otherHospConsult));
+
+        assertThat(service.getConsultationsRequestedBy(staffId)).hasSize(1);
+    }
+
+    @Test void getConsultationsRequestedBy_superAdmin_noFilter() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(consultationRepository.findByRequestingProvider_IdOrderByRequestedAtDesc(staffId)).thenReturn(List.of());
+        assertThat(service.getConsultationsRequestedBy(staffId)).isEmpty();
+    }
 }
