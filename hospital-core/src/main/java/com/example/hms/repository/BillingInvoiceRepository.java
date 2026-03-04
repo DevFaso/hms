@@ -21,6 +21,9 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
     Page<BillingInvoice> findByPatient_Id(UUID patientId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"patient", "hospital"})
+    Page<BillingInvoice> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"patient", "hospital"})
     Page<BillingInvoice> findByHospital_Id(UUID hospitalId, Pageable pageable);
     
         // Find invoices by patient email

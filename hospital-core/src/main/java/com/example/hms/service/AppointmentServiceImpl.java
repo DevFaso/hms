@@ -698,7 +698,20 @@ public class AppointmentServiceImpl implements AppointmentService {
     @Override
     @Transactional(readOnly = true)
     public List<AppointmentResponseDTO> getAppointmentsByDoctorId(UUID staffId, Locale locale) {
+        // ── Hospital scope enforcement: filter results to the caller's hospital scope ──
+        HospitalContext context = HospitalContextHolder.getContextOrEmpty();
+        if (context.isSuperAdmin()) {
+            return appointmentRepository.findByStaff_Id(staffId).stream()
+                .map(appointmentMapper::toAppointmentResponseDTO)
+                .toList();
+        }
+        UUID activeHospitalId = context.getActiveHospitalId();
+        if (activeHospitalId == null) {
+            log.warn("getAppointmentsByDoctorId: no active hospital context, returning empty");
+            return List.of();
+        }
         return appointmentRepository.findByStaff_Id(staffId).stream()
+            .filter(a -> a.getHospital() != null && a.getHospital().getId().equals(activeHospitalId))
             .map(appointmentMapper::toAppointmentResponseDTO)
             .toList();
     }

@@ -40,6 +40,7 @@ class ProcedureOrderServiceImplTest {
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private EncounterRepository encounterRepository;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks private ProcedureOrderServiceImpl service;
 
@@ -173,7 +174,7 @@ class ProcedureOrderServiceImplTest {
     @Test void getPendingConsentOrders() {
         ProcedureOrder o = buildOrder(ProcedureOrderStatus.SCHEDULED);
         o.setConsentObtained(false);
-        when(procedureOrderRepository.findByStatusAndConsentObtainedFalse(ProcedureOrderStatus.SCHEDULED)).thenReturn(List.of(o));
+        when(procedureOrderRepository.findByHospital_IdAndStatusAndConsentObtainedFalse(hospitalId, ProcedureOrderStatus.SCHEDULED)).thenReturn(List.of(o));
         assertThat(service.getPendingConsentOrders(hospitalId)).hasSize(1);
     }
 }

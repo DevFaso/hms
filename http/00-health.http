@@ -10,7 +10,7 @@ Accept: application/json
 
 ### Health endpoint (Actuator)
 # Note: Actuator runs at root context, not under /api
-GET http://localhost:8081/actuator/health
+GET {{baseUrl}}/auth/health
 Accept: application/json
 
 ### API Docs (OpenAPI JSON)

@@ -22,6 +22,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -51,6 +52,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     private final StaffRepository staffRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final DischargeApprovalRepository dischargeApprovalRepository;
+    private final RoleValidator roleValidator;
 
     @Override
     @Transactional
@@ -155,6 +157,8 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         DischargeSummary existing = dischargeSummaryRepository.findById(summaryId)
             .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
 
+        enforceHospitalScope(existing, summaryId);
+
         // Cannot update finalized summaries
         if (Boolean.TRUE.equals(existing.getIsFinalized())) {
             throw new BusinessException("Cannot update a finalized discharge summary");
@@ -218,6 +222,8 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
             .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
 
+        enforceHospitalScope(dischargeSummary, summaryId);
+
         // Verify provider is authorized
         if (!dischargeSummary.getDischargingProvider().getId().equals(providerId)) {
             throw new BusinessException("Only the discharging provider can finalize the summary");
@@ -243,6 +249,8 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
             .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
 
+        enforceHospitalScope(dischargeSummary, summaryId);
+
         return dischargeSummaryMapper.toResponseDTO(dischargeSummary);
     }
 
@@ -252,13 +260,21 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findByEncounter_Id(encounterId)
             .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "encounter", encounterId.toString()));
 
+        enforceHospitalScope(dischargeSummary, dischargeSummary.getId());
+
         return dischargeSummaryMapper.toResponseDTO(dischargeSummary);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<DischargeSummaryResponseDTO> getDischargeSummariesByPatient(UUID patientId, Locale locale) {
-        List<DischargeSummary> summaries = dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<DischargeSummary> summaries;
+        if (activeHospitalId != null) {
+            summaries = dischargeSummaryRepository.findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientId, activeHospitalId);
+        } else {
+            summaries = dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId);
+        }
         return summaries.stream()
             .map(dischargeSummaryMapper::toResponseDTO)
             .toList();
@@ -272,7 +288,9 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         LocalDate endDate,
         Locale locale
     ) {
-        List<DischargeSummary> summaries = dischargeSummaryRepository.findByHospitalAndDateRange(hospitalId, startDate, endDate);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
+        List<DischargeSummary> summaries = dischargeSummaryRepository.findByHospitalAndDateRange(effectiveHospitalId, startDate, endDate);
         return summaries.stream()
             .map(dischargeSummaryMapper::toResponseDTO)
             .toList();
@@ -281,7 +299,9 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     @Override
     @Transactional(readOnly = true)
     public List<DischargeSummaryResponseDTO> getUnfinalizedDischargeSummaries(UUID hospitalId, Locale locale) {
-        List<DischargeSummary> summaries = dischargeSummaryRepository.findUnfinalizedByHospital(hospitalId);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
+        List<DischargeSummary> summaries = dischargeSummaryRepository.findUnfinalizedByHospital(effectiveHospitalId);
         return summaries.stream()
             .map(dischargeSummaryMapper::toResponseDTO)
             .toList();
@@ -290,7 +310,9 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     @Override
     @Transactional(readOnly = true)
     public List<DischargeSummaryResponseDTO> getDischargeSummariesWithPendingResults(UUID hospitalId, Locale locale) {
-        List<DischargeSummary> summaries = dischargeSummaryRepository.findWithPendingTestResults(hospitalId);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
+        List<DischargeSummary> summaries = dischargeSummaryRepository.findWithPendingTestResults(effectiveHospitalId);
         return summaries.stream()
             .map(dischargeSummaryMapper::toResponseDTO)
             .toList();
@@ -299,7 +321,13 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     @Override
     @Transactional(readOnly = true)
     public List<DischargeSummaryResponseDTO> getDischargeSummariesByProvider(UUID providerId, Locale locale) {
-        List<DischargeSummary> summaries = dischargeSummaryRepository.findByDischargingProvider_IdOrderByDischargeDateDesc(providerId);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<DischargeSummary> summaries;
+        if (activeHospitalId != null) {
+            summaries = dischargeSummaryRepository.findByDischargingProvider_IdAndHospital_IdOrderByDischargeDateDesc(providerId, activeHospitalId);
+        } else {
+            summaries = dischargeSummaryRepository.findByDischargingProvider_IdOrderByDischargeDateDesc(providerId);
+        }
         return summaries.stream()
             .map(dischargeSummaryMapper::toResponseDTO)
             .toList();
@@ -313,6 +341,8 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         DischargeSummary dischargeSummary = dischargeSummaryRepository.findById(summaryId)
             .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString()));
 
+        enforceHospitalScope(dischargeSummary, summaryId);
+
         // Cannot delete finalized summaries
         if (Boolean.TRUE.equals(dischargeSummary.getIsFinalized())) {
             throw new BusinessException("Cannot delete a finalized discharge summary");
@@ -320,5 +350,13 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
         dischargeSummaryRepository.delete(dischargeSummary);
         log.info("Discharge summary deleted successfully: {}", summaryId);
+    }
+
+    private void enforceHospitalScope(DischargeSummary summary, UUID summaryId) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && summary.getHospital() != null
+                && !activeHospitalId.equals(summary.getHospital().getId())) {
+            throw new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString());
+        }
     }
 }

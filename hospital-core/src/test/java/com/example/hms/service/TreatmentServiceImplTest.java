@@ -45,6 +45,7 @@ class TreatmentServiceImplTest {
     @Mock private AuthService authService;
     @Mock private TreatmentValidationService treatmentValidationService;
     @Mock private JwtTokenProvider jwtTokenProvider;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks private TreatmentServiceImpl service;
 

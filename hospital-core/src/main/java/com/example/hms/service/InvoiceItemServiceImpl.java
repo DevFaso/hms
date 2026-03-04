@@ -13,6 +13,7 @@ import com.example.hms.repository.BillingInvoiceRepository;
 import com.example.hms.repository.InvoiceItemRepository;
 import com.example.hms.repository.TreatmentRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     private final InvoiceItemMapper invoiceItemMapper;
     private final BillingInvoiceService billingInvoiceService;
     private final MessageSource messageSource;
+    private final RoleValidator roleValidator;
 
     @Override
     @Transactional
@@ -71,12 +73,27 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
     public InvoiceItemResponseDTO getInvoiceItemById(UUID id, Locale locale) {
         InvoiceItem item = invoiceItemRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY));
+        // ── Tenant isolation ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && item.getBillingInvoice() != null
+                && item.getBillingInvoice().getHospital() != null
+                && !activeHospitalId.equals(item.getBillingInvoice().getHospital().getId())) {
+            throw new ResourceNotFoundException(INVOICE_ITEM_NOT_FOUND_KEY);
+        }
         return invoiceItemMapper.toInvoiceItemResponseDTO(item);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<InvoiceItemResponseDTO> getItemsByInvoiceId(UUID invoiceId, Locale locale) {
+        // ── Tenant isolation: verify the parent invoice belongs to caller's hospital ──
+        BillingInvoice invoice = billingInvoiceRepository.findById(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException("billinginvoice.notfound"));
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && invoice.getHospital() != null
+                && !activeHospitalId.equals(invoice.getHospital().getId())) {
+            throw new ResourceNotFoundException("billinginvoice.notfound");
+        }
         return invoiceItemRepository.findByBillingInvoice_Id(invoiceId).stream()
             .map(invoiceItemMapper::toInvoiceItemResponseDTO)
             .toList();

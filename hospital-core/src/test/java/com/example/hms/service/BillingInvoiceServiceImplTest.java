@@ -57,6 +57,8 @@ class BillingInvoiceServiceImplTest {
     private InvoiceItemRepository invoiceItemRepository;
     @Mock
     private PdfInvoiceService pdfInvoiceService;
+    @Mock
+    private com.example.hms.utility.RoleValidator roleValidator;
 
     private BillingInvoiceServiceImpl billingInvoiceService;
     private BillingInvoiceMapper invoiceMapper;
@@ -73,7 +75,8 @@ class BillingInvoiceServiceImplTest {
             encounterRepository,
             invoiceItemRepository,
             pdfInvoiceService,
-            invoiceMapper
+            invoiceMapper,
+            roleValidator
         );
     }
 

@@ -65,7 +65,7 @@ export class NotificationService {
    * sockjs-client is a CommonJS module; it is loaded lazily via dynamic import
    * so that Vite's ESM bundler does not crash at module evaluation time.
    */
-  connectWebSocket(username: string): void {
+  connectWebSocket(_username: string): void {
     if (typeof globalThis === 'undefined' || !globalThis.WebSocket) return;
 
     // Build the SockJS URL pointing at /api/ws-chat (context path included).
@@ -98,15 +98,10 @@ export class NotificationService {
               this.stompClient.reconnectDelay = this.baseReconnectDelay;
             }
 
-            this.stompClient?.subscribe('/topic/notifications', (frame: IMessage) => {
+            this.stompClient?.subscribe('/user/topic/notifications', (frame: IMessage) => {
               try {
                 const notification = JSON.parse(frame.body) as Notification;
-                if (
-                  !notification.recipientUsername ||
-                  notification.recipientUsername === username
-                ) {
-                  this.notificationSubject.next(notification);
-                }
+                this.notificationSubject.next(notification);
               } catch {
                 // Malformed frame — ignore
               }

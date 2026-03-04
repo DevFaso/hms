@@ -54,6 +54,8 @@ class ImagingOrderServiceImplTest {
     private HospitalRepository hospitalRepository;
     @Mock
     private ImagingOrderMapper imagingOrderMapper;
+    @Mock
+    private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks
     private ImagingOrderServiceImpl imagingOrderService;

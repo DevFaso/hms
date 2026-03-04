@@ -42,6 +42,7 @@ class EncounterTreatmentServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private EncounterTreatmentRepository encounterTreatmentRepository;
     @Mock private EncounterTreatmentMapper mapper;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks
     private EncounterTreatmentServiceImpl service;
@@ -202,6 +203,7 @@ class EncounterTreatmentServiceImplTest {
             EncounterTreatmentResponseDTO dto2 = EncounterTreatmentResponseDTO.builder()
                     .id(UUID.randomUUID()).outcome("B").build();
 
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
             when(encounterTreatmentRepository.findByEncounter_Id(encounterId)).thenReturn(List.of(et1, et2));
             when(mapper.toDto(any(EncounterTreatment.class))).thenReturn(dto1, dto2);
 
@@ -216,6 +218,7 @@ class EncounterTreatmentServiceImplTest {
         @Test
         @DisplayName("returns empty list when no treatments for encounter")
         void returnsEmptyList() {
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
             when(encounterTreatmentRepository.findByEncounter_Id(encounterId)).thenReturn(List.of());
 
             List<EncounterTreatmentResponseDTO> result = service.getTreatmentsByEncounter(encounterId);

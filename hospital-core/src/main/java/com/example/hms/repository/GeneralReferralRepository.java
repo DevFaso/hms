@@ -24,15 +24,21 @@ public interface GeneralReferralRepository extends JpaRepository<GeneralReferral
      */
     List<GeneralReferral> findByPatientIdOrderByCreatedAtDesc(UUID patientId);
 
+    List<GeneralReferral> findByPatientIdAndHospitalIdOrderByCreatedAtDesc(UUID patientId, UUID hospitalId);
+
     /**
      * Find referrals by referring provider
      */
     List<GeneralReferral> findByReferringProviderIdOrderByCreatedAtDesc(UUID referringProviderId);
 
+    List<GeneralReferral> findByReferringProviderIdAndHospitalIdOrderByCreatedAtDesc(UUID referringProviderId, UUID hospitalId);
+
     /**
      * Find referrals by receiving provider
      */
     List<GeneralReferral> findByReceivingProviderIdOrderByCreatedAtDesc(UUID receivingProviderId);
+
+    List<GeneralReferral> findByReceivingProviderIdAndHospitalIdOrderByCreatedAtDesc(UUID receivingProviderId, UUID hospitalId);
 
     /**
      * Find referrals by hospital and status
@@ -64,6 +70,10 @@ public interface GeneralReferralRepository extends JpaRepository<GeneralReferral
     @Query("SELECT r FROM GeneralReferral r WHERE r.slaDueAt < :now " +
            "AND r.status NOT IN ('COMPLETED', 'CANCELLED', 'REJECTED') ORDER BY r.slaDueAt ASC")
     List<GeneralReferral> findOverdueReferrals(@Param("now") LocalDateTime now);
+
+    @Query("SELECT r FROM GeneralReferral r WHERE r.hospital.id = :hospitalId AND r.slaDueAt < :now " +
+           "AND r.status NOT IN ('COMPLETED', 'CANCELLED', 'REJECTED') ORDER BY r.slaDueAt ASC")
+    List<GeneralReferral> findOverdueReferralsByHospital(@Param("hospitalId") UUID hospitalId, @Param("now") LocalDateTime now);
 
     /**
      * Find pending referrals for provider

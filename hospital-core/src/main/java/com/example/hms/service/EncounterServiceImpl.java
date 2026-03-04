@@ -133,6 +133,12 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         return encounterRepository.findByStaff_Id(staffId).stream()
+            .filter(e -> {
+                // SECURITY: Only return encounters within caller's active hospital
+                UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+                return activeHospitalId == null // super-admin
+                    || (e.getHospital() != null && activeHospitalId.equals(e.getHospital().getId()));
+            })
             .map(encounterMapper::toEncounterResponseDTO)
             .toList();
     }
@@ -968,6 +974,17 @@ public class EncounterServiceImpl implements EncounterService {
     public EncounterResponseDTO getEncounterById(UUID id, Locale locale) {
         Encounter e = encounterRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale)));
+
+        // SECURITY: Verify the caller has access to this encounter's hospital
+        if (!roleValidator.isSuperAdminFromAuth()) {
+            UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+            if (activeHospitalId != null && e.getHospital() != null
+                && !activeHospitalId.equals(e.getHospital().getId())) {
+                // Return 404 to avoid leaking existence of encounters in other hospitals
+                throw new ResourceNotFoundException(messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, locale));
+            }
+        }
+
         return encounterMapper.toEncounterResponseDTO(e);
     }
 
@@ -982,7 +999,16 @@ public class EncounterServiceImpl implements EncounterService {
             throw new BusinessException(messageSource.getMessage(MSG_ENCOUNTER_STAFF_INVALID, null, locale));
         }
 
-        return encounterRepository.findByStaff_Id(staffId).stream()
+        // SECURITY: Scope results to caller's active hospital
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<Encounter> encounters = encounterRepository.findByStaff_Id(staffId);
+        if (activeHospitalId != null) {
+            encounters = encounters.stream()
+                .filter(e -> e.getHospital() != null && activeHospitalId.equals(e.getHospital().getId()))
+                .toList();
+        }
+
+        return encounters.stream()
             .map(encounterMapper::toEncounterResponseDTO)
             .toList();
     }
@@ -997,6 +1023,15 @@ public class EncounterServiceImpl implements EncounterService {
                                            EncounterStatus status,
                                            Pageable pageable,
                                            Locale locale) {
+        // SECURITY: Non-superadmin must always have hospital scope
+        if (hospitalId == null && !roleValidator.isSuperAdminFromAuth()) {
+            // Try to resolve from context
+            hospitalId = roleValidator.requireActiveHospitalId();
+            if (hospitalId == null) {
+                throw new BusinessException("Hospital context required to list encounters.");
+            }
+        }
+
         Specification<Encounter> spec = alwaysTrue();
 
         if (patientId != null)  spec = spec.and(eqUuid("patient.id", patientId));

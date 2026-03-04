@@ -28,6 +28,8 @@ public interface DischargeSummaryRepository extends JpaRepository<DischargeSumma
      */
     List<DischargeSummary> findByPatient_IdOrderByDischargeDateDesc(UUID patientId);
 
+    List<DischargeSummary> findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(UUID patientId, UUID hospitalId);
+
     /**
      * Find all discharge summaries for a hospital within a date range
      */
@@ -62,6 +64,8 @@ public interface DischargeSummaryRepository extends JpaRepository<DischargeSumma
      * Find discharge summaries by discharging provider
      */
     List<DischargeSummary> findByDischargingProvider_IdOrderByDischargeDateDesc(UUID providerId);
+
+    List<DischargeSummary> findByDischargingProvider_IdAndHospital_IdOrderByDischargeDateDesc(UUID providerId, UUID hospitalId);
 
     /**
      * Check if discharge summary exists for encounter

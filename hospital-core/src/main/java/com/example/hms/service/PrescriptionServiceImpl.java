@@ -88,27 +88,38 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO getPrescriptionById(UUID id, Locale locale) {
-        return prescriptionRepository.findById(id)
-            .map(prescriptionMapper::toResponseDTO)
+        Prescription prescription = prescriptionRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+
+        // ── Hospital scope enforcement ──
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (prescription.getHospital() != null && !prescription.getHospital().getId().equals(hospitalId)) {
+            // Return 404 (not 403) to avoid info leakage
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
+
+        return prescriptionMapper.toResponseDTO(prescription);
     }
 
     @Override
     @Transactional
     public Page<PrescriptionResponseDTO> list(UUID patientId, UUID staffId, UUID encounterId, Pageable pageable, Locale locale) {
+        // ── Hospital scope enforcement: mandatory for non-superadmin ──
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+
         if (patientId != null) {
-            return prescriptionRepository.findByPatient_Id(patientId, pageable)
+            return prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId, pageable)
                 .map(prescriptionMapper::toResponseDTO);
         }
         if (staffId != null) {
-            return prescriptionRepository.findByStaff_Id(staffId, pageable)
+            return prescriptionRepository.findByStaff_IdAndHospital_Id(staffId, hospitalId, pageable)
                 .map(prescriptionMapper::toResponseDTO);
         }
         if (encounterId != null) {
-            return prescriptionRepository.findByEncounter_Id(encounterId, pageable)
+            return prescriptionRepository.findByEncounter_IdAndHospital_Id(encounterId, hospitalId, pageable)
                 .map(prescriptionMapper::toResponseDTO);
         }
-        return prescriptionRepository.findAll(pageable).map(prescriptionMapper::toResponseDTO);
+        return prescriptionRepository.findByHospital_Id(hospitalId, pageable).map(prescriptionMapper::toResponseDTO);
     }
 
     @Override
@@ -151,17 +162,24 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public void deletePrescription(UUID id, Locale locale) {
-        if (!prescriptionRepository.existsById(id)) {
+        Prescription prescription = prescriptionRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+
+        // ── Hospital scope enforcement ──
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (prescription.getHospital() != null && !prescription.getHospital().getId().equals(hospitalId)) {
             throw new ResourceNotFoundException("prescription.notfound");
         }
+
         prescriptionRepository.deleteById(id);
     }
 
     @Override
     @Transactional
     public java.util.List<PrescriptionResponseDTO> getPrescriptionsByPatientId(UUID patientId, Locale locale) {
-        return prescriptionRepository.findByPatient_Id(patientId, Pageable.unpaged())
-            .getContent().stream()
+        // ── Hospital scope enforcement ──
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        return prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId).stream()
             .map(prescriptionMapper::toResponseDTO)
             .toList();
     }

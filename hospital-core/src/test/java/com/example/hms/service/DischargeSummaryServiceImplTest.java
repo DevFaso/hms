@@ -48,6 +48,7 @@ class DischargeSummaryServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private DischargeApprovalRepository dischargeApprovalRepository;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks private DischargeSummaryServiceImpl service;
 

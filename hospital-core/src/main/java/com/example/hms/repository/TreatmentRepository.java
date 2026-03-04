@@ -35,4 +35,11 @@ public interface TreatmentRepository extends JpaRepository<Treatment, UUID> {
             "JOIN FETCH t.assignment a " +
             "JOIN FETCH a.user")
     List<Treatment> findAllWithAssignmentAndUser();
+
+    // ✅ NEW: loads all treatments with creator user, scoped to hospital
+    @Query("SELECT t FROM Treatment t " +
+            "JOIN FETCH t.assignment a " +
+            "JOIN FETCH a.user " +
+            "WHERE t.hospital.id = :hospitalId")
+    List<Treatment> findAllWithAssignmentAndUserByHospitalId(@Param("hospitalId") UUID hospitalId);
 }

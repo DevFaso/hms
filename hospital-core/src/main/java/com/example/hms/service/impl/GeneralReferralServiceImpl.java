@@ -18,6 +18,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.GeneralReferralService;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +42,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
+    private final RoleValidator roleValidator;
 
     @Override
     @Transactional
@@ -136,36 +138,56 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
     @Override
     public List<GeneralReferralResponseDTO> getReferralsByPatient(UUID patientId) {
-        return referralRepository.findByPatientIdOrderByCreatedAtDesc(patientId)
-            .stream()
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<GeneralReferral> referrals;
+        if (activeHospitalId != null) {
+            referrals = referralRepository.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patientId, activeHospitalId);
+        } else {
+            referrals = referralRepository.findByPatientIdOrderByCreatedAtDesc(patientId);
+        }
+        return referrals.stream()
             .map(this::toResponse)
             .toList();
     }
 
     @Override
     public List<GeneralReferralResponseDTO> getReferralsByReferringProvider(UUID providerId) {
-        return referralRepository.findByReferringProviderIdOrderByCreatedAtDesc(providerId)
-            .stream()
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<GeneralReferral> referrals;
+        if (activeHospitalId != null) {
+            referrals = referralRepository.findByReferringProviderIdAndHospitalIdOrderByCreatedAtDesc(providerId, activeHospitalId);
+        } else {
+            referrals = referralRepository.findByReferringProviderIdOrderByCreatedAtDesc(providerId);
+        }
+        return referrals.stream()
             .map(this::toResponse)
             .toList();
     }
 
     @Override
     public List<GeneralReferralResponseDTO> getReferralsByReceivingProvider(UUID providerId) {
-        return referralRepository.findByReceivingProviderIdOrderByCreatedAtDesc(providerId)
-            .stream()
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<GeneralReferral> referrals;
+        if (activeHospitalId != null) {
+            referrals = referralRepository.findByReceivingProviderIdAndHospitalIdOrderByCreatedAtDesc(providerId, activeHospitalId);
+        } else {
+            referrals = referralRepository.findByReceivingProviderIdOrderByCreatedAtDesc(providerId);
+        }
+        return referrals.stream()
             .map(this::toResponse)
             .toList();
     }
 
     @Override
     public List<GeneralReferralResponseDTO> getReferralsByHospital(UUID hospitalId, String status) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<GeneralReferral> referrals;
         if (status != null && !status.isBlank()) {
             ReferralStatus referralStatus = ReferralStatus.valueOf(status.toUpperCase());
-            referrals = referralRepository.findByHospitalIdAndStatusOrderByCreatedAtDesc(hospitalId, referralStatus);
+            referrals = referralRepository.findByHospitalIdAndStatusOrderByCreatedAtDesc(effectiveHospitalId, referralStatus);
         } else {
-            referrals = referralRepository.findByHospitalIdOrderByCreatedAtDesc(hospitalId);
+            referrals = referralRepository.findByHospitalIdOrderByCreatedAtDesc(effectiveHospitalId);
         }
         return referrals.stream()
             .map(this::toResponse)
@@ -174,6 +196,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
     @Override
     public List<GeneralReferralResponseDTO> getAllReferrals(String status) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null) {
+            return getReferralsByHospital(activeHospitalId, status);
+        }
         List<GeneralReferral> referrals;
         if (status != null && !status.isBlank()) {
             ReferralStatus referralStatus = ReferralStatus.valueOf(status.toUpperCase());
@@ -188,15 +214,27 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
     @Override
     public List<GeneralReferralResponseDTO> getOverdueReferrals() {
-        return referralRepository.findOverdueReferrals(LocalDateTime.now())
-            .stream()
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<GeneralReferral> referrals;
+        if (activeHospitalId != null) {
+            referrals = referralRepository.findOverdueReferralsByHospital(activeHospitalId, LocalDateTime.now());
+        } else {
+            referrals = referralRepository.findOverdueReferrals(LocalDateTime.now());
+        }
+        return referrals.stream()
             .map(this::toResponse)
             .toList();
     }
 
     private GeneralReferral findReferral(UUID referralId) {
-        return referralRepository.findById(referralId)
+        GeneralReferral referral = referralRepository.findById(referralId)
             .orElseThrow(() -> new ResourceNotFoundException("Referral not found"));
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && referral.getHospital() != null
+                && !activeHospitalId.equals(referral.getHospital().getId())) {
+            throw new ResourceNotFoundException("Referral not found");
+        }
+        return referral;
     }
 
     private GeneralReferralResponseDTO toResponse(GeneralReferral referral) {

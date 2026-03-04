@@ -42,6 +42,7 @@ class ConsultationServiceImplTest {
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private EncounterRepository encounterRepository;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks private ConsultationServiceImpl service;
 

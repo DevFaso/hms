@@ -63,6 +63,7 @@ class TreatmentPlanServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private TreatmentPlanMapper treatmentPlanMapper;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks private TreatmentPlanServiceImpl service;
 
