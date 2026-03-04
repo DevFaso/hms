@@ -45,6 +45,7 @@ class GeneralReferralServiceImplTest {
     @Mock private HospitalRepository hospitalRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private DepartmentRepository departmentRepository;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks
     private GeneralReferralServiceImpl service;

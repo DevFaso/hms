@@ -162,6 +162,8 @@ class PatientServiceImplTest {
     private StaffRepository staffRepository;
     @Mock
     private ObjectMapper objectMapper;
+    @Mock
+    private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks
     private PatientServiceImpl patientService;
@@ -212,9 +214,10 @@ class PatientServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(false);
 
+        // SECURITY FIX: Now returns 404 (ResourceNotFoundException) instead of IllegalStateException
+        // to prevent information leakage about patients in other hospitals
         assertThatThrownBy(() -> patientService.getPatientById(patientId, hospitalId, Locale.ENGLISH))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("not registered");
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test

@@ -24,6 +24,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.AdmissionService;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +50,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
     private final AdmissionMapper admissionMapper;
+    private final RoleValidator roleValidator;
 
     @Override
     @Transactional
@@ -109,6 +111,12 @@ public class AdmissionServiceImpl implements AdmissionService {
     public AdmissionResponseDTO getAdmission(UUID admissionId) {
         Admission admission = admissionRepository.findById(admissionId)
             .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_MSG));
+        // ── Tenant isolation ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && admission.getHospital() != null
+                && !activeHospitalId.equals(admission.getHospital().getId())) {
+            throw new ResourceNotFoundException(ADMISSION_NOT_FOUND_MSG);
+        }
         return admissionMapper.toResponseDTO(admission);
     }
 
@@ -195,8 +203,15 @@ public class AdmissionServiceImpl implements AdmissionService {
 
     @Override
     public List<AdmissionResponseDTO> getAdmissionsByPatient(UUID patientId) {
-        return admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId)
-            .stream()
+        // ── Tenant isolation: filter to active hospital ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<Admission> admissions = admissionRepository.findByPatientIdOrderByAdmissionDateTimeDesc(patientId);
+        if (activeHospitalId != null) {
+            admissions = admissions.stream()
+                .filter(a -> a.getHospital() != null && activeHospitalId.equals(a.getHospital().getId()))
+                .toList();
+        }
+        return admissions.stream()
             .map(admissionMapper::toResponseDTO)
             .toList();
     }
@@ -218,6 +233,11 @@ public class AdmissionServiceImpl implements AdmissionService {
 
     @Override
     public List<AdmissionResponseDTO> getAllAdmissions(String status, LocalDateTime startDate, LocalDateTime endDate) {
+        // ── Tenant isolation: non-superadmin must be scoped ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null) {
+            return getAdmissionsByHospital(activeHospitalId, status, startDate, endDate);
+        }
         if (status != null && !status.isEmpty()) {
             AdmissionStatus admissionStatus = AdmissionStatus.valueOf(status.toUpperCase());
             return admissionRepository.findByStatusOrderByAdmissionDateTimeDesc(admissionStatus)
@@ -238,7 +258,11 @@ public class AdmissionServiceImpl implements AdmissionService {
 
     @Override
     public AdmissionResponseDTO getCurrentAdmissionForPatient(UUID patientId) {
+        // ── Tenant isolation ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         return admissionRepository.findCurrentAdmissionByPatient(patientId)
+            .filter(admission -> activeHospitalId == null
+                || (admission.getHospital() != null && activeHospitalId.equals(admission.getHospital().getId())))
             .map(admissionMapper::toResponseDTO)
             .orElse(null);
     }

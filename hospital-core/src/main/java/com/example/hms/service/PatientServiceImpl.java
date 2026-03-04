@@ -75,6 +75,7 @@ import com.example.hms.repository.UltrasoundOrderRepository;
 import com.example.hms.repository.UltrasoundReportRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.utility.DiagnosisCodeValidator;
+import com.example.hms.utility.RoleValidator;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -207,10 +208,20 @@ public class PatientServiceImpl implements PatientService {
     private final NursingNoteMapper nursingNoteMapper;
     private final StaffRepository staffRepository;
     private final ObjectMapper objectMapper;
+    private final RoleValidator roleValidator;
 
     @Override
     @Transactional(readOnly = true)
     public List<PatientResponseDTO> getAllPatients(UUID hospitalId, Locale locale) {
+        // SECURITY: Never return unscoped patient data. hospitalId is mandatory for non-superadmin.
+        if (hospitalId == null) {
+            // Only super-admin can list all patients (caller must have already verified role)
+            if (!roleValidator.isSuperAdminFromAuth()) {
+                throw new com.example.hms.exception.BusinessException(
+                    "Hospital context required to list patients. Please select an active hospital.");
+            }
+        }
+
         List<Patient> patients = (hospitalId != null)
             ? patientRepository.findByHospitalId(hospitalId)
             : patientRepository.findAll();
@@ -228,8 +239,15 @@ public class PatientServiceImpl implements PatientService {
                 messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale)
             ));
 
+        // SECURITY: Enforce hospital scope — non-superadmin must have hospitalId and patient must be registered there.
         if (hospitalId != null && !registrationRepository.isPatientRegisteredInHospitalFixed(id, hospitalId)) {
-            throw new IllegalStateException("Patient is not registered in the specified hospital.");
+            // Return 404 instead of 403 to prevent information leakage (don't reveal patient exists in other hospital)
+            throw new ResourceNotFoundException(
+                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale));
+        }
+        if (hospitalId == null && !roleValidator.isSuperAdminFromAuth()) {
+            throw new com.example.hms.exception.BusinessException(
+                "Hospital context required to view patient details.");
         }
 
         return buildPatientDto(patient, hospitalId);

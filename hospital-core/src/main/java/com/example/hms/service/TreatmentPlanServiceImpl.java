@@ -59,6 +59,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     private final StaffRepository staffRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final TreatmentPlanMapper treatmentPlanMapper;
+    private final com.example.hms.utility.RoleValidator roleValidator;
 
     @Override
     public TreatmentPlanResponseDTO create(TreatmentPlanRequestDTO requestDTO) {
@@ -105,12 +106,24 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     @Override
     @Transactional(readOnly = true)
     public TreatmentPlanResponseDTO getById(UUID id) {
-        return treatmentPlanMapper.toResponseDTO(getPlanOrThrow(id));
+        TreatmentPlan plan = getPlanOrThrow(id);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && plan.getHospital() != null
+                && !activeHospitalId.equals(plan.getHospital().getId())) {
+            throw new ResourceNotFoundException("Treatment plan not found with ID: " + id);
+        }
+        return treatmentPlanMapper.toResponseDTO(plan);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<TreatmentPlanResponseDTO> listByPatient(UUID patientId, Pageable pageable) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null) {
+            // Filter patient results by hospital at the DB level
+            return treatmentPlanRepository.findAllByPatientIdAndHospitalId(patientId, activeHospitalId, pageable)
+                .map(treatmentPlanMapper::toResponseDTO);
+        }
         return treatmentPlanRepository.findAllByPatientId(patientId, pageable)
             .map(treatmentPlanMapper::toResponseDTO);
     }
@@ -118,15 +131,21 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     @Override
     @Transactional(readOnly = true)
     public Page<TreatmentPlanResponseDTO> listByHospital(UUID hospitalId, TreatmentPlanStatus status, Pageable pageable) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         Page<TreatmentPlan> page = (status != null)
-            ? treatmentPlanRepository.findAllByHospitalIdAndStatus(hospitalId, status, pageable)
-            : treatmentPlanRepository.findAllByHospitalId(hospitalId, pageable);
+            ? treatmentPlanRepository.findAllByHospitalIdAndStatus(effectiveHospitalId, status, pageable)
+            : treatmentPlanRepository.findAllByHospitalId(effectiveHospitalId, pageable);
         return page.map(treatmentPlanMapper::toResponseDTO);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<TreatmentPlanResponseDTO> listAll(TreatmentPlanStatus status, Pageable pageable) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null) {
+            return listByHospital(activeHospitalId, status, pageable);
+        }
         Page<TreatmentPlan> page = (status != null)
             ? treatmentPlanRepository.findAllByStatus(status, pageable)
             : treatmentPlanRepository.findAll(pageable);

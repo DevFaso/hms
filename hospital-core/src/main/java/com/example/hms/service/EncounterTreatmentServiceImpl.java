@@ -12,6 +12,7 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.EncounterTreatmentRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.TreatmentRepository;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +28,7 @@ public class EncounterTreatmentServiceImpl implements EncounterTreatmentService 
     private final StaffRepository staffRepository;
     private final EncounterTreatmentRepository encounterTreatmentRepository;
     private final EncounterTreatmentMapper mapper;
+    private final RoleValidator roleValidator;
 
     @Override
     @Transactional
@@ -47,6 +49,13 @@ public class EncounterTreatmentServiceImpl implements EncounterTreatmentService 
     @Override
     @Transactional(readOnly = true)
     public List<EncounterTreatmentResponseDTO> getTreatmentsByEncounter(UUID encounterId) {
+        Encounter encounter = encounterRepository.findById(encounterId)
+                .orElseThrow(() -> new ResourceNotFoundException("Encounter not found"));
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && encounter.getHospital() != null
+                && !activeHospitalId.equals(encounter.getHospital().getId())) {
+            throw new ResourceNotFoundException("Encounter not found");
+        }
         List<EncounterTreatment> list = encounterTreatmentRepository.findByEncounter_Id(encounterId);
         return list.stream().map(mapper::toDto).toList();
     }

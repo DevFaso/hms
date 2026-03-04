@@ -138,13 +138,11 @@ export class AuthService {
    * Call POST /api/auth/token/refresh with the stored refresh token.
    * Returns an Observable of the new token pair.
    *
-   * Uses a window-relative absolute URL so the request bypasses BOTH the
-   * apiPrefixInterceptor (which would add a double /api prefix) AND the
-   * csrfInterceptor (CSRF tokens are not needed for this stateless endpoint
-   * because it is authenticated by the signed refresh-token body, not a session
-   * cookie — attaching X-XSRF-TOKEN is harmless but the cookie may be absent
-   * when the token refresh is the very first mutating request after a hard
-   * reload, causing an unnecessary rejection).
+   * Uses a window-relative absolute URL so the request bypasses the
+   * apiPrefixInterceptor (which would add a double /api prefix).
+   * Note: Angular interceptors still run for same-origin absolute URLs,
+   * so the csrfInterceptor will execute — this is harmless since the
+   * endpoint is authenticated by the signed refresh-token body.
    */
   refreshTokenRequest(): Observable<{ accessToken: string; refreshToken: string }> {
     const refreshToken = this.getRefreshToken();

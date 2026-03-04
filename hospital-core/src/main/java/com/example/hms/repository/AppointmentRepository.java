@@ -19,20 +19,38 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     @Query("SELECT a FROM Appointment a WHERE LOWER(a.patient.email) = LOWER(:email)")
     List<Appointment> findByPatientEmail(@Param("email") String email);
 
+    @Query("SELECT a FROM Appointment a WHERE LOWER(a.patient.email) = LOWER(:email) AND a.hospital.id = :hospitalId")
+    List<Appointment> findByPatientEmailAndHospitalId(@Param("email") String email, @Param("hospitalId") UUID hospitalId);
+
     @Query("SELECT a FROM Appointment a WHERE a.patient.phoneNumberPrimary = :phone")
     List<Appointment> findByPatientPhoneNumber(@Param("phone") String phone);
 
+    @Query("SELECT a FROM Appointment a WHERE a.patient.phoneNumberPrimary = :phone AND a.hospital.id = :hospitalId")
+    List<Appointment> findByPatientPhoneNumberAndHospitalId(@Param("phone") String phone, @Param("hospitalId") UUID hospitalId);
+
     @Query("SELECT a FROM Appointment a JOIN a.patient.hospitalRegistrations r WHERE r.mrn = :mrn")
-    List<Appointment> findByPatientMri(@Param("mrn") String mrn);
+    List<Appointment> findByPatientMrn(@Param("mrn") String mrn);
+
+    @Query("SELECT a FROM Appointment a JOIN a.patient.hospitalRegistrations r WHERE r.mrn = :mrn AND a.hospital.id = :hospitalId")
+    List<Appointment> findByPatientMrnAndHospitalId(@Param("mrn") String mrn, @Param("hospitalId") UUID hospitalId);
 
     @Query("SELECT a FROM Appointment a WHERE a.staff.licenseNumber = :number")
     List<Appointment> findByStaffNumber(@Param("number") String number);
 
+    @Query("SELECT a FROM Appointment a WHERE a.staff.licenseNumber = :number AND a.hospital.id = :hospitalId")
+    List<Appointment> findByStaffNumberAndHospitalId(@Param("number") String number, @Param("hospitalId") UUID hospitalId);
+
     @Query("SELECT a FROM Appointment a WHERE LOWER(a.staff.user.email) = LOWER(:email)")
     List<Appointment> findByStaffEmail(@Param("email") String email);
 
+    @Query("SELECT a FROM Appointment a WHERE LOWER(a.staff.user.email) = LOWER(:email) AND a.hospital.id = :hospitalId")
+    List<Appointment> findByStaffEmailAndHospitalId(@Param("email") String email, @Param("hospitalId") UUID hospitalId);
+
     @Query("SELECT a FROM Appointment a WHERE a.staff.id = :id")
     List<Appointment> findByStaffId(@Param("id") UUID id);
+
+    @Query("SELECT a FROM Appointment a WHERE a.staff.id = :id AND a.hospital.id = :hospitalId")
+    List<Appointment> findByStaffIdAndHospitalId(@Param("id") UUID id, @Param("hospitalId") UUID hospitalId);
 
     List<Appointment> findByPatient_Id(UUID patientId);
 

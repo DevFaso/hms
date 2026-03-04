@@ -54,6 +54,8 @@ class ImagingOrderServiceImplTest {
     private HospitalRepository hospitalRepository;
     @Mock
     private ImagingOrderMapper imagingOrderMapper;
+    @Mock
+    private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks
     private ImagingOrderServiceImpl imagingOrderService;
@@ -460,5 +462,97 @@ class ImagingOrderServiceImplTest {
 
         assertThat(result).isEmpty();
         verify(imagingOrderRepository).findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class));
+    }
+
+    // ── Tenant isolation tests ──
+
+    @Test
+    void getOrder_crossHospital_throws404() {
+        UUID otherHospitalId = UUID.randomUUID();
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospitalId);
+
+        org.junit.jupiter.api.Assertions.assertThrows(
+            ResourceNotFoundException.class,
+            () -> imagingOrderService.getOrder(orderId)
+        );
+    }
+
+    @Test
+    void getOrder_sameHospital_success() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        ImagingOrderResponseDTO dto = ImagingOrderResponseDTO.builder().id(orderId).build();
+
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(dto);
+
+        assertThat(imagingOrderService.getOrder(orderId).getId()).isEqualTo(orderId);
+    }
+
+    @Test
+    void getOrder_superAdmin_noFilter() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        ImagingOrderResponseDTO dto = ImagingOrderResponseDTO.builder().id(orderId).build();
+
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(dto);
+
+        assertThat(imagingOrderService.getOrder(orderId)).isNotNull();
+    }
+
+    @Test
+    void getOrdersByPatient_scopedToHospital() {
+        UUID otherHospId = UUID.randomUUID();
+        Hospital otherHosp = new Hospital(); otherHosp.setId(otherHospId);
+
+        ImagingOrder ownOrder = new ImagingOrder(); ownOrder.setId(UUID.randomUUID()); ownOrder.setHospital(hospital);
+        ImagingOrder otherOrder = new ImagingOrder(); otherOrder.setId(UUID.randomUUID()); otherOrder.setHospital(otherHosp);
+        ImagingOrderResponseDTO dto = ImagingOrderResponseDTO.builder().id(ownOrder.getId()).build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(imagingOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId)).thenReturn(List.of(ownOrder, otherOrder));
+        when(imagingOrderMapper.toResponseDTO(ownOrder)).thenReturn(dto);
+
+        List<ImagingOrderResponseDTO> result = imagingOrderService.getOrdersByPatient(patientId, null);
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void getOrdersByPatient_superAdmin_noFilter() {
+        ImagingOrder order = new ImagingOrder(); order.setId(orderId); order.setHospital(hospital);
+        ImagingOrderResponseDTO dto = ImagingOrderResponseDTO.builder().id(orderId).build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(imagingOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId)).thenReturn(List.of(order));
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(dto);
+
+        assertThat(imagingOrderService.getOrdersByPatient(patientId, null)).hasSize(1);
+    }
+
+    @Test
+    void getAllOrders_scopedToHospital_delegatesToHospitalQuery() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(imagingOrderRepository.findByHospital_IdOrderByOrderedAtDesc(hospitalId)).thenReturn(List.of());
+
+        List<ImagingOrderResponseDTO> result = imagingOrderService.getAllOrders(null);
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getAllOrders_superAdmin_noFilter_withStatus() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(imagingOrderRepository.findByStatusOrderByOrderedAtDesc(ImagingOrderStatus.COMPLETED)).thenReturn(List.of());
+
+        assertThat(imagingOrderService.getAllOrders(ImagingOrderStatus.COMPLETED)).isEmpty();
     }
 }

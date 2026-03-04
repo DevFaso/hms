@@ -18,6 +18,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.ConsultationService;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
+    private final RoleValidator roleValidator;
 
     @Override
     public ConsultationResponseDTO createConsultation(ConsultationRequestDTO request, UUID requestingProviderId) {
@@ -94,13 +96,26 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Transactional(readOnly = true)
     public ConsultationResponseDTO getConsultation(UUID consultationId) {
         Consultation consultation = getConsultationEntity(consultationId);
+        // ── Tenant isolation ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && consultation.getHospital() != null
+                && !activeHospitalId.equals(consultation.getHospital().getId())) {
+            throw new ResourceNotFoundException("Consultation not found with ID: " + consultationId);
+        }
         return toResponseDTO(consultation);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getConsultationsForPatient(UUID patientId) {
+        // ── Tenant isolation ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<Consultation> consultations = consultationRepository.findByPatient_IdOrderByRequestedAtDesc(patientId);
+        if (activeHospitalId != null) {
+            consultations = consultations.stream()
+                .filter(c -> c.getHospital() != null && activeHospitalId.equals(c.getHospital().getId()))
+                .toList();
+        }
         return consultations.stream()
             .map(this::toResponseDTO)
             .toList();
@@ -126,6 +141,11 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Override
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getAllConsultations(ConsultationStatus status) {
+        // ── Tenant isolation: non-superadmin scoped to active hospital ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null) {
+            return getConsultationsForHospital(activeHospitalId, status);
+        }
         List<Consultation> consultations;
         if (status != null) {
             consultations = consultationRepository.findByStatusOrderByRequestedAtDesc(status);
@@ -140,7 +160,14 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Override
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getConsultationsRequestedBy(UUID providerId) {
+        // ── Tenant isolation ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<Consultation> consultations = consultationRepository.findByRequestingProvider_IdOrderByRequestedAtDesc(providerId);
+        if (activeHospitalId != null) {
+            consultations = consultations.stream()
+                .filter(c -> c.getHospital() != null && activeHospitalId.equals(c.getHospital().getId()))
+                .toList();
+        }
         return consultations.stream()
             .map(this::toResponseDTO)
             .toList();
@@ -149,11 +176,18 @@ public class ConsultationServiceImpl implements ConsultationService {
     @Override
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getConsultationsAssignedTo(UUID consultantId, ConsultationStatus status) {
+        // ── Tenant isolation ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<Consultation> consultations;
         if (status != null) {
             consultations = consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(consultantId, status);
         } else {
             consultations = consultationRepository.findByConsultant_IdOrderByRequestedAtDesc(consultantId);
+        }
+        if (activeHospitalId != null) {
+            consultations = consultations.stream()
+                .filter(c -> c.getHospital() != null && activeHospitalId.equals(c.getHospital().getId()))
+                .toList();
         }
         return consultations.stream()
             .map(this::toResponseDTO)

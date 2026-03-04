@@ -57,7 +57,8 @@ export class NotificationService {
 
   /**
    * Opens a STOMP-over-SockJS connection to /ws-chat and subscribes to
-   * /topic/notifications, filtering messages for the given username.
+   * /user/topic/notifications (Spring's user-destination prefix ensures
+   * only messages targeted at the authenticated user are received).
    *
    * Uses exponential backoff for reconnection (5 s → 10 s → 20 s → … → 60 s)
    * to avoid hammering the backend when it is down or restarting.
@@ -65,7 +66,7 @@ export class NotificationService {
    * sockjs-client is a CommonJS module; it is loaded lazily via dynamic import
    * so that Vite's ESM bundler does not crash at module evaluation time.
    */
-  connectWebSocket(username: string): void {
+  connectWebSocket(): void {
     if (typeof globalThis === 'undefined' || !globalThis.WebSocket) return;
 
     // Build the SockJS URL pointing at /api/ws-chat (context path included).
@@ -98,15 +99,10 @@ export class NotificationService {
               this.stompClient.reconnectDelay = this.baseReconnectDelay;
             }
 
-            this.stompClient?.subscribe('/topic/notifications', (frame: IMessage) => {
+            this.stompClient?.subscribe('/user/topic/notifications', (frame: IMessage) => {
               try {
                 const notification = JSON.parse(frame.body) as Notification;
-                if (
-                  !notification.recipientUsername ||
-                  notification.recipientUsername === username
-                ) {
-                  this.notificationSubject.next(notification);
-                }
+                this.notificationSubject.next(notification);
               } catch {
                 // Malformed frame — ignore
               }

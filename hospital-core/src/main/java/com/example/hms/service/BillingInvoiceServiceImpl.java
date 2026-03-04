@@ -17,6 +17,7 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.InvoiceItemRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -43,6 +44,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private final InvoiceItemRepository invoiceItemRepository;
     private final PdfInvoiceService pdfInvoiceService;
     private final BillingInvoiceMapper invoiceMapper;
+    private final RoleValidator roleValidator;
 
     @Override
     @Transactional
@@ -73,6 +75,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     public BillingInvoiceResponseDTO getInvoiceById(UUID id, Locale locale) {
         BillingInvoice invoice = invoiceRepository.findWithAllById(id)
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
+        // ── Tenant isolation: verify caller has access to this invoice's hospital ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && invoice.getHospital() != null
+                && !activeHospitalId.equals(invoice.getHospital().getId())) {
+            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND); // 404, not 403
+        }
         return invoiceMapper.toBillingInvoiceResponseDTO(invoice);
     }
 
@@ -81,6 +89,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional(readOnly = true)
     public Page<BillingInvoiceResponseDTO> getInvoicesByPatientId(UUID patientId, Pageable pageable, Locale locale) {
+        // ── Tenant isolation: scope by active hospital when present ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null) {
+            return invoiceRepository.findByPatient_IdAndHospital_Id(patientId, activeHospitalId, pageable)
+                .map(invoiceMapper::toBillingInvoiceResponseDTO);
+        }
         return invoiceRepository.findByPatient_Id(patientId, pageable)
             .map(invoiceMapper::toBillingInvoiceResponseDTO);
     }
@@ -95,10 +109,17 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional(readOnly = true)
     public List<BillingInvoiceResponseDTO> getOverdueInvoices(LocalDate referenceDate, Locale locale) {
+        // ── Tenant isolation: super-admin sees all, others scoped ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<BillingInvoice> overdue = invoiceRepository.findOverdue(
             referenceDate,
             List.of(InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID)
         );
+        if (activeHospitalId != null) {
+            overdue = overdue.stream()
+                .filter(inv -> inv.getHospital() != null && activeHospitalId.equals(inv.getHospital().getId()))
+                .toList();
+        }
         return overdue.stream()
             .map(invoiceMapper::toBillingInvoiceResponseDTO)
             .toList();
@@ -109,6 +130,13 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     public BillingInvoiceResponseDTO updateInvoice(UUID id, BillingInvoiceRequestDTO dto, Locale locale) {
         BillingInvoice invoice = invoiceRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
+
+        // ── Tenant isolation ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && invoice.getHospital() != null
+                && !activeHospitalId.equals(invoice.getHospital().getId())) {
+            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND);
+        }
 
         Patient patient = patientRepository.findByUsernameOrEmail(dto.getPatientEmail())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
@@ -139,7 +167,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional
     public void deleteInvoice(UUID id, Locale locale) {
-        if (!invoiceRepository.existsById(id)) {
+        BillingInvoice invoice = invoiceRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
+        // ── Tenant isolation ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && invoice.getHospital() != null
+                && !activeHospitalId.equals(invoice.getHospital().getId())) {
             throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND);
         }
         invoiceRepository.deleteById(id);
@@ -161,6 +194,13 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BillingInvoice invoice = invoiceRepository.findByIdWithRefs(invoiceId)
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
 
+        // ── Tenant isolation ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && invoice.getHospital() != null
+                && !activeHospitalId.equals(invoice.getHospital().getId())) {
+            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND);
+        }
+
         List<InvoiceItem> items = invoiceItemRepository.findByBillingInvoiceId(invoiceId);
         Locale effectiveLocale = locale != null ? locale : LocaleContextHolder.getLocale();
 
@@ -171,6 +211,13 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional(readOnly = true)
     public Page<BillingInvoiceResponseDTO> searchInvoices(BillingInvoiceSearchRequest searchRequest, Pageable pageable, Locale locale) {
+        // ── Tenant isolation: force hospital scope for non-superadmin ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID effectiveHospitalId = (searchRequest != null ? searchRequest.getHospitalId() : null);
+        if (activeHospitalId != null) {
+            effectiveHospitalId = activeHospitalId; // override any client-supplied hospitalId
+        }
+
         List<InvoiceStatus> statuses = null;
         if (searchRequest != null && searchRequest.getStatuses() != null) {
             statuses = searchRequest.getStatuses().stream()
@@ -179,7 +226,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         return invoiceRepository.findAllWithFilters(
             searchRequest != null ? searchRequest.getPatientId() : null,
-            searchRequest != null ? searchRequest.getHospitalId() : null,
+            effectiveHospitalId,
             statuses,
             searchRequest != null ? searchRequest.getFromDate() : null,
             searchRequest != null ? searchRequest.getToDate() : null,

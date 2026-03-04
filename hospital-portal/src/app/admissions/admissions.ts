@@ -14,6 +14,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 
 @Component({
   selector: 'app-admissions',
@@ -28,6 +29,7 @@ export class AdmissionsComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
+  private readonly roleContext = inject(RoleContextService);
 
   admissions = signal<AdmissionResponse[]>([]);
   filtered = signal<AdmissionResponse[]>([]);
@@ -65,7 +67,9 @@ export class AdmissionsComponent implements OnInit {
   ngOnInit(): void {
     this.load();
     this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
-    this.staffService.list().subscribe((s) => {
+    // ── TENANT ISOLATION: scope staff list to active hospital ──
+    const hid = this.roleContext.activeHospitalId;
+    this.staffService.list(hid ?? undefined).subscribe((s) => {
       this.allStaff = s ?? [];
       this.staffMembers.set(s ?? []);
     });
@@ -92,7 +96,9 @@ export class AdmissionsComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          return this.patientService.list(undefined, q);
+          // ── TENANT ISOLATION: scope patient search to active hospital ──
+          const hid = this.roleContext.activeHospitalId ?? undefined;
+          return this.patientService.list(hid, q);
         }),
       )
       .subscribe({

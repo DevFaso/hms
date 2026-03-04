@@ -390,13 +390,14 @@ class PrescriptionServiceImplTest {
         PrescriptionResponseDTO dto = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
         Page<Prescription> page = new PageImpl<>(List.of(prescription));
 
-        when(prescriptionRepository.findByPatient_Id(patientId, pageable)).thenReturn(page);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId, pageable)).thenReturn(page);
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
         Page<PrescriptionResponseDTO> result = prescriptionService.list(patientId, null, null, pageable, Locale.ENGLISH);
 
         assertThat(result.getContent()).containsExactly(dto);
-        verify(prescriptionRepository).findByPatient_Id(patientId, pageable);
+        verify(prescriptionRepository).findByPatient_IdAndHospital_Id(patientId, hospitalId, pageable);
         verify(prescriptionRepository, never()).findAll(any(Pageable.class));
     }
 
@@ -407,13 +408,14 @@ class PrescriptionServiceImplTest {
         PrescriptionResponseDTO dto = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
         Page<Prescription> page = new PageImpl<>(List.of(prescription));
 
-        when(prescriptionRepository.findAll(pageable)).thenReturn(page);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByHospital_Id(hospitalId, pageable)).thenReturn(page);
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
         Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, null, pageable, Locale.ENGLISH);
 
         assertThat(result.getContent()).containsExactly(dto);
-        verify(prescriptionRepository).findAll(pageable);
+        verify(prescriptionRepository).findByHospital_Id(hospitalId, pageable);
     }
 
     private PrescriptionRequestDTO buildRequest() {
@@ -458,7 +460,9 @@ class PrescriptionServiceImplTest {
     @Test
     void deletePrescriptionWhenExistsDeletesById() {
         UUID id = UUID.randomUUID();
-        when(prescriptionRepository.existsById(id)).thenReturn(true);
+        Prescription prescription = new Prescription();
+        prescription.setId(id);
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.of(prescription));
 
         prescriptionService.deletePrescription(id, Locale.ENGLISH);
 
@@ -468,7 +472,7 @@ class PrescriptionServiceImplTest {
     @Test
     void deletePrescriptionThrowsWhenNotExists() {
         UUID id = UUID.randomUUID();
-        when(prescriptionRepository.existsById(id)).thenReturn(false);
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> prescriptionService.deletePrescription(id, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -483,13 +487,14 @@ class PrescriptionServiceImplTest {
         PrescriptionResponseDTO dto = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
         Page<Prescription> page = new PageImpl<>(List.of(prescription));
 
-        when(prescriptionRepository.findByStaff_Id(staffId, pageable)).thenReturn(page);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByStaff_IdAndHospital_Id(staffId, hospitalId, pageable)).thenReturn(page);
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
         Page<PrescriptionResponseDTO> result = prescriptionService.list(null, staffId, null, pageable, Locale.ENGLISH);
 
         assertThat(result.getContent()).containsExactly(dto);
-        verify(prescriptionRepository).findByStaff_Id(staffId, pageable);
+        verify(prescriptionRepository).findByStaff_IdAndHospital_Id(staffId, hospitalId, pageable);
     }
 
     @Test
@@ -499,13 +504,14 @@ class PrescriptionServiceImplTest {
         PrescriptionResponseDTO dto = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
         Page<Prescription> page = new PageImpl<>(List.of(prescription));
 
-        when(prescriptionRepository.findByEncounter_Id(encounterId, pageable)).thenReturn(page);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByEncounter_IdAndHospital_Id(encounterId, hospitalId, pageable)).thenReturn(page);
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
         Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, encounterId, pageable, Locale.ENGLISH);
 
         assertThat(result.getContent()).containsExactly(dto);
-        verify(prescriptionRepository).findByEncounter_Id(encounterId, pageable);
+        verify(prescriptionRepository).findByEncounter_IdAndHospital_Id(encounterId, hospitalId, pageable);
     }
 
     // ═══════════════ getPrescriptionsByPatientId/StaffId/EncounterId ═══════════════
@@ -514,9 +520,9 @@ class PrescriptionServiceImplTest {
     void getPrescriptionsByPatientIdReturnsList() {
         Prescription prescription = new Prescription();
         PrescriptionResponseDTO dto = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
-        Page<Prescription> page = new PageImpl<>(List.of(prescription));
 
-        when(prescriptionRepository.findByPatient_Id(eq(patientId), any(Pageable.class))).thenReturn(page);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(prescription));
         when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
 
         List<PrescriptionResponseDTO> result = prescriptionService.getPrescriptionsByPatientId(patientId, Locale.ENGLISH);
@@ -1601,13 +1607,14 @@ class PrescriptionServiceImplTest {
 
     @Test
     void listWithNoFiltersCallsFindAll() {
-        when(prescriptionRepository.findAll(any(Pageable.class)))
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByHospital_Id(eq(hospitalId), any(Pageable.class)))
             .thenReturn(Page.empty());
 
         Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, null,
             org.springframework.data.domain.PageRequest.of(0, 10), Locale.ENGLISH);
         assertThat(result).isEmpty();
-        verify(prescriptionRepository).findAll(any(Pageable.class));
+        verify(prescriptionRepository).findByHospital_Id(eq(hospitalId), any(Pageable.class));
     }
 
     // ═══════════════ determineHospitalId: null staff ═══════════════
@@ -2092,5 +2099,120 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class);
+    }
+
+    // ═══════════════ Hospital scope enforcement tests ═══════════════
+
+    @Test
+    void getPrescriptionById_crossHospital_throws404() {
+        UUID id = UUID.randomUUID();
+        UUID otherHospId = UUID.randomUUID();
+        Hospital hosp = new Hospital(); hosp.setId(UUID.randomUUID());
+        Prescription prescription = new Prescription();
+        prescription.setId(id);
+        prescription.setHospital(hosp);
+
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.of(prescription));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospId);
+
+        assertThatThrownBy(() -> prescriptionService.getPrescriptionById(id, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void getPrescriptionById_sameHospital_success() {
+        UUID id = UUID.randomUUID();
+        UUID hospId = UUID.randomUUID();
+        Hospital hosp = new Hospital(); hosp.setId(hospId);
+        Prescription prescription = new Prescription();
+        prescription.setId(id);
+        prescription.setHospital(hosp);
+        PrescriptionResponseDTO dto = PrescriptionResponseDTO.builder().id(id).build();
+
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.of(prescription));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
+        when(prescriptionMapper.toResponseDTO(prescription)).thenReturn(dto);
+
+        assertThat(prescriptionService.getPrescriptionById(id, Locale.ENGLISH)).isSameAs(dto);
+    }
+
+    @Test
+    void deletePrescription_crossHospital_throws404() {
+        UUID id = UUID.randomUUID();
+        UUID otherHospId = UUID.randomUUID();
+        Hospital hosp = new Hospital(); hosp.setId(UUID.randomUUID());
+        Prescription prescription = new Prescription();
+        prescription.setId(id);
+        prescription.setHospital(hosp);
+
+        when(prescriptionRepository.findById(id)).thenReturn(Optional.of(prescription));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospId);
+
+        assertThatThrownBy(() -> prescriptionService.deletePrescription(id, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void list_withPatientFilter_usesHospitalScopedQuery() {
+        UUID hospId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospId, pageable))
+            .thenReturn(Page.empty());
+
+        Page<PrescriptionResponseDTO> result = prescriptionService.list(patientId, null, null, pageable, Locale.ENGLISH);
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void list_withStaffFilter_usesHospitalScopedQuery() {
+        UUID hospId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
+        when(prescriptionRepository.findByStaff_IdAndHospital_Id(staffId, hospId, pageable))
+            .thenReturn(Page.empty());
+
+        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, staffId, null, pageable, Locale.ENGLISH);
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void list_withEncounterFilter_usesHospitalScopedQuery() {
+        UUID hospId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
+        when(prescriptionRepository.findByEncounter_IdAndHospital_Id(encounterId, hospId, pageable))
+            .thenReturn(Page.empty());
+
+        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, encounterId, pageable, Locale.ENGLISH);
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void list_withNoFilter_usesHospitalScopedQuery() {
+        UUID hospId = UUID.randomUUID();
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
+        when(prescriptionRepository.findByHospital_Id(hospId, pageable))
+            .thenReturn(Page.empty());
+
+        Page<PrescriptionResponseDTO> result = prescriptionService.list(null, null, null, pageable, Locale.ENGLISH);
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getPrescriptionsByPatientId_usesHospitalScopedQuery() {
+        UUID hospId = UUID.randomUUID();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospId))
+            .thenReturn(List.of());
+
+        List<PrescriptionResponseDTO> result = prescriptionService.getPrescriptionsByPatientId(patientId, Locale.ENGLISH);
+        assertThat(result).isEmpty();
     }
 }

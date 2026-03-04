@@ -59,13 +59,7 @@ export class StaffService {
   }
 
   getById(id: string): Observable<StaffResponse> {
-    return this.http.get<StaffResponse[]>('/staff').pipe(
-      map((list) => {
-        const found = list.find((s) => s.id === id);
-        if (!found) throw new Error('Staff member not found');
-        return found;
-      }),
-    );
+    return this.http.get<StaffResponse>(`/staff/${id}/active`);
   }
 
   create(req: StaffUpsertRequest): Observable<StaffResponse> {

@@ -15,6 +15,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.TreatmentRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.JwtTokenProvider;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,7 @@ public class TreatmentServiceImpl implements TreatmentService {
     private final AuthService authService;
     private final TreatmentValidationService treatmentValidationService;
     private final JwtTokenProvider jwtTokenProvider;
+    private final RoleValidator roleValidator;
 
     @Transactional
     @Override
@@ -120,13 +122,27 @@ public class TreatmentServiceImpl implements TreatmentService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         messageSource.getMessage("treatment.notFound", new Object[]{id}, locale)));
 
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && treatment.getHospital() != null
+                && !activeHospitalId.equals(treatment.getHospital().getId())) {
+            throw new ResourceNotFoundException(
+                    messageSource.getMessage("treatment.notFound", new Object[]{id}, locale));
+        }
+
         return treatmentMapper.toTreatmentResponseDTO(treatment, language);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<TreatmentResponseDTO> getAllTreatments(Locale locale, String language) {
-        return treatmentRepository.findAllWithAssignmentAndUser().stream()
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<Treatment> treatments;
+        if (activeHospitalId != null) {
+            treatments = treatmentRepository.findAllWithAssignmentAndUserByHospitalId(activeHospitalId);
+        } else {
+            treatments = treatmentRepository.findAllWithAssignmentAndUser();
+        }
+        return treatments.stream()
                 .map(t -> treatmentMapper.toTreatmentResponseDTO(t, language))
                 .toList();
     }

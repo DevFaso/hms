@@ -19,4 +19,13 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
     Page<Prescription> findByEncounter_Id(UUID encounterId, Pageable pageable);
 
     List<Prescription> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
+
+    // Hospital-scoped queries for tenant isolation
+    Page<Prescription> findByHospital_Id(UUID hospitalId, Pageable pageable);
+
+    Page<Prescription> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId, Pageable pageable);
+
+    Page<Prescription> findByStaff_IdAndHospital_Id(UUID staffId, UUID hospitalId, Pageable pageable);
+
+    Page<Prescription> findByEncounter_IdAndHospital_Id(UUID encounterId, UUID hospitalId, Pageable pageable);
 }

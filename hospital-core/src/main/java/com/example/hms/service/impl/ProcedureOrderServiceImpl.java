@@ -17,6 +17,7 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.ProcedureOrderService;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -37,6 +38,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
+    private final RoleValidator roleValidator;
 
     @Override
     public ProcedureOrderResponseDTO createProcedureOrder(ProcedureOrderRequestDTO request, UUID orderingProviderId) {
@@ -103,7 +105,13 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     @Override
     @Transactional(readOnly = true)
     public List<ProcedureOrderResponseDTO> getProcedureOrdersForPatient(UUID patientId) {
-        List<ProcedureOrder> orders = procedureOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<ProcedureOrder> orders;
+        if (activeHospitalId != null) {
+            orders = procedureOrderRepository.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(patientId, activeHospitalId);
+        } else {
+            orders = procedureOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId);
+        }
         return orders.stream()
             .map(this::toResponseDTO)
             .toList();
@@ -112,13 +120,13 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     @Override
     @Transactional(readOnly = true)
     public List<ProcedureOrderResponseDTO> getProcedureOrdersForHospital(UUID hospitalId, ProcedureOrderStatus status) {
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<ProcedureOrder> orders;
         if (status != null) {
-            orders = procedureOrderRepository.findByHospital_IdAndStatusOrderByScheduledDatetimeAsc(hospitalId, status);
+            orders = procedureOrderRepository.findByHospital_IdAndStatusOrderByScheduledDatetimeAsc(effectiveHospitalId, status);
         } else {
-            orders = procedureOrderRepository.findAll().stream()
-                .filter(order -> order.getHospital().getId().equals(hospitalId))
-                .toList();
+            orders = procedureOrderRepository.findByHospital_IdOrderByOrderedAtDesc(effectiveHospitalId);
         }
         return orders.stream()
             .map(this::toResponseDTO)
@@ -128,7 +136,13 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     @Override
     @Transactional(readOnly = true)
     public List<ProcedureOrderResponseDTO> getProcedureOrdersOrderedBy(UUID providerId) {
-        List<ProcedureOrder> orders = procedureOrderRepository.findByOrderingProvider_IdOrderByOrderedAtDesc(providerId);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<ProcedureOrder> orders;
+        if (activeHospitalId != null) {
+            orders = procedureOrderRepository.findByOrderingProvider_IdAndHospital_IdOrderByOrderedAtDesc(providerId, activeHospitalId);
+        } else {
+            orders = procedureOrderRepository.findByOrderingProvider_IdOrderByOrderedAtDesc(providerId);
+        }
         return orders.stream()
             .map(this::toResponseDTO)
             .toList();
@@ -137,7 +151,9 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     @Override
     @Transactional(readOnly = true)
     public List<ProcedureOrderResponseDTO> getProcedureOrdersScheduledBetween(UUID hospitalId, LocalDateTime startDate, LocalDateTime endDate) {
-        List<ProcedureOrder> orders = procedureOrderRepository.findByHospital_IdAndScheduledDatetimeBetween(hospitalId, startDate, endDate);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
+        List<ProcedureOrder> orders = procedureOrderRepository.findByHospital_IdAndScheduledDatetimeBetween(effectiveHospitalId, startDate, endDate);
         return orders.stream()
             .map(this::toResponseDTO)
             .toList();
@@ -206,9 +222,10 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     @Override
     @Transactional(readOnly = true)
     public List<ProcedureOrderResponseDTO> getPendingConsentOrders(UUID hospitalId) {
-        List<ProcedureOrder> orders = procedureOrderRepository.findByStatusAndConsentObtainedFalse(ProcedureOrderStatus.SCHEDULED);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
+        List<ProcedureOrder> orders = procedureOrderRepository.findByHospital_IdAndStatusAndConsentObtainedFalse(effectiveHospitalId, ProcedureOrderStatus.SCHEDULED);
         return orders.stream()
-            .filter(order -> order.getHospital().getId().equals(hospitalId))
             .map(this::toResponseDTO)
             .toList();
     }
@@ -216,8 +233,14 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
     // Helper methods
 
     private ProcedureOrder getProcedureOrderEntity(UUID orderId) {
-        return procedureOrderRepository.findById(orderId)
+        ProcedureOrder order = procedureOrderRepository.findById(orderId)
             .orElseThrow(() -> new ResourceNotFoundException("Procedure order not found with ID: " + orderId));
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && order.getHospital() != null
+                && !activeHospitalId.equals(order.getHospital().getId())) {
+            throw new ResourceNotFoundException("Procedure order not found with ID: " + orderId);
+        }
+        return order;
     }
 
     private ProcedureOrderResponseDTO toResponseDTO(ProcedureOrder order) {

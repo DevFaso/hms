@@ -8,8 +8,11 @@
 GET {{baseUrl}}/auth/ping
 Accept: application/json
 
-### Health endpoint (Actuator)
-# Note: Actuator runs at root context, not under /api
+### Health endpoint (Custom Spring Boot health check under /api)
+GET {{baseUrl}}/auth/health
+Accept: application/json
+
+### Health endpoint (Actuator - runs at root context, not under /api)
 GET http://localhost:8081/actuator/health
 Accept: application/json
 

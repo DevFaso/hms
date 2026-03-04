@@ -13,6 +13,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 
 @Component({
   selector: 'app-encounters',
@@ -27,6 +28,7 @@ export class EncountersComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
+  private readonly roleContext = inject(RoleContextService);
 
   encounters = signal<EncounterResponse[]>([]);
   filtered = signal<EncounterResponse[]>([]);
@@ -83,7 +85,9 @@ export class EncountersComponent implements OnInit {
   ngOnInit(): void {
     this.loadEncounters();
     this.hospitalService.list().subscribe({ next: (h) => this.hospitals.set(h) });
-    this.staffService.list().subscribe({
+    // ── TENANT ISOLATION: scope staff list to active hospital ──
+    const hid = this.roleContext.activeHospitalId;
+    this.staffService.list(hid ?? undefined).subscribe({
       next: (list) => {
         this.allStaff = list;
         this.staffMembers.set(list.map((s) => ({ id: s.id, name: s.name || s.email })));
@@ -100,7 +104,9 @@ export class EncountersComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          return this.patientService.list(undefined, q);
+          // ── TENANT ISOLATION: always scope patient search to active hospital ──
+          const hid = this.roleContext.activeHospitalId ?? undefined;
+          return this.patientService.list(hid, q);
         }),
       )
       .subscribe({
@@ -167,6 +173,8 @@ export class EncountersComponent implements OnInit {
   // ── CRUD ──
   openCreate(): void {
     this.form = this.emptyForm();
+    // ── TENANT ISOLATION: pre-fill hospitalId from active context ──
+    this.form.hospitalId = this.roleContext.activeHospitalId ?? '';
     this.editing.set(false);
     this.editingId = '';
     this.selectedPatient.set(null);
@@ -249,7 +257,9 @@ export class EncountersComponent implements OnInit {
 
   loadEncounters(): void {
     this.loading.set(true);
-    this.encounterService.list().subscribe({
+    // ── TENANT ISOLATION: always scope encounter list to active hospital ──
+    const hospitalId = this.roleContext.activeHospitalId ?? undefined;
+    this.encounterService.list(hospitalId ? { hospitalId } : undefined).subscribe({
       next: (data) => {
         const list = Array.isArray(data) ? data : [];
         this.encounters.set(list);

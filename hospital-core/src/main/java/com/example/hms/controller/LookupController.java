@@ -6,6 +6,7 @@ import com.example.hms.model.Staff;
 import com.example.hms.model.Department;
 import com.example.hms.model.Hospital;
 import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.utility.RoleValidator;
 import com.example.hms.payload.dto.AppointmentSummaryDTO;
 import java.util.List;
 import org.springframework.http.ResponseEntity;
@@ -25,59 +26,90 @@ import org.springframework.web.bind.annotation.RestController;
 public class LookupController {
 
     private final AppointmentRepository appointmentRepository;
+    private final RoleValidator roleValidator;
 
     // Lookup appointments by patient email
     @GetMapping("/appointment/patient/email/{email}")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientEmail(@PathVariable String email) {
-        List<AppointmentSummaryDTO> appointments = appointmentRepository.findByPatientEmail(email)
-            .stream().map(this::toAppointmentSummaryDTO).toList();
-        return ResponseEntity.ok(appointments);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<Appointment> appointments;
+        if (activeHospitalId != null) {
+            appointments = appointmentRepository.findByPatientEmailAndHospitalId(email, activeHospitalId);
+        } else {
+            appointments = appointmentRepository.findByPatientEmail(email);
+        }
+        return ResponseEntity.ok(appointments.stream().map(this::toAppointmentSummaryDTO).toList());
     }
 
     // Lookup appointments by patient phone
     @GetMapping("/appointment/patient/phone/{phone}")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientPhone(@PathVariable String phone) {
-        List<AppointmentSummaryDTO> appointments = appointmentRepository.findByPatientPhoneNumber(phone)
-            .stream().map(this::toAppointmentSummaryDTO).toList();
-        return ResponseEntity.ok(appointments);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<Appointment> appointments;
+        if (activeHospitalId != null) {
+            appointments = appointmentRepository.findByPatientPhoneNumberAndHospitalId(phone, activeHospitalId);
+        } else {
+            appointments = appointmentRepository.findByPatientPhoneNumber(phone);
+        }
+        return ResponseEntity.ok(appointments.stream().map(this::toAppointmentSummaryDTO).toList());
     }
 
-    // Lookup appointments by patient MRI
+    // Lookup appointments by patient MRN
     @GetMapping("/appointment/patient/mri/{mri}")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientMri(@PathVariable String mri) {
-        List<AppointmentSummaryDTO> appointments = appointmentRepository.findByPatientMri(mri)
-            .stream().map(this::toAppointmentSummaryDTO).toList();
-        return ResponseEntity.ok(appointments);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<Appointment> appointments;
+        if (activeHospitalId != null) {
+            appointments = appointmentRepository.findByPatientMrnAndHospitalId(mri, activeHospitalId);
+        } else {
+            appointments = appointmentRepository.findByPatientMrn(mri);
+        }
+        return ResponseEntity.ok(appointments.stream().map(this::toAppointmentSummaryDTO).toList());
     }
 
     // Lookup appointments by staff number
     @GetMapping("/appointment/staff/number/{number}")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByStaffNumber(@PathVariable String number) {
-        List<AppointmentSummaryDTO> appointments = appointmentRepository.findByStaffNumber(number)
-            .stream().map(this::toAppointmentSummaryDTO).toList();
-        return ResponseEntity.ok(appointments);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<Appointment> appointments;
+        if (activeHospitalId != null) {
+            appointments = appointmentRepository.findByStaffNumberAndHospitalId(number, activeHospitalId);
+        } else {
+            appointments = appointmentRepository.findByStaffNumber(number);
+        }
+        return ResponseEntity.ok(appointments.stream().map(this::toAppointmentSummaryDTO).toList());
     }
 
     // Lookup appointments by staff email
     @GetMapping("/appointment/staff/email/{email}")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByStaffEmail(@PathVariable String email) {
-        List<AppointmentSummaryDTO> appointments = appointmentRepository.findByStaffEmail(email)
-            .stream().map(this::toAppointmentSummaryDTO).toList();
-        return ResponseEntity.ok(appointments);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<Appointment> appointments;
+        if (activeHospitalId != null) {
+            appointments = appointmentRepository.findByStaffEmailAndHospitalId(email, activeHospitalId);
+        } else {
+            appointments = appointmentRepository.findByStaffEmail(email);
+        }
+        return ResponseEntity.ok(appointments.stream().map(this::toAppointmentSummaryDTO).toList());
     }
 
     // Lookup appointments by staff id
     @GetMapping("/appointment/staff/id/{id}")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByStaffId(@PathVariable UUID id) {
-        List<AppointmentSummaryDTO> appointments = appointmentRepository.findByStaffId(id)
-            .stream().map(this::toAppointmentSummaryDTO).toList();
-        return ResponseEntity.ok(appointments);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        List<Appointment> appointments;
+        if (activeHospitalId != null) {
+            appointments = appointmentRepository.findByStaffIdAndHospitalId(id, activeHospitalId);
+        } else {
+            appointments = appointmentRepository.findByStaffId(id);
+        }
+        return ResponseEntity.ok(appointments.stream().map(this::toAppointmentSummaryDTO).toList());
     }
 
     // --- DTO mapping helper ---

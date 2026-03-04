@@ -45,6 +45,7 @@ class TreatmentServiceImplTest {
     @Mock private AuthService authService;
     @Mock private TreatmentValidationService treatmentValidationService;
     @Mock private JwtTokenProvider jwtTokenProvider;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks private TreatmentServiceImpl service;
 
@@ -244,5 +245,80 @@ class TreatmentServiceImplTest {
 
         List<TreatmentResponseDTO> result = service.getAllTreatments(locale, "en");
         assertThat(result).hasSize(2);
+    }
+
+    // ---------- Tenant isolation tests ----------
+
+    @Test
+    void getTreatmentById_crossHospital_throws404() {
+        UUID id = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital hospital = Hospital.builder().build();
+        hospital.setId(UUID.randomUUID());
+        Treatment treatment = Treatment.builder().name("Therapy").hospital(hospital).build();
+        treatment.setId(id);
+
+        when(treatmentRepository.findWithAssignmentAndUserById(id)).thenReturn(Optional.of(treatment));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospitalId);
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
+
+        assertThatThrownBy(() -> service.getTreatmentById(id, locale, "en"))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void getTreatmentById_sameHospital_success() {
+        UUID id = UUID.randomUUID();
+        UUID hospId = UUID.randomUUID();
+        Hospital hospital = Hospital.builder().build();
+        hospital.setId(hospId);
+        Treatment treatment = Treatment.builder().name("Therapy").hospital(hospital).build();
+        treatment.setId(id);
+        TreatmentResponseDTO dto = TreatmentResponseDTO.builder().id(id).build();
+
+        when(treatmentRepository.findWithAssignmentAndUserById(id)).thenReturn(Optional.of(treatment));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
+        when(treatmentMapper.toTreatmentResponseDTO(treatment, "en")).thenReturn(dto);
+
+        assertThat(service.getTreatmentById(id, locale, "en").getId()).isEqualTo(id);
+    }
+
+    @Test
+    void getTreatmentById_superAdmin_noFilter() {
+        UUID id = UUID.randomUUID();
+        Hospital hospital = Hospital.builder().build();
+        hospital.setId(UUID.randomUUID());
+        Treatment treatment = Treatment.builder().name("Therapy").hospital(hospital).build();
+        treatment.setId(id);
+        TreatmentResponseDTO dto = TreatmentResponseDTO.builder().id(id).build();
+
+        when(treatmentRepository.findWithAssignmentAndUserById(id)).thenReturn(Optional.of(treatment));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(treatmentMapper.toTreatmentResponseDTO(treatment, "en")).thenReturn(dto);
+
+        assertThat(service.getTreatmentById(id, locale, "en")).isNotNull();
+    }
+
+    @Test
+    void getAllTreatments_scopedToHospital() {
+        UUID hospId = UUID.randomUUID();
+        Treatment t1 = Treatment.builder().name("T1").build();
+        t1.setId(UUID.randomUUID());
+        TreatmentResponseDTO dto1 = TreatmentResponseDTO.builder().id(t1.getId()).build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospId);
+        when(treatmentRepository.findAllWithAssignmentAndUserByHospitalId(hospId)).thenReturn(List.of(t1));
+        when(treatmentMapper.toTreatmentResponseDTO(t1, "en")).thenReturn(dto1);
+
+        List<TreatmentResponseDTO> result = service.getAllTreatments(locale, "en");
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void getAllTreatments_superAdmin_allTreatments() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(treatmentRepository.findAllWithAssignmentAndUser()).thenReturn(List.of());
+
+        assertThat(service.getAllTreatments(locale, "en")).isEmpty();
     }
 }

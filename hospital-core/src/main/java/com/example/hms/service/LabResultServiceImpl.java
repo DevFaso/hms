@@ -86,6 +86,13 @@ public class LabResultServiceImpl implements LabResultService {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && labResult.getLabOrder() != null
+                && labResult.getLabOrder().getHospital() != null
+                && !activeHospitalId.equals(labResult.getLabOrder().getHospital().getId())) {
+            throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
+        }
+
         LabResultResponseDTO response = labResultMapper.toResponseDTO(labResult);
         response.setTrendHistory(buildTrendHistory(labResult));
         return response;
@@ -177,6 +184,14 @@ public class LabResultServiceImpl implements LabResultService {
     LabResult labResult = labResultRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
+        // Hospital scope enforcement
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && labResult.getLabOrder() != null
+                && labResult.getLabOrder().getHospital() != null
+                && !activeHospitalId.equals(labResult.getLabOrder().getHospital().getId())) {
+            throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
+        }
+
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
 
@@ -201,7 +216,12 @@ public class LabResultServiceImpl implements LabResultService {
 
     @Override
     public void deleteLabResult(UUID id, Locale locale) {
-        if (!labResultRepository.existsById(id)) {
+        LabResult labResult = labResultRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && labResult.getLabOrder() != null
+                && labResult.getLabOrder().getHospital() != null
+                && !activeHospitalId.equals(labResult.getLabOrder().getHospital().getId())) {
             throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
         }
         labResultRepository.deleteById(id);
@@ -554,6 +574,14 @@ public class LabResultServiceImpl implements LabResultService {
         LabResult current = labResultRepository.findById(currentResultId)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
 
+        // Hospital scope enforcement
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && current.getLabOrder() != null
+                && current.getLabOrder().getHospital() != null
+                && !activeHospitalId.equals(current.getLabOrder().getHospital().getId())) {
+            throw new ResourceNotFoundException(LAB_RESULT_NOT_FOUND);
+        }
+
         LabOrder labOrder = current.getLabOrder();
         if (labOrder == null || labOrder.getPatient() == null || labOrder.getLabTestDefinition() == null) {
             throw new BusinessException("Cannot compare lab results: missing patient or test definition");
@@ -632,7 +660,9 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public List<LabResultResponseDTO> getCriticalResults(UUID hospitalId, LocalDateTime since, Locale locale) {
-        List<LabResult> results = labResultRepository.findByLabOrder_Hospital_IdIn(List.of(hospitalId));
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
+        List<LabResult> results = labResultRepository.findByLabOrder_Hospital_IdIn(List.of(effectiveHospitalId));
 
         return results.stream()
             .filter(r -> r.getResultDate() != null && r.getResultDate().isAfter(since))
@@ -645,7 +675,9 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional(readOnly = true)
     public List<LabResultResponseDTO> getCriticalResultsRequiringAcknowledgment(UUID hospitalId, Locale locale) {
-        List<LabResult> results = labResultRepository.findByLabOrder_Hospital_IdIn(List.of(hospitalId));
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
+        List<LabResult> results = labResultRepository.findByLabOrder_Hospital_IdIn(List.of(effectiveHospitalId));
 
         return results.stream()
             .filter(r -> !r.isAcknowledged())

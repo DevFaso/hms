@@ -138,8 +138,19 @@ public class EncounterController {
         UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
         UUID resolvedHospitalId = hospitalId;
 
-        if (!isSuperAdmin && resolvedHospitalId == null) {
-            // doctors/nurses/admins: fallback to JWT hospital if not specified
+        if (!isSuperAdmin) {
+            // Non-superadmin MUST be scoped to a hospital — try param → JWT → assignment fallback
+            if (resolvedHospitalId == null) {
+                resolvedHospitalId = jwtHospitalId;
+            }
+            if (resolvedHospitalId == null) {
+                resolvedHospitalId = authUtils.fallbackHospitalFromAssignments(auth).orElse(null);
+            }
+            if (resolvedHospitalId == null) {
+                throw new BusinessException("Hospital context required to list encounters. Please select an active hospital.");
+            }
+        } else if (resolvedHospitalId == null) {
+            // super-admin: allow unscoped, but still prefer JWT if available
             resolvedHospitalId = jwtHospitalId;
         }
 

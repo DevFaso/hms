@@ -96,11 +96,17 @@ export class PatientService {
     return this.http.put<PatientResponse>(`/patients/${id}`, req);
   }
 
-  lookup(params: { email?: string; phone?: string; mrn?: string }): Observable<PatientResponse[]> {
+  lookup(params: {
+    email?: string;
+    phone?: string;
+    mrn?: string;
+    hospitalId?: string;
+  }): Observable<PatientResponse[]> {
     let httpParams = new HttpParams();
     if (params.email) httpParams = httpParams.set('email', params.email);
     if (params.phone) httpParams = httpParams.set('phone', params.phone);
     if (params.mrn) httpParams = httpParams.set('mrn', params.mrn);
+    if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
     return this.http.get<PatientResponse[]>('/patients/lookup', { params: httpParams });
   }
 }

@@ -42,6 +42,7 @@ class EncounterTreatmentServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private EncounterTreatmentRepository encounterTreatmentRepository;
     @Mock private EncounterTreatmentMapper mapper;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks
     private EncounterTreatmentServiceImpl service;
@@ -202,6 +203,7 @@ class EncounterTreatmentServiceImplTest {
             EncounterTreatmentResponseDTO dto2 = EncounterTreatmentResponseDTO.builder()
                     .id(UUID.randomUUID()).outcome("B").build();
 
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
             when(encounterTreatmentRepository.findByEncounter_Id(encounterId)).thenReturn(List.of(et1, et2));
             when(mapper.toDto(any(EncounterTreatment.class))).thenReturn(dto1, dto2);
 
@@ -216,10 +218,66 @@ class EncounterTreatmentServiceImplTest {
         @Test
         @DisplayName("returns empty list when no treatments for encounter")
         void returnsEmptyList() {
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
             when(encounterTreatmentRepository.findByEncounter_Id(encounterId)).thenReturn(List.of());
 
             List<EncounterTreatmentResponseDTO> result = service.getTreatmentsByEncounter(encounterId);
 
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("throws ResourceNotFoundException when encounter not found")
+        void throwsWhenEncounterNotFound() {
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.getTreatmentsByEncounter(encounterId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("throws 404 when encounter belongs to different hospital")
+        void throwsWhenCrossHospitalAccess() {
+            UUID otherHospitalId = UUID.randomUUID();
+            com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+            hospital.setId(UUID.randomUUID());
+            encounter.setHospital(hospital);
+
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(otherHospitalId);
+
+            assertThatThrownBy(() -> service.getTreatmentsByEncounter(encounterId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("succeeds when encounter belongs to same hospital")
+        void succeedsWhenSameHospital() {
+            UUID myHospitalId = UUID.randomUUID();
+            com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+            hospital.setId(myHospitalId);
+            encounter.setHospital(hospital);
+
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(myHospitalId);
+            when(encounterTreatmentRepository.findByEncounter_Id(encounterId)).thenReturn(List.of());
+
+            List<EncounterTreatmentResponseDTO> result = service.getTreatmentsByEncounter(encounterId);
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("super admin bypasses hospital filter")
+        void superAdminBypassesFilter() {
+            com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
+            hospital.setId(UUID.randomUUID());
+            encounter.setHospital(hospital);
+
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+            when(encounterTreatmentRepository.findByEncounter_Id(encounterId)).thenReturn(List.of());
+
+            List<EncounterTreatmentResponseDTO> result = service.getTreatmentsByEncounter(encounterId);
             assertThat(result).isEmpty();
         }
     }

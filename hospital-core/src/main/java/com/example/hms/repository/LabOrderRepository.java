@@ -19,6 +19,12 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     List<LabOrder> findByLabTestDefinition_Id(UUID labTestDefinitionId);
     List<LabOrder> findByStatus(LabOrderStatus status);
 
+    // Hospital-scoped queries for tenant isolation
+    List<LabOrder> findByHospital_Id(UUID hospitalId);
+    List<LabOrder> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
+    List<LabOrder> findByOrderingStaff_IdAndHospital_Id(UUID staffId, UUID hospitalId);
+    List<LabOrder> findByStatusAndHospital_Id(LabOrderStatus status, UUID hospitalId);
+
     @Query(value = """
     SELECT * FROM lab_orders l
     WHERE (:patientId IS NULL OR l.patient_id = CAST(:patientId AS uuid))

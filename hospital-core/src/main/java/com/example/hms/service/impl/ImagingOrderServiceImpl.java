@@ -16,6 +16,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.ImagingOrderService;
+import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +37,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
     private final ImagingOrderMapper imagingOrderMapper;
+    private final RoleValidator roleValidator;
 
     @Override
     public ImagingOrderResponseDTO createOrder(ImagingOrderRequestDTO request, UUID orderingUserId) {
@@ -146,17 +148,30 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     @Transactional(readOnly = true)
     public ImagingOrderResponseDTO getOrder(UUID orderId) {
         ImagingOrder order = getOrderEntity(orderId);
+        // ── Tenant isolation ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null && order.getHospital() != null
+                && !activeHospitalId.equals(order.getHospital().getId())) {
+            throw new ResourceNotFoundException("Imaging order not found with ID: " + orderId);
+        }
         return imagingOrderMapper.toResponseDTO(order);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ImagingOrderResponseDTO> getOrdersByPatient(UUID patientId, ImagingOrderStatus status) {
+        // ── Tenant isolation ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         List<ImagingOrder> orders;
         if (status != null) {
             orders = imagingOrderRepository.findByPatient_IdAndStatusOrderByOrderedAtDesc(patientId, status);
         } else {
             orders = imagingOrderRepository.findByPatient_IdOrderByOrderedAtDesc(patientId);
+        }
+        if (activeHospitalId != null) {
+            orders = orders.stream()
+                .filter(o -> o.getHospital() != null && activeHospitalId.equals(o.getHospital().getId()))
+                .toList();
         }
         return orders.stream()
             .map(imagingOrderMapper::toResponseDTO)
@@ -180,6 +195,11 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     @Override
     @Transactional(readOnly = true)
     public List<ImagingOrderResponseDTO> getAllOrders(ImagingOrderStatus status) {
+        // ── Tenant isolation: non-superadmin scoped to active hospital ──
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null) {
+            return getOrdersByHospital(activeHospitalId, status);
+        }
         List<ImagingOrder> orders;
         if (status != null) {
             orders = imagingOrderRepository.findByStatusOrderByOrderedAtDesc(status);

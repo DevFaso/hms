@@ -47,6 +47,7 @@ class AdmissionServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private DepartmentRepository departmentRepository;
     @Mock private AdmissionMapper admissionMapper;
+    @Mock private com.example.hms.utility.RoleValidator roleValidator;
 
     @InjectMocks
     private AdmissionServiceImpl service;

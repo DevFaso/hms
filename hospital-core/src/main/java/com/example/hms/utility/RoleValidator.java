@@ -87,12 +87,36 @@ public class RoleValidator {
         return null;
     }
 
-    /** Resolve a single current hospital if there’s exactly one active assignment */
+    /** Resolve a single current hospital if there's exactly one active assignment */
     public UUID getCurrentHospitalId() {
         UUID uid = getCurrentUserId();
         if (uid == null) return null;
         List<UserRoleHospitalAssignment> active = assignmentRepository.findByUser_IdAndActiveTrue(uid);
         return (active.size() == 1) ? active.get(0).getHospital().getId() : null;
+    }
+
+    /**
+     * Returns the active hospital ID from HospitalContext (set via X-Hospital-Id header + JWT validation).
+     * Falls back to single-assignment detection. Throws if no hospital can be determined and user is not super-admin.
+     * This is the <b>mandatory</b> method for all hospital-scoped operations.
+     */
+    public UUID requireActiveHospitalId() {
+        // 1. Try HospitalContext (populated by JwtAuthenticationFilter from X-Hospital-Id header)
+        com.example.hms.security.context.HospitalContext ctx =
+            com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty();
+        if (ctx.getActiveHospitalId() != null) {
+            return ctx.getActiveHospitalId();
+        }
+        // 2. Fallback: single active assignment
+        UUID singleHospital = getCurrentHospitalId();
+        if (singleHospital != null) {
+            return singleHospital;
+        }
+        // 3. Super-admin may operate without hospital scope
+        if (isSuperAdminFromAuth()) {
+            return null; // super-admin can see cross-hospital
+        }
+        throw new BusinessException("Hospital context required. Please select an active hospital or include X-Hospital-Id header.");
     }
 
     /** Active assignment for (currentUser, currentHospital) if uniquely determined */

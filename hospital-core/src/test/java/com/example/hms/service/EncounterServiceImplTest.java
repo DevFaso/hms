@@ -263,6 +263,8 @@ class EncounterServiceImplTest {
         EncounterResponseDTO dto = new EncounterResponseDTO();
         Page<Encounter> page = new PageImpl<>(List.of(encounter));
 
+        UUID testHospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(testHospitalId);
         when(encounterRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(page);
         when(encounterMapper.toEncounterResponseDTO(encounter)).thenReturn(dto);
 

@@ -13,6 +13,7 @@ import {
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 
 @Component({
   selector: 'app-consultations',
@@ -26,6 +27,7 @@ export class ConsultationsComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
+  private readonly roleContext = inject(RoleContextService);
 
   consultations = signal<ConsultationResponse[]>([]);
   filtered = signal<ConsultationResponse[]>([]);
@@ -85,7 +87,9 @@ export class ConsultationsComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          return this.patientService.list(undefined, q);
+          // ── TENANT ISOLATION: scope patient search to active hospital ──
+          const hid = this.roleContext.activeHospitalId ?? undefined;
+          return this.patientService.list(hid, q);
         }),
       )
       .subscribe({
