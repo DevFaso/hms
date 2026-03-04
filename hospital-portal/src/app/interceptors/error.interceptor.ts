@@ -47,14 +47,32 @@ const SILENT_401_PATTERNS = [
 /**
  * Token refresh state — shared across concurrent requests so only ONE refresh
  * call goes to the server at a time (all others queue and retry with the new token).
+ *
+ * NOTE: these are module-level singletons.  Angular's functional interceptors are
+ * executed in the same module scope for the lifetime of the app, so this is safe.
  */
 let isRefreshing = false;
 const refreshDone$ = new BehaviorSubject<string | null>(null);
 
 /**
+ * Clone a request and attach a new Bearer token, preserving every other header
+ * that was already present (e.g. X-Hospital-Id, Content-Type, Accept, etc.).
+ * Using `setHeaders` on `HttpRequest.clone()` merges into the existing headers
+ * rather than replacing them, so this is safe.
+ */
+function cloneWithToken(req: HttpRequest<unknown>, token: string): HttpRequest<unknown> {
+  return req.clone({ setHeaders: { Authorization: `Bearer ${token}` } });
+}
+
+/**
  * Attempt a silent token refresh and then replay the original request.
- * Returns EMPTY (swallows the error) if the refresh also fails AND the URL
- * matches a SILENT_401_PATTERNS entry.
+ *
+ * - Only ONE concurrent refresh call is made; all other 401-ing requests queue
+ *   on `refreshDone$` and are replayed with the new token once it arrives.
+ * - If refresh fails the `__REFRESH_FAILED__` sentinel unblocks all waiters
+ *   so they never hang indefinitely.
+ * - Returns EMPTY (swallows the error) for background/auxiliary requests so the
+ *   user is not ejected from their current view for best-effort API calls.
  */
 function tryRefreshAndRetry(
   req: HttpRequest<unknown>,
@@ -66,7 +84,7 @@ function tryRefreshAndRetry(
 
   if (!isRefreshing) {
     isRefreshing = true;
-    refreshDone$.next(null); // reset
+    refreshDone$.next(null); // reset before the call
 
     return auth.refreshTokenRequest().pipe(
       switchMap((tokens) => {
@@ -75,21 +93,22 @@ function tryRefreshAndRetry(
         if (tokens.refreshToken) {
           auth.setRefreshToken(tokens.refreshToken);
         }
+        // Unblock all queued requests with the new token.
         refreshDone$.next(tokens.accessToken);
 
-        // Replay the original request with the new token
-        const retried = req.clone({
-          setHeaders: { Authorization: `Bearer ${tokens.accessToken}` },
-        });
-        return next(retried);
+        // Replay the original request with the fresh token.
+        // req here is the fully-prefixed request from the error interceptor,
+        // so its URL is already correct — we only swap the Authorization header.
+        return next(cloneWithToken(req, tokens.accessToken));
       }),
       catchError((refreshError) => {
         isRefreshing = false;
-        // Emit a sentinel so any queued requests unblock and get redirected
-        // instead of hanging indefinitely waiting for a non-null token.
+        // Emit sentinel so any queued requests unblock immediately instead of
+        // hanging forever waiting for a non-null value.
         refreshDone$.next('__REFRESH_FAILED__');
+        // Reset to null so refreshDone$ is ready for the next login session.
         refreshDone$.next(null);
-        // Refresh token is also expired / invalid → full logout
+        // Refresh token is expired/invalid → full logout.
         auth.logout();
         void router.navigate(['/login']);
         return isSilentBackground ? EMPTY : throwError(() => refreshError);
@@ -97,15 +116,13 @@ function tryRefreshAndRetry(
     );
   }
 
-  // Another request is already refreshing — wait for the new token then retry.
-  // Filter out the failure sentinel so we only proceed with a real token.
+  // Another request is already refreshing — queue behind it.
+  // Filter out null (initial value) and the failure sentinel so we only proceed
+  // when a real new access token has been issued.
   return refreshDone$.pipe(
     filter((t): t is string => t !== null && t !== '__REFRESH_FAILED__'),
     take(1),
-    switchMap((newToken) => {
-      const retried = req.clone({ setHeaders: { Authorization: `Bearer ${newToken}` } });
-      return next(retried);
-    }),
+    switchMap((newToken) => next(cloneWithToken(req, newToken))),
   );
 }
 

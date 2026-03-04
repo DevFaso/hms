@@ -8,29 +8,43 @@ import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 
 /**
- * Handle an expired access token before the request is sent.
+ * Handle a proactively-detected expired access token before the request is sent.
  *
+ * Strategy:
  * - No refresh token available → logout immediately and cancel the request.
- * - Refresh token available → let the request go through (the error interceptor
- *   will catch the 401 and transparently refresh + retry).
+ * - Refresh token IS available → attach the (expired) token as the Authorization
+ *   header anyway and let the request proceed.  The server will return 401 and
+ *   the errorInterceptor will transparently refresh + retry with a fresh token.
  *
- * Returns an Observable when the caller should return that observable instead of
- * proceeding with normal token attachment.
+ * Why attach an expired token instead of refreshing proactively here?
+ *   1. The error interceptor already has the full refresh+queue+retry machinery.
+ *      Duplicating that logic here would create two competing refresh paths.
+ *   2. We must NOT send the request with no Authorization header: if we do, the
+ *      server can't tell whether the caller forgot the header or the token simply
+ *      expired — some backends return 400/403 instead of 401 in that case.
+ *   3. The server's 401 is the canonical signal; reacting to it centrally in the
+ *      error interceptor is the correct pattern for functional interceptors.
  */
 function handleExpiredToken(
   auth: AuthService,
   router: Router,
   modified: HttpRequest<unknown>,
   next: HttpHandlerFn,
+  expiredToken: string,
 ): Observable<HttpEvent<unknown>> {
   if (!auth.getRefreshToken()) {
+    // No way to renew — hard logout.
     auth.logout();
     void router.navigate(['/login']);
     return EMPTY;
   }
-  // Refresh token exists — send the request as-is (without attaching the
-  // expired bearer). The error interceptor will handle the 401 refresh cycle.
-  return next(modified);
+
+  // Attach the expired token so the server issues a proper 401 and the
+  // errorInterceptor can run its refresh+retry cycle for this request.
+  const withExpiredBearer = modified.clone({
+    setHeaders: { Authorization: `Bearer ${expiredToken}` },
+  });
+  return next(withExpiredBearer);
 }
 
 export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
@@ -38,7 +52,7 @@ export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
   const roleCtx = inject(RoleContextService);
   const router = inject(Router);
 
-  // Skip absolute URLs and i18n assets
+  // Skip absolute URLs and i18n assets — they bypass all API logic.
   if (
     /^https?:\/\//i.test(req.url) ||
     /^assets\/i18n\//i.test(req.url) ||
@@ -55,12 +69,15 @@ export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
 
   let modified = req.clone({ url: finalUrl });
 
-  // Add Authorization header for API requests (skip auth endpoints)
+  // Attach auth headers for all API calls except the login endpoint itself.
   if (!/\/auth\/login(?:[/?#]|$)/i.test(modified.url)) {
     const token = auth.getToken();
 
     if (token && auth.isExpired(token)) {
-      return handleExpiredToken(auth, router, modified, next);
+      // Token is expired — delegate to the helper which either hard-logouts
+      // (no refresh token) or sends the expired bearer so the errorInterceptor
+      // can do the refresh+retry cycle.
+      return handleExpiredToken(auth, router, modified, next, token);
     }
 
     const headers: Record<string, string> = {};
