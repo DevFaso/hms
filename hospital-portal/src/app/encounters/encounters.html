@@ -319,17 +319,18 @@
         <div class="form-row">
           <div class="field">
             <label for="enc-hospitalId">Hospital *</label>
-            <select
+            <div class="locked-field">
+              <span class="material-symbols-outlined locked-icon">business</span>
+              {{ getLockedHospitalName() }}
+            </div>
+            <!-- Keep the value in model implicitly or as hidden input if needed, but [(ngModel)] isn't strictly necessary if it's updated in the TS directly. However, to pass validation: -->
+            <input
+              type="hidden"
               id="enc-hospitalId"
-              [value]="form.hospitalId"
-              (change)="onHospitalChange($any($event.target).value)"
+              [(ngModel)]="form.hospitalId"
+              name="hospitalId"
               required
-            >
-              <option value="">Select hospital...</option>
-              @for (h of hospitals(); track h.id) {
-                <option [value]="h.id">{{ h.name }}</option>
-              }
-            </select>
+            />
           </div>
           <div class="field">
             <label for="enc-type">Encounter Type *</label>

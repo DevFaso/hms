@@ -186,6 +186,11 @@ export class EncountersComponent implements OnInit {
     this.departments.set(depts);
   }
 
+  getLockedHospitalName(): string {
+    const h = this.hospitals().find((x) => x.id === this.form.hospitalId);
+    return h ? h.name : 'Unknown Hospital';
+  }
+
   // ── CRUD ──
   openCreate(): void {
     this.form = this.emptyForm();
@@ -195,7 +200,10 @@ export class EncountersComponent implements OnInit {
     this.editingId = '';
     this.selectedPatient.set(null);
     this.patientQuery.set('');
-    this.departments.set([]);
+
+    // Automatically load departments for the locked hospital
+    this.loadDepartmentsFor(this.form.hospitalId);
+
     this.showModal.set(true);
   }
 
