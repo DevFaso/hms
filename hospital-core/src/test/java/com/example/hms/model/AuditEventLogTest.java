@@ -442,12 +442,12 @@ class AuditEventLogTest {
         // ─── assignment == null path ───
 
         @Test
-        @DisplayName("no-op when assignment is null and user is null")
+        @DisplayName("no-op when assignment is null and user is null – userName falls back to SYSTEM")
         void noAssignmentNoUser() {
             AuditEventLog log = new AuditEventLog();
-            // both null → method should not throw, no side effects
+            // both null → SYSTEM fallback for userName, hospitalName stays null
             invokeValidateAndSnapshot(log);
-            assertNull(log.getUserName());
+            assertEquals("SYSTEM", log.getUserName());
             assertNull(log.getHospitalName());
         }
 
@@ -649,17 +649,17 @@ class AuditEventLogTest {
         // ─── user is null → userName stays null ───
 
         @Test
-        @DisplayName("user is null – userName stays null")
+        @DisplayName("user is null – userName falls back to SYSTEM")
         void userNullUserNameStaysNull() {
             AuditEventLog log = AuditEventLog.builder().build();
             invokeValidateAndSnapshot(log);
-            assertNull(log.getUserName());
+            assertEquals("SYSTEM", log.getUserName());
         }
 
         // ─── assignment not null, hospital not null, assignment.user null, audit user null ───
 
         @Test
-        @DisplayName("assignment.hospital set, both users null – snapshots hospital, userName stays null")
+        @DisplayName("assignment.hospital set, both users null – snapshots hospital, userName falls back to SYSTEM")
         void bothUsersNullSnapshotsHospital() {
             Hospital hospital = buildHospital("Orphan Hospital");
             UserRoleHospitalAssignment assignment = buildAssignment(null, hospital);
@@ -671,13 +671,13 @@ class AuditEventLogTest {
 
             invokeValidateAndSnapshot(log);
             assertEquals("Orphan Hospital", log.getHospitalName());
-            assertNull(log.getUserName());
+            assertEquals("SYSTEM", log.getUserName());
         }
 
         // ─── assignment.user set, audit user null → user-mismatch guard not triggered (user==null check) ───
 
         @Test
-        @DisplayName("assignment.user set but audit user null – no exception (guard short-circuits)")
+        @DisplayName("assignment.user set but audit user null – no exception (guard short-circuits), userName falls back to SYSTEM")
         void assignmentUserSetAuditUserNull() {
             User assignmentUser = buildUser(UUID.randomUUID(), "X", "Y", "xy@test.com");
             Hospital hospital = buildHospital("Guard Hospital");
@@ -690,7 +690,7 @@ class AuditEventLogTest {
 
             assertDoesNotThrow(() -> invokeValidateAndSnapshot(log));
             assertEquals("Guard Hospital", log.getHospitalName());
-            assertNull(log.getUserName());
+            assertEquals("SYSTEM", log.getUserName());
         }
 
         // ─── assignment.user null, audit user set → no exception (assignmentUser==null check) ───
