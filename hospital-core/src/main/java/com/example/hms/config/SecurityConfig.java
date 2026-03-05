@@ -20,8 +20,6 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
-import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper;
@@ -29,6 +27,9 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -58,25 +59,34 @@ public class SecurityConfig {
 
     // -----------------------------------------------------------------------
     // Path constants — context-path is /api, so Spring Security sees paths
-    // *after* the context-path is stripped.  All matchers are relative.
+    // *after* the context-path is stripped. All matchers are relative.
     // -----------------------------------------------------------------------
     private static final String API_FEATURE_FLAGS = "/feature-flags";
     private static final String API_FEATURE_FLAGS_PATTERN = API_FEATURE_FLAGS + "/**";
+
     private static final String API_PATIENTS = "/patients";
     private static final String API_PATIENTS_PATTERN = API_PATIENTS + "/**";
+
     private static final String API_PATIENT_VITALS = "/patients/*/vitals";
     private static final String API_PATIENT_VITALS_PATTERN = API_PATIENT_VITALS + "/**";
+
     private static final String API_REGISTRATIONS = "/registrations";
     private static final String API_REGISTRATIONS_PATTERN = API_REGISTRATIONS + "/**";
+
     private static final String API_LAB_ORDERS = "/lab-orders";
     private static final String API_LAB_ORDERS_PATTERN = API_LAB_ORDERS + "/**";
+
     private static final String API_LAB_RESULTS = "/lab-results";
     private static final String API_LAB_RESULTS_PATTERN = API_LAB_RESULTS + "/**";
+
     private static final String API_NURSE = "/nurse";
     private static final String API_NURSE_PATTERN = API_NURSE + "/**";
+
     private static final String API_ME_PATIENT_PATTERN = "/me/patient/**";
+
     private static final String API_STAFF = "/staff";
     private static final String API_STAFF_PATTERN = API_STAFF + "/**";
+
     private static final String API_HOSPITALS = "/hospitals";
     private static final String API_HOSPITALS_PATTERN = API_HOSPITALS + "/**";
 
@@ -103,7 +113,10 @@ public class SecurityConfig {
         return provider;
     }
 
-    /** Expand ROLE_SUPER_ADMIN with operational roles so existing checks remain simple. */
+    /**
+     * Expand ROLE_SUPER_ADMIN with operational roles so existing checks remain simple.
+     * NOTE: Authorization/tenant isolation must still be enforced at service layer.
+     */
     @Bean
     public GrantedAuthoritiesMapper authoritiesMapper() {
         final Set<String> inherited = Set.of(
@@ -127,6 +140,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         var cfg = new CorsConfiguration();
+
         // Build origin patterns from env-driven property + local defaults
         var patterns = new java.util.ArrayList<>(List.of("http://localhost:*", "http://127.0.0.1:*"));
         if (allowedOrigins != null && !allowedOrigins.isBlank()) {
@@ -137,12 +151,15 @@ public class SecurityConfig {
                 }
             }
         }
+
         cfg.setAllowedOriginPatterns(patterns);
-        cfg.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS","HEAD"));
+        // TRACE is intentionally excluded (should be denied/disabled)
+        cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));
         cfg.setAllowedHeaders(List.of("*"));
-        cfg.setExposedHeaders(List.of("Authorization","Content-Type"));
+        cfg.setExposedHeaders(List.of("Authorization", "Content-Type"));
         cfg.setAllowCredentials(true);
         cfg.setMaxAge(3600L);
+
         var source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cfg);
         return source;
@@ -151,11 +168,13 @@ public class SecurityConfig {
     @Bean
     @Order(1)
     @SuppressWarnings({"java:S3330", "java:S4502"})
-    // S3330: XSRF-TOKEN cookie intentionally lacks HttpOnly so Angular's HttpClient can read it for CSRF protection.
-    // S4502: CSRF is deliberately disabled only for idempotent HTTP methods (GET/HEAD/OPTIONS/TRACE) and WebSocket /chat/** — all mutating endpoints still enforce CSRF.
+    // S3330: XSRF-TOKEN cookie intentionally lacks HttpOnly so Angular can read it when CSRF is enabled.
+    // S4502: CSRF is enabled by default, but selectively ignored for preflight and specific public bootstrap endpoint.
     public SecurityFilterChain apiSecurity(HttpSecurity http) throws Exception {
+
         var csrfTokenRepo = CookieCsrfTokenRepository.withHttpOnlyFalse();
         csrfTokenRepo.setCookiePath("/");
+
         var csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
 
         http
@@ -164,13 +183,14 @@ public class SecurityConfig {
             .csrf(csrf -> csrf
                 .csrfTokenRepository(csrfTokenRepo)
                 .csrfTokenRequestHandler(csrfRequestHandler)
+                // Keep CSRF enabled for browser-cookie flows; ignore only what is necessary.
                 .ignoringRequestMatchers(
-                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "GET"),
-                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "HEAD"),
-                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "OPTIONS"),
-                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "TRACE"),
-                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/chat/**"),
-                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/auth/bootstrap-signup")
+                    // CORS preflight (no cookies should mutate state anyway)
+                    new AntPathRequestMatcher("/**", "OPTIONS"),
+                    // One-time bootstrap (frontend may not have XSRF token yet)
+                    new AntPathRequestMatcher("/auth/bootstrap-signup", "POST"),
+                    // WebSocket handshake endpoints (if any) - adjust to your actual handshake path
+                    new AntPathRequestMatcher("/chat/**")
                 )
             )
             .exceptionHandling(ex -> ex
@@ -179,12 +199,17 @@ public class SecurityConfig {
             )
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+
+                // Hard deny TRACE everywhere
+                .requestMatchers(HttpMethod.TRACE, "/**").denyAll()
+
                 // Preflight
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
+                // -------------------- Auth / Tokens --------------------
                 // Credential / token endpoints require authentication
                 .requestMatchers("/auth/credentials/**").authenticated()
-                // /auth/token/refresh is public — called when access token has already expired
+                // Refresh is public (access token may be expired)
                 .requestMatchers(HttpMethod.POST, "/auth/token/refresh").permitAll()
                 .requestMatchers("/auth/token/**").authenticated()
                 .requestMatchers("/auth/logout").authenticated()
@@ -193,72 +218,75 @@ public class SecurityConfig {
 
                 // Public auth endpoints (login, register, csrf-token bootstrap, etc.)
                 .requestMatchers("/auth/csrf-token").permitAll()
+                .requestMatchers("/auth/bootstrap-signup").permitAll()
                 .requestMatchers("/auth/**").permitAll()
 
-                // Swagger / OpenAPI
+                // -------------------- Swagger / OpenAPI --------------------
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/api-docs/**").permitAll()
 
-                // Public landing page content & Errors
-                .requestMatchers(HttpMethod.GET, "/services", "/articles", "/testimonials").permitAll()
+                // -------------------- Public / Health --------------------
                 .requestMatchers("/error").permitAll()
-
-                // Actuator health
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
-                .requestMatchers(HttpMethod.PUT, API_FEATURE_FLAGS, API_FEATURE_FLAGS_PATTERN)
-                .hasAuthority(ROLE_SUPER_ADMIN)
-                .requestMatchers(HttpMethod.DELETE, API_FEATURE_FLAGS, API_FEATURE_FLAGS_PATTERN)
-                .hasAuthority(ROLE_SUPER_ADMIN)
+
+                // Feature flags
+                .requestMatchers(HttpMethod.PUT, API_FEATURE_FLAGS, API_FEATURE_FLAGS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.DELETE, API_FEATURE_FLAGS, API_FEATURE_FLAGS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.GET, API_FEATURE_FLAGS, API_FEATURE_FLAGS_PATTERN).permitAll()
 
-                // Patients
+                // -------------------- Patients --------------------
                 .requestMatchers(HttpMethod.GET, API_PATIENTS, API_PATIENTS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
+
                 .requestMatchers(HttpMethod.POST, API_PATIENTS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+
                 .requestMatchers(HttpMethod.POST, API_PATIENT_VITALS, API_PATIENT_VITALS_PATTERN)
                 .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+
                 .requestMatchers(HttpMethod.GET, API_PATIENT_VITALS, API_PATIENT_VITALS_PATTERN)
                 .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+
                 .requestMatchers(HttpMethod.PUT, API_PATIENTS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+
                 .requestMatchers(HttpMethod.PATCH, API_PATIENTS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+
                 .requestMatchers(HttpMethod.DELETE, API_PATIENTS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
-                // Registrations
+                // -------------------- Registrations --------------------
                 .requestMatchers(HttpMethod.GET, API_REGISTRATIONS, API_REGISTRATIONS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
+
                 .requestMatchers(HttpMethod.POST, API_REGISTRATIONS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
+
                 .requestMatchers(HttpMethod.PUT, API_REGISTRATIONS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
+
                 .requestMatchers(HttpMethod.DELETE, API_REGISTRATIONS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
 
-                // Allow all clinical staff to register patients via admin-register
+                // Allow all clinical staff to register users via admin-register
                 .requestMatchers(HttpMethod.POST, "/users/admin-register")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
 
-                // Hospitals / Staff / Departments / Roles (specific before broad)
-                // GET /hospitals and /hospitals/{id} — readable by all clinical roles
-                .requestMatchers(HttpMethod.GET, API_HOSPITALS, API_HOSPITALS + "/")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR)
-                .requestMatchers(HttpMethod.GET, API_HOSPITALS + "/{id}")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR)
-                .requestMatchers(HttpMethod.GET, API_HOSPITALS_PATTERN)
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR)
-                .requestMatchers(HttpMethod.GET, "/me/hospital")
-                .hasAnyAuthority(ROLE_RECEPTIONIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
-                // POST/PUT/DELETE /hospitals/** — super admin only
-                .requestMatchers(HttpMethod.POST, API_HOSPITALS_PATTERN)
-                .hasAnyAuthority(ROLE_SUPER_ADMIN)
-                .requestMatchers(HttpMethod.PUT, API_HOSPITALS_PATTERN)
-                .hasAnyAuthority(ROLE_SUPER_ADMIN)
-                .requestMatchers(HttpMethod.PATCH, API_HOSPITALS_PATTERN)
-                .hasAnyAuthority(ROLE_SUPER_ADMIN)
-                .requestMatchers(HttpMethod.DELETE, API_HOSPITALS_PATTERN)
-                .hasAnyAuthority(ROLE_SUPER_ADMIN)
+                // -------------------- Hospitals (tenant-safe) --------------------
+                // IMPORTANT: non-superadmin users must not have access to global hospital directory.
+                // They should use /me/hospitals (assigned only) or /me/hospital (active).
+                .requestMatchers(HttpMethod.GET, "/me/hospital", "/me/hospitals")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+
+                // Global hospitals directory: super-admin only
+                .requestMatchers(HttpMethod.GET, API_HOSPITALS, API_HOSPITALS + "/", API_HOSPITALS_PATTERN)
+                .hasAuthority(ROLE_SUPER_ADMIN)
+
+                // Hospital mutations: super-admin only
+                .requestMatchers(HttpMethod.POST, API_HOSPITALS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.PUT, API_HOSPITALS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.PATCH, API_HOSPITALS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.DELETE, API_HOSPITALS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
 
                 // Organizations and security management
                 .requestMatchers("/organizations/**")
@@ -271,42 +299,59 @@ public class SecurityConfig {
                 // All other assignment endpoints — admin only
                 .requestMatchers("/assignments/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
-                // GET /staff — readable by anyone who books or manages appointments
+
+                // -------------------- Staff --------------------
                 .requestMatchers(HttpMethod.GET, API_STAFF, API_STAFF_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
-                // POST/PUT/DELETE /staff — admin only
+
                 .requestMatchers(HttpMethod.POST, API_STAFF)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+
                 .requestMatchers(HttpMethod.PUT, API_STAFF_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+
                 .requestMatchers(HttpMethod.DELETE, API_STAFF_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+
+                // -------------------- Departments / Roles --------------------
                 .requestMatchers(HttpMethod.GET, "/departments/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST)
+
                 .requestMatchers(HttpMethod.POST, "/departments/filter")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST)
-                .requestMatchers("/departments/**")
+
+                .requestMatchers(HttpMethod.POST, "/departments/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+
+                .requestMatchers(HttpMethod.PUT, "/departments/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+
+                .requestMatchers(HttpMethod.PATCH, "/departments/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+
+                .requestMatchers(HttpMethod.DELETE, "/departments/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+
                 .requestMatchers("/roles/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+
+                // -------------------- Chat / Notifications --------------------
                 .requestMatchers("/chat/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST, ROLE_STAFF, ROLE_PATIENT)
 
-                // Patient portal — self-service endpoints (MyChart equivalent)
-                .requestMatchers(HttpMethod.GET, API_ME_PATIENT_PATTERN)
-                .hasAuthority(ROLE_PATIENT)
-                .requestMatchers(HttpMethod.PUT, API_ME_PATIENT_PATTERN)
-                .hasAuthority(ROLE_PATIENT)
-                .requestMatchers(HttpMethod.POST, API_ME_PATIENT_PATTERN)
-                .hasAuthority(ROLE_PATIENT)
-                .requestMatchers(HttpMethod.DELETE, API_ME_PATIENT_PATTERN)
-                .hasAuthority(ROLE_PATIENT)
+                // WebSocket endpoints should NOT be public in an HMS; require authentication.
+                .requestMatchers("/ws-chat/**").authenticated()
 
                 // Notifications - allow all authenticated users
-                .requestMatchers("/notifications/**")
-                .authenticated()
+                .requestMatchers("/notifications/**").authenticated()
 
-                // Nurse workflow dashboard endpoints
+                // -------------------- Patient portal — self-service --------------------
+                .requestMatchers(HttpMethod.GET, API_ME_PATIENT_PATTERN).hasAuthority(ROLE_PATIENT)
+                .requestMatchers(HttpMethod.PUT, API_ME_PATIENT_PATTERN).hasAuthority(ROLE_PATIENT)
+                .requestMatchers(HttpMethod.POST, API_ME_PATIENT_PATTERN).hasAuthority(ROLE_PATIENT)
+                .requestMatchers(HttpMethod.DELETE, API_ME_PATIENT_PATTERN).hasAuthority(ROLE_PATIENT)
+
+                // -------------------- Nurse workflow dashboard endpoints --------------------
                 .requestMatchers(HttpMethod.GET, API_NURSE, API_NURSE_PATTERN)
                 .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_SUPER_ADMIN)
                 .requestMatchers(HttpMethod.PUT, API_NURSE, API_NURSE_PATTERN)
@@ -314,33 +359,39 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.POST, API_NURSE, API_NURSE_PATTERN)
                 .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_SUPER_ADMIN)
 
-                // ---------- Lab modules ----------
-                .requestMatchers(HttpMethod.GET,   "/lab-test-definitions/**")
+                // -------------------- Lab modules --------------------
+                .requestMatchers(HttpMethod.GET, "/lab-test-definitions/**")
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
-                .requestMatchers(HttpMethod.GET,   API_LAB_ORDERS, API_LAB_ORDERS_PATTERN)
+
+                .requestMatchers(HttpMethod.GET, API_LAB_ORDERS, API_LAB_ORDERS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
-                .requestMatchers(HttpMethod.POST,  API_LAB_ORDERS, API_LAB_ORDERS_PATTERN)
+
+                .requestMatchers(HttpMethod.POST, API_LAB_ORDERS, API_LAB_ORDERS_PATTERN)
                 .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
-                .requestMatchers(HttpMethod.GET,   API_LAB_RESULTS, API_LAB_RESULTS_PATTERN)
+
+                .requestMatchers(HttpMethod.GET, API_LAB_RESULTS, API_LAB_RESULTS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
-                .requestMatchers(HttpMethod.POST,  API_LAB_RESULTS)
+
+                .requestMatchers(HttpMethod.POST, API_LAB_RESULTS)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
-                .requestMatchers(HttpMethod.POST,  API_LAB_RESULTS + "/*/acknowledge")
+
+                .requestMatchers(HttpMethod.POST, API_LAB_RESULTS + "/*/acknowledge")
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+
                 .requestMatchers(HttpMethod.PATCH, API_LAB_ORDERS_PATTERN, API_LAB_RESULTS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
-                .requestMatchers(HttpMethod.POST,  "/lab-results/{id}/attachments")
+
+                .requestMatchers(HttpMethod.POST, "/lab-results/{id}/attachments")
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_HOSPITAL_ADMIN)
 
-                // Public access to uploaded profile images (served as static assets)
+                // Public access to uploaded profile images (static assets)
                 .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()
-                .requestMatchers("/ws-chat/**").permitAll()
 
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider())
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-            // Helpful debug for 401/403 (cast before calling HttpServletX methods)
+            // Helpful debug for 401/403
             .addFilterAfter((request, response, chain) -> {
                 chain.doFilter(request, response);
                 if (request instanceof HttpServletRequest req && response instanceof HttpServletResponse res) {
