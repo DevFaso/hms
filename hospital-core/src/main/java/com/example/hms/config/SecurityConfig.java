@@ -169,7 +169,8 @@ public class SecurityConfig {
                     new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "HEAD"),
                     new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "OPTIONS"),
                     new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/**", "TRACE"),
-                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/chat/**")
+                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/chat/**"),
+                    new org.springframework.security.web.util.matcher.AntPathRequestMatcher("/auth/bootstrap-signup")
                 )
             )
             .exceptionHandling(ex -> ex
@@ -195,7 +196,11 @@ public class SecurityConfig {
                 .requestMatchers("/auth/**").permitAll()
 
                 // Swagger / OpenAPI
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/api-docs/**").permitAll()
+
+                // Public landing page content & Errors
+                .requestMatchers(HttpMethod.GET, "/services", "/articles", "/testimonials").permitAll()
+                .requestMatchers("/error").permitAll()
 
                 // Actuator health
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
@@ -231,9 +236,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, API_REGISTRATIONS_PATTERN)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST)
 
-                            // Allow all clinical staff to register patients via admin-register
-                            .requestMatchers(HttpMethod.POST, "/users/admin-register")
-                            .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                // Allow all clinical staff to register patients via admin-register
+                .requestMatchers(HttpMethod.POST, "/users/admin-register")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
 
                 // Hospitals / Staff / Departments / Roles (specific before broad)
                 // GET /hospitals and /hospitals/{id} — readable by all clinical roles
