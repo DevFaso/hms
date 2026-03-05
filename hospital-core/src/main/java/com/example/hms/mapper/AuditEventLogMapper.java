@@ -42,6 +42,8 @@ public class AuditEventLogMapper {
             .resourceId(event.getResourceId())
             .resourceName(resourceName)
             .entityType(event.getEntityType())
+            .actorType(event.getActorType() != null ? event.getActorType().name() : null)
+            .actorLabel(event.getActorLabel())
             .build();
     }
 

@@ -118,4 +118,18 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V9: Support SYSTEM actor in audit_event_logs
+         - Makes user_id nullable so bootstrap/scheduled events can be
+           persisted without a real user entity.
+         - Adds actor_type (USER|SYSTEM) and actor_label columns.
+         - CHECK constraint ensures USER events still require user_id.
+         ================================================================= -->
+    <changeSet id="V9-audit-system-actor-support" author="hms-team" runOnChange="false">
+        <sqlFile path="V9__audit_system_actor_support.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="false"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

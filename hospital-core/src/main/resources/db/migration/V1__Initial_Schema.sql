@@ -2966,8 +2966,10 @@ CREATE TABLE IF NOT EXISTS support.audit_event_logs (
     updated_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
     assignment_id UUID,
     id UUID NOT NULL,
-    user_id UUID NOT NULL,
+    user_id UUID,
     ip_address VARCHAR(45),
+    actor_type VARCHAR(20) NOT NULL DEFAULT 'USER',
+    actor_label VARCHAR(255),
     target_entity_type VARCHAR(50),
     target_resource_id VARCHAR(100),
     details VARCHAR(2048),
@@ -2978,7 +2980,12 @@ CREATE TABLE IF NOT EXISTS support.audit_event_logs (
     user_name VARCHAR(255),
     event_type VARCHAR(60) NOT NULL,
     status VARCHAR(60),
-    PRIMARY KEY (id)
+    PRIMARY KEY (id),
+    CONSTRAINT chk_audit_user_or_system CHECK (
+        (actor_type = 'USER' AND user_id IS NOT NULL)
+        OR
+        (actor_type = 'SYSTEM')
+    )
 );
 
 CREATE TABLE IF NOT EXISTS support.chat_messages (

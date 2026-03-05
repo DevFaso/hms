@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.ActorType;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.mapper.AuditEventLogMapper;
@@ -157,6 +158,8 @@ class AuditEventLogServiceImplTest {
         AuditEventLog captured = captor.getValue();
         assertThat(captured.getUser()).isNull();
         assertThat(captured.getUserName()).isEqualTo("SYSTEM");
+        assertThat(captured.getActorType()).isEqualTo(ActorType.SYSTEM);
+        assertThat(captured.getActorLabel()).isEqualTo("SYSTEM");
     }
 
     // ─── Successful persistence ───────────────────────────────────────

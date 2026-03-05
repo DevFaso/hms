@@ -27,4 +27,6 @@ public class AuditEventLogResponseDTO {
     private String resourceId;
     private String resourceName;
     private String entityType;
+    private String actorType;
+    private String actorLabel;
 }

@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.ActorType;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import jakarta.persistence.Column;
@@ -111,6 +112,16 @@ public class AuditEventLog extends BaseEntity {
         @Column(name = "resource_name", length = 255)
         private String resourceName;
 
+    /** USER when a real user triggered the event; SYSTEM for bootstrap / scheduled jobs. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "actor_type", nullable = false, length = 20)
+    private ActorType actorType;
+
+    /** Human-readable label for the actor (e.g. "Jane Doe" or "SYSTEM"). */
+    @Size(max = 255)
+    @Column(name = "actor_label", length = 255)
+    private String actorLabel;
+
     @PrePersist
     @PreUpdate
     private void validateAndSnapshot() {
@@ -133,14 +144,28 @@ public class AuditEventLog extends BaseEntity {
 
     private void snapshotUserName() {
         if (user != null && userName == null) {
-            String f = user.getFirstName() != null ? user.getFirstName().trim() : "";
-            String l = user.getLastName() != null ? user.getLastName().trim() : "";
-            String full = (f + " " + l).trim();
-            userName = full.isEmpty() ? user.getEmail() : full;
+            userName = deriveUserNameFromUser();
         }
         // SYSTEM / bootstrap flows — no actor user entity
         if (user == null && (userName == null || userName.isBlank())) {
             userName = "SYSTEM";
+        }
+        deriveActorFields();
+    }
+
+    private String deriveUserNameFromUser() {
+        String f = user.getFirstName() != null ? user.getFirstName().trim() : "";
+        String l = user.getLastName() != null ? user.getLastName().trim() : "";
+        String full = (f + " " + l).trim();
+        return full.isEmpty() ? user.getEmail() : full;
+    }
+
+    private void deriveActorFields() {
+        if (actorType == null) {
+            actorType = (user == null) ? ActorType.SYSTEM : ActorType.USER;
+        }
+        if (actorLabel == null || actorLabel.isBlank()) {
+            actorLabel = userName;
         }
     }
 }

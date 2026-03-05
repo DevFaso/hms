@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.ActorType;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.mapper.AuditEventLogMapper;
 import com.example.hms.model.AuditEventLog;
@@ -102,13 +103,17 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         User user = resolveUser(requestDTO);
         UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO, user);
 
-        // Derive display name: prefer resolved user, then DTO userName, then "SYSTEM"
+        // Derive actor type and display name
+        ActorType actorType;
         String userName;
         if (user != null) {
+            actorType = ActorType.USER;
             userName = user.getFirstName() + " " + user.getLastName();
         } else if (requestDTO.getUserName() != null && !requestDTO.getUserName().isBlank()) {
+            actorType = ActorType.SYSTEM;
             userName = requestDTO.getUserName();
         } else {
+            actorType = ActorType.SYSTEM;
             userName = "SYSTEM";
         }
 
@@ -126,6 +131,8 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         AuditEventLog event = AuditEventLog.builder()
                 .user(user)          // nullable — SYSTEM / bootstrap flows have no actor user
                 .assignment(assignment)
+                .actorType(actorType)
+                .actorLabel(userName)
                 .eventType(requestDTO.getEventType())
                 .eventDescription(requestDTO.getEventDescription())
                 .resourceId(resourceId != null && !resourceId.isBlank() ? resourceId : "Unknown Resource")

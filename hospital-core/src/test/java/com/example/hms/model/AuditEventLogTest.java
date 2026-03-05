@@ -1,5 +1,6 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.ActorType;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import org.junit.jupiter.api.DisplayName;
@@ -91,7 +92,9 @@ class AuditEventLogTest {
                 () -> assertNull(log.getResourceId()),
                 () -> assertNull(log.getEntityType()),
                 () -> assertNull(log.getResourceName()),
-                () -> assertNull(log.getId())
+                () -> assertNull(log.getId()),
+                () -> assertNull(log.getActorType(), "actorType null before validateAndSnapshot derives it"),
+                () -> assertNull(log.getActorLabel())
             );
         }
     }
@@ -124,7 +127,9 @@ class AuditEventLogTest {
                 "{\"key\":\"val\"}",           // details
                 "res-001",                     // resourceId
                 "Patient",                     // entityType
-                "Resource X"                   // resourceName
+                "Resource X",                  // resourceName
+                ActorType.USER,                // actorType
+                "John Doe"                     // actorLabel
             );
 
             assertAll(
@@ -141,7 +146,9 @@ class AuditEventLogTest {
                 () -> assertEquals("{\"key\":\"val\"}", log.getDetails()),
                 () -> assertEquals("res-001", log.getResourceId()),
                 () -> assertEquals("Patient", log.getEntityType()),
-                () -> assertEquals("Resource X", log.getResourceName())
+                () -> assertEquals("Resource X", log.getResourceName()),
+                () -> assertEquals(ActorType.USER, log.getActorType()),
+                () -> assertEquals("John Doe", log.getActorLabel())
             );
         }
     }
@@ -175,6 +182,8 @@ class AuditEventLogTest {
                 .resourceId("res-xyz")
                 .entityType("Patient")
                 .resourceName("Patient #123")
+                .actorType(ActorType.USER)
+                .actorLabel("Jane Smith")
                 .build();
 
             assertAll(
@@ -191,7 +200,9 @@ class AuditEventLogTest {
                 () -> assertEquals("some-details", log.getDetails()),
                 () -> assertEquals("res-xyz", log.getResourceId()),
                 () -> assertEquals("Patient", log.getEntityType()),
-                () -> assertEquals("Patient #123", log.getResourceName())
+                () -> assertEquals("Patient #123", log.getResourceName()),
+                () -> assertEquals(ActorType.USER, log.getActorType()),
+                () -> assertEquals("Jane Smith", log.getActorLabel())
             );
         }
 
@@ -214,7 +225,9 @@ class AuditEventLogTest {
                 () -> assertNull(log.getDetails()),
                 () -> assertNull(log.getResourceId()),
                 () -> assertNull(log.getEntityType()),
-                () -> assertNull(log.getResourceName())
+                () -> assertNull(log.getResourceName()),
+                () -> assertNull(log.getActorType(), "actorType null before validateAndSnapshot derives it"),
+                () -> assertNull(log.getActorLabel())
             );
         }
     }
@@ -339,6 +352,22 @@ class AuditEventLogTest {
             log.setResourceName("My Resource");
             assertEquals("My Resource", log.getResourceName());
         }
+
+        @Test
+        @DisplayName("actorType getter/setter")
+        void actorType() {
+            AuditEventLog log = new AuditEventLog();
+            log.setActorType(ActorType.SYSTEM);
+            assertEquals(ActorType.SYSTEM, log.getActorType());
+        }
+
+        @Test
+        @DisplayName("actorLabel getter/setter")
+        void actorLabel() {
+            AuditEventLog log = new AuditEventLog();
+            log.setActorLabel("SYSTEM");
+            assertEquals("SYSTEM", log.getActorLabel());
+        }
     }
 
     // ═══════════════ toString ═══════════════
@@ -449,6 +478,8 @@ class AuditEventLogTest {
             invokeValidateAndSnapshot(log);
             assertEquals("SYSTEM", log.getUserName());
             assertNull(log.getHospitalName());
+            assertEquals(ActorType.SYSTEM, log.getActorType());
+            assertEquals("SYSTEM", log.getActorLabel());
         }
 
         // ─── assignment != null but hospital == null path ───
@@ -472,6 +503,8 @@ class AuditEventLogTest {
             assertNull(log.getHospitalName());
             // userName should be snapshotted from user
             assertEquals("Bob Ross", log.getUserName());
+            assertEquals(ActorType.USER, log.getActorType());
+            assertEquals("Bob Ross", log.getActorLabel());
         }
 
         // ─── assignment.hospital != null; assignment.user == null → no user-mismatch check ───
@@ -654,6 +687,8 @@ class AuditEventLogTest {
             AuditEventLog log = AuditEventLog.builder().build();
             invokeValidateAndSnapshot(log);
             assertEquals("SYSTEM", log.getUserName());
+            assertEquals(ActorType.SYSTEM, log.getActorType());
+            assertEquals("SYSTEM", log.getActorLabel());
         }
 
         // ─── assignment not null, hospital not null, assignment.user null, audit user null ───
@@ -672,6 +707,8 @@ class AuditEventLogTest {
             invokeValidateAndSnapshot(log);
             assertEquals("Orphan Hospital", log.getHospitalName());
             assertEquals("SYSTEM", log.getUserName());
+            assertEquals(ActorType.SYSTEM, log.getActorType());
+            assertEquals("SYSTEM", log.getActorLabel());
         }
 
         // ─── assignment.user set, audit user null → user-mismatch guard not triggered (user==null check) ───
@@ -691,6 +728,8 @@ class AuditEventLogTest {
             assertDoesNotThrow(() -> invokeValidateAndSnapshot(log));
             assertEquals("Guard Hospital", log.getHospitalName());
             assertEquals("SYSTEM", log.getUserName());
+            assertEquals(ActorType.SYSTEM, log.getActorType());
+            assertEquals("SYSTEM", log.getActorLabel());
         }
 
         // ─── assignment.user null, audit user set → no exception (assignmentUser==null check) ───
@@ -710,6 +749,8 @@ class AuditEventLogTest {
             assertDoesNotThrow(() -> invokeValidateAndSnapshot(log));
             assertEquals("One-sided Hospital", log.getHospitalName());
             assertEquals("Audit Only", log.getUserName());
+            assertEquals(ActorType.USER, log.getActorType());
+            assertEquals("Audit Only", log.getActorLabel());
         }
 
         // ─── same user IDs → Objects.equals returns true ───
