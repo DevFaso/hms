@@ -10,6 +10,11 @@
          Generated from Hibernate entity model to ensure 1:1 alignment
          ================================================================= -->
     <changeSet id="V1-initial-schema" author="hms-team" runOnChange="false">
+        <!-- validCheckSum: accept the old hash recorded in DATABASECHANGELOG before
+             V1__Initial_Schema.sql was patched (e.g. license_number nullability added).
+             Old:  9:92dc2358315d80d6d03dceede59b7f13
+             New:  9:a32668130d49c4a74f9076943acd206e -->
+        <validCheckSum>9:92dc2358315d80d6d03dceede59b7f13</validCheckSum>
         <sqlFile path="V1__Initial_Schema.sql"
                  relativeToChangelogFile="true"
                  splitStatements="true"
