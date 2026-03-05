@@ -82,9 +82,25 @@ export class EncountersComponent implements OnInit {
     };
   }
 
+  // Only load hospitals the user is assigned to
+  loadAssignedHospitals(): void {
+    if (this.roleContext.hasRole('ROLE_SUPER_ADMIN')) {
+      this.hospitalService.list().subscribe({ next: (h) => this.hospitals.set(h) });
+    } else {
+      // In a real app we might fetch user assignments here, but we can also just leverage the RoleContext
+      // if it holds the user's assigned hospitals, or restrict entirely to the active context.
+      const activeId = this.roleContext.activeHospitalId;
+      if (activeId) {
+        this.hospitalService
+          .getById(activeId)
+          .subscribe({ next: (h: HospitalResponse) => this.hospitals.set([h]) });
+      }
+    }
+  }
+
   ngOnInit(): void {
     this.loadEncounters();
-    this.hospitalService.list().subscribe({ next: (h) => this.hospitals.set(h) });
+    this.loadAssignedHospitals();
     // ── TENANT ISOLATION: scope staff list to active hospital ──
     const hid = this.roleContext.activeHospitalId;
     this.staffService.list(hid ?? undefined).subscribe({

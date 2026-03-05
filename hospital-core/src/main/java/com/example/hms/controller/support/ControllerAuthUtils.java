@@ -90,6 +90,27 @@ public class ControllerAuthUtils {
     }
 
     /**
+     * Return the requested hospital ID if it belongs to the user or if they are SUPER_ADMIN.
+     */
+    private Optional<UUID> validateAndPreferHospital(Authentication auth, UUID requestedHospitalId, UUID jwtHospitalId) {
+        if (requestedHospitalId != null) {
+            if (hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
+                return Optional.of(requestedHospitalId);
+            }
+            UUID userId = resolveUserId(auth).orElseThrow(() -> new BusinessException("User ID not found in token."));
+            if (assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, requestedHospitalId)) {
+                return Optional.of(requestedHospitalId);
+            } else {
+                throw new com.example.hms.exception.BusinessException("Access Denied: You do not have an active role in the requested hospital.");
+            }
+        }
+        if (jwtHospitalId != null) {
+            return Optional.of(jwtHospitalId);
+        }
+        return Optional.empty();
+    }
+
+    /**
      * Resolve hospital scope with a single requested hospital ID.
      * <p>
      * Rules:
@@ -119,12 +140,12 @@ public class ControllerAuthUtils {
         }
 
         if (hasAuthority(auth, "ROLE_HOSPITAL_ADMIN")) {
-            return preferHospital(requestedHospitalId, jwtHospitalId)
+            return validateAndPreferHospital(auth, requestedHospitalId, jwtHospitalId)
                 .or(() -> fallbackHospitalFromAssignments(auth))
                 .orElse(null);
         }
 
-        return preferHospital(requestedHospitalId, jwtHospitalId)
+        return validateAndPreferHospital(auth, requestedHospitalId, jwtHospitalId)
             .or(() -> fallbackHospitalFromAssignments(auth))
             .orElse(null);
     }
@@ -140,6 +161,11 @@ public class ControllerAuthUtils {
             return jwtHospitalId;
         }
         if (requestedHospitalId != null) {
+            // Must validate receptionist's requested hospital ID
+            UUID userId = resolveUserId(auth).orElseThrow(() -> new BusinessException("User ID not found in token."));
+            if (!assignmentRepository.existsByUserIdAndHospitalIdAndActiveTrue(userId, requestedHospitalId)) {
+                throw new com.example.hms.exception.BusinessException("Access Denied: You do not have an active role in the requested hospital.");
+            }
             return requestedHospitalId;
         }
         Optional<UUID> assignmentHospital = fallbackHospitalFromAssignments(auth);
