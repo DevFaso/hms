@@ -62,7 +62,7 @@ export class Login implements OnInit {
   }
 
   /** Check if the system needs initial setup (no users exist) */
-  private checkBootstrapStatus(): void {
+  private checkBootstrapStatus(attempt = 1): void {
     this.http.get<{ allowed: boolean }>('/auth/bootstrap-status').subscribe({
       next: (res) => {
         this.bootstrapAllowed = res?.allowed === true;
@@ -70,9 +70,16 @@ export class Login implements OnInit {
           this.bootstrapMode = true;
         }
       },
-      error: () => {
-        // If endpoint unreachable, stay on login form
+      error: (err) => {
+        // Retry once after a short delay (backend may still be starting)
+        if (attempt < 2) {
+          setTimeout(() => this.checkBootstrapStatus(attempt + 1), 2000);
+          return;
+        }
+        // After retries exhausted, show a helpful message
         this.bootstrapAllowed = false;
+        console.error('[bootstrap-status] Failed after retries:', err?.status, err?.message);
+        this.error = 'Unable to reach the server. Please refresh the page or try again shortly.';
       },
     });
   }

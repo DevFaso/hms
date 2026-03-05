@@ -49,8 +49,17 @@ export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
 
   let modified = req.clone({ url: finalUrl });
 
-  // Attach auth headers for all API calls except the login endpoint itself.
-  if (!/\/auth\/login(?:[/?#]|$)/i.test(modified.url)) {
+  // Public auth endpoints that must never carry (possibly stale) credentials.
+  // bootstrap-status & bootstrap-signup must work before any user exists,
+  // and a leftover expired token would cause the request to silently die.
+  const isPublicAuth =
+    /\/auth\/login(?:[/?#]|$)/i.test(modified.url) ||
+    /\/auth\/bootstrap/i.test(modified.url) ||
+    /\/auth\/register/i.test(modified.url) ||
+    /\/auth\/password\/request/i.test(modified.url) ||
+    /\/auth\/csrf-token/i.test(modified.url);
+
+  if (!isPublicAuth) {
     const token = auth.getToken();
 
     if (token && auth.isExpired(token)) {
