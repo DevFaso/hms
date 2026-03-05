@@ -25,5 +25,6 @@ public class BootstrapSignupRequest {
     @NotBlank
     private String lastName;
 
+    @NotBlank
     private String phoneNumber;
 }

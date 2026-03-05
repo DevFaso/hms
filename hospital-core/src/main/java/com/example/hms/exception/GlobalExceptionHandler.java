@@ -65,6 +65,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Object> handleIllegalStateException(IllegalStateException ex, WebRequest request) {
+        // Audit failures should never reach here (they are swallowed in the service layer),
+        // but as a safety net, treat them as internal errors rather than client errors.
+        if (ex.getMessage() != null && ex.getMessage().contains("audit")) {
+            log.error("Unexpected audit exception leaked to controller layer: {}", ex.getMessage(), ex);
+            return buildErrorResponse(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "An internal error occurred. The operation may have succeeded.", request);
+        }
         log.warn("Illegal state (business rule violation): {}", ex.getMessage());
         return buildErrorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), request);
     }

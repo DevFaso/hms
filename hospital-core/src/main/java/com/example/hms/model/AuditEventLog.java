@@ -52,8 +52,8 @@ public class AuditEventLog extends BaseEntity {
     @Column(name = "role_name", length = 255)
     private String roleName;
 
-    @ManyToOne(fetch = FetchType.EAGER, optional = false)
-    @JoinColumn(name = "user_id", nullable = false,
+    @ManyToOne(fetch = FetchType.EAGER, optional = true)
+    @JoinColumn(name = "user_id", nullable = true,
         foreignKey = @ForeignKey(name = "fk_audit_user"))
     private User user;
 
@@ -114,21 +114,33 @@ public class AuditEventLog extends BaseEntity {
     @PrePersist
     @PreUpdate
     private void validateAndSnapshot() {
-        if (assignment != null && assignment.getHospital() != null) {
-            // Optional consistency: if assignment has a user, ensure it matches the acting user
-            if (assignment.getUser() != null && user != null
-                && !Objects.equals(assignment.getUser().getId(), user.getId())) {
-                throw new IllegalStateException("Audit assignment.user must match audit user");
-            }
-            if (hospitalName == null) {
-                hospitalName = assignment.getHospital().getName();
-            }
+        snapshotFromAssignment();
+        snapshotUserName();
+    }
+
+    private void snapshotFromAssignment() {
+        if (assignment == null || assignment.getHospital() == null) {
+            return;
         }
+        if (assignment.getUser() != null && user != null
+                && !Objects.equals(assignment.getUser().getId(), user.getId())) {
+            throw new IllegalStateException("Audit assignment.user must match audit user");
+        }
+        if (hospitalName == null) {
+            hospitalName = assignment.getHospital().getName();
+        }
+    }
+
+    private void snapshotUserName() {
         if (user != null && userName == null) {
             String f = user.getFirstName() != null ? user.getFirstName().trim() : "";
             String l = user.getLastName() != null ? user.getLastName().trim() : "";
             String full = (f + " " + l).trim();
             userName = full.isEmpty() ? user.getEmail() : full;
+        }
+        // SYSTEM / bootstrap flows — no actor user entity
+        if (user == null && (userName == null || userName.isBlank())) {
+            userName = "SYSTEM";
         }
     }
 }

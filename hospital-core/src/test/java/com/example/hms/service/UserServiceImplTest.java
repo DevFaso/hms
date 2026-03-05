@@ -134,11 +134,82 @@ class UserServiceImplTest {
         request.setPassword("password");
         request.setFirstName("Admin");
         request.setLastName("User");
+        request.setPhoneNumber("+1234567890");
 
         BootstrapSignupResponse response = userService.bootstrapFirstUser(request);
 
         assertThat(response.isSuccess()).isTrue();
         assertThat(response.getUsername()).isEqualTo("admin");
+    }
+
+    @Test
+    @DisplayName("bootstrap succeeds even when audit logging throws an exception")
+    void bootstrapFirstUser_auditFailure_doesNotFailBootstrap() {
+        when(userRepository.count()).thenReturn(0L);
+        when(passwordEncoder.encode(any())).thenReturn("encoded");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+            User u = inv.getArgument(0);
+            u.setId(UUID.randomUUID());
+            return u;
+        });
+        when(roleRepository.findByCode("ROLE_SUPER_ADMIN")).thenReturn(Optional.of(superAdminRole));
+        when(userRoleRepository.existsById(any())).thenReturn(false);
+        when(userRepository.getReferenceById(any())).thenReturn(user);
+        when(roleRepository.getReferenceById(any())).thenReturn(superAdminRole);
+        when(assignmentService.isRoleAlreadyAssigned(any(), any(), any())).thenReturn(false);
+
+        // Simulate audit failure — logEvent returns null (swallowed exception)
+        when(auditEventLogService.logEvent(any())).thenReturn(null);
+
+        BootstrapSignupRequest request = new BootstrapSignupRequest();
+        request.setUsername("admin");
+        request.setEmail("admin@test.com");
+        request.setPassword("password");
+        request.setFirstName("Admin");
+        request.setLastName("User");
+        request.setPhoneNumber("+1234567890");
+
+        BootstrapSignupResponse response = userService.bootstrapFirstUser(request);
+
+        assertThat(response.isSuccess()).isTrue();
+        assertThat(response.getUsername()).isEqualTo("admin");
+        verify(auditEventLogService).logEvent(any());
+    }
+
+    @Test
+    @DisplayName("bootstrap passes null userId and SYSTEM userName to audit (no JWT actor)")
+    void bootstrapFirstUser_passesSystemActorToAudit() {
+        when(userRepository.count()).thenReturn(0L);
+        when(passwordEncoder.encode(any())).thenReturn("encoded");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> {
+            User u = inv.getArgument(0);
+            u.setId(UUID.randomUUID());
+            return u;
+        });
+        when(roleRepository.findByCode("ROLE_SUPER_ADMIN")).thenReturn(Optional.of(superAdminRole));
+        when(userRoleRepository.existsById(any())).thenReturn(false);
+        when(userRepository.getReferenceById(any())).thenReturn(user);
+        when(roleRepository.getReferenceById(any())).thenReturn(superAdminRole);
+        when(assignmentService.isRoleAlreadyAssigned(any(), any(), any())).thenReturn(false);
+
+        BootstrapSignupRequest request = new BootstrapSignupRequest();
+        request.setUsername("admin");
+        request.setEmail("admin@test.com");
+        request.setPassword("password");
+        request.setFirstName("Admin");
+        request.setLastName("User");
+        request.setPhoneNumber("+1234567890");
+
+        userService.bootstrapFirstUser(request);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> captor =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(captor.capture());
+
+        com.example.hms.payload.dto.AuditEventRequestDTO captured = captor.getValue();
+        assertThat(captured.getUserId()).isNull();
+        assertThat(captured.getUserName()).isEqualTo("SYSTEM");
+        assertThat(captured.getAssignmentId()).isNull();
     }
 
     // =====================================================================

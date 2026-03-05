@@ -29,12 +29,10 @@ public class AuditEventRequestDTO {
     @Schema(description = "Human-readable name of the target resource.", example = "John Doe")
     private String resourceName;
 
-    @NotNull
-    @Schema(description = "ID of the user performing the action.", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "ID of the user performing the action. Null for SYSTEM/bootstrap flows.", example = "3fa85f64-5717-4562-b3fc-2c963f66afa6")
     private UUID userId;
 
-    @NotNull
-    @Schema(description = "Assignment ID of the user in the hospital context.", example = "512a9d3b-051f-4139-bfbf-f61c1b8ad2e3", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Assignment ID of the user in the hospital context. Null for SYSTEM/bootstrap flows.", example = "512a9d3b-051f-4139-bfbf-f61c1b8ad2e3")
     private UUID assignmentId;
 
     @NotNull

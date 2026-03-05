@@ -184,9 +184,10 @@ public class UserServiceImpl implements UserService {
         addUserRoleIfAbsent(user.getId(), superAdmin.getId());
         createAssignmentIfAbsent(user.getId(), superAdmin.getId(), null);
 
-        // Audit event
+        // Audit event — best-effort, never fails the bootstrap operation
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                .userId(user.getId())
+                .userId(null)           // no JWT actor during bootstrap; audit supports null (SYSTEM flow)
+                .userName("SYSTEM")     // denormalized label for audit trail
                 .assignmentId(null)
                 .eventType(AuditEventType.USER_BOOTSTRAP)
                 .eventDescription("First system user bootstrap (Super Admin)")

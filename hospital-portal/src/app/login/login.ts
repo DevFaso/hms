@@ -88,7 +88,8 @@ export class Login implements OnInit {
       !this.bootstrap.email ||
       !this.bootstrap.password ||
       !this.bootstrap.firstName ||
-      !this.bootstrap.lastName
+      !this.bootstrap.lastName ||
+      !this.bootstrap.phoneNumber
     ) {
       this.error = 'All required fields must be filled.';
       return;
@@ -111,7 +112,7 @@ export class Login implements OnInit {
         password: this.bootstrap.password,
         firstName: this.bootstrap.firstName,
         lastName: this.bootstrap.lastName,
-        phoneNumber: this.bootstrap.phoneNumber || undefined,
+        phoneNumber: this.bootstrap.phoneNumber,
       })
       .subscribe({
         next: (res) => {

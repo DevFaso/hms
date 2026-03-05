@@ -1,7 +1,6 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.AuditEventType;
-import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AuditEventLogMapper;
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.Patient;
@@ -73,26 +72,59 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     }
 
 
+    /**
+     * Best-effort audit logging. Returns the persisted DTO on success, or {@code null}
+     * if the audit event could not be recorded. Audit failures are logged but
+     * <b>never propagated</b> — callers are guaranteed this method will not throw.
+     */
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public AuditEventLogResponseDTO logEvent(AuditEventRequestDTO requestDTO) {
         try {
-            User user = resolveUser(requestDTO);
-            UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO, user);
-            String userName = user != null ? (user.getFirstName() + " " + user.getLastName()) : requestDTO.getUserName();
-            String hospitalName = resolveHospitalName(requestDTO, assignment);
-            String roleName = resolveRoleName(requestDTO, assignment, user);
-            String detailsStr = convertDetailsToString(requestDTO.getDetails());
+            return doLogEvent(requestDTO);
+        } catch (Exception e) {
+            log.error("[AUDIT] Failed to persist audit event (eventType={}, entityType={}, resourceId={}, userId={}, userName={}): {}",
+                    requestDTO.getEventType(),
+                    requestDTO.getEntityType(),
+                    requestDTO.getResourceId(),
+                    requestDTO.getUserId(),
+                    requestDTO.getUserName(),
+                    e.getMessage(), e);
+            return null;
+        }
+    }
 
-            String resourceId = requestDTO.getResourceId();
-            String resourceName = requestDTO.getResourceName();
-            if ("PATIENT".equalsIgnoreCase(requestDTO.getEntityType())) {
-                resourceId = resolvePatientResourceId(resourceId, resourceName);
-                resourceName = resolvePatientResourceName(resourceName, resourceId);
-            }
+    /**
+     * Internal implementation that does the actual audit persistence.
+     * Separated from {@link #logEvent} so the outer method can swallow exceptions.
+     */
+    private AuditEventLogResponseDTO doLogEvent(AuditEventRequestDTO requestDTO) {
+        User user = resolveUser(requestDTO);
+        UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO, user);
 
-            AuditEventLog event = AuditEventLog.builder()
-                .user(user)
+        // Derive display name: prefer resolved user, then DTO userName, then "SYSTEM"
+        String userName;
+        if (user != null) {
+            userName = user.getFirstName() + " " + user.getLastName();
+        } else if (requestDTO.getUserName() != null && !requestDTO.getUserName().isBlank()) {
+            userName = requestDTO.getUserName();
+        } else {
+            userName = "SYSTEM";
+        }
+
+        String hospitalName = resolveHospitalName(requestDTO, assignment);
+        String roleName = resolveRoleName(requestDTO, assignment, user);
+        String detailsStr = convertDetailsToString(requestDTO.getDetails());
+
+        String resourceId = requestDTO.getResourceId();
+        String resourceName = requestDTO.getResourceName();
+        if ("PATIENT".equalsIgnoreCase(requestDTO.getEntityType())) {
+            resourceId = resolvePatientResourceId(resourceId, resourceName);
+            resourceName = resolvePatientResourceName(resourceName, resourceId);
+        }
+
+        AuditEventLog event = AuditEventLog.builder()
+                .user(user)          // nullable — SYSTEM / bootstrap flows have no actor user
                 .assignment(assignment)
                 .eventType(requestDTO.getEventType())
                 .eventDescription(requestDTO.getEventDescription())
@@ -108,23 +140,20 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
                 .eventTimestamp(java.time.LocalDateTime.now())
                 .build();
 
-            AuditEventLog saved = auditRepository.save(event);
-            return auditMapper.toDto(saved);
-
-        } catch (RuntimeException e) {
-            log.warn("Failed to log audit event for user {}: {}", requestDTO.getUserName(), e.getMessage(), e);
-            throw new IllegalStateException("audit.log.failed");
-        }
+        AuditEventLog saved = auditRepository.save(event);
+        return auditMapper.toDto(saved);
     }
 
+    /**
+     * Resolve the acting user. Returns {@code null} when no user can be found
+     * (e.g. SYSTEM / bootstrap flows) — this is intentional, not an error.
+     */
     private User resolveUser(AuditEventRequestDTO requestDTO) {
         if (requestDTO.getUserId() != null) {
-            return userRepository.findById(requestDTO.getUserId())
-                .orElseThrow(() -> new ResourceNotFoundException("user.notfound", requestDTO.getUserId().toString()));
+            return userRepository.findById(requestDTO.getUserId()).orElse(null);
         }
-        if (requestDTO.getUserName() != null) {
-            return userRepository.findByUsername(requestDTO.getUserName())
-                .orElseThrow(() -> new ResourceNotFoundException("user.notfound", requestDTO.getUserName()));
+        if (requestDTO.getUserName() != null && !requestDTO.getUserName().isBlank()) {
+            return userRepository.findByUsername(requestDTO.getUserName()).orElse(null);
         }
         return null;
     }
