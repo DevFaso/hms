@@ -40,4 +40,13 @@ public class JwtResponse {
     /** True when the user must change their password before accessing the application. */
     private boolean forcePasswordChange;
 
+    // ── Hospital assignment context (sourced from active UserRoleHospitalAssignment) ──
+
+    /** The primary hospital this user is assigned to (first active assignment). */
+    private UUID primaryHospitalId;
+    /** Display name of the primary hospital. */
+    private String primaryHospitalName;
+    /** All hospital IDs this user is permitted to access (active assignments). */
+    private List<UUID> hospitalIds;
+
 }

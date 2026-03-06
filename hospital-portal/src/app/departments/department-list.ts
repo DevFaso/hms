@@ -6,6 +6,7 @@ import { ToastService } from '../core/toast.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ProfileService } from '../services/profile.service';
 
 interface Department {
   id: string;
@@ -46,6 +47,7 @@ export class DepartmentListComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly staffService = inject(StaffService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly profileService = inject(ProfileService);
 
   departments = signal<Department[]>([]);
   filtered = signal<Department[]>([]);
@@ -83,15 +85,36 @@ export class DepartmentListComponent implements OnInit {
     } else {
       const activeId = this.roleContext.activeHospitalId;
       if (activeId) {
-        this.hospitalService.getById(activeId).subscribe({
-          next: (h) => {
-            this.hospitals.set([h]);
-            this.form.hospitalId = h.id;
-            this.loadStaffForHospital(h.id);
+        this.fetchAndLockHospital(activeId);
+      } else {
+        // Fallback: activeHospitalId may be null if JWT was stale or rehydration
+        // failed.  Resolve from the server-side assignments (source of truth).
+        this.profileService.getAssignments().subscribe({
+          next: (assignments) => {
+            const active = assignments.filter((a) => a.active && a.hospitalId);
+            if (active.length > 0) {
+              const hId = active[0].hospitalId!;
+              this.roleContext.activeHospitalId = hId;
+              this.roleContext.setPermittedHospitalIds(
+                active.map((a) => a.hospitalId!).filter((v, i, arr) => arr.indexOf(v) === i),
+              );
+              this.fetchAndLockHospital(hId);
+            }
           },
         });
       }
     }
+  }
+
+  /** Fetch a single hospital by ID and lock it into the form. */
+  private fetchAndLockHospital(hospitalId: string): void {
+    this.hospitalService.getById(hospitalId).subscribe({
+      next: (h) => {
+        this.hospitals.set([h]);
+        this.form.hospitalId = h.id;
+        this.loadStaffForHospital(h.id);
+      },
+    });
   }
 
   /** Name shown in the locked hospital display for non-SUPER_ADMIN */

@@ -168,6 +168,9 @@ public class AuthController {
             var roles = jwtTokenProvider.getRolesFromToken(accessToken);
             String preferredRole = jwtTokenProvider.resolvePreferredRole(roles);
 
+            // ── Hospital assignment context (source of truth: UserRoleHospitalAssignment) ──
+            var hospitalContext = resolveHospitalContext(user.getId());
+
             var body = JwtResponse.builder()
                     .tokenType("Bearer")
                     .accessToken(accessToken)
@@ -189,6 +192,9 @@ public class AuthController {
                     .active(user.isActive())
                     .profilePictureUrl(user.getProfileImageUrl())
                     .forcePasswordChange(user.isForcePasswordChange())
+                    .primaryHospitalId(hospitalContext.primaryHospitalId())
+                    .primaryHospitalName(hospitalContext.primaryHospitalName())
+                    .hospitalIds(hospitalContext.hospitalIds())
                     .build();
 
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
@@ -385,12 +391,21 @@ public class AuthController {
 
         log.info("🔄 [REFRESH] Tokens rotated for user='{}'", username);
 
+        // Include fresh hospital context so the frontend can re-hydrate
+        var hospitalContext = resolveHospitalContext(user.getId());
+
         return ResponseEntity.ok(JwtResponse.builder()
                 .accessToken(newAccessToken)
                 .refreshToken(newRefreshToken)
                 .issuedAt(nowMs)
                 .accessTokenExpiresAt(accessExp)
                 .refreshTokenExpiresAt(refreshExp)
+                .id(user.getId())
+                .username(user.getUsername())
+                .roles(roles)
+                .primaryHospitalId(hospitalContext.primaryHospitalId())
+                .primaryHospitalName(hospitalContext.primaryHospitalName())
+                .hospitalIds(hospitalContext.hospitalIds())
                 .build());
     }
 
@@ -645,4 +660,32 @@ public class AuthController {
     }
 
     // helper methods removed as self-registration is deprecated
+
+    /* ── Hospital assignment context ── */
+    private record HospitalContext(UUID primaryHospitalId, String primaryHospitalName,
+                                   List<UUID> hospitalIds) {}
+
+    /**
+     * Resolve hospital context from the user's active tenant role assignments.
+     * Returns the primary hospital (first active assignment) and all permitted hospital IDs.
+     */
+    private HospitalContext resolveHospitalContext(UUID userId) {
+        var assignments = assignmentRepository.findAllDetailedByUserId(userId).stream()
+                .filter(a -> Boolean.TRUE.equals(a.getActive()) && a.getHospital() != null)
+                .toList();
+
+        List<UUID> ids = assignments.stream()
+                .map(a -> a.getHospital().getId())
+                .distinct()
+                .toList();
+
+        UUID primaryId = ids.isEmpty() ? null : ids.get(0);
+        String primaryName = assignments.stream()
+                .filter(a -> a.getHospital().getId().equals(primaryId))
+                .map(a -> a.getHospital().getName())
+                .findFirst()
+                .orElse(null);
+
+        return new HospitalContext(primaryId, primaryName, ids.isEmpty() ? null : ids);
+    }
 }

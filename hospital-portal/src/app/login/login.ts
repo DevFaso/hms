@@ -171,6 +171,9 @@ export class Login implements OnInit {
         staffId?: string;
         roleName?: string;
         active?: boolean;
+        primaryHospitalId?: string;
+        primaryHospitalName?: string;
+        hospitalIds?: string[];
       }>('/auth/login', {
         username: this.username,
         password: this.password,
@@ -197,13 +200,20 @@ export class Login implements OnInit {
           const jwtRoles = this.auth.getRoles();
           this.roleContext.setRoles(jwtRoles);
 
-          const permittedIds = this.auth.getPermittedHospitalIds();
+          // Prefer hospital IDs from the response body (authoritative, fresh from DB)
+          // over JWT claims (which may be stale if assignment changed since last login).
+          const bodyHospitalIds = (res.hospitalIds ?? []).filter((v) => !!v);
+          const permittedIds =
+            bodyHospitalIds.length > 0 ? bodyHospitalIds : this.auth.getPermittedHospitalIds();
           this.roleContext.setPermittedHospitalIds(permittedIds);
 
           // Non-admin staff always resolve to exactly one hospital (their primary).
           // Admin roles with a single hospital also get locked here.
           if (permittedIds.length === 1) {
             this.roleContext.activeHospitalId = permittedIds[0];
+          } else if (res.primaryHospitalId) {
+            // Multi-hospital admin: pre-select the primary hospital
+            this.roleContext.activeHospitalId = res.primaryHospitalId;
           }
 
           if (res.id && res.username) {
@@ -221,6 +231,9 @@ export class Login implements OnInit {
               staffId: res.staffId,
               roleName: res.roleName,
               active: res.active ?? true,
+              primaryHospitalId: res.primaryHospitalId,
+              primaryHospitalName: res.primaryHospitalName,
+              hospitalIds: res.hospitalIds,
             };
             this.auth.setUserProfile(profile);
           }

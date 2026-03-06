@@ -23,6 +23,12 @@ export interface LoginUserProfile {
   staffId?: string;
   roleName?: string;
   active: boolean;
+  /** Primary hospital this user is assigned to (from active assignment). */
+  primaryHospitalId?: string;
+  /** Display name of the primary hospital. */
+  primaryHospitalName?: string;
+  /** All hospital IDs this user is permitted to access. */
+  hospitalIds?: string[];
 }
 
 export interface JwtPayload {

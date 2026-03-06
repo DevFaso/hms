@@ -250,6 +250,113 @@ class AuthControllerTest {
     }
 
     // =====================================================================
+    // POST /auth/login  — success with hospital context
+    // =====================================================================
+
+    @Test
+    void login_success_includesHospitalContext() throws Exception {
+        java.util.UUID userId = java.util.UUID.randomUUID();
+        java.util.UUID hospitalId = java.util.UUID.randomUUID();
+
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("admin@hospital-a.com")
+                .email("admin@hospital-a.com")
+                .build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", userId);
+
+        com.example.hms.model.Hospital hospital = com.example.hms.model.Hospital.builder()
+                .name("Hospital A")
+                .code("HOSP-A")
+                .build();
+        org.springframework.test.util.ReflectionTestUtils.setField(hospital, "id", hospitalId);
+
+        com.example.hms.model.Role role = com.example.hms.model.Role.builder()
+                .code("ROLE_HOSPITAL_ADMIN")
+                .build();
+
+        com.example.hms.model.UserRoleHospitalAssignment assignment =
+                com.example.hms.model.UserRoleHospitalAssignment.builder()
+                        .user(user)
+                        .hospital(hospital)
+                        .role(role)
+                        .active(true)
+                        .assignedAt(java.time.LocalDateTime.now())
+                        .build();
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                "admin@hospital-a.com", null,
+                AuthorityUtils.createAuthorityList("ROLE_HOSPITAL_ADMIN"));
+
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(auth);
+        when(jwtTokenProvider.generateAccessToken(any(org.springframework.security.core.Authentication.class)))
+                .thenReturn("mock.access.token");
+        when(jwtTokenProvider.generateRefreshToken(any(org.springframework.security.core.Authentication.class)))
+                .thenReturn("mock.refresh.token");
+        when(userRepository.findByUsername("admin@hospital-a.com"))
+                .thenReturn(java.util.Optional.of(user));
+        when(jwtTokenProvider.getRolesFromToken("mock.access.token"))
+                .thenReturn(java.util.List.of("ROLE_HOSPITAL_ADMIN"));
+        when(jwtTokenProvider.resolvePreferredRole(java.util.List.of("ROLE_HOSPITAL_ADMIN")))
+                .thenReturn("ROLE_HOSPITAL_ADMIN");
+        when(assignmentRepository.findAllDetailedByUserId(userId))
+                .thenReturn(java.util.List.of(assignment));
+
+        LoginRequest loginReq = new LoginRequest("admin@hospital-a.com", "Password1!");
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginReq)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("mock.access.token"))
+                .andExpect(jsonPath("$.username").value("admin@hospital-a.com"))
+                .andExpect(jsonPath("$.primaryHospitalId").value(hospitalId.toString()))
+                .andExpect(jsonPath("$.primaryHospitalName").value("Hospital A"))
+                .andExpect(jsonPath("$.hospitalIds[0]").value(hospitalId.toString()));
+    }
+
+    @Test
+    void login_success_noAssignment_hospitalFieldsNull() throws Exception {
+        java.util.UUID userId = java.util.UUID.randomUUID();
+
+        com.example.hms.model.User user = com.example.hms.model.User.builder()
+                .username("newuser@example.com")
+                .email("newuser@example.com")
+                .build();
+        org.springframework.test.util.ReflectionTestUtils.setField(user, "id", userId);
+
+        var auth = new UsernamePasswordAuthenticationToken(
+                "newuser@example.com", null,
+                AuthorityUtils.createAuthorityList("ROLE_DOCTOR"));
+
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
+                .thenReturn(auth);
+        when(jwtTokenProvider.generateAccessToken(any(org.springframework.security.core.Authentication.class)))
+                .thenReturn("mock.access.token");
+        when(jwtTokenProvider.generateRefreshToken(any(org.springframework.security.core.Authentication.class)))
+                .thenReturn("mock.refresh.token");
+        when(userRepository.findByUsername("newuser@example.com"))
+                .thenReturn(java.util.Optional.of(user));
+        when(jwtTokenProvider.getRolesFromToken("mock.access.token"))
+                .thenReturn(java.util.List.of("ROLE_DOCTOR"));
+        when(jwtTokenProvider.resolvePreferredRole(java.util.List.of("ROLE_DOCTOR")))
+                .thenReturn("ROLE_DOCTOR");
+        when(assignmentRepository.findAllDetailedByUserId(userId))
+                .thenReturn(java.util.List.of());
+
+        LoginRequest loginReq = new LoginRequest("newuser@example.com", "Password1!");
+
+        mockMvc.perform(post("/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(loginReq)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("mock.access.token"))
+                .andExpect(jsonPath("$.primaryHospitalId").doesNotExist())
+                .andExpect(jsonPath("$.primaryHospitalName").doesNotExist())
+                .andExpect(jsonPath("$.hospitalIds").doesNotExist());
+    }
+
+    // =====================================================================
     // GET /auth/csrf-token  (CSRF bootstrap)
     // =====================================================================
 
@@ -393,6 +500,8 @@ class AuthControllerTest {
                 .thenReturn(java.util.Optional.of(activeUser));
         when(assignmentRepository.findByUser(activeUser))
                 .thenReturn(java.util.Set.of(assignment));
+        when(assignmentRepository.findAllDetailedByUserId(userId))
+                .thenReturn(java.util.List.of(assignment));
         when(jwtTokenProvider.generateAccessToken(
                 org.mockito.ArgumentMatchers.any(
                         com.example.hms.security.TokenUserDescriptor.class)))

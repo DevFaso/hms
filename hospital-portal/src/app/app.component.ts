@@ -49,13 +49,30 @@ export class AppComponent implements OnInit {
       const roles = this.auth.getRoles();
       this.roleContext.setRoles(roles);
 
-      const permittedIds = this.auth.getPermittedHospitalIds();
+      let permittedIds = this.auth.getPermittedHospitalIds();
+
+      // Fallback: if JWT claims don't contain hospital IDs (e.g. assignment was
+      // added after the JWT was issued), try the stored user profile which was
+      // populated from the login response body (authoritative, DB-fresh data).
+      if (permittedIds.length === 0) {
+        const profile = this.auth.getUserProfile();
+        if (profile?.hospitalIds?.length) {
+          permittedIds = profile.hospitalIds;
+        }
+      }
+
       this.roleContext.setPermittedHospitalIds(permittedIds);
 
       // Non-admin staff always get exactly one permitted hospital (their primary).
       // Admin roles may have multiple; for single-hospital admins we still pre-lock.
       if (permittedIds.length === 1) {
         this.roleContext.activeHospitalId = permittedIds[0];
+      } else if (permittedIds.length > 1) {
+        // Multi-hospital admin: pre-select the primary from stored profile
+        const profile = this.auth.getUserProfile();
+        if (profile?.primaryHospitalId) {
+          this.roleContext.activeHospitalId = profile.primaryHospitalId;
+        }
       }
     }
   }
