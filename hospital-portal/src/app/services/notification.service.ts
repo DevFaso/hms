@@ -3,6 +3,8 @@ import { Injectable, inject } from '@angular/core';
 import { Observable, Subject } from 'rxjs';
 import { Client, IMessage } from '@stomp/stompjs';
 
+import { AuthService } from '../auth/auth.service';
+
 export interface Notification {
   id: string;
   message: string;
@@ -25,6 +27,7 @@ export class NotificationService {
   private stompClient: Client | null = null;
   private readonly notificationSubject = new Subject<Notification>();
   private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
 
   /** Exponential-backoff state for WebSocket reconnection */
   private reconnectAttempts = 0;
@@ -70,7 +73,12 @@ export class NotificationService {
     if (typeof globalThis === 'undefined' || !globalThis.WebSocket) return;
 
     // Build the SockJS URL pointing at /api/ws-chat (context path included).
-    const sockUrl = '/api/ws-chat';
+    // SockJS initiates plain browser GETs (/info, transport negotiation) that
+    // bypass Angular's HttpClient interceptor — the Authorization header is
+    // never attached. Pass the JWT as a query parameter so the backend's
+    // JwtAuthenticationFilter can authenticate the handshake.
+    const token = this.auth.getToken();
+    const sockUrl = token ? `/api/ws-chat?token=${encodeURIComponent(token)}` : '/api/ws-chat';
 
     // Capture the generation *before* the async gap. If disconnectWebSocket()
     // is called while the import() is in flight, the generation increments and

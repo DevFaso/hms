@@ -189,7 +189,10 @@ public class SecurityConfig {
                     new AntPathRequestMatcher("/**", "OPTIONS"),
                     // One-time bootstrap (frontend may not have XSRF token yet)
                     new AntPathRequestMatcher("/auth/bootstrap-signup", "POST"),
-                    // WebSocket handshake endpoints (if any) - adjust to your actual handshake path
+                    // SockJS handshake & transport (xhr_send, xhr_streaming are POSTs
+                    // that bypass Angular's HttpClient and therefore carry no XSRF token)
+                    new AntPathRequestMatcher("/ws-chat/**"),
+                    // REST chat endpoints
                     new AntPathRequestMatcher("/chat/**")
                 )
             )

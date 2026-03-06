@@ -150,9 +150,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private String getJwtFromRequest(HttpServletRequest request) {
+        // 1. Standard Authorization header
         String bearerToken = request.getHeader(HEADER_STRING);
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith(TOKEN_PREFIX)) {
             return bearerToken.substring(TOKEN_PREFIX.length());
+        }
+        // 2. Query-parameter fallback for SockJS/WebSocket handshakes.
+        //    SockJS initiates plain browser GETs (/ws-chat/info, /ws-chat/…/websocket)
+        //    that bypass Angular's HttpClient interceptor, so the Authorization header
+        //    is never attached. The frontend passes the JWT as ?token= instead.
+        String queryToken = request.getParameter("token");
+        if (StringUtils.hasText(queryToken)) {
+            return queryToken;
         }
         return null;
     }
