@@ -2,7 +2,7 @@ package com.example.hms.controller;
 
 import com.example.hms.payload.dto.AdminSignupRequest;
 import com.example.hms.payload.dto.MessageResponse;
-import com.example.hms.payload.dto.UserRequestDTO;
+import com.example.hms.payload.dto.UpdateUserRequestDTO;
 import com.example.hms.payload.dto.UserResponseDTO;
 import com.example.hms.payload.dto.UserSummaryDTO;
 import com.example.hms.service.UserService;
@@ -141,11 +141,11 @@ public class UserController {
         return ResponseEntity.ok(userService.getAllUsers(page, size));
     }
 
-    @Operation(summary = "Update user by ID")
+    @Operation(summary = "Update user by ID (partial update — only send fields you want to change)")
     @PutMapping("/{id}")
     public ResponseEntity<UserResponseDTO> updateUser(@PathVariable UUID id,
-                                                      @Valid @RequestBody UserRequestDTO userRequestDTO) {
-        return ResponseEntity.ok(userService.updateUser(id, userRequestDTO));
+                                                      @Valid @RequestBody UpdateUserRequestDTO dto) {
+        return ResponseEntity.ok(userService.updateUser(id, dto));
     }
 
     @Operation(summary = "Delete user by ID (Soft Delete)")

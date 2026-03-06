@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.payload.dto.AdminSignupRequest;
 import com.example.hms.payload.dto.BootstrapSignupRequest;
 import com.example.hms.payload.dto.BootstrapSignupResponse;
+import com.example.hms.payload.dto.UpdateUserRequestDTO;
 import com.example.hms.payload.dto.UserRequestDTO;
 import com.example.hms.payload.dto.UserResponseDTO;
 import com.example.hms.payload.dto.UserSummaryDTO;
@@ -16,7 +17,7 @@ public interface UserService {
 
     UserResponseDTO getUserById(UUID id);
 
-    UserResponseDTO updateUser(UUID id, UserRequestDTO userRequestDTO);
+    UserResponseDTO updateUser(UUID id, UpdateUserRequestDTO dto);
 
     void deleteUser(UUID id);
 

@@ -20,6 +20,7 @@ import com.example.hms.payload.dto.AdminSignupRequest;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.BootstrapSignupRequest;
 import com.example.hms.payload.dto.BootstrapSignupResponse;
+import com.example.hms.payload.dto.UpdateUserRequestDTO;
 import com.example.hms.payload.dto.UserRequestDTO;
 import com.example.hms.payload.dto.UserResponseDTO;
 import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
@@ -844,18 +845,34 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
-    public UserResponseDTO updateUser(UUID id, UserRequestDTO dto) {
+    public UserResponseDTO updateUser(UUID id, UpdateUserRequestDTO dto) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + id));
 
-        user.setUsername(dto.getUsername());
-        user.setEmail(dto.getEmail());
-        user.setFirstName(dto.getFirstName());
-        user.setLastName(dto.getLastName());
-        user.setPhoneNumber(dto.getPhoneNumber());
-        user.setActive(dto.getActive());
+        // ── Merge-preserve: only overwrite fields that are explicitly provided ──
 
-        if (dto.getPassword() != null && !dto.getPassword().isBlank()
+        if (hasText(dto.getUsername())) {
+            user.setUsername(dto.getUsername());
+        }
+        if (hasText(dto.getEmail())) {
+            user.setEmail(dto.getEmail());
+        }
+        if (hasText(dto.getFirstName())) {
+            user.setFirstName(dto.getFirstName());
+        }
+        if (hasText(dto.getLastName())) {
+            user.setLastName(dto.getLastName());
+        }
+        if (hasText(dto.getPhoneNumber())) {
+            user.setPhoneNumber(dto.getPhoneNumber());
+        }
+        if (dto.getActive() != null) {
+            user.setActive(dto.getActive());
+        }
+
+        // Password: only update if a new non-blank password is explicitly provided
+        // and it differs from the current hash.
+        if (hasText(dto.getPassword())
                 && !passwordEncoder.matches(dto.getPassword(), user.getPasswordHash())) {
             String encoded = passwordEncoder.encode(dto.getPassword());
             LocalDateTime passwordSetAt = LocalDateTime.now();
@@ -896,6 +913,11 @@ public class UserServiceImpl implements UserService {
 
         Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(updated);
         return userMapper.toResponseDTO(updated, assignments);
+    }
+
+    /** True when the string is non-null and non-blank. */
+    private static boolean hasText(String value) {
+        return value != null && !value.isBlank();
     }
 
     /*

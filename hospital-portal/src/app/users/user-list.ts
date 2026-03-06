@@ -278,6 +278,7 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   openEdit(user: UserSummary): void {
     this.editing.set(user);
+    // Pre-populate with summary data; phoneNumber comes from full detail fetch.
     this.createForm = {
       username: user.username,
       email: user.email,
@@ -290,6 +291,16 @@ export class UserListComponent implements OnInit, OnDestroy {
     this.selectedRoles = user.roleName ? [user.roleName] : [];
     this.fieldErrors.set({});
     this.showCreate.set(true);
+
+    // Fetch full user detail to populate phoneNumber and other fields
+    // not available in the summary projection.
+    this.userService.getById(user.id).subscribe({
+      next: (detail) => {
+        if (detail.phoneNumber) {
+          this.createForm.phoneNumber = detail.phoneNumber;
+        }
+      },
+    });
   }
 
   closeCreate(): void {
@@ -340,17 +351,22 @@ export class UserListComponent implements OnInit, OnDestroy {
 
     // Strip empty strings for optional UUID / enum fields so Jackson on the backend
     // doesn't attempt to deserialize "" as a UUID or enum value (→ 400 parse error).
-    const payload: AdminRegisterRequest = { ...this.createForm };
-    if (!payload.hospitalId) delete payload.hospitalId;
-    if (!payload.jobTitle) delete payload.jobTitle;
-    if (!payload.employmentType) delete payload.employmentType;
-    if (!payload.specialization) delete payload.specialization;
-    if (!payload.licenseNumber?.trim()) delete payload.licenseNumber;
-    if (!payload.departmentId) delete payload.departmentId;
+    // For edits, also strip blank password and phoneNumber so the backend preserves
+    // existing values (merge-preserve semantics).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const payload: Record<string, any> = { ...this.createForm };
+    if (!payload['hospitalId']) delete payload['hospitalId'];
+    if (!payload['jobTitle']) delete payload['jobTitle'];
+    if (!payload['employmentType']) delete payload['employmentType'];
+    if (!payload['specialization']) delete payload['specialization'];
+    if (!payload['licenseNumber']?.trim()) delete payload['licenseNumber'];
+    if (!payload['departmentId']) delete payload['departmentId'];
+    if (!payload['password']?.trim()) delete payload['password'];
+    if (!payload['phoneNumber']?.trim()) delete payload['phoneNumber'];
 
     const op = existing
-      ? this.userService.update(existing.id, payload)
-      : this.userService.adminRegister(payload);
+      ? this.userService.update(existing.id, payload as Partial<AdminRegisterRequest>)
+      : this.userService.adminRegister(payload as AdminRegisterRequest);
 
     op.subscribe({
       next: () => {

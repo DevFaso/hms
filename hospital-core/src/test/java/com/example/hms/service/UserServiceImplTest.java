@@ -6,9 +6,12 @@ import com.example.hms.mapper.UserMapper;
 import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.BootstrapSignupRequest;
 import com.example.hms.payload.dto.BootstrapSignupResponse;
 import com.example.hms.payload.dto.AdminSignupRequest;
+import com.example.hms.payload.dto.UpdateUserRequestDTO;
+import com.example.hms.payload.dto.UserResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.StaffRepository;
@@ -22,12 +25,15 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.lang.reflect.Method;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -597,6 +603,269 @@ class UserServiceImplTest {
 
             verify(userRepository, never()).save(any());
             verify(emailService, never()).sendAccountRestoredEmail(any(), any());
+        }
+    }
+
+    // ── updateUser ─────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("updateUser (merge-preserve semantics)")
+    class UpdateUser {
+
+        private UserResponseDTO responseDTO;
+
+        @BeforeEach
+        void setUpUpdateUser() {
+            // Give the shared 'user' a password hash so password-change tests work
+            user.setPasswordHash("$2a$10$existingHash");
+            user.setPhoneNumber("+1-555-0100");
+
+            responseDTO = new UserResponseDTO();
+            responseDTO.setId(userId);
+        }
+
+        /** Common stubbing for every updateUser happy-path test. */
+        private void stubHappyPath() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findFirstByUserIdAndActiveTrue(userId))
+                    .thenReturn(Optional.empty());
+            when(assignmentRepository.findByUser(any(User.class)))
+                    .thenReturn(Collections.emptySet());
+            when(userMapper.toResponseDTO(any(User.class), any()))
+                    .thenReturn(responseDTO);
+            when(auditEventLogService.logEvent(any())).thenReturn(null);
+        }
+
+        @Test
+        @DisplayName("partial update — only firstName — preserves every other field")
+        void partialUpdateOnlyFirstName() {
+            stubHappyPath();
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("NewFirst");
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+            User saved = cap.getValue();
+
+            assertThat(saved.getFirstName()).isEqualTo("NewFirst");
+            // Everything else untouched
+            assertThat(saved.getLastName()).isEqualTo("User");
+            assertThat(saved.getEmail()).isEqualTo("test@example.com");
+            assertThat(saved.getUsername()).isEqualTo("testuser");
+            assertThat(saved.getPhoneNumber()).isEqualTo("+1-555-0100");
+            assertThat(saved.getPasswordHash()).isEqualTo("$2a$10$existingHash");
+        }
+
+        @Test
+        @DisplayName("blank password is ignored — existing hash preserved")
+        void blankPasswordPreservesHash() {
+            stubHappyPath();
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setPassword("");
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+
+            assertThat(cap.getValue().getPasswordHash()).isEqualTo("$2a$10$existingHash");
+            verify(passwordEncoder, never()).encode(any());
+        }
+
+        @Test
+        @DisplayName("null password is ignored — existing hash preserved")
+        void nullPasswordPreservesHash() {
+            stubHappyPath();
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            // password remains null by default
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+
+            assertThat(cap.getValue().getPasswordHash()).isEqualTo("$2a$10$existingHash");
+            verify(passwordEncoder, never()).encode(any());
+        }
+
+        @Test
+        @DisplayName("new password that differs from current hash is encoded and saved")
+        void newPasswordUpdatesHash() {
+            stubHappyPath();
+            when(passwordEncoder.matches("NewPass123", "$2a$10$existingHash")).thenReturn(false);
+            when(passwordEncoder.encode("NewPass123")).thenReturn("$2a$10$newHash");
+
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setPassword("NewPass123");
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+            User saved = cap.getValue();
+
+            assertThat(saved.getPasswordHash()).isEqualTo("$2a$10$newHash");
+            assertThat(saved.getPasswordChangedAt()).isNotNull();
+            assertThat(saved.isForcePasswordChange()).isFalse();
+        }
+
+        @Test
+        @DisplayName("same password as current hash is NOT re-encoded")
+        void samePasswordIsNotReEncoded() {
+            stubHappyPath();
+            when(passwordEncoder.matches("SamePass123", "$2a$10$existingHash")).thenReturn(true);
+
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setPassword("SamePass123");
+
+            userService.updateUser(userId, dto);
+
+            verify(passwordEncoder, never()).encode(any());
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+            assertThat(cap.getValue().getPasswordHash()).isEqualTo("$2a$10$existingHash");
+        }
+
+        @Test
+        @DisplayName("blank phoneNumber is ignored — existing number preserved")
+        void blankPhoneNumberPreservesExisting() {
+            stubHappyPath();
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setPhoneNumber("");
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+
+            assertThat(cap.getValue().getPhoneNumber()).isEqualTo("+1-555-0100");
+        }
+
+        @Test
+        @DisplayName("non-blank phoneNumber is applied")
+        void nonBlankPhoneNumberIsApplied() {
+            stubHappyPath();
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setPhoneNumber("+1-555-0999");
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+
+            assertThat(cap.getValue().getPhoneNumber()).isEqualTo("+1-555-0999");
+        }
+
+        @Test
+        @DisplayName("setting only active flag preserves all other fields")
+        void activeOnlyPreservesOtherFields() {
+            stubHappyPath();
+            user.setActive(true);
+
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setActive(false);
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+            User saved = cap.getValue();
+
+            assertThat(saved.isActive()).isFalse();
+            assertThat(saved.getFirstName()).isEqualTo("Test");
+            assertThat(saved.getEmail()).isEqualTo("test@example.com");
+            assertThat(saved.getPasswordHash()).isEqualTo("$2a$10$existingHash");
+        }
+
+        @Test
+        @DisplayName("completely empty DTO preserves every field (the exact bug scenario)")
+        void emptyDtoPreservesEverything() {
+            stubHappyPath();
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+            User saved = cap.getValue();
+
+            assertThat(saved.getFirstName()).isEqualTo("Test");
+            assertThat(saved.getLastName()).isEqualTo("User");
+            assertThat(saved.getEmail()).isEqualTo("test@example.com");
+            assertThat(saved.getUsername()).isEqualTo("testuser");
+            assertThat(saved.getPhoneNumber()).isEqualTo("+1-555-0100");
+            assertThat(saved.getPasswordHash()).isEqualTo("$2a$10$existingHash");
+        }
+
+        @Test
+        @DisplayName("multiple fields updated simultaneously")
+        void multipleFieldsUpdated() {
+            stubHappyPath();
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("Jane");
+            dto.setLastName("Doe");
+            dto.setEmail("jane.doe@example.com");
+
+            userService.updateUser(userId, dto);
+
+            ArgumentCaptor<User> cap = ArgumentCaptor.forClass(User.class);
+            verify(userRepository).save(cap.capture());
+            User saved = cap.getValue();
+
+            assertThat(saved.getFirstName()).isEqualTo("Jane");
+            assertThat(saved.getLastName()).isEqualTo("Doe");
+            assertThat(saved.getEmail()).isEqualTo("jane.doe@example.com");
+            // Unchanged fields
+            assertThat(saved.getUsername()).isEqualTo("testuser");
+            assertThat(saved.getPhoneNumber()).isEqualTo("+1-555-0100");
+        }
+
+        @Test
+        @DisplayName("audit event is logged on successful update")
+        void auditEventIsLogged() {
+            stubHappyPath();
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("Audited");
+
+            userService.updateUser(userId, dto);
+
+            verify(auditEventLogService).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("mapper receives saved user and assignments")
+        void mapperReceivesSavedUserAndAssignments() {
+            Set<UserRoleHospitalAssignment> assignments = new HashSet<>();
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(assignmentRepository.findFirstByUserIdAndActiveTrue(userId))
+                    .thenReturn(Optional.empty());
+            when(assignmentRepository.findByUser(any(User.class))).thenReturn(assignments);
+            when(userMapper.toResponseDTO(any(User.class), any())).thenReturn(responseDTO);
+            when(auditEventLogService.logEvent(any())).thenReturn(null);
+
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            UserResponseDTO result = userService.updateUser(userId, dto);
+
+            verify(userMapper).toResponseDTO(any(User.class), any());
+            assertThat(result).isSameAs(responseDTO);
+        }
+
+        @Test
+        @DisplayName("throws ResourceNotFoundException when user does not exist")
+        void throwsWhenUserNotFound() {
+            when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(ResourceNotFoundException.class);
+
+            verify(userRepository, never()).save(any());
         }
     }
 }
