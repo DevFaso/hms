@@ -115,12 +115,9 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
         },
       });
     } else {
-      const activeId = this.roleContext.activeHospitalId;
-      if (activeId) {
-        this.hospitalService.getById(activeId).subscribe({
-          next: (h) => this.hospitals.set([h]),
-        });
-      }
+      this.hospitalService.getMyHospitalAsResponse().subscribe({
+        next: (h) => this.hospitals.set([h]),
+      });
     }
   }
 

@@ -83,30 +83,42 @@ export class DepartmentListComponent implements OnInit {
         next: (data) => this.hospitals.set(data),
       });
     } else {
-      const activeId = this.roleContext.activeHospitalId;
-      if (activeId) {
-        this.fetchAndLockHospital(activeId);
-      } else {
-        // Fallback: activeHospitalId may be null if JWT was stale or rehydration
-        // failed.  Resolve from the server-side assignments (source of truth).
-        this.profileService.getAssignments().subscribe({
-          next: (assignments) => {
-            const active = assignments.filter((a) => a.active && a.hospitalId);
-            if (active.length > 0) {
-              const hId = active[0].hospitalId!;
-              this.roleContext.activeHospitalId = hId;
-              this.roleContext.setPermittedHospitalIds(
-                active.map((a) => a.hospitalId!).filter((v, i, arr) => arr.indexOf(v) === i),
-              );
-              this.fetchAndLockHospital(hId);
-            }
-          },
-        });
-      }
+      // Non-super-admin: use /me/hospital (tenant-safe, allowed by SecurityConfig)
+      // instead of /hospitals/{id} which is SUPER_ADMIN-only.
+      this.hospitalService.getMyHospitalAsResponse().subscribe({
+        next: (h) => {
+          this.hospitals.set([h]);
+          this.form.hospitalId = h.id;
+          // Also ensure roleContext has the hospital ID for other components
+          if (!this.roleContext.activeHospitalId) {
+            this.roleContext.activeHospitalId = h.id;
+          }
+          this.loadStaffForHospital(h.id);
+        },
+        error: () => {
+          // Last-resort fallback: try /me/assignments
+          this.profileService.getAssignments().subscribe({
+            next: (assignments) => {
+              const active = assignments.filter((a) => a.active && a.hospitalId);
+              if (active.length > 0) {
+                const hId = active[0].hospitalId!;
+                const hName = active[0].hospitalName ?? 'Assigned Hospital';
+                this.roleContext.activeHospitalId = hId;
+                this.roleContext.setPermittedHospitalIds(
+                  active.map((a) => a.hospitalId!).filter((v, i, arr) => arr.indexOf(v) === i),
+                );
+                this.hospitals.set([{ id: hId, name: hName } as HospitalResponse]);
+                this.form.hospitalId = hId;
+                this.loadStaffForHospital(hId);
+              }
+            },
+          });
+        },
+      });
     }
   }
 
-  /** Fetch a single hospital by ID and lock it into the form. */
+  /** Fetch a single hospital by ID and lock it into the form (SUPER_ADMIN only). */
   private fetchAndLockHospital(hospitalId: string): void {
     this.hospitalService.getById(hospitalId).subscribe({
       next: (h) => {
@@ -163,8 +175,17 @@ export class DepartmentListComponent implements OnInit {
   // ---------- Create ----------
   openCreate(): void {
     this.form = this.emptyForm();
+    // Re-apply the locked hospital for non-super-admin users
+    const h = this.hospitals();
+    if (this.hospitalLocked && h.length === 1) {
+      this.form.hospitalId = h[0].id;
+    }
     this.editing.set(null);
     this.staffForHospital.set([]);
+    // Pre-load staff for the locked hospital
+    if (this.form.hospitalId) {
+      this.loadStaffForHospital(this.form.hospitalId);
+    }
     this.showModal.set(true);
   }
 

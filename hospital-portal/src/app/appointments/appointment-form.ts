@@ -101,7 +101,7 @@ export class AppointmentFormComponent implements OnInit {
     if (lockedId) {
       // Scoped user (all non-admin staff, single-hospital admins):
       // locked to one hospital — never show a dropdown.
-      this.hospitalService.getById(lockedId).subscribe((h) => {
+      this.hospitalService.getMyHospitalAsResponse().subscribe((h) => {
         this.hospitals.set([h]);
         this.selectedHospitalId.set(lockedId);
         this.form.hospitalId = lockedId;

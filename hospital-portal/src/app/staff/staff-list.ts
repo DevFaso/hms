@@ -167,15 +167,12 @@ export class StaffListComponent implements OnInit {
         next: (data) => this.hospitals.set(data),
       });
     } else {
-      const activeId = this.roleContext.activeHospitalId;
-      if (activeId) {
-        this.hospitalService.getById(activeId).subscribe({
-          next: (h) => {
-            this.hospitals.set([h]);
-            this.form.hospitalName = h.name;
-          },
-        });
-      }
+      this.hospitalService.getMyHospitalAsResponse().subscribe({
+        next: (h) => {
+          this.hospitals.set([h]);
+          this.form.hospitalName = h.name;
+        },
+      });
     }
   }
 
@@ -255,6 +252,11 @@ export class StaffListComponent implements OnInit {
   openCreate(): void {
     this.form = this.emptyForm();
     this.editing.set(null);
+    // Re-apply locked hospital after emptyForm() reset
+    if (this.hospitalLocked) {
+      const h = this.hospitals();
+      if (h.length === 1) this.form.hospitalName = h[0].name;
+    }
     this.showModal.set(true);
   }
 

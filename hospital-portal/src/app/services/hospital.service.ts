@@ -1,6 +1,12 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
+
+/** Minimal hospital DTO returned by /me/hospital. */
+export interface HospitalMinimal {
+  id: string;
+  name: string;
+}
 
 export interface HospitalRequest {
   name: string;
@@ -76,5 +82,26 @@ export class HospitalService {
 
   delete(id: string): Observable<void> {
     return this.http.delete<void>(`/hospitals/${id}`);
+  }
+
+  /**
+   * Tenant-safe: returns the current user's assigned hospital via GET /me/hospital.
+   * This endpoint is permitted for HOSPITAL_ADMIN, RECEPTIONIST, and other non-admin roles,
+   * unlike GET /hospitals/{id} which is restricted to SUPER_ADMIN.
+   */
+  getMyHospital(): Observable<HospitalMinimal> {
+    return this.http.get<HospitalMinimal>('/me/hospital');
+  }
+
+  /**
+   * Tenant-safe hospital fetch that works for any role:
+   * - Returns the minimal hospital DTO from /me/hospital
+   * - Maps it into a partial HospitalResponse so callers that expect
+   *   HospitalResponse can use it for id + name display.
+   */
+  getMyHospitalAsResponse(): Observable<HospitalResponse> {
+    return this.getMyHospital().pipe(
+      map((h) => ({ ...({} as HospitalResponse), id: h.id, name: h.name })),
+    );
   }
 }

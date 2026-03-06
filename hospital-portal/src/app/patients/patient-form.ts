@@ -61,16 +61,13 @@ export class PatientFormComponent implements OnInit {
         error: () => this.toast.error('Failed to load hospitals'),
       });
     } else {
-      const activeId = this.roleContext.activeHospitalId;
-      if (activeId) {
-        this.hospitalService.getById(activeId).subscribe({
-          next: (h) => {
-            this.hospitals = [h];
-            this.form.hospitalId = h.id;
-          },
-          error: () => this.toast.error('Failed to load hospital'),
-        });
-      }
+      this.hospitalService.getMyHospitalAsResponse().subscribe({
+        next: (h) => {
+          this.hospitals = [h];
+          this.form.hospitalId = h.id;
+        },
+        error: () => this.toast.error('Failed to load hospital'),
+      });
     }
   }
 

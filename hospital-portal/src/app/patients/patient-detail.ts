@@ -186,21 +186,16 @@ export class PatientDetailComponent implements OnInit {
         },
       });
     } else {
-      const activeId = this.roleContext.activeHospitalId;
-      if (activeId) {
-        this.hospitalService.getById(activeId).subscribe({
-          next: (h) => {
-            this.hospitals.set([h]);
-            this.hospitalsLoading.set(false);
-          },
-          error: () => {
-            this.toast.error('Failed to load hospital');
-            this.hospitalsLoading.set(false);
-          },
-        });
-      } else {
-        this.hospitalsLoading.set(false);
-      }
+      this.hospitalService.getMyHospitalAsResponse().subscribe({
+        next: (h) => {
+          this.hospitals.set([h]);
+          this.hospitalsLoading.set(false);
+        },
+        error: () => {
+          this.toast.error('Failed to load hospital');
+          this.hospitalsLoading.set(false);
+        },
+      });
     }
   }
 

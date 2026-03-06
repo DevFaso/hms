@@ -78,15 +78,12 @@ export class LabComponent implements OnInit {
     if (this.roleContext.isSuperAdmin()) {
       this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
     } else {
-      const activeId = this.roleContext.activeHospitalId;
-      if (activeId) {
-        this.hospitalService.getById(activeId).subscribe({
-          next: (h) => {
-            this.hospitals.set([h]);
-            this.form.hospitalId = h.id;
-          },
-        });
-      }
+      this.hospitalService.getMyHospitalAsResponse().subscribe({
+        next: (h) => {
+          this.hospitals.set([h]);
+          this.form.hospitalId = h.id;
+        },
+      });
     }
   }
 
@@ -151,6 +148,11 @@ export class LabComponent implements OnInit {
     this.editingId.set(null);
     this.selectedPatient.set(null);
     this.patientQuery.set('');
+    // Re-apply locked hospital after emptyForm() reset
+    if (this.hospitalLocked) {
+      const h = this.hospitals();
+      if (h.length === 1) this.form.hospitalId = h[0].id;
+    }
     this.showModal.set(true);
   }
 

@@ -194,15 +194,12 @@ export class UserListComponent implements OnInit, OnDestroy {
         },
       });
     } else {
-      const activeId = this.roleContext.activeHospitalId;
-      if (activeId) {
-        this.hospitalService.getById(activeId).subscribe({
-          next: (h) => {
-            this.availableHospitals.set([{ id: h.id, name: h.name }]);
-            this.createForm.hospitalId = h.id;
-          },
-        });
-      }
+      this.hospitalService.getMyHospitalAsResponse().subscribe({
+        next: (h) => {
+          this.availableHospitals.set([{ id: h.id, name: h.name }]);
+          this.createForm.hospitalId = h.id;
+        },
+      });
     }
   }
 
