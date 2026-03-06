@@ -4,6 +4,7 @@ import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.UserMapper;
 import com.example.hms.model.Role;
+import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.BootstrapSignupRequest;
 import com.example.hms.payload.dto.BootstrapSignupResponse;
@@ -27,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.lang.reflect.Method;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -463,12 +465,34 @@ class UserServiceImplTest {
             user.setActive(true);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
 
             userService.deleteUser(userId);
 
             assertThat(user.isDeleted()).isTrue();
             assertThat(user.isActive()).isFalse();
             verify(userRepository).save(user);
+        }
+
+        @Test
+        @DisplayName("deactivates associated staff records when user is deleted")
+        void deactivatesStaffRecords() {
+            user.setDeleted(false);
+            user.setActive(true);
+
+            Staff activeStaff = new Staff();
+            activeStaff.setId(UUID.randomUUID());
+            activeStaff.setUser(user);
+            activeStaff.setActive(true);
+
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of(activeStaff));
+
+            userService.deleteUser(userId);
+
+            assertThat(activeStaff.isActive()).isFalse();
+            verify(staffRepository).save(activeStaff);
         }
 
         @Test
@@ -498,6 +522,7 @@ class UserServiceImplTest {
             user.setActive(false);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
             doNothing().when(emailService).sendAccountRestoredEmail(any(), any());
 
             userService.restoreUser(userId);
@@ -508,12 +533,35 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("reactivates associated staff records when user is restored")
+        void reactivatesStaffRecords() {
+            user.setDeleted(true);
+            user.setActive(false);
+
+            Staff inactiveStaff = new Staff();
+            inactiveStaff.setId(UUID.randomUUID());
+            inactiveStaff.setUser(user);
+            inactiveStaff.setActive(false);
+
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of(inactiveStaff));
+            doNothing().when(emailService).sendAccountRestoredEmail(any(), any());
+
+            userService.restoreUser(userId);
+
+            assertThat(inactiveStaff.isActive()).isTrue();
+            verify(staffRepository).save(inactiveStaff);
+        }
+
+        @Test
         @DisplayName("sends account-restored notification email after save")
         void sendsNotificationEmail() {
             user.setDeleted(true);
             user.setActive(false);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
             doNothing().when(emailService).sendAccountRestoredEmail(any(), any());
 
             userService.restoreUser(userId);
@@ -528,6 +576,7 @@ class UserServiceImplTest {
             user.setActive(false);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserId(userId)).thenReturn(List.of());
             doThrow(new RuntimeException("SMTP down"))
                     .when(emailService).sendAccountRestoredEmail(any(), any());
 

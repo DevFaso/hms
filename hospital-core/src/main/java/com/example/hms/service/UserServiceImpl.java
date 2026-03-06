@@ -794,6 +794,16 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
         assignmentService.deleteAllAssignmentsForUser(id);
 
+        // Deactivate all Staff records linked to the deleted user
+        List<Staff> staffRecords = staffRepository.findByUserId(id);
+        for (Staff staff : staffRecords) {
+            if (staff.isActive()) {
+                staff.setActive(false);
+                staffRepository.save(staff);
+                log.debug("🔒 Deactivated staff record {} for deleted user {}", staff.getId(), id);
+            }
+        }
+
         log.info("🗑️ User soft-deleted with ID: {}", id);
         recordUserDeletionAudit(user);
     }
@@ -807,6 +817,16 @@ public class UserServiceImpl implements UserService {
         user.setDeleted(false);
         user.setActive(true);
         userRepository.save(user);
+
+        // Reactivate Staff records that were deactivated when the user was deleted
+        List<Staff> staffRecords = staffRepository.findByUserId(id);
+        for (Staff staff : staffRecords) {
+            if (!staff.isActive()) {
+                staff.setActive(true);
+                staffRepository.save(staff);
+                log.debug("♻️ Reactivated staff record {} for restored user {}", staff.getId(), id);
+            }
+        }
 
         log.info("♻️ User restored with ID: {}", id);
 

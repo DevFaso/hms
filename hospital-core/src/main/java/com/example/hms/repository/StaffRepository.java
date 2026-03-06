@@ -18,12 +18,12 @@ import java.util.UUID;
 public interface StaffRepository extends JpaRepository<Staff, UUID> {
     @Query("SELECT s FROM Staff s WHERE s.user.username = :identifier OR s.licenseNumber = :identifier OR s.assignment.role.code = :identifier")
     java.util.Optional<Staff> findByUsernameOrLicenseOrRoleCode(@Param("identifier") String identifier);
-    // Lookup staff by user email
-    @Query("SELECT s FROM Staff s WHERE LOWER(s.user.email) = LOWER(:email)")
+    // Lookup staff by user email (excludes deleted users)
+    @Query("SELECT s FROM Staff s WHERE LOWER(s.user.email) = LOWER(:email) AND s.user.isDeleted = false")
     List<Staff> findByUserEmail(@Param("email") String email);
 
-    // Lookup staff by user phone number
-    @Query("SELECT s FROM Staff s WHERE s.user.phoneNumber = :phone")
+    // Lookup staff by user phone number (excludes deleted users)
+    @Query("SELECT s FROM Staff s WHERE s.user.phoneNumber = :phone AND s.user.isDeleted = false")
     List<Staff> findByUserPhoneNumber(@Param("phone") String phone);
 
 
@@ -41,13 +41,16 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     boolean existsByLicenseNumber(String licenseNumber);
 
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
-    Page<Staff> findByHospital_Id(UUID hospitalId, Pageable pageable);
+    @Query("SELECT s FROM Staff s WHERE s.hospital.id = :hospitalId AND s.user.isDeleted = false")
+    Page<Staff> findByHospitalIdExcludingDeletedUsers(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
-    Page<Staff> findByHospital_IdAndActiveTrue(UUID hospitalId, Pageable pageable);
+    @Query("SELECT s FROM Staff s WHERE s.hospital.id = :hospitalId AND s.active = true AND s.user.isDeleted = false")
+    Page<Staff> findByHospitalIdAndActiveTrueExcludingDeletedUsers(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
-    List<Staff> findByHospital_IdIn(Collection<UUID> hospitalIds);
+    @Query("SELECT s FROM Staff s WHERE s.hospital.id IN :hospitalIds AND s.user.isDeleted = false")
+    List<Staff> findByHospitalIdInExcludingDeletedUsers(@Param("hospitalIds") Collection<UUID> hospitalIds);
 
     Optional<Staff> findByUserIdAndHospitalId(UUID userId, UUID hospitalId);
 
@@ -65,6 +68,7 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
         JOIN FETCH a.role r
         WHERE s.hospital.id = :hospitalId
           AND s.active = true
+          AND u.isDeleted = false
           AND (:roleCode IS NULL OR UPPER(r.code) = UPPER(:roleCode))
           AND (
                 LOWER(COALESCE(s.name, '')) = LOWER(:identifier)
@@ -76,6 +80,16 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     List<Staff> findActiveByHospitalAndRoleAndIdentifier(@Param("hospitalId") UUID hospitalId,
                                                          @Param("roleCode") String roleCode,
                                                          @Param("identifier") String identifier);
+
+    // ----- Original derived queries retained for internal/backward compatibility -----
+    @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
+    Page<Staff> findByHospital_Id(UUID hospitalId, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
+    Page<Staff> findByHospital_IdAndActiveTrue(UUID hospitalId, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
+    List<Staff> findByHospital_IdIn(Collection<UUID> hospitalIds);
 
 }
 

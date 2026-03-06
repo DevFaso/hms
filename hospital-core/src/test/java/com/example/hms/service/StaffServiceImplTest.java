@@ -205,7 +205,7 @@ class StaffServiceImplTest {
     void getStaffByHospitalId_returnsPage() {
         Pageable pageable = PageRequest.of(0, 10);
         Page<Staff> page = new PageImpl<>(List.of(staff));
-        when(staffRepository.findByHospital_Id(hospitalId, pageable)).thenReturn(page);
+        when(staffRepository.findByHospitalIdExcludingDeletedUsers(hospitalId, pageable)).thenReturn(page);
         when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
 
         Page<StaffResponseDTO> result = staffService.getStaffByHospitalId(hospitalId, pageable);
@@ -217,7 +217,7 @@ class StaffServiceImplTest {
     void getStaffByHospitalIdAndActiveTrue_returnsPage() {
         Pageable pageable = PageRequest.of(0, 10);
         Page<Staff> page = new PageImpl<>(List.of(staff));
-        when(staffRepository.findByHospital_IdAndActiveTrue(hospitalId, pageable)).thenReturn(page);
+        when(staffRepository.findByHospitalIdAndActiveTrueExcludingDeletedUsers(hospitalId, pageable)).thenReturn(page);
         when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
 
         Page<StaffResponseDTO> result = staffService.getStaffByHospitalIdAndActiveTrue(hospitalId, pageable);
@@ -406,13 +406,13 @@ class StaffServiceImplTest {
             .build();
         HospitalContextHolder.setContext(ctx);
 
-        when(staffRepository.findByHospital_IdIn(any())).thenReturn(List.of(staff));
+        when(staffRepository.findByHospitalIdInExcludingDeletedUsers(any())).thenReturn(List.of(staff));
         when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
 
         List<StaffResponseDTO> result = staffService.getAllStaff(locale);
 
         assertThat(result).hasSize(1);
-        verify(staffRepository).findByHospital_IdIn(any());
+        verify(staffRepository).findByHospitalIdInExcludingDeletedUsers(any());
     }
 
     @Test

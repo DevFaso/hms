@@ -79,7 +79,8 @@ public class StaffServiceImpl implements StaffService {
     @Transactional(readOnly = true)
     public List<StaffResponseDTO> getActiveStaffByUserId(UUID userId, Locale locale) {
         return staffRepository.findByUserId(userId).stream()
-            .filter(staff -> staff.isActive() && isStaffVisible(staff))
+            .filter(staff -> staff.isActive() && isStaffVisible(staff)
+                    && (staff.getUser() == null || !staff.getUser().isDeleted()))
             .map(staffMapper::toStaffDTO)
             .toList();
     }
@@ -97,19 +98,19 @@ public class StaffServiceImpl implements StaffService {
         return staffRepository.existsByLicenseNumberAndUserId(licenseNumber, userId);
     }
 
-    // Find staff by hospital ID (paginated)
+    // Find staff by hospital ID (paginated, excludes deleted users)
     @Transactional(readOnly = true)
     public Page<StaffResponseDTO> getStaffByHospitalId(UUID hospitalId, Pageable pageable) {
         requireHospitalScope(hospitalId);
-        return staffRepository.findByHospital_Id(hospitalId, pageable)
+        return staffRepository.findByHospitalIdExcludingDeletedUsers(hospitalId, pageable)
             .map(staffMapper::toStaffDTO);
     }
 
-    // Find staff by hospital ID and active status (paginated)
+    // Find staff by hospital ID and active status (paginated, excludes deleted users)
     @Transactional(readOnly = true)
     public Page<StaffResponseDTO> getStaffByHospitalIdAndActiveTrue(UUID hospitalId, Pageable pageable) {
         requireHospitalScope(hospitalId);
-        return staffRepository.findByHospital_IdAndActiveTrue(hospitalId, pageable)
+        return staffRepository.findByHospitalIdAndActiveTrueExcludingDeletedUsers(hospitalId, pageable)
             .map(staffMapper::toStaffDTO);
     }
 
@@ -136,6 +137,7 @@ public class StaffServiceImpl implements StaffService {
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
         if (context.isSuperAdmin()) {
             return staffRepository.findAll().stream()
+                .filter(staff -> staff.getUser() == null || !staff.getUser().isDeleted())
                 .map(staffMapper::toStaffDTO)
                 .toList();
         }
@@ -145,7 +147,7 @@ public class StaffServiceImpl implements StaffService {
             return List.of();
         }
 
-        return staffRepository.findByHospital_IdIn(hospitalScope).stream()
+        return staffRepository.findByHospitalIdInExcludingDeletedUsers(hospitalScope).stream()
             .map(staffMapper::toStaffDTO)
             .toList();
     }
