@@ -45,22 +45,37 @@ cp .env.example .env
 ```
 
 **API endpoints used (Patient Portal):**
-| Feature        | Method | Endpoint                              |
-|----------------|--------|---------------------------------------|
-| Login          | POST   | `/auth/login`                         |
-| Logout         | POST   | `/auth/logout`                        |
-| Token Refresh  | POST   | `/auth/token/refresh`                 |
-| Profile        | GET    | `/me/patient/profile`                 |
-| Update Profile | PUT    | `/me/patient/profile`                 |
-| Appointments   | GET    | `/me/patient/appointments`            |
-| Lab Results    | GET    | `/me/patient/lab-results`             |
-| Medications    | GET    | `/me/patient/medications`             |
-| Billing        | GET    | `/me/patient/billing/invoices`        |
-| Notifications  | GET    | `/notifications`                      |
-| Mark Read      | POST   | `/notifications/{id}/read`            |
-| Messages       | GET    | `/chat/conversations/{userId}`        |
-| Refill Request | POST   | `/me/patient/refills`                 |
-| Health Summary | GET    | `/me/patient/health-summary`          |
+| Feature             | Method | Endpoint                              |
+|---------------------|--------|---------------------------------------|
+| Login               | POST   | `/auth/login`                         |
+| Logout              | POST   | `/auth/logout`                        |
+| Token Refresh       | POST   | `/auth/token/refresh`                 |
+| Profile             | GET    | `/me/patient/profile`                 |
+| Update Profile      | PUT    | `/me/patient/profile`                 |
+| Appointments        | GET    | `/me/patient/appointments`            |
+| Cancel Appointment  | PUT    | `/me/patient/appointments/cancel`     |
+| Reschedule          | PUT    | `/me/patient/appointments/reschedule` |
+| Schedule (create)   | POST   | `/appointments`                       |
+| Check Availability  | GET    | `/availability/check`                 |
+| Lab Results         | GET    | `/me/patient/lab-results`             |
+| Medications         | GET    | `/me/patient/medications`             |
+| Billing Invoices    | GET    | `/me/patient/billing/invoices`        |
+| Notifications       | GET    | `/notifications`                      |
+| Mark Read           | POST   | `/notifications/{id}/read`            |
+| Conversations       | GET    | `/chat/conversations/{userId}`        |
+| Chat History        | GET    | `/chat/history/{u1}/{u2}`             |
+| Send Message        | POST   | `/chat/send`                          |
+| Mark Chat Read      | PUT    | `/chat/mark-read/{s}/{r}`             |
+| Care Team           | GET    | `/me/patient/care-team`               |
+| Visit History       | GET    | `/me/patient/encounters`              |
+| After Visit Summary | GET    | `/me/patient/after-visit-summaries`   |
+| Prescriptions       | GET    | `/me/patient/prescriptions`           |
+| Consents            | GET    | `/me/patient/consents`                |
+| Grant Consent       | POST   | `/me/patient/consents`                |
+| Revoke Consent      | DELETE | `/me/patient/consents`                |
+| Refill Request      | POST   | `/me/patient/refills`                 |
+| Health Summary      | GET    | `/me/patient/health-summary`          |
+| Staff List          | GET    | `/staff`                              |
 
 ## 🧪 Complete Testing Checklist
 
@@ -102,11 +117,59 @@ cp .env.example .env
 - [ ] **After Visit Summary**: Test "View After Visit Summary" button
 - [ ] **Schedule Button**: Test "Schedule an appointment" button
 
-### ✅ Messages Testing
-- [ ] **Message List**: Verify messages appear with proper formatting
-- [ ] **New Badge**: Check "New" badge on unread messages
-- [ ] **Message Details**: Verify sender, subject, date, and preview text
-- [ ] **Compose Button**: Test "Compose New Message" button
+### ✅ Messages Testing (MVP2 — Full Chat)
+- [ ] **Conversation List**: Verify conversations appear with avatars
+- [ ] **Unread Badges**: Check unread counts on conversations
+- [ ] **Search Messages**: Test search bar filters conversations
+- [ ] **Open Thread**: Tap conversation to open chat thread
+- [ ] **Chat Bubbles**: Verify sent (blue, right) and received (gray, left) bubbles
+- [ ] **Date Separators**: Check "Today", "Yesterday", and date labels
+- [ ] **Send Message**: Type and send a message, verify optimistic display
+- [ ] **Compose New**: Click "New" button → recipient picker → compose → send
+- [ ] **Recipient Search**: Search providers in compose screen
+- [ ] **Success Screen**: Verify "Message Sent" confirmation
+
+### ✅ Scheduling Testing (MVP2)
+- [ ] **Schedule Button**: Click "Schedule" on Appointments page → opens wizard
+- [ ] **Step 1 — Provider**: Verify provider list with search
+- [ ] **Step 2 — Date**: Select date on calendar (weekdays only)
+- [ ] **Step 2 — Time**: Select time slot from grid
+- [ ] **Step 3 — Confirm**: Review appointment details
+- [ ] **Reason/Notes**: Enter visit reason and notes
+- [ ] **Submit**: Confirm and see success screen
+- [ ] **Step Navigation**: Back/forward through steps works
+- [ ] **Step Indicator**: 3-step progress dots update
+
+### ✅ Visit History Testing (MVP2)
+- [ ] **Visit List**: Verify encounters display with provider, date, facility
+- [ ] **Status Badges**: Check COMPLETED badges
+- [ ] **Diagnoses Tags**: Verify diagnosis badges on visits
+- [ ] **After Visit Summary**: Click "View After Visit Summary®"
+- [ ] **Summary Detail**: Verify diagnoses, vitals, instructions, medications, labs
+- [ ] **Follow-up Info**: Check follow-up date and referrals display
+- [ ] **Download/Print**: Verify download and print buttons present
+
+### ✅ Care Team Testing (MVP2)
+- [ ] **PCP Card**: Verify primary care provider with PCP badge
+- [ ] **Team Members**: Check specialist and care coordinator cards
+- [ ] **Contact Actions**: Test Message, Call, Email buttons
+- [ ] **Facility Info**: Verify MapPin + facility names
+- [ ] **Message Link**: Click "Message" → navigates to chat thread
+
+### ✅ Documents Testing (MVP2)
+- [ ] **Document List**: Verify all document categories display
+- [ ] **Tab Filtering**: Test All, Visit Notes, Prescriptions, Lab Reports, etc.
+- [ ] **Search**: Test document search
+- [ ] **Category Icons**: Verify color-coded icons per category
+- [ ] **Download Button**: Check download icon on downloadable docs
+- [ ] **Consents Link**: Click "Consents" button → navigates to consent form
+
+### ✅ Forms & Consents Testing (MVP2)
+- [ ] **Consent List**: Verify active consents with hospital names
+- [ ] **Info Card**: Check "About Data Sharing" explanation
+- [ ] **Grant New**: Click "Grant" → fill hospital name → select scope → confirm
+- [ ] **Revoke Consent**: Click trash icon → consent removed
+- [ ] **Scope Types**: Verify dropdown: Full, Labs only, Medications only, Imaging only
 
 ### ✅ Test Results Testing
 - [ ] **Results List**: Verify test results display

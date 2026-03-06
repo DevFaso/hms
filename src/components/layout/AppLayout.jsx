@@ -9,29 +9,29 @@ import { Separator } from '@/components/ui/separator'
 import {
   X, Calendar, Mail, Building2, TestTube, Pill, CreditCard,
   Shield, DollarSign, FileText, Settings, LogOut, ChevronRight,
-  HelpCircle, User
+  HelpCircle, User, FolderOpen, ClipboardList
 } from 'lucide-react'
 
 const menuSections = [
   {
     id: 'find-care', title: 'Find Care', items: [
-      { path: '/appointments', title: 'Schedule an Appointment', icon: Calendar },
-      { path: '/profile', title: 'View Care Team', icon: User },
+      { path: '/appointments/schedule', title: 'Schedule an Appointment', icon: Calendar },
+      { path: '/care-team', title: 'View Care Team', icon: User },
     ]
   },
   {
     id: 'communication', title: 'Communication', items: [
       { path: '/messages', title: 'Messages', icon: Mail },
-      { path: '/messages', title: 'Ask a Question', icon: HelpCircle },
+      { path: '/messages/new', title: 'Ask a Question', icon: HelpCircle },
     ]
   },
   {
     id: 'my-record', title: 'My Record', items: [
-      { path: '/appointments', title: 'Visits', icon: Building2 },
+      { path: '/visits', title: 'Visits', icon: Building2 },
       { path: '/lab-results', title: 'Test Results', icon: TestTube },
       { path: '/medications', title: 'Medications', icon: Pill },
       { path: '/profile', title: 'Health Summary', icon: FileText },
-      { path: '/profile', title: 'Preventive Care', icon: Shield },
+      { path: '/documents', title: 'Documents', icon: FolderOpen },
     ]
   },
   {
@@ -39,6 +39,12 @@ const menuSections = [
       { path: '/billing', title: 'Billing', icon: CreditCard },
       { path: '/billing', title: 'Insurance Summary', icon: Shield },
       { path: '/billing', title: 'Estimates', icon: DollarSign },
+    ]
+  },
+  {
+    id: 'forms', title: 'Forms & Consents', items: [
+      { path: '/documents/consents', title: 'Data Sharing Consents', icon: Shield },
+      { path: '/documents', title: 'All Documents', icon: ClipboardList },
     ]
   },
 ]

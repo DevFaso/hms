@@ -5,7 +5,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import {
   Calendar, Mail, Building2, TestTube, Pill, CreditCard,
-  ChevronRight, Bell
+  ChevronRight, Bell, Users
 } from 'lucide-react'
 import { notifications as mockNotifications } from '@/data/notifications'
 import notificationService from '@/services/notificationService'
@@ -14,10 +14,11 @@ import useApiData from '@/hooks/useApiData'
 const quickLinks = [
   { icon: Calendar, title: 'Appointments', path: '/appointments', color: 'bg-green-500' },
   { icon: Mail, title: 'Messages', path: '/messages', color: 'bg-blue-500' },
-  { icon: Building2, title: 'Visits', path: '/appointments', color: 'bg-indigo-500' },
+  { icon: Building2, title: 'Visits', path: '/visits', color: 'bg-indigo-500' },
   { icon: TestTube, title: 'Test Results', path: '/lab-results', color: 'bg-purple-500' },
   { icon: Pill, title: 'Medications', path: '/medications', color: 'bg-teal-500' },
   { icon: CreditCard, title: 'Billing', path: '/billing', color: 'bg-orange-500' },
+  { icon: Users, title: 'Care Team', path: '/care-team', color: 'bg-pink-500' },
 ]
 
 export default function DashboardPage() {
@@ -174,4 +175,3 @@ export default function DashboardPage() {
     </div>
   )
 }
-

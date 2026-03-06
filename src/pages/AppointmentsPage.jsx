@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Calendar, AlertCircle, FileText } from 'lucide-react'
@@ -6,6 +7,7 @@ import portalService from '@/services/portalService'
 import useApiData from '@/hooks/useApiData'
 
 export default function AppointmentsPage() {
+  const navigate = useNavigate()
   const { data: raw } = useApiData(
     () => portalService.getAppointments(),
     mockAppointments,
@@ -31,7 +33,10 @@ export default function AppointmentsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-gray-800">Appointments</h2>
-        <Button className="bg-blue-700 hover:bg-blue-800 text-xs h-9">
+        <Button
+          className="bg-blue-700 hover:bg-blue-800 text-xs h-9"
+          onClick={() => navigate('/appointments/schedule')}
+        >
           <Calendar className="h-4 w-4 mr-1" />
           Schedule
         </Button>
