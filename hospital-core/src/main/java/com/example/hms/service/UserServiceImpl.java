@@ -479,7 +479,10 @@ public class UserServiceImpl implements UserService {
             u.setActivationToken(UUID.randomUUID().toString());
             u.setActivationTokenExpiresAt(LocalDateTime.now().plusDays(1));
         } else {
-            u.setActive(true);
+            // Staff/admin accounts also start inactive — activated after the
+            // assignee verifies the confirmation code sent in the role-assignment
+            // email.  The account is activated in verifyAssignmentByCode().
+            u.setActive(false);
         }
 
         if (isPatient || Boolean.TRUE.equals(request.getForcePasswordChange())) {

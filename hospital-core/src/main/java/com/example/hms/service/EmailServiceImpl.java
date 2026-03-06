@@ -133,9 +133,9 @@ public class EmailServiceImpl implements EmailService {
         if (profileCompletionUrl != null && !profileCompletionUrl.isBlank()) {
             linkSection = """
                 <p style="margin:24px 0;">
-                    <a href="%s" style="background:#2563eb;color:#fff;padding:12px 18px;border-radius:6px;text-decoration:none;display:inline-block;">Finish profile setup</a>
+                    <a href="%s" style="background:#2563eb;color:#fff;padding:12px 18px;border-radius:6px;text-decoration:none;display:inline-block;">Verify Your Role Assignment</a>
                 </p>
-                <p style="font-size: 14px; color: #666;">If the button above doesn't work, copy and paste this link into your browser:<br /><a href="%s">%s</a></p>
+                <p style="font-size: 14px; color: #666;">Click the button above to open the verification page, then enter the 6-digit code shown in this email.<br />If the button doesn't work, copy and paste this link into your browser:<br /><a href="%s">%s</a></p>
                 """.formatted(profileCompletionUrl, profileCompletionUrl, profileCompletionUrl);
         }
 
@@ -152,16 +152,17 @@ public class EmailServiceImpl implements EmailService {
         }
 
         String body = """
-            <h2>Confirm Your New Role Assignment</h2>
+            <h2>Verify Your New Role Assignment</h2>
             <p>Hi %s,</p>
             <p>You have been assigned the role <strong>%s</strong> at <strong>%s</strong>.</p>
-            <p>Please confirm this assignment with the verification code below:</p>
+            <p>To activate your assignment, click the verification link below and enter this code:</p>
                 <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">%s</p>
             <p>Assignment reference: <strong>%s</strong></p>
+            %s
+            %s
+            <p><strong>Your account will remain inactive until you verify this code.</strong></p>
             <p>If you did not expect this assignment, please contact the hospital administrator immediately.</p>
-            %s
-            %s
-            <p style="color:#666">This code will expire soon for security purposes.</p>
+            <p style="color:#666">This code expires 48 hours after it was sent.</p>
             """.formatted(safeUserName, safeRole, safeHospital, confirmationCode, assignmentCode, linkSection, credentialsSection);
 
         sendHtml(List.of(to), List.of(), List.of(), "Action Required: Confirm Your Hospital Role Assignment", body);

@@ -17,6 +17,11 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./reset-password/reset-password').then((m) => m.ResetPasswordComponent),
   },
+  {
+    path: 'onboarding/role-welcome',
+    loadComponent: () =>
+      import('./onboarding/role-welcome/role-welcome').then((m) => m.RoleWelcomeComponent),
+  },
 
   // Authenticated shell
   {

@@ -57,7 +57,8 @@ export const apiPrefixInterceptor: HttpInterceptorFn = (req, next) => {
     /\/auth\/bootstrap/i.test(modified.url) ||
     /\/auth\/register/i.test(modified.url) ||
     /\/auth\/password\/request/i.test(modified.url) ||
-    /\/auth\/csrf-token/i.test(modified.url);
+    /\/auth\/csrf-token/i.test(modified.url) ||
+    /\/assignments\/public\//i.test(modified.url);
 
   if (!isPublicAuth) {
     const token = auth.getToken();

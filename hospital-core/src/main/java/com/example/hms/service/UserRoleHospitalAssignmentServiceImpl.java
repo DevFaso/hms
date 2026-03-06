@@ -120,6 +120,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String DEFAULT_CONFIRMATION_ACTOR_MISMATCH = "Only the assigner who created this assignment can confirm it.";
     private static final String DEFAULT_ASSIGNMENT_NOT_FOUND_BY_CODE_PREFIX = "Assignment not found with code: ";
     private static final String DEFAULT_ACTOR_RESOLUTION_FAILURE = "Unable to resolve the current user.";
+    private static final long CONFIRMATION_CODE_EXPIRY_HOURS = 48;
     private static final List<String> DEFAULT_PROFILE_CHECKLIST = List.of(
         "Review and confirm your personal information",
         "Add at least one emergency contact",
@@ -298,6 +299,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 || (dto.getHospitalName() != null && !dto.getHospitalName().isBlank())) {
                 throw new BusinessException(DEFAULT_SUPER_ADMIN_SCOPE_MESSAGE);
             }
+            // SUPER_ADMIN assignments are immediately active (bootstrap / global admin).
             return;
         }
 
@@ -309,7 +311,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             if (dto.getActive() == null) {
                 dto.setActive(Boolean.FALSE);
             }
+            return;
         }
+
+        // All other roles (staff / admin): assignments start INACTIVE until the
+        // assignee verifies the confirmation code sent by email.  The assignment
+        // is activated in verifyAssignmentByCode() after successful verification.
+        dto.setActive(Boolean.FALSE);
     }
 
     /* ===================== Update ===================== */
@@ -718,6 +726,12 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             return buildPublicViewDTO(assignment, null, null);
         }
 
+        // ── Expiry check: confirmation code expires 48 hours after it was sent ──
+        if (assignment.getConfirmationSentAt() != null
+                && assignment.getConfirmationSentAt().plusHours(CONFIRMATION_CODE_EXPIRY_HOURS).isBefore(LocalDateTime.now())) {
+            throw new BusinessException("Verification code has expired. Please contact the administrator to resend a new code.");
+        }
+
         String expectedCode = assignment.getConfirmationCode();
         if (expectedCode == null || !expectedCode.equalsIgnoreCase(sanitizedConfirmation)) {
             throw new BusinessException(
@@ -732,11 +746,21 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         String tempUsername = assignment.getUser() != null ? assignment.getUser().getUsername() : null;
         String tempPassword = assignment.getTempPlainPassword();
 
+        // ── Mark the assignment as verified AND activate it ──
         assignment.setConfirmationVerifiedAt(LocalDateTime.now());
+        assignment.setActive(true);
         // Clear plaintext temp password from DB — one-time exposure only
         assignment.setTempPlainPassword(null);
         assignmentRepository.save(assignment);
-        log.info("✅ Assignment '{}' self-verified by assignee.", sanitizedCode);
+        log.info("✅ Assignment '{}' self-verified and activated by assignee.", sanitizedCode);
+
+        // ── Activate the user account if it was pending assignment verification ──
+        User user = assignment.getUser();
+        if (user != null && !Boolean.TRUE.equals(user.isActive())) {
+            user.setActive(true);
+            userRepository.save(user);
+            log.info("✅ User '{}' activated after first assignment verification.", user.getUsername());
+        }
 
         // Include credentials if this was a new-user assignment (temp creds were set)
         String exposedUsername = tempPassword != null ? tempUsername : null;
