@@ -15,6 +15,7 @@ import {
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
+import { RoleContextService } from '../core/role-context.service';
 
 type TabKey = 'overview' | 'medical' | 'vitals' | 'encounters' | 'appointments' | 'sharing';
 
@@ -36,6 +37,7 @@ export class PatientDetailComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
   protected readonly permissions = inject(PermissionService);
+  private readonly roleContext = inject(RoleContextService);
 
   patient = signal<PatientResponse | null>(null);
   loading = signal(true);
@@ -171,16 +173,35 @@ export class PatientDetailComponent implements OnInit {
 
   private loadHospitals(): void {
     this.hospitalsLoading.set(true);
-    this.hospitalService.list().subscribe({
-      next: (h) => {
-        this.hospitals.set(h);
+    // ── TENANT ISOLATION: only SUPER_ADMIN loads full hospital list ──
+    if (this.roleContext.isSuperAdmin()) {
+      this.hospitalService.list().subscribe({
+        next: (h) => {
+          this.hospitals.set(h);
+          this.hospitalsLoading.set(false);
+        },
+        error: () => {
+          this.toast.error('Failed to load hospitals');
+          this.hospitalsLoading.set(false);
+        },
+      });
+    } else {
+      const activeId = this.roleContext.activeHospitalId;
+      if (activeId) {
+        this.hospitalService.getById(activeId).subscribe({
+          next: (h) => {
+            this.hospitals.set([h]);
+            this.hospitalsLoading.set(false);
+          },
+          error: () => {
+            this.toast.error('Failed to load hospital');
+            this.hospitalsLoading.set(false);
+          },
+        });
+      } else {
         this.hospitalsLoading.set(false);
-      },
-      error: () => {
-        this.toast.error('Failed to load hospitals');
-        this.hospitalsLoading.set(false);
-      },
-    });
+      }
+    }
   }
 
   // ── Sharing actions ──────────────────────────────────────────────────────

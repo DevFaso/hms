@@ -7,6 +7,7 @@ import { ReferralService, ReferralResponse, ReferralRequest } from '../services/
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 
 @Component({
   selector: 'app-referrals',
@@ -20,6 +21,7 @@ export class ReferralsComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
+  private readonly roleContext = inject(RoleContextService);
 
   referrals = signal<ReferralResponse[]>([]);
   filtered = signal<ReferralResponse[]>([]);
@@ -52,7 +54,7 @@ export class ReferralsComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
-    this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
+    this.loadAssignedHospitals();
     this.initPatientSearch();
   }
 
@@ -64,6 +66,32 @@ export class ReferralsComponent implements OnInit {
       referralReason: '',
       urgency: 'ROUTINE',
     };
+  }
+
+  /** ── TENANT ISOLATION: only SUPER_ADMIN may choose from all hospitals ── */
+  private loadAssignedHospitals(): void {
+    if (this.roleContext.isSuperAdmin()) {
+      this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
+    } else {
+      const activeId = this.roleContext.activeHospitalId;
+      if (activeId) {
+        this.hospitalService.getById(activeId).subscribe({
+          next: (h) => {
+            this.hospitals.set([h]);
+            this.form.hospitalId = h.id;
+          },
+        });
+      }
+    }
+  }
+
+  get lockedHospitalName(): string {
+    const h = this.hospitals();
+    return h.length === 1 ? h[0].name : 'No hospital assigned';
+  }
+
+  get hospitalLocked(): boolean {
+    return !this.roleContext.isSuperAdmin();
   }
 
   initPatientSearch(): void {

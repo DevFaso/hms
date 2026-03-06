@@ -5,6 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
+import { RoleContextService } from '../core/role-context.service';
 
 interface Department {
   id: string;
@@ -44,6 +45,7 @@ export class DepartmentListComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly hospitalService = inject(HospitalService);
   private readonly staffService = inject(StaffService);
+  private readonly roleContext = inject(RoleContextService);
 
   departments = signal<Department[]>([]);
   filtered = signal<Department[]>([]);
@@ -69,9 +71,38 @@ export class DepartmentListComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadDepartments();
-    this.hospitalService.list().subscribe({
-      next: (data) => this.hospitals.set(data),
-    });
+    this.loadAssignedHospitals();
+  }
+
+  /** ── TENANT ISOLATION: only SUPER_ADMIN may choose from all hospitals ── */
+  private loadAssignedHospitals(): void {
+    if (this.roleContext.isSuperAdmin()) {
+      this.hospitalService.list().subscribe({
+        next: (data) => this.hospitals.set(data),
+      });
+    } else {
+      const activeId = this.roleContext.activeHospitalId;
+      if (activeId) {
+        this.hospitalService.getById(activeId).subscribe({
+          next: (h) => {
+            this.hospitals.set([h]);
+            this.form.hospitalId = h.id;
+            this.loadStaffForHospital(h.id);
+          },
+        });
+      }
+    }
+  }
+
+  /** Name shown in the locked hospital display for non-SUPER_ADMIN */
+  get lockedHospitalName(): string {
+    const h = this.hospitals();
+    return h.length === 1 ? h[0].name : 'No hospital assigned';
+  }
+
+  /** Whether the hospital field should be a read-only locked display */
+  get hospitalLocked(): boolean {
+    return !this.roleContext.isSuperAdmin();
   }
 
   loadDepartments(): void {

@@ -292,12 +292,20 @@
           </div>
           <div class="field">
             <label for="lab-hospitalId">Hospital *</label>
-            <select id="lab-hospitalId" [(ngModel)]="form.hospitalId" required>
-              <option value="">Select hospital...</option>
-              @for (h of hospitals(); track h.id) {
-                <option [value]="h.id">{{ h.name }}</option>
-              }
-            </select>
+            @if (hospitalLocked) {
+              <div class="locked-field">
+                <span class="material-symbols-outlined locked-icon">business</span>
+                {{ lockedHospitalName }}
+              </div>
+              <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
+            } @else {
+              <select id="lab-hospitalId" [(ngModel)]="form.hospitalId" required>
+                <option value="">Select hospital...</option>
+                @for (h of hospitals(); track h.id) {
+                  <option [value]="h.id">{{ h.name }}</option>
+                }
+              </select>
+            }
           </div>
         </div>
         <div class="form-row">

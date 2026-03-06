@@ -9,6 +9,7 @@ import {
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 
 @Component({
   selector: 'app-treatment-plans',
@@ -22,6 +23,7 @@ export class TreatmentPlansComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
+  private readonly roleContext = inject(RoleContextService);
 
   plans = signal<TreatmentPlanResponse[]>([]);
   filtered = signal<TreatmentPlanResponse[]>([]);
@@ -42,7 +44,7 @@ export class TreatmentPlansComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
-    this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
+    this.loadAssignedHospitals();
     this.staffService.list().subscribe((s) => this.staffList.set(s ?? []));
   }
 
@@ -56,6 +58,32 @@ export class TreatmentPlansComponent implements OnInit {
       timelineStartDate: '',
       timelineReviewDate: '',
     };
+  }
+
+  /** ── TENANT ISOLATION: only SUPER_ADMIN may choose from all hospitals ── */
+  private loadAssignedHospitals(): void {
+    if (this.roleContext.isSuperAdmin()) {
+      this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
+    } else {
+      const activeId = this.roleContext.activeHospitalId;
+      if (activeId) {
+        this.hospitalService.getById(activeId).subscribe({
+          next: (h) => {
+            this.hospitals.set([h]);
+            this.form.hospitalId = h.id;
+          },
+        });
+      }
+    }
+  }
+
+  get lockedHospitalName(): string {
+    const h = this.hospitals();
+    return h.length === 1 ? h[0].name : 'No hospital assigned';
+  }
+
+  get hospitalLocked(): boolean {
+    return !this.roleContext.isSuperAdmin();
   }
 
   openCreate(): void {

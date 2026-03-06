@@ -207,17 +207,25 @@
           </div>
           <div class="field">
             <label for="adm-hospitalId">Hospital *</label>
-            <select
-              id="adm-hospitalId"
-              [value]="form.hospitalId"
-              (change)="onHospitalChange($any($event.target).value)"
-              required
-            >
-              <option value="">Select hospital...</option>
-              @for (h of hospitals(); track h.id) {
-                <option [value]="h.id">{{ h.name }}</option>
-              }
-            </select>
+            @if (hospitalLocked) {
+              <div class="locked-field">
+                <span class="material-symbols-outlined locked-icon">business</span>
+                {{ lockedHospitalName }}
+              </div>
+              <input type="hidden" [value]="form.hospitalId" name="hospitalId" />
+            } @else {
+              <select
+                id="adm-hospitalId"
+                [value]="form.hospitalId"
+                (change)="onHospitalChange($any($event.target).value)"
+                required
+              >
+                <option value="">Select hospital...</option>
+                @for (h of hospitals(); track h.id) {
+                  <option [value]="h.id">{{ h.name }}</option>
+                }
+              </select>
+            }
           </div>
         </div>
         <div class="form-row">

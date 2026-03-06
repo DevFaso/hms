@@ -11,6 +11,9 @@ export class RoleContextService {
 
   readonly activeHospitalIdSignal = computed(() => this._activeHospitalId());
 
+  /** True when the current user holds ROLE_SUPER_ADMIN. */
+  readonly isSuperAdmin = computed(() => this._activeRoles().includes('ROLE_SUPER_ADMIN'));
+
   get activeHospitalId(): string | null {
     return this._activeHospitalId();
   }

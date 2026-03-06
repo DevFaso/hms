@@ -54,6 +54,7 @@ import java.util.Collections;
 import java.util.Objects;
 import java.util.UUID;
 
+import com.example.hms.utility.RoleValidator;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
@@ -71,6 +72,7 @@ public class DepartmentServiceImpl implements DepartmentService {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
+    private final RoleValidator roleValidator;
 
     private static final String ROLE_HOSPITAL_ADMIN = "ROLE_HOSPITAL_ADMIN";
     private static final String FIELD_HEAD_OF_DEPARTMENT = "headOfDepartment";
@@ -117,6 +119,7 @@ public class DepartmentServiceImpl implements DepartmentService {
         log.debug("[dept:create] start dto={} locale={}", dto, locale);
 
         Locale effectiveLocale = determineEffectiveLocale(locale);
+        enforceHospitalScopeOnDto(dto);
         validateDepartmentRequest(dto, effectiveLocale);
 
         Hospital hospital = resolveHospitalAndSyncDto(dto, effectiveLocale);
@@ -212,6 +215,8 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Transactional
     public DepartmentResponseDTO updateDepartment(UUID id, DepartmentRequestDTO dto, Locale locale) {
         Department department = findDepartmentOrThrow(id, locale);
+        enforceHospitalScopeOnEntity(department);
+        enforceHospitalScopeOnDto(dto);
         validateDepartmentRequest(dto, locale);
 
         Hospital hospital = resolveHospital(dto, locale);
@@ -310,13 +315,16 @@ public class DepartmentServiceImpl implements DepartmentService {
     @Override
     @Transactional
     public void deleteDepartment(UUID id, Locale locale) {
+        Department department = departmentRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Department not found"));
+
+        enforceHospitalScopeOnEntity(department);
+
         if (departmentRepository.hasStaffMembers(id)) {
             throw new BusinessRuleException(
                     messageSource.getMessage("department.delete.withStaff", new Object[]{id}, locale)
             );
         }
-        Department department = departmentRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Department not found"));
 
         departmentRepository.delete(department);
     }
@@ -330,6 +338,55 @@ public class DepartmentServiceImpl implements DepartmentService {
         dto.setHospitalName(hospital.getName());
         dto.setCode(normalizeDepartmentCode(dto.getCode()));
         return hospital;
+    }
+
+    /**
+     * Tenant-isolation guard for write operations.
+     * <ul>
+     *   <li>SUPER_ADMIN – no override, any hospital is acceptable.</li>
+     *   <li>All other roles – the DTO's hospitalId is forcibly set to the
+     *       caller's active hospital (from X-Hospital-Id header / single-assignment).
+     *       If the DTO contained a <em>different</em> hospital, a BusinessRuleException is thrown
+     *       to prevent cross-hospital tampering.</li>
+     * </ul>
+     */
+    private void enforceHospitalScopeOnDto(DepartmentRequestDTO dto) {
+        if (dto == null || roleValidator.isSuperAdminFromAuth()) {
+            return; // null handled downstream by validateDepartmentRequest; super-admin may target any hospital
+        }
+
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+
+        if (dto.getHospitalId() != null && !dto.getHospitalId().equals(activeHospitalId)) {
+            log.warn("[dept:tenantGuard] User {} attempted cross-hospital operation: dto.hospitalId={} activeHospital={}",
+                    roleValidator.getCurrentUserId(), dto.getHospitalId(), activeHospitalId);
+            throw new BusinessRuleException("You may only manage departments within your assigned hospital.");
+        }
+
+        // Force the DTO to carry the caller's active hospital
+        dto.setHospitalId(activeHospitalId);
+    }
+
+    /**
+     * Tenant-isolation guard for entity-level operations (update / delete).
+     * Ensures the existing department belongs to the caller's active hospital.
+     */
+    private void enforceHospitalScopeOnEntity(Department department) {
+        if (roleValidator.isSuperAdminFromAuth()) {
+            return;
+        }
+
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+
+        if (department.getHospital() != null
+                && !department.getHospital().getId().equals(activeHospitalId)) {
+            log.warn("[dept:tenantGuard] User {} attempted access to department {} in hospital {} (active={})",
+                    roleValidator.getCurrentUserId(), department.getId(),
+                    department.getHospital().getId(), activeHospitalId);
+            throw new ResourceNotFoundException(
+                    messageSource.getMessage(MESSAGE_DEPARTMENT_NOT_FOUND,
+                            new Object[]{department.getId()}, DEFAULT_LOCALE));
+        }
     }
 
     private void ensureDepartmentUniqueness(DepartmentRequestDTO dto, Hospital hospital, Locale locale) {

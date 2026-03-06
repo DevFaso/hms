@@ -66,7 +66,7 @@ export class AdmissionsComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
-    this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
+    this.loadAssignedHospitals();
     // ── TENANT ISOLATION: scope staff list to active hospital ──
     const hid = this.roleContext.activeHospitalId;
     this.staffService.list(hid ?? undefined).subscribe((s) => {
@@ -86,6 +86,32 @@ export class AdmissionsComponent implements OnInit {
       admissionDateTime: '',
       chiefComplaint: '',
     };
+  }
+
+  /** ── TENANT ISOLATION: only SUPER_ADMIN may choose from all hospitals ── */
+  private loadAssignedHospitals(): void {
+    if (this.roleContext.isSuperAdmin()) {
+      this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
+    } else {
+      const activeId = this.roleContext.activeHospitalId;
+      if (activeId) {
+        this.hospitalService.getById(activeId).subscribe({
+          next: (h) => {
+            this.hospitals.set([h]);
+            this.form.hospitalId = h.id;
+          },
+        });
+      }
+    }
+  }
+
+  get lockedHospitalName(): string {
+    const h = this.hospitals();
+    return h.length === 1 ? h[0].name : 'No hospital assigned';
+  }
+
+  get hospitalLocked(): boolean {
+    return !this.roleContext.isSuperAdmin();
   }
 
   // ── Patient picker ──

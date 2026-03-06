@@ -7,6 +7,7 @@ import { LabService, LabOrderResponse, LabOrderRequest } from '../services/lab.s
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 
 @Component({
   selector: 'app-lab',
@@ -20,6 +21,7 @@ export class LabComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
+  private readonly roleContext = inject(RoleContextService);
 
   orders = signal<LabOrderResponse[]>([]);
   filtered = signal<LabOrderResponse[]>([]);
@@ -56,7 +58,7 @@ export class LabComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadOrders();
-    this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
+    this.loadAssignedHospitals();
     this.initPatientSearch();
   }
 
@@ -69,6 +71,32 @@ export class LabComponent implements OnInit {
       clinicalIndication: '',
       medicalNecessityNote: '',
     };
+  }
+
+  /** ── TENANT ISOLATION: only SUPER_ADMIN may choose from all hospitals ── */
+  private loadAssignedHospitals(): void {
+    if (this.roleContext.isSuperAdmin()) {
+      this.hospitalService.list().subscribe((h) => this.hospitals.set(h ?? []));
+    } else {
+      const activeId = this.roleContext.activeHospitalId;
+      if (activeId) {
+        this.hospitalService.getById(activeId).subscribe({
+          next: (h) => {
+            this.hospitals.set([h]);
+            this.form.hospitalId = h.id;
+          },
+        });
+      }
+    }
+  }
+
+  get lockedHospitalName(): string {
+    const h = this.hospitals();
+    return h.length === 1 ? h[0].name : 'No hospital assigned';
+  }
+
+  get hospitalLocked(): boolean {
+    return !this.roleContext.isSuperAdmin();
   }
 
   initPatientSearch(): void {

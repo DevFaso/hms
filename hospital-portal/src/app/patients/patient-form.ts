@@ -6,6 +6,7 @@ import { PatientService, PatientCreateRequest } from '../services/patient.servic
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import { RoleContextService } from '../core/role-context.service';
 
 @Component({
   selector: 'app-patient-form',
@@ -20,6 +21,7 @@ export class PatientFormComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly hospitalService = inject(HospitalService);
+  private readonly roleContext = inject(RoleContextService);
 
   saving = false;
   hospitals: HospitalResponse[] = [];
@@ -52,11 +54,32 @@ export class PatientFormComponent implements OnInit {
 
   ngOnInit(): void {
     this.hasContextHospital = !!this.auth.getHospitalId();
-    // Always load the hospital list so the user can choose (or confirm) the hospital
-    this.hospitalService.list().subscribe({
-      next: (list) => (this.hospitals = list),
-      error: () => this.toast.error('Failed to load hospitals'),
-    });
+    // ── TENANT ISOLATION: only SUPER_ADMIN may choose from all hospitals ──
+    if (this.roleContext.isSuperAdmin()) {
+      this.hospitalService.list().subscribe({
+        next: (list) => (this.hospitals = list),
+        error: () => this.toast.error('Failed to load hospitals'),
+      });
+    } else {
+      const activeId = this.roleContext.activeHospitalId;
+      if (activeId) {
+        this.hospitalService.getById(activeId).subscribe({
+          next: (h) => {
+            this.hospitals = [h];
+            this.form.hospitalId = h.id;
+          },
+          error: () => this.toast.error('Failed to load hospital'),
+        });
+      }
+    }
+  }
+
+  get lockedHospitalName(): string {
+    return this.hospitals.length === 1 ? this.hospitals[0].name : 'No hospital assigned';
+  }
+
+  get hospitalLocked(): boolean {
+    return !this.roleContext.isSuperAdmin();
   }
 
   onSubmit(): void {

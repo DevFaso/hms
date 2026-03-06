@@ -7,6 +7,7 @@ import { UserService, UserSummary, AdminRegisterRequest } from '../services/user
 import { RoleService, RoleResponse } from '../services/role.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 
 const MEDICAL_ROLE_CODES = new Set([
   'ROLE_DOCTOR',
@@ -76,6 +77,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   private readonly roleService = inject(RoleService);
   private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
+  private readonly roleContext = inject(RoleContextService);
 
   private readonly searchSubject = new Subject<string>();
   private readonly destroy$ = new Subject<void>();
@@ -182,13 +184,37 @@ export class UserListComponent implements OnInit, OnDestroy {
   }
 
   loadHospitals(): void {
-    this.hospitalService.list().subscribe({
-      next: (hospitals: HospitalResponse[]) =>
-        this.availableHospitals.set(hospitals.map((h) => ({ id: h.id, name: h.name }))),
-      error: () => {
-        /* silent */
-      },
-    });
+    // ── TENANT ISOLATION: only SUPER_ADMIN loads full hospital list ──
+    if (this.roleContext.isSuperAdmin()) {
+      this.hospitalService.list().subscribe({
+        next: (hospitals: HospitalResponse[]) =>
+          this.availableHospitals.set(hospitals.map((h) => ({ id: h.id, name: h.name }))),
+        error: () => {
+          /* silent */
+        },
+      });
+    } else {
+      const activeId = this.roleContext.activeHospitalId;
+      if (activeId) {
+        this.hospitalService.getById(activeId).subscribe({
+          next: (h) => {
+            this.availableHospitals.set([{ id: h.id, name: h.name }]);
+            this.createForm.hospitalId = h.id;
+          },
+        });
+      }
+    }
+  }
+
+  /** True when the hospital field should be a non-editable locked indicator. */
+  get hospitalLocked(): boolean {
+    return !this.roleContext.isSuperAdmin();
+  }
+
+  /** Display name of the single locked hospital. */
+  get lockedHospitalName(): string {
+    const list = this.availableHospitals();
+    return list.length > 0 ? list[0].name : '—';
   }
 
   applyFilter(): void {

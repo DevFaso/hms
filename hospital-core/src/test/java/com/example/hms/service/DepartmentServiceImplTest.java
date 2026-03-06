@@ -25,6 +25,7 @@ import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.UserRoleRepository;
+import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,6 +54,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import java.util.Locale;
@@ -70,6 +72,7 @@ class DepartmentServiceImplTest {
     @Mock private UserRepository userRepository;
     @Mock private RoleRepository roleRepository;
     @Mock private UserRoleRepository userRoleRepository;
+    @Mock private RoleValidator roleValidator;
 
     @InjectMocks
     private DepartmentServiceImpl departmentService;
@@ -116,6 +119,10 @@ class DepartmentServiceImplTest {
         department.setHeadOfDepartment(staff);
         department.setStaffMembers(new HashSet<>());
         department.setDepartmentTranslations(new ArrayList<>());
+
+        // Default: all existing tests run as SUPER_ADMIN (permissive path).
+        // Tenant-isolation-specific tests override this per test.
+        lenient().when(roleValidator.isSuperAdminFromAuth()).thenReturn(true);
     }
 
     @Test
@@ -288,6 +295,7 @@ class DepartmentServiceImplTest {
 
     @Test
     void deleteDepartment_throwsWhenHasStaff() {
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
         when(departmentRepository.hasStaffMembers(deptId)).thenReturn(true);
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Has staff");
 
@@ -786,7 +794,6 @@ class DepartmentServiceImplTest {
 
     @Test
     void deleteDepartment_notFound_throwsEntityNotFound() {
-        when(departmentRepository.hasStaffMembers(deptId)).thenReturn(false);
         when(departmentRepository.findById(deptId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
@@ -1050,5 +1057,198 @@ class DepartmentServiceImplTest {
         departmentService.createDepartment(dto, locale);
 
         assertThat(dto.getCode()).isNull();
+    }
+
+    // ========== Tenant Isolation Tests ==========
+
+    @Test
+    void createDepartment_hospitalAdmin_forcesActiveHospitalId() {
+        // HOSPITAL_ADMIN → enforceHospitalScopeOnDto should override dto.hospitalId
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setName("Neurology");
+        // dto.hospitalId intentionally NOT set — enforcement should fill it
+
+        UUID userId = UUID.randomUUID();
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).active(true).build();
+        DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
+        responseDto.setName("Neurology");
+
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Neurology", hospitalId)).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(userId);
+        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+            .thenReturn(Optional.of(assignment));
+        when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
+        when(departmentRepository.save(department)).thenReturn(department);
+        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(responseDto);
+
+        DepartmentResponseDTO result = departmentService.createDepartment(dto, locale);
+
+        assertThat(result.getName()).isEqualTo("Neurology");
+        // The dto's hospitalId should have been forced to the active hospital
+        assertThat(dto.getHospitalId()).isEqualTo(hospitalId);
+    }
+
+    @Test
+    void createDepartment_hospitalAdmin_matchingHospitalId_succeeds() {
+        // HOSPITAL_ADMIN sends DTO with their own hospital — should pass
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setHospitalId(hospitalId);  // matches active hospital
+        dto.setName("Orthopedics");
+
+        UUID userId = UUID.randomUUID();
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).active(true).build();
+        DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
+
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("Orthopedics", hospitalId)).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(userId);
+        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+            .thenReturn(Optional.of(assignment));
+        when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
+        when(departmentRepository.save(department)).thenReturn(department);
+        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(responseDto);
+
+        departmentService.createDepartment(dto, locale);
+
+        verify(departmentRepository).save(department);
+    }
+
+    @Test
+    void createDepartment_hospitalAdmin_crossHospitalId_throwsBusinessRule() {
+        // HOSPITAL_ADMIN sends DTO with a DIFFERENT hospital → must be rejected
+        UUID otherHospitalId = UUID.randomUUID();
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setHospitalId(otherHospitalId); // cross-hospital attempt!
+        dto.setName("Evil Dept");
+
+        assertThatThrownBy(() -> departmentService.createDepartment(dto, locale))
+            .isInstanceOf(BusinessRuleException.class)
+            .hasMessageContaining("assigned hospital");
+    }
+
+    @Test
+    void createDepartment_superAdmin_anyHospitalId_succeeds() {
+        // SUPER_ADMIN can target any hospital (default setUp already sets isSuperAdminFromAuth=true)
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setHospitalId(hospitalId);
+        dto.setName("SuperAdminDept");
+
+        UUID userId = UUID.randomUUID();
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).active(true).build();
+        DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
+
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(departmentRepository.existsByNameIgnoreCaseAndHospitalId("SuperAdminDept", hospitalId)).thenReturn(false);
+        when(authService.getCurrentUserId()).thenReturn(userId);
+        when(roleAssignmentRepository.findByUserIdAndHospitalId(userId, hospitalId))
+            .thenReturn(Optional.of(assignment));
+        when(departmentMapper.toDepartment(any(), eq(hospital), isNull(), eq(assignment))).thenReturn(department);
+        when(departmentRepository.save(department)).thenReturn(department);
+        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(responseDto);
+
+        departmentService.createDepartment(dto, locale);
+
+        verify(departmentRepository).save(department);
+        // roleValidator.requireActiveHospitalId should never be called for super-admin
+        verify(roleValidator, never()).requireActiveHospitalId();
+    }
+
+    @Test
+    void updateDepartment_hospitalAdmin_crossHospitalEntity_throwsNotFound() {
+        // HOSPITAL_ADMIN scoped to hospitalId tries to update a department in a different hospital
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(otherHospitalId);
+        otherHospital.setName("Other Hospital");
+        department.setHospital(otherHospital);
+
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setHospitalId(otherHospitalId);
+        dto.setName("Cross Update");
+
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
+
+        assertThatThrownBy(() -> departmentService.updateDepartment(deptId, dto, locale))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void updateDepartment_hospitalAdmin_ownHospital_succeeds() {
+        // HOSPITAL_ADMIN updates a department in their own hospital
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        DepartmentRequestDTO dto = new DepartmentRequestDTO();
+        dto.setHospitalId(hospitalId);
+        dto.setName("Updated Cardiology");
+        dto.setCode("UC");
+
+        DepartmentResponseDTO responseDto = new DepartmentResponseDTO();
+        responseDto.setName("Updated Cardiology");
+
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(departmentRepository.save(department)).thenReturn(department);
+        when(departmentMapper.toDepartmentResponseDTO(eq(department), any(Locale.class))).thenReturn(responseDto);
+
+        DepartmentResponseDTO result = departmentService.updateDepartment(deptId, dto, locale);
+
+        assertThat(result.getName()).isEqualTo("Updated Cardiology");
+    }
+
+    @Test
+    void deleteDepartment_hospitalAdmin_crossHospital_throwsNotFound() {
+        // HOSPITAL_ADMIN scoped to hospitalId tries to delete a department in another hospital
+        UUID otherHospitalId = UUID.randomUUID();
+        Hospital otherHospital = new Hospital();
+        otherHospital.setId(otherHospitalId);
+        otherHospital.setName("Other Hospital");
+        department.setHospital(otherHospital);
+
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
+
+        assertThatThrownBy(() -> departmentService.deleteDepartment(deptId, locale))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        // delete should never be called
+        verify(departmentRepository, never()).delete(any(Department.class));
+    }
+
+    @Test
+    void deleteDepartment_hospitalAdmin_ownHospital_succeeds() {
+        // HOSPITAL_ADMIN deletes a department in their own hospital
+        when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        when(departmentRepository.findById(deptId)).thenReturn(Optional.of(department));
+        when(departmentRepository.hasStaffMembers(deptId)).thenReturn(false);
+
+        departmentService.deleteDepartment(deptId, locale);
+
+        verify(departmentRepository).delete(department);
     }
 }

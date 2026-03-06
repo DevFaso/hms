@@ -7,6 +7,7 @@ import { AppointmentService, AppointmentResponse } from '../services/appointment
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PermissionService } from '../core/permission.service';
 import { ToastService } from '../core/toast.service';
+import { RoleContextService } from '../core/role-context.service';
 
 type SortField = 'patient' | 'doctor' | 'date' | 'status';
 type SortDir = 'asc' | 'desc';
@@ -23,6 +24,7 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
   private readonly hospitalService = inject(HospitalService);
   private readonly permissions = inject(PermissionService);
   private readonly toast = inject(ToastService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly destroy$ = new Subject<void>();
   private readonly searchInput$ = new Subject<string>();
 
@@ -104,12 +106,22 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
   }
 
   loadHospitals(): void {
-    this.hospitalService.list().subscribe({
-      next: (h) => this.hospitals.set(h),
-      error: () => {
-        /* silent */
-      },
-    });
+    // ── TENANT ISOLATION: only SUPER_ADMIN loads full hospital list for filter ──
+    if (this.roleContext.isSuperAdmin()) {
+      this.hospitalService.list().subscribe({
+        next: (h) => this.hospitals.set(h),
+        error: () => {
+          /* silent */
+        },
+      });
+    } else {
+      const activeId = this.roleContext.activeHospitalId;
+      if (activeId) {
+        this.hospitalService.getById(activeId).subscribe({
+          next: (h) => this.hospitals.set([h]),
+        });
+      }
+    }
   }
 
   applyFilter(): void {

@@ -99,18 +99,26 @@
             <div class="form-row">
               <div class="field">
                 <label for="dHospital">Hospital *</label>
-                <select
-                  id="dHospital"
-                  [(ngModel)]="form.hospitalId"
-                  name="hospitalId"
-                  required
-                  (ngModelChange)="onHospitalChange($event)"
-                >
-                  <option value="">Select hospital</option>
-                  @for (h of hospitals(); track h.id) {
-                    <option [value]="h.id">{{ h.name }}</option>
-                  }
-                </select>
+                @if (hospitalLocked) {
+                  <div class="locked-field">
+                    <span class="material-symbols-outlined locked-icon">business</span>
+                    {{ lockedHospitalName }}
+                  </div>
+                  <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
+                } @else {
+                  <select
+                    id="dHospital"
+                    [(ngModel)]="form.hospitalId"
+                    name="hospitalId"
+                    required
+                    (ngModelChange)="onHospitalChange($event)"
+                  >
+                    <option value="">Select hospital</option>
+                    @for (h of hospitals(); track h.id) {
+                      <option [value]="h.id">{{ h.name }}</option>
+                    }
+                  </select>
+                }
               </div>
               <div class="field">
                 <label for="dName">Name *</label>

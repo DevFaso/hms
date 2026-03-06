@@ -1174,3 +1174,25 @@ a.list-item {
     border-radius: 8px;
   }
 }
+
+// ── Locked field indicator (tenant isolation — shows the user's hospital as read-only) ──
+.locked-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 12px;
+  background: #f8fafc;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 8px;
+  color: #64748b;
+  font-size: 0.8125rem;
+  font-style: italic;
+  -webkit-user-select: none;
+  user-select: none;
+
+  .locked-icon {
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+}

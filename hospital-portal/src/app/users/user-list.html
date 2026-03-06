@@ -394,12 +394,16 @@
             <!-- Hospital -->
             <div class="field">
               <label for="hospitalId">Hospital</label>
-              <select id="hospitalId" [(ngModel)]="createForm.hospitalId" name="hospitalId">
-                <option value="">— None —</option>
-                @for (h of availableHospitals(); track h.id) {
-                  <option [value]="h.id">{{ h.name }}</option>
-                }
-              </select>
+              @if (hospitalLocked) {
+                <div class="locked-field">🏥 {{ lockedHospitalName }}</div>
+              } @else {
+                <select id="hospitalId" [(ngModel)]="createForm.hospitalId" name="hospitalId">
+                  <option value="">— None —</option>
+                  @for (h of availableHospitals(); track h.id) {
+                    <option [value]="h.id">{{ h.name }}</option>
+                  }
+                </select>
+              }
             </div>
 
             <!-- Job Title & Employment Type -->
