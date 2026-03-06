@@ -7,7 +7,9 @@ import {
   Bell, Calendar, TestTube, CreditCard, Pill, Mail,
   ChevronRight, Check
 } from 'lucide-react'
-import { notifications as initialNotifications } from '@/data/notifications'
+import { notifications as mockNotifications } from '@/data/notifications'
+import notificationService from '@/services/notificationService'
+import useApiData from '@/hooks/useApiData'
 
 const iconMap = {
   'lab-result': TestTube,
@@ -26,19 +28,47 @@ const colorMap = {
 
 export default function NotificationsPage() {
   const navigate = useNavigate()
-  const [notifs, setNotifs] = useState(initialNotifications)
+  const { data: apiNotifs } = useApiData(
+    () => notificationService.getAll(),
+    mockNotifications,
+  )
+  const [notifs, setNotifs] = useState(null)
 
-  const unread = notifs.filter((n) => !n.read)
-  const read = notifs.filter((n) => n.read)
+  // Sync API data into local state once loaded
+  const displayNotifs = notifs || (apiNotifs || []).map((n) => {
+    // Normalize API Notification → local shape
+    if (n.recipientUsername !== undefined && !n.type) {
+      return {
+        id: n.id,
+        type: 'message',
+        title: 'Notification',
+        message: n.message,
+        date: n.createdAt ? new Date(n.createdAt).toLocaleDateString() : '',
+        time: n.createdAt ? new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
+        read: n.read ?? false,
+        actionLink: '/dashboard',
+        actionLabel: 'View',
+      }
+    }
+    return n
+  })
+
+  const unread = displayNotifs.filter((n) => !n.read)
+  const read = displayNotifs.filter((n) => n.read)
 
   const markAllRead = () => {
-    setNotifs((prev) => prev.map((n) => ({ ...n, read: true })))
+    const updated = displayNotifs.map((n) => ({ ...n, read: true }))
+    setNotifs(updated)
+    // Fire-and-forget API calls
+    displayNotifs.filter((n) => !n.read).forEach((n) => {
+      notificationService.markRead(n.id).catch(() => {})
+    })
   }
 
   const markRead = (id) => {
-    setNotifs((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
-    )
+    const updated = displayNotifs.map((n) => (n.id === id ? { ...n, read: true } : n))
+    setNotifs(updated)
+    notificationService.markRead(id).catch(() => {})
   }
 
   const renderNotif = (notif) => {
@@ -133,7 +163,7 @@ export default function NotificationsPage() {
         </section>
       )}
 
-      {notifs.length === 0 && (
+      {displayNotifs.length === 0 && (
         <div className="text-center py-12">
           <Bell className="h-12 w-12 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500">No notifications</p>

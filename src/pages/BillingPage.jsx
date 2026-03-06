@@ -3,10 +3,33 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { CreditCard, Shield, DollarSign } from 'lucide-react'
-import { bills } from '@/data/bills'
+import { bills as mockBills } from '@/data/bills'
+import portalService from '@/services/portalService'
+import useApiData from '@/hooks/useApiData'
 
 export default function BillingPage() {
   const navigate = useNavigate()
+  const { data: raw } = useApiData(
+    () => portalService.getInvoices(),
+    mockBills,
+  )
+
+  // Normalize — API returns Page<BillingInvoiceResponseDTO>, content may be in .content
+  const invoices = Array.isArray(raw) ? raw : raw?.content || raw || []
+  const bills = invoices.map((b) => {
+    if (b.invoiceNumber) {
+      return {
+        id: b.id,
+        description: b.notes || `Invoice #${b.invoiceNumber}`,
+        amount: (b.totalAmount ?? 0) - (b.amountPaid ?? 0),
+        date: b.invoiceDate || '',
+        status: b.status === 'PAID' ? 'Paid' : b.status === 'CANCELLED' ? 'Cancelled' : 'Due',
+        provider: b.hospitalName || '',
+      }
+    }
+    return b
+  })
+
   const totalDue = bills
     .filter((b) => b.status === 'Due')
     .reduce((sum, b) => sum + b.amount, 0)

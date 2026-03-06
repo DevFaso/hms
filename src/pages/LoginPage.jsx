@@ -13,21 +13,36 @@ export default function LoginPage() {
   const [showUsernameLogin, setShowUsernameLogin] = useState(false)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loggingIn, setLoggingIn] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
 
-  const handleFaceIdLogin = () => {
-    setTimeout(() => {
-      login('tiego')
+  const handleFaceIdLogin = async () => {
+    setLoggingIn(true)
+    setError('')
+    try {
+      await login('tiego', 'faceId')
       navigate('/dashboard', { replace: true })
-    }, 800)
+    } catch (err) {
+      setError(err.message || 'Login failed')
+    } finally {
+      setLoggingIn(false)
+    }
   }
 
-  const handleUsernameLogin = (e) => {
+  const handleUsernameLogin = async (e) => {
     e.preventDefault()
-    if (username && password) {
-      login(username)
+    if (!username || !password) return
+    setLoggingIn(true)
+    setError('')
+    try {
+      await login(username, password)
       navigate('/dashboard', { replace: true })
+    } catch (err) {
+      setError(err.message || 'Invalid username or password')
+    } finally {
+      setLoggingIn(false)
     }
   }
 
@@ -78,8 +93,14 @@ export default function LoginPage() {
 
             {!showUsernameLogin ? (
               <div className="space-y-6">
+                {error && (
+                  <div className="bg-red-50 text-red-700 text-sm rounded-lg p-3 text-center">
+                    {error}
+                  </div>
+                )}
                 <Button
                   onClick={handleFaceIdLogin}
+                  disabled={loggingIn}
                   className="w-full bg-blue-700 hover:bg-blue-800 text-white py-4 text-lg"
                 >
                   <Fingerprint className="mr-3 h-6 w-6" />
@@ -109,6 +130,11 @@ export default function LoginPage() {
               </div>
             ) : (
               <form onSubmit={handleUsernameLogin} className="space-y-4">
+                {error && (
+                  <div className="bg-red-50 text-red-700 text-sm rounded-lg p-3 text-center">
+                    {error}
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="username">Username</Label>
                   <Input
@@ -131,8 +157,8 @@ export default function LoginPage() {
                     required
                   />
                 </div>
-                <Button type="submit" className="w-full bg-blue-700 hover:bg-blue-800">
-                  Log In
+                <Button type="submit" disabled={loggingIn} className="w-full bg-blue-700 hover:bg-blue-800">
+                  {loggingIn ? 'Logging in…' : 'Log In'}
                 </Button>
                 <Button
                   type="button"

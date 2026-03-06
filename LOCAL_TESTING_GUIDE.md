@@ -24,10 +24,6 @@ npm install
 # OR (faster)
 pnpm install
 
-# Note: Dependencies have been updated to resolve conflicts:
-# - react-day-picker upgraded to v9.x for date-fns 4.x compatibility
-# All peer dependency conflicts are now resolved
-
 # Start the development server
 npm run dev
 # OR
@@ -35,6 +31,36 @@ pnpm run dev
 
 # Open browser to: http://localhost:5173
 ```
+
+### Step 3: Backend API (Optional)
+The app connects to the Hospital Management System API at `http://localhost:8081/api`.
+If the backend is not running, the app gracefully falls back to mock data.
+
+```bash
+# Copy and edit the environment file
+cp .env.example .env
+
+# The default is:
+# VITE_API_URL=http://localhost:8081/api
+```
+
+**API endpoints used (Patient Portal):**
+| Feature        | Method | Endpoint                              |
+|----------------|--------|---------------------------------------|
+| Login          | POST   | `/auth/login`                         |
+| Logout         | POST   | `/auth/logout`                        |
+| Token Refresh  | POST   | `/auth/token/refresh`                 |
+| Profile        | GET    | `/me/patient/profile`                 |
+| Update Profile | PUT    | `/me/patient/profile`                 |
+| Appointments   | GET    | `/me/patient/appointments`            |
+| Lab Results    | GET    | `/me/patient/lab-results`             |
+| Medications    | GET    | `/me/patient/medications`             |
+| Billing        | GET    | `/me/patient/billing/invoices`        |
+| Notifications  | GET    | `/notifications`                      |
+| Mark Read      | POST   | `/notifications/{id}/read`            |
+| Messages       | GET    | `/chat/conversations/{userId}`        |
+| Refill Request | POST   | `/me/patient/refills`                 |
+| Health Summary | GET    | `/me/patient/health-summary`          |
 
 ## 🧪 Complete Testing Checklist
 

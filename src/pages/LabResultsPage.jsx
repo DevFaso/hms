@@ -2,9 +2,32 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Eye, Download } from 'lucide-react'
-import { testResults } from '@/data/testResults'
+import { testResults as mockResults } from '@/data/testResults'
+import portalService from '@/services/portalService'
+import useApiData from '@/hooks/useApiData'
 
 export default function LabResultsPage() {
+  const { data: raw } = useApiData(
+    () => portalService.getLabResults(),
+    mockResults,
+  )
+
+  // Normalize API shape → local shape
+  const testResults = (raw || []).map((r) => {
+    // If it came from the API (has testName), reshape
+    if (r.testName) {
+      return {
+        id: r.id,
+        test: r.testName,
+        date: r.resultedAt ? new Date(r.resultedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
+        status: r.status === 'FINAL' ? 'Reviewed' : 'New',
+        provider: r.performedBy || r.orderedBy || 'Lab',
+        details: r.value ? { [r.testCode || r.testName]: { value: r.value, unit: r.unit || '', range: r.referenceRange || '—', flag: r.notes || 'Normal' } } : null,
+      }
+    }
+    // Already in mock shape
+    return r
+  })
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-gray-800">Test Results</h2>

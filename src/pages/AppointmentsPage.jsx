@@ -1,9 +1,29 @@
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Calendar, AlertCircle, FileText } from 'lucide-react'
-import { appointments } from '@/data/appointments'
+import { appointments as mockAppointments } from '@/data/appointments'
+import portalService from '@/services/portalService'
+import useApiData from '@/hooks/useApiData'
 
 export default function AppointmentsPage() {
+  const { data: raw } = useApiData(
+    () => portalService.getAppointments(),
+    mockAppointments,
+  )
+
+  // Normalize API shape → local shape
+  const appointments = (raw || []).map((a) => ({
+    id: a.id,
+    type: a.treatmentName || a.type || 'Appointment',
+    doctor: a.staffName || a.doctor,
+    location: a.hospitalName || a.location || '',
+    date: a.appointmentDate
+      ? new Date(a.appointmentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()
+      : a.date || '',
+    time: a.startTime || a.time || '',
+    status: mapStatus(a.status),
+  }))
+
   const upcoming = appointments.filter((a) => a.status === 'upcoming')
   const past = appointments.filter((a) => a.status === 'past')
 
@@ -93,3 +113,9 @@ export default function AppointmentsPage() {
   )
 }
 
+function mapStatus(s) {
+  if (!s) return 'upcoming'
+  const upper = s.toUpperCase()
+  if (['COMPLETED', 'NO_SHOW', 'CANCELLED'].includes(upper)) return 'past'
+  return 'upcoming'
+}

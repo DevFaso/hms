@@ -2,9 +2,32 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Mail, ChevronRight } from 'lucide-react'
-import { messages } from '@/data/messages'
+import { messages as mockMessages } from '@/data/messages'
+import { useAuth } from '@/contexts/AuthContext'
+import chatService from '@/services/chatService'
+import useApiData from '@/hooks/useApiData'
 
 export default function MessagesPage() {
+  const { user } = useAuth()
+  const { data: raw } = useApiData(
+    () => user?.id ? chatService.getConversations(user.id) : Promise.resolve(null),
+    mockMessages,
+    [user?.id],
+  )
+
+  const messages = (raw || []).map((m) => {
+    // Already in mock shape
+    if (m.from) return m
+    // Normalize API shape
+    return {
+      id: m.id,
+      from: m.senderName || m.recipientName || 'Unknown',
+      subject: m.subject || 'Message',
+      date: m.createdAt ? new Date(m.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '',
+      unread: !m.read,
+      preview: m.content || m.lastMessage || '',
+    }
+  })
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-gray-800">Messages</h2>

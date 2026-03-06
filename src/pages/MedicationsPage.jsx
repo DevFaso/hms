@@ -2,9 +2,31 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Pill, RefreshCw, MapPin } from 'lucide-react'
-import { medications } from '@/data/medications'
+import { medications as mockMedications } from '@/data/medications'
+import portalService from '@/services/portalService'
+import useApiData from '@/hooks/useApiData'
 
 export default function MedicationsPage() {
+  const { data: raw } = useApiData(
+    () => portalService.getMedications(),
+    mockMedications,
+  )
+
+  const medications = (raw || []).map((m) => {
+    if (m.medicationName) {
+      return {
+        id: m.id,
+        name: m.medicationName + (m.dosage ? ` ${m.dosage}` : ''),
+        dosage: m.instructions || m.frequency || '',
+        prescriber: m.prescribedBy || '',
+        refills: '',
+        pharmacy: '',
+        lastFilled: m.startDate || '',
+        status: m.status || 'Active',
+      }
+    }
+    return m
+  })
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold text-gray-800">Medications</h2>

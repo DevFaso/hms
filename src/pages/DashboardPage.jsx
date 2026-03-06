@@ -7,7 +7,9 @@ import {
   Calendar, Mail, Building2, TestTube, Pill, CreditCard,
   ChevronRight, Bell
 } from 'lucide-react'
-import { notifications } from '@/data/notifications'
+import { notifications as mockNotifications } from '@/data/notifications'
+import notificationService from '@/services/notificationService'
+import useApiData from '@/hooks/useApiData'
 
 const quickLinks = [
   { icon: Calendar, title: 'Appointments', path: '/appointments', color: 'bg-green-500' },
@@ -21,7 +23,11 @@ const quickLinks = [
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
-  const unreadNotifications = notifications.filter((n) => !n.read)
+  const { data: notifications } = useApiData(
+    () => notificationService.getAll(),
+    mockNotifications,
+  )
+  const unreadNotifications = (notifications || []).filter((n) => !n.read)
 
   return (
     <div className="space-y-6">

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import portalService from '@/services/portalService'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -28,8 +29,20 @@ export default function PatientProfilePage() {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
-  const handleSave = () => {
-    // In a real app this would call an API
+  const handleSave = async () => {
+    try {
+      await portalService.updateProfile({
+        phoneNumberPrimary: form.phone,
+        email: form.email,
+        addressLine1: form.street,
+        addressLine2: form.apt,
+        city: form.city,
+        state: form.state,
+        zipCode: form.zip,
+      })
+    } catch {
+      console.warn('Profile update API unavailable — saved locally')
+    }
     setEditing(false)
   }
 
