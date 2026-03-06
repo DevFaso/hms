@@ -57,6 +57,10 @@ app:
     enabled: false
     synthetic:
       enabled: false
+  # Frontend base URL used in emails, activation links, and onboarding flows.
+  # Set FRONTEND_BASE_URL=https://hms.bitnesttechs.com in Railway env vars.
+  frontend:
+    base-url: ${FRONTEND_BASE_URL:https://hms.bitnesttechs.com}
   # Set PUBLIC_BASE_URL to the public-facing HTTPS domain so that uploaded
   # file links returned to the browser point to a reachable URL rather than
   # the internal Railway hostname.

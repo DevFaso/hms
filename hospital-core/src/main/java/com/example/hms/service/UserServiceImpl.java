@@ -34,6 +34,7 @@ import com.example.hms.security.JwtTokenHolder;
 import com.example.hms.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -86,6 +87,9 @@ public class UserServiceImpl implements UserService {
     private final StaffRepository staffRepository;
     private final JwtTokenProvider jwtTokenProvider;
 
+    @Value("${app.frontend.base-url}")
+    private String frontendBaseUrl;
+
     /*
      * --------------------------------
      * Public Registration (Patient)
@@ -127,8 +131,8 @@ public class UserServiceImpl implements UserService {
         }
 
         final String activationLink = String.format(
-                "https://bitnesttechs.com/verify?email=%s&token=%s",
-                saved.getEmail(), saved.getActivationToken());
+                "%s/verify?email=%s&token=%s",
+                frontendBaseUrl, saved.getEmail(), saved.getActivationToken());
         try {
             emailService.sendActivationEmail(saved.getEmail(), activationLink);
         } catch (Exception e) {
@@ -490,8 +494,8 @@ public class UserServiceImpl implements UserService {
         // Send verification email for patient accounts
         if (isPatient && saved.getActivationToken() != null) {
             final String activationLink = String.format(
-                    "https://bitnesttechs.com/verify?email=%s&token=%s",
-                    saved.getEmail(), saved.getActivationToken());
+                    "%s/verify?email=%s&token=%s",
+                    frontendBaseUrl, saved.getEmail(), saved.getActivationToken());
             try {
                 emailService.sendActivationEmail(saved.getEmail(), activationLink);
                 log.info("📧 Verification email sent to patient '{}' at '{}'", saved.getUsername(), saved.getEmail());

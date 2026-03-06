@@ -11,7 +11,6 @@ import org.springframework.context.MessageSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,7 +32,6 @@ import static com.example.hms.config.SecurityConstants.ROLE_NURSE;
 import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
 
-@CrossOrigin(origins = "http://localhost:4200", maxAge = 3600 )
 @RestController
 @RequestMapping("/hospitals")
 public class HospitalController {

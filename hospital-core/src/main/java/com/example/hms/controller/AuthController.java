@@ -33,6 +33,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.web.csrf.CsrfToken;
@@ -41,7 +42,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -58,7 +58,6 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/auth")
-@CrossOrigin(origins = "http://localhost:4200", maxAge = 3600)
 @Slf4j
 public class AuthController {
 
@@ -71,6 +70,7 @@ public class AuthController {
 
     private final UserService userService;
     private final UserCredentialLifecycleService userCredentialLifecycleService;
+    private final String frontendBaseUrl;
 
     public AuthController(UserRepository userRepository,
             UserRoleHospitalAssignmentRepository assignmentRepository,
@@ -78,7 +78,8 @@ public class AuthController {
             AuthenticationManager authenticationManager,
             JwtTokenProvider jwtTokenProvider,
             AuthNotificationFacade authNotification,
-            UserCredentialLifecycleService userCredentialLifecycleService) {
+            UserCredentialLifecycleService userCredentialLifecycleService,
+            @Value("${app.frontend.base-url}") String frontendBaseUrl) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
         this.userService = userService;
@@ -86,6 +87,7 @@ public class AuthController {
         this.jwtTokenProvider = jwtTokenProvider;
         this.authNotification = authNotification;
         this.userCredentialLifecycleService = userCredentialLifecycleService;
+        this.frontendBaseUrl = frontendBaseUrl;
     }
 
     /**
@@ -291,8 +293,8 @@ public class AuthController {
         userRepository.save(user);
 
         String activationLink = String.format(
-                "https://bitnesttechs.com/verify?email=%s&token=%s",
-                user.getEmail(), user.getActivationToken());
+                "%s/verify?email=%s&token=%s",
+                frontendBaseUrl, user.getEmail(), user.getActivationToken());
         try {
             authNotification.email().sendActivationEmail(user.getEmail(), activationLink);
             log.info("📧 Resent verification email to '{}'", user.getEmail());

@@ -40,3 +40,6 @@ app:
     enabled: true
     synthetic:
       enabled: true
+  # Frontend base URL — localhost only for local dev.
+  frontend:
+    base-url: http://localhost:4200

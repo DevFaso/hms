@@ -65,6 +65,11 @@ logging:
 
 # ---- Application ----
 app:
+  frontend:
+    base-url: https://test.hms.example.com
+  portal:
+    profile-completion-url-template: https://test.hms.example.com/onboarding/role-welcome?assignment=%s
+    assigner-confirmation-url-template: https://test.hms.example.com/super/assignments?confirm=%s
   jwt:
     secret: "base64:dGVzdC1qd3Qtc2VjcmV0LXNlbGYtZ2VuZXJhdGVkLXN0cmluZy1mb3ItZGV2"
     access-token-expiration-ms: 3600000
