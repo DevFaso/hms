@@ -510,8 +510,15 @@ public class UserServiceImpl implements UserService {
             final String activationLink = String.format(
                     "%s/verify?email=%s&token=%s",
                     frontendBaseUrl, saved.getEmail(), saved.getActivationToken());
+            final String patientName = ((saved.getFirstName() != null ? saved.getFirstName() : "")
+                    + " " + (saved.getLastName() != null ? saved.getLastName() : "")).trim();
+            final String hospitalName = request.getHospitalId() != null
+                    ? hospitalRepository.findById(request.getHospitalId())
+                          .map(Hospital::getName).orElse(null)
+                    : null;
             try {
-                emailService.sendActivationEmail(saved.getEmail(), activationLink);
+                emailService.sendActivationEmail(saved.getEmail(), activationLink,
+                        patientName, saved.getUsername(), hospitalName);
                 log.info("📧 Verification email sent to patient '{}' at '{}'", saved.getUsername(), saved.getEmail());
             } catch (Exception e) {
                 log.warn("⚠️ Failed to send verification email to '{}': {}. "

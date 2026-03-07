@@ -89,6 +89,11 @@ public interface EmailService {
 
     // App-specific helpers
     void sendActivationEmail(String to, String activationLink);
+
+    /**
+     * Enhanced activation email that includes the patient's credentials and hospital context.
+     */
+    void sendActivationEmail(String to, String activationLink, String patientName, String username, String hospitalName);
     void sendPasswordResetEmail(String to, String resetLink);
 
     void sendPasswordResetConfirmationEmail(String to, String displayName);

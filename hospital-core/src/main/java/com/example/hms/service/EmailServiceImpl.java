@@ -200,7 +200,14 @@ public class EmailServiceImpl implements EmailService {
 
     @Override
     public void sendActivationEmail(String to, String activationLink) {
-        var body = buildActivationEmailBody(activationLink);
+        sendActivationEmail(to, activationLink, null, null, null);
+    }
+
+    @Override
+    public void sendActivationEmail(String to, String activationLink,
+                                     String patientName, String username,
+                                     String hospitalName) {
+        var body = buildActivationEmailBody(activationLink, patientName, username, hospitalName);
         sendHtml(List.of(to), List.of(), List.of(), "Activate Your Hospital Management Account", body);
         log.info("✅ Activation email sent to {}", to);
     }
@@ -403,13 +410,57 @@ public class EmailServiceImpl implements EmailService {
     }
 
 
-    private String buildActivationEmailBody(String link) {
-        return """
-            <h2>Welcome to the Hospital Management System</h2>
-            <p>Click the link below to activate your account:</p>
-            <p><a href="%s">Activate Account</a></p>
-            <p style="color:#666">This link will expire in 24 hours.</p>
-            """.formatted(link);
+    private String buildActivationEmailBody(String link, String patientName,
+                                              String username, String hospitalName) {
+        String safeName = (patientName != null && !patientName.isBlank()) ? escapeHtml(patientName) : null;
+        String safeUser = (username != null && !username.isBlank()) ? escapeHtml(username) : null;
+        String safeHosp = (hospitalName != null && !hospitalName.isBlank()) ? escapeHtml(hospitalName) : null;
+
+        String header = "<div style=\"background:linear-gradient(135deg,#1e3a5f,#2563eb);"
+            + "padding:32px 40px;text-align:center;\">"
+            + "<h1 style=\"color:#ffffff;margin:0;font-size:22px;font-weight:700;\">"
+            + "Welcome to the Hospital Management System</h1>"
+            + (safeHosp != null
+                ? "<p style=\"color:#bfdbfe;margin:8px 0 0;font-size:14px;\">" + safeHosp + "</p>"
+                : "")
+            + "</div>";
+
+        StringBuilder body = new StringBuilder();
+        body.append("<div style=\"padding:36px 40px;\">");
+        if (safeName != null) {
+            body.append("<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">Hi ").append(safeName).append(",</p>");
+        }
+        body.append("<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">")
+            .append("Your patient account has been created. Please activate it by clicking the button below.")
+            .append("</p>");
+
+        if (safeUser != null) {
+            body.append("<div style=\"background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;")
+                .append("padding:16px 20px;margin:0 0 24px;\">")
+                .append("<p style=\"margin:0 0 8px;font-size:14px;font-weight:700;color:#0c4a6e;\">Your login credentials</p>")
+                .append("<p style=\"margin:0;font-size:14px;color:#075985;\">")
+                .append("<strong>Username:</strong> ").append(safeUser).append("<br/>")
+                .append("<strong>Password:</strong> You will be prompted to set a password after activation.")
+                .append("</p></div>");
+        }
+
+        body.append("<div style=\"text-align:center;margin:32px 0;\">")
+            .append("<a href=\"").append(link).append("\" style=\"display:inline-block;")
+            .append("background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#ffffff;")
+            .append("text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;")
+            .append("font-weight:600;\">Activate My Account</a>")
+            .append("</div>")
+            .append("<p style=\"font-size:13px;color:#64748b;text-align:center;margin:0 0 32px;\">")
+            .append("Button not working? Copy and paste this link into your browser:<br/>")
+            .append("<a href=\"").append(link).append("\" style=\"color:#2563eb;word-break:break-all;\">").append(link).append("</a>")
+            .append("</p>")
+            .append("<hr style=\"border:none;border-top:1px solid #e2e8f0;margin:0 0 20px;\"/>")
+            .append("<p style=\"font-size:13px;color:#94a3b8;text-align:center;\">")
+            .append("This link expires in <strong>24 hours</strong>. ")
+            .append("If you did not expect this email, please contact the hospital administrator.")
+            .append("</p></div>");
+
+        return htmlEmailWrapper(header + body.toString() + htmlEmailFooter());
     }
 
     private String buildResetEmailBody(String link) {

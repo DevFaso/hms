@@ -231,10 +231,12 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             hospital != null ? (" in hospital '" + hospital.getName() + "'") : " (global)");
 
         syncLegacyRole(user, role);
-        if (sendNotifications) {
+        if (sendNotifications && !isRoleCode(roleCode, ROLE_PATIENT)) {
             // Publish an after-commit event so that email + SMS are only dispatched
             // once the transaction has committed and the assignment row is visible.
             // This prevents ghost links where the email is sent for a rolled-back assignment.
+            // PATIENT roles are excluded: patients receive a dedicated activation email
+            // from UserServiceImpl.createNewUser() instead of the role-confirmation flow.
             eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId()));
         }
         recordAssignmentAudit(saved);
