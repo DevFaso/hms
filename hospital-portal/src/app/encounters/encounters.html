@@ -319,17 +319,28 @@
         <div class="form-row">
           <div class="field">
             <label for="enc-hospitalId">Hospital *</label>
-            <select
-              id="enc-hospitalId"
-              [value]="form.hospitalId"
-              (change)="onHospitalChange($any($event.target).value)"
-              required
-            >
-              <option value="">Select hospital...</option>
-              @for (h of hospitals(); track h.id) {
-                <option [value]="h.id">{{ h.name }}</option>
-              }
-            </select>
+            @if (lockedHospitalId) {
+              <!-- Staff is locked to their current hospital -->
+              <input
+                type="text"
+                [value]="hospitals()[0]?.name || 'Loading...'"
+                readonly
+                class="locked-field"
+              />
+            } @else {
+              <!-- Super admin: full hospital dropdown -->
+              <select
+                id="enc-hospitalId"
+                [value]="form.hospitalId"
+                (change)="onHospitalChange($any($event.target).value)"
+                required
+              >
+                <option value="">Select hospital...</option>
+                @for (h of hospitals(); track h.id) {
+                  <option [value]="h.id">{{ h.name }}</option>
+                }
+              </select>
+            }
           </div>
           <div class="field">
             <label for="enc-type">Encounter Type *</label>

@@ -13,6 +13,8 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
+import { AuthService } from '../auth/auth.service';
+import { RoleContextService } from '../core/role-context.service';
 
 @Component({
   selector: 'app-encounters',
@@ -27,6 +29,13 @@ export class EncountersComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
+  private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
+
+  /** true when the logged-in user is a super-admin (can pick any hospital) */
+  isSuperAdmin = false;
+  /** Non-null when the user is locked to a single hospital (all non-admin staff) */
+  lockedHospitalId: string | null = null;
 
   encounters = signal<EncounterResponse[]>([]);
   filtered = signal<EncounterResponse[]>([]);
@@ -82,7 +91,30 @@ export class EncountersComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadEncounters();
-    this.hospitalService.list().subscribe({ next: (h) => this.hospitals.set(h) });
+
+    // Determine role-based hospital access
+    this.isSuperAdmin = this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']);
+    const permitted = this.roleContext.permittedHospitalIds;
+
+    if (this.isSuperAdmin) {
+      // Super admin: load ALL hospitals for dropdown selection
+      this.hospitalService.list().subscribe({ next: (h) => this.hospitals.set(h) });
+    } else {
+      // All other staff: locked to their current (active) hospital
+      const activeId = this.roleContext.activeHospitalId;
+      const lockId = activeId || (permitted.length > 0 ? permitted[0] : null);
+
+      if (lockId) {
+        this.lockedHospitalId = lockId;
+        this.hospitalService.getById(lockId).subscribe({
+          next: (h) => {
+            this.hospitals.set([h]);
+            this.roleContext.activeHospitalId = lockId;
+          },
+        });
+      }
+    }
+
     this.staffService.list().subscribe({
       next: (list) => {
         this.allStaff = list;
@@ -172,6 +204,13 @@ export class EncountersComponent implements OnInit {
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.departments.set([]);
+
+    // Auto-lock hospital for non-super-admin staff
+    if (this.lockedHospitalId) {
+      this.form.hospitalId = this.lockedHospitalId;
+      this.loadDepartmentsFor(this.lockedHospitalId);
+    }
+
     this.showModal.set(true);
   }
 
