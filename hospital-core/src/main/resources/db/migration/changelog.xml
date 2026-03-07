@@ -132,4 +132,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V10: Activate hospital-scoped staff assignments created by admin
+         Admin-register created assignments with is_active=false due to
+         enforceRoleScopeConstraints() confirmation-code workflow. This
+         broke JWT hospital claims and /api/me/hospital for all staff.
+         ================================================================= -->
+    <changeSet id="V10-activate-admin-staff-assignments" author="hms-team" runOnChange="false">
+        <sqlFile path="V10__activate_admin_registered_staff_assignments.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
