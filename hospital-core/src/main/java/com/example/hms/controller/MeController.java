@@ -27,6 +27,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -76,9 +77,10 @@ public class MeController {
         return ResponseEntity.ok(config);
     }
 
-    @Operation(summary = "Get my hospital (receptionist/admin)")
+    @Operation(summary = "Get my hospital context for any hospital-scoped role")
     @GetMapping("/hospital")
-    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN')")
+    @Transactional(readOnly = true)
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<HospitalMinimalDTO> myHospital(Authentication auth) {
         UUID hospitalId = resolveHospitalId(auth)
                 .orElseThrow(() -> new BusinessException("Unable to resolve hospital from your context."));
@@ -218,7 +220,7 @@ public class MeController {
     }
 
     private Optional<UUID> activeAssignmentHospital(Authentication auth) {
-        UUID userId = tryUserIdFromJwtSub(auth).orElse(null);
+        UUID userId = tryUserIdFromJwt(auth).orElse(null);
         if (userId == null) {
             String principal = (auth != null ? auth.getName() : null);
             if (principal != null && !principal.isBlank()) {
@@ -231,20 +233,26 @@ public class MeController {
         if (userId == null)
             return Optional.empty();
 
-        return assignmentRepository.findFirstByUserIdAndActiveTrueOrderByCreatedAtDesc(userId)
-                .map(a -> a.getHospital() != null ? a.getHospital().getId() : null);
+        return assignmentRepository.findAllDetailedByUserId(userId).stream()
+                .filter(a -> Boolean.TRUE.equals(a.getActive()))
+                .filter(a -> a.getHospital() != null)
+                .map(a -> a.getHospital().getId())
+                .findFirst();
     }
 
-    private Optional<UUID> tryUserIdFromJwtSub(Authentication auth) {
+    private Optional<UUID> tryUserIdFromJwt(Authentication auth) {
         if (auth instanceof JwtAuthenticationToken jat) {
-            Object sub = jat.getToken().getClaims().get("sub");
-            if (sub == null)
-                return Optional.empty();
-            try {
-                return Optional.of(sub instanceof UUID uuid ? uuid : UUID.fromString(String.valueOf(sub)));
-            } catch (RuntimeException ignored) {
-                // JWT 'sub' claim is not a valid UUID format — cannot resolve user ID
-                return Optional.empty();
+            Jwt jwt = jat.getToken();
+            // Try uid claim first (set by JwtTokenProvider), then sub
+            for (String claim : List.of("uid", "userId", "id", "sub")) {
+                String raw = jwt.getClaimAsString(claim);
+                if (raw != null && !raw.isBlank()) {
+                    try {
+                        return Optional.of(UUID.fromString(raw));
+                    } catch (RuntimeException ignored) {
+                        // not a UUID — try next claim key
+                    }
+                }
             }
         }
         return Optional.empty();
@@ -254,7 +262,7 @@ public class MeController {
      * Resolve the current user ID from authentication
      */
     private UUID resolveUserId(Authentication auth) {
-        return tryUserIdFromJwtSub(auth)
+        return tryUserIdFromJwt(auth)
                 .orElseGet(() -> {
                     String principal = (auth != null ? auth.getName() : null);
                     if (principal != null && !principal.isBlank()) {

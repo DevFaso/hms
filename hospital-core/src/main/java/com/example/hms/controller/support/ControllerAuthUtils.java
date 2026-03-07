@@ -194,13 +194,15 @@ public class ControllerAuthUtils {
 
     /**
      * Fallback: look up the user's most-recent active hospital assignment.
+     * Uses findAllDetailedByUserId which eagerly fetches hospital via JOIN FETCH.
      */
     public Optional<UUID> fallbackHospitalFromAssignments(Authentication auth) {
         return resolveUserId(auth)
-            .flatMap(assignmentRepository::findFirstByUserIdAndActiveTrueOrderByCreatedAtDesc)
-            .map(UserRoleHospitalAssignment::getHospital)
-            .filter(Objects::nonNull)
-            .map(Hospital::getId);
+            .flatMap(userId -> assignmentRepository.findAllDetailedByUserId(userId).stream()
+                .filter(a -> Boolean.TRUE.equals(a.getActive()))
+                .filter(a -> a.getHospital() != null)
+                .map(a -> a.getHospital().getId())
+                .findFirst());
     }
 
     /**

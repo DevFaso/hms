@@ -481,10 +481,9 @@ public class UserServiceImpl implements UserService {
             u.setActivationToken(UUID.randomUUID().toString());
             u.setActivationTokenExpiresAt(LocalDateTime.now().plusDays(1));
         } else {
-            // Staff/admin accounts also start inactive — activated after the
-            // assignee verifies the confirmation code sent in the role-assignment
-            // email.  The account is activated in verifyAssignmentByCode().
-            u.setActive(false);
+            // Admin-registered staff/admin accounts are immediately active.
+            // The admin vouches for them and sends credentials via welcome email.
+            u.setActive(true);
         }
 
         if (isPatient || Boolean.TRUE.equals(request.getForcePasswordChange())) {
@@ -695,8 +694,19 @@ public class UserServiceImpl implements UserService {
         }
 
         // fetch the assignment we now expect to exist
-        return assignmentRepository.findFirstByUserIdAndHospitalIdAndRoleId(userId, hospitalId, roleId)
+        UserRoleHospitalAssignment assignment = assignmentRepository
+                .findFirstByUserIdAndHospitalIdAndRoleId(userId, hospitalId, roleId)
                 .orElseThrow(() -> new IllegalStateException("Assignment was not persisted as expected"));
+
+        // Admin-register creates assignments that should be immediately active.
+        // enforceRoleScopeConstraints may have forced active=false for the
+        // email-confirmation workflow, but admin-created users are pre-approved.
+        if (active && !Boolean.TRUE.equals(assignment.getActive())) {
+            assignment.setActive(true);
+            assignmentRepository.save(assignment);
+        }
+
+        return assignment;
     }
 
     private UUID extractHospitalIdFromJwt() {
