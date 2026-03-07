@@ -319,18 +319,35 @@
         <div class="form-row">
           <div class="field">
             <label for="enc-hospitalId">Hospital *</label>
-            <div class="locked-field">
-              <span class="material-symbols-outlined locked-icon">business</span>
-              {{ getLockedHospitalName() }}
-            </div>
-            <!-- Keep the value in model implicitly or as hidden input if needed, but [(ngModel)] isn't strictly necessary if it's updated in the TS directly. However, to pass validation: -->
-            <input
-              type="hidden"
-              id="enc-hospitalId"
-              [(ngModel)]="form.hospitalId"
-              name="hospitalId"
-              required
-            />
+            @if (lockedHospitalId) {
+              <!-- Staff is locked to their current hospital -->
+              <input
+                type="text"
+                [value]="lockedHospitalName || 'Loading...'"
+                readonly
+                class="locked-field"
+              />
+              <input
+                type="hidden"
+                id="enc-hospitalId"
+                [(ngModel)]="form.hospitalId"
+                name="hospitalId"
+                required
+              />
+            } @else {
+              <!-- Super admin: full hospital dropdown -->
+              <select
+                id="enc-hospitalId"
+                [value]="form.hospitalId"
+                (change)="onHospitalChange($any($event.target).value)"
+                required
+              >
+                <option value="">Select hospital...</option>
+                @for (h of hospitals(); track h.id) {
+                  <option [value]="h.id">{{ h.name }}</option>
+                }
+              </select>
+            }
           </div>
           <div class="field">
             <label for="enc-type">Encounter Type *</label>

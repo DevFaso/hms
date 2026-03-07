@@ -13,6 +13,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
+import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 
 @Component({
@@ -28,7 +29,15 @@ export class EncountersComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
+  private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
+
+  /** true when the logged-in user is a super-admin (can pick any hospital) */
+  isSuperAdmin = false;
+  /** Non-null when the user is locked to a single hospital (all non-admin staff) */
+  lockedHospitalId: string | null = null;
+  /** Human-readable name of the locked hospital */
+  lockedHospitalName = '';
 
   encounters = signal<EncounterResponse[]>([]);
   filtered = signal<EncounterResponse[]>([]);
@@ -82,25 +91,37 @@ export class EncountersComponent implements OnInit {
     };
   }
 
-  // Only load hospitals the user is assigned to
-  loadAssignedHospitals(): void {
-    if (this.roleContext.hasRole('ROLE_SUPER_ADMIN')) {
-      this.hospitalService.list().subscribe({ next: (h) => this.hospitals.set(h) });
-    } else {
-      // In a real app we might fetch user assignments here, but we can also just leverage the RoleContext
-      // if it holds the user's assigned hospitals, or restrict entirely to the active context.
-      const activeId = this.roleContext.activeHospitalId;
-      if (activeId) {
-        this.hospitalService
-          .getById(activeId)
-          .subscribe({ next: (h: HospitalResponse) => this.hospitals.set([h]) });
-      }
-    }
-  }
-
   ngOnInit(): void {
     this.loadEncounters();
-    this.loadAssignedHospitals();
+
+    // Determine role-based hospital access
+    this.isSuperAdmin = this.auth.hasAnyRole(['ROLE_SUPER_ADMIN']);
+    const permitted = this.roleContext.permittedHospitalIds;
+
+    if (this.isSuperAdmin) {
+      // Super admin: load ALL hospitals for dropdown selection
+      this.hospitalService.list().subscribe({ next: (h) => this.hospitals.set(h) });
+    } else {
+      // All other staff: locked to their current (active) hospital
+      const activeId = this.roleContext.activeHospitalId;
+      const lockId = activeId || (permitted.length > 0 ? permitted[0] : null);
+
+      if (lockId) {
+        this.lockedHospitalId = lockId;
+        this.hospitalService.getById(lockId).subscribe({
+          next: (h) => {
+            this.hospitals.set([h]);
+            this.lockedHospitalName = h.name;
+            this.roleContext.activeHospitalId = lockId;
+          },
+        });
+      } else {
+        this.toast.error(
+          'No hospital is associated with your account. Please contact an administrator.',
+        );
+      }
+    }
+
     // ── TENANT ISOLATION: scope staff list to active hospital ──
     const hid = this.roleContext.activeHospitalId;
     this.staffService.list(hid ?? undefined).subscribe({
@@ -186,11 +207,6 @@ export class EncountersComponent implements OnInit {
     this.departments.set(depts);
   }
 
-  getLockedHospitalName(): string {
-    const h = this.hospitals().find((x) => x.id === this.form.hospitalId);
-    return h ? h.name : 'Unknown Hospital';
-  }
-
   // ── CRUD ──
   openCreate(): void {
     this.form = this.emptyForm();
@@ -200,9 +216,13 @@ export class EncountersComponent implements OnInit {
     this.editingId = '';
     this.selectedPatient.set(null);
     this.patientQuery.set('');
+    this.departments.set([]);
 
-    // Automatically load departments for the locked hospital
-    this.loadDepartmentsFor(this.form.hospitalId);
+    // Auto-lock hospital for non-super-admin staff
+    if (this.lockedHospitalId) {
+      this.form.hospitalId = this.lockedHospitalId;
+      this.loadDepartmentsFor(this.lockedHospitalId);
+    }
 
     this.showModal.set(true);
   }
