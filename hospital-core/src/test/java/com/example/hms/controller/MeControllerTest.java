@@ -624,6 +624,7 @@ class MeControllerTest {
 
         UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
         assignment.setHospital(hospital);
+        assignment.setActive(true);
 
         Jwt jwt = Jwt.withTokenValue(TEST_TOKEN_VALUE)
                 .header("alg", "none")
@@ -632,8 +633,8 @@ class MeControllerTest {
         JwtAuthenticationToken receptionistAuth = new JwtAuthenticationToken(jwt,
                 List.of(new SimpleGrantedAuthority(ROLE_RECEPTIONIST)));
 
-        when(assignmentRepository.findFirstByUserIdAndActiveTrueOrderByCreatedAtDesc(testUserId))
-                .thenReturn(Optional.of(assignment));
+        when(assignmentRepository.findAllDetailedByUserId(testUserId))
+                .thenReturn(List.of(assignment));
         when(hospitalRepository.findById(testHospitalId)).thenReturn(Optional.of(hospital));
 
         // Act
@@ -643,6 +644,6 @@ class MeControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         MeController.HospitalMinimalDTO body = requireBody(response);
         assertEquals(testHospitalId, body.id());
-        verify(assignmentRepository).findFirstByUserIdAndActiveTrueOrderByCreatedAtDesc(testUserId);
+        verify(assignmentRepository).findAllDetailedByUserId(testUserId);
     }
 }
