@@ -276,7 +276,8 @@ public class UserServiceImpl implements UserService {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
         final boolean requiresStaff = roles.stream().anyMatch(role -> switch (role.getCode()) {
-            case ROLE_DOCTOR, ROLE_NURSE, ROLE_LAB_SCIENTIST, ROLE_PHARMACIST, ROLE_HOSPITAL_ADMIN -> true;
+            case ROLE_DOCTOR, ROLE_NURSE, ROLE_LAB_SCIENTIST, ROLE_PHARMACIST, ROLE_HOSPITAL_ADMIN,
+                 "ROLE_RECEPTIONIST", "ROLE_MIDWIFE", "ROLE_RADIOLOGIST", "ROLE_SURGEON", "ROLE_PHYSICIAN" -> true;
             default -> false;
         });
 
