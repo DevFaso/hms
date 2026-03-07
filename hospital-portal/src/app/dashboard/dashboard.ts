@@ -589,6 +589,232 @@ export class DashboardComponent implements OnInit, OnDestroy {
     { icon: 'policy', label: 'Audit Logs', route: '/audit-logs', color: '#2563eb', bg: '#eff6ff' },
   ]);
 
+  // ── Nurse workflow tiles (Epic-style My Activities) ──────────
+  nurseWorkflowTiles = computed<NavTile[]>(() => [
+    {
+      icon: 'monitor_heart',
+      label: 'Vitals',
+      route: '/nurse-station',
+      color: '#dc2626',
+      bg: '#fee2e2',
+    },
+    { icon: 'medication', label: 'MAR', route: '/nurse-station', color: '#7c3aed', bg: '#ede9fe' },
+    {
+      icon: 'how_to_reg',
+      label: 'Check-In',
+      route: '/appointments',
+      color: '#059669',
+      bg: '#d1fae5',
+    },
+    { icon: 'hotel', label: 'Admissions', route: '/admissions', color: '#2563eb', bg: '#dbeafe' },
+    { icon: 'people', label: 'Patients', route: '/patients', color: '#0891b2', bg: '#cffafe' },
+    {
+      icon: 'clinical_notes',
+      label: 'Encounters',
+      route: '/encounters',
+      color: '#d97706',
+      bg: '#fef3c7',
+    },
+    {
+      icon: 'local_pharmacy',
+      label: 'Prescriptions',
+      route: '/prescriptions',
+      color: '#9333ea',
+      bg: '#f3e8ff',
+    },
+    { icon: 'science', label: 'Lab Orders', route: '/lab', color: '#0d9488', bg: '#ccfbf1' },
+    {
+      icon: 'assignment',
+      label: 'Tasks',
+      route: '/nurse-station',
+      color: '#ea580c',
+      bg: '#fff7ed',
+    },
+    {
+      icon: 'swap_horiz',
+      label: 'Handoffs',
+      route: '/nurse-station',
+      color: '#4f46e5',
+      bg: '#eef2ff',
+    },
+  ]);
+
+  // ── Doctor workflow tiles (Epic-style Provider Activities) ───
+  doctorWorkflowTiles = computed<NavTile[]>(() => [
+    {
+      icon: 'calendar_month',
+      label: 'Schedule',
+      route: '/appointments',
+      color: '#2563eb',
+      bg: '#dbeafe',
+    },
+    { icon: 'people', label: 'Patients', route: '/patients', color: '#0891b2', bg: '#cffafe' },
+    {
+      icon: 'stethoscope',
+      label: 'Encounters',
+      route: '/encounters',
+      color: '#059669',
+      bg: '#d1fae5',
+    },
+    {
+      icon: 'medication',
+      label: 'Prescriptions',
+      route: '/prescriptions',
+      color: '#7c3aed',
+      bg: '#ede9fe',
+    },
+    { icon: 'science', label: 'Lab Orders', route: '/lab', color: '#0d9488', bg: '#ccfbf1' },
+    { icon: 'radiology', label: 'Imaging', route: '/imaging', color: '#d97706', bg: '#fef3c7' },
+    { icon: 'hotel', label: 'Admissions', route: '/admissions', color: '#dc2626', bg: '#fee2e2' },
+    { icon: 'forum', label: 'Consults', route: '/consultations', color: '#4f46e5', bg: '#eef2ff' },
+    {
+      icon: 'assignment',
+      label: 'Treatment Plans',
+      route: '/treatment-plans',
+      color: '#ea580c',
+      bg: '#fff7ed',
+    },
+    { icon: 'send', label: 'Referrals', route: '/referrals', color: '#9333ea', bg: '#f3e8ff' },
+  ]);
+
+  // ── Receptionist workflow tiles (Epic-style Front Desk) ──────
+  receptionistWorkflowTiles = computed<NavTile[]>(() => [
+    {
+      icon: 'how_to_reg',
+      label: 'Check-In',
+      route: '/appointments',
+      color: '#059669',
+      bg: '#d1fae5',
+    },
+    {
+      icon: 'calendar_add_on',
+      label: 'Schedule',
+      route: '/appointments',
+      color: '#2563eb',
+      bg: '#dbeafe',
+    },
+    { icon: 'person_add', label: 'Register', route: '/patients', color: '#0891b2', bg: '#cffafe' },
+    { icon: 'people', label: 'Patients', route: '/patients', color: '#7c3aed', bg: '#ede9fe' },
+    { icon: 'receipt_long', label: 'Billing', route: '/billing', color: '#d97706', bg: '#fef3c7' },
+    {
+      icon: 'notifications',
+      label: 'Notifications',
+      route: '/notifications',
+      color: '#dc2626',
+      bg: '#fee2e2',
+    },
+    { icon: 'chat', label: 'Messages', route: '/chat', color: '#4f46e5', bg: '#eef2ff' },
+    {
+      icon: 'event_note',
+      label: 'Scheduling',
+      route: '/scheduling',
+      color: '#ea580c',
+      bg: '#fff7ed',
+    },
+  ]);
+
+  // ── Lab Scientist workflow tiles ─────────────────────────────
+  labWorkflowTiles = computed<NavTile[]>(() => [
+    { icon: 'science', label: 'Lab Orders', route: '/lab', color: '#0d9488', bg: '#ccfbf1' },
+    { icon: 'biotech', label: 'Process Tests', route: '/lab', color: '#7c3aed', bg: '#ede9fe' },
+    { icon: 'task_alt', label: 'Results', route: '/lab', color: '#059669', bg: '#d1fae5' },
+    { icon: 'people', label: 'Patients', route: '/patients', color: '#0891b2', bg: '#cffafe' },
+    {
+      icon: 'clinical_notes',
+      label: 'Encounters',
+      route: '/encounters',
+      color: '#d97706',
+      bg: '#fef3c7',
+    },
+    { icon: 'priority_high', label: 'Urgent', route: '/lab', color: '#dc2626', bg: '#fee2e2' },
+    { icon: 'inventory_2', label: 'Inventory', route: '/lab', color: '#4f46e5', bg: '#eef2ff' },
+    { icon: 'analytics', label: 'Reports', route: '/lab', color: '#ea580c', bg: '#fff7ed' },
+  ]);
+
+  // ── Pharmacist workflow tiles ────────────────────────────────
+  pharmacistWorkflowTiles = computed<NavTile[]>(() => [
+    {
+      icon: 'local_pharmacy',
+      label: 'Prescriptions',
+      route: '/prescriptions',
+      color: '#9333ea',
+      bg: '#f3e8ff',
+    },
+    {
+      icon: 'medication_liquid',
+      label: 'Dispense',
+      route: '/prescriptions',
+      color: '#059669',
+      bg: '#d1fae5',
+    },
+    { icon: 'loop', label: 'Refills', route: '/prescriptions', color: '#2563eb', bg: '#dbeafe' },
+    { icon: 'people', label: 'Patients', route: '/patients', color: '#0891b2', bg: '#cffafe' },
+    {
+      icon: 'clinical_notes',
+      label: 'Encounters',
+      route: '/encounters',
+      color: '#d97706',
+      bg: '#fef3c7',
+    },
+    {
+      icon: 'warning',
+      label: 'Interactions',
+      route: '/prescriptions',
+      color: '#dc2626',
+      bg: '#fee2e2',
+    },
+    {
+      icon: 'inventory_2',
+      label: 'Inventory',
+      route: '/prescriptions',
+      color: '#4f46e5',
+      bg: '#eef2ff',
+    },
+    {
+      icon: 'analytics',
+      label: 'Reports',
+      route: '/prescriptions',
+      color: '#ea580c',
+      bg: '#fff7ed',
+    },
+  ]);
+
+  // ── Radiologist workflow tiles ───────────────────────────────
+  radiologistWorkflowTiles = computed<NavTile[]>(() => [
+    {
+      icon: 'radiology',
+      label: 'Imaging Studies',
+      route: '/imaging',
+      color: '#2563eb',
+      bg: '#dbeafe',
+    },
+    {
+      icon: 'pending_actions',
+      label: 'Pending Reports',
+      route: '/imaging',
+      color: '#d97706',
+      bg: '#fef3c7',
+    },
+    { icon: 'task_alt', label: 'Completed', route: '/imaging', color: '#059669', bg: '#d1fae5' },
+    { icon: 'people', label: 'Patients', route: '/patients', color: '#0891b2', bg: '#cffafe' },
+    {
+      icon: 'clinical_notes',
+      label: 'Encounters',
+      route: '/encounters',
+      color: '#7c3aed',
+      bg: '#ede9fe',
+    },
+    {
+      icon: 'priority_high',
+      label: 'STAT Orders',
+      route: '/imaging',
+      color: '#dc2626',
+      bg: '#fee2e2',
+    },
+    { icon: 'description', label: 'Templates', route: '/imaging', color: '#4f46e5', bg: '#eef2ff' },
+    { icon: 'analytics', label: 'Reports', route: '/imaging', color: '#ea580c', bg: '#fff7ed' },
+  ]);
+
   // ────────────────────────────────────────────────────────────
   // LIFECYCLE
   // ────────────────────────────────────────────────────────────
