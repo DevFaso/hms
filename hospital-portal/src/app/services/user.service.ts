@@ -41,7 +41,7 @@ export interface UserDetail {
 export interface AdminRegisterRequest {
   username: string;
   email: string;
-  password: string;
+  password?: string;
   firstName: string;
   lastName: string;
   phoneNumber: string;

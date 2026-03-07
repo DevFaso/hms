@@ -140,7 +140,7 @@ public class PatientController {
             schema = @Schema(implementation = MessageResponse.class)))
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<PatientResponseDTO> createPatientByReceptionist(
         @Valid @RequestBody PatientRequestDTO dto,
         @RequestHeader(name = "Accept-Language", required = false) String lang,

@@ -43,7 +43,9 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -487,12 +489,41 @@ public class AppointmentServiceImpl implements AppointmentService {
             ));
         }
 
+        // Capture old schedule before mapper overwrites fields
+        LocalDate   oldDate  = existing.getAppointmentDate();
+        LocalTime   oldStart = existing.getStartTime();
+        LocalTime   oldEnd   = existing.getEndTime();
+
         appointmentMapper.updateAppointmentFromDto(request, existing, patient, staff, hospital);
         existing.setAssignment(assignment);
         existing.setUpdatedAt(LocalDateTime.now());
 
         Appointment saved = appointmentRepository.save(existing);
         entityManager.refresh(saved);
+
+        // Notify patient when date/time changes (treat as reschedule)
+        boolean dateChanged  = !saved.getAppointmentDate().equals(oldDate);
+        boolean startChanged = !saved.getStartTime().equals(oldStart);
+        boolean endChanged   = !saved.getEndTime().equals(oldEnd);
+        if (dateChanged || startChanged || endChanged) {
+            try {
+                Patient pt = saved.getPatient();
+                Staff st   = saved.getStaff();
+                Hospital h = saved.getHospital();
+                emailService.sendAppointmentRescheduledEmail(
+                    pt.getEmail(),
+                    pt.getFirstName() + " " + pt.getLastName(),
+                    h.getName(),
+                    st.getUser().getFirstName() + " " + st.getUser().getLastName(),
+                    saved.getAppointmentDate().toString(),
+                    saved.getStartTime().toString() + " - " + saved.getEndTime().toString(),
+                    h.getEmail(), h.getPhoneNumber(),
+                    "https://your-app.com/appointments/reschedule/" + saved.getId(),
+                    "https://your-app.com/appointments/cancel/" + saved.getId());
+            } catch (Exception e) {
+                log.warn("Failed to send reschedule email for appointment {}: {}", saved.getId(), e.getMessage());
+            }
+        }
 
         return appointmentMapper.toAppointmentResponseDTO(saved);
     }
@@ -540,6 +571,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         String cancelLink = "https://your-app.com/appointments/cancel/" + appointment.getId();
 
         switch (newStatus) {
+            case CONFIRMED -> emailService.sendAppointmentConfirmationEmail(
+                patient.getEmail(), patientName, hospital.getName(), staffName,
+                appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink);
             case RESCHEDULED -> emailService.sendAppointmentRescheduledEmail(
                 patient.getEmail(), patientName, hospital.getName(), staffName,
                 appointmentDate, appointmentTime, hospitalEmail, hospitalPhone, rescheduleLink, cancelLink);
@@ -553,7 +587,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 patient.getEmail(), patientName, hospital.getName(), staffName,
                 appointmentDate, appointmentTime, hospitalEmail, hospitalPhone);
             default -> {
-                // No notification for remaining statuses
+                // No notification for remaining statuses (PENDING, IN_PROGRESS, FAILED)
             }
         }
 

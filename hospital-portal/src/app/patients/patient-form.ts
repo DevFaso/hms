@@ -3,10 +3,12 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { PatientService, PatientCreateRequest } from '../services/patient.service';
+import { UserService } from '../services/user.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
+import { switchMap } from 'rxjs/operators';
 
 @Component({
   selector: 'app-patient-form',
@@ -17,6 +19,7 @@ import { RoleContextService } from '../core/role-context.service';
 })
 export class PatientFormComponent implements OnInit {
   private readonly patientService = inject(PatientService);
+  private readonly userService = inject(UserService);
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
@@ -29,7 +32,7 @@ export class PatientFormComponent implements OnInit {
   hasContextHospital = false;
 
   form: PatientCreateRequest = {
-    userId: this.auth.getUserId() ?? '',
+    userId: '',
     hospitalId: this.auth.getHospitalId() ?? '',
     firstName: '',
     lastName: '',
@@ -93,25 +96,48 @@ export class PatientFormComponent implements OnInit {
       this.toast.error('Please fill in all required fields');
       return;
     }
-    if (!this.form.userId) {
-      this.toast.error('Unable to resolve user context. Please log in again.');
-      return;
-    }
     if (!this.form.hospitalId) {
       this.toast.error('Please select a hospital');
       return;
     }
     this.saving = true;
 
-    this.patientService.create(this.form).subscribe({
-      next: (patient) => {
-        this.toast.success('Patient registered successfully');
-        this.router.navigate(['/patients', patient.id]);
-      },
-      error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to register patient');
-        this.saving = false;
-      },
-    });
+    // Step 1: Create a User account with ROLE_PATIENT via admin-register
+    // Step 2: Use the returned userId to create the Patient entity
+    const username = this.generateUsername(this.form.firstName, this.form.lastName);
+    this.userService
+      .adminRegister({
+        username,
+        email: this.form.email,
+        firstName: this.form.firstName,
+        lastName: this.form.lastName,
+        phoneNumber: this.form.phoneNumberPrimary,
+        roleNames: ['PATIENT'],
+        hospitalId: this.form.hospitalId,
+        forcePasswordChange: true,
+      })
+      .pipe(
+        switchMap((user) => {
+          this.form.userId = user.id;
+          return this.patientService.create(this.form);
+        }),
+      )
+      .subscribe({
+        next: (patient) => {
+          this.toast.success('Patient registered successfully. A verification email has been sent.');
+          this.router.navigate(['/patients', patient.id]);
+        },
+        error: (err) => {
+          this.toast.error(err?.error?.message ?? 'Failed to register patient');
+          this.saving = false;
+        },
+      });
+  }
+
+  /** Generate a unique-ish username from first + last name */
+  private generateUsername(first: string, last: string): string {
+    const base = (first.charAt(0) + last).toLowerCase().replace(/[^a-z0-9]/g, '');
+    const suffix = Math.floor(1000 + Math.random() * 9000);
+    return `pat_${base}${suffix}`;
   }
 }
