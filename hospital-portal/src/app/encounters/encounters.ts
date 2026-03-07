@@ -36,6 +36,8 @@ export class EncountersComponent implements OnInit {
   isSuperAdmin = false;
   /** Non-null when the user is locked to a single hospital (all non-admin staff) */
   lockedHospitalId: string | null = null;
+  /** Human-readable name of the locked hospital */
+  lockedHospitalName = '';
 
   encounters = signal<EncounterResponse[]>([]);
   filtered = signal<EncounterResponse[]>([]);
@@ -109,9 +111,14 @@ export class EncountersComponent implements OnInit {
         this.hospitalService.getById(lockId).subscribe({
           next: (h) => {
             this.hospitals.set([h]);
+            this.lockedHospitalName = h.name;
             this.roleContext.activeHospitalId = lockId;
           },
         });
+      } else {
+        this.toast.error(
+          'No hospital is associated with your account. Please contact an administrator.',
+        );
       }
     }
 

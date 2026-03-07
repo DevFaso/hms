@@ -59,7 +59,7 @@ public class EncounterController {
     // ----------------------------------------------------------
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
-    @Operation(summary = "Create a new encounter (receptionist-doctor-nurse-admin)")
+    @Operation(summary = "Create a new encounter (super-admin, receptionist, doctor, nurse, midwife, hospital-admin)")
     public ResponseEntity<EncounterResponseDTO> create(
         @Valid @RequestBody EncounterRequestDTO dto,
         Locale locale,
@@ -153,7 +153,7 @@ public class EncounterController {
     // ----------------------------------------------------------
     @PutMapping(value = "/{id}", consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
-    @Operation(summary = "Update an encounter")
+    @Operation(summary = "Update an encounter (super-admin, doctor, nurse, midwife, hospital-admin)")
     public ResponseEntity<EncounterResponseDTO> update(
         @PathVariable UUID id,
         @Valid @RequestBody EncounterRequestDTO dto,
@@ -199,7 +199,7 @@ public class EncounterController {
     // ----------------------------------------------------------
     @PostMapping(value = "/{encounterId}/notes", consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
-    @Operation(summary = "Create or update encounter note", 
+    @Operation(summary = "Create or update encounter note (super-admin, doctor, nurse, midwife, hospital-admin)", 
                description = "Creates or updates the encounter note with SOAP/narrative documentation")
     public ResponseEntity<EncounterNoteResponseDTO> upsertEncounterNote(
         @PathVariable UUID encounterId,

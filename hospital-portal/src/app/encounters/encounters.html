@@ -322,8 +322,9 @@
             @if (lockedHospitalId) {
               <!-- Staff is locked to their current hospital -->
               <input
+                id="enc-hospitalId"
                 type="text"
-                [value]="hospitals()[0]?.name || 'Loading...'"
+                [value]="lockedHospitalName || 'Loading...'"
                 readonly
                 class="locked-field"
               />
