@@ -44,7 +44,7 @@ import java.util.UUID;
 @Tag(name = "Me", description = "Endpoints for the current authenticated user")
 public class MeController {
 
-    private static final String HOSPITAL_ID_CLAIM = "hospitalId";
+    private static final String[] HOSPITAL_ID_CLAIMS = {"primaryHospitalId", "hospitalId"};
 
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
@@ -192,24 +192,25 @@ public class MeController {
     private Optional<UUID> extractHospitalIdFromJwt(Authentication auth) {
         if (auth instanceof JwtAuthenticationToken jat) {
             Jwt jwt = jat.getToken();
-            // flat claim
-            String str = jwt.getClaimAsString(HOSPITAL_ID_CLAIM);
-            if (str != null && !str.isBlank()) {
-                try {
-                    return Optional.of(UUID.fromString(str));
-                } catch (RuntimeException ignored) {
-                    // Claim value is not a valid UUID — continue to fallback formats
+            // Check both claim names: "primaryHospitalId" (set by JwtTokenProvider) and legacy "hospitalId"
+            for (String claimKey : HOSPITAL_ID_CLAIMS) {
+                String str = jwt.getClaimAsString(claimKey);
+                if (str != null && !str.isBlank()) {
+                    try {
+                        return Optional.of(UUID.fromString(str));
+                    } catch (RuntimeException ignored) {
+                        // try next claim key
+                    }
                 }
-            }
-            // nested/custom formats
-            Object raw = jwt.getClaims().get(HOSPITAL_ID_CLAIM);
-            if (raw instanceof UUID u)
-                return Optional.of(u);
-            if (raw instanceof String s && !s.isBlank()) {
-                try {
-                    return Optional.of(UUID.fromString(s));
-                } catch (RuntimeException ignored) {
-                    // Raw string claim is not a valid UUID — fall through to empty
+                Object raw = jwt.getClaims().get(claimKey);
+                if (raw instanceof UUID u)
+                    return Optional.of(u);
+                if (raw instanceof String s && !s.isBlank()) {
+                    try {
+                        return Optional.of(UUID.fromString(s));
+                    } catch (RuntimeException ignored) {
+                        // try next claim key
+                    }
                 }
             }
         }

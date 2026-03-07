@@ -91,23 +91,26 @@ public class PharmacyDirectoryController {
     private UUID extractHospitalId(Authentication auth) {
         if (auth instanceof JwtAuthenticationToken jat) {
             Jwt jwt = jat.getToken();
-            String direct = jwt.getClaimAsString("hospitalId");
-            if (direct != null && !direct.isBlank()) {
-                try {
-                    return UUID.fromString(direct);
-                } catch (IllegalArgumentException ignored) {
-                    // fall through
+            // Check both claim names: "primaryHospitalId" (set by JwtTokenProvider) and legacy "hospitalId"
+            for (String claimKey : java.util.List.of("primaryHospitalId", "hospitalId")) {
+                String direct = jwt.getClaimAsString(claimKey);
+                if (direct != null && !direct.isBlank()) {
+                    try {
+                        return UUID.fromString(direct);
+                    } catch (IllegalArgumentException ignored) {
+                        // try next claim key
+                    }
                 }
-            }
-            Object raw = jwt.getClaims().get("hospitalId");
-            if (raw instanceof UUID uuid) {
-                return uuid;
-            }
-            if (raw instanceof String s && !s.isBlank()) {
-                try {
-                    return UUID.fromString(s);
-                } catch (IllegalArgumentException ignored) {
-                    return null;
+                Object raw = jwt.getClaims().get(claimKey);
+                if (raw instanceof UUID uuid) {
+                    return uuid;
+                }
+                if (raw instanceof String s && !s.isBlank()) {
+                    try {
+                        return UUID.fromString(s);
+                    } catch (IllegalArgumentException ignored) {
+                        // try next claim key
+                    }
                 }
             }
         }

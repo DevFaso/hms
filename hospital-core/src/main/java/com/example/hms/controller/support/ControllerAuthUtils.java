@@ -220,23 +220,26 @@ public class ControllerAuthUtils {
     public UUID extractHospitalIdFromJwt(Authentication auth) {
         if (auth instanceof JwtAuthenticationToken token) {
             Jwt jwt = token.getToken();
-            String claim = jwt.getClaimAsString("hospitalId");
-            if (claim != null && !claim.isBlank()) {
-                try {
-                    return UUID.fromString(claim);
-                } catch (IllegalArgumentException ignored) {
-                    // invalid UUID format — fall through
+            // Check both claim names: "primaryHospitalId" (set by JwtTokenProvider) and legacy "hospitalId"
+            for (String claimKey : List.of("primaryHospitalId", "hospitalId")) {
+                String claim = jwt.getClaimAsString(claimKey);
+                if (claim != null && !claim.isBlank()) {
+                    try {
+                        return UUID.fromString(claim);
+                    } catch (IllegalArgumentException ignored) {
+                        // invalid UUID format — try next claim key
+                    }
                 }
-            }
-            Object raw = jwt.getClaims().get("hospitalId");
-            if (raw instanceof UUID uuid) {
-                return uuid;
-            }
-            if (raw instanceof String str && !str.isBlank()) {
-                try {
-                    return UUID.fromString(str);
-                } catch (IllegalArgumentException ignored) {
-                    // invalid UUID format — fall through
+                Object raw = jwt.getClaims().get(claimKey);
+                if (raw instanceof UUID uuid) {
+                    return uuid;
+                }
+                if (raw instanceof String str && !str.isBlank()) {
+                    try {
+                        return UUID.fromString(str);
+                    } catch (IllegalArgumentException ignored) {
+                        // invalid UUID format — try next claim key
+                    }
                 }
             }
         }

@@ -710,7 +710,10 @@ public class UserServiceImpl implements UserService {
                     .parseSignedClaims(jwt)
                     .getPayload();
 
-            Object hId = claims.get("hospitalId");
+            Object hId = claims.get("primaryHospitalId");
+            if (hId == null) {
+                hId = claims.get("hospitalId");
+            }
             if (hId instanceof String s && !s.isBlank()) {
                 return UUID.fromString(s);
             }
