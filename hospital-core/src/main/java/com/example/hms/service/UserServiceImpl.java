@@ -468,7 +468,17 @@ public class UserServiceImpl implements UserService {
         u.setUsername(username);
         u.setEmail(email);
         LocalDateTime passwordSetAt = LocalDateTime.now();
-        u.setPasswordHash(passwordEncoder.encode(request.getPassword()));
+
+        // Auto-generate a temporary password when none is provided (e.g. patient
+        // registration by receptionist).  The user will be forced to change it on
+        // first login via forcePasswordChange flag.
+        String rawPassword = request.getPassword();
+        if (rawPassword == null || rawPassword.isBlank()) {
+            rawPassword = UUID.randomUUID().toString();
+            request.setForcePasswordChange(true);
+        }
+        u.setPasswordHash(passwordEncoder.encode(rawPassword));
+
         u.setFirstName(request.getFirstName());
         u.setLastName(request.getLastName());
         u.setPhoneNumber(phone);
