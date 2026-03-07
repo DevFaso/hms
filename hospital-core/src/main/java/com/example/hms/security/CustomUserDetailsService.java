@@ -1,6 +1,7 @@
 package com.example.hms.security;
 
 import com.example.hms.model.User;
+import com.example.hms.model.UserRole;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import jakarta.transaction.Transactional;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -34,13 +36,28 @@ public class CustomUserDetailsService implements HospitalUserDetailsService {
 
         log.info("✅ Loaded user: {}, Active: {}", user.getUsername(), user.isActive());
 
-        Set<SimpleGrantedAuthority> authorities = userRoleHospitalAssignmentRepository.findByUser(user).stream()
+        // Hospital-scoped roles from user_role_hospital_assignment (active only)
+        Set<String> scopedRoles = userRoleHospitalAssignmentRepository.findByUser(user).stream()
             .filter(assignment -> Boolean.TRUE.equals(assignment.getActive()))
-            .map(assignment -> new SimpleGrantedAuthority(assignment.getRole().getCode())) // ✅ FIXED
+            .map(assignment -> assignment.getRole().getCode())
             .collect(Collectors.toSet());
 
+        // Global roles from user_roles (fallback for users without hospital assignments)
+        Set<String> globalRoles = user.getUserRoles().stream()
+            .map(UserRole::getRole)
+            .filter(role -> role != null && role.getCode() != null)
+            .map(role -> role.getCode())
+            .collect(Collectors.toSet());
 
-        log.info("🔐 User '{}' granted {} authorities: {}", user.getUsername(), authorities.size(), authorities);
+        // Merge both sources — hospital-scoped assignments take priority but global roles
+        // ensure users always have their base role even without an active hospital assignment
+        Set<SimpleGrantedAuthority> authorities = Stream.concat(scopedRoles.stream(), globalRoles.stream())
+            .distinct()
+            .map(SimpleGrantedAuthority::new)
+            .collect(Collectors.toSet());
+
+        log.info("🔐 User '{}' granted {} authorities (scoped={}, global={}): {}",
+                user.getUsername(), authorities.size(), scopedRoles.size(), globalRoles.size(), authorities);
 
         return new CustomUserDetails(user, authorities);
     }
