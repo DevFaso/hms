@@ -23,6 +23,16 @@ import {
   OnCallStatus,
   RoomedPatient,
 } from '../services/dashboard.service';
+import {
+  PatientPortalService,
+  HealthSummaryDTO,
+  PortalAppointment,
+  MedicationSummary,
+  LabResultSummary,
+  VitalSignSummary,
+  PortalInvoice,
+  CareTeamDTO,
+} from '../services/patient-portal.service';
 
 // ── Local interfaces ────────────────────────────────────────────────────────
 
@@ -83,6 +93,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly appointmentService = inject(AppointmentService);
   private readonly patientService = inject(PatientService);
   private readonly dashboardService = inject(DashboardService);
+  private readonly portalService = inject(PatientPortalService);
 
   // ── Time & Identity ──────────────────────────────────────────
   greeting = signal('');
@@ -111,6 +122,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   isLabScientist = signal(false);
   isPharmacist = signal(false);
   isRadiologist = signal(false);
+  isPatient = signal(false);
 
   /** True for DOCTOR / NURSE / MIDWIFE — gets clinical workspace layout */
   isClinician = computed(() => this.isDoctor() || this.isNurse() || this.isMidwife());
@@ -134,6 +146,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // ── Schedule & Patients ───────────────────────────────────────
   todayAppointments = signal<AppointmentResponse[]>([]);
   recentPatients = signal<PatientResponse[]>([]);
+
+  // ── Patient Portal data ──────────────────────────────────────
+  healthSummary = signal<HealthSummaryDTO | null>(null);
+  myAppointments = signal<PortalAppointment[]>([]);
+  myMedications = signal<MedicationSummary[]>([]);
+  myLabResults = signal<LabResultSummary[]>([]);
+  myVitals = signal<VitalSignSummary[]>([]);
+  myInvoices = signal<PortalInvoice[]>([]);
+  myCareTeam = signal<CareTeamDTO | null>(null);
 
   // ────────────────────────────────────────────────────────────
   // COMPUTED — DERIVED STATE
@@ -199,6 +220,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // ── Hero gradient class (role-specific) ─────────────────────
   heroGradientClass = computed(() => {
+    if (this.isPatient()) return 'hero-gradient-patient';
     if (this.isSuperAdmin()) return 'hero-gradient-superadmin';
     if (this.isHospitalAdmin()) return 'hero-gradient-hospital-admin';
     if (this.isDoctor()) return 'hero-gradient-doctor';
@@ -224,8 +246,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     | 'lab'
     | 'pharmacist'
     | 'radiologist'
+    | 'patient'
     | 'fallback'
   >(() => {
+    if (this.isPatient()) return 'patient';
     if (this.isSuperAdmin()) return 'superadmin';
     if (this.isHospitalAdmin()) return 'hospitaladmin';
     if (this.isDoctor()) return 'doctor';
@@ -239,6 +263,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // ── Role display label ────────────────────────────────────────
   roleLabel = computed(() => {
+    if (this.isPatient()) return 'Patient';
     if (this.isSuperAdmin()) return 'Super Administrator';
     if (this.isHospitalAdmin()) return 'Hospital Administrator';
     if (this.isDoctor()) return 'Physician';
@@ -815,6 +840,56 @@ export class DashboardComponent implements OnInit, OnDestroy {
     { icon: 'analytics', label: 'Reports', route: '/imaging', color: '#ea580c', bg: '#fff7ed' },
   ]);
 
+  // ── Patient quick-access tiles (Epic MyChart style) ──────────
+  patientQuickLinks = computed<NavTile[]>(() => [
+    {
+      icon: 'calendar_month',
+      label: 'Appointments',
+      route: '/my-appointments',
+      color: '#059669',
+      bg: '#d1fae5',
+    },
+    { icon: 'chat', label: 'Messages', route: '/chat', color: '#2563eb', bg: '#dbeafe' },
+    { icon: 'history', label: 'Visits', route: '/my-visits', color: '#4f46e5', bg: '#eef2ff' },
+    {
+      icon: 'science',
+      label: 'Test Results',
+      route: '/my-lab-results',
+      color: '#7c3aed',
+      bg: '#ede9fe',
+    },
+    {
+      icon: 'medication',
+      label: 'Medications',
+      route: '/my-medications',
+      color: '#0d9488',
+      bg: '#ccfbf1',
+    },
+    {
+      icon: 'receipt_long',
+      label: 'Billing',
+      route: '/my-billing',
+      color: '#d97706',
+      bg: '#fef3c7',
+    },
+    { icon: 'groups', label: 'Care Team', route: '/my-care-team', color: '#ec4899', bg: '#fce7f3' },
+    {
+      icon: 'monitor_heart',
+      label: 'Vitals',
+      route: '/my-vitals',
+      color: '#dc2626',
+      bg: '#fee2e2',
+    },
+  ]);
+
+  // ── Upcoming appointments for patient (computed from portal data) ────
+  upcomingAppointments = computed(() => {
+    const now = new Date();
+    return this.myAppointments()
+      .filter((a) => a.status !== 'CANCELLED' && new Date(a.date) >= now)
+      .slice(0, 3);
+  });
+
   // ────────────────────────────────────────────────────────────
   // LIFECYCLE
   // ────────────────────────────────────────────────────────────
@@ -861,6 +936,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.isLabScientist.set(this.auth.hasAnyRole(['ROLE_LAB_SCIENTIST']));
     this.isPharmacist.set(this.auth.hasAnyRole(['ROLE_PHARMACIST']));
     this.isRadiologist.set(this.auth.hasAnyRole(['ROLE_RADIOLOGIST']));
+    this.isPatient.set(this.auth.hasAnyRole(['ROLE_PATIENT']));
 
     // Title prefix
     if (this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON'])) {
@@ -960,6 +1036,67 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.patientService.list().subscribe({
         next: (patients) => {
           this.recentPatients.set(patients.slice(0, 6));
+          done();
+        },
+        error: () => done(),
+      });
+    }
+
+    // Patient portal data (MyChart-style)
+    if (this.isPatient()) {
+      pending++;
+      this.portalService.getHealthSummary().subscribe({
+        next: (summary) => {
+          this.healthSummary.set(summary);
+          done();
+        },
+        error: () => done(),
+      });
+
+      pending++;
+      this.portalService.getMyAppointments().subscribe({
+        next: (appts) => {
+          this.myAppointments.set(appts);
+          this.scheduleLoading.set(false);
+          done();
+        },
+        error: () => {
+          this.scheduleLoading.set(false);
+          done();
+        },
+      });
+
+      pending++;
+      this.portalService.getMyMedications().subscribe({
+        next: (meds) => {
+          this.myMedications.set(meds);
+          done();
+        },
+        error: () => done(),
+      });
+
+      pending++;
+      this.portalService.getMyLabResults(5).subscribe({
+        next: (results) => {
+          this.myLabResults.set(results);
+          done();
+        },
+        error: () => done(),
+      });
+
+      pending++;
+      this.portalService.getMyInvoices().subscribe({
+        next: (invoices) => {
+          this.myInvoices.set(invoices);
+          done();
+        },
+        error: () => done(),
+      });
+
+      pending++;
+      this.portalService.getMyCareTeam().subscribe({
+        next: (team) => {
+          this.myCareTeam.set(team);
           done();
         },
         error: () => done(),

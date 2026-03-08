@@ -69,6 +69,24 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   /** Base permission-filtered list — source of truth before ordering */
   private readonly baseNavItems = computed<NavItem[]>(() => {
+    // Patient gets a completely different nav — Epic MyChart style
+    if (this.auth.hasAnyRole(['ROLE_PATIENT'])) {
+      return [
+        { icon: 'dashboard', label: 'Dashboard', route: '/dashboard' },
+        { icon: 'calendar_month', label: 'My Appointments', route: '/my-appointments' },
+        { icon: 'medication', label: 'Medications', route: '/my-medications' },
+        { icon: 'science', label: 'Test Results', route: '/my-lab-results' },
+        { icon: 'monitor_heart', label: 'Vitals', route: '/my-vitals' },
+        { icon: 'receipt_long', label: 'Billing', route: '/my-billing' },
+        { icon: 'history', label: 'Visit History', route: '/my-visits' },
+        { icon: 'folder_shared', label: 'My Records', route: '/my-records' },
+        { icon: 'share', label: 'Record Sharing', route: '/my-sharing' },
+        { icon: 'summarize', label: 'Visit Summaries', route: '/my-summaries' },
+        { icon: 'chat', label: 'Messages', route: '/chat' },
+        { icon: 'notifications', label: 'Notifications', route: '/notifications' },
+      ];
+    }
+
     const items: NavItem[] = [
       { icon: 'dashboard', label: 'Dashboard', route: '/dashboard' },
       { icon: 'people', label: 'Patients', route: '/patients', permission: 'View Patient Records' },
@@ -79,7 +97,12 @@ export class ShellComponent implements OnInit, OnDestroy {
         permission: 'View Appointments',
       },
       { icon: 'badge', label: 'Staff', route: '/staff', permission: 'View Staff' },
-      { icon: 'event_note', label: 'Scheduling', route: '/scheduling', permission: 'View Staff' },
+      {
+        icon: 'event_note',
+        label: 'Scheduling',
+        route: '/scheduling',
+        permission: 'View Staff Schedules',
+      },
       {
         icon: 'domain',
         label: 'Departments',
@@ -102,7 +125,7 @@ export class ShellComponent implements OnInit, OnDestroy {
         icon: 'medication',
         label: 'Prescriptions',
         route: '/prescriptions',
-        permission: 'Create Prescriptions',
+        permission: 'View Prescriptions',
       },
       {
         icon: 'monitor_heart',
@@ -114,7 +137,7 @@ export class ShellComponent implements OnInit, OnDestroy {
         icon: 'radiology',
         label: 'Imaging',
         route: '/imaging',
-        permission: 'Request Imaging Studies',
+        permission: 'View Imaging Studies',
       },
       {
         icon: 'forum',
@@ -141,16 +164,21 @@ export class ShellComponent implements OnInit, OnDestroy {
       { icon: 'campaign', label: 'Announcements', route: '/announcements' },
     ];
 
+    // Admin items — gated individually so HOSPITAL_ADMIN sees relevant ones
+    if (this.permissions.hasPermission('View Hospitals')) {
+      items.push({ icon: 'local_hospital', label: 'Hospitals', route: '/hospitals' });
+    }
     if (this.permissions.hasPermission('*')) {
       items.push(
-        { icon: 'local_hospital', label: 'Hospitals', route: '/hospitals' },
         { icon: 'corporate_fare', label: 'Organizations', route: '/organizations' },
         { icon: 'manage_accounts', label: 'Users', route: '/users' },
         { icon: 'shield', label: 'Roles', route: '/roles' },
         { icon: 'hub', label: 'Platform', route: '/platform' },
         { icon: 'admin_panel_settings', label: 'Administration', route: '/admin' },
-        { icon: 'policy', label: 'Audit Logs', route: '/audit-logs' },
       );
+    }
+    if (this.permissions.hasPermission('View Audit Logs')) {
+      items.push({ icon: 'policy', label: 'Audit Logs', route: '/audit-logs' });
     }
 
     return items.filter(

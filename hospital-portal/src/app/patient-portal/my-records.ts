@@ -1,0 +1,313 @@
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { CommonModule, DatePipe } from '@angular/common';
+import {
+  PatientPortalService,
+  HealthSummaryDTO,
+  PortalEncounter,
+  LabResultSummary,
+  MedicationSummary,
+  ImmunizationSummary,
+} from '../services/patient-portal.service';
+
+@Component({
+  selector: 'app-my-records',
+  standalone: true,
+  imports: [CommonModule, DatePipe],
+  styleUrl: './patient-portal-pages.scss',
+  template: `
+    <div class="portal-page">
+      <div class="portal-page-header">
+        <h1>
+          <span class="material-symbols-outlined">folder_shared</span>
+          My Health Records
+        </h1>
+      </div>
+
+      @if (loading()) {
+        <div class="portal-loading">
+          <div class="portal-spinner"></div>
+          <span>Loading your records…</span>
+        </div>
+      } @else {
+        <!-- Action bar -->
+        <div class="records-actions">
+          <button class="rec-action-btn" (click)="printRecords()">
+            <span class="material-symbols-outlined">print</span> Print Records
+          </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="rec-tabs">
+          @for (tab of tabs; track tab.key) {
+            <button
+              class="rec-tab"
+              [class.active]="activeTab() === tab.key"
+              (click)="activeTab.set(tab.key)"
+            >
+              <span class="material-symbols-outlined">{{ tab.icon }}</span>
+              {{ tab.label }}
+            </button>
+          }
+        </div>
+
+        <!-- Overview -->
+        @if (activeTab() === 'overview') {
+          <div class="rec-section">
+            <h2 class="portal-section-title">Personal Information</h2>
+            @if (summary()) {
+              <div class="rec-info-grid">
+                <div class="rec-info-item">
+                  <span class="info-label">Name</span>
+                  <span class="info-value"
+                    >{{ summary()!.profile.firstName }} {{ summary()!.profile.lastName }}</span
+                  >
+                </div>
+                <div class="rec-info-item">
+                  <span class="info-label">Date of Birth</span>
+                  <span class="info-value">{{
+                    summary()!.profile.dateOfBirth | date: 'mediumDate'
+                  }}</span>
+                </div>
+                <div class="rec-info-item">
+                  <span class="info-label">Gender</span>
+                  <span class="info-value">{{ summary()!.profile.gender }}</span>
+                </div>
+                <div class="rec-info-item">
+                  <span class="info-label">Blood Type</span>
+                  <span class="info-value">{{
+                    summary()!.profile.bloodType || 'Not recorded'
+                  }}</span>
+                </div>
+                <div class="rec-info-item">
+                  <span class="info-label">Primary Provider</span>
+                  <span class="info-value">{{
+                    summary()!.profile.primaryCareProvider || 'Not assigned'
+                  }}</span>
+                </div>
+                <div class="rec-info-item">
+                  <span class="info-label">Facility</span>
+                  <span class="info-value">{{ summary()!.profile.facility || '—' }}</span>
+                </div>
+              </div>
+            }
+
+            <h2 class="portal-section-title" style="margin-top: 24px;">Allergies</h2>
+            @if (summary()?.allergies?.length) {
+              <div class="rec-chip-list">
+                @for (a of summary()!.allergies; track a) {
+                  <span class="rec-chip rec-chip-danger">{{ a }}</span>
+                }
+              </div>
+            } @else {
+              <p class="rec-muted">No known allergies</p>
+            }
+
+            <h2 class="portal-section-title" style="margin-top: 24px;">Active Conditions</h2>
+            @if (summary()?.activeDiagnoses?.length) {
+              <div class="rec-chip-list">
+                @for (d of summary()!.activeDiagnoses; track d) {
+                  <span class="rec-chip">{{ d }}</span>
+                }
+              </div>
+            } @else {
+              <p class="rec-muted">No active conditions on file</p>
+            }
+          </div>
+        }
+
+        <!-- Encounters -->
+        @if (activeTab() === 'encounters') {
+          <div class="rec-section">
+            @if (!encounters().length) {
+              <div class="portal-empty">
+                <span class="material-symbols-outlined">event_busy</span>
+                <h3>No Visit Records</h3>
+                <p>Your visit history will appear here</p>
+              </div>
+            } @else {
+              <div class="portal-list">
+                @for (e of encounters(); track e.id) {
+                  <div class="portal-list-item">
+                    <div class="pli-icon" style="background:#dbeafe;">
+                      <span class="material-symbols-outlined" style="color:#2563eb;"
+                        >stethoscope</span
+                      >
+                    </div>
+                    <div class="pli-body">
+                      <span class="pli-title">{{ e.type }} — {{ e.providerName }}</span>
+                      <span class="pli-sub">{{ e.chiefComplaint }}</span>
+                      @if (e.diagnosisSummary) {
+                        <span class="pli-meta">Diagnosis: {{ e.diagnosisSummary }}</span>
+                      }
+                      <span class="pli-meta"
+                        >{{ e.date | date: 'mediumDate' }} · {{ e.department }}</span
+                      >
+                    </div>
+                    <span class="portal-status-chip" [attr.data-status]="e.status">{{
+                      e.status
+                    }}</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Lab Results -->
+        @if (activeTab() === 'labs') {
+          <div class="rec-section">
+            @if (!labs().length) {
+              <div class="portal-empty">
+                <span class="material-symbols-outlined">science</span>
+                <h3>No Lab Results</h3>
+                <p>Your test results will appear here</p>
+              </div>
+            } @else {
+              <div class="portal-list">
+                @for (l of labs(); track l.id) {
+                  <div class="portal-list-item" [class.item-abnormal]="l.isAbnormal">
+                    <div class="pli-icon" [style.background]="l.isAbnormal ? '#fee2e2' : '#d1fae5'">
+                      <span
+                        class="material-symbols-outlined"
+                        [style.color]="l.isAbnormal ? '#dc2626' : '#059669'"
+                      >
+                        {{ l.isAbnormal ? 'warning' : 'check_circle' }}
+                      </span>
+                    </div>
+                    <div class="pli-body">
+                      <span class="pli-title">{{ l.testName }}</span>
+                      <span class="pli-sub"
+                        >Result: {{ l.result }}
+                        <span class="rec-muted">(Ref: {{ l.referenceRange }})</span></span
+                      >
+                      <span class="pli-meta">{{ l.collectedDate | date: 'mediumDate' }}</span>
+                    </div>
+                    <span class="portal-status-chip" [attr.data-status]="l.status">{{
+                      l.status
+                    }}</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Medications -->
+        @if (activeTab() === 'medications') {
+          <div class="rec-section">
+            @if (!medications().length) {
+              <div class="portal-empty">
+                <span class="material-symbols-outlined">medication</span>
+                <h3>No Medications</h3>
+                <p>Your medication list will appear here</p>
+              </div>
+            } @else {
+              <div class="portal-list">
+                @for (m of medications(); track m.id) {
+                  <div class="portal-list-item">
+                    <div class="pli-icon" style="background:#fef3c7;">
+                      <span class="material-symbols-outlined" style="color:#d97706;"
+                        >medication</span
+                      >
+                    </div>
+                    <div class="pli-body">
+                      <span class="pli-title">{{ m.name }}</span>
+                      <span class="pli-sub">{{ m.dosage }} · {{ m.frequency }}</span>
+                      <span class="pli-meta"
+                        >Prescribed by {{ m.prescribedBy }} ·
+                        {{ m.startDate | date: 'mediumDate' }}</span
+                      >
+                    </div>
+                    <span class="portal-status-chip" [attr.data-status]="m.status">{{
+                      m.status
+                    }}</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Immunizations -->
+        @if (activeTab() === 'immunizations') {
+          <div class="rec-section">
+            @if (!immunizations().length) {
+              <div class="portal-empty">
+                <span class="material-symbols-outlined">vaccines</span>
+                <h3>No Immunization Records</h3>
+                <p>Your vaccination history will appear here</p>
+              </div>
+            } @else {
+              <div class="portal-list">
+                @for (im of immunizations(); track im.id) {
+                  <div class="portal-list-item">
+                    <div class="pli-icon" style="background:#ede9fe;">
+                      <span class="material-symbols-outlined" style="color:#7c3aed;">vaccines</span>
+                    </div>
+                    <div class="pli-body">
+                      <span class="pli-title">{{ im.vaccineName }}</span>
+                      <span class="pli-sub">Administered by {{ im.provider }}</span>
+                      <span class="pli-meta">{{ im.dateAdministered | date: 'mediumDate' }}</span>
+                    </div>
+                    <span class="portal-status-chip" [attr.data-status]="im.status">{{
+                      im.status
+                    }}</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+      }
+    </div>
+  `,
+})
+export class MyRecordsComponent implements OnInit {
+  private readonly portal = inject(PatientPortalService);
+
+  loading = signal(true);
+  summary = signal<HealthSummaryDTO | null>(null);
+  encounters = signal<PortalEncounter[]>([]);
+  labs = signal<LabResultSummary[]>([]);
+  medications = signal<MedicationSummary[]>([]);
+  immunizations = signal<ImmunizationSummary[]>([]);
+  activeTab = signal<string>('overview');
+
+  tabs = [
+    { key: 'overview', label: 'Overview', icon: 'person' },
+    { key: 'encounters', label: 'Visits', icon: 'stethoscope' },
+    { key: 'labs', label: 'Lab Results', icon: 'science' },
+    { key: 'medications', label: 'Medications', icon: 'medication' },
+    { key: 'immunizations', label: 'Immunizations', icon: 'vaccines' },
+  ];
+
+  ngOnInit(): void {
+    this.portal.getHealthSummary().subscribe({
+      next: (s) => this.summary.set(s),
+      error: () => void 0,
+    });
+    this.portal.getMyEncounters().subscribe({
+      next: (e) => this.encounters.set(e),
+      error: () => void 0,
+    });
+    this.portal.getMyLabResults(50).subscribe({
+      next: (l) => this.labs.set(l),
+      error: () => void 0,
+    });
+    this.portal.getMyMedications().subscribe({
+      next: (m) => this.medications.set(m),
+      error: () => void 0,
+    });
+    this.portal.getMyImmunizations().subscribe({
+      next: (im) => {
+        this.immunizations.set(im);
+        this.loading.set(false);
+      },
+      error: () => this.loading.set(false),
+    });
+  }
+
+  printRecords(): void {
+    window.print();
+  }
+}

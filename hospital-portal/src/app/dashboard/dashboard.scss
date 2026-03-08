@@ -1903,6 +1903,11 @@ $shadow-md:
   box-shadow: 0 8px 32px rgba(8, 145, 178, 0.38);
 }
 
+.hero-gradient-patient {
+  background: linear-gradient(135deg, #064e3b 0%, #059669 60%, #34d399 100%);
+  box-shadow: 0 8px 32px rgba(5, 150, 105, 0.38);
+}
+
 .hero-gradient-default {
   background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 60%, #3b82f6 100%);
   box-shadow: 0 8px 32px rgba(37, 99, 235, 0.38);
@@ -2110,5 +2115,532 @@ $shadow-md:
 
   .role-badge {
     display: none;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// PATIENT DASHBOARD — Epic MyChart Style
+// ══════════════════════════════════════════════════════════════
+
+// ── Quick Access Grid ────────────────────────────────────────
+.patient-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.patient-quick-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 8px;
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  text-decoration: none;
+  transition: all 0.2s ease;
+  cursor: pointer;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+    border-color: #cbd5e1;
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+.pq-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pq-icon {
+  font-size: 24px;
+}
+
+.pq-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  text-align: center;
+  line-height: 1.3;
+}
+
+// ── Patient Dashboard Grid ───────────────────────────────────
+.patient-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+.patient-card {
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  overflow: hidden;
+
+  .card-head {
+    padding: 16px 20px 12px;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  .card-title-icon {
+    font-size: 20px;
+  }
+
+  .card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #1e293b;
+  }
+}
+
+.patient-card-wide {
+  grid-column: 1 / -1;
+}
+
+.patient-card-body {
+  padding: 12px 20px 16px;
+}
+
+// ── Empty States ─────────────────────────────────────────────
+.patient-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px 16px;
+  text-align: center;
+  color: #94a3b8;
+
+  .empty-icon {
+    font-size: 36px;
+    color: #cbd5e1;
+  }
+
+  p {
+    font-size: 13px;
+    margin: 0;
+  }
+}
+
+.patient-btn-sm {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: #059669;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.15s;
+
+  &:hover {
+    background: #047857;
+  }
+}
+
+// ── Appointment Cards ────────────────────────────────────────
+.patient-appt-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid #f1f5f9;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.appt-date-badge {
+  width: 48px;
+  height: 52px;
+  border-radius: 10px;
+  background: #d1fae5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.appt-month {
+  font-size: 10px;
+  font-weight: 700;
+  color: #059669;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.appt-day {
+  font-size: 18px;
+  font-weight: 800;
+  color: #064e3b;
+  line-height: 1;
+}
+
+.appt-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.appt-provider {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.appt-reason {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.appt-time {
+  font-size: 12px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.appt-status-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+  background: #f1f5f9;
+  color: #64748b;
+
+  &[data-status='SCHEDULED'],
+  &[data-status='CONFIRMED'] {
+    background: #dbeafe;
+    color: #2563eb;
+  }
+
+  &[data-status='COMPLETED'] {
+    background: #d1fae5;
+    color: #059669;
+  }
+
+  &[data-status='IN_PROGRESS'] {
+    background: #fef3c7;
+    color: #d97706;
+  }
+
+  &[data-status='CANCELLED'] {
+    background: #fee2e2;
+    color: #dc2626;
+  }
+}
+
+// ── Medication Rows ──────────────────────────────────────────
+.patient-med-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f8fafc;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.med-icon-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #ccfbf1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.med-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.med-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.med-dosage {
+  font-size: 12px;
+  color: #64748b;
+}
+
+// ── Lab Result Rows ──────────────────────────────────────────
+.patient-lab-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #f8fafc;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.lab-icon-wrap {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #d1fae5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #059669;
+
+  &.lab-abnormal {
+    background: #fee2e2;
+    color: #dc2626;
+  }
+}
+
+.lab-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.lab-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.lab-value {
+  font-size: 12px;
+  color: #475569;
+}
+
+.lab-range {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.lab-date {
+  font-size: 12px;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+// ── Billing Rows ─────────────────────────────────────────────
+.patient-bill-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid #f8fafc;
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.bill-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bill-desc {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.bill-date {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.bill-amount-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.bill-amount {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1e293b;
+
+  &.bill-due {
+    color: #d97706;
+  }
+}
+
+.bill-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #64748b;
+
+  &[data-status='PAID'] {
+    background: #d1fae5;
+    color: #059669;
+  }
+
+  &[data-status='PENDING'],
+  &[data-status='OVERDUE'] {
+    background: #fef3c7;
+    color: #d97706;
+  }
+}
+
+// ── Care Team Grid ───────────────────────────────────────────
+.care-team-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.care-team-member {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.ctm-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.ctm-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ctm-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.ctm-role {
+  font-size: 12px;
+  color: #64748b;
+}
+
+// ── Health at a Glance ───────────────────────────────────────
+.health-glance-grid {
+  display: flex;
+  gap: 24px;
+}
+
+.health-glance-section {
+  flex: 1;
+}
+
+.hg-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569;
+  margin: 0 0 8px;
+}
+
+.hg-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.hg-chip {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.hg-chip-allergy {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.hg-chip-condition {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+// ── Patient Dashboard Responsive ─────────────────────────────
+@media (max-width: 1024px) {
+  .patient-quick-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+
+  .patient-dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .care-team-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .patient-quick-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .pq-icon-wrap {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
+  .pq-icon {
+    font-size: 20px;
+  }
+
+  .pq-label {
+    font-size: 11px;
+  }
+
+  .health-glance-grid {
+    flex-direction: column;
+    gap: 16px;
   }
 }
