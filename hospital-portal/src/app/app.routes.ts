@@ -34,6 +34,76 @@ export const routes: Routes = [
         loadComponent: () => import('./dashboard/dashboard').then((m) => m.DashboardComponent),
       },
 
+      // ─── Patient Portal (ROLE_PATIENT only) ───────────────────
+      {
+        path: 'my-appointments',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-appointments').then((m) => m.MyAppointmentsComponent),
+      },
+      {
+        path: 'my-medications',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-medications').then((m) => m.MyMedicationsComponent),
+      },
+      {
+        path: 'my-lab-results',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-lab-results').then((m) => m.MyLabResultsComponent),
+      },
+      {
+        path: 'my-vitals',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () => import('./patient-portal/my-vitals').then((m) => m.MyVitalsComponent),
+      },
+      {
+        path: 'my-billing',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-billing').then((m) => m.MyBillingComponent),
+      },
+      {
+        path: 'my-visits',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () => import('./patient-portal/my-visits').then((m) => m.MyVisitsComponent),
+      },
+      {
+        path: 'my-care-team',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-care-team').then((m) => m.MyCareTeamComponent),
+      },
+      {
+        path: 'my-records',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-records').then((m) => m.MyRecordsComponent),
+      },
+      {
+        path: 'my-sharing',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-sharing').then((m) => m.MySharingComponent),
+      },
+      {
+        path: 'my-summaries',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-summaries').then((m) => m.MySummariesComponent),
+      },
+
       // Patients
       {
         path: 'patients',
@@ -128,6 +198,7 @@ export const routes: Routes = [
             'ROLE_DOCTOR',
             'ROLE_NURSE',
             'ROLE_MIDWIFE',
+            'ROLE_RECEPTIONIST',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
@@ -159,7 +230,15 @@ export const routes: Routes = [
       {
         path: 'billing',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_BILLING'] },
+        data: {
+          roles: [
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+            'ROLE_BILLING',
+            'ROLE_BILLING_SPECIALIST',
+          ],
+        },
         loadComponent: () => import('./billing/billing').then((m) => m.BillingComponent),
       },
 
@@ -171,7 +250,9 @@ export const routes: Routes = [
           roles: [
             'ROLE_DOCTOR',
             'ROLE_NURSE',
+            'ROLE_MIDWIFE',
             'ROLE_LAB_TECHNICIAN',
+            'ROLE_LAB_SCIENTIST',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
@@ -399,7 +480,7 @@ export const routes: Routes = [
       {
         path: 'audit-logs',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./audit-logs/audit-logs').then((m) => m.AuditLogsComponent),
       },
 

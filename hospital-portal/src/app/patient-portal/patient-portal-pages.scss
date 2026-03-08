@@ -1,0 +1,636 @@
+/* ═══════════════════════════════════════════════════════════
+   Patient Portal – Shared Page Styles (Epic MyChart inspired)
+   ═══════════════════════════════════════════════════════════ */
+
+.portal-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 4px;
+}
+
+.portal-page-header {
+  margin-bottom: 24px;
+
+  h1 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 22px;
+    font-weight: 800;
+    color: #1e293b;
+    margin: 0;
+
+    .material-symbols-outlined {
+      font-size: 28px;
+      color: #059669;
+    }
+  }
+}
+
+// ── Loading ──────────────────────────────────────────────────
+.portal-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 60px 20px;
+  color: #94a3b8;
+}
+
+.portal-spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #e2e8f0;
+  border-top: 3px solid #059669;
+  border-radius: 50%;
+  animation: portal-spin 0.8s linear infinite;
+}
+
+@keyframes portal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+// ── Empty State ──────────────────────────────────────────────
+.portal-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 60px 20px;
+  text-align: center;
+
+  .material-symbols-outlined {
+    font-size: 48px;
+    color: #cbd5e1;
+  }
+
+  h3 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #475569;
+    margin: 4px 0 0;
+  }
+
+  p {
+    font-size: 13px;
+    color: #94a3b8;
+    margin: 0;
+  }
+}
+
+// ── Section ──────────────────────────────────────────────────
+.portal-section {
+  margin-bottom: 24px;
+}
+
+.portal-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #475569;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+// ── Generic List ─────────────────────────────────────────────
+.portal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.portal-list-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #f1f5f9;
+  border-radius: 12px;
+  transition: background 0.15s;
+
+  &:hover {
+    background: #f8fafc;
+  }
+
+  &.item-abnormal {
+    border-left: 3px solid #dc2626;
+  }
+}
+
+.pli-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  .material-symbols-outlined {
+    font-size: 20px;
+  }
+}
+
+.pli-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pli-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.pli-sub {
+  font-size: 13px;
+  color: #475569;
+}
+
+.pli-meta {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+// ── Status Chip ──────────────────────────────────────────────
+.portal-status-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+  background: #f1f5f9;
+  color: #64748b;
+  flex-shrink: 0;
+
+  &[data-status='COMPLETED'],
+  &[data-status='DISCHARGED'] {
+    background: #d1fae5;
+    color: #059669;
+  }
+
+  &[data-status='IN_PROGRESS'],
+  &[data-status='ACTIVE'] {
+    background: #dbeafe;
+    color: #2563eb;
+  }
+
+  &[data-status='SCHEDULED'],
+  &[data-status='CONFIRMED'] {
+    background: #fef3c7;
+    color: #d97706;
+  }
+
+  &[data-status='CANCELLED'] {
+    background: #fee2e2;
+    color: #dc2626;
+  }
+}
+
+// ── Appointment Cards (My Appointments page) ─────────────────
+.portal-appt-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  margin-bottom: 10px;
+  transition: box-shadow 0.15s;
+
+  &:hover {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+  }
+
+  &.past {
+    opacity: 0.7;
+  }
+}
+
+.pac-date {
+  width: 52px;
+  height: 56px;
+  border-radius: 12px;
+  background: #d1fae5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pac-month {
+  font-size: 10px;
+  font-weight: 700;
+  color: #059669;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pac-day {
+  font-size: 20px;
+  font-weight: 800;
+  color: #064e3b;
+  line-height: 1;
+}
+
+.pac-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.pac-provider {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.pac-detail {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.pac-time {
+  font-size: 12px;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pac-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 20px;
+  white-space: nowrap;
+  background: #f1f5f9;
+  color: #64748b;
+  flex-shrink: 0;
+
+  &[data-status='SCHEDULED'],
+  &[data-status='CONFIRMED'] {
+    background: #dbeafe;
+    color: #2563eb;
+  }
+
+  &[data-status='COMPLETED'] {
+    background: #d1fae5;
+    color: #059669;
+  }
+
+  &[data-status='IN_PROGRESS'] {
+    background: #fef3c7;
+    color: #d97706;
+  }
+
+  &[data-status='CANCELLED'] {
+    background: #fee2e2;
+    color: #dc2626;
+  }
+}
+
+// ── Responsive ───────────────────────────────────────────────
+@media (max-width: 640px) {
+  .portal-page-header h1 {
+    font-size: 18px;
+  }
+
+  .portal-list-item {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .pli-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .portal-appt-card {
+    padding: 12px;
+    gap: 12px;
+  }
+
+  .pac-date {
+    width: 44px;
+    height: 48px;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// Records Tabs, Info Grid, Chips
+// ══════════════════════════════════════════════════════════════
+
+.records-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.rec-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+
+  &:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+  }
+}
+
+.rec-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #f1f5f9;
+  padding-bottom: 2px;
+  overflow-x: auto;
+}
+
+.rec-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: all 0.15s;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+
+  &:hover {
+    color: #059669;
+  }
+  &.active {
+    color: #059669;
+    border-bottom-color: #059669;
+  }
+}
+
+.rec-section {
+  margin-bottom: 24px;
+}
+
+.rec-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.rec-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  background: #f8fafc;
+  border-radius: 10px;
+
+  .info-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .info-value {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+  }
+}
+
+.rec-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rec-chip {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 20px;
+  background: #f1f5f9;
+  color: #475569;
+
+  &.rec-chip-danger {
+    background: #fee2e2;
+    color: #dc2626;
+  }
+}
+
+.rec-muted {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+// ══════════════════════════════════════════════════════════════
+// Sharing / Consent
+// ══════════════════════════════════════════════════════════════
+
+.sharing-consent-item .consent-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.revoke-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid #fca5a5;
+  background: #fff;
+  color: #dc2626;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    background: #fee2e2;
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════
+// After-Visit Summary Cards
+// ══════════════════════════════════════════════════════════════
+
+.avs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.avs-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  overflow: hidden;
+  transition: box-shadow 0.15s;
+
+  &:hover {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+  }
+  &.expanded {
+    border-color: #059669;
+  }
+}
+
+.avs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+
+.avs-header-left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.avs-date-badge {
+  width: 48px;
+  height: 52px;
+  border-radius: 10px;
+  background: #d1fae5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.avs-month {
+  font-size: 10px;
+  font-weight: 700;
+  color: #059669;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.avs-day {
+  font-size: 18px;
+  font-weight: 800;
+  color: #064e3b;
+  line-height: 1;
+}
+
+.avs-header-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.avs-provider {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.avs-dept {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.avs-expand-icon {
+  color: #94a3b8;
+  font-size: 24px;
+}
+
+.avs-body {
+  padding: 0 16px 16px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.avs-section {
+  margin-top: 14px;
+
+  h4 {
+    font-size: 13px;
+    font-weight: 700;
+    color: #475569;
+    margin: 0 0 6px;
+  }
+
+  p {
+    font-size: 14px;
+    color: #334155;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  ul {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 14px;
+    color: #334155;
+    line-height: 1.6;
+  }
+}
+
+.avs-actions {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.avs-print-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+
+  &:hover {
+    background: #f8fafc;
+  }
+}

@@ -1781,6 +1781,270 @@
   }
 
   <!-- ══════════════════════════════════════════
+       PATIENT DASHBOARD (Epic MyChart Style)
+       ══════════════════════════════════════════ -->
+  @if (!loading() && activeView() === 'patient') {
+    <!-- Quick Access Grid -->
+    <section class="patient-quick-grid">
+      @for (tile of patientQuickLinks(); track tile.route) {
+        <a class="patient-quick-tile" [routerLink]="tile.route">
+          <div class="pq-icon-wrap" [style.background]="tile.bg">
+            <span class="material-symbols-outlined pq-icon" [style.color]="tile.color">{{
+              tile.icon
+            }}</span>
+          </div>
+          <span class="pq-label">{{ tile.label }}</span>
+        </a>
+      }
+    </section>
+
+    <div class="patient-dashboard-grid">
+      <!-- Upcoming Appointments -->
+      <section class="card patient-card">
+        <div class="card-head">
+          <div class="card-title-group">
+            <span class="material-symbols-outlined card-title-icon" style="color: #059669"
+              >calendar_month</span
+            >
+            <h2 class="card-title">Upcoming Appointments</h2>
+          </div>
+          <a routerLink="/my-appointments" class="card-link">View All</a>
+        </div>
+        <div class="patient-card-body">
+          @if (upcomingAppointments().length === 0) {
+            <div class="patient-empty-state">
+              <span class="material-symbols-outlined empty-icon">event_available</span>
+              <p>No upcoming appointments</p>
+              <a routerLink="/my-appointments" class="patient-btn-sm">Schedule Now</a>
+            </div>
+          } @else {
+            @for (appt of upcomingAppointments(); track appt.id) {
+              <div class="patient-appt-card">
+                <div class="appt-date-badge">
+                  <span class="appt-month">{{ appt.date | date: 'MMM' }}</span>
+                  <span class="appt-day">{{ appt.date | date: 'd' }}</span>
+                </div>
+                <div class="appt-details">
+                  <span class="appt-provider">{{ appt.providerName || 'Provider' }}</span>
+                  <span class="appt-reason">{{
+                    appt.reason || appt.department || 'General Visit'
+                  }}</span>
+                  <span class="appt-time">
+                    <span class="material-symbols-outlined" style="font-size: 14px">schedule</span>
+                    {{ appt.startTime }}
+                  </span>
+                </div>
+                <span class="appt-status-chip" [attr.data-status]="appt.status">
+                  {{ appt.status | titlecase }}
+                </span>
+              </div>
+            }
+          }
+        </div>
+      </section>
+
+      <!-- Current Medications -->
+      <section class="card patient-card">
+        <div class="card-head">
+          <div class="card-title-group">
+            <span class="material-symbols-outlined card-title-icon" style="color: #0d9488"
+              >medication</span
+            >
+            <h2 class="card-title">Current Medications</h2>
+          </div>
+          <a routerLink="/my-medications" class="card-link">View All</a>
+        </div>
+        <div class="patient-card-body">
+          @if (myMedications().length === 0) {
+            <div class="patient-empty-state">
+              <span class="material-symbols-outlined empty-icon">medication</span>
+              <p>No active medications</p>
+            </div>
+          } @else {
+            @for (med of myMedications().slice(0, 4); track med.id) {
+              <div class="patient-med-row">
+                <div class="med-icon-wrap">
+                  <span class="material-symbols-outlined" style="color: #0d9488; font-size: 20px"
+                    >pill</span
+                  >
+                </div>
+                <div class="med-info">
+                  <span class="med-name">{{ med.name }}</span>
+                  <span class="med-dosage">{{ med.dosage }} · {{ med.frequency }}</span>
+                </div>
+              </div>
+            }
+          }
+        </div>
+      </section>
+
+      <!-- Recent Test Results -->
+      <section class="card patient-card">
+        <div class="card-head">
+          <div class="card-title-group">
+            <span class="material-symbols-outlined card-title-icon" style="color: #7c3aed"
+              >science</span
+            >
+            <h2 class="card-title">Recent Test Results</h2>
+          </div>
+          <a routerLink="/my-lab-results" class="card-link">View All</a>
+        </div>
+        <div class="patient-card-body">
+          @if (myLabResults().length === 0) {
+            <div class="patient-empty-state">
+              <span class="material-symbols-outlined empty-icon">biotech</span>
+              <p>No test results available</p>
+            </div>
+          } @else {
+            @for (lab of myLabResults().slice(0, 4); track lab.id) {
+              <div class="patient-lab-row">
+                <div class="lab-icon-wrap" [class.lab-abnormal]="lab.isAbnormal">
+                  <span class="material-symbols-outlined" style="font-size: 18px">
+                    {{ lab.isAbnormal ? 'warning' : 'check_circle' }}
+                  </span>
+                </div>
+                <div class="lab-info">
+                  <span class="lab-name">{{ lab.testName }}</span>
+                  <span class="lab-value"
+                    >{{ lab.result }}
+                    @if (lab.referenceRange) {
+                      <span class="lab-range">({{ lab.referenceRange }})</span>
+                    }
+                  </span>
+                </div>
+                <span class="lab-date">{{ lab.collectedDate | date: 'MMM d' }}</span>
+              </div>
+            }
+          }
+        </div>
+      </section>
+
+      <!-- Billing Summary -->
+      <section class="card patient-card">
+        <div class="card-head">
+          <div class="card-title-group">
+            <span class="material-symbols-outlined card-title-icon" style="color: #d97706"
+              >receipt_long</span
+            >
+            <h2 class="card-title">Billing</h2>
+          </div>
+          <a routerLink="/my-billing" class="card-link">View All</a>
+        </div>
+        <div class="patient-card-body">
+          @if (myInvoices().length === 0) {
+            <div class="patient-empty-state">
+              <span class="material-symbols-outlined empty-icon">payments</span>
+              <p>No outstanding bills</p>
+            </div>
+          } @else {
+            @for (inv of myInvoices().slice(0, 3); track inv.id) {
+              <div class="patient-bill-row">
+                <div class="bill-info">
+                  <span class="bill-desc">{{
+                    inv.description || inv.facility || 'Medical Services'
+                  }}</span>
+                  <span class="bill-date">{{ inv.date | date: 'MMM d, yyyy' }}</span>
+                </div>
+                <div class="bill-amount-wrap">
+                  <span class="bill-amount" [class.bill-due]="inv.balance > 0">
+                    ${{ inv.balance.toFixed(2) }}
+                  </span>
+                  <span class="bill-status" [attr.data-status]="inv.status">
+                    {{ inv.status | titlecase }}
+                  </span>
+                </div>
+              </div>
+            }
+          }
+        </div>
+      </section>
+
+      <!-- Care Team -->
+      @if (myCareTeam()?.members?.length) {
+        <section class="card patient-card patient-card-wide">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon" style="color: #ec4899"
+                >groups</span
+              >
+              <h2 class="card-title">My Care Team</h2>
+            </div>
+          </div>
+          <div class="patient-card-body care-team-grid">
+            @for (member of myCareTeam()!.members.slice(0, 4); track member.name) {
+              <div class="care-team-member">
+                <div
+                  class="ctm-avatar"
+                  [style.background]="member.isPrimary ? '#dbeafe' : '#f1f5f9'"
+                >
+                  <span
+                    class="material-symbols-outlined"
+                    [style.color]="member.isPrimary ? '#2563eb' : '#64748b'"
+                  >
+                    {{ member.isPrimary ? 'star' : 'person' }}
+                  </span>
+                </div>
+                <div class="ctm-info">
+                  <span class="ctm-name">{{ member.name }}</span>
+                  <span class="ctm-role">{{ member.specialty || member.role }}</span>
+                </div>
+              </div>
+            }
+          </div>
+        </section>
+      }
+
+      <!-- Health Summary highlights (if data loaded) -->
+      @if (healthSummary(); as hs) {
+        @if (hs.allergies?.length || hs.activeDiagnoses?.length) {
+          <section class="card patient-card patient-card-wide">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon" style="color: #dc2626"
+                  >health_and_safety</span
+                >
+                <h2 class="card-title">Health at a Glance</h2>
+              </div>
+            </div>
+            <div class="patient-card-body health-glance-grid">
+              @if (hs.allergies?.length) {
+                <div class="health-glance-section">
+                  <h4 class="hg-label">
+                    <span class="material-symbols-outlined" style="font-size: 16px; color: #dc2626"
+                      >warning</span
+                    >
+                    Allergies
+                  </h4>
+                  <div class="hg-chips">
+                    @for (allergy of hs.allergies; track allergy) {
+                      <span class="hg-chip hg-chip-allergy">{{ allergy }}</span>
+                    }
+                  </div>
+                </div>
+              }
+              @if (hs.activeDiagnoses?.length) {
+                <div class="health-glance-section">
+                  <h4 class="hg-label">
+                    <span class="material-symbols-outlined" style="font-size: 16px; color: #2563eb"
+                      >clinical_notes</span
+                    >
+                    Active Conditions
+                  </h4>
+                  <div class="hg-chips">
+                    @for (dx of hs.activeDiagnoses; track dx) {
+                      <span class="hg-chip hg-chip-condition">{{ dx }}</span>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+        }
+      }
+    </div>
+  }
+
+  <!-- ══════════════════════════════════════════
        FALLBACK
        ══════════════════════════════════════════ -->
   @if (!loading() && activeView() === 'fallback') {
