@@ -9,6 +9,7 @@ import com.example.hms.event.AssignmentCreatedEvent;
 import com.example.hms.mapper.UserRoleHospitalAssignmentMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Organization;
+import com.example.hms.model.Patient;
 import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
@@ -30,6 +31,7 @@ import com.example.hms.payload.dto.assignment.UserRoleAssignmentPublicViewDTO;
 import com.example.hms.specification.UserRoleHospitalAssignmentSpecification;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.OrganizationRepository;
+import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
@@ -170,6 +172,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final OrganizationRepository organizationRepository;
     private final StaffRepository staffRepository;
+    private final PatientRepository patientRepository;
     private final UserRoleHospitalAssignmentMapper mapper;
     private final MessageSource messageSource;
     private final ApplicationEventPublisher eventPublisher;
@@ -231,12 +234,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             hospital != null ? (" in hospital '" + hospital.getName() + "'") : " (global)");
 
         syncLegacyRole(user, role);
-        if (sendNotifications && !isRoleCode(roleCode, ROLE_PATIENT)) {
+        if (sendNotifications) {
             // Publish an after-commit event so that email + SMS are only dispatched
             // once the transaction has committed and the assignment row is visible.
             // This prevents ghost links where the email is sent for a rolled-back assignment.
-            // PATIENT roles are excluded: patients receive a dedicated activation email
-            // from UserServiceImpl.createNewUser() instead of the role-confirmation flow.
             eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId()));
         }
         recordAssignmentAudit(saved);
@@ -762,6 +763,18 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             user.setActive(true);
             userRepository.save(user);
             log.info("✅ User '{}' activated after first assignment verification.", user.getUsername());
+        }
+
+        // ── Activate the Patient entity if this was a PATIENT role assignment ──
+        if (user != null && assignment.getRole() != null
+                && ROLE_PATIENT.equalsIgnoreCase(assignment.getRole().getCode())) {
+            patientRepository.findByUserId(user.getId()).ifPresent(patient -> {
+                if (!patient.isActive()) {
+                    patient.setActive(true);
+                    patientRepository.save(patient);
+                    log.info("✅ Patient record activated for user '{}'.", user.getUsername());
+                }
+            });
         }
 
         // Include credentials if this was a new-user assignment (temp creds were set)
@@ -1587,8 +1600,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 confirmationCode,
                 assignment.getAssignmentCode(),
                 profileCompletionUrl,
-                null,  // tempUsername — not applicable for existing-user assignments
-                null   // tempPassword — not applicable for existing-user assignments
+                assignment.getTempPlainPassword() != null ? user.getUsername() : null,
+                assignment.getTempPlainPassword()
             );
         } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to send assignment confirmation email for assignment '{}': {}", assignment.getId(), ex.getMessage());

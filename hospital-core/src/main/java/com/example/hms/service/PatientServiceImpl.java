@@ -461,6 +461,12 @@ public class PatientServiceImpl implements PatientService {
         Patient patient = patientRepository.findByUserId(user.getId())
             .orElseGet(() -> patientRepository.save(patientMapper.toPatient(dto, user)));
 
+        // Mirror User's activation state: patients pending email verification start inactive
+        if (!Boolean.TRUE.equals(user.isActive()) && patient.isActive()) {
+            patient.setActive(false);
+            patientRepository.save(patient);
+        }
+
         ensurePatientRegistration(patient, hospital);
 
         if (dto.getInsurance() != null) {

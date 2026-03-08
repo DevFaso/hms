@@ -124,7 +124,9 @@ export class PatientFormComponent implements OnInit {
       )
       .subscribe({
         next: (patient) => {
-          this.toast.success('Patient registered successfully. A verification email has been sent.');
+          this.toast.success(
+            'Patient registered successfully. A verification email has been sent.',
+          );
           this.router.navigate(['/patients', patient.id]);
         },
         error: (err) => {

@@ -127,16 +127,22 @@ public class EmailServiceImpl implements EmailService {
         log.info("📧 Sending role assignment confirmation email to: {}", to);
 
         String safeUserName = (userName != null && !userName.isBlank()) ? userName : GENERIC_GREETING;
-        String safeRole = (roleDisplayName != null && !roleDisplayName.isBlank()) ? roleDisplayName : "the assigned role";
         String safeHospital = (hospitalDisplayName != null && !hospitalDisplayName.isBlank()) ? hospitalDisplayName : "our hospital network";
+
+        boolean isPatient = roleDisplayName != null
+                && roleDisplayName.toUpperCase(java.util.Locale.ROOT).contains("PATIENT");
+        String safeRole = isPatient ? "Patient" :
+                (roleDisplayName != null && !roleDisplayName.isBlank()) ? roleDisplayName : "the assigned role";
+
+        String buttonLabel = isPatient ? "Activate Your Account" : "Verify Your Role Assignment";
         String linkSection = "";
         if (profileCompletionUrl != null && !profileCompletionUrl.isBlank()) {
             linkSection = """
                 <p style="margin:24px 0;">
-                    <a href="%s" style="background:#2563eb;color:#fff;padding:12px 18px;border-radius:6px;text-decoration:none;display:inline-block;">Verify Your Role Assignment</a>
+                    <a href="%s" style="background:#2563eb;color:#fff;padding:12px 18px;border-radius:6px;text-decoration:none;display:inline-block;">%s</a>
                 </p>
                 <p style="font-size: 14px; color: #666;">Click the button above to open the verification page, then enter the 6-digit code shown in this email.<br />If the button doesn't work, copy and paste this link into your browser:<br /><a href="%s">%s</a></p>
-                """.formatted(profileCompletionUrl, profileCompletionUrl, profileCompletionUrl);
+                """.formatted(profileCompletionUrl, buttonLabel, profileCompletionUrl, profileCompletionUrl);
         }
 
         String credentialsSection = "";
@@ -146,26 +152,51 @@ public class EmailServiceImpl implements EmailService {
                     <p style="margin:0 0 8px;font-weight:600;color:#0369a1;">Your Temporary Login Credentials</p>
                     <p style="margin:4px 0;"><strong>Username:</strong> %s</p>
                     <p style="margin:4px 0;"><strong>Temporary Password:</strong> <code style="background:#e0f2fe;padding:2px 6px;border-radius:4px;">%s</code></p>
-                    <p style="margin:8px 0 0;font-size:13px;color:#0369a1;">Please sign in and change your password immediately.</p>
+                    <p style="margin:8px 0 0;font-size:13px;color:#0369a1;">Please sign in and change your password immediately after activation.</p>
                 </div>
                 """.formatted(tempUsername, tempPassword);
         }
 
-        String body = """
-            <h2>Verify Your New Role Assignment</h2>
-            <p>Hi %s,</p>
-            <p>You have been assigned the role <strong>%s</strong> at <strong>%s</strong>.</p>
-            <p>To activate your assignment, click the verification link below and enter this code:</p>
-                <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">%s</p>
-            <p>Assignment reference: <strong>%s</strong></p>
-            %s
-            %s
-            <p><strong>Your account will remain inactive until you verify this code.</strong></p>
-            <p>If you did not expect this assignment, please contact the hospital administrator immediately.</p>
-            <p style="color:#666">This code expires 48 hours after it was sent.</p>
-            """.formatted(safeUserName, safeRole, safeHospital, confirmationCode, assignmentCode, linkSection, credentialsSection);
+        String subject;
+        String body;
+        if (isPatient) {
+            subject = "Welcome to " + safeHospital + " — Activate Your Patient Account";
+            body = """
+                <h2>Welcome to %s</h2>
+                <p>Hi %s,</p>
+                <p>A patient account has been created for you at <strong>%s</strong>.</p>
+                <p>To activate your account, click the button below and enter this <strong>6-digit verification code</strong>:</p>
+                <p style="font-size: 28px; font-weight: bold; letter-spacing: 6px; text-align: center; \
+                background: #f8fafc; border: 2px dashed #2563eb; border-radius: 8px; padding: 16px; margin: 16px 0;">%s</p>
+                %s
+                %s
+                <p><strong>Your account will remain inactive until you enter this code.</strong></p>
+                <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 16px;margin:16px 0;">
+                    <p style="margin:0;font-size:13px;color:#991b1b;"><strong>Didn't request this account?</strong> \
+                If you did not register at this hospital, please ignore this email or contact the hospital administrator. \
+                No action is needed — the account will not be activated.</p>
+                </div>
+                <p style="color:#666;font-size:13px;">This verification code expires 48 hours after it was sent.</p>
+                """.formatted(safeHospital, safeUserName, safeHospital, confirmationCode,
+                              credentialsSection, linkSection);
+        } else {
+            subject = "Action Required: Confirm Your Hospital Role Assignment";
+            body = """
+                <h2>Verify Your New Role Assignment</h2>
+                <p>Hi %s,</p>
+                <p>You have been assigned the role <strong>%s</strong> at <strong>%s</strong>.</p>
+                <p>To activate your assignment, click the verification link below and enter this code:</p>
+                    <p style="font-size: 24px; font-weight: bold; letter-spacing: 4px;">%s</p>
+                <p>Assignment reference: <strong>%s</strong></p>
+                %s
+                %s
+                <p><strong>Your account will remain inactive until you verify this code.</strong></p>
+                <p>If you did not expect this assignment, please contact the hospital administrator immediately.</p>
+                <p style="color:#666">This code expires 48 hours after it was sent.</p>
+                """.formatted(safeUserName, safeRole, safeHospital, confirmationCode, assignmentCode, linkSection, credentialsSection);
+        }
 
-        sendHtml(List.of(to), List.of(), List.of(), "Action Required: Confirm Your Hospital Role Assignment", body);
+        sendHtml(List.of(to), List.of(), List.of(), subject, body);
         log.info("✅ Role assignment confirmation email sent to {}", to);
     }
 

@@ -306,6 +306,20 @@ public class UserServiceImpl implements UserService {
         final List<UserRoleHospitalAssignment> ensuredAssignments =
                 ensureRolesAndAssignments(user, roles, staffContextHospitalId);
 
+        // ---- 4a) Forward temp password to the PATIENT assignment ----
+        // The assignment notification email (AFTER_COMMIT) will expose these
+        // credentials once, then verifyAssignmentByCode() clears them.
+        if (newUserCreated && isPatient && request.getPassword() != null) {
+            ensuredAssignments.stream()
+                    .filter(a -> a.getRole() != null
+                            && ROLE_PATIENT.equalsIgnoreCase(a.getRole().getCode()))
+                    .findFirst()
+                    .ifPresent(patientAssignment -> {
+                        patientAssignment.setTempPlainPassword(request.getPassword());
+                        assignmentRepository.save(patientAssignment);
+                    });
+        }
+
         auditIfNewUser(newUserCreated, user, ensuredAssignments);
 
         // ---- 5) Upsert Staff when needed ----
@@ -477,6 +491,10 @@ public class UserServiceImpl implements UserService {
             rawPassword = UUID.randomUUID().toString();
             request.setForcePasswordChange(true);
         }
+        // Persist the raw password back onto the request so that callers
+        // (e.g. createUserWithRolesAndHospital) can forward it to the
+        // assignment's tempPlainPassword field for one-time email exposure.
+        request.setPassword(rawPassword);
         u.setPasswordHash(passwordEncoder.encode(rawPassword));
 
         u.setFirstName(request.getFirstName());
@@ -505,27 +523,10 @@ public class UserServiceImpl implements UserService {
         u.setPasswordRotationForcedAt(Boolean.TRUE.equals(request.getForcePasswordChange()) ? passwordSetAt : null);
         User saved = userRepository.save(u);
 
-        // Send verification email for patient accounts
-        if (isPatient && saved.getActivationToken() != null) {
-            final String activationLink = String.format(
-                    "%s/verify?email=%s&token=%s",
-                    frontendBaseUrl, saved.getEmail(), saved.getActivationToken());
-            final String patientName = ((saved.getFirstName() != null ? saved.getFirstName() : "")
-                    + " " + (saved.getLastName() != null ? saved.getLastName() : "")).trim();
-            final String hospitalName = request.getHospitalId() != null
-                    ? hospitalRepository.findById(request.getHospitalId())
-                          .map(Hospital::getName).orElse(null)
-                    : null;
-            try {
-                emailService.sendActivationEmail(saved.getEmail(), activationLink,
-                        patientName, saved.getUsername(), hospitalName);
-                log.info("📧 Verification email sent to patient '{}' at '{}'", saved.getUsername(), saved.getEmail());
-            } catch (Exception e) {
-                log.warn("⚠️ Failed to send verification email to '{}': {}. "
-                        + "Patient can request a new verification email later.",
-                        saved.getEmail(), e.getMessage());
-            }
-        }
+        // Patient verification email is now handled by the assignment notification
+        // flow (AssignmentCreatedEvent → sendRoleAssignmentConfirmationEmail) which
+        // includes the 6-digit confirmation code, temp credentials, and a link to
+        // the RoleWelcomeComponent verification page.
 
         return saved;
     }
