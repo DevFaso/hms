@@ -395,7 +395,12 @@
             <div class="field">
               <label for="hospitalId">Hospital</label>
               @if (hospitalLocked) {
-                <div class="locked-field">🏥 {{ lockedHospitalName }}</div>
+                <div class="locked-field">
+                  <span class="material-symbols-outlined locked-icon" aria-hidden="true"
+                    >local_hospital</span
+                  >
+                  {{ lockedHospitalName }}
+                </div>
               } @else {
                 <select id="hospitalId" [(ngModel)]="createForm.hospitalId" name="hospitalId">
                   <option value="">— None —</option>

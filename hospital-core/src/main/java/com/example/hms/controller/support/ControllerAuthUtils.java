@@ -1,7 +1,6 @@
 package com.example.hms.controller.support;
 
 import com.example.hms.exception.BusinessException;
-import com.example.hms.model.Hospital;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
@@ -14,7 +13,6 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -222,28 +220,35 @@ public class ControllerAuthUtils {
     public UUID extractHospitalIdFromJwt(Authentication auth) {
         if (auth instanceof JwtAuthenticationToken token) {
             Jwt jwt = token.getToken();
-            // Check both claim names: "primaryHospitalId" (set by JwtTokenProvider) and legacy "hospitalId"
             for (String claimKey : List.of("primaryHospitalId", "hospitalId")) {
-                String claim = jwt.getClaimAsString(claimKey);
-                if (claim != null && !claim.isBlank()) {
-                    try {
-                        return UUID.fromString(claim);
-                    } catch (IllegalArgumentException ignored) {
-                        // invalid UUID format — try next claim key
-                    }
-                }
-                Object raw = jwt.getClaims().get(claimKey);
-                if (raw instanceof UUID uuid) {
-                    return uuid;
-                }
-                if (raw instanceof String str && !str.isBlank()) {
-                    try {
-                        return UUID.fromString(str);
-                    } catch (IllegalArgumentException ignored) {
-                        // invalid UUID format — try next claim key
-                    }
+                UUID result = tryParseUuidClaim(jwt, claimKey);
+                if (result != null) {
+                    return result;
                 }
             }
+        }
+        return null;
+    }
+
+    /**
+     * Attempt to extract a UUID from a single JWT claim, trying string-claim,
+     * raw-UUID, and raw-String representations in turn.
+     */
+    private static UUID tryParseUuidClaim(Jwt jwt, String claimKey) {
+        String direct = jwt.getClaimAsString(claimKey);
+        if (direct != null && !direct.isBlank()) {
+            try {
+                return UUID.fromString(direct);
+            } catch (IllegalArgumentException ignored) { /* try raw */ }
+        }
+        Object raw = jwt.getClaims().get(claimKey);
+        if (raw instanceof UUID uuid) {
+            return uuid;
+        }
+        if (raw instanceof String str && !str.isBlank()) {
+            try {
+                return UUID.fromString(str);
+            } catch (IllegalArgumentException ignored) { /* not a valid UUID */ }
         }
         return null;
     }

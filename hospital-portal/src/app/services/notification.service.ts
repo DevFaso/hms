@@ -77,6 +77,7 @@ export class NotificationService {
     // bypass Angular's HttpClient interceptor — the Authorization header is
     // never attached. Pass the JWT as a query parameter so the backend's
     // JwtAuthenticationFilter can authenticate the handshake.
+    // Security: the backend restricts query-param token to /ws-chat/** paths only.
     const token = this.auth.getToken();
     const sockUrl = token ? `/api/ws-chat?token=${encodeURIComponent(token)}` : '/api/ws-chat';
 

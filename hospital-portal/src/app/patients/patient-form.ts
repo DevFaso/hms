@@ -8,7 +8,8 @@ import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
-import { switchMap } from 'rxjs/operators';
+import { switchMap, catchError } from 'rxjs/operators';
+import { EMPTY } from 'rxjs';
 
 @Component({
   selector: 'app-patient-form',
@@ -104,7 +105,9 @@ export class PatientFormComponent implements OnInit {
 
     // Step 1: Create a User account with ROLE_PATIENT via admin-register
     // Step 2: Use the returned userId to create the Patient entity
+    // If Step 2 fails, delete the orphaned user to avoid dangling accounts.
     const username = this.generateUsername(this.form.firstName, this.form.lastName);
+    let createdUserId: string | null = null;
     this.userService
       .adminRegister({
         username,
@@ -118,8 +121,17 @@ export class PatientFormComponent implements OnInit {
       })
       .pipe(
         switchMap((user) => {
+          createdUserId = user.id;
           this.form.userId = user.id;
-          return this.patientService.create(this.form);
+          return this.patientService.create(this.form).pipe(
+            catchError((patientErr) => {
+              // Compensate: remove the orphaned user account
+              this.userService.delete(createdUserId!).subscribe();
+              this.toast.error(patientErr?.error?.message ?? 'Failed to register patient');
+              this.saving = false;
+              return EMPTY;
+            }),
+          );
         }),
       )
       .subscribe({

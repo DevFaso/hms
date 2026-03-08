@@ -521,14 +521,13 @@ public class UserServiceImpl implements UserService {
         u.setPasswordChangedAt(passwordSetAt);
         u.setPasswordRotationWarningAt(null);
         u.setPasswordRotationForcedAt(Boolean.TRUE.equals(request.getForcePasswordChange()) ? passwordSetAt : null);
-        User saved = userRepository.save(u);
 
         // Patient verification email is now handled by the assignment notification
         // flow (AssignmentCreatedEvent → sendRoleAssignmentConfirmationEmail) which
         // includes the 6-digit confirmation code, temp credentials, and a link to
         // the RoleWelcomeComponent verification page.
 
-        return saved;
+        return userRepository.save(u);
     }
 
         private UUID resolveHospitalForRegistration(AdminSignupRequest request, Set<String> roleNames, boolean isPatient) {

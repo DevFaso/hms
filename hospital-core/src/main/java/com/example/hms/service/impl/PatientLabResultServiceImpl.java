@@ -55,14 +55,27 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
 
-        Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
-
         int effectiveLimit = limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
         Pageable pageable = PageRequest.of(0, effectiveLimit, Sort.by(Sort.Direction.DESC, "resultDate"));
 
-        List<LabResult> results = labResultRepository
-            .findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(patient.getId(), hospital.getId(), pageable);
+        List<LabResult> results;
+        if (hospitalId != null) {
+            Hospital hospital = hospitalRepository.findById(hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
+            results = labResultRepository
+                .findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(patient.getId(), hospital.getId(), pageable);
+        } else {
+            // Fallback: patient-only query (no hospital scope) — common for patient portal
+            results = labResultRepository.findByLabOrder_Patient_Id(patient.getId()).stream()
+                .sorted((a, b) -> {
+                    if (a.getResultDate() == null && b.getResultDate() == null) return 0;
+                    if (a.getResultDate() == null) return 1;
+                    if (b.getResultDate() == null) return -1;
+                    return b.getResultDate().compareTo(a.getResultDate());
+                })
+                .limit(effectiveLimit)
+                .toList();
+        }
 
         return results.stream()
             .map(this::toResponse)

@@ -91,28 +91,31 @@ public class PharmacyDirectoryController {
     private UUID extractHospitalId(Authentication auth) {
         if (auth instanceof JwtAuthenticationToken jat) {
             Jwt jwt = jat.getToken();
-            // Check both claim names: "primaryHospitalId" (set by JwtTokenProvider) and legacy "hospitalId"
-            for (String claimKey : java.util.List.of("primaryHospitalId", "hospitalId")) {
-                String direct = jwt.getClaimAsString(claimKey);
-                if (direct != null && !direct.isBlank()) {
-                    try {
-                        return UUID.fromString(direct);
-                    } catch (IllegalArgumentException ignored) {
-                        // try next claim key
-                    }
-                }
-                Object raw = jwt.getClaims().get(claimKey);
-                if (raw instanceof UUID uuid) {
-                    return uuid;
-                }
-                if (raw instanceof String s && !s.isBlank()) {
-                    try {
-                        return UUID.fromString(s);
-                    } catch (IllegalArgumentException ignored) {
-                        // try next claim key
-                    }
+            for (String claimKey : List.of("primaryHospitalId", "hospitalId")) {
+                UUID result = tryParseUuidClaim(jwt, claimKey);
+                if (result != null) {
+                    return result;
                 }
             }
+        }
+        return null;
+    }
+
+    private static UUID tryParseUuidClaim(Jwt jwt, String claimKey) {
+        String direct = jwt.getClaimAsString(claimKey);
+        if (direct != null && !direct.isBlank()) {
+            try {
+                return UUID.fromString(direct);
+            } catch (IllegalArgumentException ignored) { /* try raw */ }
+        }
+        Object raw = jwt.getClaims().get(claimKey);
+        if (raw instanceof UUID uuid) {
+            return uuid;
+        }
+        if (raw instanceof String str && !str.isBlank()) {
+            try {
+                return UUID.fromString(str);
+            } catch (IllegalArgumentException ignored) { /* not a valid UUID */ }
         }
         return null;
     }

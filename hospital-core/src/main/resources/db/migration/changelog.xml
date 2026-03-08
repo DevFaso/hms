@@ -138,7 +138,7 @@
          enforceRoleScopeConstraints() confirmation-code workflow. This
          broke JWT hospital claims and /api/me/hospital for all staff.
          ================================================================= -->
-    <changeSet id="V10-activate-admin-staff-assignments" author="hms-team" runOnChange="false">
+    <changeSet id="V10-activate-admin-staff-assignments" author="hms-team" runOnChange="true">
         <sqlFile path="V10__activate_admin_registered_staff_assignments.sql"
                  relativeToChangelogFile="true"
                  splitStatements="true"

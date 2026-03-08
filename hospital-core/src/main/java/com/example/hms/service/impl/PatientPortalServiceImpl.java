@@ -164,11 +164,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public HealthSummaryDTO getHealthSummary(Authentication auth, Locale locale) {
         Patient patient = findPatient(auth);
         UUID patientId = patient.getId();
+        UUID hospitalId = resolvePatientHospitalId(patient);
 
         return HealthSummaryDTO.builder()
                 .profile(toProfileDTO(patient))
-                .recentLabResults(safeLabResults(patientId))
-                .currentMedications(safeMedications(patientId))
+                .recentLabResults(safeLabResults(patientId, hospitalId))
+                .currentMedications(safeMedications(patientId, hospitalId))
                 .recentVitals(safeVitals(patientId))
                 .immunizations(safeImmunizations(patientId))
                 .allergies(splitToList(patient.getAllergies()))
@@ -181,8 +182,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getMyLabResults(Authentication auth, int limit) {
-        UUID patientId = resolvePatientId(auth);
-        return labResultService.getLabResultsForPatient(patientId, null, limit);
+        Patient patient = findPatient(auth);
+        UUID hospitalId = resolvePatientHospitalId(patient);
+        return labResultService.getLabResultsForPatient(patient.getId(), hospitalId, limit);
     }
 
     // ── Medications ──────────────────────────────────────────────────────
@@ -190,8 +192,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientMedicationResponseDTO> getMyMedications(Authentication auth, int limit) {
-        UUID patientId = resolvePatientId(auth);
-        return medicationService.getMedicationsForPatient(patientId, null, limit);
+        Patient patient = findPatient(auth);
+        UUID hospitalId = resolvePatientHospitalId(patient);
+        return medicationService.getMedicationsForPatient(patient.getId(), hospitalId, limit);
     }
 
     // ── Prescriptions ────────────────────────────────────────────────────
@@ -529,6 +532,23 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                         "No patient record linked to your account. Contact your care team."));
     }
 
+    /**
+     * Resolve the patient's primary hospital ID.
+     * Tries {@code patient.getHospitalId()} first, then falls back to the first
+     * active hospital registration. Returns {@code null} if no hospital context is
+     * available (sub-services must tolerate null in that case).
+     */
+    private UUID resolvePatientHospitalId(Patient patient) {
+        if (patient.getHospitalId() != null) {
+            return patient.getHospitalId();
+        }
+        return registrationRepository.findByPatientId(patient.getId()).stream()
+                .filter(reg -> reg.isActive() && reg.getHospital() != null)
+                .map(reg -> reg.getHospital().getId())
+                .findFirst()
+                .orElse(null);
+    }
+
     private PatientProfileDTO toProfileDTO(Patient p) {
         return PatientProfileDTO.builder()
                 .id(p.getId())
@@ -558,18 +578,18 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     /** Safe delegates — return empty list if service call fails (partial availability). */
-    private List<PatientLabResultResponseDTO> safeLabResults(UUID patientId) {
+    private List<PatientLabResultResponseDTO> safeLabResults(UUID patientId, UUID hospitalId) {
         try {
-            return labResultService.getLabResultsForPatient(patientId, null, 5);
+            return labResultService.getLabResultsForPatient(patientId, hospitalId, 5);
         } catch (Exception e) {
             log.warn("Failed to fetch lab results for health summary: {}", e.getMessage());
             return Collections.emptyList();
         }
     }
 
-    private List<PatientMedicationResponseDTO> safeMedications(UUID patientId) {
+    private List<PatientMedicationResponseDTO> safeMedications(UUID patientId, UUID hospitalId) {
         try {
-            return medicationService.getMedicationsForPatient(patientId, null, 10);
+            return medicationService.getMedicationsForPatient(patientId, hospitalId, 10);
         } catch (Exception e) {
             log.warn("Failed to fetch medications for health summary: {}", e.getMessage());
             return Collections.emptyList();

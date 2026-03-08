@@ -23,10 +23,16 @@ public class EmailServiceImpl implements EmailService {
 
     private static final DateTimeFormatter HUMAN_DATE = DateTimeFormatter.ofPattern("MMMM d, yyyy");
     private static final String GENERIC_GREETING = "there";
+    private static final String HI_PARAGRAPH = "<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">Hi ";
 
     /** Returns the app login URL, driven by the configured frontend base URL. */
     private String loginUrl() {
         return frontendBaseUrl + "/login";
+    }
+
+    private static String resolveRoleLabel(String roleDisplayName, boolean isPatient) {
+        if (isPatient) return "Patient";
+        return (roleDisplayName != null && !roleDisplayName.isBlank()) ? roleDisplayName : "the assigned role";
     }
 
     @Override
@@ -131,8 +137,7 @@ public class EmailServiceImpl implements EmailService {
 
         boolean isPatient = roleDisplayName != null
                 && roleDisplayName.toUpperCase(java.util.Locale.ROOT).contains("PATIENT");
-        String safeRole = isPatient ? "Patient" :
-                (roleDisplayName != null && !roleDisplayName.isBlank()) ? roleDisplayName : "the assigned role";
+        String safeRole = resolveRoleLabel(roleDisplayName, isPatient);
 
         String buttonLabel = isPatient ? "Activate Your Account" : "Verify Your Role Assignment";
         String linkSection = "";
@@ -268,7 +273,7 @@ public class EmailServiceImpl implements EmailService {
             + "</div>";
 
         String bodyContent = "<div style=\"padding:36px 40px;\">"
-            + "<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">Hi " + escapedName + ",</p>"
+            + HI_PARAGRAPH + escapedName + ",</p>"
             + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
             + "Your account password was successfully reset on <strong>" + changedAt + "</strong>."
             + " You can now sign in with your new password."
@@ -320,7 +325,7 @@ public class EmailServiceImpl implements EmailService {
             + "</div>";
 
         String bodyContent = "<div style=\"padding:36px 40px;\">"
-            + "<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">Hi " + escapedName + ",</p>"
+            + HI_PARAGRAPH + escapedName + ",</p>"
             + "<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">"
             + "Your account was <strong>restored</strong> on <strong>" + restoredAt + "</strong> "
             + "by a system administrator. You can now sign in as normal."
@@ -459,7 +464,7 @@ public class EmailServiceImpl implements EmailService {
         StringBuilder body = new StringBuilder();
         body.append("<div style=\"padding:36px 40px;\">");
         if (safeName != null) {
-            body.append("<p style=\"font-size:15px;color:#1e293b;margin:0 0 16px;\">Hi ").append(safeName).append(",</p>");
+            body.append(HI_PARAGRAPH).append(safeName).append(",</p>");
         }
         body.append("<p style=\"font-size:15px;color:#334155;line-height:1.6;margin:0 0 24px;\">")
             .append("Your patient account has been created. Please activate it by clicking the button below.")

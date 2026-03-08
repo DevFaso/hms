@@ -155,13 +155,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith(TOKEN_PREFIX)) {
             return bearerToken.substring(TOKEN_PREFIX.length());
         }
-        // 2. Query-parameter fallback for SockJS/WebSocket handshakes.
+        // 2. Query-parameter fallback — restricted to WebSocket handshake paths only.
         //    SockJS initiates plain browser GETs (/ws-chat/info, /ws-chat/…/websocket)
         //    that bypass Angular's HttpClient interceptor, so the Authorization header
         //    is never attached. The frontend passes the JWT as ?token= instead.
-        String queryToken = request.getParameter("token");
-        if (StringUtils.hasText(queryToken)) {
-            return queryToken;
+        //    We only honour this on /ws-chat/** to avoid credential leakage via access
+        //    logs, browser history, proxies, and Referer headers on other endpoints.
+        String uri = request.getRequestURI();
+        if (uri != null && uri.startsWith("/api/ws-chat")) {
+            String queryToken = request.getParameter("token");
+            if (StringUtils.hasText(queryToken)) {
+                return queryToken;
+            }
         }
         return null;
     }

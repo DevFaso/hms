@@ -694,34 +694,16 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public UserRoleAssignmentPublicViewDTO verifyAssignmentByCode(String assignmentCode, String confirmationCode) {
-        Locale locale = Locale.getDefault();
-        String sanitizedCode = assignmentCode != null ? assignmentCode.trim() : null;
-        String sanitizedConfirmation = confirmationCode != null ? confirmationCode.trim() : null;
-
-        if (sanitizedCode == null || sanitizedCode.isBlank()) {
-            throw new ResourceNotFoundException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_NOT_FOUND_BY_CODE,
-                    new Object[]{assignmentCode},
-                    DEFAULT_ASSIGNMENT_NOT_FOUND_BY_CODE_PREFIX + assignmentCode,
-                    locale));
-        }
-        if (sanitizedConfirmation == null || sanitizedConfirmation.isBlank()) {
-            throw new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_INVALID_CODE,
-                    null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID,
-                    locale));
-        }
+        String sanitizedCode = sanitizeRequiredInput(assignmentCode, MSG_ASSIGNMENT_NOT_FOUND_BY_CODE,
+                DEFAULT_ASSIGNMENT_NOT_FOUND_BY_CODE_PREFIX + assignmentCode);
+        String sanitizedConfirmation = sanitizeConfirmationInput(confirmationCode);
 
         UserRoleHospitalAssignment assignment = assignmentRepository.findByAssignmentCode(sanitizedCode)
             .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_NOT_FOUND_BY_CODE,
+                messageSource.getMessage(MSG_ASSIGNMENT_NOT_FOUND_BY_CODE,
                     new Object[]{sanitizedCode},
                     DEFAULT_ASSIGNMENT_NOT_FOUND_BY_CODE_PREFIX + sanitizedCode,
-                    locale)));
+                    Locale.getDefault())));
 
         // Idempotent: already verified → build DTO from existing state (no save)
         if (assignment.getConfirmationVerifiedAt() != null) {
@@ -729,35 +711,62 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             return buildPublicViewDTO(assignment, null, null);
         }
 
-        // ── Expiry check: confirmation code expires 48 hours after it was sent ──
-        if (assignment.getConfirmationSentAt() != null
-                && assignment.getConfirmationSentAt().plusHours(CONFIRMATION_CODE_EXPIRY_HOURS).isBefore(LocalDateTime.now())) {
-            throw new BusinessException("Verification code has expired. Please contact the administrator to resend a new code.");
-        }
-
-        String expectedCode = assignment.getConfirmationCode();
-        if (expectedCode == null || !expectedCode.equalsIgnoreCase(sanitizedConfirmation)) {
-            throw new BusinessException(
-                messageSource.getMessage(
-                    MSG_ASSIGNMENT_INVALID_CODE,
-                    null,
-                    DEFAULT_CONFIRMATION_CODE_INVALID,
-                    locale));
-        }
+        verifyCodeNotExpiredAndMatches(assignment, sanitizedConfirmation);
 
         // Capture one-time temp credentials BEFORE clearing them
         String tempUsername = assignment.getUser() != null ? assignment.getUser().getUsername() : null;
         String tempPassword = assignment.getTempPlainPassword();
 
-        // ── Mark the assignment as verified AND activate it ──
+        activateVerifiedAssignment(assignment, sanitizedCode);
+
+        // Include credentials if this was a new-user assignment (temp creds were set)
+        String exposedUsername = tempPassword != null ? tempUsername : null;
+        return buildPublicViewDTO(assignment, exposedUsername, tempPassword);
+    }
+
+    private String sanitizeRequiredInput(String value, String messageKey, String defaultMsg) {
+        String sanitized = value != null ? value.trim() : null;
+        if (sanitized == null || sanitized.isBlank()) {
+            throw new ResourceNotFoundException(
+                messageSource.getMessage(messageKey, new Object[]{value}, defaultMsg, Locale.getDefault()));
+        }
+        return sanitized;
+    }
+
+    private String sanitizeConfirmationInput(String confirmationCode) {
+        String sanitized = confirmationCode != null ? confirmationCode.trim() : null;
+        if (sanitized == null || sanitized.isBlank()) {
+            throw new BusinessException(
+                messageSource.getMessage(MSG_ASSIGNMENT_INVALID_CODE, null,
+                    DEFAULT_CONFIRMATION_CODE_INVALID, Locale.getDefault()));
+        }
+        return sanitized;
+    }
+
+    private void verifyCodeNotExpiredAndMatches(UserRoleHospitalAssignment assignment, String sanitizedConfirmation) {
+        if (assignment.getConfirmationSentAt() != null
+                && assignment.getConfirmationSentAt().plusHours(CONFIRMATION_CODE_EXPIRY_HOURS)
+                    .isBefore(LocalDateTime.now())) {
+            throw new BusinessException(
+                "Verification code has expired. Please contact the administrator to resend a new code.");
+        }
+        String expectedCode = assignment.getConfirmationCode();
+        if (expectedCode == null || !expectedCode.equalsIgnoreCase(sanitizedConfirmation)) {
+            throw new BusinessException(
+                messageSource.getMessage(MSG_ASSIGNMENT_INVALID_CODE, null,
+                    DEFAULT_CONFIRMATION_CODE_INVALID, Locale.getDefault()));
+        }
+    }
+
+    private void activateVerifiedAssignment(UserRoleHospitalAssignment assignment, String sanitizedCode) {
+        // Mark the assignment as verified AND activate it
         assignment.setConfirmationVerifiedAt(LocalDateTime.now());
         assignment.setActive(true);
-        // Clear plaintext temp password from DB — one-time exposure only
         assignment.setTempPlainPassword(null);
         assignmentRepository.save(assignment);
         log.info("✅ Assignment '{}' self-verified and activated by assignee.", sanitizedCode);
 
-        // ── Activate the user account if it was pending assignment verification ──
+        // Activate the user account if it was pending assignment verification
         User user = assignment.getUser();
         if (user != null && !Boolean.TRUE.equals(user.isActive())) {
             user.setActive(true);
@@ -765,7 +774,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             log.info("✅ User '{}' activated after first assignment verification.", user.getUsername());
         }
 
-        // ── Activate the Patient entity if this was a PATIENT role assignment ──
+        // Activate the Patient entity if this was a PATIENT role assignment
         if (user != null && assignment.getRole() != null
                 && ROLE_PATIENT.equalsIgnoreCase(assignment.getRole().getCode())) {
             patientRepository.findByUserId(user.getId()).ifPresent(patient -> {
@@ -776,10 +785,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 }
             });
         }
-
-        // Include credentials if this was a new-user assignment (temp creds were set)
-        String exposedUsername = tempPassword != null ? tempUsername : null;
-        return buildPublicViewDTO(assignment, exposedUsername, tempPassword);
     }
 
     /**

@@ -194,29 +194,33 @@ public class MeController {
     private Optional<UUID> extractHospitalIdFromJwt(Authentication auth) {
         if (auth instanceof JwtAuthenticationToken jat) {
             Jwt jwt = jat.getToken();
-            // Check both claim names: "primaryHospitalId" (set by JwtTokenProvider) and legacy "hospitalId"
             for (String claimKey : HOSPITAL_ID_CLAIMS) {
-                String str = jwt.getClaimAsString(claimKey);
-                if (str != null && !str.isBlank()) {
-                    try {
-                        return Optional.of(UUID.fromString(str));
-                    } catch (RuntimeException ignored) {
-                        // try next claim key
-                    }
-                }
-                Object raw = jwt.getClaims().get(claimKey);
-                if (raw instanceof UUID u)
-                    return Optional.of(u);
-                if (raw instanceof String s && !s.isBlank()) {
-                    try {
-                        return Optional.of(UUID.fromString(s));
-                    } catch (RuntimeException ignored) {
-                        // try next claim key
-                    }
+                UUID result = tryParseUuidClaim(jwt, claimKey);
+                if (result != null) {
+                    return Optional.of(result);
                 }
             }
         }
         return Optional.empty();
+    }
+
+    private static UUID tryParseUuidClaim(Jwt jwt, String claimKey) {
+        String direct = jwt.getClaimAsString(claimKey);
+        if (direct != null && !direct.isBlank()) {
+            try {
+                return UUID.fromString(direct);
+            } catch (IllegalArgumentException ignored) { /* try raw */ }
+        }
+        Object raw = jwt.getClaims().get(claimKey);
+        if (raw instanceof UUID uuid) {
+            return uuid;
+        }
+        if (raw instanceof String str && !str.isBlank()) {
+            try {
+                return UUID.fromString(str);
+            } catch (IllegalArgumentException ignored) { /* not a valid UUID */ }
+        }
+        return null;
     }
 
     private Optional<UUID> activeAssignmentHospital(Authentication auth) {

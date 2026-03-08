@@ -350,19 +350,18 @@ export class UserListComponent implements OnInit, OnDestroy {
     // doesn't attempt to deserialize "" as a UUID or enum value (→ 400 parse error).
     // For edits, also strip blank password and phoneNumber so the backend preserves
     // existing values (merge-preserve semantics).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const payload: Record<string, any> = { ...this.createForm };
-    if (!payload['hospitalId']) delete payload['hospitalId'];
-    if (!payload['jobTitle']) delete payload['jobTitle'];
-    if (!payload['employmentType']) delete payload['employmentType'];
-    if (!payload['specialization']) delete payload['specialization'];
-    if (!payload['licenseNumber']?.trim()) delete payload['licenseNumber'];
-    if (!payload['departmentId']) delete payload['departmentId'];
-    if (!payload['password']?.trim()) delete payload['password'];
-    if (!payload['phoneNumber']?.trim()) delete payload['phoneNumber'];
+    const payload: Partial<AdminRegisterRequest> = { ...this.createForm };
+    if (!payload.hospitalId) delete payload.hospitalId;
+    if (!payload.jobTitle) delete payload.jobTitle;
+    if (!payload.employmentType) delete payload.employmentType;
+    if (!payload.specialization) delete payload.specialization;
+    if (!payload.licenseNumber?.trim()) delete payload.licenseNumber;
+    if (!payload.departmentId) delete payload.departmentId;
+    if (!payload.password?.trim()) delete payload.password;
+    if (!payload.phoneNumber?.trim()) delete payload.phoneNumber;
 
     const op = existing
-      ? this.userService.update(existing.id, payload as Partial<AdminRegisterRequest>)
+      ? this.userService.update(existing.id, payload)
       : this.userService.adminRegister(payload as AdminRegisterRequest);
 
     op.subscribe({

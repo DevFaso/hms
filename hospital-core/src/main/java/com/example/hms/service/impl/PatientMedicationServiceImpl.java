@@ -13,6 +13,7 @@ import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.service.PatientMedicationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -46,10 +47,16 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
 
-        Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
+        List<Prescription> prescriptions;
+        if (hospitalId != null) {
+            Hospital hospital = hospitalRepository.findById(hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found with ID: " + hospitalId));
+            prescriptions = prescriptionRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospital.getId());
+        } else {
+            // Fallback: patient-only query (no hospital scope) — common for patient portal
+            prescriptions = prescriptionRepository.findByPatient_Id(patient.getId(), Pageable.unpaged()).getContent();
+        }
 
-        List<Prescription> prescriptions = prescriptionRepository.findByPatient_IdAndHospital_Id(patient.getId(), hospital.getId());
         int limitToApply = limit > 0 ? limit : DEFAULT_LIMIT;
 
         Comparator<Prescription> byCreatedAt = Comparator.comparing(

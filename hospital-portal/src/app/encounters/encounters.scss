@@ -503,6 +503,8 @@
     resize: vertical;
     font-family: inherit;
   }
+  // Scoped override for <input class="locked-field"> inside .field
+  // (differs from the shared _page-common .locked-field which targets <div>)
   .locked-field {
     display: flex;
     align-items: center;

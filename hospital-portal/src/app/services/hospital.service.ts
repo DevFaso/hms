@@ -100,8 +100,6 @@ export class HospitalService {
    *   HospitalResponse can use it for id + name display.
    */
   getMyHospitalAsResponse(): Observable<HospitalResponse> {
-    return this.getMyHospital().pipe(
-      map((h) => ({ ...({} as HospitalResponse), id: h.id, name: h.name })),
-    );
+    return this.getMyHospital().pipe(map((h) => ({ id: h.id, name: h.name }) as HospitalResponse));
   }
 }

@@ -109,12 +109,10 @@ public class UserRoleHospitalAssignment extends BaseEntity {
             : role.getName();
         String roleKey = raw == null ? "" : raw.trim().toUpperCase();
 
-        if (Boolean.TRUE.equals(active)) {
-            // SUPER_ADMIN must be global (no hospital)
-            if (("ROLE_SUPER_ADMIN".equals(roleKey) || "SYSTEM_ADMIN".equals(roleKey))
-                    && hospital != null) {
-                throw new IllegalStateException("Super Admins must not be assigned to a hospital (global only).");
-            }
+        // SUPER_ADMIN / SYSTEM_ADMIN must be global (no hospital)
+        boolean isGlobalOnlyRole = "ROLE_SUPER_ADMIN".equals(roleKey) || "SYSTEM_ADMIN".equals(roleKey);
+        if (Boolean.TRUE.equals(active) && isGlobalOnlyRole && hospital != null) {
+            throw new IllegalStateException("Super Admins must not be assigned to a hospital (global only).");
         }
     }
 }

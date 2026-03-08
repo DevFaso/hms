@@ -87,6 +87,12 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final StaffAvailabilityService staffAvailabilityService;
     private final DepartmentRepository departmentRepository;
 
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
+    private String frontendBaseUrl;
+
+    private static final String RESCHEDULE_PATH = "/appointments/reschedule/";
+    private static final String CANCEL_PATH = "/appointments/cancel/";
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -272,9 +278,9 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         Appointment saved = appointmentRepository.save(appointment);
 
-        // Build reschedule/cancel links (example, adjust as needed)
-        String rescheduleLink = "https://your-app.com/appointments/reschedule/" + saved.getId();
-        String cancelLink = "https://your-app.com/appointments/cancel/" + saved.getId();
+        // Build reschedule/cancel links
+        String rescheduleLink = frontendBaseUrl + RESCHEDULE_PATH + saved.getId();
+        String cancelLink = frontendBaseUrl + CANCEL_PATH + saved.getId();
         // Send confirmation email to patient
         emailService.sendAppointmentConfirmationEmail(
             patient.getEmail(),
@@ -518,8 +524,8 @@ public class AppointmentServiceImpl implements AppointmentService {
                     saved.getAppointmentDate().toString(),
                     saved.getStartTime().toString() + " - " + saved.getEndTime().toString(),
                     h.getEmail(), h.getPhoneNumber(),
-                    "https://your-app.com/appointments/reschedule/" + saved.getId(),
-                    "https://your-app.com/appointments/cancel/" + saved.getId());
+                    frontendBaseUrl + RESCHEDULE_PATH + saved.getId(),
+                    frontendBaseUrl + CANCEL_PATH + saved.getId());
             } catch (Exception e) {
                 log.warn("Failed to send reschedule email for appointment {}: {}", saved.getId(), e.getMessage());
             }
@@ -567,8 +573,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         String appointmentTime = appointment.getStartTime().toString() + " - " + appointment.getEndTime().toString();
         String hospitalEmail = hospital.getEmail();
         String hospitalPhone = hospital.getPhoneNumber();
-        String rescheduleLink = "https://your-app.com/appointments/reschedule/" + appointment.getId();
-        String cancelLink = "https://your-app.com/appointments/cancel/" + appointment.getId();
+        String rescheduleLink = frontendBaseUrl + RESCHEDULE_PATH + appointment.getId();
+        String cancelLink = frontendBaseUrl + CANCEL_PATH + appointment.getId();
 
         switch (newStatus) {
             case CONFIRMED -> emailService.sendAppointmentConfirmationEmail(

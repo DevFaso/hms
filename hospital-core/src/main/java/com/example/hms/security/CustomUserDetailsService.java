@@ -1,6 +1,7 @@
 package com.example.hms.security;
 
 import com.example.hms.model.User;
+import com.example.hms.model.Role;
 import com.example.hms.model.UserRole;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -46,7 +47,7 @@ public class CustomUserDetailsService implements HospitalUserDetailsService {
         Set<String> globalRoles = user.getUserRoles().stream()
             .map(UserRole::getRole)
             .filter(role -> role != null && role.getCode() != null)
-            .map(role -> role.getCode())
+            .map(Role::getCode)
             .collect(Collectors.toSet());
 
         // Merge both sources — hospital-scoped assignments take priority but global roles
