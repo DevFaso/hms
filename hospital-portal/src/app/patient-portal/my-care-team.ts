@@ -1,9 +1,6 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import {
-  PatientPortalService,
-  CareTeamMember,
-} from '../services/patient-portal.service';
+import { PatientPortalService, CareTeamMember } from '../services/patient-portal.service';
 
 @Component({
   selector: 'app-my-care-team',

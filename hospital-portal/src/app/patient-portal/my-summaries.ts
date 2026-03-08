@@ -38,7 +38,8 @@ import { PatientPortalService, AfterVisitSummary } from '../services/patient-por
                 role="button"
                 tabindex="0"
                 (click)="toggle(s.id)"
-                (keydown.enter)="toggle(s.id)">
+                (keydown.enter)="toggle(s.id)"
+              >
                 <div class="avs-header-left">
                   <div class="avs-date-badge">
                     <span class="avs-month">{{ s.encounterDate | date: 'MMM' }}</span>
