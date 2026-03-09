@@ -10,6 +10,8 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.UserMapper;
 import com.example.hms.utility.UserDisplayUtil;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
@@ -26,6 +28,8 @@ import com.example.hms.payload.dto.UserResponseDTO;
 import com.example.hms.payload.dto.UserRoleHospitalAssignmentRequestDTO;
 import com.example.hms.payload.dto.UserSummaryDTO;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
@@ -87,6 +91,8 @@ public class UserServiceImpl implements UserService {
     private final AuditEventLogService auditEventLogService;
     private final StaffRepository staffRepository;
     private final JwtTokenProvider jwtTokenProvider;
+    private final PatientRepository patientRepository;
+    private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
 
     @Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -248,17 +254,7 @@ public class UserServiceImpl implements UserService {
         final String phone = request.getPhoneNumber();
         final String username = request.getUsername();
 
-        // ---- 0a) Strict duplicate checks — fail fast with field-specific 409 ----
-        if (username != null && Boolean.TRUE.equals(userRepository.existsByUsername(username))) {
-            throw new ConflictException("username:Username '" + username + "' is already taken.");
-        }
-        if (email != null && Boolean.TRUE.equals(userRepository.existsByEmail(email))) {
-            throw new ConflictException("email:Email '" + email + "' is already registered.");
-        }
-        if (phone != null && !phone.isBlank() && Boolean.TRUE.equals(userRepository.existsByPhoneNumber(phone))) {
-            throw new ConflictException("phone:Phone number '" + phone + "' is already registered.");
-        }
-
+        // Determine roles early so patient-specific logic can relax duplicate checks.
         final Set<String> roleNames = Optional.ofNullable(request.getRoleNames())
                 .filter(s -> !s.isEmpty())
                 .orElseThrow(() -> new IllegalArgumentException("At least one role must be provided."));
@@ -266,6 +262,24 @@ public class UserServiceImpl implements UserService {
         final boolean isPatient = roleNames.stream()
                 .map(r -> r == null ? "" : r.trim().toUpperCase(Locale.ROOT))
                 .anyMatch(r -> r.equals("PATIENT") || r.equals(ROLE_PATIENT));
+
+        // ---- 0a) Duplicate checks ----
+        if (isPatient) {
+            // Epic-style: patients can span multiple hospitals.
+            // Only reject if the same patient is already at the *target* hospital.
+            checkPatientAlreadyAtHospital(username, email, phone, request);
+        } else {
+            // Non-patient roles: strict global uniqueness.
+            if (username != null && Boolean.TRUE.equals(userRepository.existsByUsername(username))) {
+                throw new ConflictException("username:Username '" + username + "' is already taken.");
+            }
+            if (email != null && Boolean.TRUE.equals(userRepository.existsByEmail(email))) {
+                throw new ConflictException("email:Email '" + email + "' is already registered.");
+            }
+            if (phone != null && !phone.isBlank() && Boolean.TRUE.equals(userRepository.existsByPhoneNumber(phone))) {
+                throw new ConflictException("phone:Phone number '" + phone + "' is already registered.");
+            }
+        }
 
         // ---- 1) Resolve hospital for this registration ----
         UUID staffContextHospitalId = resolveHospitalForRegistration(request, roleNames, isPatient);
@@ -535,6 +549,27 @@ public class UserServiceImpl implements UserService {
             return resolveHospitalForPatient(request);
         }
         return resolveHospitalForStaff(request, roleNames);
+    }
+
+    /**
+     * For patient registrations, allow reuse of existing users across hospitals.
+     * Only reject if the patient already has an active assignment at the target hospital.
+     */
+    private void checkPatientAlreadyAtHospital(String username, String email, String phone,
+                                                AdminSignupRequest request) {
+        Optional<User> existing = userRepository
+                .findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(username, email, phone);
+        if (existing.isEmpty()) {
+            return;
+        }
+        UUID targetHospitalId = resolveHospitalForPatient(request);
+        if (targetHospitalId == null) {
+            return;
+        }
+        Role patientRole = getRoleByCode(ROLE_PATIENT);
+        if (assignmentService.isRoleAlreadyAssigned(existing.get().getId(), targetHospitalId, patientRole.getId())) {
+            throw new ConflictException("patient:Patient is already registered at this hospital.");
+        }
     }
 
     private UUID resolveHospitalForPatient(AdminSignupRequest request) {

@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.UserMapper;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.Role;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
@@ -13,6 +14,8 @@ import com.example.hms.payload.dto.AdminSignupRequest;
 import com.example.hms.payload.dto.UpdateUserRequestDTO;
 import com.example.hms.payload.dto.UserResponseDTO;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
@@ -63,6 +66,8 @@ class UserServiceImplTest {
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private StaffRepository staffRepository;
     @Mock private JwtTokenProvider jwtTokenProvider;
+    @Mock private PatientRepository patientRepository;
+    @Mock private PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
 
     @InjectMocks
     private UserServiceImpl userService;
@@ -343,6 +348,95 @@ class UserServiceImplTest {
             assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
                 .isNotInstanceOf(ConflictException.class);
             verify(userRepository, never()).existsByPhoneNumber(any());
+        }
+
+        @Test
+        @DisplayName("patient with existing email at DIFFERENT hospital skips 409 (multi-hospital)")
+        void patientAtNewHospitalSkips409() {
+            UUID hospitalId = UUID.fromString("00000000-0000-0000-0000-000000000001");
+            Hospital hospital = new Hospital();
+            hospital.setId(hospitalId);
+            hospital.setName("Hospital B");
+
+            // Existing user found by email — but NOT yet assigned as PATIENT at target hospital
+            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
+                    "patient.doe", "existing@test.com", "+1111111111"))
+                .thenReturn(Optional.of(user));
+
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(roleRepository.findByCode("ROLE_PATIENT")).thenReturn(Optional.of(patientRole));
+            when(assignmentService.isRoleAlreadyAssigned(user.getId(), hospitalId, patientRole.getId()))
+                .thenReturn(false);
+
+            AdminSignupRequest req = new AdminSignupRequest();
+            req.setUsername("patient.doe");
+            req.setEmail("existing@test.com");
+            req.setPhoneNumber("+1111111111");
+            req.setFirstName("Jane");
+            req.setLastName("Doe");
+            req.setPassword("Temp@1234");
+            req.setRoleNames(Set.of("ROLE_PATIENT"));
+            req.setHospitalId(hospitalId);
+
+            // Should NOT throw ConflictException — patient can span hospitals.
+            // Will throw some downstream exception (role resolution, etc.) but not 409.
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isNotInstanceOf(ConflictException.class);
+        }
+
+        @Test
+        @DisplayName("patient already assigned at SAME hospital throws specific conflict")
+        void patientAtSameHospitalThrowsConflict() {
+            UUID hospitalId = UUID.fromString("00000000-0000-0000-0000-000000000002");
+            Hospital hospital = new Hospital();
+            hospital.setId(hospitalId);
+            hospital.setName("Hospital A");
+
+            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
+                    "patient.doe", "existing@test.com", "+1111111111"))
+                .thenReturn(Optional.of(user));
+
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(roleRepository.findByCode("ROLE_PATIENT")).thenReturn(Optional.of(patientRole));
+            when(assignmentService.isRoleAlreadyAssigned(user.getId(), hospitalId, patientRole.getId()))
+                .thenReturn(true);
+
+            AdminSignupRequest req = new AdminSignupRequest();
+            req.setUsername("patient.doe");
+            req.setEmail("existing@test.com");
+            req.setPhoneNumber("+1111111111");
+            req.setFirstName("Jane");
+            req.setLastName("Doe");
+            req.setPassword("Temp@1234");
+            req.setRoleNames(Set.of("ROLE_PATIENT"));
+            req.setHospitalId(hospitalId);
+
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("patient:Patient is already registered at this hospital.");
+        }
+
+        @Test
+        @DisplayName("brand-new patient (no existing user) passes duplicate check")
+        void brandNewPatientPassesDuplicateCheck() {
+            when(userRepository.findFirstByUsernameIgnoreCaseOrEmailIgnoreCaseOrPhoneNumber(
+                    "new.patient", "new@test.com", "+2222222222"))
+                .thenReturn(Optional.empty());
+
+            AdminSignupRequest req = new AdminSignupRequest();
+            req.setUsername("new.patient");
+            req.setEmail("new@test.com");
+            req.setPhoneNumber("+2222222222");
+            req.setFirstName("New");
+            req.setLastName("Patient");
+            req.setPassword("Temp@1234");
+            req.setRoleNames(Set.of("ROLE_PATIENT"));
+            req.setHospitalId(UUID.fromString("00000000-0000-0000-0000-000000000003"));
+
+            // Should NOT throw ConflictException — brand new patient
+            // Will fail downstream (hospital lookup, etc.) but not with 409
+            assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
+                .isNotInstanceOf(ConflictException.class);
         }
     }
 
