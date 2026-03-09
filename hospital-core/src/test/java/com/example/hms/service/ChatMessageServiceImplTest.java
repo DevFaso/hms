@@ -34,6 +34,7 @@ class ChatMessageServiceImplTest {
     @Mock private UserRoleHospitalAssignmentRepository userRoleHospitalAssignmentRepository;
     @Mock private ChatMessageMapper chatMessageMapper;
     @Mock private MessageSource messageSource;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks
     private ChatMessageServiceImpl chatMessageService;

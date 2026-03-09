@@ -1,8 +1,10 @@
 package com.example.hms.service;
 
 import com.example.hms.model.Announcement;
+import com.example.hms.model.User;
 import com.example.hms.payload.dto.AnnouncementResponseDTO;
 import com.example.hms.repository.AnnouncementRepository;
+import com.example.hms.repository.UserRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -32,6 +34,12 @@ class AnnouncementServiceImplTest {
 
     @Mock
     private AnnouncementRepository announcementRepository;
+
+    @Mock
+    private NotificationService notificationService;
+
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private AnnouncementServiceImpl service;
@@ -146,6 +154,7 @@ class AnnouncementServiceImplTest {
                 a.setId(savedId);
                 return a;
             });
+            when(userRepository.findByIsDeletedFalse()).thenReturn(List.of());
 
             AnnouncementResponseDTO dto = service.createAnnouncement("New policy");
 

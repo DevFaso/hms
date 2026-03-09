@@ -25,6 +25,7 @@ import com.example.hms.payload.dto.portal.PatientProfileDTO;
 import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
+import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
 import com.example.hms.service.PatientPortalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -183,6 +184,19 @@ public class PatientPortalController {
         Locale locale = LocaleContextHolder.getLocale();
         Page<BillingInvoiceResponseDTO> invoices = portalService.getMyInvoices(auth, pageable, locale);
         return ResponseEntity.ok(ApiResponseWrapper.success(invoices));
+    }
+
+    @Operation(summary = "Pay an invoice",
+            description = "Make a payment towards an outstanding invoice. The invoice must be in SENT or PARTIALLY_PAID status.")
+    @PostMapping("/billing/invoices/{invoiceId}/pay")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<BillingInvoiceResponseDTO>> payMyInvoice(
+            Authentication auth,
+            @PathVariable UUID invoiceId,
+            @Valid @RequestBody PatientPaymentRequestDTO dto) {
+        Locale locale = LocaleContextHolder.getLocale();
+        BillingInvoiceResponseDTO result = portalService.recordMyPayment(auth, invoiceId, dto.getAmount(), locale);
+        return ResponseEntity.ok(ApiResponseWrapper.success(result));
     }
 
     // ── Consents ─────────────────────────────────────────────────────────

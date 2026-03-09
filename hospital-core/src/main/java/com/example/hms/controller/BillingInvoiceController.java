@@ -39,6 +39,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+import static com.example.hms.config.SecurityConstants.*;
+
 @RestController
 @RequestMapping("/billing-invoices")
 @Tag(name = "Billing Invoice Management", description = "APIs for managing billing invoices")
@@ -52,7 +54,7 @@ public class BillingInvoiceController {
     private final InvoiceEmailService invoiceEmailService;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
     @Operation(summary = "Create Billing Invoice")
     public ResponseEntity<BillingInvoiceResponseDTO> createInvoice(
         @Valid @RequestBody BillingInvoiceRequestDTO dto,
@@ -61,7 +63,7 @@ public class BillingInvoiceController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "Get Billing Invoice by ID")
     public ResponseEntity<BillingInvoiceResponseDTO> getInvoiceById(
         @PathVariable UUID id,
@@ -70,7 +72,7 @@ public class BillingInvoiceController {
     }
 
     @GetMapping("/{id}/pdf")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "Download Billing Invoice as PDF")
     public ResponseEntity<byte[]> downloadInvoicePdf(
         @PathVariable UUID id,
@@ -90,7 +92,7 @@ public class BillingInvoiceController {
     }
 
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST','ROLE_DOCTOR')")
     @Operation(summary = "Get Invoices by Patient ID (paginated)")
     public ResponseEntity<Page<BillingInvoiceResponseDTO>> getInvoicesByPatientId(
         @PathVariable UUID patientId,
@@ -100,7 +102,7 @@ public class BillingInvoiceController {
     }
 
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
     @Operation(summary = "Get Invoices by Hospital ID (paginated)")
     public ResponseEntity<Page<BillingInvoiceResponseDTO>> getInvoicesByHospitalId(
         @PathVariable UUID hospitalId,
@@ -110,7 +112,7 @@ public class BillingInvoiceController {
     }
 
     @GetMapping("/overdue")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
     @Operation(summary = "Get Overdue Invoices")
     public ResponseEntity<List<BillingInvoiceResponseDTO>> getOverdueInvoices(
         @RequestParam(name = "referenceDate", required = false)
@@ -121,7 +123,7 @@ public class BillingInvoiceController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
     @Operation(summary = "Update Billing Invoice")
     public ResponseEntity<BillingInvoiceResponseDTO> updateInvoice(
         @PathVariable UUID id,
@@ -131,7 +133,7 @@ public class BillingInvoiceController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     @Operation(summary = "Delete Billing Invoice")
     public ResponseEntity<String> deleteInvoice(
         @PathVariable UUID id,
@@ -145,7 +147,7 @@ public class BillingInvoiceController {
     }
 
     @PostMapping("/search")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
     @Operation(summary = "Search Billing Invoices")
     public ResponseEntity<Page<BillingInvoiceResponseDTO>> searchInvoices(
         @RequestBody(required = false) BillingInvoiceSearchRequest searchRequest,
@@ -155,7 +157,7 @@ public class BillingInvoiceController {
     }
 
     @PostMapping("/{id}/email")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
     @Operation(summary = "Email Billing Invoice")
     public ResponseEntity<Map<String, Object>> emailInvoice(
         @PathVariable UUID id,

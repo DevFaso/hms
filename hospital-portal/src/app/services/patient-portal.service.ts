@@ -222,6 +222,13 @@ export interface RescheduleAppointmentRequest {
   reason: string;
 }
 
+export interface PatientPaymentRequest {
+  amount: number;
+  paymentMethod: string;
+  transactionReference?: string;
+  notes?: string;
+}
+
 interface ApiWrapper<T> {
   data: T;
   success: boolean;
@@ -304,6 +311,12 @@ export class PatientPortalService {
         map((r) => r.data?.content ?? []),
         catchError(() => of([])),
       );
+  }
+
+  payInvoice(invoiceId: string, payment: PatientPaymentRequest): Observable<PortalInvoice> {
+    return this.http
+      .post<ApiWrapper<PortalInvoice>>(`${this.base}/billing/invoices/${invoiceId}/pay`, payment)
+      .pipe(map((r) => r.data));
   }
 
   getMyCareTeam(): Observable<CareTeamDTO> {

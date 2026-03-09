@@ -21,9 +21,21 @@ public class SecurityConstants {
     public static final String ROLE_SURGEON = "ROLE_SURGEON";
     public static final String ROLE_DENTIST = "ROLE_DENTIST";
     public static final String ROLE_MIDWIFE = "ROLE_MIDWIFE";
+    public static final String ROLE_BILLING_SPECIALIST = "ROLE_BILLING_SPECIALIST";
     public static final String ROLE_ADMINISTRATIVE_STAFF = "ROLE_ADMINISTRATIVE_STAFF";
     public static final String ROLE_SUPPORT_STAFF = "ROLE_SUPPORT_STAFF";
     public static final String ROLE_IT_STAFF = "ROLE_IT_STAFF";
+
+    // Billing permission constants (used as granted authorities)
+    public static final String BILLING_VIEW_SUMMARY = "BILLING_VIEW_SUMMARY";
+    public static final String BILLING_VIEW_DETAIL = "BILLING_VIEW_DETAIL";
+    public static final String BILLING_CREATE_INVOICE = "BILLING_CREATE_INVOICE";
+    public static final String BILLING_RECORD_PAYMENT = "BILLING_RECORD_PAYMENT";
+    public static final String BILLING_REFUND = "BILLING_REFUND";
+    public static final String BILLING_REPORT_VIEW = "BILLING_REPORT_VIEW";
+    public static final String BILLING_CONFIG_MANAGE = "BILLING_CONFIG_MANAGE";
+    public static final String BILLING_EMAIL_INVOICE = "BILLING_EMAIL_INVOICE";
+    public static final String BILLING_DELETE_INVOICE = "BILLING_DELETE_INVOICE";
 
     // JWT constants
     public static final String TOKEN_PREFIX = "Bearer ";

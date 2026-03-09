@@ -48,6 +48,8 @@ import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
 import static com.example.hms.config.SecurityConstants.ROLE_RECEPTIONIST;
 import static com.example.hms.config.SecurityConstants.ROLE_STAFF;
 import static com.example.hms.config.SecurityConstants.ROLE_SUPER_ADMIN;
+import static com.example.hms.config.SecurityConstants.ROLE_BILLING_SPECIALIST;
+import static com.example.hms.config.SecurityConstants.ROLE_ACCOUNTANT;
 
 @Configuration
 @EnableWebSecurity
@@ -121,7 +123,7 @@ public class SecurityConfig {
     public GrantedAuthoritiesMapper authoritiesMapper() {
         final Set<String> inherited = Set.of(
             ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-            ROLE_LAB_SCIENTIST, ROLE_STAFF, ROLE_PATIENT
+            ROLE_LAB_SCIENTIST, ROLE_STAFF, ROLE_PATIENT, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT
         );
         return (Collection<? extends GrantedAuthority> authorities) -> {
             boolean isSuper = authorities.stream().anyMatch(a -> ROLE_SUPER_ADMIN.equals(a.getAuthority()));
@@ -337,6 +339,40 @@ public class SecurityConfig {
 
                 .requestMatchers("/roles/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+
+                // -------------------- Billing --------------------
+                .requestMatchers(HttpMethod.GET, "/billing-invoices/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST, ROLE_DOCTOR)
+
+                .requestMatchers(HttpMethod.POST, "/billing-invoices/search")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
+
+                .requestMatchers(HttpMethod.POST, "/billing-invoices/*/email")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
+
+                .requestMatchers(HttpMethod.POST, "/billing-invoices/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
+
+                .requestMatchers(HttpMethod.PUT, "/billing-invoices/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
+
+                .requestMatchers(HttpMethod.DELETE, "/billing-invoices/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+
+                .requestMatchers(HttpMethod.GET, "/invoice-items/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
+
+                .requestMatchers(HttpMethod.POST, "/invoice-items/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
+
+                .requestMatchers(HttpMethod.PUT, "/invoice-items/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
+
+                .requestMatchers(HttpMethod.DELETE, "/invoice-items/**")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
+
+                .requestMatchers("/invoices/*/email", "/invoices/*/send-to")
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
 
                 // -------------------- Chat / Notifications --------------------
                 .requestMatchers("/chat/**")

@@ -3,72 +3,102 @@
     <div class="page-title-group">
       <h1>
         <span class="material-symbols-outlined">calendar_month</span>
-        Staff Scheduling
+        @if (isSchedulingAdmin) {
+          Staff Scheduling
+        } @else {
+          Provider Availability
+        }
       </h1>
-      <p class="subtitle">Manage shifts, schedules, and leave requests</p>
+      <p class="subtitle">
+        @if (isSchedulingAdmin) {
+          Manage shifts, schedules, and leave requests
+        } @else {
+          View staff schedules and on-duty providers
+        }
+      </p>
     </div>
-    <div class="page-actions">
-      <button class="btn-primary" (click)="openBulkModal()">
-        <span class="material-symbols-outlined">date_range</span>
-        Bulk Schedule
-      </button>
-    </div>
+    @if (isSchedulingAdmin) {
+      <div class="page-actions">
+        <button class="btn-primary" (click)="openBulkModal()">
+          <span class="material-symbols-outlined">date_range</span>
+          Bulk Schedule
+        </button>
+      </div>
+    }
   </div>
 
   <!-- Summary Cards -->
-  <div class="summary-row">
-    <div class="summary-card shifts-card">
-      <span class="material-symbols-outlined">event_note</span>
-      <div class="summary-info">
-        <span class="summary-value">{{ shifts().length }}</span>
-        <span class="summary-label">Shifts This Week</span>
+  @if (isSchedulingAdmin) {
+    <div class="summary-row">
+      <div class="summary-card shifts-card">
+        <span class="material-symbols-outlined">event_note</span>
+        <div class="summary-info">
+          <span class="summary-value">{{ shifts().length }}</span>
+          <span class="summary-label">Shifts This Week</span>
+        </div>
+      </div>
+      <div class="summary-card pending-card">
+        <span class="material-symbols-outlined">hourglass_top</span>
+        <div class="summary-info">
+          <span class="summary-value">{{ pendingCount }}</span>
+          <span class="summary-label">Pending Leaves</span>
+        </div>
+      </div>
+      <div class="summary-card approved-card">
+        <span class="material-symbols-outlined">check_circle</span>
+        <div class="summary-info">
+          <span class="summary-value">{{ approvedCount }}</span>
+          <span class="summary-label">Approved Leaves</span>
+        </div>
+      </div>
+      <div class="summary-card total-card">
+        <span class="material-symbols-outlined">groups</span>
+        <div class="summary-info">
+          <span class="summary-value">{{ leaves().length }}</span>
+          <span class="summary-label">Total Leave Requests</span>
+        </div>
       </div>
     </div>
-    <div class="summary-card pending-card">
-      <span class="material-symbols-outlined">hourglass_top</span>
-      <div class="summary-info">
-        <span class="summary-value">{{ pendingCount }}</span>
-        <span class="summary-label">Pending Leaves</span>
+  } @else {
+    <div class="summary-row">
+      <div class="summary-card shifts-card">
+        <span class="material-symbols-outlined">event_note</span>
+        <div class="summary-info">
+          <span class="summary-value">{{ shifts().length }}</span>
+          <span class="summary-label">Scheduled Staff This Week</span>
+        </div>
       </div>
     </div>
-    <div class="summary-card approved-card">
-      <span class="material-symbols-outlined">check_circle</span>
-      <div class="summary-info">
-        <span class="summary-value">{{ approvedCount }}</span>
-        <span class="summary-label">Approved Leaves</span>
-      </div>
-    </div>
-    <div class="summary-card total-card">
-      <span class="material-symbols-outlined">groups</span>
-      <div class="summary-info">
-        <span class="summary-value">{{ leaves().length }}</span>
-        <span class="summary-label">Total Leave Requests</span>
-      </div>
-    </div>
-  </div>
+  }
 
   <!-- View Toggle -->
-  <div class="tabs">
-    <button class="tab" [class.active]="activeView() === 'shifts'" (click)="setView('shifts')">
-      <span class="material-symbols-outlined">event_note</span>
-      Shifts
-    </button>
-    <button class="tab" [class.active]="activeView() === 'leaves'" (click)="setView('leaves')">
-      <span class="material-symbols-outlined">event_busy</span>
-      Leave Requests
-      @if (pendingCount > 0) {
-        <span class="badge">{{ pendingCount }}</span>
-      }
-    </button>
-  </div>
+  @if (isSchedulingAdmin) {
+    <div class="tabs">
+      <button class="tab" [class.active]="activeView() === 'shifts'" (click)="setView('shifts')">
+        <span class="material-symbols-outlined">event_note</span>
+        Shifts
+      </button>
+      <button class="tab" [class.active]="activeView() === 'leaves'" (click)="setView('leaves')">
+        <span class="material-symbols-outlined">event_busy</span>
+        Leave Requests
+        @if (pendingCount > 0) {
+          <span class="badge">{{ pendingCount }}</span>
+        }
+      </button>
+    </div>
+  }
 
   <!-- ═══ SHIFTS VIEW ═══ -->
-  @if (activeView() === 'shifts') {
+  @if (activeView() === 'shifts' || !isSchedulingAdmin) {
     <div class="schedule-section">
       <div class="schedule-header">
         <h3>
           <span class="material-symbols-outlined">view_week</span>
-          Weekly Schedule
+          @if (isSchedulingAdmin) {
+            Weekly Schedule
+          } @else {
+            Weekly Staff Availability
+          }
         </h3>
         <div class="week-nav">
           <button class="week-btn" (click)="changeWeek(-1)" aria-label="Previous week">
@@ -137,7 +167,7 @@
   }
 
   <!-- ═══ LEAVES VIEW ═══ -->
-  @if (activeView() === 'leaves') {
+  @if (activeView() === 'leaves' && isSchedulingAdmin) {
     <div class="filter-bar">
       <button
         class="filter-chip"
@@ -247,7 +277,7 @@
 </div>
 
 <!-- ═══ BULK SCHEDULE MODAL ═══ -->
-@if (bulkModalOpen()) {
+@if (bulkModalOpen() && isSchedulingAdmin) {
   <dialog class="modal-panel" open aria-labelledby="bulk-modal-title">
     <!-- Header -->
     <div class="modal-header">

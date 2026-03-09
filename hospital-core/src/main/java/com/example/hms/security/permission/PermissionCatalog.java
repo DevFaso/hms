@@ -605,7 +605,8 @@ public final class PermissionCatalog {
             Permission.SEND_APPOINTMENT_REMINDERS,
             Permission.CHECK_OUT_PATIENTS,
             Permission.UPDATE_VISIT_REASONS,
-            Permission.VIEW_DOCTOR_AVAILABILITY
+            Permission.VIEW_DOCTOR_AVAILABILITY,
+            Permission.VIEW_STAFF_SCHEDULES
         ),
         FINANCE_OPERATIONS(
             Permission.CREATE_INVOICES,

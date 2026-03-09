@@ -8,17 +8,30 @@ import {
   PaymentStatus,
 } from '../services/billing.service';
 import { ToastService } from '../core/toast.service';
+import { PermissionService } from '../core/permission.service';
+import { HasPermissionDirective } from '../shared/directives/has-permission.directive';
 
 @Component({
   selector: 'app-billing',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, HasPermissionDirective],
   templateUrl: './billing.html',
   styleUrl: './billing.scss',
 })
 export class BillingComponent implements OnInit {
   private readonly billingService = inject(BillingService);
   private readonly toast = inject(ToastService);
+  private readonly permissions = inject(PermissionService);
+
+  // Permission-gated action flags
+  readonly canCreate = this.permissions.hasAnyPermission('Create Invoice', 'Manage Billing');
+  readonly canEdit = this.permissions.hasAnyPermission('Create Invoice', 'Manage Billing');
+  readonly canDelete = this.permissions.hasAnyPermission('Delete Invoice', 'Manage Billing');
+  readonly canEmail = this.permissions.hasAnyPermission('Email Invoice', 'Manage Billing');
+  readonly canViewReports = this.permissions.hasAnyPermission(
+    'View Billing Reports',
+    'Manage Billing',
+  );
 
   invoices = signal<BillingInvoiceResponse[]>([]);
   filtered = signal<BillingInvoiceResponse[]>([]);

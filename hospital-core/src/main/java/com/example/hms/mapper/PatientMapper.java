@@ -13,6 +13,10 @@ import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.stereotype.Component;
 
+import jakarta.persistence.EntityNotFoundException;
+import org.hibernate.Hibernate;
+import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
+
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -76,7 +80,7 @@ public class PatientMapper {
         String mrn = (scopedHospitalId != null) ? patient.getMrnForHospital(scopedHospitalId) : null;
 
         PatientHospitalRegistration scopedRegistration = resolveScopedRegistration(patient, scopedHospitalId);
-        Hospital scopedHospital = scopedRegistration != null ? scopedRegistration.getHospital() : null;
+        Hospital scopedHospital = scopedRegistration != null ? safeInit(scopedRegistration.getHospital()) : null;
 
         if (includeHospital && scopedHospital != null) {
             if (scopedHospital.getId() != null) {
@@ -87,8 +91,9 @@ public class PatientMapper {
                 outHospitalName = scopedHospital.getName();
                 outPrimaryHospitalName = scopedHospital.getName();
             }
-            if (scopedHospital.getOrganization() != null && scopedHospital.getOrganization().getId() != null) {
-                outOrganizationId = scopedHospital.getOrganization().getId();
+            var org = safeInit(scopedHospital.getOrganization());
+            if (org != null && org.getId() != null) {
+                outOrganizationId = org.getId();
             }
             if (scopedRegistration != null && scopedRegistration.getRegistrationDate() != null) {
                 outRegistrationDate = scopedRegistration.getRegistrationDate();
@@ -105,8 +110,9 @@ public class PatientMapper {
         }
 
         // ---------- PRIMARY HOSPITAL MIRRORING ----------
-        if (includeHospital && outPrimaryHospitalId.equals(nilUuid) && patient.getPrimaryHospital() != null) {
-            Hospital h = patient.getPrimaryHospital();
+        Hospital primaryH = safeInit(patient.getPrimaryHospital());
+        if (includeHospital && outPrimaryHospitalId.equals(nilUuid) && primaryH != null) {
+            Hospital h = primaryH;
             if (h.getId() != null) {
                 outPrimaryHospitalId = h.getId();
                 outHospitalId = h.getId(); // backward/legacy mirror
@@ -153,6 +159,8 @@ public class PatientMapper {
                     Comparator.nullsLast(Comparator.reverseOrder())))
                 .map(Encounter::getDepartment)
                 .filter(Objects::nonNull)
+                .map(PatientMapper::safeInit)
+                .filter(Objects::nonNull)
                 .map(Department::getName)
                 .findFirst()
                 .orElse(null);
@@ -193,7 +201,7 @@ public class PatientMapper {
                 scopedRegistration != null ? scopedRegistration.getPatientFullName() : null,
                 outPatientName
             )))
-            .username(patient.getUser() != null ? patient.getUser().getUsername() : null)
+            .username(safeInit(patient.getUser()) != null ? patient.getUser().getUsername() : null)
             .room(scopedRegistration != null ? nullIfBlank(firstNonBlank(
                 scopedRegistration.getCurrentRoom(),
                 scopedRegistration.getCurrentBed()
@@ -281,6 +289,20 @@ public class PatientMapper {
     /* -------------------------------------------------------
      * Helpers
      * ------------------------------------------------------- */
+
+    /**
+     * Safely initialise a Hibernate lazy proxy, returning {@code null} when the
+     * referenced row has been deleted (dangling FK).
+     */
+    private static <T> T safeInit(T proxyOrEntity) {
+        if (proxyOrEntity == null) return null;
+        try {
+            Hibernate.initialize(proxyOrEntity);
+            return proxyOrEntity;
+        } catch (EntityNotFoundException | JpaObjectRetrievalFailureException e) {
+            return null;
+        }
+    }
 
     private PatientHospitalRegistration resolveScopedRegistration(Patient patient, UUID scopedHospitalId) {
         if (patient == null || scopedHospitalId == null) {

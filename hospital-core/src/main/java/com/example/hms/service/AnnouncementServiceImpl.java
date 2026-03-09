@@ -1,9 +1,12 @@
 package com.example.hms.service;
 
 import com.example.hms.model.Announcement;
+import com.example.hms.model.User;
 import com.example.hms.payload.dto.AnnouncementResponseDTO;
 import com.example.hms.repository.AnnouncementRepository;
+import com.example.hms.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,10 +14,13 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AnnouncementServiceImpl implements AnnouncementService {
     private final AnnouncementRepository announcementRepository;
+    private final NotificationService notificationService;
+    private final UserRepository userRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -41,7 +47,21 @@ public class AnnouncementServiceImpl implements AnnouncementService {
             .text(text)
             .date(LocalDateTime.now())
             .build();
-        return toDTO(announcementRepository.save(announcement));
+        AnnouncementResponseDTO saved = toDTO(announcementRepository.save(announcement));
+
+        List<User> activeUsers = userRepository.findByIsDeletedFalse();
+        for (User user : activeUsers) {
+            try {
+                notificationService.createNotification(
+                    "New announcement: " + text,
+                    user.getUsername()
+                );
+            } catch (Exception e) {
+                log.warn("Failed to notify user {}: {}", user.getUsername(), e.getMessage());
+            }
+        }
+
+        return saved;
     }
 
     @Override

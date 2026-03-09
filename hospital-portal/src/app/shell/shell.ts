@@ -99,7 +99,9 @@ export class ShellComponent implements OnInit, OnDestroy {
       { icon: 'badge', label: 'Staff', route: '/staff', permission: 'View Staff' },
       {
         icon: 'event_note',
-        label: 'Scheduling',
+        label: this.permissions.hasAnyPermission('Manage Staff', 'Manage Staff Schedules')
+          ? 'Scheduling'
+          : 'Availability',
         route: '/scheduling',
         permission: 'View Staff Schedules',
       },

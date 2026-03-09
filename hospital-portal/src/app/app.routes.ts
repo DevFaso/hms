@@ -176,7 +176,9 @@ export const routes: Routes = [
       {
         path: 'staff',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        data: {
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_RECEPTIONIST'],
+        },
         children: [
           {
             path: '',
@@ -232,11 +234,12 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: {
           roles: [
+            'ROLE_SUPER_ADMIN',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
-            'ROLE_SUPER_ADMIN',
-            'ROLE_BILLING',
             'ROLE_BILLING_SPECIALIST',
+            'ROLE_ACCOUNTANT',
+            'ROLE_RECEPTIONIST',
           ],
         },
         loadComponent: () => import('./billing/billing').then((m) => m.BillingComponent),

@@ -6,6 +6,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { UserService, UserSummary } from '../services/user.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { PermissionService } from '../core/permission.service';
 
 @Component({
   selector: 'app-staff-list',
@@ -20,6 +21,10 @@ export class StaffListComponent implements OnInit {
   private readonly userService = inject(UserService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly permissions = inject(PermissionService);
+
+  /** True when the user can create/edit/delete staff (admin roles only). */
+  readonly canManageStaff = this.permissions.hasPermission('Manage Staff');
 
   staff = signal<StaffResponse[]>([]);
   filtered = signal<StaffResponse[]>([]);

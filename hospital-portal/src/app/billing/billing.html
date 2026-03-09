@@ -5,9 +5,11 @@
       <p class="page-subtitle">Manage invoices, payments, and revenue</p>
     </div>
     <div class="page-actions">
-      <button class="btn-primary" (click)="openCreate()">
-        <span class="material-symbols-outlined">add</span> New Invoice
-      </button>
+      @if (canCreate) {
+        <button class="btn-primary" (click)="openCreate()">
+          <span class="material-symbols-outlined">add</span> New Invoice
+        </button>
+      }
     </div>
   </div>
 
@@ -160,19 +162,25 @@
                   <button class="action-link" title="Download PDF" (click)="downloadPdf(inv.id)">
                     <span class="material-symbols-outlined">picture_as_pdf</span>
                   </button>
-                  <button class="action-link" title="Email invoice" (click)="emailInvoice(inv)">
-                    <span class="material-symbols-outlined">email</span>
-                  </button>
-                  <button class="action-link edit-link" title="Edit" (click)="openEdit(inv)">
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
-                  <button
-                    class="action-link delete-link"
-                    title="Delete"
-                    (click)="confirmDelete(inv)"
-                  >
-                    <span class="material-symbols-outlined">delete</span>
-                  </button>
+                  @if (canEmail) {
+                    <button class="action-link" title="Email invoice" (click)="emailInvoice(inv)">
+                      <span class="material-symbols-outlined">email</span>
+                    </button>
+                  }
+                  @if (canEdit) {
+                    <button class="action-link edit-link" title="Edit" (click)="openEdit(inv)">
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
+                  @if (canDelete) {
+                    <button
+                      class="action-link delete-link"
+                      title="Delete"
+                      (click)="confirmDelete(inv)"
+                    >
+                      <span class="material-symbols-outlined">delete</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>

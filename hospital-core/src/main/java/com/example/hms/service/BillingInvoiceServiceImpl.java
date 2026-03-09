@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.InvoiceStatus;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.BillingInvoiceMapper;
 import com.example.hms.model.BillingInvoice;
@@ -232,5 +233,48 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             searchRequest != null ? searchRequest.getToDate() : null,
             pageable
         ).map(invoiceMapper::toBillingInvoiceResponseDTO);
+    }
+
+    @Override
+    @Transactional
+    public BillingInvoiceResponseDTO recordPayment(UUID invoiceId, UUID patientId, BigDecimal amount, Locale locale) {
+        BillingInvoice invoice = invoiceRepository.findById(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
+
+        // ── Ownership check: ensure invoice belongs to this patient ──
+        if (!invoice.getPatient().getId().equals(patientId)) {
+            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND);
+        }
+
+        // ── Validate the invoice is payable ──
+        if (invoice.getStatus() == InvoiceStatus.PAID) {
+            throw new BusinessException("This invoice is already fully paid.");
+        }
+        if (invoice.getStatus() == InvoiceStatus.CANCELLED) {
+            throw new BusinessException("Cannot make a payment on a cancelled invoice.");
+        }
+        if (invoice.getStatus() == InvoiceStatus.DRAFT) {
+            throw new BusinessException("This invoice has not been issued yet.");
+        }
+
+        BigDecimal currentPaid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
+        BigDecimal balanceDue = invoice.getTotalAmount().subtract(currentPaid);
+
+        if (amount.compareTo(balanceDue) > 0) {
+            throw new BusinessException("Payment amount (" + amount + ") exceeds balance due (" + balanceDue + ").");
+        }
+
+        // ── Apply payment ──
+        BigDecimal newAmountPaid = currentPaid.add(amount);
+        invoice.setAmountPaid(newAmountPaid);
+
+        if (newAmountPaid.compareTo(invoice.getTotalAmount()) >= 0) {
+            invoice.setStatus(InvoiceStatus.PAID);
+        } else {
+            invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
+        }
+
+        BillingInvoice saved = invoiceRepository.save(invoice);
+        return invoiceMapper.toBillingInvoiceResponseDTO(saved);
     }
 }

@@ -14,6 +14,7 @@ import {
 } from '../services/staff-scheduling.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
+import { PermissionService } from '../core/permission.service';
 
 @Component({
   selector: 'app-scheduling',
@@ -26,6 +27,13 @@ export class SchedulingComponent implements OnInit {
   private readonly schedulingService = inject(StaffSchedulingService);
   private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
+  private readonly permissions = inject(PermissionService);
+
+  /** True for admin/clinician roles that can manage shifts, leaves & bulk scheduling. */
+  readonly isSchedulingAdmin = this.permissions.hasAnyPermission(
+    'Manage Staff',
+    'Manage Staff Schedules',
+  );
 
   activeView = signal<'shifts' | 'leaves'>('shifts');
 
@@ -239,7 +247,9 @@ export class SchedulingComponent implements OnInit {
   ngOnInit(): void {
     this.initStaffSearch();
     this.loadShifts();
-    this.loadLeaves();
+    if (this.isSchedulingAdmin) {
+      this.loadLeaves();
+    }
   }
 
   setView(view: 'shifts' | 'leaves'): void {

@@ -45,6 +45,12 @@ export class PermissionService {
       'View Audit Logs',
       'View Billing',
       'Manage Billing',
+      'Create Invoice',
+      'Record Payment',
+      'Process Refund',
+      'View Billing Reports',
+      'Email Invoice',
+      'Delete Invoice',
       'View Lab',
       'Order Lab Tests',
       'View Notifications',
@@ -76,6 +82,9 @@ export class PermissionService {
       'View Lab',
       // Scheduling
       'View Staff Schedules',
+      'Manage Staff Schedules',
+      // Billing (billable status awareness)
+      'View Billing Summary',
       // Notifications
       'View Notifications',
     ],
@@ -101,6 +110,7 @@ export class PermissionService {
       'Order Lab Tests',
       'View Lab',
       'View Staff Schedules',
+      'Manage Staff Schedules',
       'View Notifications',
     ],
     ROLE_SURGEON: [
@@ -124,6 +134,7 @@ export class PermissionService {
       'Order Lab Tests',
       'View Lab',
       'View Staff Schedules',
+      'Manage Staff Schedules',
       'View Notifications',
     ],
     ROLE_NURSE: [
@@ -147,6 +158,7 @@ export class PermissionService {
       'View Record Sharing',
       // Scheduling
       'View Staff Schedules',
+      'Manage Staff Schedules',
       'Check-in Patients',
       // Vitals / meds
       'Update Vital Signs',
@@ -179,6 +191,7 @@ export class PermissionService {
       'View Record Sharing',
       // Scheduling
       'View Staff Schedules',
+      'Manage Staff Schedules',
       // Maternity-specific
       'Perform Prenatal Assessments',
       'Create Birth Plans',
@@ -200,8 +213,10 @@ export class PermissionService {
       // Staff lookup for scheduling
       'View Staff',
       'View Staff Schedules',
+      'View Departments',
       // Billing (co-pay collection)
       'View Billing',
+      'View Billing Summary',
       // Notifications
       'View Notifications',
     ],
@@ -247,6 +262,7 @@ export class PermissionService {
       'View My Vitals',
       'View My Immunizations',
       'View My Billing',
+      'View Billing Summary',
       'View My Encounters',
       'View My Profile',
       'View My Health Summary',
@@ -276,6 +292,11 @@ export class PermissionService {
       'View Dashboard',
       'View Billing',
       'Manage Billing',
+      'View Billing Summary',
+      'Create Invoice',
+      'Record Payment',
+      'Process Refund',
+      'Email Invoice',
       'View Patient Records',
       'View Notifications',
     ],
@@ -293,6 +314,15 @@ export class PermissionService {
       'View Dashboard',
       'View Appointments',
       'View Staff Schedules',
+      'View Notifications',
+    ],
+    ROLE_ACCOUNTANT: [
+      'View Dashboard',
+      'View Billing',
+      'View Billing Summary',
+      'Record Payment',
+      'View Billing Reports',
+      'View Patient Records',
       'View Notifications',
     ],
   };

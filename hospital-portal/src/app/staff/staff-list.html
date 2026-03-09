@@ -10,10 +10,12 @@
         }
       </p>
     </div>
-    <button class="btn-primary" (click)="openCreate()">
-      <span class="material-symbols-outlined">add</span>
-      New Staff
-    </button>
+    @if (canManageStaff) {
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span>
+        New Staff
+      </button>
+    }
   </div>
 
   <!-- Filter toolbar -->
@@ -163,14 +165,20 @@
           </div>
           <div class="staff-actions-col">
             <span class="status-dot" [class.active]="member.active"></span>
-            <div class="action-group">
-              <button class="action-link" title="Edit" (click)="openEdit(member)">
-                <span class="material-symbols-outlined">edit</span>
-              </button>
-              <button class="action-link danger" title="Deactivate" (click)="confirmDelete(member)">
-                <span class="material-symbols-outlined">person_off</span>
-              </button>
-            </div>
+            @if (canManageStaff) {
+              <div class="action-group">
+                <button class="action-link" title="Edit" (click)="openEdit(member)">
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+                <button
+                  class="action-link danger"
+                  title="Deactivate"
+                  (click)="confirmDelete(member)"
+                >
+                  <span class="material-symbols-outlined">person_off</span>
+                </button>
+              </div>
+            }
           </div>
         </div>
       }

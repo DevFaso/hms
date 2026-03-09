@@ -27,4 +27,7 @@ public interface BillingInvoiceService {
     InvoicePdfResponseDTO getInvoicePdf(UUID invoiceId, Locale locale);
 
     Page<BillingInvoiceResponseDTO> searchInvoices(BillingInvoiceSearchRequest searchRequest, Pageable pageable, Locale locale);
+
+    /** Record a payment against an invoice — updates amountPaid and status. */
+    BillingInvoiceResponseDTO recordPayment(UUID invoiceId, UUID patientId, java.math.BigDecimal amount, Locale locale);
 }

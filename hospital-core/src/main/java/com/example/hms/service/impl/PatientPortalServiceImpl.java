@@ -243,6 +243,15 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return billingInvoiceService.getInvoicesByPatientId(patientId, pageable, locale);
     }
 
+    // ── Pay an invoice ───────────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public BillingInvoiceResponseDTO recordMyPayment(Authentication auth, UUID invoiceId, java.math.BigDecimal amount, Locale locale) {
+        UUID patientId = resolvePatientId(auth);
+        return billingInvoiceService.recordPayment(invoiceId, patientId, amount, locale);
+    }
+
     // ── Consents ─────────────────────────────────────────────────────────
 
     @Override

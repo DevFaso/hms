@@ -29,7 +29,7 @@ public class InvoiceEmailController {
 
     // Body-based (recommended)
     @PostMapping(path = "/{invoiceId}/email", consumes = "application/json")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','BILLING_CLERK')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
     public ResponseEntity<Map<String,Object>> emailInvoice(
         @PathVariable UUID invoiceId,
         @RequestBody @Valid EmailInvoiceRequest req) {
@@ -39,7 +39,7 @@ public class InvoiceEmailController {
 
     // Quick path — email as query param to avoid URL-encoding issues with @, +, %
     @PostMapping("/{invoiceId}/send-to")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','BILLING_CLERK')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
     public ResponseEntity<Map<String,Object>> emailInvoiceQuick(
         @PathVariable UUID invoiceId,
         @RequestParam String email) {

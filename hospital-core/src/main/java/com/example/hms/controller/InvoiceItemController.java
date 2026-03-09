@@ -35,7 +35,7 @@ public class InvoiceItemController {
     private final MessageSource messageSource;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
     @Operation(summary = "Create Invoice Item")
     public ResponseEntity<InvoiceItemResponseDTO> createInvoiceItem(
         @Valid @RequestBody InvoiceItemRequestDTO dto,
@@ -44,7 +44,7 @@ public class InvoiceItemController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
     @Operation(summary = "Get Invoice Item by ID")
     public ResponseEntity<InvoiceItemResponseDTO> getInvoiceItemById(
         @PathVariable UUID id,
@@ -53,7 +53,7 @@ public class InvoiceItemController {
     }
 
     @GetMapping("/invoice/{invoiceId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
     @Operation(summary = "Get Items by Invoice ID")
     public ResponseEntity<List<InvoiceItemResponseDTO>> getItemsByInvoiceId(
         @PathVariable UUID invoiceId,
@@ -62,7 +62,7 @@ public class InvoiceItemController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
     @Operation(summary = "Update Invoice Item")
     public ResponseEntity<InvoiceItemResponseDTO> updateInvoiceItem(
         @PathVariable UUID id,
@@ -72,7 +72,7 @@ public class InvoiceItemController {
     }
 
     @DeleteMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
     @Operation(summary = "Delete Invoice Item")
     public ResponseEntity<Object> deleteInvoiceItem(
         @PathVariable UUID id,

@@ -43,6 +43,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
     private final MessageSource messageSource;
     private final UserRoleHospitalAssignmentRepository userRoleHospitalAssignmentRepository;
     private final com.example.hms.repository.HospitalRepository hospitalRepository;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -111,6 +112,12 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             .build();
 
         ChatMessage saved = chatMessageRepository.save(message);
+
+        notificationService.createNotification(
+            "New message from " + sender.getFirstName() + " " + sender.getLastName(),
+            recipient.getUsername()
+        );
+
         return chatMessageMapper.toChatMessageResponseDTO(saved);
     }
 

@@ -73,6 +73,9 @@ public interface PatientPortalService {
     // ── Billing / invoices ───────────────────────────────────────────────
     Page<BillingInvoiceResponseDTO> getMyInvoices(Authentication auth, Pageable pageable, Locale locale);
 
+    // ── Pay an invoice ───────────────────────────────────────────────────
+    BillingInvoiceResponseDTO recordMyPayment(Authentication auth, UUID invoiceId, java.math.BigDecimal amount, Locale locale);
+
     // ── Consents ─────────────────────────────────────────────────────────
     Page<PatientConsentResponseDTO> getMyConsents(Authentication auth, Pageable pageable);
 
