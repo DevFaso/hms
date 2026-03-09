@@ -104,6 +104,7 @@ public class ChatController {
     }
 
     @PostMapping("/send")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'DOCTOR', 'NURSE', 'MIDWIFE', 'RECEPTIONIST', 'STAFF', 'PATIENT')")
     @Tag(name = "Chat History", description = "APIs for chat messaging and retrieving chat history between users")
     @Operation(summary = "Send a chat message via REST", description = "Send a chat message from one user to another.")
     public ResponseEntity<ChatMessageResponseDTO> sendMessage(

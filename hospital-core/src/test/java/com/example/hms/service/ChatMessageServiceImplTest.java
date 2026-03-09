@@ -2,20 +2,28 @@ package com.example.hms.service;
 
 import com.example.hms.mapper.ChatMessageMapper;
 import com.example.hms.model.ChatMessage;
+import com.example.hms.model.Role;
 import com.example.hms.model.User;
+import com.example.hms.model.UserRole;
+import com.example.hms.model.UserRoleId;
 import com.example.hms.payload.dto.ChatMessageRequestDTO;
 import com.example.hms.payload.dto.ChatMessageResponseDTO;
 import com.example.hms.repository.ChatMessageRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.context.MessageSource;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,6 +50,35 @@ class ChatMessageServiceImplTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private void setSecurityContext(String role) {
+        var auth = new UsernamePasswordAuthenticationToken(
+            "user", "pass",
+            List.of(new SimpleGrantedAuthority(role))
+        );
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    private User userWithRole(UUID id, String roleName) {
+        User user = new User();
+        user.setId(id);
+        Role role = new Role();
+        role.setId(UUID.randomUUID());
+        role.setName(roleName);
+        role.setCode(roleName);
+        UserRole ur = UserRole.builder()
+            .id(new UserRoleId(id, role.getId()))
+            .user(user)
+            .role(role)
+            .build();
+        user.getUserRoles().add(ur);
+        return user;
     }
 
     @Test
@@ -84,12 +121,15 @@ class ChatMessageServiceImplTest {
     @Test
     void sendMessage_shouldThrowIfHospitalNotFound() {
         UUID senderId = UUID.randomUUID();
+        UUID recipientId = UUID.randomUUID();
         User sender = new User();
         sender.setId(senderId);
         sender.setEmail("sender@example.com");
+        User recipient = userWithRole(recipientId, "ROLE_DOCTOR");
         when(userRepository.findById(senderId)).thenReturn(Optional.of(sender));
-        when(userRepository.findByEmail("recipient@example.com")).thenReturn(Optional.of(new User()));
+        when(userRepository.findByEmail("recipient@example.com")).thenReturn(Optional.of(recipient));
         when(hospitalRepository.findByNameIgnoreCase("General Hospital")).thenReturn(Optional.empty());
+        setSecurityContext("ROLE_NURSE");
         ChatMessageRequestDTO dto = new ChatMessageRequestDTO();
         dto.setRecipientEmail("recipient@example.com");
         dto.setHospitalName("General Hospital");
@@ -107,12 +147,13 @@ class ChatMessageServiceImplTest {
 
         User sender = new User();
         sender.setId(senderId);
-        User recipient = new User();
-        recipient.setId(recipientId);
+        User recipient = userWithRole(recipientId, "ROLE_DOCTOR");
 
         when(userRepository.findById(senderId)).thenReturn(Optional.of(sender));
         when(userRepository.findById(recipientId)).thenReturn(Optional.of(recipient));
         when(userRoleHospitalAssignmentRepository.existsByUserIdAndActiveTrue(senderId)).thenReturn(true);
+
+        setSecurityContext("ROLE_NURSE");
 
         ChatMessage savedMessage = new ChatMessage();
         savedMessage.setSender(sender);
@@ -141,12 +182,13 @@ class ChatMessageServiceImplTest {
 
         User sender = new User();
         sender.setId(senderId);
-        User recipient = new User();
-        recipient.setId(recipientId);
+        User recipient = userWithRole(recipientId, "ROLE_DOCTOR");
 
         when(userRepository.findById(senderId)).thenReturn(Optional.of(sender));
         when(userRepository.findById(recipientId)).thenReturn(Optional.of(recipient));
         when(userRoleHospitalAssignmentRepository.existsByUserIdAndActiveTrue(senderId)).thenReturn(false);
+
+        setSecurityContext("ROLE_NURSE");
 
         ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder()
             .recipientId(recipientId)

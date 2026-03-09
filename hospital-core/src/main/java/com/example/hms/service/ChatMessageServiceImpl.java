@@ -27,6 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -35,6 +37,61 @@ import java.util.UUID;
 public class ChatMessageServiceImpl implements ChatMessageService {
     private static final String USER_NOT_FOUND_KEY = "user.notfound";
     private static final String TIMESTAMP_FIELD = "timestamp";
+
+    /**
+     * Hierarchical messaging rules — maps each role to the set of roles it may message.
+     * <ul>
+     *   <li>SUPER_ADMIN — can reach everyone (no restriction applied)</li>
+     *   <li>HOSPITAL_ADMIN — can reach SUPER_ADMIN + all staff/patient roles in their hospital</li>
+     *   <li>Clinical roles (DOCTOR, NURSE, MIDWIFE) — can reach each other, HOSPITAL_ADMIN, support staff, and patients</li>
+     *   <li>Support roles (RECEPTIONIST, LAB_SCIENTIST, STAFF) — can reach clinical staff and HOSPITAL_ADMIN (escalation)</li>
+     *   <li>PATIENT — can only reach their clinical care roles (DOCTOR, NURSE, MIDWIFE)</li>
+     * </ul>
+     */
+    private static final Map<String, Set<String>> ALLOWED_MESSAGE_TARGETS = Map.ofEntries(
+        Map.entry("ROLE_HOSPITAL_ADMIN", Set.of(
+            "ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN",
+            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
+            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
+            "ROLE_PATIENT"
+        )),
+        Map.entry("ROLE_DOCTOR", Set.of(
+            "ROLE_HOSPITAL_ADMIN",
+            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
+            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
+            "ROLE_PATIENT"
+        )),
+        Map.entry("ROLE_NURSE", Set.of(
+            "ROLE_HOSPITAL_ADMIN",
+            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
+            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
+            "ROLE_PATIENT"
+        )),
+        Map.entry("ROLE_MIDWIFE", Set.of(
+            "ROLE_HOSPITAL_ADMIN",
+            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
+            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF",
+            "ROLE_PATIENT"
+        )),
+        Map.entry("ROLE_RECEPTIONIST", Set.of(
+            "ROLE_HOSPITAL_ADMIN",
+            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
+            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF"
+        )),
+        Map.entry("ROLE_LAB_SCIENTIST", Set.of(
+            "ROLE_HOSPITAL_ADMIN",
+            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
+            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF"
+        )),
+        Map.entry("ROLE_STAFF", Set.of(
+            "ROLE_HOSPITAL_ADMIN",
+            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE",
+            "ROLE_RECEPTIONIST", "ROLE_LAB_SCIENTIST", "ROLE_STAFF"
+        )),
+        Map.entry("ROLE_PATIENT", Set.of(
+            "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_MIDWIFE"
+        ))
+    );
 
 
     private final ChatMessageRepository chatMessageRepository;
@@ -68,6 +125,9 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         if (sender.getId().equals(recipient.getId())) {
             throw new SecurityException("Cannot send a chat message to yourself.");
         }
+
+        // Enforce role-based messaging hierarchy
+        validateMessageHierarchy(sender, recipient);
 
         // Check if sender is SUPER_ADMIN (skip hospital/assignment validation)
         boolean isSuperAdmin = isSuperAdminContext();
@@ -126,6 +186,47 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         if (authentication == null) return false;
         return authentication.getAuthorities().stream()
             .anyMatch(a -> "ROLE_SUPER_ADMIN".equals(a.getAuthority()));
+    }
+
+    /**
+     * Validates that the sender's role is allowed to message the recipient based on
+     * the hospital role hierarchy. SUPER_ADMIN can message anyone. All other roles
+     * must have at least one role that permits messaging at least one of the
+     * recipient's roles.
+     */
+    private void validateMessageHierarchy(User sender, User recipient) {
+        // SUPER_ADMIN bypasses all hierarchy checks
+        if (isSuperAdminContext()) {
+            return;
+        }
+
+        // Collect sender role names from SecurityContext authorities
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        Set<String> senderRoles = auth.getAuthorities().stream()
+            .map(a -> a.getAuthority())
+            .collect(java.util.stream.Collectors.toSet());
+
+        // Collect recipient role names from their user-role associations
+        Set<String> recipientRoles = recipient.getUserRoles().stream()
+            .filter(ur -> ur.getRole() != null)
+            .map(ur -> {
+                String roleName = ur.getRole().getName();
+                return roleName.startsWith("ROLE_") ? roleName : "ROLE_" + roleName;
+            })
+            .collect(java.util.stream.Collectors.toSet());
+
+        // Check if any sender role is allowed to message any recipient role
+        boolean allowed = senderRoles.stream().anyMatch(senderRole -> {
+            Set<String> targets = ALLOWED_MESSAGE_TARGETS.get(senderRole);
+            if (targets == null) {
+                return false; // Unknown role — deny by default
+            }
+            return recipientRoles.stream().anyMatch(targets::contains);
+        });
+
+        if (!allowed) {
+            throw new SecurityException("Your role does not permit messaging this user.");
+        }
     }
 
     private void validateSenderHospitalAssignment(UUID senderId, UUID hospitalId) {

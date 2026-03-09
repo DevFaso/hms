@@ -11,6 +11,91 @@ import { UserService, UserSummary } from '../services/user.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 
+/** Maps each role to the set of roles it is allowed to message. */
+const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
+  ROLE_SUPER_ADMIN: new Set([
+    'ROLE_SUPER_ADMIN',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_ADMIN',
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_RECEPTIONIST',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_STAFF',
+    'ROLE_PATIENT',
+  ]),
+  ROLE_HOSPITAL_ADMIN: new Set([
+    'ROLE_SUPER_ADMIN',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_RECEPTIONIST',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_STAFF',
+    'ROLE_PATIENT',
+  ]),
+  ROLE_DOCTOR: new Set([
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_RECEPTIONIST',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_STAFF',
+    'ROLE_PATIENT',
+  ]),
+  ROLE_NURSE: new Set([
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_RECEPTIONIST',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_STAFF',
+    'ROLE_PATIENT',
+  ]),
+  ROLE_MIDWIFE: new Set([
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_RECEPTIONIST',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_STAFF',
+    'ROLE_PATIENT',
+  ]),
+  ROLE_RECEPTIONIST: new Set([
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_RECEPTIONIST',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_STAFF',
+  ]),
+  ROLE_LAB_SCIENTIST: new Set([
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_RECEPTIONIST',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_STAFF',
+  ]),
+  ROLE_STAFF: new Set([
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_DOCTOR',
+    'ROLE_NURSE',
+    'ROLE_MIDWIFE',
+    'ROLE_RECEPTIONIST',
+    'ROLE_LAB_SCIENTIST',
+    'ROLE_STAFF',
+  ]),
+  ROLE_PATIENT: new Set(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']),
+};
+
 @Component({
   selector: 'app-chat',
   standalone: true,
@@ -156,9 +241,23 @@ export class ChatComponent implements OnInit {
       next: (page) => {
         // Filter out current user and already-conversing users
         const existingIds = new Set(this.conversations().map((c) => c.conversationUserId));
-        const filtered = (page.content ?? []).filter(
-          (u) => u.id !== this.currentUserId && !existingIds.has(u.id),
-        );
+
+        // Determine which roles the current user may message
+        const myRoles = this.auth.getRoles();
+        const allowedTargets = new Set<string>();
+        for (const role of myRoles) {
+          const targets = ALLOWED_MESSAGE_TARGETS[role];
+          if (targets) {
+            targets.forEach((t) => allowedTargets.add(t));
+          }
+        }
+
+        const filtered = (page.content ?? []).filter((u) => {
+          if (u.id === this.currentUserId || existingIds.has(u.id)) return false;
+          // Normalise the user's roleName for comparison (may or may not have ROLE_ prefix)
+          const userRole = u.roleName?.startsWith('ROLE_') ? u.roleName : 'ROLE_' + u.roleName;
+          return allowedTargets.has(userRole);
+        });
         this.availableUsers.set(filtered);
         this.loadingUsers.set(false);
       },
