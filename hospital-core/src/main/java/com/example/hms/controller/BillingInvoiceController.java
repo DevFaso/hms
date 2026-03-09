@@ -147,7 +147,7 @@ public class BillingInvoiceController {
     }
 
     @PostMapping("/search")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "Search Billing Invoices")
     public ResponseEntity<Page<BillingInvoiceResponseDTO>> searchInvoices(
         @RequestBody(required = false) BillingInvoiceSearchRequest searchRequest,

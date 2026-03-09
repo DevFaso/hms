@@ -42,7 +42,7 @@ public class DepartmentController {
     @Operation(summary = "Get all departments", description = "Returns a list of all departments with localized data.")
     @ApiResponse(responseCode = "200", description = "Successful retrieval of departments")
     @GetMapping
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('RECEPTIONIST')")
     public ResponseEntity<List<DepartmentResponseDTO>> getAllDepartments(
             @RequestParam(name = "organizationId", required = false) UUID organizationId,
             @RequestParam(name = "unassignedOnly", required = false) Boolean unassignedOnly,
@@ -63,7 +63,7 @@ public class DepartmentController {
     @Operation(summary = "Get department by ID", description = "Returns a department by its ID with localized content.")
     @ApiResponse(responseCode = "200", description = "Department found")
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('RECEPTIONIST')")
     public ResponseEntity<DepartmentResponseDTO> getDepartmentById(
             @PathVariable UUID id,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
@@ -85,7 +85,7 @@ public class DepartmentController {
     }
 
     @GetMapping("/by-hospital/{hospitalId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('RECEPTIONIST')")
     public ResponseEntity<Page<DepartmentResponseDTO>> getDepartmentsByHospital(
         @PathVariable UUID hospitalId,
         @ParameterObject Pageable pageable,
@@ -95,7 +95,7 @@ public class DepartmentController {
     }
 
     @GetMapping("/search")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('RECEPTIONIST')")
     public ResponseEntity<Page<DepartmentResponseDTO>> searchDepartments(
         @RequestParam String query,
         @ParameterObject Pageable pageable,
@@ -105,7 +105,7 @@ public class DepartmentController {
     }
 
     @PostMapping("/filter")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('DOCTOR') or hasRole('NURSE') or hasRole('MIDWIFE')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('DOCTOR') or hasRole('NURSE') or hasRole('MIDWIFE') or hasRole('RECEPTIONIST')")
     public ResponseEntity<Page<DepartmentResponseDTO>> filterDepartments(
         @RequestBody DepartmentFilterDTO filter,
         @ParameterObject Pageable pageable,
@@ -141,7 +141,7 @@ public class DepartmentController {
 
     @Operation(summary = "Get department with staff", description = "Returns a department with full staff listing.")
     @GetMapping("/{id}/with-staff")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('RECEPTIONIST')")
     public ResponseEntity<DepartmentWithStaffDTO> getDepartmentWithStaff(
             @PathVariable UUID id,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
@@ -162,7 +162,7 @@ public class DepartmentController {
 
     @Operation(summary = "Get department statistics", description = "Returns statistics like total staff, doctors, nurses.")
     @GetMapping("/{id}/stats")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('RECEPTIONIST')")
     public ResponseEntity<DepartmentStatsDTO> getDepartmentStatistics(
             @PathVariable UUID id,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
@@ -172,7 +172,7 @@ public class DepartmentController {
 
     @Operation(summary = "Get active departments (minimal)", description = "Returns a minimal list of active departments in a hospital.")
     @GetMapping("/active-minimal/{hospitalId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('DOCTOR')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('DOCTOR') or hasRole('RECEPTIONIST')")
     public ResponseEntity<List<DepartmentMinimalDTO>> getActiveDepartmentsMinimal(
             @PathVariable UUID hospitalId,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
@@ -182,7 +182,7 @@ public class DepartmentController {
 
     @Operation(summary = "Check if staff is head of any department", description = "Returns true if given staff is a department head.")
     @GetMapping("/is-head/{staffId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('RECEPTIONIST')")
     public ResponseEntity<Boolean> isHeadOfDepartment(
             @PathVariable UUID staffId,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {

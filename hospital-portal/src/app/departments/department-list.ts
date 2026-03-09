@@ -66,6 +66,9 @@ export class DepartmentListComponent implements OnInit {
   saving = signal(false);
   form: DepartmentRequest = this.emptyForm();
 
+  /** Receptionist gets read-only access — no create/edit/delete */
+  canManage = !this.roleContext.isReceptionist();
+
   // Delete
   showDeleteConfirm = signal(false);
   deletingDept = signal<Department | null>(null);

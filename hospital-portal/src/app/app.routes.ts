@@ -213,7 +213,9 @@ export const routes: Routes = [
       {
         path: 'departments',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        data: {
+          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_RECEPTIONIST'],
+        },
         children: [
           {
             path: '',

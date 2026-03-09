@@ -4,10 +4,12 @@
       <h1 class="page-title">Departments</h1>
       <p class="page-subtitle">Manage hospital departments and divisions</p>
     </div>
-    <button class="btn-primary" (click)="openCreate()">
-      <span class="material-symbols-outlined">add</span>
-      New Department
-    </button>
+    @if (canManage) {
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span>
+        New Department
+      </button>
+    }
   </div>
 
   <div class="search-bar">
@@ -52,12 +54,14 @@
               {{ dept.active ? 'Active' : 'Inactive' }}
             </span>
             <div class="action-group">
-              <button class="action-link" title="Edit" (click)="openEdit(dept)">
-                <span class="material-symbols-outlined">edit</span>
-              </button>
-              <button class="action-link danger" title="Delete" (click)="confirmDelete(dept)">
-                <span class="material-symbols-outlined">delete</span>
-              </button>
+              @if (canManage) {
+                <button class="action-link" title="Edit" (click)="openEdit(dept)">
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+                <button class="action-link danger" title="Delete" (click)="confirmDelete(dept)">
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              }
             </div>
           </div>
         </div>
