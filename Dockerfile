@@ -39,7 +39,7 @@ COPY --from=build /app/hospital-core/build/libs/*.jar app.jar
 # Copy the entrypoint script that fixes volume-mount ownership at startup.
 # It runs as root, chowns the uploads directory to appuser, then execs the
 # JVM as appuser — so the running process is still unprivileged.
-COPY entrypoint.sh /entrypoint.sh
+COPY ./entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh \
     && mkdir -p /app/uploads \
     && chown -R appuser:appuser /app
