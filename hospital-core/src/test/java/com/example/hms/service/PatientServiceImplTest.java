@@ -196,7 +196,7 @@ class PatientServiceImplTest {
     void getPatientByIdReturnsDtoWhenRegistered() {
         PatientResponseDTO responseDTO = PatientResponseDTO.builder().id(patientId).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
         when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(responseDTO);
         when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
@@ -204,14 +204,14 @@ class PatientServiceImplTest {
         PatientResponseDTO result = patientService.getPatientById(patientId, hospitalId, Locale.ENGLISH);
 
         assertThat(result).isSameAs(responseDTO);
-        verify(patientRepository).findById(patientId);
+        verify(patientRepository).findByIdUnscoped(patientId);
         verify(registrationRepository).existsByPatientIdAndHospitalId(patientId, hospitalId);
         verify(patientMapper).toPatientDTO(patient, hospitalId);
     }
 
     @Test
     void getPatientByIdThrowsWhenNotRegistered() {
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
 
         // SECURITY FIX: Now returns 404 (ResourceNotFoundException) instead of IllegalStateException
@@ -347,7 +347,7 @@ class PatientServiceImplTest {
         staff.setId(UUID.randomUUID());
         staff.setName("Dr. Carter");
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
@@ -381,7 +381,7 @@ class PatientServiceImplTest {
         Staff staff = new Staff();
         staff.setId(UUID.randomUUID());
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
@@ -414,7 +414,7 @@ class PatientServiceImplTest {
         Staff staff = new Staff();
         staff.setId(UUID.randomUUID());
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
@@ -553,7 +553,7 @@ class PatientServiceImplTest {
             .build();
         allergy.setId(UUID.randomUUID());
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(encounter));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of(prescription));
@@ -700,7 +700,7 @@ class PatientServiceImplTest {
             .includeSensitiveData(true)
             .build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(patientDto);
         when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
@@ -760,5 +760,42 @@ class PatientServiceImplTest {
             "ENCOUNTERS"
         );
         verify(auditEventLogService).logEvent(any());
+    }
+
+    @Test
+    void getPatientByIdWorksForMultiHospitalPatient() {
+        // Patient originally registered at Hospital B (hospitalId on entity differs)
+        UUID hospitalBId = UUID.randomUUID();
+        UUID hospitalAId = UUID.randomUUID();
+        patient.setHospitalId(hospitalBId); // Patient.hospitalId permanently set to first hospital (B)
+
+        PatientResponseDTO responseDTO = PatientResponseDTO.builder().id(patientId).build();
+
+        // findByIdUnscoped bypasses TenantScopeSpecification, so Hospital B's id on the entity won't block
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        // Patient IS registered at Hospital A via PatientHospitalRegistration
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalAId)).thenReturn(true);
+        when(patientMapper.toPatientDTO(patient, hospitalAId)).thenReturn(responseDTO);
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalAId)).thenReturn(Optional.empty());
+
+        PatientResponseDTO result = patientService.getPatientById(patientId, hospitalAId, Locale.ENGLISH);
+
+        assertThat(result).isSameAs(responseDTO);
+        verify(patientRepository).findByIdUnscoped(patientId);
+        verify(registrationRepository).existsByPatientIdAndHospitalId(patientId, hospitalAId);
+    }
+
+    @Test
+    void getPatientByIdDeniesAccessWhenNotRegisteredAtHospital() {
+        UUID hospitalBId = UUID.randomUUID();
+        UUID hospitalCId = UUID.randomUUID();
+        patient.setHospitalId(hospitalBId);
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        // Patient is NOT registered at Hospital C
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalCId)).thenReturn(false);
+
+        assertThatThrownBy(() -> patientService.getPatientById(patientId, hospitalCId, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 }

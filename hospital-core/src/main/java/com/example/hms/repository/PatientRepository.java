@@ -88,6 +88,22 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
     Optional<Patient> findByUserId(UUID userId);
 
+    /**
+     * Fetches a Patient by primary key WITHOUT tenant-scope filtering.
+     * <p>
+     * Multi-hospital patients have {@code Patient.hospitalId} permanently set
+     * to the <em>first</em> hospital they were registered at. The tenant-scoped
+     * {@code findById} (via {@code TenantAwareJpaRepository}) adds
+     * {@code WHERE hospital_id IN (permittedHospitalIds)} which causes it to
+     * miss patients whose first hospital differs from the caller's context.
+     * <p>
+     * Callers <b>must</b> enforce access control themselves — typically via
+     * {@link PatientHospitalRegistrationRepository#existsByPatientIdAndHospitalId}
+     * or a controller-level {@code @PreAuthorize} check.
+     */
+    @Query("SELECT p FROM Patient p WHERE p.id = :id")
+    Optional<Patient> findByIdUnscoped(@Param("id") UUID id);
+
   List<Patient> findByActive(boolean active);
 
     List<Patient> findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(String firstName, String lastName);

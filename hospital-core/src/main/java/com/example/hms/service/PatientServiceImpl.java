@@ -236,10 +236,12 @@ public class PatientServiceImpl implements PatientService {
     public PatientResponseDTO getPatientById(UUID id, UUID hospitalId, Locale locale) {
         log.info("[getPatientById] Looking up patient id={}, hospitalId={}", id, hospitalId);
 
-        // Try Patient PK first, then fall back to User ID (handles links using userId)
-        Patient patient = patientRepository.findById(id)
+        // Use unscoped query: multi-hospital patients have Patient.hospitalId set to
+        // their FIRST hospital, so the tenant-scoped findById misses them when accessed
+        // from a different hospital. Security is enforced via existsByPatientIdAndHospitalId below.
+        Patient patient = patientRepository.findByIdUnscoped(id)
             .or(() -> {
-                log.info("[getPatientById] findById returned empty, trying findByUserId for id={}", id);
+                log.info("[getPatientById] findByIdUnscoped returned empty, trying findByUserId for id={}", id);
                 return patientRepository.findByUserId(id);
             })
             .orElseThrow(() -> {
@@ -266,6 +268,7 @@ public class PatientServiceImpl implements PatientService {
     }
 
     @Override
+    @Transactional
     public PatientResponseDTO createPatient(PatientRequestDTO dto, Locale locale) {
         User user = userRepository.findById(dto.getUserId())
             .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND_PREFIX + dto.getUserId()));
@@ -298,7 +301,7 @@ public class PatientServiceImpl implements PatientService {
     @Override
     @Transactional
     public PatientResponseDTO updatePatient(UUID id, PatientRequestDTO dto, Locale locale) {
-        Patient patient = patientRepository.findById(id)
+        Patient patient = patientRepository.findByIdUnscoped(id)
             .orElseThrow(() -> new ResourceNotFoundException(
                 messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale)
             ));
@@ -318,7 +321,7 @@ public class PatientServiceImpl implements PatientService {
         if (request == null) {
             throw new BusinessException("Update payload is required.");
         }
-        Patient patient = patientRepository.findById(id)
+        Patient patient = patientRepository.findByIdUnscoped(id)
             .orElseThrow(() -> new ResourceNotFoundException(
                 messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale)
             ));
@@ -607,7 +610,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Access reason must be provided.");
         }
 
-        Patient patient = patientRepository.findById(patientId)
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(
                 messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{patientId}, Locale.getDefault())
             ));
@@ -697,7 +700,7 @@ public class PatientServiceImpl implements PatientService {
             throw new BusinessException("Access reason must be provided.");
         }
 
-        Patient patient = patientRepository.findById(patientId)
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(
                 messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{patientId}, Locale.getDefault())
             ));
@@ -810,7 +813,7 @@ public class PatientServiceImpl implements PatientService {
         if (requesterUserId == null) {
             throw new BusinessException("Requester context is required to load patient allergies.");
         }
-        Patient patient = patientRepository.findById(patientId)
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(
                 messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{patientId}, Locale.getDefault())
             ));
@@ -1222,7 +1225,7 @@ public class PatientServiceImpl implements PatientService {
         if (patientId == null) {
             throw new BusinessException("Patient identifier is required.");
         }
-        return patientRepository.findById(patientId)
+        return patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(
                 messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{patientId}, Locale.getDefault())
             ));

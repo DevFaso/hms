@@ -143,7 +143,7 @@ export class NotificationService {
         this.stompClient.activate();
       })
       .catch(() => {
-
+        // Token expired or unavailable — skip WebSocket connection silently
       });
   }
 
