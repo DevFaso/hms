@@ -1010,6 +1010,14 @@ public class UserServiceImpl implements UserService {
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);
 
+        // Activate the Patient entity to match the now-verified User
+        patientRepository.findByUserId(user.getId()).ifPresent(patient -> {
+            if (!patient.isActive()) {
+                patient.setActive(true);
+                patientRepository.save(patient);
+            }
+        });
+
         log.info("✅ Email verified: {}", user.getEmail());
         return true;
     }
