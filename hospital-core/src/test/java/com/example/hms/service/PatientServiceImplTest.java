@@ -197,7 +197,7 @@ class PatientServiceImplTest {
         PatientResponseDTO responseDTO = PatientResponseDTO.builder().id(patientId).build();
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
         when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(responseDTO);
         when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
 
@@ -205,14 +205,14 @@ class PatientServiceImplTest {
 
         assertThat(result).isSameAs(responseDTO);
         verify(patientRepository).findById(patientId);
-        verify(registrationRepository).isPatientRegisteredInHospitalFixed(patientId, hospitalId);
+        verify(registrationRepository).existsByPatientIdAndHospitalId(patientId, hospitalId);
         verify(patientMapper).toPatientDTO(patient, hospitalId);
     }
 
     @Test
     void getPatientByIdThrowsWhenNotRegistered() {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
-        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(false);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(false);
 
         // SECURITY FIX: Now returns 404 (ResourceNotFoundException) instead of IllegalStateException
         // to prevent information leakage about patients in other hospitals

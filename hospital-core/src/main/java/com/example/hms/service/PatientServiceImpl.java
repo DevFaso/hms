@@ -234,21 +234,30 @@ public class PatientServiceImpl implements PatientService {
     @Override
     @Transactional(readOnly = true)
     public PatientResponseDTO getPatientById(UUID id, UUID hospitalId, Locale locale) {
+        log.info("[getPatientById] Looking up patient id={}, hospitalId={}", id, hospitalId);
+
         // Try Patient PK first, then fall back to User ID (handles links using userId)
         Patient patient = patientRepository.findById(id)
-            .or(() -> patientRepository.findByUserId(id))
-            .orElseThrow(() -> new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale)
-            ));
+            .or(() -> {
+                log.info("[getPatientById] findById returned empty, trying findByUserId for id={}", id);
+                return patientRepository.findByUserId(id);
+            })
+            .orElseThrow(() -> {
+                log.warn("[getPatientById] Patient NOT FOUND by id or userId: {}", id);
+                return new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id);
+            });
+
+        UUID patientId = patient.getId();
+        log.info("[getPatientById] Found patient entity pk={}, user={}", patientId, patient.getUser() != null ? patient.getUser().getId() : "null");
 
         // SECURITY: Enforce hospital scope — non-superadmin must have hospitalId and patient must be registered there.
-        UUID patientId = patient.getId();
-        if (hospitalId != null && !registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
-            // Return 404 instead of 403 to prevent information leakage (don't reveal patient exists in other hospital)
-            throw new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{patientId}, locale));
-        }
-        if (hospitalId == null && !roleValidator.isSuperAdminFromAuth()) {
+        if (hospitalId != null) {
+            boolean registered = registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId);
+            log.info("[getPatientById] Hospital scope check: patientId={}, hospitalId={}, registered={}", patientId, hospitalId, registered);
+            if (!registered) {
+                throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
+            }
+        } else if (!roleValidator.isSuperAdminFromAuth()) {
             throw new com.example.hms.exception.BusinessException(
                 "Hospital context required to view patient details.");
         }
