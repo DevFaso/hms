@@ -34,12 +34,7 @@ export class NotificationService {
   private readonly maxReconnectDelay = 60_000; // cap at 60 s
   private readonly baseReconnectDelay = 5_000; // start at 5 s
 
-  /**
-   * Monotonically increasing generation counter. Incremented on every
-   * connectWebSocket() and disconnectWebSocket() call. The async .then()
-   * callback captures the generation at call-time and bails out if it has
-   * become stale — preventing a reconnect after logout / component destroy.
-   */
+
   private connectGeneration = 0;
 
   getNotifications(params?: {
@@ -58,43 +53,21 @@ export class NotificationService {
     return this.http.put<void>(`/notifications/${id}/read`, {});
   }
 
-  /**
-   * Opens a STOMP-over-SockJS connection to /ws-chat and subscribes to
-   * /user/topic/notifications (Spring's user-destination prefix ensures
-   * only messages targeted at the authenticated user are received).
-   *
-   * Uses exponential backoff for reconnection (5 s → 10 s → 20 s → … → 60 s)
-   * to avoid hammering the backend when it is down or restarting.
-   *
-   * sockjs-client is a CommonJS module; it is loaded lazily via dynamic import
-   * so that Vite's ESM bundler does not crash at module evaluation time.
-   */
   connectWebSocket(): void {
     if (typeof globalThis === 'undefined' || !globalThis.WebSocket) return;
 
-    // Build the SockJS URL pointing at /api/ws-chat (context path included).
-    // SockJS initiates plain browser GETs (/info, transport negotiation) that
-    // bypass Angular's HttpClient interceptor — the Authorization header is
-    // never attached. Pass the JWT as a query parameter so the backend's
-    // JwtAuthenticationFilter can authenticate the handshake.
-    // Security: the backend restricts query-param token to /ws-chat/** paths only.
+    // Don't attempt WebSocket connection if the token is expired
     const token = this.auth.getToken();
-    const sockUrl = token ? `/api/ws-chat?token=${encodeURIComponent(token)}` : '/api/ws-chat';
+    if (!token || this.auth.isExpired(token)) return;
 
-    // Capture the generation *before* the async gap. If disconnectWebSocket()
-    // is called while the import() is in flight, the generation increments and
-    // the stale .then() callback bails out without creating a new client.
+    const sockUrl = `/api/ws-chat?token=${encodeURIComponent(token)}`;
     const generation = ++this.connectGeneration;
 
-    // Lazily import sockjs-client to avoid "Dynamic require is not supported"
-    // crashes in Vite/ESM at module evaluation time.
     void import('sockjs-client')
       .then((mod) => {
-        // Bail out if this connect attempt has been superseded by a disconnect
-        // (or a subsequent connect) that occurred while the import was resolving.
+
         if (generation !== this.connectGeneration) return;
 
-        // The CJS default export may be wrapped under `.default` by ESM interop.
         const SockJSCtor = (mod.default ?? mod) as new (url: string) => WebSocket;
 
         this.stompClient = new Client({
@@ -119,6 +92,11 @@ export class NotificationService {
           },
 
           onDisconnect: () => {
+            // If token has expired while connected, stop reconnecting
+            if (this.auth.isExpired()) {
+              this.disconnectWebSocket();
+              return;
+            }
             this.reconnectAttempts++;
             const nextDelay = Math.min(
               this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
@@ -130,6 +108,11 @@ export class NotificationService {
           },
 
           onStompError: () => {
+            // STOMP-level auth failures — stop reconnecting with stale token
+            if (this.auth.isExpired()) {
+              this.disconnectWebSocket();
+              return;
+            }
             this.reconnectAttempts++;
             const nextDelay = Math.min(
               this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
@@ -141,6 +124,11 @@ export class NotificationService {
           },
 
           onWebSocketError: () => {
+            // Transport-level failure (401 from SockJS /info) — stop if token expired
+            if (this.auth.isExpired()) {
+              this.disconnectWebSocket();
+              return;
+            }
             this.reconnectAttempts++;
             const nextDelay = Math.min(
               this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
@@ -155,8 +143,7 @@ export class NotificationService {
         this.stompClient.activate();
       })
       .catch(() => {
-        // SockJS unavailable (e.g. bundler environment without CJS support) —
-        // real-time notifications will be disabled; the rest of the app is unaffected.
+
       });
   }
 
@@ -165,7 +152,6 @@ export class NotificationService {
   }
 
   disconnectWebSocket(): void {
-    // Invalidate any in-flight connectWebSocket() async chain before tearing down.
     this.connectGeneration++;
     this.stompClient?.deactivate().catch(() => undefined);
     this.stompClient = null;
