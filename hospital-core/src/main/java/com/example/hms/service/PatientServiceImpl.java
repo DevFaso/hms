@@ -234,16 +234,19 @@ public class PatientServiceImpl implements PatientService {
     @Override
     @Transactional(readOnly = true)
     public PatientResponseDTO getPatientById(UUID id, UUID hospitalId, Locale locale) {
+        // Try Patient PK first, then fall back to User ID (handles links using userId)
         Patient patient = patientRepository.findById(id)
+            .or(() -> patientRepository.findByUserId(id))
             .orElseThrow(() -> new ResourceNotFoundException(
                 messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale)
             ));
 
         // SECURITY: Enforce hospital scope — non-superadmin must have hospitalId and patient must be registered there.
-        if (hospitalId != null && !registrationRepository.isPatientRegisteredInHospitalFixed(id, hospitalId)) {
+        UUID patientId = patient.getId();
+        if (hospitalId != null && !registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)) {
             // Return 404 instead of 403 to prevent information leakage (don't reveal patient exists in other hospital)
             throw new ResourceNotFoundException(
-                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale));
+                messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{patientId}, locale));
         }
         if (hospitalId == null && !roleValidator.isSuperAdminFromAuth()) {
             throw new com.example.hms.exception.BusinessException(
@@ -263,6 +266,12 @@ public class PatientServiceImpl implements PatientService {
 
         Patient patient = patientRepository.findByUserId(user.getId())
             .orElseGet(() -> patientRepository.save(patientMapper.toPatient(dto, user)));
+
+        // Mirror User's activation state: patients pending email verification start inactive
+        if (!Boolean.TRUE.equals(user.isActive()) && patient.isActive()) {
+            patient.setActive(false);
+            patientRepository.save(patient);
+        }
 
         ensurePatientRegistration(patient, hospital);
 
