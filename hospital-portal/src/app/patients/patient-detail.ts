@@ -80,7 +80,8 @@ export class PatientDetailComponent implements OnInit {
 
   loadPatient(id: string): void {
     this.loading.set(true);
-    this.patientService.getById(id).subscribe({
+    const hospitalId = this.roleContext.activeHospitalId ?? undefined;
+    this.patientService.getById(id, hospitalId).subscribe({
       next: (p) => {
         this.patient.set(p);
         this.loading.set(false);

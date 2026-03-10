@@ -84,8 +84,10 @@ export class PatientService {
     return this.http.get<PatientResponse[]>('/patients', { params });
   }
 
-  getById(id: string): Observable<PatientResponse> {
-    return this.http.get<PatientResponse>(`/patients/${id}`);
+  getById(id: string, hospitalId?: string): Observable<PatientResponse> {
+    let params = new HttpParams();
+    if (hospitalId) params = params.set('hospitalId', hospitalId);
+    return this.http.get<PatientResponse>(`/patients/${id}`, { params });
   }
 
   create(req: PatientCreateRequest): Observable<PatientResponse> {
