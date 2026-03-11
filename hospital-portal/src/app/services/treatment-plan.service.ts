@@ -68,7 +68,7 @@ export interface TreatmentPlanRequest {
   patientId: string;
   hospitalId: string;
   encounterId?: string;
-  assignmentId: string;
+  assignmentId?: string;
   authorStaffId: string;
   supervisingStaffId?: string;
   problemStatement: string;

@@ -29,7 +29,6 @@ public class TreatmentPlanRequestDTO {
 
     private UUID encounterId;
 
-    @NotNull
     private UUID assignmentId;
 
     @NotNull

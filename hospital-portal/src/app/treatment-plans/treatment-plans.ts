@@ -1,6 +1,8 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subject } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
   TreatmentPlanService,
   TreatmentPlanResponse,
@@ -8,6 +10,7 @@ import {
 } from '../services/treatment-plan.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
+import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 
@@ -22,6 +25,7 @@ export class TreatmentPlansComponent implements OnInit {
   private readonly tpService = inject(TreatmentPlanService);
   private readonly hospitalService = inject(HospitalService);
   private readonly staffService = inject(StaffService);
+  private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
 
@@ -35,6 +39,14 @@ export class TreatmentPlansComponent implements OnInit {
   hospitals = signal<HospitalResponse[]>([]);
   staffList = signal<StaffResponse[]>([]);
 
+  // Patient picker
+  patientQuery = signal('');
+  patientSuggestions = signal<PatientResponse[]>([]);
+  patientDropdownOpen = signal(false);
+  patientSearchLoading = signal(false);
+  selectedPatient = signal<PatientResponse | null>(null);
+  private readonly patientSearch$ = new Subject<string>();
+
   /* ── CRUD signals ── */
   showModal = signal(false);
   editing = signal(false);
@@ -46,13 +58,13 @@ export class TreatmentPlansComponent implements OnInit {
     this.load();
     this.loadAssignedHospitals();
     this.staffService.list().subscribe((s) => this.staffList.set(s ?? []));
+    this.initPatientSearch();
   }
 
   emptyForm(): TreatmentPlanRequest {
     return {
       patientId: '',
       hospitalId: '',
-      assignmentId: '',
       authorStaffId: '',
       problemStatement: '',
       timelineStartDate: '',
@@ -83,10 +95,60 @@ export class TreatmentPlansComponent implements OnInit {
     return !this.roleContext.isSuperAdmin();
   }
 
+  // ── Patient picker ──
+  initPatientSearch(): void {
+    this.patientSearch$
+      .pipe(
+        debounceTime(220),
+        distinctUntilChanged(),
+        switchMap((q) => {
+          this.patientSearchLoading.set(true);
+          const hid = this.roleContext.activeHospitalId ?? undefined;
+          return this.patientService.list(hid, q);
+        }),
+      )
+      .subscribe({
+        next: (list) => {
+          this.patientSuggestions.set(list.slice(0, 8));
+          this.patientDropdownOpen.set(list.length > 0);
+          this.patientSearchLoading.set(false);
+        },
+        error: () => this.patientSearchLoading.set(false),
+      });
+  }
+
+  onPatientQueryChange(q: string): void {
+    this.patientQuery.set(q);
+    if (q.length >= 2) this.patientSearch$.next(q);
+    else {
+      this.patientSuggestions.set([]);
+      this.patientDropdownOpen.set(false);
+    }
+  }
+
+  selectPatient(p: PatientResponse): void {
+    this.selectedPatient.set(p);
+    this.form.patientId = p.id;
+    this.patientDropdownOpen.set(false);
+    this.patientQuery.set('');
+  }
+
+  clearPatient(): void {
+    this.selectedPatient.set(null);
+    this.form.patientId = '';
+    this.patientQuery.set('');
+  }
+
+  patientInitials(p: PatientResponse): string {
+    return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
+  }
+
   openCreate(): void {
     this.form = this.emptyForm();
     this.editing.set(false);
     this.editId = '';
+    this.selectedPatient.set(null);
+    this.patientQuery.set('');
     // Re-apply locked hospital after emptyForm() reset
     if (this.hospitalLocked) {
       const h = this.hospitals();
@@ -99,13 +161,14 @@ export class TreatmentPlansComponent implements OnInit {
     this.form = {
       patientId: p.patientId ?? '',
       hospitalId: p.hospitalId ?? '',
-      assignmentId: '',
       authorStaffId: '',
       problemStatement: p.problemStatement ?? '',
       timelineStartDate: p.timelineStartDate ?? '',
       timelineReviewDate: p.timelineReviewDate ?? '',
     };
     this.editId = p.id;
+    this.selectedPatient.set(null);
+    this.patientQuery.set('');
     this.editing.set(true);
     this.showModal.set(true);
   }

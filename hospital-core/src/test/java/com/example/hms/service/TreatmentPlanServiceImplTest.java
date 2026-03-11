@@ -204,6 +204,7 @@ class TreatmentPlanServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(staffRepository.findById(authorId)).thenReturn(Optional.of(author));
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(requestDTO))
@@ -216,7 +217,6 @@ class TreatmentPlanServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
-        when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(staffRepository.findById(authorId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.create(requestDTO))

@@ -66,8 +66,8 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         Patient patient = fetchPatient(requestDTO.getPatientId());
         Hospital hospital = fetchHospital(requestDTO.getHospitalId());
         Encounter encounter = resolveEncounter(requestDTO.getEncounterId());
-        UserRoleHospitalAssignment assignment = fetchAssignment(requestDTO.getAssignmentId());
     Staff author = fetchStaff(requestDTO.getAuthorStaffId(), AUTHOR_LABEL);
+        UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO.getAssignmentId(), author);
         Staff supervising = fetchOptionalStaff(requestDTO.getSupervisingStaffId());
         Staff signOff = fetchOptionalStaff(requestDTO.getSignOffStaffId());
 
@@ -87,8 +87,8 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         Patient patient = fetchPatient(requestDTO.getPatientId());
         Hospital hospital = fetchHospital(requestDTO.getHospitalId());
         Encounter encounter = resolveEncounter(requestDTO.getEncounterId());
-        UserRoleHospitalAssignment assignment = fetchAssignment(requestDTO.getAssignmentId());
     Staff author = fetchStaff(requestDTO.getAuthorStaffId(), AUTHOR_LABEL);
+        UserRoleHospitalAssignment assignment = resolveAssignment(requestDTO.getAssignmentId(), author);
         Staff supervising = fetchOptionalStaff(requestDTO.getSupervisingStaffId());
         Staff signOff = fetchOptionalStaff(requestDTO.getSignOffStaffId());
 
@@ -220,6 +220,14 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     private UserRoleHospitalAssignment fetchAssignment(UUID assignmentId) {
         return assignmentRepository.findById(assignmentId)
             .orElseThrow(() -> new ResourceNotFoundException("Assignment not found"));
+    }
+
+    /** Resolve assignment: use explicit ID if provided, otherwise derive from author staff. */
+    private UserRoleHospitalAssignment resolveAssignment(UUID assignmentId, Staff author) {
+        if (assignmentId != null) {
+            return fetchAssignment(assignmentId);
+        }
+        return author.getAssignment();
     }
 
     private Staff fetchStaff(UUID staffId, String label) {
