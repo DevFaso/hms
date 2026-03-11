@@ -256,9 +256,13 @@ export class EncountersComponent implements OnInit {
 
   submitForm(): void {
     this.saving.set(true);
+    const payload = {
+      ...this.form,
+      encounterDate: this.form.encounterDate ? this.form.encounterDate + 'T00:00:00' : '',
+    };
     const op = this.editing()
-      ? this.encounterService.update(this.editingId, this.form)
-      : this.encounterService.create(this.form);
+      ? this.encounterService.update(this.editingId, payload)
+      : this.encounterService.create(payload);
     op.subscribe({
       next: () => {
         this.toast.success(this.editing() ? 'Encounter updated' : 'Encounter created');
