@@ -56,10 +56,12 @@
               </button>
             }
             @if (appt.status === 'CONFIRMED' || appt.status === 'IN_PROGRESS') {
-              <button class="btn-xs btn-complete" (click)="markAsCompleted()" [disabled]="saving()">
+              <button class="btn-xs btn-complete" (click)="markAsCompleted()" [disabled]="saving() || !hasAppointmentStarted"
+                [title]="hasAppointmentStarted ? 'Mark as completed' : 'Cannot complete before scheduled start time'">
                 Complete
               </button>
-              <button class="btn-xs btn-noshow" (click)="markAsNoShow()" [disabled]="saving()">
+              <button class="btn-xs btn-noshow" (click)="markAsNoShow()" [disabled]="saving() || !hasAppointmentStarted"
+                [title]="hasAppointmentStarted ? 'Mark as no-show' : 'Cannot mark no-show before scheduled start time'">
                 No Show
               </button>
             }

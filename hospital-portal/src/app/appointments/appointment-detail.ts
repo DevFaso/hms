@@ -78,6 +78,14 @@ export class AppointmentDetailComponent implements OnInit {
     return STATUS_UPDATE_ROLES.some((r) => this.currentUserRoles.includes(r));
   }
 
+  /** True once the current date/time is at or past the appointment's start time. */
+  get hasAppointmentStarted(): boolean {
+    const appt = this.appointment();
+    if (!appt) return false;
+    const start = new Date(`${appt.appointmentDate}T${appt.startTime}`);
+    return new Date() >= start;
+  }
+
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) {

@@ -47,6 +47,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Collections;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -105,6 +107,27 @@ public class AppointmentServiceImpl implements AppointmentService {
     private static final String ROLE_DOCTOR_CODE = "ROLE_DOCTOR";
     private static final String ROLE_NURSE_CODE = "ROLE_NURSE";
     private static final String ROLE_RECEPTIONIST_CODE = "ROLE_RECEPTIONIST";
+
+    /** Allowed status transitions: current → set of valid next statuses. */
+    private static final Map<AppointmentStatus, Set<AppointmentStatus>> VALID_TRANSITIONS;
+    static {
+        Map<AppointmentStatus, Set<AppointmentStatus>> m = new EnumMap<>(AppointmentStatus.class);
+        m.put(AppointmentStatus.PENDING,     EnumSet.of(AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED));
+        m.put(AppointmentStatus.SCHEDULED,   EnumSet.of(AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED));
+        m.put(AppointmentStatus.CONFIRMED,   EnumSet.of(AppointmentStatus.IN_PROGRESS, AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED, AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW));
+        m.put(AppointmentStatus.IN_PROGRESS, EnumSet.of(AppointmentStatus.COMPLETED, AppointmentStatus.FAILED, AppointmentStatus.NO_SHOW));
+        m.put(AppointmentStatus.RESCHEDULED, EnumSet.of(AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED));
+        m.put(AppointmentStatus.COMPLETED,   EnumSet.noneOf(AppointmentStatus.class));
+        m.put(AppointmentStatus.CANCELLED,   EnumSet.noneOf(AppointmentStatus.class));
+        m.put(AppointmentStatus.NO_SHOW,     EnumSet.of(AppointmentStatus.RESCHEDULED));
+        m.put(AppointmentStatus.FAILED,      EnumSet.of(AppointmentStatus.RESCHEDULED));
+        m.put(AppointmentStatus.UNKNOWN,     EnumSet.noneOf(AppointmentStatus.class));
+        VALID_TRANSITIONS = Collections.unmodifiableMap(m);
+    }
+
+    /** Statuses that require the appointment time window to have started. */
+    private static final Set<AppointmentStatus> REQUIRES_APPOINTMENT_STARTED =
+        EnumSet.of(AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW);
 
     /* =======================
        Helpers
@@ -558,6 +581,25 @@ public class AppointmentServiceImpl implements AppointmentService {
             case "in_progress"-> newStatus = AppointmentStatus.IN_PROGRESS;
             case "fail"       -> newStatus = AppointmentStatus.FAILED;
             default -> throw new BusinessException("Invalid action: " + action);
+        }
+
+        // ── Validate status transition ──
+        AppointmentStatus currentStatus = appointment.getStatus();
+        Set<AppointmentStatus> allowed = VALID_TRANSITIONS.getOrDefault(currentStatus, Set.of());
+        if (!allowed.contains(newStatus)) {
+            throw new BusinessException(
+                String.format("Cannot transition from %s to %s", currentStatus, newStatus));
+        }
+
+        // ── Temporal guard: COMPLETED / NO_SHOW only after appointment start time ──
+        if (REQUIRES_APPOINTMENT_STARTED.contains(newStatus)) {
+            LocalDateTime appointmentStart = LocalDateTime.of(
+                appointment.getAppointmentDate(), appointment.getStartTime());
+            if (LocalDateTime.now().isBefore(appointmentStart)) {
+                throw new BusinessException(
+                    String.format("Cannot mark appointment as %s before its scheduled start time (%s)",
+                        newStatus, appointmentStart));
+            }
         }
 
         appointment.setStatus(newStatus);
