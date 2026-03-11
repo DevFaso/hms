@@ -310,14 +310,18 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="lab-testName">Test Name *</label>
-            <input
-              id="lab-testName"
-              type="text"
-              [(ngModel)]="form.testName"
-              placeholder="e.g. Complete Blood Count"
+            <label for="lab-testDef">Lab Test *</label>
+            <select
+              id="lab-testDef"
+              [(ngModel)]="form.labTestDefinitionId"
+              (ngModelChange)="onTestDefChange($event)"
               required
-            />
+            >
+              <option value="">Select lab test...</option>
+              @for (def of labTestDefs(); track def.id) {
+                <option [value]="def.id">{{ def.testName }} ({{ def.testCode }})</option>
+              }
+            </select>
           </div>
           <div class="field">
             <label for="lab-testCode">Test Code</label>
@@ -325,7 +329,8 @@
               id="lab-testCode"
               type="text"
               [(ngModel)]="form.testCode"
-              placeholder="e.g. CBC"
+              placeholder="Auto-filled"
+              readonly
             />
           </div>
         </div>
@@ -378,6 +383,42 @@
             placeholder="Additional notes..."
           ></textarea>
         </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="lab-diagnosisCode">Primary Diagnosis Code (ICD-10) *</label>
+            <input
+              id="lab-diagnosisCode"
+              type="text"
+              [(ngModel)]="form.primaryDiagnosisCode"
+              placeholder="e.g. R50.9"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="lab-orderChannel">Order Channel *</label>
+            <select id="lab-orderChannel" [(ngModel)]="form.orderChannel" required>
+              @for (ch of orderChannels; track ch.value) {
+                <option [value]="ch.value">{{ ch.label }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              [(ngModel)]="form.providerSignature"
+              [ngModelOptions]="{ standalone: true }"
+              (ngModelChange)="
+                form.providerSignature = $event
+                  ? 'I electronically attest that the above information is accurate.'
+                  : ''
+              "
+              [checked]="!!form.providerSignature"
+            />
+            I electronically attest that the above information is accurate. *
+          </label>
+        </div>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeModal()">Cancel</button>
@@ -388,9 +429,12 @@
             saving() ||
             !form.patientId ||
             !form.hospitalId ||
+            !form.labTestDefinitionId ||
             !form.testName ||
             !form.clinicalIndication ||
-            !form.medicalNecessityNote
+            !form.medicalNecessityNote ||
+            !form.primaryDiagnosisCode ||
+            !form.providerSignature
           "
         >
           {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Create' }}

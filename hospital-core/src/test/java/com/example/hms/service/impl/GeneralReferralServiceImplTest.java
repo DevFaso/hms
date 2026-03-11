@@ -67,6 +67,8 @@ class GeneralReferralServiceImplTest {
         UUID receivingProviderId = UUID.randomUUID();
         UUID departmentId = UUID.randomUUID();
         UUID referralId = UUID.randomUUID();
+        UUID receivingHospitalId = UUID.randomUUID();
+        UUID sourceDepartmentId = UUID.randomUUID();
 
         GeneralReferralRequestDTO request = new GeneralReferralRequestDTO();
         request.setPatientId(patientId);
@@ -87,18 +89,24 @@ class GeneralReferralServiceImplTest {
         request.setAnticipatedTreatment("Cardiac cath");
         request.setInsuranceAuthNumber("AUTH-123");
         request.setMetadata(Map.of("source", "ED"));
+        request.setReceivingHospitalId(receivingHospitalId);
+        request.setSourceDepartmentId(sourceDepartmentId);
 
         Patient patient = buildPatient(patientId, "Alice", "Smith");
         Hospital hospital = buildHospital(hospitalId, "Metro Hospital");
+        Hospital receivingHospital = buildHospital(receivingHospitalId, "Cardiology Institute Hospital");
         Staff referringProvider = buildStaff(referringProviderId, "Dr. Referrer");
         Staff receivingProvider = buildStaff(receivingProviderId, "Dr. Receiver");
         Department department = buildDepartment(departmentId, "Cardiology");
+        Department sourceDept = buildDepartment(sourceDepartmentId, "Emergency");
 
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(hospitalRepository.findById(receivingHospitalId)).thenReturn(Optional.of(receivingHospital));
         when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
         when(staffRepository.findById(receivingProviderId)).thenReturn(Optional.of(receivingProvider));
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
+        when(departmentRepository.findById(sourceDepartmentId)).thenReturn(Optional.of(sourceDept));
         when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(invocation -> {
             GeneralReferral referral = invocation.getArgument(0);
             referral.setId(referralId);
@@ -118,6 +126,10 @@ class GeneralReferralServiceImplTest {
         assertEquals("Dr. Receiver", response.getReceivingProviderName());
         assertEquals("Cardiology", response.getTargetDepartmentName());
         assertThat(response.getCurrentMedications()).containsExactly(Map.of("name", "Aspirin"));
+        assertEquals(receivingHospitalId, response.getReceivingHospitalId());
+        assertEquals("Cardiology Institute Hospital", response.getReceivingHospitalName());
+        assertEquals(sourceDepartmentId, response.getSourceDepartmentId());
+        assertEquals("Emergency", response.getSourceDepartmentName());
 
         ArgumentCaptor<GeneralReferral> captor = ArgumentCaptor.forClass(GeneralReferral.class);
         verify(referralRepository).save(captor.capture());
@@ -126,6 +138,52 @@ class GeneralReferralServiceImplTest {
         assertEquals("Chest pain evaluation", saved.getReferralReason());
         assertEquals("Cardiac cath", saved.getAnticipatedTreatment());
         assertEquals("AUTH-123", saved.getInsuranceAuthNumber());
+        assertNotNull(saved.getReceivingHospital());
+        assertEquals(receivingHospitalId, saved.getReceivingHospital().getId());
+        assertNotNull(saved.getSourceDepartment());
+        assertEquals(sourceDepartmentId, saved.getSourceDepartment().getId());
+    }
+
+    @Test
+    void createReferral_withoutOptionalHospitalAndDepartment_leavesFieldsNull() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID referringProviderId = UUID.randomUUID();
+        UUID referralId = UUID.randomUUID();
+
+        GeneralReferralRequestDTO request = new GeneralReferralRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(hospitalId);
+        request.setReferringProviderId(referringProviderId);
+        request.setReferralType(ReferralType.CONSULTATION);
+        request.setUrgency(ReferralUrgency.ROUTINE);
+        request.setReferralReason("Follow-up care");
+        // receivingHospitalId and sourceDepartmentId deliberately omitted
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(buildPatient(patientId, "Bob", "Jones")));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(buildHospital(hospitalId, "Main Hospital")));
+        when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(buildStaff(referringProviderId, "Dr. Provider")));
+        when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(invocation -> {
+            GeneralReferral ref = invocation.getArgument(0);
+            ref.setId(referralId);
+            ref.setCreatedAt(LocalDateTime.now());
+            ref.setUpdatedAt(LocalDateTime.now());
+            return ref;
+        });
+
+        GeneralReferralResponseDTO response = generalReferralService.createReferral(request);
+
+        assertNotNull(response);
+        assertThat(response.getReceivingHospitalId()).isNull();
+        assertThat(response.getReceivingHospitalName()).isNull();
+        assertThat(response.getSourceDepartmentId()).isNull();
+        assertThat(response.getSourceDepartmentName()).isNull();
+
+        ArgumentCaptor<GeneralReferral> captor = ArgumentCaptor.forClass(GeneralReferral.class);
+        verify(referralRepository).save(captor.capture());
+        GeneralReferral saved = captor.getValue();
+        assertThat(saved.getReceivingHospital()).isNull();
+        assertThat(saved.getSourceDepartment()).isNull();
     }
 
     @Test
@@ -318,6 +376,31 @@ class GeneralReferralServiceImplTest {
         referral.setUrgency(ReferralUrgency.PRIORITY);
         referral.setReferralReason("Follow-up care");
         return referral;
+    }
+
+    @Test
+    void toResponse_mapsReceivingHospitalAndSourceDepartment() {
+        UUID referralId = UUID.randomUUID();
+        GeneralReferral referral = buildReferral(referralId);
+        UUID receivingHospId = UUID.randomUUID();
+        UUID sourceDeptId = UUID.randomUUID();
+        referral.setReceivingHospital(buildHospital(receivingHospId, "Destination Hospital"));
+        referral.setSourceDepartment(buildDepartment(sourceDeptId, "ICU"));
+        referral.setCreatedAt(LocalDateTime.now());
+        referral.setUpdatedAt(LocalDateTime.now());
+
+        when(referralRepository.findByPatientIdOrderByCreatedAtDesc(referral.getPatient().getId()))
+            .thenReturn(List.of(referral));
+
+        List<GeneralReferralResponseDTO> results =
+            generalReferralService.getReferralsByPatient(referral.getPatient().getId());
+
+        assertEquals(1, results.size());
+        GeneralReferralResponseDTO dto = results.get(0);
+        assertEquals(receivingHospId, dto.getReceivingHospitalId());
+        assertEquals("Destination Hospital", dto.getReceivingHospitalName());
+        assertEquals(sourceDeptId, dto.getSourceDepartmentId());
+        assertEquals("ICU", dto.getSourceDepartmentName());
     }
 
     // ── Tenant isolation tests ──

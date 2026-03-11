@@ -68,9 +68,23 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
                 .orElseThrow(() -> new ResourceNotFoundException("Target department not found"));
         }
 
+        Hospital receivingHospital = null;
+        if (request.getReceivingHospitalId() != null) {
+            receivingHospital = hospitalRepository.findById(request.getReceivingHospitalId())
+                .orElseThrow(() -> new ResourceNotFoundException("Receiving hospital not found"));
+        }
+
+        Department sourceDepartment = null;
+        if (request.getSourceDepartmentId() != null) {
+            sourceDepartment = departmentRepository.findById(request.getSourceDepartmentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Source department not found"));
+        }
+
         GeneralReferral referral = new GeneralReferral();
         referral.setPatient(patient);
         referral.setHospital(hospital);
+        referral.setReceivingHospital(receivingHospital);
+        referral.setSourceDepartment(sourceDepartment);
         referral.setReferringProvider(referringProvider);
         referral.setReceivingProvider(receivingProvider);
         referral.setTargetSpecialty(request.getTargetSpecialty());
@@ -244,6 +258,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         dto.setPatientName(extractPatientName(referral.getPatient()));
         dto.setHospitalId(referral.getHospital() != null ? referral.getHospital().getId() : null);
         dto.setHospitalName(referral.getHospital() != null ? referral.getHospital().getName() : null);
+        dto.setReceivingHospitalId(referral.getReceivingHospital() != null ? referral.getReceivingHospital().getId() : null);
+        dto.setReceivingHospitalName(referral.getReceivingHospital() != null ? referral.getReceivingHospital().getName() : null);
+        dto.setSourceDepartmentId(referral.getSourceDepartment() != null ? referral.getSourceDepartment().getId() : null);
+        dto.setSourceDepartmentName(referral.getSourceDepartment() != null ? referral.getSourceDepartment().getName() : null);
         dto.setReferringProviderId(referral.getReferringProvider() != null ? referral.getReferringProvider().getId() : null);
         dto.setReferringProviderName(extractStaffName(referral.getReferringProvider()));
         dto.setReceivingProviderId(referral.getReceivingProvider() != null ? referral.getReceivingProvider().getId() : null);

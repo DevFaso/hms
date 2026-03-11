@@ -420,6 +420,23 @@
   border-color: #4f46e5;
   box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
 }
+.form-section {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+
+  legend {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #374151;
+    padding: 0 0.5rem;
+  }
+}
+.locked-field {
+  background: #f3f4f6;
+  cursor: not-allowed;
+}
 .delete-warning {
   display: flex;
   align-items: flex-start;

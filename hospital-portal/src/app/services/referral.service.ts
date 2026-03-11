@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, map } from 'rxjs';
 
 export type ReferralStatus =
   | 'DRAFT'
@@ -18,6 +18,10 @@ export interface ReferralResponse {
   patientMrn: string;
   hospitalId: string;
   hospitalName: string;
+  receivingHospitalId: string;
+  receivingHospitalName: string;
+  sourceDepartmentId: string;
+  sourceDepartmentName: string;
   referringProviderId: string;
   referringProviderName: string;
   receivingProviderId: string;
@@ -48,15 +52,23 @@ export interface ReferralResponse {
 export interface ReferralRequest {
   patientId: string;
   hospitalId: string;
+  receivingHospitalId?: string;
+  sourceDepartmentId?: string;
+  referringProviderId: string;
   targetSpecialty: string;
   referralReason: string;
   clinicalIndication?: string;
   clinicalSummary?: string;
   urgency: string;
-  referralType?: string;
+  referralType: string;
   receivingProviderId?: string;
   targetDepartmentId?: string;
   targetFacilityName?: string;
+}
+
+export interface DepartmentMinimal {
+  id: string;
+  name: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -113,5 +125,12 @@ export class ReferralService {
 
   getOverdue(): Observable<ReferralResponse[]> {
     return this.http.get<ReferralResponse[]>(`${this.baseUrl}/overdue`);
+  }
+
+  /** Fetch active departments for a hospital (for dropdowns) */
+  getDepartmentsByHospital(hospitalId: string): Observable<DepartmentMinimal[]> {
+    return this.http
+      .get<{ data: DepartmentMinimal[] }>(`/departments/active-minimal/${hospitalId}`)
+      .pipe(map((res) => res?.data ?? []));
   }
 }

@@ -28,6 +28,12 @@ public class GeneralReferralResponseDTO {
     
     private UUID hospitalId;
     private String hospitalName;
+
+    private UUID receivingHospitalId;
+    private String receivingHospitalName;
+
+    private UUID sourceDepartmentId;
+    private String sourceDepartmentName;
     
     private UUID referringProviderId;
     private String referringProviderName;

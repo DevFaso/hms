@@ -35,6 +35,16 @@ export interface LabResultResponse {
   notes: string;
 }
 
+export interface LabTestDefinition {
+  id: string;
+  testCode: string;
+  testName: string;
+  description: string;
+  category: string;
+  sampleType: string;
+  isActive: boolean;
+}
+
 export interface LabOrderRequest {
   patientId: string;
   hospitalId: string;
@@ -46,6 +56,13 @@ export interface LabOrderRequest {
   clinicalIndication: string;
   medicalNecessityNote: string;
   notes?: string;
+  orderingStaffId: string;
+  labTestDefinitionId: string;
+  assignmentId: string;
+  primaryDiagnosisCode: string;
+  orderChannel: string;
+  providerSignature: string;
+  documentationSharedWithLab: boolean;
 }
 
 interface ApiWrapper<T> {
@@ -109,6 +126,12 @@ export class LabService {
     return this.http
       .post<ApiWrapper<LabOrderResponse>>('/lab-orders', req)
       .pipe(map((res) => res.data));
+  }
+
+  listTestDefinitions(): Observable<LabTestDefinition[]> {
+    return this.http
+      .get<ApiWrapper<LabTestDefinition[]>>('/lab-test-definitions')
+      .pipe(map((res) => res?.data ?? []));
   }
 
   updateOrder(id: string, req: Partial<LabOrderRequest>): Observable<LabOrderResponse> {

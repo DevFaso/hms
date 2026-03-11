@@ -3,11 +3,17 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
-import { ReferralService, ReferralResponse, ReferralRequest } from '../services/referral.service';
+import {
+  ReferralService,
+  ReferralResponse,
+  ReferralRequest,
+  DepartmentMinimal,
+} from '../services/referral.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { AuthService } from '../auth/auth.service';
 
 @Component({
   selector: 'app-referrals',
@@ -22,6 +28,7 @@ export class ReferralsComponent implements OnInit {
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
 
   referrals = signal<ReferralResponse[]>([]);
   filtered = signal<ReferralResponse[]>([]);
@@ -31,6 +38,10 @@ export class ReferralsComponent implements OnInit {
   selectedReferral = signal<ReferralResponse | null>(null);
 
   hospitals = signal<HospitalResponse[]>([]);
+  /** All hospitals for the destination picker (loaded once) */
+  allHospitals = signal<HospitalResponse[]>([]);
+  sourceDepartments = signal<DepartmentMinimal[]>([]);
+  targetDepartments = signal<DepartmentMinimal[]>([]);
 
   // Patient picker
   patientQuery = signal('');
@@ -51,6 +62,12 @@ export class ReferralsComponent implements OnInit {
   deleting = signal(false);
 
   urgencies = ['ROUTINE', 'PRIORITY', 'URGENT', 'EMERGENCY'];
+
+  referralTypes = [
+    { value: 'CONSULTATION', label: 'Consultation' },
+    { value: 'SHARED_CARE', label: 'Shared Care' },
+    { value: 'TRANSFER_OF_CARE', label: 'Transfer of Care' },
+  ];
 
   specialties = [
     { value: 'GENERAL_PRACTICE', label: 'General Practice' },
@@ -109,6 +126,7 @@ export class ReferralsComponent implements OnInit {
   ngOnInit(): void {
     this.load();
     this.loadAssignedHospitals();
+    this.loadAllHospitals();
     this.initPatientSearch();
   }
 
@@ -116,9 +134,14 @@ export class ReferralsComponent implements OnInit {
     return {
       patientId: '',
       hospitalId: '',
+      receivingHospitalId: '',
+      sourceDepartmentId: '',
+      referringProviderId: this.auth.getUserProfile()?.staffId ?? '',
       targetSpecialty: '',
       referralReason: '',
       urgency: 'ROUTINE',
+      referralType: 'CONSULTATION',
+      targetDepartmentId: '',
     };
   }
 
@@ -131,9 +154,49 @@ export class ReferralsComponent implements OnInit {
         next: (h) => {
           this.hospitals.set([h]);
           this.form.hospitalId = h.id;
+          this.loadSourceDepartments(h.id);
         },
       });
     }
+  }
+
+  /** Load all hospitals for the destination hospital picker */
+  private loadAllHospitals(): void {
+    this.hospitalService.list().subscribe({
+      next: (h) => this.allHospitals.set(h ?? []),
+    });
+  }
+
+  /** Load departments for the source hospital */
+  loadSourceDepartments(hospitalId: string): void {
+    if (!hospitalId) {
+      this.sourceDepartments.set([]);
+      return;
+    }
+    this.referralService.getDepartmentsByHospital(hospitalId).subscribe({
+      next: (depts) => this.sourceDepartments.set(depts),
+      error: () => this.sourceDepartments.set([]),
+    });
+  }
+
+  /** Load departments for the receiving/destination hospital */
+  onReceivingHospitalChange(hospitalId: string): void {
+    this.form.receivingHospitalId = hospitalId;
+    this.form.targetDepartmentId = '';
+    this.targetDepartments.set([]);
+    if (!hospitalId) return;
+    this.referralService.getDepartmentsByHospital(hospitalId).subscribe({
+      next: (depts) => this.targetDepartments.set(depts),
+      error: () => this.targetDepartments.set([]),
+    });
+  }
+
+  /** When source hospital changes (super-admin only) */
+  onSourceHospitalChange(hospitalId: string): void {
+    this.form.hospitalId = hospitalId;
+    this.form.sourceDepartmentId = '';
+    this.sourceDepartments.set([]);
+    if (hospitalId) this.loadSourceDepartments(hospitalId);
   }
 
   get lockedHospitalName(): string {
@@ -196,10 +259,14 @@ export class ReferralsComponent implements OnInit {
     this.editing.set(false);
     this.selectedPatient.set(null);
     this.patientQuery.set('');
+    this.targetDepartments.set([]);
     // Re-apply locked hospital after emptyForm() reset
     if (this.hospitalLocked) {
       const h = this.hospitals();
-      if (h.length === 1) this.form.hospitalId = h[0].id;
+      if (h.length === 1) {
+        this.form.hospitalId = h[0].id;
+        this.loadSourceDepartments(h[0].id);
+      }
     }
     this.showModal.set(true);
   }

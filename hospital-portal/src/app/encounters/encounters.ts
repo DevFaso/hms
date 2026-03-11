@@ -110,7 +110,8 @@ export class EncountersComponent implements OnInit {
 
       if (lockId) {
         this.lockedHospitalId = lockId;
-        this.hospitalService.getById(lockId).subscribe({
+        // Use tenant-safe /me/hospital instead of /hospitals/{id} (SUPER_ADMIN-only)
+        this.hospitalService.getMyHospitalAsResponse().subscribe({
           next: (h) => {
             this.hospitals.set([h]);
             this.lockedHospitalName = h.name;

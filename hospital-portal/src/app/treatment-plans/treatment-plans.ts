@@ -171,7 +171,7 @@ export class TreatmentPlansComponent implements OnInit {
     this.form = {
       patientId: p.patientId ?? '',
       hospitalId: p.hospitalId ?? '',
-      authorStaffId: '',
+      authorStaffId: p.authorStaffId ?? '',
       problemStatement: p.problemStatement ?? '',
       timelineStartDate: p.timelineStartDate ?? '',
       timelineReviewDate: p.timelineReviewDate ?? '',

@@ -27,6 +27,10 @@ public class GeneralReferralRequestDTO {
     @NotNull(message = "Hospital ID is required")
     private UUID hospitalId;
 
+    private UUID receivingHospitalId;
+
+    private UUID sourceDepartmentId;
+
     @NotNull(message = "Referring provider ID is required")
     private UUID referringProviderId;
 

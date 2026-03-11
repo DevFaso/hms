@@ -170,6 +170,22 @@
               ><span class="field-value">{{ ref.patientMrn }}</span>
             </div>
             <div class="detail-field">
+              <span class="field-label">Source Hospital</span
+              ><span class="field-value">{{ ref.hospitalName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Source Department</span
+              ><span class="field-value">{{ ref.sourceDepartmentName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Destination Hospital</span
+              ><span class="field-value">{{ ref.receivingHospitalName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">Destination Department</span
+              ><span class="field-value">{{ ref.targetDepartmentName || '—' }}</span>
+            </div>
+            <div class="detail-field">
               <span class="field-label">Specialty</span
               ><span class="field-value">{{ ref.targetSpecialty }}</span>
             </div>
@@ -253,6 +269,7 @@
         <button class="modal-close" (click)="closeModal()" title="Close">&times;</button>
       </div>
       <div class="modal-body">
+        <!-- Patient -->
         <div class="form-row">
           <div class="field">
             <label for="ref-patientSearch">Patient *</label>
@@ -303,27 +320,89 @@
               </div>
             }
           </div>
-          <div class="field">
-            <label for="ref-hospitalId">Hospital</label>
-            @if (hospitalLocked) {
-              <div class="locked-field">
-                <span class="material-symbols-outlined locked-icon">business</span>
-                {{ lockedHospitalName }}
-              </div>
-              <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
-            } @else {
-              <select id="ref-hospitalId" [(ngModel)]="form.hospitalId" title="Hospital">
-                <option value="">Select hospital</option>
-                @for (h of hospitals(); track h.id) {
+        </div>
+
+        <!-- Source: Hospital + Department -->
+        <fieldset class="form-section">
+          <legend>Source (Referring From)</legend>
+          <div class="form-row">
+            <div class="field">
+              <label for="ref-hospitalId">Source Hospital *</label>
+              @if (hospitalLocked) {
+                <div class="locked-field">
+                  <span class="material-symbols-outlined locked-icon">business</span>
+                  {{ lockedHospitalName }}
+                </div>
+                <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
+              } @else {
+                <select
+                  id="ref-hospitalId"
+                  [ngModel]="form.hospitalId"
+                  (ngModelChange)="onSourceHospitalChange($event)"
+                  title="Source Hospital"
+                >
+                  <option value="">Select source hospital</option>
+                  @for (h of hospitals(); track h.id) {
+                    <option [value]="h.id">{{ h.name }}</option>
+                  }
+                </select>
+              }
+            </div>
+            <div class="field">
+              <label for="ref-sourceDept">Source Department</label>
+              <select
+                id="ref-sourceDept"
+                [(ngModel)]="form.sourceDepartmentId"
+                title="Source Department"
+              >
+                <option value="">Select department...</option>
+                @for (d of sourceDepartments(); track d.id) {
+                  <option [value]="d.id">{{ d.name }}</option>
+                }
+              </select>
+            </div>
+          </div>
+        </fieldset>
+
+        <!-- Destination: Hospital + Department -->
+        <fieldset class="form-section">
+          <legend>Destination (Referring To)</legend>
+          <div class="form-row">
+            <div class="field">
+              <label for="ref-recvHospital">Destination Hospital</label>
+              <select
+                id="ref-recvHospital"
+                [ngModel]="form.receivingHospitalId"
+                (ngModelChange)="onReceivingHospitalChange($event)"
+                title="Destination Hospital"
+              >
+                <option value="">Select destination hospital...</option>
+                @for (h of allHospitals(); track h.id) {
                   <option [value]="h.id">{{ h.name }}</option>
                 }
               </select>
-            }
+            </div>
+            <div class="field">
+              <label for="ref-targetDept">Destination Department</label>
+              <select
+                id="ref-targetDept"
+                [(ngModel)]="form.targetDepartmentId"
+                [disabled]="!form.receivingHospitalId"
+                title="Destination Department"
+              >
+                <option value="">Select department...</option>
+                @for (d of targetDepartments(); track d.id) {
+                  <option [value]="d.id">{{ d.name }}</option>
+                }
+              </select>
+            </div>
           </div>
-        </div>
+        </fieldset>
+
+        <!-- Specialty, Urgency, Type -->
         <div class="form-row">
           <div class="field">
-            <label for="ref-specialty">Target Specialty</label>
+            <label for="ref-specialty">Target Specialty *</label>
             <select id="ref-specialty" [(ngModel)]="form.targetSpecialty" title="Target specialty">
               <option value="">Select specialty...</option>
               @for (s of specialties; track s.value) {
@@ -332,7 +411,7 @@
             </select>
           </div>
           <div class="field">
-            <label for="ref-urgency">Urgency</label>
+            <label for="ref-urgency">Urgency *</label>
             <select id="ref-urgency" [(ngModel)]="form.urgency" title="Urgency">
               @for (u of urgencies; track u) {
                 <option [value]="u">{{ u }}</option>
@@ -341,8 +420,20 @@
           </div>
         </div>
         <div class="form-row">
+          <div class="field">
+            <label for="ref-type">Referral Type *</label>
+            <select id="ref-type" [(ngModel)]="form.referralType" title="Referral type">
+              @for (t of referralTypes; track t.value) {
+                <option [value]="t.value">{{ t.label }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <!-- Clinical details -->
+        <div class="form-row">
           <div class="field" style="flex: 1">
-            <label for="ref-reason">Referral Reason</label>
+            <label for="ref-reason">Referral Reason *</label>
             <textarea
               id="ref-reason"
               [(ngModel)]="form.referralReason"

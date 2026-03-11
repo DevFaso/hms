@@ -40,6 +40,7 @@ import java.util.UUID;
 @Table(name = "general_referrals", indexes = {
     @Index(name = "idx_referral_patient", columnList = "patient_id"),
     @Index(name = "idx_referral_hospital", columnList = "hospital_id"),
+    @Index(name = "idx_referral_receiving_hospital", columnList = "receiving_hospital_id"),
     @Index(name = "idx_referral_specialty", columnList = "target_specialty"),
     @Index(name = "idx_referral_status", columnList = "status"),
     @Index(name = "idx_referral_urgency", columnList = "urgency"),
@@ -68,6 +69,20 @@ public class GeneralReferral {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "hospital_id", nullable = false)
     private Hospital hospital;
+
+    /**
+     * Hospital/organization receiving the referral (destination)
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "receiving_hospital_id")
+    private Hospital receivingHospital;
+
+    /**
+     * Department the referral originates from (source)
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "source_department_id")
+    private Department sourceDepartment;
 
     /**
      * Provider making the referral

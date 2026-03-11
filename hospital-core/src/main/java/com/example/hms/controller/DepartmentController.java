@@ -172,7 +172,7 @@ public class DepartmentController {
 
     @Operation(summary = "Get active departments (minimal)", description = "Returns a minimal list of active departments in a hospital.")
     @GetMapping("/active-minimal/{hospitalId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('DOCTOR') or hasRole('RECEPTIONIST')")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('HOSPITAL_ADMIN') or hasRole('DOCTOR') or hasRole('NURSE') or hasRole('MIDWIFE') or hasRole('RECEPTIONIST')")
     public ResponseEntity<List<DepartmentMinimalDTO>> getActiveDepartmentsMinimal(
             @PathVariable UUID hospitalId,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {

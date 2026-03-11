@@ -3,11 +3,18 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
-import { LabService, LabOrderResponse, LabOrderRequest } from '../services/lab.service';
+import {
+  LabService,
+  LabOrderResponse,
+  LabOrderRequest,
+  LabTestDefinition,
+} from '../services/lab.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
+import { ProfileService } from '../services/profile.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { AuthService } from '../auth/auth.service';
 
 @Component({
   selector: 'app-lab',
@@ -22,6 +29,8 @@ export class LabComponent implements OnInit {
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
+  private readonly profileService = inject(ProfileService);
 
   orders = signal<LabOrderResponse[]>([]);
   filtered = signal<LabOrderResponse[]>([]);
@@ -34,6 +43,8 @@ export class LabComponent implements OnInit {
   stats = signal({ total: 0, pending: 0, completed: 0, cancelled: 0 });
 
   hospitals = signal<HospitalResponse[]>([]);
+  labTestDefs = signal<LabTestDefinition[]>([]);
+  private activeAssignmentId = '';
 
   // Patient picker
   patientQuery = signal('');
@@ -56,13 +67,32 @@ export class LabComponent implements OnInit {
 
   priorities = ['ROUTINE', 'URGENT', 'STAT', 'ASAP'];
 
+  orderChannels = [
+    { value: 'PORTAL', label: 'Portal' },
+    { value: 'ELECTRONIC', label: 'Electronic' },
+    { value: 'PHONE', label: 'Phone' },
+    { value: 'FAX', label: 'Fax' },
+    { value: 'EMAIL', label: 'Email' },
+    { value: 'WRITTEN', label: 'Written' },
+    { value: 'WALK_IN', label: 'Walk-In' },
+    { value: 'OTHER', label: 'Other' },
+  ];
+
   ngOnInit(): void {
     this.loadOrders();
     this.loadAssignedHospitals();
     this.initPatientSearch();
+    this.labService.listTestDefinitions().subscribe((defs) => this.labTestDefs.set(defs));
+    this.profileService.getAssignments().subscribe({
+      next: (assignments) => {
+        const active = assignments.find((a) => a.active);
+        if (active) this.activeAssignmentId = active.id;
+      },
+    });
   }
 
   emptyForm(): LabOrderRequest {
+    const profile = this.auth.getUserProfile();
     return {
       patientId: '',
       hospitalId: '',
@@ -70,7 +100,22 @@ export class LabComponent implements OnInit {
       status: 'ORDERED',
       clinicalIndication: '',
       medicalNecessityNote: '',
+      orderingStaffId: profile?.staffId ?? '',
+      labTestDefinitionId: '',
+      assignmentId: this.activeAssignmentId,
+      primaryDiagnosisCode: '',
+      orderChannel: 'PORTAL',
+      providerSignature: '',
+      documentationSharedWithLab: false,
     };
+  }
+
+  onTestDefChange(defId: string): void {
+    const def = this.labTestDefs().find((d) => d.id === defId);
+    if (def) {
+      this.form.testName = def.testName;
+      this.form.testCode = def.testCode;
+    }
   }
 
   /** ── TENANT ISOLATION: only SUPER_ADMIN may choose from all hospitals ── */
@@ -157,6 +202,7 @@ export class LabComponent implements OnInit {
   }
 
   openEdit(o: LabOrderResponse): void {
+    const profile = this.auth.getUserProfile();
     this.form = {
       patientId: '',
       hospitalId: '',
@@ -166,6 +212,13 @@ export class LabComponent implements OnInit {
       clinicalIndication: o.clinicalIndication ?? '',
       medicalNecessityNote: o.medicalNecessityNote ?? '',
       notes: o.notes,
+      orderingStaffId: profile?.staffId ?? '',
+      labTestDefinitionId: '',
+      assignmentId: this.activeAssignmentId,
+      primaryDiagnosisCode: o.primaryDiagnosisCode ?? '',
+      orderChannel: o.orderChannel ?? 'PORTAL',
+      providerSignature: '',
+      documentationSharedWithLab: false,
     };
     this.selectedPatient.set({
       id: '',
