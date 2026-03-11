@@ -34,7 +34,6 @@ export class NotificationService {
   private readonly maxReconnectDelay = 60_000; // cap at 60 s
   private readonly baseReconnectDelay = 5_000; // start at 5 s
 
-
   private connectGeneration = 0;
 
   getNotifications(params?: {
@@ -65,7 +64,6 @@ export class NotificationService {
 
     void import('sockjs-client')
       .then((mod) => {
-
         if (generation !== this.connectGeneration) return;
 
         const SockJSCtor = (mod.default ?? mod) as new (url: string) => WebSocket;
@@ -142,7 +140,7 @@ export class NotificationService {
 
         this.stompClient.activate();
       })
-      .catch(() => {
+      .catch((_: unknown) => {
         // Token expired or unavailable — skip WebSocket connection silently
       });
   }
