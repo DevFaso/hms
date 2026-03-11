@@ -27,10 +27,13 @@ import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import lombok.EqualsAndHashCode;
+
+import org.hibernate.annotations.Type;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -141,9 +144,11 @@ public class Prescription extends BaseEntity {
     @Column(name = "instructions", length = 2048)
     private String instructions;
 
+    @Type(JsonBinaryType.class)
     @Column(name = "patient_instruction_json", columnDefinition = "JSONB")
     private String patientInstructionJson;
 
+    @Type(JsonBinaryType.class)
     @Column(name = "education_material_json", columnDefinition = "JSONB")
     private String educationMaterialJson;
 

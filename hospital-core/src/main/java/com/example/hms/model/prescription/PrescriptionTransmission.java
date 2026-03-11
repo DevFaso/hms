@@ -12,11 +12,13 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.Type;
 
 import java.time.LocalDateTime;
 
@@ -62,6 +64,7 @@ public class PrescriptionTransmission extends BaseEntity {
     @Column(name = "last_attempted_at")
     private LocalDateTime lastAttemptedAt;
 
+    @Type(JsonBinaryType.class)
     @Column(name = "payload", columnDefinition = "JSONB")
     private String payload;
 

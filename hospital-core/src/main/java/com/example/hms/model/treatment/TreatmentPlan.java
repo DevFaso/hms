@@ -22,11 +22,14 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import io.hypersistence.utils.hibernate.type.json.JsonBinaryType;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import lombok.EqualsAndHashCode;
+
+import org.hibernate.annotations.Type;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -95,12 +98,15 @@ public class TreatmentPlan extends BaseEntity {
     @Column(name = "problem_statement", nullable = false, columnDefinition = "TEXT")
     private String problemStatement;
 
+    @Type(JsonBinaryType.class)
     @Column(name = "therapeutic_goals_json", columnDefinition = "JSONB")
     private String therapeuticGoalsJson;
 
+    @Type(JsonBinaryType.class)
     @Column(name = "medication_plan_json", columnDefinition = "JSONB")
     private String medicationPlanJson;
 
+    @Type(JsonBinaryType.class)
     @Column(name = "lifestyle_plan_json", columnDefinition = "JSONB")
     private String lifestylePlanJson;
 
@@ -110,9 +116,11 @@ public class TreatmentPlan extends BaseEntity {
     @Column(name = "follow_up_summary", columnDefinition = "TEXT")
     private String followUpSummary;
 
+    @Type(JsonBinaryType.class)
     @Column(name = "referral_plan_json", columnDefinition = "JSONB")
     private String referralPlanJson;
 
+    @Type(JsonBinaryType.class)
     @Column(name = "responsible_parties_json", columnDefinition = "JSONB")
     private String responsiblePartiesJson;
 
