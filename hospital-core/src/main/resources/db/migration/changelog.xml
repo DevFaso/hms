@@ -145,4 +145,16 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V11: Add receiving_hospital_id and source_department_id to
+         general_referrals for the redesigned referral workflow with
+         explicit source/destination hospital and department tracking.
+         ================================================================= -->
+    <changeSet id="V11-add-referral-receiving-hospital-source-department" author="hms-team" runOnChange="false">
+        <sqlFile path="V11__add_referral_receiving_hospital_source_department.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
