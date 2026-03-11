@@ -72,8 +72,10 @@ export class EncountersComponent implements OnInit {
     'OUTPATIENT',
     'INPATIENT',
     'EMERGENCY',
-    'TELEMEDICINE',
-    'HOME_VISIT',
+    'CONSULTATION',
+    'FOLLOW_UP',
+    'SURGERY',
+    'LAB',
   ];
 
   // Delete
@@ -330,9 +332,11 @@ export class EncountersComponent implements OnInit {
     let list = this.encounters();
     const tab = this.activeTab();
     if (tab === 'open') {
-      list = list.filter((e) => e.status === 'OPEN' || e.status === 'IN_PROGRESS');
+      list = list.filter(
+        (e) => e.status === 'SCHEDULED' || e.status === 'IN_PROGRESS' || e.status === 'ARRIVED',
+      );
     } else if (tab === 'completed') {
-      list = list.filter((e) => e.status === 'COMPLETED' || e.status === 'DISCHARGED');
+      list = list.filter((e) => e.status === 'COMPLETED');
     }
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
@@ -372,14 +376,14 @@ export class EncountersComponent implements OnInit {
 
   getStatusClass(status: string): string {
     switch (status) {
-      case 'OPEN':
+      case 'SCHEDULED':
         return 'status-open';
       case 'IN_PROGRESS':
         return 'status-progress';
       case 'COMPLETED':
         return 'status-completed';
-      case 'DISCHARGED':
-        return 'status-discharged';
+      case 'ARRIVED':
+        return 'status-progress';
       case 'CANCELLED':
         return 'status-cancelled';
       default:
@@ -395,10 +399,14 @@ export class EncountersComponent implements OnInit {
         return 'hotel';
       case 'EMERGENCY':
         return 'emergency';
-      case 'TELEMEDICINE':
-        return 'videocam';
-      case 'HOME_VISIT':
-        return 'home';
+      case 'CONSULTATION':
+        return 'forum';
+      case 'FOLLOW_UP':
+        return 'event_repeat';
+      case 'SURGERY':
+        return 'medical_services';
+      case 'LAB':
+        return 'science';
       default:
         return 'medical_services';
     }

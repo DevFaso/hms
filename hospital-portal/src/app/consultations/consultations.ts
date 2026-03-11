@@ -56,12 +56,21 @@ export class ConsultationsComponent implements OnInit {
   deleting = signal(false);
 
   consultationTypes: ConsultationType[] = [
-    'FORMAL',
-    'CURBSIDE',
-    'TRANSFER_OF_CARE',
-    'SECOND_OPINION',
+    'OUTPATIENT_CONSULT',
+    'INPATIENT_CONSULT',
+    'FOLLOW_UP_CONSULT',
+    'CURBSIDE_CONSULT',
+    'EMERGENCY_CONSULT',
   ];
-  urgencies: ConsultationUrgency[] = ['ROUTINE', 'URGENT', 'EMERGENT', 'STAT'];
+  urgencies: ConsultationUrgency[] = ['ROUTINE', 'URGENT', 'EMERGENCY', 'STAT'];
+
+  readonly typeLabel: Record<string, string> = {
+    OUTPATIENT_CONSULT: 'Outpatient',
+    INPATIENT_CONSULT: 'Inpatient',
+    FOLLOW_UP_CONSULT: 'Follow-up',
+    CURBSIDE_CONSULT: 'Curbside',
+    EMERGENCY_CONSULT: 'Emergency',
+  };
 
   ngOnInit(): void {
     this.load();
@@ -73,7 +82,7 @@ export class ConsultationsComponent implements OnInit {
     return {
       patientId: '',
       hospitalId: '',
-      consultationType: 'FORMAL' as ConsultationType,
+      consultationType: 'OUTPATIENT_CONSULT' as ConsultationType,
       specialtyRequested: '',
       reasonForConsult: '',
       urgency: 'ROUTINE' as ConsultationUrgency,
@@ -275,7 +284,7 @@ export class ConsultationsComponent implements OnInit {
   getUrgencyClass(urgency: string): string {
     switch (urgency) {
       case 'STAT':
-      case 'EMERGENT':
+      case 'EMERGENCY':
         return 'urgency-stat';
       case 'URGENT':
         return 'urgency-urgent';

@@ -3,7 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 // ── Shift ──
-export type StaffShiftType = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT' | 'FLEX';
+export type StaffShiftType = 'MORNING' | 'AFTERNOON' | 'EVENING' | 'NIGHT' | 'ON_CALL' | 'FLEX';
 export type StaffShiftStatus = 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
 
 export interface StaffShiftRequest {
@@ -94,7 +94,7 @@ export interface BulkShiftResult {
 
 // ── Leave ──
 export type StaffLeaveType = 'VACATION' | 'SICK' | 'EMERGENCY' | 'TRAINING' | 'UNPAID' | 'OTHER';
-export type StaffLeaveStatus = 'PENDING' | 'APPROVED' | 'DENIED' | 'CANCELLED';
+export type StaffLeaveStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
 
 export interface StaffLeaveRequest {
   staffId: string;

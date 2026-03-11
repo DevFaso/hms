@@ -175,7 +175,9 @@
             </div>
             <div class="detail-field">
               <span class="field-label">Type</span
-              ><span class="field-value">{{ con.consultationType }}</span>
+              ><span class="field-value">{{
+                typeLabel[con.consultationType] || con.consultationType
+              }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">Specialty</span
@@ -328,7 +330,7 @@
             <label for="con-type">Type</label>
             <select id="con-type" [(ngModel)]="form.consultationType" title="Consultation type">
               @for (t of consultationTypes; track t) {
-                <option [value]="t">{{ t }}</option>
+                <option [value]="t">{{ typeLabel[t] || t }}</option>
               }
             </select>
           </div>

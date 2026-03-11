@@ -11,7 +11,8 @@ export type AppointmentStatus =
   | 'RESCHEDULED'
   | 'NO_SHOW'
   | 'FAILED'
-  | 'REQUESTED';
+  | 'PENDING'
+  | 'UNKNOWN';
 
 export interface AppointmentResponse {
   id: string;

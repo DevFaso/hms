@@ -4,11 +4,11 @@ import { Observable, map } from 'rxjs';
 
 export type TreatmentPlanStatus =
   | 'DRAFT'
-  | 'PENDING_REVIEW'
+  | 'IN_REVIEW'
+  | 'REVISIONS_REQUIRED'
   | 'APPROVED'
-  | 'ACTIVE'
-  | 'COMPLETED'
-  | 'REJECTED';
+  | 'ARCHIVED'
+  | 'CANCELLED';
 
 export interface TreatmentPlanFollowUp {
   id: string;

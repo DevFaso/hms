@@ -219,10 +219,10 @@ export class TreatmentPlansComponent implements OnInit {
   applyFilter(): void {
     let list = this.plans();
     const tab = this.activeTab();
-    if (tab === 'active') list = list.filter((p) => ['ACTIVE', 'APPROVED'].includes(p.status));
+    if (tab === 'active') list = list.filter((p) => p.status === 'APPROVED');
     else if (tab === 'draft')
-      list = list.filter((p) => ['DRAFT', 'PENDING_REVIEW'].includes(p.status));
-    else if (tab === 'completed') list = list.filter((p) => p.status === 'COMPLETED');
+      list = list.filter((p) => ['DRAFT', 'IN_REVIEW', 'REVISIONS_REQUIRED'].includes(p.status));
+    else if (tab === 'completed') list = list.filter((p) => p.status === 'ARCHIVED');
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       list = list.filter(
@@ -246,14 +246,15 @@ export class TreatmentPlansComponent implements OnInit {
     switch (status) {
       case 'DRAFT':
         return 'status-draft';
-      case 'PENDING_REVIEW':
+      case 'IN_REVIEW':
         return 'status-pending';
       case 'APPROVED':
-      case 'ACTIVE':
         return 'status-active';
-      case 'COMPLETED':
+      case 'ARCHIVED':
         return 'status-completed';
-      case 'REJECTED':
+      case 'REVISIONS_REQUIRED':
+        return 'status-rejected';
+      case 'CANCELLED':
         return 'status-rejected';
       default:
         return '';
@@ -261,11 +262,12 @@ export class TreatmentPlansComponent implements OnInit {
   }
 
   countByGroup(group: string): number {
-    if (group === 'active')
-      return this.plans().filter((p) => ['ACTIVE', 'APPROVED'].includes(p.status)).length;
+    if (group === 'active') return this.plans().filter((p) => p.status === 'APPROVED').length;
     if (group === 'draft')
-      return this.plans().filter((p) => ['DRAFT', 'PENDING_REVIEW'].includes(p.status)).length;
-    if (group === 'completed') return this.plans().filter((p) => p.status === 'COMPLETED').length;
+      return this.plans().filter((p) =>
+        ['DRAFT', 'IN_REVIEW', 'REVISIONS_REQUIRED'].includes(p.status),
+      ).length;
+    if (group === 'completed') return this.plans().filter((p) => p.status === 'ARCHIVED').length;
     return 0;
   }
 }

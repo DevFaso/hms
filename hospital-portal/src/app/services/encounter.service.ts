@@ -2,13 +2,15 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 
-export type EncounterStatus = 'OPEN' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'DISCHARGED';
+export type EncounterStatus = 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED' | 'ARRIVED';
 export type EncounterType =
-  | 'OUTPATIENT'
-  | 'INPATIENT'
+  | 'CONSULTATION'
+  | 'FOLLOW_UP'
   | 'EMERGENCY'
-  | 'TELEMEDICINE'
-  | 'HOME_VISIT';
+  | 'SURGERY'
+  | 'LAB'
+  | 'OUTPATIENT'
+  | 'INPATIENT';
 
 export interface EncounterNoteResponse {
   id: string;

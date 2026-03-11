@@ -63,14 +63,14 @@ export class AppointmentDetailComponent implements OnInit {
   get canCancel(): boolean {
     const appt = this.appointment();
     if (!appt) return false;
-    const cancellableStatuses: AppointmentStatus[] = ['SCHEDULED', 'CONFIRMED', 'REQUESTED'];
+    const cancellableStatuses: AppointmentStatus[] = ['SCHEDULED', 'CONFIRMED', 'PENDING'];
     return cancellableStatuses.includes(appt.status);
   }
 
   get canReschedule(): boolean {
     const appt = this.appointment();
     if (!appt) return false;
-    const reschedulableStatuses: AppointmentStatus[] = ['SCHEDULED', 'CONFIRMED', 'REQUESTED'];
+    const reschedulableStatuses: AppointmentStatus[] = ['SCHEDULED', 'CONFIRMED', 'PENDING'];
     return reschedulableStatuses.includes(appt.status);
   }
 
@@ -121,7 +121,8 @@ export class AppointmentDetailComponent implements OnInit {
       RESCHEDULED: 'status-rescheduled',
       NO_SHOW: 'status-no-show',
       FAILED: 'status-failed',
-      REQUESTED: 'status-requested',
+      PENDING: 'status-requested',
+      UNKNOWN: '',
     };
     return map[status] ?? '';
   }

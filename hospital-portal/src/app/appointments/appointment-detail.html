@@ -50,7 +50,7 @@
 
         @if (canUpdateStatus) {
           <div class="status-actions">
-            @if (appt.status === 'SCHEDULED' || appt.status === 'REQUESTED') {
+            @if (appt.status === 'SCHEDULED' || appt.status === 'PENDING') {
               <button class="btn-xs btn-confirm" (click)="markAsConfirmed()" [disabled]="saving()">
                 Confirm
               </button>

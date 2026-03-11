@@ -61,8 +61,32 @@ export class AdmissionsComponent implements OnInit {
   deletingAdm = signal<AdmissionResponse | null>(null);
   deleting = signal(false);
 
-  admissionTypes: AdmissionType[] = ['EMERGENCY', 'ELECTIVE', 'URGENT', 'TRANSFER', 'OBSERVATION'];
-  acuityLevels: AcuityLevel[] = ['CRITICAL', 'HIGH', 'MODERATE', 'LOW', 'MINIMAL'];
+  admissionTypes: AdmissionType[] = [
+    'EMERGENCY',
+    'ELECTIVE',
+    'URGENT',
+    'NEWBORN',
+    'TRANSFER',
+    'OBSERVATION',
+    'DAY_CASE',
+    'LABOR_DELIVERY',
+    'PSYCHIATRIC',
+  ];
+  acuityLevels: AcuityLevel[] = [
+    'LEVEL_5_CRITICAL',
+    'LEVEL_4_SEVERE',
+    'LEVEL_3_MAJOR',
+    'LEVEL_2_MODERATE',
+    'LEVEL_1_MINIMAL',
+  ];
+
+  readonly acuityLabel: Record<string, string> = {
+    LEVEL_5_CRITICAL: 'Critical',
+    LEVEL_4_SEVERE: 'Severe',
+    LEVEL_3_MAJOR: 'Major',
+    LEVEL_2_MODERATE: 'Moderate',
+    LEVEL_1_MINIMAL: 'Minimal',
+  };
 
   ngOnInit(): void {
     this.load();
@@ -82,7 +106,7 @@ export class AdmissionsComponent implements OnInit {
       hospitalId: '',
       admittingProviderId: '',
       admissionType: 'ELECTIVE',
-      acuityLevel: 'MODERATE',
+      acuityLevel: 'LEVEL_2_MODERATE',
       admissionDateTime: '',
       chiefComplaint: '',
     };
@@ -295,7 +319,7 @@ export class AdmissionsComponent implements OnInit {
   applyFilter(): void {
     let list = this.admissions();
     const tab = this.activeTab();
-    if (tab === 'admitted') list = list.filter((a) => a.status === 'ADMITTED');
+    if (tab === 'admitted') list = list.filter((a) => a.status === 'ACTIVE');
     else if (tab === 'discharged') list = list.filter((a) => a.status === 'DISCHARGED');
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
@@ -311,7 +335,7 @@ export class AdmissionsComponent implements OnInit {
 
   getStatusClass(status: string): string {
     switch (status) {
-      case 'ADMITTED':
+      case 'ACTIVE':
         return 'status-admitted';
       case 'DISCHARGED':
         return 'status-discharged';
@@ -326,11 +350,11 @@ export class AdmissionsComponent implements OnInit {
 
   getAcuityClass(level: string): string {
     switch (level) {
-      case 'CRITICAL':
+      case 'LEVEL_5_CRITICAL':
         return 'acuity-critical';
-      case 'HIGH':
+      case 'LEVEL_4_SEVERE':
         return 'acuity-high';
-      case 'MODERATE':
+      case 'LEVEL_3_MAJOR':
         return 'acuity-moderate';
       default:
         return 'acuity-low';

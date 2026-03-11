@@ -14,7 +14,7 @@
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon admitted">hotel</span>
       <div class="card-info">
-        <span class="card-value">{{ countByStatus('ADMITTED') }}</span
+        <span class="card-value">{{ countByStatus('ACTIVE') }}</span
         ><span class="card-label">Admitted</span>
       </div>
     </div>
@@ -108,7 +108,7 @@
               <td>{{ a.admissionType || '—' }}</td>
               <td>
                 <span class="acuity-badge {{ getAcuityClass(a.acuityLevel) }}">{{
-                  a.acuityLevel
+                  acuityLabel[a.acuityLevel] || a.acuityLevel
                 }}</span>
               </td>
               <td class="complaint-cell">{{ a.chiefComplaint || '—' }}</td>
@@ -261,7 +261,7 @@
             <label for="adm-acuity">Acuity Level *</label>
             <select id="adm-acuity" [(ngModel)]="form.acuityLevel" required>
               @for (l of acuityLevels; track l) {
-                <option [value]="l">{{ l }}</option>
+                <option [value]="l">{{ acuityLabel[l] || l }}</option>
               }
             </select>
           </div>

@@ -563,7 +563,7 @@
   &[data-status='PENDING'] {
     border-left: 3px solid #f59e0b;
   }
-  &[data-status='DENIED'] {
+  &[data-status='REJECTED'] {
     border-left: 3px solid #ef4444;
   }
   &[data-status='CANCELLED'] {
@@ -633,7 +633,7 @@
     background: #fffbeb;
     color: #b45309;
   }
-  &[data-status='DENIED'] {
+  &[data-status='REJECTED'] {
     background: #fef2f2;
     color: #b91c1c;
   }

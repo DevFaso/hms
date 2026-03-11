@@ -7,19 +7,23 @@ export type ImagingModality =
   | 'CT'
   | 'MRI'
   | 'ULTRASOUND'
-  | 'PET'
   | 'MAMMOGRAPHY'
   | 'FLUOROSCOPY'
-  | 'NUCLEAR';
+  | 'PET'
+  | 'NUCLEAR_MEDICINE'
+  | 'INTERVENTIONAL_RADIOLOGY'
+  | 'DEXA'
+  | 'OTHER';
 export type ImagingOrderStatus =
+  | 'DRAFT'
   | 'ORDERED'
+  | 'PENDING_AUTHORIZATION'
   | 'SCHEDULED'
   | 'IN_PROGRESS'
   | 'COMPLETED'
-  | 'CANCELLED'
-  | 'PRELIMINARY'
-  | 'FINAL';
-export type ImagingPriority = 'ROUTINE' | 'URGENT' | 'STAT' | 'ASAP';
+  | 'RESULTS_AVAILABLE'
+  | 'CANCELLED';
+export type ImagingPriority = 'ROUTINE' | 'URGENT' | 'STAT';
 
 export interface ImagingOrderResponse {
   id: string;

@@ -321,9 +321,9 @@ export class PatientDetailComponent implements OnInit {
   getEncounterStatusClass(status: string): string {
     switch (status) {
       case 'COMPLETED':
-      case 'DISCHARGED':
         return 'status-badge completed';
-      case 'OPEN':
+      case 'SCHEDULED':
+      case 'ARRIVED':
       case 'IN_PROGRESS':
         return 'status-badge scheduled';
       case 'CANCELLED':

@@ -8,9 +8,15 @@ export type ConsultationStatus =
   | 'SCHEDULED'
   | 'IN_PROGRESS'
   | 'COMPLETED'
-  | 'CANCELLED';
-export type ConsultationUrgency = 'ROUTINE' | 'URGENT' | 'EMERGENT' | 'STAT';
-export type ConsultationType = 'FORMAL' | 'CURBSIDE' | 'TRANSFER_OF_CARE' | 'SECOND_OPINION';
+  | 'CANCELLED'
+  | 'DECLINED';
+export type ConsultationUrgency = 'ROUTINE' | 'URGENT' | 'EMERGENCY' | 'STAT';
+export type ConsultationType =
+  | 'OUTPATIENT_CONSULT'
+  | 'INPATIENT_CONSULT'
+  | 'FOLLOW_UP_CONSULT'
+  | 'CURBSIDE_CONSULT'
+  | 'EMERGENCY_CONSULT';
 
 export interface ConsultationResponse {
   id: string;

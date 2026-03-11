@@ -2,9 +2,31 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-export type AdmissionType = 'EMERGENCY' | 'ELECTIVE' | 'URGENT' | 'TRANSFER' | 'OBSERVATION';
-export type AcuityLevel = 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW' | 'MINIMAL';
-export type AdmissionStatus = 'ADMITTED' | 'DISCHARGED' | 'TRANSFERRED' | 'CANCELLED' | 'PENDING';
+export type AdmissionType =
+  | 'EMERGENCY'
+  | 'ELECTIVE'
+  | 'URGENT'
+  | 'NEWBORN'
+  | 'TRANSFER'
+  | 'OBSERVATION'
+  | 'DAY_CASE'
+  | 'LABOR_DELIVERY'
+  | 'PSYCHIATRIC';
+export type AcuityLevel =
+  | 'LEVEL_1_MINIMAL'
+  | 'LEVEL_2_MODERATE'
+  | 'LEVEL_3_MAJOR'
+  | 'LEVEL_4_SEVERE'
+  | 'LEVEL_5_CRITICAL';
+export type AdmissionStatus =
+  | 'PENDING'
+  | 'ACTIVE'
+  | 'ON_LEAVE'
+  | 'AWAITING_DISCHARGE'
+  | 'DISCHARGED'
+  | 'CANCELLED'
+  | 'TRANSFERRED'
+  | 'DECEASED';
 
 export interface AdmissionResponse {
   id: string;

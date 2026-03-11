@@ -65,9 +65,12 @@ export class ImagingComponent implements OnInit {
     'PET',
     'MAMMOGRAPHY',
     'FLUOROSCOPY',
-    'NUCLEAR',
+    'NUCLEAR_MEDICINE',
+    'INTERVENTIONAL_RADIOLOGY',
+    'DEXA',
+    'OTHER',
   ];
-  priorities: ImagingPriority[] = ['ROUTINE', 'URGENT', 'STAT', 'ASAP'];
+  priorities: ImagingPriority[] = ['ROUTINE', 'URGENT', 'STAT'];
 
   ngOnInit(): void {
     this.load();
@@ -269,7 +272,7 @@ export class ImagingComponent implements OnInit {
     if (tab === 'ordered')
       list = list.filter((o) => ['ORDERED', 'SCHEDULED', 'IN_PROGRESS'].includes(o.status));
     else if (tab === 'completed')
-      list = list.filter((o) => ['COMPLETED', 'PRELIMINARY', 'FINAL'].includes(o.status));
+      list = list.filter((o) => ['COMPLETED', 'RESULTS_AVAILABLE'].includes(o.status));
     else if (tab === 'cancelled') list = list.filter((o) => o.status === 'CANCELLED');
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
@@ -299,9 +302,10 @@ export class ImagingComponent implements OnInit {
       case 'IN_PROGRESS':
         return 'status-progress';
       case 'COMPLETED':
-      case 'FINAL':
+      case 'RESULTS_AVAILABLE':
         return 'status-completed';
-      case 'PRELIMINARY':
+      case 'DRAFT':
+      case 'PENDING_AUTHORIZATION':
         return 'status-preliminary';
       case 'CANCELLED':
         return 'status-cancelled';
@@ -315,7 +319,6 @@ export class ImagingComponent implements OnInit {
       case 'STAT':
         return 'priority-stat';
       case 'URGENT':
-      case 'ASAP':
         return 'priority-urgent';
       case 'ROUTINE':
         return 'priority-routine';
@@ -329,7 +332,7 @@ export class ImagingComponent implements OnInit {
       return this.orders().filter((o) => ['ORDERED', 'SCHEDULED', 'IN_PROGRESS'].includes(o.status))
         .length;
     if (group === 'completed')
-      return this.orders().filter((o) => ['COMPLETED', 'PRELIMINARY', 'FINAL'].includes(o.status))
+      return this.orders().filter((o) => ['COMPLETED', 'RESULTS_AVAILABLE'].includes(o.status))
         .length;
     return 0;
   }

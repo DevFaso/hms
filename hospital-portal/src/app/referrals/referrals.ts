@@ -50,7 +50,7 @@ export class ReferralsComponent implements OnInit {
   deletingRef = signal<ReferralResponse | null>(null);
   deleting = signal(false);
 
-  urgencies = ['ROUTINE', 'URGENT', 'EMERGENT', 'STAT'];
+  urgencies = ['ROUTINE', 'PRIORITY', 'URGENT', 'EMERGENCY'];
 
   ngOnInit(): void {
     this.load();
@@ -264,7 +264,7 @@ export class ReferralsComponent implements OnInit {
   getUrgencyClass(urgency: string): string {
     switch (urgency?.toUpperCase()) {
       case 'STAT':
-      case 'EMERGENT':
+      case 'EMERGENCY':
         return 'urgency-stat';
       case 'URGENT':
         return 'urgency-urgent';
