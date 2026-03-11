@@ -61,6 +61,15 @@ export class PrescriptionsComponent implements OnInit {
     this.initPatientSearch();
   }
 
+  prescriptionStatuses = [
+    { value: 'DRAFT', label: 'Draft' },
+    { value: 'PENDING_SIGNATURE', label: 'Pending Signature' },
+    { value: 'SIGNED', label: 'Signed' },
+    { value: 'TRANSMITTED', label: 'Transmitted' },
+    { value: 'CANCELLED', label: 'Cancelled' },
+    { value: 'DISCONTINUED', label: 'Discontinued' },
+  ];
+
   emptyForm(): PrescriptionRequest {
     return {
       patientId: '',
@@ -69,6 +78,7 @@ export class PrescriptionsComponent implements OnInit {
       frequency: '',
       duration: '',
       notes: '',
+      status: 'DRAFT',
     };
   }
 
@@ -139,6 +149,7 @@ export class PrescriptionsComponent implements OnInit {
       frequency: p.frequency ?? '',
       duration: p.duration ?? '',
       notes: p.notes ?? '',
+      status: (p.status as PrescriptionRequest['status']) ?? 'DRAFT',
     };
     this.selectedPatient.set({
       id: p.patientId ?? '',
@@ -222,8 +233,8 @@ export class PrescriptionsComponent implements OnInit {
   applyFilter(): void {
     let list = this.prescriptions();
     const tab = this.activeTab();
-    if (tab === 'active') list = list.filter((p) => p.status === 'ACTIVE');
-    else if (tab === 'completed') list = list.filter((p) => p.status === 'COMPLETED');
+    if (tab === 'active') list = list.filter((p) => p.status === 'DRAFT');
+    else if (tab === 'completed') list = list.filter((p) => p.status === 'SIGNED');
     else if (tab === 'cancelled') list = list.filter((p) => p.status === 'CANCELLED');
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
@@ -246,14 +257,20 @@ export class PrescriptionsComponent implements OnInit {
 
   getStatusClass(status?: string): string {
     switch (status) {
-      case 'ACTIVE':
+      case 'DRAFT':
+        return 'status-draft';
+      case 'PENDING_SIGNATURE':
+        return 'status-pending';
+      case 'SIGNED':
         return 'status-active';
-      case 'COMPLETED':
+      case 'TRANSMITTED':
         return 'status-completed';
       case 'CANCELLED':
         return 'status-cancelled';
-      case 'SUSPENDED':
+      case 'DISCONTINUED':
         return 'status-suspended';
+      case 'TRANSMISSION_FAILED':
+        return 'status-cancelled';
       default:
         return '';
     }

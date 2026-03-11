@@ -61,6 +61,15 @@ export class TreatmentPlansComponent implements OnInit {
     this.initPatientSearch();
   }
 
+  treatmentPlanStatuses = [
+    { value: 'DRAFT', label: 'Draft' },
+    { value: 'IN_REVIEW', label: 'In Review' },
+    { value: 'REVISIONS_REQUIRED', label: 'Revisions Required' },
+    { value: 'APPROVED', label: 'Approved' },
+    { value: 'ARCHIVED', label: 'Archived' },
+    { value: 'CANCELLED', label: 'Cancelled' },
+  ];
+
   emptyForm(): TreatmentPlanRequest {
     return {
       patientId: '',
@@ -69,6 +78,7 @@ export class TreatmentPlansComponent implements OnInit {
       problemStatement: '',
       timelineStartDate: '',
       timelineReviewDate: '',
+      status: 'DRAFT',
     };
   }
 
@@ -165,6 +175,7 @@ export class TreatmentPlansComponent implements OnInit {
       problemStatement: p.problemStatement ?? '',
       timelineStartDate: p.timelineStartDate ?? '',
       timelineReviewDate: p.timelineReviewDate ?? '',
+      status: p.status ?? 'DRAFT',
     };
     this.editId = p.id;
     this.selectedPatient.set(null);

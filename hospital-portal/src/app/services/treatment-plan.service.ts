@@ -71,6 +71,7 @@ export interface TreatmentPlanRequest {
   assignmentId?: string;
   authorStaffId: string;
   supervisingStaffId?: string;
+  status?: TreatmentPlanStatus;
   problemStatement: string;
   therapeuticGoals?: string[];
   medicationPlan?: string[];

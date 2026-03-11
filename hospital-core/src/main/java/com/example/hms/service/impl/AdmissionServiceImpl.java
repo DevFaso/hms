@@ -108,6 +108,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public AdmissionResponseDTO getAdmission(UUID admissionId) {
         Admission admission = admissionRepository.findById(admissionId)
             .orElseThrow(() -> new ResourceNotFoundException(ADMISSION_NOT_FOUND_MSG));
@@ -202,6 +203,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<AdmissionResponseDTO> getAdmissionsByPatient(UUID patientId) {
         // ── Tenant isolation: filter to active hospital ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
@@ -217,6 +219,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<AdmissionResponseDTO> getAdmissionsByHospital(UUID hospitalId, String status, LocalDateTime startDate, LocalDateTime endDate) {
         if (status != null && !status.isEmpty()) {
             AdmissionStatus admissionStatus = AdmissionStatus.valueOf(status.toUpperCase());
@@ -232,6 +235,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<AdmissionResponseDTO> getAllAdmissions(String status, LocalDateTime startDate, LocalDateTime endDate) {
         // ── Tenant isolation: non-superadmin must be scoped ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
@@ -257,6 +261,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public AdmissionResponseDTO getCurrentAdmissionForPatient(UUID patientId) {
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
@@ -297,6 +302,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public AdmissionOrderSetResponseDTO getOrderSet(UUID orderSetId) {
         AdmissionOrderSet orderSet = orderSetRepository.findById(orderSetId)
             .orElseThrow(() -> new ResourceNotFoundException("Order set not found"));
@@ -304,6 +310,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<AdmissionOrderSetResponseDTO> getOrderSetsByHospital(UUID hospitalId, String admissionType) {
         List<AdmissionOrderSet> orderSets;
         if (admissionType != null && !admissionType.isEmpty()) {

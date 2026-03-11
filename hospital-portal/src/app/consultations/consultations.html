@@ -232,6 +232,18 @@
               <p>{{ con.clinicalQuestion }}</p>
             </div>
           }
+          @if (con.relevantHistory) {
+            <div class="detail-notes">
+              <span class="field-label">Relevant History</span>
+              <p>{{ con.relevantHistory }}</p>
+            </div>
+          }
+          @if (con.currentMedications) {
+            <div class="detail-notes">
+              <span class="field-label">Current Medications</span>
+              <p>{{ con.currentMedications }}</p>
+            </div>
+          }
           @if (con.recommendations) {
             <div class="detail-notes">
               <span class="field-label">Recommendations</span>
@@ -373,6 +385,28 @@
               [(ngModel)]="form.clinicalQuestion"
               rows="2"
               placeholder="Optional"
+            ></textarea>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field full-width">
+            <label for="con-history">Relevant History</label>
+            <textarea
+              id="con-history"
+              [(ngModel)]="form.relevantHistory"
+              rows="2"
+              placeholder="Relevant medical history (optional)"
+            ></textarea>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field full-width">
+            <label for="con-medications">Current Medications</label>
+            <textarea
+              id="con-medications"
+              [(ngModel)]="form.currentMedications"
+              rows="2"
+              placeholder="List current medications (optional)"
             ></textarea>
           </div>
         </div>

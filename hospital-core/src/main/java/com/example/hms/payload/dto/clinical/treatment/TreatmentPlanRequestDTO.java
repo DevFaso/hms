@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.clinical.treatment;
 
+import com.example.hms.enums.TreatmentPlanStatus;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -37,6 +38,8 @@ public class TreatmentPlanRequestDTO {
     private UUID supervisingStaffId;
 
     private UUID signOffStaffId;
+
+    private TreatmentPlanStatus status;
 
     @NotBlank
     @Size(max = 10_000)

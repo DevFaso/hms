@@ -336,6 +336,16 @@
           </div>
         </div>
         <div class="form-row">
+          <div class="field">
+            <label for="tp-status">Status</label>
+            <select id="tp-status" [(ngModel)]="form.status" title="Plan status">
+              @for (s of treatmentPlanStatuses; track s.value) {
+                <option [value]="s.value">{{ s.label }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
           <div class="field full-width">
             <label for="tp-problem">Problem Statement</label>
             <textarea

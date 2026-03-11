@@ -22,6 +22,15 @@ export interface PrescriptionResponse {
   updatedAt: string;
 }
 
+export type PrescriptionStatusType =
+  | 'DRAFT'
+  | 'PENDING_SIGNATURE'
+  | 'SIGNED'
+  | 'TRANSMITTED'
+  | 'TRANSMISSION_FAILED'
+  | 'CANCELLED'
+  | 'DISCONTINUED';
+
 export interface PrescriptionRequest {
   patientId?: string;
   patientIdentifier?: string;
@@ -32,6 +41,7 @@ export interface PrescriptionRequest {
   frequency?: string;
   duration?: string;
   notes?: string;
+  status?: PrescriptionStatusType;
   forceOverride?: boolean;
 }
 

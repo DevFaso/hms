@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto;
 
+import com.example.hms.enums.PrescriptionStatus;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -45,6 +46,8 @@ public class PrescriptionRequestDTO {
 
     @Size(max = 1024)
     private String notes;
+
+    private PrescriptionStatus status;
 
     /**
      * Force override allergy checking (for severe allergies).

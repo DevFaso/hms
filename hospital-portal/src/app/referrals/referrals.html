@@ -324,12 +324,12 @@
         <div class="form-row">
           <div class="field">
             <label for="ref-specialty">Target Specialty</label>
-            <input
-              id="ref-specialty"
-              type="text"
-              [(ngModel)]="form.targetSpecialty"
-              placeholder="e.g. Cardiology"
-            />
+            <select id="ref-specialty" [(ngModel)]="form.targetSpecialty" title="Target specialty">
+              <option value="">Select specialty...</option>
+              @for (s of specialties; track s.value) {
+                <option [value]="s.value">{{ s.label }}</option>
+              }
+            </select>
           </div>
           <div class="field">
             <label for="ref-urgency">Urgency</label>

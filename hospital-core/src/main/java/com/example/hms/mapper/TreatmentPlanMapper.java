@@ -116,6 +116,10 @@ public class TreatmentPlanMapper {
         } else if (target.getPatientVisibility() == null) {
             target.setPatientVisibility(Boolean.FALSE);
         }
+
+        if (request.getStatus() != null) {
+            target.setStatus(request.getStatus());
+        }
     }
 
     public static class TreatmentPlanContext {

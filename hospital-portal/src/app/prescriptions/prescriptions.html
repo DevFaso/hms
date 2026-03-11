@@ -14,15 +14,15 @@
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon active">medication</span>
       <div class="card-info">
-        <span class="card-value">{{ countByStatus('ACTIVE') }}</span
-        ><span class="card-label">Active</span>
+        <span class="card-value">{{ countByStatus('DRAFT') }}</span
+        ><span class="card-label">Draft</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon completed">check_circle</span>
       <div class="card-info">
-        <span class="card-value">{{ countByStatus('COMPLETED') }}</span
-        ><span class="card-label">Completed</span>
+        <span class="card-value">{{ countByStatus('SIGNED') }}</span
+        ><span class="card-label">Signed</span>
       </div>
     </div>
     <div class="summary-card">
@@ -54,17 +54,17 @@
         class="tab-btn"
         [class.active]="activeTab() === 'active'"
         (click)="setTab('active')"
-        title="Show active"
+        title="Show draft"
       >
-        Active
+        Draft
       </button>
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'completed'"
         (click)="setTab('completed')"
-        title="Show completed"
+        title="Show signed"
       >
-        Completed
+        Signed
       </button>
       <button
         class="tab-btn"
@@ -330,6 +330,16 @@
               placeholder="e.g. 7 days"
             />
           </div>
+          <div class="field">
+            <label for="rx-status">Status</label>
+            <select id="rx-status" [(ngModel)]="form.status">
+              @for (s of prescriptionStatuses; track s.value) {
+                <option [value]="s.value">{{ s.label }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
           <div class="field">
             <label for="rx-encounterId">Encounter ID</label>
             <input

@@ -64,7 +64,8 @@ export interface EncounterRequest {
 }
 
 export interface EncounterNoteRequest {
-  content: string;
+  template: 'SOAP' | 'SOAPIE';
+  summary: string;
 }
 
 export interface EncounterFilterRequest {

@@ -364,14 +364,16 @@ export class EncountersComponent implements OnInit {
   addNote(): void {
     const enc = this.selectedEncounter();
     if (!enc || !this.noteContent.trim()) return;
-    this.encounterService.addNote(enc.id, { content: this.noteContent }).subscribe({
-      next: () => {
-        this.toast.success('Note added successfully');
-        this.noteContent = '';
-        this.showNoteForm.set(false);
-      },
-      error: () => this.toast.error('Failed to add note'),
-    });
+    this.encounterService
+      .addNote(enc.id, { template: 'SOAP', summary: this.noteContent })
+      .subscribe({
+        next: () => {
+          this.toast.success('Note added successfully');
+          this.noteContent = '';
+          this.showNoteForm.set(false);
+        },
+        error: () => this.toast.error('Failed to add note'),
+      });
   }
 
   getStatusClass(status: string): string {

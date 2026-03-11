@@ -72,6 +72,10 @@ public class PrescriptionMapper {
         e.setDuration(dto.getDuration());
         e.setNotes(dto.getNotes());
 
+        if (dto.getStatus() != null) {
+            e.setStatus(dto.getStatus());
+        }
+
         return e;
     }
 
@@ -95,6 +99,10 @@ public class PrescriptionMapper {
         target.setFrequency(dto.getFrequency());
         target.setDuration(dto.getDuration());
         target.setNotes(dto.getNotes());
+
+        if (dto.getStatus() != null) {
+            target.setStatus(dto.getStatus());
+        }
     }
 
     /* ============================
