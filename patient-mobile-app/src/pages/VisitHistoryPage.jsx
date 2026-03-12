@@ -3,7 +3,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Building2, ChevronRight, FileText, Calendar } from 'lucide-react'
-import { encounters as mockEncounters } from '@/data/encounters'
 import portalService from '@/services/portalService'
 import useApiData from '@/hooks/useApiData'
 
@@ -11,7 +10,7 @@ export default function VisitHistoryPage() {
   const navigate = useNavigate()
   const { data: raw } = useApiData(
     () => portalService.getEncounters(),
-    mockEncounters,
+    [],
   )
 
   const encounters = (raw || []).map((e) => {

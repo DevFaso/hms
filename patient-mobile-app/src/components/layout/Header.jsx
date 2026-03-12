@@ -33,7 +33,7 @@ export default function Header({ onMenuToggle }) {
             </Button>
           )}
           <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium">NYC HEALTH + HOSPITALS</span>
+            <span className="text-sm font-medium">BF HEALTH+HOSPITALS</span>
           </div>
         </div>
         <div className="flex items-center space-x-2">

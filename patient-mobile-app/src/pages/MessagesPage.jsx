@@ -4,7 +4,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Mail, ChevronRight, Search, Plus } from 'lucide-react'
-import { conversations as mockConversations } from '@/data/chatThreads'
 import { useAuth } from '@/contexts/AuthContext'
 import chatService from '@/services/chatService'
 import useApiData from '@/hooks/useApiData'
@@ -17,7 +16,7 @@ export default function MessagesPage() {
 
   const { data: raw } = useApiData(
     () => user?.id ? chatService.getConversations(user.id) : Promise.resolve(null),
-    mockConversations,
+    [],
     [user?.id],
   )
 

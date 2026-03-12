@@ -7,7 +7,6 @@ import {
   Calendar, Mail, Building2, TestTube, Pill, CreditCard,
   ChevronRight, Bell, Users
 } from 'lucide-react'
-import { notifications as mockNotifications } from '@/data/notifications'
 import notificationService from '@/services/notificationService'
 import useApiData from '@/hooks/useApiData'
 
@@ -26,7 +25,7 @@ export default function DashboardPage() {
   const { user } = useAuth()
   const { data: notifications } = useApiData(
     () => notificationService.getAll(),
-    mockNotifications,
+    [],
   )
   const unreadNotifications = (notifications || []).filter((n) => !n.read)
 
@@ -145,7 +144,7 @@ export default function DashboardPage() {
                     <Building2 className="h-3 w-3 text-white" />
                   </div>
                   <div>
-                    <p className="text-xs font-medium text-gray-800">NYC Health + Hospitals</p>
+                    <p className="text-xs font-medium text-gray-800">BF Health + Hospitals</p>
                     <p className="text-xs text-gray-500">Physician Services</p>
                   </div>
                 </div>

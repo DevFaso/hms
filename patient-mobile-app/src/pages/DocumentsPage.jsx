@@ -8,7 +8,8 @@ import {
   FileText, Download, Search, Pill, TestTube,
   Shield, Camera
 } from 'lucide-react'
-import { documents as mockDocuments } from '@/data/documents'
+import portalService from '@/services/portalService'
+import useApiData from '@/hooks/useApiData'
 
 const categoryIcons = {
   'Visit Notes': FileText,
@@ -33,7 +34,12 @@ export default function DocumentsPage() {
   const [activeTab, setActiveTab] = useState('All')
   const [search, setSearch] = useState('')
 
-  const filtered = mockDocuments.filter((d) => {
+  const { data: documents } = useApiData(
+    () => portalService.getDocuments(),
+    [],
+  )
+
+  const filtered = (documents || []).filter((d) => {
     if (activeTab !== 'All' && d.category !== activeTab) return false
     if (search.trim()) {
       const q = search.toLowerCase()

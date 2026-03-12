@@ -7,7 +7,6 @@ import {
   Bell, Calendar, TestTube, CreditCard, Pill, Mail,
   ChevronRight, Check
 } from 'lucide-react'
-import { notifications as mockNotifications } from '@/data/notifications'
 import notificationService from '@/services/notificationService'
 import useApiData from '@/hooks/useApiData'
 
@@ -30,7 +29,7 @@ export default function NotificationsPage() {
   const navigate = useNavigate()
   const { data: apiNotifs } = useApiData(
     () => notificationService.getAll(),
-    mockNotifications,
+    [],
   )
   const [notifs, setNotifs] = useState(null)
 

@@ -2,7 +2,6 @@ import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Calendar, AlertCircle, FileText } from 'lucide-react'
-import { appointments as mockAppointments } from '@/data/appointments'
 import portalService from '@/services/portalService'
 import useApiData from '@/hooks/useApiData'
 
@@ -10,7 +9,7 @@ export default function AppointmentsPage() {
   const navigate = useNavigate()
   const { data: raw } = useApiData(
     () => portalService.getAppointments(),
-    mockAppointments,
+    [],
   )
 
   // Normalize API shape → local shape

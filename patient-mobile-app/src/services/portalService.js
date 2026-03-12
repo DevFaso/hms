@@ -100,6 +100,10 @@ const portalService = {
   // ── Treatment Plans ──────────────────────────────────────────
   getTreatmentPlans: (page = 0, size = 20) =>
     api.get('/me/patient/treatment-plans', { page, size }),
+
+  // ── Documents ────────────────────────────────────────────────
+  getDocuments: (page = 0, size = 50) =>
+    api.get('/me/patient/documents', { page, size }),
 }
 
 export default portalService

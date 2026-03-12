@@ -11,7 +11,6 @@ import {
   Search, ChevronRight, ChevronLeft, CheckCircle, Calendar as CalendarIcon,
   Clock, User, MapPin
 } from 'lucide-react'
-import { careTeam as mockCareTeam } from '@/data/careTeam'
 import schedulingService from '@/services/schedulingService'
 import portalService from '@/services/portalService'
 import useApiData from '@/hooks/useApiData'
@@ -54,7 +53,7 @@ export default function ScheduleAppointmentPage() {
 
   const { data: careTeamData } = useApiData(
     () => portalService.getCareTeam(),
-    mockCareTeam,
+    null,
   )
 
   const providers = [

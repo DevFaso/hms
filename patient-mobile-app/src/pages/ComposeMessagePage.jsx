@@ -6,8 +6,6 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Search, Send, CheckCircle } from 'lucide-react'
-import { staff as mockStaff } from '@/data/chatThreads'
-import { careTeam as mockCareTeam } from '@/data/careTeam'
 import chatService from '@/services/chatService'
 import portalService from '@/services/portalService'
 import useApiData from '@/hooks/useApiData'
@@ -23,7 +21,7 @@ export default function ComposeMessagePage() {
 
   const { data: careTeamData } = useApiData(
     () => portalService.getCareTeam(),
-    mockCareTeam,
+    null,
   )
 
   const providers = [

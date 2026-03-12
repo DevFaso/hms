@@ -2,14 +2,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Pill, RefreshCw, MapPin } from 'lucide-react'
-import { medications as mockMedications } from '@/data/medications'
 import portalService from '@/services/portalService'
 import useApiData from '@/hooks/useApiData'
 
 export default function MedicationsPage() {
   const { data: raw } = useApiData(
     () => portalService.getMedications(),
-    mockMedications,
+    [],
   )
 
   const medications = (raw || []).map((m) => {

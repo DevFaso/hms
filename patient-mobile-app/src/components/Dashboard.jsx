@@ -80,13 +80,13 @@ const Dashboard = ({ onLogout }) => {
               <Menu className="h-6 w-6" />
             </Button>
             <div className="flex items-center space-x-2">
-              <span className="text-sm font-medium">NYC HEALTH + HOSPITALS</span>
-              <span className="text-xs">MYCHART</span>
+              <span className="text-sm font-medium">BF HEALTH+HOSPITALS</span>
+              <span className="text-xs">PATIENTCHART</span>
             </div>
           </div>
           <div className="flex items-center space-x-2">
             <div className="flex items-center space-x-1">
-              <span className="text-white font-bold">MyChart</span>
+              <span className="text-white font-bold">PatientChart</span>
               <span className="text-red-400 font-bold italic">Epic</span>
             </div>
             <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
@@ -141,7 +141,7 @@ const Dashboard = ({ onLogout }) => {
                       <span className="text-sm font-medium text-gray-600">N</span>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-700">NYC Health and Hospitals</p>
+                      <p className="text-sm font-medium text-gray-700">BF Health and Hospitals</p>
                       <p className="text-xs text-gray-500">Sep 12</p>
                     </div>
                   </div>
@@ -168,7 +168,7 @@ const Dashboard = ({ onLogout }) => {
                       <DollarSign className="h-4 w-4 text-white" />
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-700">NYC Health + Hospitals</p>
+                      <p className="text-sm font-medium text-gray-700">BF Health + Hospitals</p>
                       <p className="text-xs text-gray-500">Physician Services</p>
                       <p className="text-xs text-gray-500">Guarantor #100714973</p>
                     </div>

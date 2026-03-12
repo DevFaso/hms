@@ -2,14 +2,13 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Eye, Download } from 'lucide-react'
-import { testResults as mockResults } from '@/data/testResults'
 import portalService from '@/services/portalService'
 import useApiData from '@/hooks/useApiData'
 
 export default function LabResultsPage() {
   const { data: raw } = useApiData(
     () => portalService.getLabResults(),
-    mockResults,
+    [],
   )
 
   // Normalize API shape → local shape

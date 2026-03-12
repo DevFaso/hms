@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback } from 'react'
 
 /**
  * Generic hook for API calls with loading / error / data state.
- * Falls back to `fallbackData` when the API is unreachable (dev mode).
+ * Falls back to `fallbackData` when the API is unreachable.
  *
  * @param {() => Promise<T>} fetcher   — service call, e.g. () => portalService.getAppointments()
- * @param {T}                fallback  — mock data used when API fails in DEV
+ * @param {T}                fallback  — initial/fallback data used when API fails
  * @param {any[]}            deps      — extra dependency array for re-fetch
  */
 export default function useApiData(fetcher, fallback = null, deps = []) {
@@ -20,9 +20,8 @@ export default function useApiData(fetcher, fallback = null, deps = []) {
       const result = await fetcher()
       setData(result)
     } catch (err) {
-      console.warn('API fetch failed, using fallback:', err.message)
+      console.warn('API fetch failed:', err.message)
       setError(err)
-      if (fallback !== null) setData(fallback)
     } finally {
       setLoading(false)
     }

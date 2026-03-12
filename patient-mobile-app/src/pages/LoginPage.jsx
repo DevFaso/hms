@@ -77,30 +77,21 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-600 to-blue-800 relative overflow-hidden">
-      {/* City skyline background */}
-      <div className="absolute bottom-0 left-0 right-0 h-64 opacity-20">
-        <svg viewBox="0 0 800 200" className="w-full h-full">
-          <rect x="50" y="120" width="40" height="80" fill="white" />
-          <rect x="100" y="80" width="60" height="120" fill="white" />
-          <rect x="170" y="100" width="45" height="100" fill="white" />
-          <rect x="220" y="60" width="50" height="140" fill="white" />
-          <rect x="280" y="90" width="35" height="110" fill="white" />
-          <rect x="320" y="70" width="55" height="130" fill="white" />
-          <rect x="380" y="110" width="40" height="90" fill="white" />
-          <rect x="430" y="50" width="65" height="150" fill="white" />
-          <rect x="500" y="85" width="45" height="115" fill="white" />
-          <rect x="550" y="95" width="50" height="105" fill="white" />
-          <rect x="610" y="75" width="40" height="125" fill="white" />
-          <rect x="660" y="105" width="35" height="95" fill="white" />
-          <rect x="700" y="65" width="50" height="135" fill="white" />
-        </svg>
+      {/* Burkina Faso coat of arms background */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ opacity: 0.15 }}>
+        <img
+          src="/images/bf-coat-of-arms.svg"
+          alt=""
+          className="w-96 h-96 object-contain"
+          aria-hidden="true"
+        />
       </div>
 
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-4">
         {/* Header */}
         <div className="flex items-center justify-between w-full max-w-md mb-8">
           <div className="flex items-center space-x-2">
-            <span className="text-white font-bold text-lg">MyChart</span>
+            <span className="text-white font-bold text-lg">PatientChart</span>
             <span className="text-red-500 font-bold text-lg italic">Epic</span>
           </div>
           <Button variant="ghost" className="text-blue-300 hover:text-white">
@@ -113,7 +104,7 @@ export default function LoginPage() {
           <CardContent className="p-8">
             {/* Hospital branding */}
             <div className="text-center mb-8">
-              <h1 className="text-4xl font-bold text-orange-500 mb-2">NYC</h1>
+              <h1 className="text-4xl font-bold text-orange-500 mb-2">BF</h1>
               <h2 className="text-2xl font-bold text-blue-700 leading-tight">
                 HEALTH<span className="text-blue-500">+</span><br />
                 HOSPITALS
@@ -215,7 +206,7 @@ export default function LoginPage() {
         </Card>
 
         <div className="mt-8 text-center text-white/80 text-sm">
-          MyChart®, Epic Systems Corporation, © 1999 - 2026
+          PatientChart®, Epic Systems Corporation, © 1999 - 2026
         </div>
       </div>
     </div>

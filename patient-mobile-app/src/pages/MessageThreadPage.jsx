@@ -3,7 +3,6 @@ import { useState, useRef, useEffect, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Send } from 'lucide-react'
-import { chatThreads as mockThreads, conversations as mockConversations } from '@/data/chatThreads'
 import { useAuth } from '@/contexts/AuthContext'
 import chatService from '@/services/chatService'
 import useApiData from '@/hooks/useApiData'
@@ -15,12 +14,18 @@ export default function MessageThreadPage() {
   const [sending, setSending] = useState(false)
   const bottomRef = useRef(null)
 
-  const convo = mockConversations.find((c) => c.recipientId === recipientId)
+  // Fetch recipient name from conversation list
+  const { data: conversations } = useApiData(
+    () => user?.id ? chatService.getConversations(user.id) : Promise.resolve([]),
+    [],
+    [user?.id],
+  )
+  const convo = (conversations || []).find((c) => c.recipientId === recipientId)
   const recipientName = convo?.recipientName || 'Provider'
 
   const { data: rawMessages, setData: setMessages } = useApiData(
     () => user?.id ? chatService.getHistory(user.id, recipientId) : Promise.resolve(null),
-    mockThreads[recipientId] || [],
+    [],
     [user?.id, recipientId],
   )
 

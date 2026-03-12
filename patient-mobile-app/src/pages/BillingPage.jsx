@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { CreditCard, Shield, DollarSign } from 'lucide-react'
-import { bills as mockBills } from '@/data/bills'
 import portalService from '@/services/portalService'
 import useApiData from '@/hooks/useApiData'
 
@@ -11,7 +10,7 @@ export default function BillingPage() {
   const navigate = useNavigate()
   const { data: raw } = useApiData(
     () => portalService.getInvoices(),
-    mockBills,
+    [],
   )
 
   // Normalize — API returns Page<BillingInvoiceResponseDTO>, content may be in .content

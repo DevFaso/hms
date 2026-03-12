@@ -2,7 +2,6 @@ import { createContext, useContext, useState, useCallback, useEffect } from 'rea
 import authService from '@/services/authService'
 import portalService from '@/services/portalService'
 import { clearTokens, getAccessToken } from '@/services/api'
-import { patient as mockPatient } from '@/data/patient'
 
 const AuthContext = createContext(null)
 
@@ -28,21 +27,11 @@ export function AuthProvider({ children }) {
   }, [])
 
   const login = useCallback(async (username, password) => {
-    try {
-      const data = await authService.login({ username, password })
-      // Fetch profile after login
-      const profile = await portalService.getProfile()
-      setUser(profile)
-      return { success: true, data }
-    } catch (err) {
-      // Fallback to mock data if backend is unreachable (dev mode)
-      if (import.meta.env.DEV) {
-        console.warn('API unreachable — using mock login')
-        setUser({ ...mockPatient, username })
-        return { success: true, mock: true }
-      }
-      throw err
-    }
+    const data = await authService.login({ username, password })
+    // Fetch profile after login
+    const profile = await portalService.getProfile()
+    setUser(profile)
+    return { success: true, data }
   }, [])
 
   const logout = useCallback(async () => {

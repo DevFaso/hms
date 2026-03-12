@@ -7,7 +7,6 @@ import {
   FileText, Pill, TestTube, Calendar, Heart,
   ClipboardList, ArrowRight, Download, Printer
 } from 'lucide-react'
-import { afterVisitSummaries as mockSummaries } from '@/data/afterVisitSummaries'
 import portalService from '@/services/portalService'
 import useApiData from '@/hooks/useApiData'
 
@@ -17,7 +16,7 @@ export default function AfterVisitSummaryPage() {
 
   const { data: allSummaries } = useApiData(
     () => portalService.getAfterVisitSummaries(),
-    mockSummaries,
+    [],
   )
 
   const summary = (allSummaries || []).find(

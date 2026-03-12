@@ -7,14 +7,13 @@ import { Label } from '@/components/ui/label'
 import {
   Shield, Building2, Plus, Trash2, CheckCircle
 } from 'lucide-react'
-import { consents as mockConsents } from '@/data/documents'
 import portalService from '@/services/portalService'
 import useApiData from '@/hooks/useApiData'
 
 export default function ConsentFormPage() {
   const { data: raw, setData } = useApiData(
     () => portalService.getConsents(),
-    mockConsents,
+    [],
   )
 
   const [showGrant, setShowGrant] = useState(false)
@@ -49,7 +48,7 @@ export default function ConsentFormPage() {
         const list = Array.isArray(prev) ? prev : prev?.content || []
         return [...list, result || {
           id: `consent-new-${Date.now()}`,
-          fromHospitalName: 'NYC Health + Hospitals / Kings County',
+          fromHospitalName: 'BF Health + Hospitals / Kings County',
           toHospitalName: newHospital,
           grantedAt: new Date().toISOString().split('T')[0],
           expiresAt: '',
@@ -63,7 +62,7 @@ export default function ConsentFormPage() {
         const list = Array.isArray(prev) ? prev : prev?.content || []
         return [...list, {
           id: `consent-new-${Date.now()}`,
-          fromHospitalName: 'NYC Health + Hospitals / Kings County',
+          fromHospitalName: 'BF Health + Hospitals / Kings County',
           toHospitalName: newHospital,
           grantedAt: new Date().toISOString().split('T')[0],
           status: 'ACTIVE',

@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Phone, Mail, MapPin, Star, MessageSquare } from 'lucide-react'
-import { careTeam as mockCareTeam } from '@/data/careTeam'
 import portalService from '@/services/portalService'
 import useApiData from '@/hooks/useApiData'
 
@@ -74,7 +73,7 @@ export default function CareTeamPage() {
   const navigate = useNavigate()
   const { data: raw } = useApiData(
     () => portalService.getCareTeam(),
-    mockCareTeam,
+    null,
   )
 
   const pcp = raw?.primaryCare
