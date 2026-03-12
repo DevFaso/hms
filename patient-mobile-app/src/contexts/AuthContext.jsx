@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import authService from '@/services/authService'
 import portalService from '@/services/portalService'
-import { clearTokens } from '@/services/api'
+import { clearTokens, getAccessToken } from '@/services/api'
 import { patient as mockPatient } from '@/data/patient'
 
 const AuthContext = createContext(null)
@@ -10,20 +10,21 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // Restore session from localStorage on mount
+  // Restore session from secure storage on mount
   useEffect(() => {
-    const token = localStorage.getItem('accessToken')
-    if (token) {
-      portalService
-        .getProfile()
-        .then((profile) => setUser(profile))
-        .catch(() => {
-          clearTokens()
-        })
-        .finally(() => setLoading(false))
-    } else {
-      setLoading(false)
-    }
+    ;(async () => {
+      try {
+        const token = await getAccessToken()
+        if (token) {
+          const profile = await portalService.getProfile()
+          setUser(profile)
+        }
+      } catch {
+        await clearTokens()
+      } finally {
+        setLoading(false)
+      }
+    })()
   }, [])
 
   const login = useCallback(async (username, password) => {
@@ -50,7 +51,7 @@ export function AuthProvider({ children }) {
     } catch {
       // silent — clear local state regardless
     }
-    clearTokens()
+    await clearTokens()
     setUser(null)
   }, [])
 

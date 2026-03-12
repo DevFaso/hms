@@ -18,7 +18,7 @@ const authService = {
     const data = await api.post('/auth/login', creds)
     const accessToken = data.accessToken ?? data.token
     const refreshToken = data.refreshToken
-    setTokens(accessToken, refreshToken)
+    await setTokens(accessToken, refreshToken)
     return data
   },
 
@@ -26,7 +26,7 @@ const authService = {
     try {
       await api.post('/auth/logout')
     } finally {
-      clearTokens()
+      await clearTokens()
     }
   },
 

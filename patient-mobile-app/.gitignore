@@ -209,3 +209,7 @@ $RECYCLE.BIN/
 .directory
 .Trash-*
 .nfs*
+
+# Capacitor native platforms (generated — rebuild from web assets)
+ios/
+android/

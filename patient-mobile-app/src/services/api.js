@@ -2,26 +2,28 @@
  * API Client — thin HTTP wrapper with JWT auth
  *
  * Base URL: http://localhost:8081/api   (configurable via VITE_API_URL)
- * Auth: Bearer token stored in localStorage
+ * Auth: Bearer token stored via secureStorage (Capacitor Preferences
+ *       on native, localStorage on web)
  * Refresh: automatic silent refresh on 401
  */
+import secureStorage from './secureStorage'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8081/api'
 
-// ── token helpers ───────────────────────────────────────────────
-function getAccessToken() {
-  return localStorage.getItem('accessToken')
+// ── token helpers (async — backed by secureStorage) ─────────────
+export async function getAccessToken() {
+  return secureStorage.getItem('accessToken')
 }
-function getRefreshToken() {
-  return localStorage.getItem('refreshToken')
+export async function getRefreshToken() {
+  return secureStorage.getItem('refreshToken')
 }
-export function setTokens(access, refresh) {
-  if (access) localStorage.setItem('accessToken', access)
-  if (refresh) localStorage.setItem('refreshToken', refresh)
+export async function setTokens(access, refresh) {
+  if (access) await secureStorage.setItem('accessToken', access)
+  if (refresh) await secureStorage.setItem('refreshToken', refresh)
 }
-export function clearTokens() {
-  localStorage.removeItem('accessToken')
-  localStorage.removeItem('refreshToken')
+export async function clearTokens() {
+  await secureStorage.removeItem('accessToken')
+  await secureStorage.removeItem('refreshToken')
 }
 
 // ── refresh lock (prevent parallel refresh calls) ───────────────
@@ -31,7 +33,7 @@ async function refreshAccessToken() {
   if (refreshPromise) return refreshPromise
 
   refreshPromise = (async () => {
-    const rt = getRefreshToken()
+    const rt = await getRefreshToken()
     if (!rt) throw new Error('No refresh token')
 
     const res = await fetch(`${API_BASE}/auth/token/refresh`, {
@@ -67,9 +69,9 @@ async function request(path, options = {}) {
     url += `?${qs}`
   }
 
-  const buildHeaders = () => {
+  const buildHeaders = async () => {
     const h = { ...headers }
-    const token = getAccessToken()
+    const token = await getAccessToken()
     if (token) h['Authorization'] = `Bearer ${token}`
     if (body && !(body instanceof FormData)) {
       h['Content-Type'] = 'application/json'
@@ -79,18 +81,18 @@ async function request(path, options = {}) {
 
   let res = await fetch(url, {
     method,
-    headers: buildHeaders(),
+    headers: await buildHeaders(),
     body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
     ...rest,
   })
 
   // automatic retry on 401
-  if (res.status === 401 && getRefreshToken()) {
+  if (res.status === 401 && (await getRefreshToken())) {
     try {
       await refreshAccessToken()
       res = await fetch(url, {
         method,
-        headers: buildHeaders(),
+        headers: await buildHeaders(),
         body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined,
         ...rest,
       })

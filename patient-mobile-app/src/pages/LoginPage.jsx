@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/contexts/AuthContext'
+import biometricAuth from '@/services/biometricAuth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -15,17 +16,41 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loggingIn, setLoggingIn] = useState(false)
+  const [biometricAvailable, setBiometricAvailable] = useState(false)
+  const [biometricLabel, setBiometricLabel] = useState('Biometric')
   const { login } = useAuth()
   const navigate = useNavigate()
 
-  const handleFaceIdLogin = async () => {
+  // Check biometric availability on mount
+  useEffect(() => {
+    biometricAuth.isAvailable().then(({ available, biometryType }) => {
+      setBiometricAvailable(available)
+      if (biometryType) setBiometricLabel(biometryType)
+    })
+  }, [])
+
+  const handleBiometricLogin = async () => {
     setLoggingIn(true)
     setError('')
     try {
-      await login('tiego', 'faceId')
+      // 1. Prompt biometric verification
+      await biometricAuth.authenticate(`Log in with ${biometricLabel}`)
+      // 2. Retrieve stored credentials from OS keychain
+      const creds = await biometricAuth.getCredentials()
+      if (!creds) {
+        setError('No saved credentials. Please log in with username first.')
+        setShowUsernameLogin(true)
+        return
+      }
+      // 3. Authenticate with backend using stored credentials
+      await login(creds.username, creds.password)
       navigate('/dashboard', { replace: true })
     } catch (err) {
-      setError(err.message || 'Login failed')
+      if (err?.message?.includes('cancel') || err?.code === 'BIOMETRIC_DISMISSED') {
+        // user dismissed — don't show error
+        return
+      }
+      setError(err.message || 'Biometric login failed')
     } finally {
       setLoggingIn(false)
     }
@@ -38,6 +63,10 @@ export default function LoginPage() {
     setError('')
     try {
       await login(username, password)
+      // Store credentials for future biometric logins
+      if (biometricAvailable) {
+        await biometricAuth.storeCredentials(username, password)
+      }
       navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err.message || 'Invalid username or password')
@@ -99,12 +128,12 @@ export default function LoginPage() {
                   </div>
                 )}
                 <Button
-                  onClick={handleFaceIdLogin}
+                  onClick={handleBiometricLogin}
                   disabled={loggingIn}
                   className="w-full bg-blue-700 hover:bg-blue-800 text-white py-4 text-lg"
                 >
                   <Fingerprint className="mr-3 h-6 w-6" />
-                  Log in with Face ID
+                  {biometricAvailable ? `Log in with ${biometricLabel}` : 'Log in with Biometric'}
                 </Button>
 
                 <div className="text-center">
@@ -166,7 +195,7 @@ export default function LoginPage() {
                   className="w-full"
                   onClick={() => setShowUsernameLogin(false)}
                 >
-                  Back to Face ID
+                  Back to {biometricAvailable ? biometricLabel : 'Biometric'} Login
                 </Button>
               </form>
             )}
