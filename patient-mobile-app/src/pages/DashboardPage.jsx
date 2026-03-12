@@ -27,7 +27,7 @@ export default function DashboardPage() {
     () => notificationService.getAll(),
     [],
   )
-  const unreadNotifications = (notifications || []).filter((n) => !n.read)
+  const unreadNotifications = (Array.isArray(notifications) ? notifications : []).filter((n) => !n.read)
 
   return (
     <div className="space-y-6">

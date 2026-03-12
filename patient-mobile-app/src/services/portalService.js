@@ -3,8 +3,14 @@
  *
  * All endpoints require a valid Bearer JWT token (handled by api.js).
  * Responses follow ApiResponseWrapper<T> — unwrapped automatically.
+ *
+ * Paginated endpoints return Spring Page<T>.  The helper below extracts
+ * `.content` so callers always receive a plain array.
  */
 import api from './api'
+
+/** Unwrap a Spring Page response into its `.content` array */
+const unwrapPage = (res) => (Array.isArray(res) ? res : res?.content ?? [])
 
 const portalService = {
   // ── Profile ──────────────────────────────────────────────────
@@ -42,8 +48,8 @@ const portalService = {
 
   // ── Refills ──────────────────────────────────────────────────
   /** GET /me/patient/refills → Page<MedicationRefillResponseDTO> */
-  getRefills: (page = 0, size = 20) =>
-    api.get('/me/patient/refills', { page, size }),
+  getRefills: async (page = 0, size = 20) =>
+    unwrapPage(await api.get('/me/patient/refills', { page, size })),
 
   /** POST /me/patient/refills → MedicationRefillResponseDTO */
   requestRefill: (dto) => api.post('/me/patient/refills', dto),
@@ -54,8 +60,8 @@ const portalService = {
 
   // ── Billing ──────────────────────────────────────────────────
   /** GET /me/patient/billing/invoices → Page<BillingInvoiceResponseDTO> */
-  getInvoices: (page = 0, size = 20) =>
-    api.get('/me/patient/billing/invoices', { page, size }),
+  getInvoices: async (page = 0, size = 20) =>
+    unwrapPage(await api.get('/me/patient/billing/invoices', { page, size })),
 
   // ── Visits / Encounters ──────────────────────────────────────
   /** GET /me/patient/encounters → EncounterResponseDTO[] */
@@ -82,8 +88,8 @@ const portalService = {
   getConsultations: () => api.get('/me/patient/consultations'),
 
   // ── Consents ─────────────────────────────────────────────────
-  getConsents: (page = 0, size = 20) =>
-    api.get('/me/patient/consents', { page, size }),
+  getConsents: async (page = 0, size = 20) =>
+    unwrapPage(await api.get('/me/patient/consents', { page, size })),
   grantConsent: (dto) => api.post('/me/patient/consents', dto),
   revokeConsent: (fromHospitalId, toHospitalId) =>
     api.delete('/me/patient/consents', undefined, {
@@ -91,19 +97,19 @@ const portalService = {
     }),
 
   // ── Access Log ───────────────────────────────────────────────
-  getAccessLog: (page = 0, size = 20) =>
-    api.get('/me/patient/access-log', { page, size }),
+  getAccessLog: async (page = 0, size = 20) =>
+    unwrapPage(await api.get('/me/patient/access-log', { page, size })),
 
   // ── Referrals ────────────────────────────────────────────────
   getReferrals: () => api.get('/me/patient/referrals'),
 
   // ── Treatment Plans ──────────────────────────────────────────
-  getTreatmentPlans: (page = 0, size = 20) =>
-    api.get('/me/patient/treatment-plans', { page, size }),
+  getTreatmentPlans: async (page = 0, size = 20) =>
+    unwrapPage(await api.get('/me/patient/treatment-plans', { page, size })),
 
   // ── Documents ────────────────────────────────────────────────
-  getDocuments: (page = 0, size = 50) =>
-    api.get('/me/patient/documents', { page, size }),
+  getDocuments: async (page = 0, size = 50) =>
+    unwrapPage(await api.get('/me/patient/documents', { page, size })),
 }
 
 export default portalService

@@ -39,7 +39,9 @@ export default function DocumentsPage() {
     [],
   )
 
-  const filtered = (documents || []).filter((d) => {
+  const docs = Array.isArray(documents) ? documents : documents?.content || []
+
+  const filtered = docs.filter((d) => {
     if (activeTab !== 'All' && d.category !== activeTab) return false
     if (search.trim()) {
       const q = search.toLowerCase()
