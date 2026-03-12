@@ -89,8 +89,7 @@ jobs:
         run: |
           railway up \
             --service ${{ steps.cfg.outputs.backend_svc }} \
-            --environment ${{ steps.cfg.outputs.railway_env }} \
-            --detach
+            --environment ${{ steps.cfg.outputs.railway_env }}
 
       - name: Deploy frontend (${{ steps.cfg.outputs.railway_env }})
         if: steps.cfg.outputs.deploy == 'both' || steps.cfg.outputs.deploy == 'frontend'
@@ -100,6 +99,5 @@ jobs:
         run: |
           railway up \
             --service ${{ steps.cfg.outputs.frontend_svc }} \
-            --environment ${{ steps.cfg.outputs.railway_env }} \
-            --detach
+            --environment ${{ steps.cfg.outputs.railway_env }}
 
