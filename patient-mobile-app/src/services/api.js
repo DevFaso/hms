@@ -10,10 +10,10 @@
 import secureStorage from './secureStorage'
 
 // When VITE_API_URL is explicitly set to "" (Docker build), use relative "/api"
-// so nginx can reverse-proxy to the backend.  Only fall back to localhost when
-// the variable is completely absent (local dev without .env override).
-const envUrl = import.meta.env.VITE_API_URL
-const API_BASE = envUrl !== undefined && envUrl !== null ? envUrl : 'http://localhost:8081/api'
+// so nginx can reverse-proxy /api/* to the backend service.
+// Only fall back to the full localhost URL when the variable is completely
+// absent (local dev without .env override).
+const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
 // ── token helpers (async — backed by secureStorage) ─────────────
 export async function getAccessToken() {
