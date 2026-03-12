@@ -193,8 +193,15 @@ public class SecurityConfig {
                 .ignoringRequestMatchers(
                     // CORS preflight (no cookies should mutate state anyway)
                     new AntPathRequestMatcher("/**", "OPTIONS"),
-                    // One-time bootstrap (frontend may not have XSRF token yet)
+                    // Public auth endpoints return JWTs — no cookie session to protect.
+                    // The patient-mobile-app (React/fetch) does not use the XSRF-TOKEN
+                    // dance, so these must be CSRF-exempt.
+                    new AntPathRequestMatcher("/auth/login", "POST"),
+                    new AntPathRequestMatcher("/auth/register", "POST"),
                     new AntPathRequestMatcher("/auth/bootstrap-signup", "POST"),
+                    new AntPathRequestMatcher("/auth/token/refresh", "POST"),
+                    new AntPathRequestMatcher("/auth/password/**"),
+                    new AntPathRequestMatcher("/auth/resend-verification", "POST"),
                     // SockJS handshake & transport (xhr_send, xhr_streaming are POSTs
                     // that bypass Angular's HttpClient and therefore carry no XSRF token)
                     new AntPathRequestMatcher("/ws-chat/**"),
