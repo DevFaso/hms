@@ -66,10 +66,10 @@ app:
   # the internal Railway hostname.
   # Example: PUBLIC_BASE_URL=https://api.hms.bitnesttechs.com
   public-base-url: ${PUBLIC_BASE_URL:}
-  # CORS allowed origins: must include the public frontend domain.
-  # Set CORS_ALLOWED_ORIGINS=https://hms.bitnesttechs.com in Railway env vars.
+  # CORS allowed origins: must include the public frontend domain and patient app.
+  # Set CORS_ALLOWED_ORIGINS=https://hms.bitnesttechs.com,https://patient.bitnesttechs.com in Railway env vars.
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:5173}
   # Directory where uploaded files are stored.
   # On Railway, set APP_UPLOAD_DIR to the persistent-volume mount path
   # (e.g. /data/uploads) so files survive redeployments.

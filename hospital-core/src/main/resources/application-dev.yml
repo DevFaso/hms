@@ -37,10 +37,10 @@ app:
   # Set FRONTEND_BASE_URL=https://hms.dev.bitnesttechs.com in Railway env vars.
   frontend:
     base-url: ${FRONTEND_BASE_URL:https://hms.dev.bitnesttechs.com}
-  # CORS allowed origins: must include the public frontend domain.
-  # Set CORS_ALLOWED_ORIGINS=https://hms.dev.bitnesttechs.com in Railway env vars.
+  # CORS allowed origins: must include the public frontend domain and patient app.
+  # Set CORS_ALLOWED_ORIGINS=https://hms.dev.bitnesttechs.com,https://patient.dev.bitnesttechs.com in Railway env vars.
   cors:
-    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200}
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:5173}
   # Public base URL for uploaded file links returned to the browser.
   # Set PUBLIC_BASE_URL=https://hms.dev.bitnesttechs.com in Railway env vars.
   public-base-url: ${PUBLIC_BASE_URL:}
