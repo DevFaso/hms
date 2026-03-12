@@ -52,11 +52,22 @@ export default function AfterVisitSummaryPage() {
       {/* Visit info */}
       <Card className="bg-blue-50 border-blue-200">
         <CardContent className="p-4">
-          <h3 className="font-semibold text-blue-800 mb-1">{summary.visitType}</h3>
-          <p className="text-sm text-blue-700">{summary.provider}</p>
-          <p className="text-sm text-blue-600">{summary.facility}</p>
+          <h3 className="font-semibold text-blue-800 mb-1">
+            {summary.encounterType || summary.visitType || 'Visit'}
+          </h3>
+          <p className="text-sm text-blue-700">
+            {summary.providerName || summary.provider || ''}
+          </p>
           <p className="text-sm text-blue-600">
-            {new Date(summary.date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+            {summary.department || summary.facility || ''}
+          </p>
+          {summary.chiefComplaint && (
+            <p className="text-sm text-blue-600 italic mt-0.5">
+              &ldquo;{summary.chiefComplaint}&rdquo;
+            </p>
+          )}
+          <p className="text-sm text-blue-600">
+            {formatVisitDate(summary.encounterDate || summary.date)}
           </p>
         </CardContent>
       </Card>
@@ -94,7 +105,7 @@ export default function AfterVisitSummaryPage() {
               {Object.entries(summary.vitals).map(([key, value]) => (
                 <div key={key} className="bg-gray-50 rounded p-2">
                   <p className="text-xs text-gray-500 capitalize">
-                    {key.replace(/([A-Z])/g, ' $1').trim()}
+                    {key.replaceAll(/([A-Z])/g, ' $1').trim()}
                   </p>
                   <p className="text-sm font-medium text-gray-800">{value}</p>
                 </div>
@@ -105,7 +116,7 @@ export default function AfterVisitSummaryPage() {
       )}
 
       {/* Instructions */}
-      {summary.instructions?.length > 0 && (
+      {summary.instructions && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center">
@@ -114,14 +125,18 @@ export default function AfterVisitSummaryPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
-            <ul className="space-y-2">
-              {summary.instructions.map((inst, i) => (
-                <li key={i} className="flex items-start text-sm text-gray-700">
-                  <span className="text-blue-600 mr-2 mt-0.5">•</span>
-                  {inst}
-                </li>
-              ))}
-            </ul>
+            {Array.isArray(summary.instructions) ? (
+              <ul className="space-y-2">
+                {summary.instructions.map((inst) => (
+                  <li key={`inst-${inst}`} className="flex items-start text-sm text-gray-700">
+                    <span className="text-blue-600 mr-2 mt-0.5">•</span>
+                    {inst}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-gray-700 whitespace-pre-line">{summary.instructions}</p>
+            )}
           </CardContent>
         </Card>
       )}
@@ -137,21 +152,28 @@ export default function AfterVisitSummaryPage() {
           </CardHeader>
           <CardContent className="pt-0">
             <div className="space-y-2">
-              {summary.medications.map((med, i) => (
-                <div key={i} className="flex items-center justify-between bg-gray-50 rounded p-2">
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">{med.name}</p>
-                    <p className="text-xs text-gray-500">{med.instructions}</p>
+              {summary.medications.map((med) => {
+                const isString = typeof med === 'string'
+                const name = isString ? med : (med.medicationName ?? med.name ?? 'Medication')
+                const dosage = isString ? '' : (med.dosage ?? med.instructions ?? '')
+                return (
+                  <div key={`med-${name}`} className="flex items-center justify-between bg-gray-50 rounded p-2">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{name}</p>
+                      {dosage && <p className="text-xs text-gray-500">{dosage}</p>}
+                    </div>
+                    {!isString && med.action && (
+                      <Badge
+                        className={`text-xs ${
+                          med.action === 'New' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+                        }`}
+                      >
+                        {med.action}
+                      </Badge>
+                    )}
                   </div>
-                  <Badge
-                    className={`text-xs ${
-                      med.action === 'New' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
-                    }`}
-                  >
-                    {med.action}
-                  </Badge>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </CardContent>
         </Card>
@@ -182,12 +204,14 @@ export default function AfterVisitSummaryPage() {
       {/* Follow-up & Referrals */}
       <Card>
         <CardContent className="p-4 space-y-3">
-          {summary.followUp && (
+          {(summary.followUp || summary.followUpDate) && (
             <div className="flex items-start space-x-2">
               <Calendar className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
               <div>
                 <p className="text-xs text-gray-500 font-medium">Follow-up</p>
-                <p className="text-sm text-gray-800">{summary.followUp}</p>
+                <p className="text-sm text-gray-800">
+                  {summary.followUp || formatVisitDate(summary.followUpDate)}
+                </p>
               </div>
             </div>
           )}
@@ -204,7 +228,29 @@ export default function AfterVisitSummaryPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Treatment Summary */}
+      {summary.treatmentSummary && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center">
+              <ClipboardList className="h-4 w-4 mr-2 text-indigo-600" />
+              Treatment Summary
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <p className="text-sm text-gray-700 whitespace-pre-line">{summary.treatmentSummary}</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
+}
+
+function formatVisitDate(raw) {
+  if (!raw) return ''
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return raw
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 

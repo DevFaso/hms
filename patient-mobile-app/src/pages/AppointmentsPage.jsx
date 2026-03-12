@@ -16,13 +16,14 @@ export default function AppointmentsPage() {
   const appointments = (raw || []).map((a) => ({
     id: a.id,
     type: a.treatmentName || a.type || 'Appointment',
-    doctor: a.staffName || a.doctor,
-    location: a.hospitalName || a.location || '',
+    doctor: a.providerName || a.staffName || a.doctor || '',
+    location: a.departmentName || a.hospitalName || a.location || '',
     date: a.appointmentDate
       ? new Date(a.appointmentDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).toUpperCase()
       : a.date || '',
+    rawDate: a.appointmentDate || a.date || '',
     time: a.startTime || a.time || '',
-    status: mapStatus(a.status),
+    status: mapStatus(a.status, a.appointmentDate || a.date),
   }))
 
   const upcoming = appointments.filter((a) => a.status === 'upcoming')
@@ -117,9 +118,14 @@ export default function AppointmentsPage() {
   )
 }
 
-function mapStatus(s) {
+function mapStatus(s, dateStr) {
   if (!s) return 'upcoming'
   const upper = s.toUpperCase()
   if (['COMPLETED', 'NO_SHOW', 'CANCELLED'].includes(upper)) return 'past'
+  // If date is in the past, treat as past even if still SCHEDULED
+  if (dateStr) {
+    const aptDate = new Date(dateStr)
+    if (!Number.isNaN(aptDate.getTime()) && aptDate < new Date()) return 'past'
+  }
   return 'upcoming'
 }

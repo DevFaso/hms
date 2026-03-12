@@ -19,6 +19,9 @@ import VisitHistoryPage from '@/pages/VisitHistoryPage'
 import AfterVisitSummaryPage from '@/pages/AfterVisitSummaryPage'
 import DocumentsPage from '@/pages/DocumentsPage'
 import ConsentFormPage from '@/pages/ConsentFormPage'
+import VitalsPage from '@/pages/VitalsPage'
+import HealthRecordsPage from '@/pages/HealthRecordsPage'
+import SharingPrivacyPage from '@/pages/SharingPrivacyPage'
 import './App.css'
 
 function App() {
@@ -45,6 +48,8 @@ function App() {
           <Route path="/lab-results" element={<LabResultsPage />} />
           <Route path="/medications" element={<MedicationsPage />} />
           <Route path="/care-team" element={<CareTeamPage />} />
+          <Route path="/vitals" element={<VitalsPage />} />
+          <Route path="/health-records" element={<HealthRecordsPage />} />
 
           {/* Visits */}
           <Route path="/visits" element={<VisitHistoryPage />} />
@@ -57,6 +62,7 @@ function App() {
           {/* Documents & Forms */}
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/documents/consents" element={<ConsentFormPage />} />
+          <Route path="/sharing" element={<SharingPrivacyPage />} />
 
           {/* Profile & Notifications */}
           <Route path="/profile" element={<PatientProfilePage />} />

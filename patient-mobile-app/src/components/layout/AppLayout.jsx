@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator'
 import {
   X, Calendar, Mail, Building2, TestTube, Pill, CreditCard,
   Shield, DollarSign, FileText, Settings, LogOut, ChevronRight,
-  HelpCircle, User, FolderOpen, ClipboardList
+  HelpCircle, User, FolderOpen, ClipboardList, Heart, Share2
 } from 'lucide-react'
 
 const menuSections = [
@@ -30,6 +30,8 @@ const menuSections = [
       { path: '/visits', title: 'Visits', icon: Building2 },
       { path: '/lab-results', title: 'Test Results', icon: TestTube },
       { path: '/medications', title: 'Medications', icon: Pill },
+      { path: '/vitals', title: 'Vitals', icon: Heart },
+      { path: '/health-records', title: 'Health Records', icon: ClipboardList },
       { path: '/profile', title: 'Health Summary', icon: FileText },
       { path: '/documents', title: 'Documents', icon: FolderOpen },
     ]
@@ -43,6 +45,7 @@ const menuSections = [
   },
   {
     id: 'forms', title: 'Forms & Consents', items: [
+      { path: '/sharing', title: 'Sharing & Privacy', icon: Share2 },
       { path: '/documents/consents', title: 'Data Sharing Consents', icon: Shield },
       { path: '/documents', title: 'All Documents', icon: ClipboardList },
     ]

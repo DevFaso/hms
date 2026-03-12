@@ -13,19 +13,30 @@ export default function LabResultsPage() {
 
   // Normalize API shape → local shape
   const testResults = (raw || []).map((r) => {
-    // If it came from the API (has testName), reshape
-    if (r.testName) {
-      return {
-        id: r.id,
-        test: r.testName,
-        date: r.resultedAt ? new Date(r.resultedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '',
-        status: r.status === 'FINAL' ? 'Reviewed' : 'New',
-        provider: r.performedBy || r.orderedBy || 'Lab',
-        details: r.value ? { [r.testCode || r.testName]: { value: r.value, unit: r.unit || '', range: r.referenceRange || '—', flag: r.notes || 'Normal' } } : null,
-      }
+    const testName = r.testName || r.testCode || 'Lab Test'
+    const resultVal = r.result ?? r.value ?? ''
+    const unit = r.unit || ''
+    const refRange = r.referenceRange || '—'
+    const abnormal = r.isAbnormal === true
+    const dateRaw = r.collectedDate || r.resultedAt
+    const dateStr = dateRaw
+      ? new Date(dateRaw).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : ''
+
+    return {
+      id: r.id,
+      test: testName,
+      date: dateStr,
+      status: r.status === 'FINAL' ? 'Reviewed' : 'New',
+      provider: r.performedBy || r.orderedBy || 'Lab',
+      result: resultVal,
+      unit,
+      referenceRange: refRange,
+      isAbnormal: abnormal,
+      details: resultVal
+        ? { [testName]: { value: resultVal, unit, range: refRange, flag: abnormal ? 'Abnormal' : 'Normal' } }
+        : null,
     }
-    // Already in mock shape
-    return r
   })
   return (
     <div className="space-y-6">
@@ -49,9 +60,23 @@ export default function LabResultsPage() {
                     >
                       {result.status}
                     </Badge>
+                    {result.isAbnormal && (
+                      <Badge className="bg-red-100 text-red-700 text-xs">Abnormal</Badge>
+                    )}
                   </div>
                   <p className="text-sm text-gray-600">{result.provider}</p>
                   <p className="text-sm text-gray-500">{result.date}</p>
+                  {result.result && (
+                    <p className="text-sm mt-1">
+                      <span className="text-gray-600">Result: </span>
+                      <span className={`font-medium ${result.isAbnormal ? 'text-red-700' : 'text-green-700'}`}>
+                        {result.result}{result.unit ? ` ${result.unit}` : ''}
+                      </span>
+                      {result.referenceRange !== '—' && (
+                        <span className="text-gray-400 text-xs ml-2">(Ref: {result.referenceRange})</span>
+                      )}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -71,7 +96,7 @@ export default function LabResultsPage() {
                       {Object.entries(result.details).map(([key, detail]) => (
                         <tr key={key} className="border-t border-gray-200">
                           <td className="py-1.5 text-gray-700 capitalize">
-                            {key.replace(/([A-Z])/g, ' $1').trim()}
+                            {key.replaceAll(/([A-Z])/g, ' $1').trim()}
                           </td>
                           <td className="py-1.5 text-right font-medium text-gray-800">
                             {detail.value} <span className="text-gray-400 text-xs">{detail.unit}</span>
