@@ -25,6 +25,7 @@ export class PermissionService {
       'Create Prescriptions',
       'View Prescriptions',
       'Document Nursing Notes',
+      'Access Nurse Station',
       'Request Imaging Studies',
       'View Imaging Studies',
       'Request Consultations',
@@ -147,6 +148,7 @@ export class PermissionService {
       // Clinical
       'Create Encounters',
       'Document Nursing Notes',
+      'Access Nurse Station',
       'Create Prescriptions',
       'View Prescriptions',
       'Request Imaging Studies',
@@ -178,6 +180,7 @@ export class PermissionService {
       'Create Encounters',
       'Admit Patients',
       'Document Nursing Notes',
+      'Access Nurse Station',
       'Create Prescriptions',
       'View Prescriptions',
       'Create Referrals',

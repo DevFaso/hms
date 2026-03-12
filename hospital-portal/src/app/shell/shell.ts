@@ -133,7 +133,7 @@ export class ShellComponent implements OnInit, OnDestroy {
         icon: 'monitor_heart',
         label: 'Nurse Station',
         route: '/nurse-station',
-        permission: 'Document Nursing Notes',
+        permission: 'Access Nurse Station',
       },
       {
         icon: 'radiology',
