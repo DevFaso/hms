@@ -1,14 +1,19 @@
 /**
  * API Client — thin HTTP wrapper with JWT auth
  *
- * Base URL: http://localhost:8081/api   (configurable via VITE_API_URL)
+ * Base URL: Relative "/api" in production (nginx reverse-proxies to backend),
+ *           or http://localhost:8081/api for local development (via .env).
  * Auth: Bearer token stored via secureStorage (Capacitor Preferences
  *       on native, localStorage on web)
  * Refresh: automatic silent refresh on 401
  */
 import secureStorage from './secureStorage'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8081/api'
+// When VITE_API_URL is explicitly set to "" (Docker build), use relative "/api"
+// so nginx can reverse-proxy to the backend.  Only fall back to localhost when
+// the variable is completely absent (local dev without .env override).
+const envUrl = import.meta.env.VITE_API_URL
+const API_BASE = envUrl !== undefined && envUrl !== null ? envUrl : 'http://localhost:8081/api'
 
 // ── token helpers (async — backed by secureStorage) ─────────────
 export async function getAccessToken() {
