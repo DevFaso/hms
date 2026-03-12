@@ -68,9 +68,17 @@ public class HospitalServiceImpl implements HospitalService {
         String normalizedState = normalizeQuery(state);
 
         List<Hospital> hospitals = hospitalRepository.findAllForFilters(organizationFilter, unassignedFilter, normalizedCity, normalizedState);
-        List<Hospital> scopedHospitals = applyHospitalScope(hospitals);
+        if (hospitals == null || hospitals.isEmpty()) {
+            return List.of();
+        }
 
-        return scopedHospitals.stream()
+        // No hospital-scope filtering here: the hospital directory (name,
+        // address, phone) is not sensitive, and clinical staff need the full
+        // list to pick destination hospitals in referral / consultation
+        // workflows.  Access is already gated by SecurityConfig + controller
+        // @PreAuthorize.
+        return hospitals.stream()
+                .filter(java.util.Objects::nonNull)
                 .map(hospitalMapper::toHospitalDTO)
                 .toList();
     }

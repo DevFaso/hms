@@ -179,7 +179,7 @@ class HospitalServiceImplTest {
     }
 
     @Test
-    @DisplayName("getAllHospitals applies hospital scope filtering for scoped user")
+    @DisplayName("getAllHospitals returns full directory regardless of user scope (referral support)")
     void getAllHospitals_scopeFiltering() {
         UUID scopedId = UUID.randomUUID();
         UUID unscopedId = UUID.randomUUID();
@@ -193,8 +193,9 @@ class HospitalServiceImplTest {
 
         List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
 
-        assertEquals(1, result.size());
-        assertEquals("Scoped", result.get(0).getName());
+        // No scope filtering — both hospitals returned so clinicians can pick
+        // referral destinations across the network.
+        assertEquals(2, result.size());
     }
 
     @Test
@@ -228,7 +229,7 @@ class HospitalServiceImplTest {
     }
 
     @Test
-    @DisplayName("getAllHospitals returns empty when scoped user has empty scope")
+    @DisplayName("getAllHospitals returns results even when user has empty scope (directory is unscoped)")
     void getAllHospitals_emptyScopeReturnsEmpty() {
         HospitalContextHolder.setContext(HospitalContext.builder()
                 .principalUserId(UUID.randomUUID()).principalUsername("user")
@@ -239,7 +240,9 @@ class HospitalServiceImplTest {
                 .thenReturn(List.of(h1));
 
         List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
-        assertTrue(result.isEmpty());
+        // Hospital directory is unscoped — even users with empty scope see the
+        // full list so they can create referrals to other hospitals.
+        assertEquals(1, result.size());
     }
 
     // ═══════════════ getHospitalById ═══════════════
@@ -1052,12 +1055,12 @@ class HospitalServiceImplTest {
     }
 
     @Test
-    @DisplayName("applyHospitalScope handles null list")
+    @DisplayName("getAllHospitals handles null list from repository gracefully")
     void getAllHospitals_nullListFromRepo() {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(null);
 
-        // applyHospitalScope(null) → returns empty list
+        // null-guard in getAllHospitals returns empty list
         List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
         assertTrue(result.isEmpty());
     }
@@ -1286,7 +1289,7 @@ class HospitalServiceImplTest {
     }
 
     @Test
-    @DisplayName("applyHospitalScope filters out hospital with null id")
+    @DisplayName("getAllHospitals returns hospitals with null id (no scope filtering)")
     void getAllHospitals_hospitalWithNullIdFiltered() {
         UUID scopedId = UUID.randomUUID();
         setScopedContext(scopedId);
@@ -1298,13 +1301,13 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(List.of(h1, h2));
 
+        // No scope filtering — both hospitals returned (directory is public)
         List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
-        assertEquals(1, result.size());
-        assertEquals("Scoped", result.get(0).getName());
+        assertEquals(2, result.size());
     }
 
     @Test
-    @DisplayName("applyHospitalScope filters out null hospital in list")
+    @DisplayName("getAllHospitals filters out null entries in hospital list")
     void getAllHospitals_nullHospitalInList() {
         UUID scopedId = UUID.randomUUID();
         setScopedContext(scopedId);
@@ -1317,6 +1320,7 @@ class HospitalServiceImplTest {
         when(hospitalRepository.findAllForFilters(any(), any(), any(), any()))
                 .thenReturn(hospitals);
 
+        // null entries are filtered out; non-null hospitals are kept
         List<HospitalResponseDTO> result = hospitalService.getAllHospitals(null, null, null, null, Locale.ENGLISH);
         assertEquals(1, result.size());
     }
