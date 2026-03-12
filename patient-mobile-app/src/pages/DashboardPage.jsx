@@ -8,6 +8,7 @@ import {
   ChevronRight, Bell, Users
 } from 'lucide-react'
 import notificationService from '@/services/notificationService'
+import portalService from '@/services/portalService'
 import useApiData from '@/hooks/useApiData'
 
 const quickLinks = [
@@ -27,7 +28,16 @@ export default function DashboardPage() {
     () => notificationService.getAll(),
     [],
   )
+  const { data: invoices } = useApiData(
+    () => portalService.getInvoices(),
+    [],
+  )
   const unreadNotifications = (Array.isArray(notifications) ? notifications : []).filter((n) => !n.read)
+
+  const safeInvoices = Array.isArray(invoices) ? invoices : []
+  const totalDue = safeInvoices
+    .filter((inv) => inv.status !== 'PAID' && inv.status !== 'CANCELLED')
+    .reduce((sum, inv) => sum + (Number.parseFloat(inv.balance ?? inv.amount) || 0), 0)
 
   return (
     <div className="space-y-6">
@@ -131,6 +141,7 @@ export default function DashboardPage() {
         })}
 
         {/* Amount Due summary card */}
+        {totalDue > 0 && (
         <Card className="border-l-4 border-l-orange-500">
           <CardContent className="p-4">
             <div className="flex items-start space-x-3">
@@ -139,37 +150,23 @@ export default function DashboardPage() {
               </div>
               <div className="flex-1">
                 <h3 className="font-semibold text-gray-800 text-sm mb-1">Amount Due</h3>
-                <div className="flex items-center space-x-2 mb-2">
-                  <div className="bg-blue-700 rounded p-1">
-                    <Building2 className="h-3 w-3 text-white" />
-                  </div>
-                  <div>
-                    <p className="text-xs font-medium text-gray-800">BF Health + Hospitals</p>
-                    <p className="text-xs text-gray-500">Physician Services</p>
-                  </div>
-                </div>
-                <p className="text-xl font-bold text-gray-800 mb-3">$54.00</p>
+                <p className="text-xl font-bold text-gray-800 mb-3">
+                  ${totalDue.toFixed(2)}
+                </p>
                 <div className="flex space-x-2">
                   <Button
                     size="sm"
                     className="bg-blue-700 hover:bg-blue-800 text-xs h-8"
-                    onClick={() => navigate('/billing/pay')}
-                  >
-                    Pay now
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="text-xs h-8"
                     onClick={() => navigate('/billing')}
                   >
-                    View details
+                    View &amp; Pay
                   </Button>
                 </div>
               </div>
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
     </div>
   )

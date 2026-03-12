@@ -76,8 +76,14 @@ export default function CareTeamPage() {
     null,
   )
 
-  const pcp = raw?.primaryCare
-  const members = raw?.members || []
+  let allMembers = []
+  if (Array.isArray(raw?.members)) {
+    allMembers = raw.members
+  } else if (Array.isArray(raw)) {
+    allMembers = raw
+  }
+  const pcp = allMembers.find((m) => m.isPrimary) || null
+  const members = allMembers.filter((m) => !m.isPrimary)
   const handleMessage = (id) => navigate(`/messages/${id}`)
 
   return (
