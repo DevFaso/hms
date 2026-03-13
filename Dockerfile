@@ -16,8 +16,11 @@ COPY hospital-core/build.gradle hospital-core/build.gradle
 # Create source directory structure so Gradle resolves
 RUN mkdir -p hospital-core/src/main/java
 
+# Fix CRLF → LF (Windows checkouts) and make executable
+RUN sed -i 's/\r$//' gradlew && chmod +x gradlew
+
 # Download dependencies (cached unless build files change)
-RUN chmod +x gradlew && ./gradlew dependencies --no-daemon || true
+RUN ./gradlew dependencies --no-daemon || true
 
 # Copy actual source code
 COPY hospital-core/src hospital-core/src
@@ -40,7 +43,8 @@ COPY --from=build /app/hospital-core/build/libs/*.jar app.jar
 # It runs as root, chowns the uploads directory to appuser, then execs the
 # JVM as appuser — so the running process is still unprivileged.
 COPY ./entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh \
+RUN sed -i 's/\r$//' /entrypoint.sh \
+    && chmod +x /entrypoint.sh \
     && mkdir -p /app/uploads \
     && chown -R appuser:appuser /app
 
