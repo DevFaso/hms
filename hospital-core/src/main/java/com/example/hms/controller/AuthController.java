@@ -192,6 +192,7 @@ public class AuthController {
                     .active(user.isActive())
                     .profilePictureUrl(user.getProfileImageUrl())
                     .forcePasswordChange(user.isForcePasswordChange())
+                    .forceUsernameChange(user.isForceUsernameChange())
                     .primaryHospitalId(hospitalContext.primaryHospitalId())
                     .primaryHospitalName(hospitalContext.primaryHospitalName())
                     .hospitalIds(hospitalContext.hospitalIds())
@@ -506,6 +507,58 @@ public class AuthController {
     public record ChangePasswordRequest(
             @NotBlank String currentPassword,
             @NotBlank String newPassword) {}
+
+    /**
+     * Change the authenticated user's own username.
+     * Clears the {@code forceUsernameChange} flag on success.
+     */
+    @PostMapping("/me/change-username")
+    @Operation(summary = "Change own username", description = "Allows any authenticated user to change their own username. Clears the force-username-change flag.")
+    @ApiResponse(responseCode = "200", description = "Username changed successfully")
+    @ApiResponse(responseCode = "400", description = "Username invalid or already taken")
+    public ResponseEntity<Object> changeOwnUsername(
+            @Valid @RequestBody ChangeUsernameRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Not authenticated."));
+        }
+        String currentUsername = authentication.getName();
+        var userOpt = userRepository.findByUsername(currentUsername);
+        if (userOpt.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("User not found."));
+        }
+        var user = userOpt.get();
+
+        String newUsername = request.newUsername() == null ? "" : request.newUsername().trim();
+        if (newUsername.length() < 3 || newUsername.length() > 50) {
+            return ResponseEntity.badRequest()
+                    .body(new MessageResponse("Username must be between 3 and 50 characters."));
+        }
+        if (!newUsername.matches("^[a-zA-Z0-9._-]+$")) {
+            return ResponseEntity.badRequest()
+                    .body(new MessageResponse("Username may only contain letters, digits, dots, hyphens, and underscores."));
+        }
+        if (newUsername.equals(currentUsername)) {
+            return ResponseEntity.badRequest()
+                    .body(new MessageResponse("New username must differ from the current username."));
+        }
+
+        try {
+            userService.changeOwnUsername(user.getId(), newUsername);
+        } catch (IllegalArgumentException ex) {
+            return ResponseEntity.badRequest()
+                    .body(new MessageResponse(ex.getMessage()));
+        }
+
+        log.info("🔑 [CHANGE-USR] Username changed for user='{}' -> '{}'; forceUsernameChange cleared.",
+                currentUsername, newUsername);
+        return ResponseEntity.ok(new MessageResponse("Username changed successfully."));
+    }
+
+    /** Request body for {@code POST /auth/me/change-username}. */
+    public record ChangeUsernameRequest(@NotBlank String newUsername) {}
 
     @PostMapping("/request-reset")
     public ResponseEntity<Void> legacyRequestPasswordReset(

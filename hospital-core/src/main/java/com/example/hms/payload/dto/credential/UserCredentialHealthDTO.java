@@ -20,6 +20,7 @@ public class UserCredentialHealthDTO {
     private String email;
     private boolean active;
     private boolean forcePasswordChange;
+    private boolean forceUsernameChange;
     private LocalDateTime lastLoginAt;
 
     private long mfaEnrolledCount;

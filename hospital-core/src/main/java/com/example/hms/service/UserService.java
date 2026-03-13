@@ -48,4 +48,13 @@ public interface UserService {
      * @param newPassword the new plaintext password (must be ≥ 8 chars, already validated by caller)
      */
     void changeOwnPassword(UUID userId, String newPassword);
+
+    /**
+     * Change a user's own username (self-service, typically on first login).
+     * Clears {@code forceUsernameChange}.
+     *
+     * @param userId      the user whose username is being changed
+     * @param newUsername  the desired new username (must be unique, already validated by caller)
+     */
+    void changeOwnUsername(UUID userId, String newUsername);
 }

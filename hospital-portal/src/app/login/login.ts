@@ -171,6 +171,8 @@ export class Login implements OnInit {
         staffId?: string;
         roleName?: string;
         active?: boolean;
+        forcePasswordChange?: boolean;
+        forceUsernameChange?: boolean;
         primaryHospitalId?: string;
         primaryHospitalName?: string;
         hospitalIds?: string[];
@@ -231,6 +233,8 @@ export class Login implements OnInit {
               staffId: res.staffId,
               roleName: res.roleName,
               active: res.active ?? true,
+              forcePasswordChange: res.forcePasswordChange,
+              forceUsernameChange: res.forceUsernameChange,
               primaryHospitalId: res.primaryHospitalId,
               primaryHospitalName: res.primaryHospitalName,
               hospitalIds: res.hospitalIds,
@@ -238,7 +242,9 @@ export class Login implements OnInit {
             this.auth.setUserProfile(profile);
           }
 
-          const dest = this.auth.resolveLandingPath();
+          // Redirect to account setup page if user must change credentials
+          const needsSetup = res.forcePasswordChange || res.forceUsernameChange;
+          const dest = needsSetup ? '/account-setup' : this.auth.resolveLandingPath();
           void this.router.navigateByUrl(dest);
           this.loading = false;
         },

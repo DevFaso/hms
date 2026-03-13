@@ -61,6 +61,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.security.SecureRandom;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -70,6 +71,7 @@ import java.util.stream.Collectors;
 public class UserServiceImpl implements UserService {
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final String ROLE_PATIENT = "ROLE_PATIENT";
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static final String HOSPITAL_NOT_FOUND_PREFIX = "Hospital not found with ID: ";
     private static final String ROLE_NURSE = "ROLE_NURSE";
     private static final String ROLE_PHARMACIST = "ROLE_PHARMACIST";
@@ -502,7 +504,7 @@ public class UserServiceImpl implements UserService {
         // first login via forcePasswordChange flag.
         String rawPassword = request.getPassword();
         if (rawPassword == null || rawPassword.isBlank()) {
-            rawPassword = UUID.randomUUID().toString();
+            rawPassword = generateTempPassword();
             request.setForcePasswordChange(true);
         }
         // Persist the raw password back onto the request so that callers
@@ -530,6 +532,7 @@ public class UserServiceImpl implements UserService {
 
         if (isPatient || Boolean.TRUE.equals(request.getForcePasswordChange())) {
             u.setForcePasswordChange(true);
+            u.setForceUsernameChange(true);
         }
         u.setCreatedAt(passwordSetAt);
         u.setPasswordChangedAt(passwordSetAt);
@@ -1106,6 +1109,20 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional
+    public void changeOwnUsername(UUID userId, String newUsername) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + userId));
+        if (userRepository.findByUsername(newUsername).filter(u -> !u.getId().equals(userId)).isPresent()) {
+            throw new IllegalArgumentException("Username '" + newUsername + "' is already taken.");
+        }
+        user.setUsername(newUsername);
+        user.setForceUsernameChange(false);
+        userRepository.save(user);
+        log.info("🔑 [CHANGE-USR] Username updated and forceUsernameChange cleared for user={}", userId);
+    }
+
+    @Override
+    @Transactional
     public void updateProfileImage(UUID userId, String imageUrl) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
@@ -1115,6 +1132,40 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
 
         log.info("Profile image updated for user {}: {} -> {}", userId, oldImageUrl, imageUrl);
+    }
+
+    /**
+     * Generate a temporary password: 9 chars mixing uppercase, lowercase, digits, and specials.
+     * Guarantees at least one character from each category.
+     */
+    private String generateTempPassword() {
+        String upper   = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        String lower   = "abcdefghijklmnopqrstuvwxyz";
+        String digits  = "0123456789";
+        String special = "!@#$%&*";
+        String all     = upper + lower + digits + special;
+
+        // Guarantee one from each category
+        StringBuilder sb = new StringBuilder(9);
+        sb.append(upper.charAt(SECURE_RANDOM.nextInt(upper.length())));
+        sb.append(lower.charAt(SECURE_RANDOM.nextInt(lower.length())));
+        sb.append(digits.charAt(SECURE_RANDOM.nextInt(digits.length())));
+        sb.append(special.charAt(SECURE_RANDOM.nextInt(special.length())));
+
+        // Fill remaining 5 chars
+        for (int i = 4; i < 9; i++) {
+            sb.append(all.charAt(SECURE_RANDOM.nextInt(all.length())));
+        }
+
+        // Shuffle to avoid predictable positions
+        char[] chars = sb.toString().toCharArray();
+        for (int i = chars.length - 1; i > 0; i--) {
+            int j = SECURE_RANDOM.nextInt(i + 1);
+            char tmp = chars[i];
+            chars[i] = chars[j];
+            chars[j] = tmp;
+        }
+        return new String(chars);
     }
 
 }

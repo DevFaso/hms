@@ -148,10 +148,10 @@ export class PatientFormComponent implements OnInit {
       });
   }
 
-  /** Generate a unique-ish username from first + last name */
+  /** Generate a short username from first + last name (e.g. tou4821) */
   private generateUsername(first: string, last: string): string {
-    const base = (first.charAt(0) + last).toLowerCase().replace(/[^a-z0-9]/g, '');
+    const base = (first.charAt(0) + last.substring(0, 2)).toLowerCase().replace(/[^a-z]/g, '');
     const suffix = Math.floor(1000 + Math.random() * 9000);
-    return `pat_${base}${suffix}`;
+    return `${base}${suffix}`;
   }
 }

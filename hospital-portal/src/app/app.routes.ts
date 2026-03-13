@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { AuthGuard } from './auth/auth.guard';
+import { AccountSetupGuard } from './auth/account-setup.guard';
 import { LoginRedirectGuard } from './auth/login-redirect.guard';
 import { RoleGuard } from './auth/role.guard';
 
@@ -23,10 +24,18 @@ export const routes: Routes = [
       import('./onboarding/role-welcome/role-welcome').then((m) => m.RoleWelcomeComponent),
   },
 
+  // First-login credential setup (authenticated but not yet through account-setup guard)
+  {
+    path: 'account-setup',
+    canActivate: [AuthGuard],
+    loadComponent: () =>
+      import('./account-setup/account-setup').then((m) => m.AccountSetupComponent),
+  },
+
   // Authenticated shell
   {
     path: '',
-    canActivate: [AuthGuard],
+    canActivate: [AuthGuard, AccountSetupGuard],
     loadComponent: () => import('./shell/shell').then((m) => m.ShellComponent),
     children: [
       {

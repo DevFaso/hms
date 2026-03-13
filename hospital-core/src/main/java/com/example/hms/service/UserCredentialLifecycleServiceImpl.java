@@ -214,6 +214,7 @@ public class UserCredentialLifecycleServiceImpl implements UserCredentialLifecyc
             .email(user.getEmail())
             .active(user.isActive())
             .forcePasswordChange(user.isForcePasswordChange())
+            .forceUsernameChange(user.isForceUsernameChange())
             .lastLoginAt(user.getLastLoginAt())
             .mfaEnrolledCount(enrolledCount)
             .verifiedMfaCount(verifiedMfa)
