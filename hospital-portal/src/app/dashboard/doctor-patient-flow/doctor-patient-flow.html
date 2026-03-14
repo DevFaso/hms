@@ -1,0 +1,63 @@
+<section class="flow-board card">
+  <div class="card-head">
+    <div class="card-title-group">
+      <span class="material-symbols-outlined card-title-icon">view_kanban</span>
+      <h2 class="card-title">Patient Flow</h2>
+      <span class="count-badge">{{ totalPatients() }}</span>
+    </div>
+  </div>
+
+  <div class="flow-columns">
+    @for (col of columns; track col.key) {
+      <div class="flow-col">
+        <div class="flow-col-header" [style.--col-color]="col.color">
+          <span class="material-symbols-outlined">{{ col.icon }}</span>
+          <span class="flow-col-label">{{ col.label }}</span>
+          <span class="flow-col-count">{{ getColumnItems(col.key).length }}</span>
+        </div>
+        <div class="flow-col-body">
+          @if (getColumnItems(col.key).length === 0) {
+            <div class="flow-empty">—</div>
+          } @else {
+            @for (item of getColumnItems(col.key); track item.encounterId) {
+              <div
+                class="flow-card"
+                role="button"
+                tabindex="0"
+                (click)="selectPatient(item.patientId)"
+                (keydown.enter)="selectPatient(item.patientId)"
+              >
+                <div class="flow-card-top">
+                  <span class="flow-card-name">{{ item.patientName }}</span>
+                  @if (item.urgency === 'EMERGENT' || item.urgency === 'URGENT') {
+                    <span
+                      class="flow-urgency-dot"
+                      [class.urgency-red]="item.urgency === 'EMERGENT'"
+                      [class.urgency-amber]="item.urgency === 'URGENT'"
+                    ></span>
+                  }
+                </div>
+                @if (item.room) {
+                  <span class="flow-card-room">
+                    <span class="material-symbols-outlined">meeting_room</span>{{ item.room }}
+                  </span>
+                }
+                <div class="flow-card-bottom">
+                  <span class="flow-elapsed" [class]="getElapsedClass(item.elapsedMinutes)">
+                    {{ item.elapsedMinutes }}m
+                  </span>
+                  @if (item.nurseAssigned) {
+                    <span class="flow-nurse">{{ item.nurseAssigned }}</span>
+                  }
+                </div>
+                @if (item.blockerTag) {
+                  <span class="flow-blocker">{{ item.blockerTag }}</span>
+                }
+              </div>
+            }
+          }
+        </div>
+      </div>
+    }
+  </div>
+</section>

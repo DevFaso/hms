@@ -534,14 +534,17 @@
   }
 
   <!-- ══════════════════════════════════════════
-       ③ DOCTOR DASHBOARD
+       ③ DOCTOR DASHBOARD (Physician Cockpit)
        ══════════════════════════════════════════ -->
   @if (!loading() && activeView() === 'doctor') {
+    <!-- ── Critical Strip ── -->
     <section class="stat-strip">
-      @for (stat of statCards(); track stat.key) {
+      @for (stat of criticalStripCards(); track stat.key) {
         <a
           class="stat-card"
-          [class.stat-card-alert]="stat.key === 'alerts' && criticalAlerts().length > 0"
+          [class.stat-card-alert]="
+            +stat.value > 0 && (stat.key === 'critical_labs' || stat.key === 'safety_alerts')
+          "
           [routerLink]="stat.route ?? null"
           [style.--stat-color]="stat.color"
           [style.--stat-bg]="stat.bgColor"
@@ -552,32 +555,26 @@
           <div class="stat-body">
             <span class="stat-value">{{ stat.value }}</span>
             <span class="stat-label">{{ stat.label }}</span>
-            @if (stat.trend && stat.delta !== undefined && stat.delta !== 0) {
-              <span [class]="getTrendClass(stat.trend)">
-                <span class="material-symbols-outlined">{{ getTrendIcon(stat.trend) }}</span>
-                {{ stat.delta > 0 ? '+' : '' }}{{ stat.delta }}
-              </span>
-            }
           </div>
-        </a>
-      }
-    </section>
-
-    <!-- ── Doctor Workflow Tiles (Epic-style Provider Activities) ── -->
-    <section class="nurse-workflow-tiles">
-      @for (tile of doctorWorkflowTiles(); track tile.label) {
-        <a class="workflow-tile" [routerLink]="tile.route" [style.--tile-color]="tile.color">
-          <div class="workflow-tile-icon">
-            <span class="material-symbols-outlined">{{ tile.icon }}</span>
-          </div>
-          <span class="workflow-tile-label">{{ tile.label }}</span>
         </a>
       }
     </section>
 
     <div class="clinical-workspace">
       <div class="workspace-left">
-        <!-- Today's Schedule -->
+        <!-- ── Physician Worklist (primary surface) ── -->
+        <app-doctor-worklist
+          [items]="worklistItems()"
+          (patientSelected)="openPatientSnapshot($event)"
+        />
+
+        <!-- ── Patient Flow Board ── -->
+        <app-doctor-patient-flow
+          [flowData]="patientFlowData()"
+          (patientSelected)="openPatientSnapshot($event)"
+        />
+
+        <!-- ── Today's Schedule (compact) ── -->
         <section class="schedule-panel card">
           <div class="card-head">
             <div class="card-title-group">
@@ -592,7 +589,7 @@
           </div>
           @if (scheduleLoading()) {
             <div class="schedule-skeleton">
-              @for (i of [1, 2, 3, 4]; track i) {
+              @for (i of [1, 2, 3]; track i) {
                 <div class="sched-skel-row">
                   <div class="skel skel-time"></div>
                   <div class="skel-lines">
@@ -606,11 +603,6 @@
             <div class="empty-schedule">
               <span class="material-symbols-outlined empty-icon">event_available</span>
               <p>No appointments scheduled for today</p>
-              @if (permissions.hasPermission('Create Appointments')) {
-                <a routerLink="/appointments/new" class="empty-cta">
-                  <span class="material-symbols-outlined">add_circle</span>Schedule one now
-                </a>
-              }
             </div>
           } @else {
             <div class="schedule-list">
@@ -658,74 +650,147 @@
           }
         </section>
 
-        <!-- Roomed Patients -->
-        @if (roomedPatients().length > 0) {
-          <section class="card roomed-card">
+        <!-- ── Quick Actions (compact) ── -->
+        @if (quickActions().length > 0) {
+          <section class="card">
             <div class="card-head">
               <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">hotel</span>
-                <h2 class="card-title">Roomed Patients</h2>
-                <span class="count-badge">{{ roomedPatients().length }}</span>
+                <span class="material-symbols-outlined card-title-icon">bolt</span>
+                <h2 class="card-title">Quick Actions</h2>
               </div>
             </div>
-            <div class="roomed-list">
-              @for (pt of roomedPatients(); track pt.id) {
-                <div class="roomed-row">
-                  <div class="roomed-avatar" [style.background]="getAvatarColor(pt.patientName)">
-                    {{ getPatientInitials(pt.patientName) }}
+            <div class="qa-grid qa-grid-compact" style="padding: 12px 16px">
+              @for (action of quickActions(); track action.label) {
+                <a
+                  class="qa-card qa-card-compact"
+                  [routerLink]="action.route"
+                  [style.--qa-color]="action.color"
+                  [style.--qa-bg]="action.bgColor"
+                >
+                  <div class="qa-icon-wrap">
+                    <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
                   </div>
-                  <div class="roomed-info">
-                    <div class="roomed-top">
-                      <strong class="roomed-name">{{ pt.patientName }}</strong>
-                      <span [class]="getTriageClass(pt.triageStatus)">{{
-                        pt.triageStatus | titlecase
-                      }}</span>
-                    </div>
-                    <div class="roomed-meta">
-                      <span
-                        ><span class="material-symbols-outlined">meeting_room</span
-                        >{{ pt.room }}</span
-                      >
-                      <span>{{ pt.age }}{{ pt.sex ? '/' + pt.sex.charAt(0) : '' }}</span>
-                      <span class="mrn-tag">{{ pt.mrn }}</span>
-                    </div>
-                    @if (pt.chiefComplaint) {
-                      <span class="roomed-complaint">{{ pt.chiefComplaint }}</span>
-                    }
-                    @if (pt.prepStatus) {
-                      <div class="prep-row">
-                        <span class="prep-chip" [class.prep-done]="pt.prepStatus.labsDrawn">
-                          <span class="material-symbols-outlined">{{
-                            pt.prepStatus.labsDrawn ? 'check_circle' : 'radio_button_unchecked'
-                          }}</span
-                          >Labs
-                        </span>
-                        <span class="prep-chip" [class.prep-done]="pt.prepStatus.imagingOrdered">
-                          <span class="material-symbols-outlined">{{
-                            pt.prepStatus.imagingOrdered ? 'check_circle' : 'radio_button_unchecked'
-                          }}</span
-                          >Imaging
-                        </span>
-                        <span class="prep-chip" [class.prep-done]="pt.prepStatus.consentSigned">
-                          <span class="material-symbols-outlined">{{
-                            pt.prepStatus.consentSigned ? 'check_circle' : 'radio_button_unchecked'
-                          }}</span
-                          >Consent
-                        </span>
-                      </div>
-                    }
-                    <div class="wait-bar">
-                      <span class="material-symbols-outlined wait-icon">hourglass_top</span>
-                      <span class="wait-val">{{ pt.waitTimeMinutes }}m wait</span>
-                    </div>
+                  <span class="qa-label">{{ action.label }}</span>
+                </a>
+              }
+            </div>
+          </section>
+        }
+      </div>
+
+      <!-- RIGHT RAIL -->
+      <aside class="workspace-right">
+        <!-- ── Clinical Inbox (accordion-style) ── -->
+        <section class="card inbox-card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">mark_email_unread</span>
+              <h2 class="card-title">Clinical Inbox</h2>
+              @if (inboxItems().length > 0) {
+                <span class="count-badge count-badge-red">{{ inboxItems().length }}</span>
+              }
+            </div>
+            <a routerLink="/chat" class="card-link">Open</a>
+          </div>
+          @if (inboxItems().length === 0) {
+            <div class="inbox-empty">
+              <span class="material-symbols-outlined">drafts</span>
+              <p>Inbox clear</p>
+            </div>
+          } @else {
+            <div class="inbox-items">
+              @for (item of inboxItems(); track item.id) {
+                <div
+                  class="inbox-row inbox-row-detailed"
+                  role="button"
+                  tabindex="0"
+                  (click)="item.patientId ? openPatientSnapshot(item.patientId) : null"
+                  (keydown.enter)="item.patientId ? openPatientSnapshot(item.patientId) : null"
+                >
+                  <div class="inbox-row-icon" [class]="'inbox-icon-' + item.category.toLowerCase()">
+                    <span class="material-symbols-outlined">{{
+                      item.category === 'MESSAGE'
+                        ? 'chat'
+                        : item.category === 'CRITICAL_RESULT'
+                          ? 'science'
+                          : item.category === 'CONSULT_REQUEST'
+                            ? 'forum'
+                            : item.category === 'REFILL_REQUEST'
+                              ? 'medication'
+                              : item.category === 'DOCUMENT_TO_SIGN'
+                                ? 'draw'
+                                : 'assignment'
+                    }}</span>
                   </div>
+                  <div class="inbox-row-content">
+                    <span class="inbox-row-subject">{{ item.subject }}</span>
+                    @if (item.patientName) {
+                      <span class="inbox-row-patient">{{ item.patientName }}</span>
+                    }
+                    <span class="inbox-row-source">{{ item.source }}</span>
+                  </div>
+                  @if (item.urgency === 'CRITICAL' || item.urgency === 'HIGH') {
+                    <span
+                      class="inbox-urgency-pill"
+                      [class.urgency-critical]="item.urgency === 'CRITICAL'"
+                    >
+                      {{ item.urgency }}
+                    </span>
+                  }
                 </div>
+              }
+            </div>
+          }
+        </section>
+
+        <!-- ── Results Awaiting Review ── -->
+        <app-doctor-results-panel
+          [results]="resultQueue()"
+          (patientSelected)="openPatientSnapshot($event)"
+        />
+
+        <!-- ── Recent Patients ── -->
+        @if (recentPatients().length > 0) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">group</span>
+                <h2 class="card-title">Recent Patients</h2>
+              </div>
+              <a routerLink="/patients" class="card-link">All Patients</a>
+            </div>
+            <div class="patient-list">
+              @for (p of recentPatients(); track p.id) {
+                <a
+                  class="patient-row"
+                  (click)="openPatientSnapshot(p.id); $event.preventDefault()"
+                  href="#"
+                >
+                  <div
+                    class="patient-avatar"
+                    [style.background]="getAvatarColor(p.firstName + p.lastName)"
+                  >
+                    {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
+                  </div>
+                  <div class="patient-info">
+                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-meta">
+                      @if (p.mrn) {
+                        <span class="mrn-tag">{{ p.mrn }}</span>
+                      }
+                      @if (p.dateOfBirth) {
+                        <span>{{ p.dateOfBirth | date: 'mediumDate' }}</span>
+                      }
+                    </span>
+                  </div>
+                  <span class="material-symbols-outlined chevron">chevron_right</span>
+                </a>
               }
             </div>
           </section>
         }
 
-        <!-- Clinical Alerts -->
+        <!-- ── Clinical Alerts ── -->
         @if (alerts().length > 0) {
           <section class="card" id="alerts-section">
             <div class="card-head">
@@ -788,137 +853,15 @@
             </div>
           </section>
         }
-
-        <!-- Quick Actions -->
-        @if (quickActions().length > 0) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">bolt</span>
-                <h2 class="card-title">Quick Actions</h2>
-              </div>
-            </div>
-            <div class="qa-grid" style="padding: 16px">
-              @for (action of quickActions(); track action.label) {
-                <a
-                  class="qa-card"
-                  [routerLink]="action.route"
-                  [style.--qa-color]="action.color"
-                  [style.--qa-bg]="action.bgColor"
-                >
-                  <div class="qa-icon-wrap">
-                    <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
-                  </div>
-                  <span class="qa-label">{{ action.label }}</span>
-                  <span class="qa-desc">{{ action.description }}</span>
-                </a>
-              }
-            </div>
-          </section>
-        }
-      </div>
-
-      <!-- RIGHT SIDEBAR -->
-      <aside class="workspace-right">
-        @if (inboxCounts(); as ic) {
-          <section class="card inbox-card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">mark_email_unread</span>
-                <h2 class="card-title">Inbox</h2>
-                @if (totalInboxCount() > 0) {
-                  <span class="count-badge count-badge-red">{{ totalInboxCount() }}</span>
-                }
-              </div>
-              <a routerLink="/chat" class="card-link">Open</a>
-            </div>
-            <div class="inbox-items">
-              <a routerLink="/chat" class="inbox-row">
-                <div class="inbox-row-icon inbox-icon-chat">
-                  <span class="material-symbols-outlined">chat</span>
-                </div>
-                <span class="inbox-row-label">Unread Messages</span>
-                <span class="inbox-row-count" [class.count-hot]="ic.unreadMessages > 0">{{
-                  ic.unreadMessages
-                }}</span>
-              </a>
-              <a routerLink="/lab" class="inbox-row">
-                <div class="inbox-row-icon inbox-icon-lab">
-                  <span class="material-symbols-outlined">science</span>
-                </div>
-                <span class="inbox-row-label">Pending Lab Results</span>
-                <span class="inbox-row-count" [class.count-hot]="ic.pendingResults > 0">{{
-                  ic.pendingResults
-                }}</span>
-              </a>
-              <a routerLink="/prescriptions" class="inbox-row">
-                <div class="inbox-row-icon inbox-icon-rx">
-                  <span class="material-symbols-outlined">medication</span>
-                </div>
-                <span class="inbox-row-label">Refill Requests</span>
-                <span class="inbox-row-count" [class.count-hot]="ic.pendingRefills > 0">{{
-                  ic.pendingRefills
-                }}</span>
-              </a>
-              <div class="inbox-row">
-                <div class="inbox-row-icon inbox-icon-task">
-                  <span class="material-symbols-outlined">checklist</span>
-                </div>
-                <span class="inbox-row-label">Tasks to Complete</span>
-                <span class="inbox-row-count" [class.count-hot]="ic.tasksToComplete > 0">{{
-                  ic.tasksToComplete
-                }}</span>
-              </div>
-              <div class="inbox-row">
-                <div class="inbox-row-icon inbox-icon-sign">
-                  <span class="material-symbols-outlined">draw</span>
-                </div>
-                <span class="inbox-row-label">Documents to Sign</span>
-                <span class="inbox-row-count" [class.count-hot]="ic.documentsToSign > 0">{{
-                  ic.documentsToSign
-                }}</span>
-              </div>
-            </div>
-          </section>
-        }
-
-        @if (recentPatients().length > 0) {
-          <section class="card">
-            <div class="card-head">
-              <div class="card-title-group">
-                <span class="material-symbols-outlined card-title-icon">group</span>
-                <h2 class="card-title">Recent Patients</h2>
-              </div>
-              <a routerLink="/patients" class="card-link">All Patients</a>
-            </div>
-            <div class="patient-list">
-              @for (p of recentPatients(); track p.id) {
-                <a [routerLink]="['/patients', p.id]" class="patient-row">
-                  <div
-                    class="patient-avatar"
-                    [style.background]="getAvatarColor(p.firstName + p.lastName)"
-                  >
-                    {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
-                  </div>
-                  <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
-                    <span class="patient-meta">
-                      @if (p.mrn) {
-                        <span class="mrn-tag">{{ p.mrn }}</span>
-                      }
-                      @if (p.dateOfBirth) {
-                        <span>{{ p.dateOfBirth | date: 'mediumDate' }}</span>
-                      }
-                    </span>
-                  </div>
-                  <span class="material-symbols-outlined chevron">chevron_right</span>
-                </a>
-              }
-            </div>
-          </section>
-        }
       </aside>
     </div>
+
+    <!-- ── Patient Snapshot Drawer ── -->
+    <app-patient-snapshot-drawer
+      [snapshot]="patientSnapshot()"
+      [isOpen]="snapshotDrawerOpen()"
+      (closed)="closePatientSnapshot()"
+    />
   }
 
   <!-- ══════════════════════════════════════════

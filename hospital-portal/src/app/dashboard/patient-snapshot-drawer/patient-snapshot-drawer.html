@@ -1,0 +1,260 @@
+@if (isOpen() && snapshot(); as pt) {
+  <div
+    class="drawer-overlay"
+    role="button"
+    tabindex="0"
+    (click)="close()"
+    (keydown.enter)="close()"
+  ></div>
+  <aside class="snapshot-drawer">
+    <!-- Header -->
+    <div class="drawer-header">
+      <div class="drawer-header-left">
+        <h2 class="drawer-patient-name">{{ pt.name }}</h2>
+        <span class="drawer-meta"
+          >{{ pt.age }}{{ pt.sex ? '/' + pt.sex.charAt(0) : '' }} · {{ pt.mrn }}</span
+        >
+      </div>
+      <div class="drawer-header-actions">
+        <a
+          [routerLink]="['/patients', pt.patientId]"
+          class="drawer-btn drawer-btn-primary"
+          (click)="close()"
+        >
+          <span class="material-symbols-outlined">open_in_full</span>
+          Full Chart
+        </a>
+        <button class="drawer-close" (click)="close()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="drawer-body">
+      <!-- Code Status -->
+      @if (pt.codeStatus) {
+        <div class="code-status-banner">
+          <span class="material-symbols-outlined">emergency</span>
+          {{ pt.codeStatus }}
+        </div>
+      }
+
+      <!-- Allergies -->
+      <div class="drawer-section">
+        <button class="section-toggle" (click)="toggle('allergies')">
+          <span class="material-symbols-outlined section-icon">warning</span>
+          <span class="section-title">Allergies</span>
+          <span class="section-count">{{ pt.allergies.length }}</span>
+          <span class="material-symbols-outlined toggle-arrow">{{
+            allergiesOpen() ? 'expand_less' : 'expand_more'
+          }}</span>
+        </button>
+        @if (allergiesOpen()) {
+          <div class="section-body">
+            @if (pt.allergies.length === 0) {
+              <span class="no-data">No known allergies</span>
+            } @else {
+              <div class="allergy-tags">
+                @for (a of pt.allergies; track a) {
+                  <span class="allergy-tag">{{ a }}</span>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Active Diagnoses -->
+      <div class="drawer-section">
+        <button class="section-toggle" (click)="toggle('diagnoses')">
+          <span class="material-symbols-outlined section-icon">medical_information</span>
+          <span class="section-title">Active Diagnoses</span>
+          <span class="section-count">{{ pt.activeDiagnoses.length }}</span>
+          <span class="material-symbols-outlined toggle-arrow">{{
+            diagnosesOpen() ? 'expand_less' : 'expand_more'
+          }}</span>
+        </button>
+        @if (diagnosesOpen()) {
+          <div class="section-body">
+            @if (pt.activeDiagnoses.length === 0) {
+              <span class="no-data">None documented</span>
+            } @else {
+              <ul class="dx-list">
+                @for (dx of pt.activeDiagnoses; track dx) {
+                  <li>{{ dx }}</li>
+                }
+              </ul>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Medications -->
+      <div class="drawer-section">
+        <button class="section-toggle" (click)="toggle('meds')">
+          <span class="material-symbols-outlined section-icon">medication</span>
+          <span class="section-title">Active Medications</span>
+          <span class="section-count">{{ pt.activeMedications.length }}</span>
+          <span class="material-symbols-outlined toggle-arrow">{{
+            medsOpen() ? 'expand_less' : 'expand_more'
+          }}</span>
+        </button>
+        @if (medsOpen()) {
+          <div class="section-body">
+            @if (pt.activeMedications.length === 0) {
+              <span class="no-data">No active medications</span>
+            } @else {
+              @for (med of pt.activeMedications; track med.name) {
+                <div class="med-row">
+                  <span class="med-name">{{ med.name }}</span>
+                  <span class="med-dose">{{ med.dose }} · {{ med.frequency }}</span>
+                </div>
+              }
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Recent Vitals -->
+      <div class="drawer-section">
+        <button class="section-toggle" (click)="toggle('vitals')">
+          <span class="material-symbols-outlined section-icon">monitor_heart</span>
+          <span class="section-title">Recent Vitals</span>
+          <span class="section-count">{{ pt.recentVitals.length }}</span>
+          <span class="material-symbols-outlined toggle-arrow">{{
+            vitalsOpen() ? 'expand_less' : 'expand_more'
+          }}</span>
+        </button>
+        @if (vitalsOpen()) {
+          <div class="section-body">
+            @if (pt.recentVitals.length === 0) {
+              <span class="no-data">No recent vitals</span>
+            } @else {
+              <div class="vitals-grid">
+                @for (v of pt.recentVitals; track v.type + v.timestamp) {
+                  <div class="vital-item">
+                    <span class="vital-type">{{ v.type }}</span>
+                    <span class="vital-value">{{ v.value }}</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Latest Labs -->
+      <div class="drawer-section">
+        <button class="section-toggle" (click)="toggle('labs')">
+          <span class="material-symbols-outlined section-icon">science</span>
+          <span class="section-title">Latest Labs</span>
+          <span class="section-count">{{ pt.latestLabs.length }}</span>
+          <span class="material-symbols-outlined toggle-arrow">{{
+            labsOpen() ? 'expand_less' : 'expand_more'
+          }}</span>
+        </button>
+        @if (labsOpen()) {
+          <div class="section-body">
+            @if (pt.latestLabs.length === 0) {
+              <span class="no-data">No recent labs</span>
+            } @else {
+              @for (lab of pt.latestLabs; track lab.test + lab.date) {
+                <div class="lab-row">
+                  <span class="lab-test">{{ lab.test }}</span>
+                  <span
+                    class="lab-value"
+                    [class.lab-abnormal]="lab.flag === 'ABNORMAL' || lab.flag === 'CRITICAL'"
+                    [class.lab-critical]="lab.flag === 'CRITICAL'"
+                  >
+                    {{ lab.value }}
+                  </span>
+                </div>
+              }
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Pending Orders -->
+      <div class="drawer-section">
+        <button class="section-toggle" (click)="toggle('orders')">
+          <span class="material-symbols-outlined section-icon">assignment</span>
+          <span class="section-title">Pending Orders</span>
+          <span class="section-count">{{ pt.pendingOrders.length }}</span>
+          <span class="material-symbols-outlined toggle-arrow">{{
+            ordersOpen() ? 'expand_less' : 'expand_more'
+          }}</span>
+        </button>
+        @if (ordersOpen()) {
+          <div class="section-body">
+            @if (pt.pendingOrders.length === 0) {
+              <span class="no-data">No pending orders</span>
+            } @else {
+              @for (o of pt.pendingOrders; track o.description + o.orderedAt) {
+                <div class="order-row">
+                  <span class="order-type-badge">{{ o.type }}</span>
+                  <span class="order-desc">{{ o.description }}</span>
+                </div>
+              }
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Recent Notes -->
+      <div class="drawer-section">
+        <button class="section-toggle" (click)="toggle('notes')">
+          <span class="material-symbols-outlined section-icon">description</span>
+          <span class="section-title">Recent Notes</span>
+          <span class="section-count">{{ pt.recentNotes.length }}</span>
+          <span class="material-symbols-outlined toggle-arrow">{{
+            notesOpen() ? 'expand_less' : 'expand_more'
+          }}</span>
+        </button>
+        @if (notesOpen()) {
+          <div class="section-body">
+            @if (pt.recentNotes.length === 0) {
+              <span class="no-data">No recent notes</span>
+            } @else {
+              @for (n of pt.recentNotes; track n.date + n.type) {
+                <div class="note-row">
+                  <div class="note-header">
+                    <span class="note-type">{{ n.type }}</span>
+                    <span class="note-author">{{ n.author }}</span>
+                  </div>
+                  <span class="note-snippet">{{ n.snippet }}</span>
+                </div>
+              }
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Care Team -->
+      <div class="drawer-section">
+        <button class="section-toggle" (click)="toggle('team')">
+          <span class="material-symbols-outlined section-icon">groups</span>
+          <span class="section-title">Care Team</span>
+          <span class="section-count">{{ pt.careTeam.length }}</span>
+          <span class="material-symbols-outlined toggle-arrow">{{
+            teamOpen() ? 'expand_less' : 'expand_more'
+          }}</span>
+        </button>
+        @if (teamOpen()) {
+          <div class="section-body">
+            @if (pt.careTeam.length === 0) {
+              <span class="no-data">No team assigned</span>
+            } @else {
+              @for (m of pt.careTeam; track m.name + m.role) {
+                <div class="team-row">
+                  <span class="team-role">{{ m.role }}</span>
+                  <span class="team-name">{{ m.name }}</span>
+                </div>
+              }
+            }
+          </div>
+        }
+      </div>
+    </div>
+  </aside>
+}

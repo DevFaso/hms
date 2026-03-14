@@ -1,0 +1,327 @@
+@use '../../dashboard/dashboard.scss' as d;
+
+.worklist-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.card-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-title-icon {
+  font-size: 20px;
+  color: #2563eb;
+}
+
+.card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #0f172a;
+  margin: 0;
+}
+
+.count-badge {
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 99px;
+}
+
+.card-link {
+  font-size: 13px;
+  font-weight: 500;
+  color: #2563eb;
+  text-decoration: none;
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+// ── Tabs ──
+.worklist-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+  overflow-x: auto;
+}
+
+.wl-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+
+  &:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+  }
+
+  &.wl-tab-active {
+    background: #2563eb;
+    color: #fff;
+
+    .wl-tab-count {
+      background: rgba(255, 255, 255, 0.25);
+      color: #fff;
+    }
+  }
+}
+
+.wl-tab-count {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 99px;
+  background: #e2e8f0;
+  color: #64748b;
+}
+
+// ── Empty ──
+.wl-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 40px 20px;
+  color: #94a3b8;
+
+  .material-symbols-outlined {
+    font-size: 36px;
+  }
+
+  p {
+    font-size: 14px;
+    margin: 0;
+  }
+}
+
+// ── Table ──
+.wl-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.wl-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #f1f5f9;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s;
+
+  &:hover {
+    background: #f8fafc;
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
+
+  &.urgency-emergent {
+    border-left-color: #dc2626;
+  }
+  &.urgency-urgent {
+    border-left-color: #d97706;
+  }
+  &.urgency-routine {
+    border-left-color: #2563eb;
+  }
+  &.urgency-low {
+    border-left-color: #94a3b8;
+  }
+}
+
+.wl-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.wl-patient-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+}
+
+.wl-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.wl-meta {
+  font-size: 12px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wl-mrn {
+  font-family: 'SF Mono', monospace;
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.wl-room {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+
+  .material-symbols-outlined {
+    font-size: 16px;
+  }
+}
+
+.wl-complaint {
+  font-size: 12px;
+  color: #64748b;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.wl-status {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 99px;
+  white-space: nowrap;
+
+  &.status-waiting {
+    background: #fef3c7;
+    color: #92400e;
+  }
+  &.status-active {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+  &.status-completed {
+    background: #d1fae5;
+    color: #065f46;
+  }
+  &.status-scheduled {
+    background: #f1f5f9;
+    color: #475569;
+  }
+  &.status-cancelled {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+  &.status-consult {
+    background: #ede9fe;
+    color: #5b21b6;
+  }
+}
+
+.wl-wait {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+
+  .material-symbols-outlined {
+    font-size: 14px;
+  }
+
+  &.wait-long {
+    color: #dc2626;
+    font-weight: 600;
+  }
+}
+
+.wl-alerts {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #d97706;
+}
+
+.wl-alert-icon {
+  font-size: 16px;
+}
+
+.wl-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.wl-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  color: #64748b;
+  text-decoration: none;
+  transition: all 0.15s;
+
+  &:hover {
+    background: #eff6ff;
+    color: #2563eb;
+  }
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+}
+
+// ── Responsive ──
+@media (max-width: 768px) {
+  .wl-complaint,
+  .wl-room {
+    display: none;
+  }
+
+  .wl-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}

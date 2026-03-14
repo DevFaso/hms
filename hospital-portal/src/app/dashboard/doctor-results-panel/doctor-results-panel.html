@@ -1,0 +1,128 @@
+<section class="results-panel card">
+  <div class="card-head">
+    <div class="card-title-group">
+      <span class="material-symbols-outlined card-title-icon">science</span>
+      <h2 class="card-title">Results to Review</h2>
+      @if (results().length > 0) {
+        <span class="count-badge" [class.count-badge-red]="criticalResults().length > 0">
+          {{ results().length }}
+        </span>
+      }
+    </div>
+    <a routerLink="/lab" class="card-link">View All</a>
+  </div>
+
+  @if (results().length === 0) {
+    <div class="rp-empty">
+      <span class="material-symbols-outlined">check_circle</span>
+      <p>All results reviewed</p>
+    </div>
+  } @else {
+    <div class="rp-sections">
+      <!-- Critical -->
+      @if (criticalResults().length > 0) {
+        <div class="rp-section rp-critical">
+          <div class="rp-section-header">
+            <span class="rp-dot rp-dot-critical"></span>
+            <span class="rp-section-label">Critical</span>
+            <span class="rp-section-count">{{ criticalResults().length }}</span>
+          </div>
+          @for (r of criticalResults(); track r.id) {
+            <div
+              class="rp-row"
+              role="button"
+              tabindex="0"
+              (click)="selectPatient(r.patientId)"
+              (keydown.enter)="selectPatient(r.patientId)"
+            >
+              <div class="rp-row-info">
+                <span class="rp-patient-name">{{ r.patientName }}</span>
+                <span class="rp-test-name">{{ r.testName }}</span>
+              </div>
+              <span class="rp-value rp-value-critical">{{ r.resultValue }}</span>
+              <span class="rp-time">{{ formatDate(r.resultedAt) }}</span>
+              <a
+                [routerLink]="['/patients', r.patientId]"
+                class="rp-action"
+                title="Open Chart"
+                (click)="$event.stopPropagation()"
+              >
+                <span class="material-symbols-outlined">open_in_new</span>
+              </a>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Abnormal -->
+      @if (abnormalResults().length > 0) {
+        <div class="rp-section rp-abnormal">
+          <div class="rp-section-header">
+            <span class="rp-dot rp-dot-abnormal"></span>
+            <span class="rp-section-label">Abnormal</span>
+            <span class="rp-section-count">{{ abnormalResults().length }}</span>
+          </div>
+          @for (r of abnormalResults(); track r.id) {
+            <div
+              class="rp-row"
+              role="button"
+              tabindex="0"
+              (click)="selectPatient(r.patientId)"
+              (keydown.enter)="selectPatient(r.patientId)"
+            >
+              <div class="rp-row-info">
+                <span class="rp-patient-name">{{ r.patientName }}</span>
+                <span class="rp-test-name">{{ r.testName }}</span>
+              </div>
+              <span class="rp-value rp-value-abnormal">{{ r.resultValue }}</span>
+              <span class="rp-time">{{ formatDate(r.resultedAt) }}</span>
+              <a
+                [routerLink]="['/patients', r.patientId]"
+                class="rp-action"
+                title="Open Chart"
+                (click)="$event.stopPropagation()"
+              >
+                <span class="material-symbols-outlined">open_in_new</span>
+              </a>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Normal -->
+      @if (normalResults().length > 0) {
+        <div class="rp-section rp-normal">
+          <div class="rp-section-header">
+            <span class="rp-dot rp-dot-normal"></span>
+            <span class="rp-section-label">Normal</span>
+            <span class="rp-section-count">{{ normalResults().length }}</span>
+          </div>
+          @for (r of normalResults(); track r.id) {
+            <div
+              class="rp-row"
+              role="button"
+              tabindex="0"
+              (click)="selectPatient(r.patientId)"
+              (keydown.enter)="selectPatient(r.patientId)"
+            >
+              <div class="rp-row-info">
+                <span class="rp-patient-name">{{ r.patientName }}</span>
+                <span class="rp-test-name">{{ r.testName }}</span>
+              </div>
+              <span class="rp-value">{{ r.resultValue }}</span>
+              <span class="rp-time">{{ formatDate(r.resultedAt) }}</span>
+              <a
+                [routerLink]="['/patients', r.patientId]"
+                class="rp-action"
+                title="Open Chart"
+                (click)="$event.stopPropagation()"
+              >
+                <span class="material-symbols-outlined">open_in_new</span>
+              </a>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+</section>
