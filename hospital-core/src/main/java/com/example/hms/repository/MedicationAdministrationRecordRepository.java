@@ -25,12 +25,13 @@ public interface MedicationAdministrationRecordRepository extends JpaRepository<
     @Query("""
         SELECT m FROM MedicationAdministrationRecord m
         WHERE m.hospital.id = :hospitalId
-          AND m.status = 'PENDING'
+          AND m.status = :status
           AND m.scheduledTime <= :cutoff
         ORDER BY m.scheduledTime ASC
     """)
     List<MedicationAdministrationRecord> findDueForHospital(
         @Param("hospitalId") UUID hospitalId,
+        @Param("status") MedicationAdministrationStatus status,
         @Param("cutoff") LocalDateTime cutoff
     );
 
