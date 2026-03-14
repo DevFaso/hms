@@ -483,4 +483,225 @@ class ResultReviewServiceImplTest {
         assertNotNull(consultItem);
         assertEquals("CRITICAL", consultItem.getUrgency());
     }
+
+    // ========== Additional coverage for branches ==========
+
+    @Test
+    void getInboxItems_consultWithEmergencyUrgency_shouldMapToCritical() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Consultation consult = mock(Consultation.class);
+        when(consult.getId()).thenReturn(UUID.randomUUID());
+        when(consult.getPatient()).thenReturn(null);
+        when(consult.getRequestingProvider()).thenReturn(null);
+        when(consult.getReasonForConsult()).thenReturn(null);
+        when(consult.getUrgency()).thenReturn(ConsultationUrgency.EMERGENCY);
+        when(consult.getRequestedAt()).thenReturn(LocalDateTime.now());
+
+        when(chatMessageRepository.countByRecipient_IdAndReadFalse(userId)).thenReturn(0L);
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(List.of(consult));
+        when(digitalSignatureRepository.findBySignedBy_IdAndStatusOrderBySignatureDateTimeDesc(staffId, SignatureStatus.PENDING))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(Collections.emptyList());
+
+        List<ClinicalInboxItemDTO> result = service.getInboxItems(userId);
+
+        ClinicalInboxItemDTO item = result.stream()
+                .filter(i -> "CONSULT_REQUEST".equals(i.getCategory()))
+                .findFirst().orElse(null);
+        assertNotNull(item);
+        assertEquals("CRITICAL", item.getUrgency());
+        // null requestingProvider → "Unknown"
+        assertEquals("Unknown", item.getSource());
+        // null reason → "Consultation Request"
+        assertEquals("Consultation Request", item.getSubject());
+    }
+
+    @Test
+    void getInboxItems_consultWithRoutineUrgency_shouldMapToNormal() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(UUID.randomUUID());
+        when(patient.getFirstName()).thenReturn("R");
+        when(patient.getLastName()).thenReturn("P");
+
+        Staff reqDoc = mock(Staff.class);
+        when(reqDoc.getFullName()).thenReturn("Dr. Routine");
+
+        Consultation consult = mock(Consultation.class);
+        when(consult.getId()).thenReturn(UUID.randomUUID());
+        when(consult.getPatient()).thenReturn(patient);
+        when(consult.getRequestingProvider()).thenReturn(reqDoc);
+        // Reason longer than 80 chars to test truncation
+        String longReason = "A".repeat(100);
+        when(consult.getReasonForConsult()).thenReturn(longReason);
+        when(consult.getUrgency()).thenReturn(ConsultationUrgency.ROUTINE);
+        when(consult.getRequestedAt()).thenReturn(LocalDateTime.now());
+
+        when(chatMessageRepository.countByRecipient_IdAndReadFalse(userId)).thenReturn(0L);
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(List.of(consult));
+        when(digitalSignatureRepository.findBySignedBy_IdAndStatusOrderBySignatureDateTimeDesc(staffId, SignatureStatus.PENDING))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(Collections.emptyList());
+
+        List<ClinicalInboxItemDTO> result = service.getInboxItems(userId);
+
+        ClinicalInboxItemDTO item = result.stream()
+                .filter(i -> "CONSULT_REQUEST".equals(i.getCategory()))
+                .findFirst().orElse(null);
+        assertNotNull(item);
+        assertEquals("NORMAL", item.getUrgency());
+        // truncated subject
+        assertTrue(item.getSubject().endsWith("..."));
+        assertEquals(83, item.getSubject().length());
+    }
+
+    @Test
+    void getInboxItems_consultWithNullUrgency_shouldDefaultToNormal() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Consultation consult = mock(Consultation.class);
+        when(consult.getId()).thenReturn(UUID.randomUUID());
+        when(consult.getPatient()).thenReturn(null);
+        when(consult.getRequestingProvider()).thenReturn(null);
+        when(consult.getReasonForConsult()).thenReturn("Short");
+        when(consult.getUrgency()).thenReturn(null);
+        when(consult.getRequestedAt()).thenReturn(LocalDateTime.now());
+
+        when(chatMessageRepository.countByRecipient_IdAndReadFalse(userId)).thenReturn(0L);
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(List.of(consult));
+        when(digitalSignatureRepository.findBySignedBy_IdAndStatusOrderBySignatureDateTimeDesc(staffId, SignatureStatus.PENDING))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(Collections.emptyList());
+
+        List<ClinicalInboxItemDTO> result = service.getInboxItems(userId);
+
+        ClinicalInboxItemDTO item = result.stream()
+                .filter(i -> "CONSULT_REQUEST".equals(i.getCategory()))
+                .findFirst().orElse(null);
+        assertNotNull(item);
+        assertEquals("NORMAL", item.getUrgency());
+        assertEquals("Short", item.getSubject());
+    }
+
+    @Test
+    void getInboxItems_consultQueryFails_shouldStillReturnOtherItems() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        when(chatMessageRepository.countByRecipient_IdAndReadFalse(userId)).thenReturn(0L);
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenThrow(new RuntimeException("DB error"));
+        when(digitalSignatureRepository.findBySignedBy_IdAndStatusOrderBySignatureDateTimeDesc(staffId, SignatureStatus.PENDING))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(Collections.emptyList());
+
+        List<ClinicalInboxItemDTO> result = service.getInboxItems(userId);
+
+        assertNotNull(result);
+    }
+
+    @Test
+    void getInboxItems_signatureQueryFails_shouldStillReturnOtherItems() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        when(chatMessageRepository.countByRecipient_IdAndReadFalse(userId)).thenReturn(0L);
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+        when(digitalSignatureRepository.findBySignedBy_IdAndStatusOrderBySignatureDateTimeDesc(staffId, SignatureStatus.PENDING))
+                .thenThrow(new RuntimeException("DB error"));
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(Collections.emptyList());
+
+        List<ClinicalInboxItemDTO> result = service.getInboxItems(userId);
+
+        assertNotNull(result);
+    }
+
+    @Test
+    void getInboxItems_encounterWithNullPatient_shouldHandleGracefully() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Encounter enc = mock(Encounter.class);
+        when(enc.getId()).thenReturn(UUID.randomUUID());
+        when(enc.getPatient()).thenReturn(null);
+        when(enc.getEncounterDate()).thenReturn(LocalDateTime.now());
+
+        when(chatMessageRepository.countByRecipient_IdAndReadFalse(userId)).thenReturn(0L);
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+        when(digitalSignatureRepository.findBySignedBy_IdAndStatusOrderBySignatureDateTimeDesc(staffId, SignatureStatus.PENDING))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(List.of(enc));
+
+        List<ClinicalInboxItemDTO> result = service.getInboxItems(userId);
+
+        ClinicalInboxItemDTO task = result.stream()
+                .filter(i -> "TASK".equals(i.getCategory()))
+                .findFirst().orElse(null);
+        assertNotNull(task);
+        // patientName should be null when patient is null
+        assertEquals(null, task.getPatientName());
+    }
+
+    @Test
+    void getResultReviewQueue_resultWithNullResultedAt_shouldSortLast() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(UUID.randomUUID());
+        when(patient.getFirstName()).thenReturn("T");
+        when(patient.getLastName()).thenReturn("P");
+
+        UUID orderId = UUID.randomUUID();
+        LabOrder order = mock(LabOrder.class);
+        when(order.getId()).thenReturn(orderId);
+        when(order.getStatus()).thenReturn(LabOrderStatus.COMPLETED);
+        when(order.getPatient()).thenReturn(patient);
+        when(order.getLabTestDefinition()).thenReturn(null);
+        when(order.getClinicalIndication()).thenReturn(null);
+
+        LabResult result1 = mock(LabResult.class);
+        when(result1.getId()).thenReturn(UUID.randomUUID());
+        when(result1.getResultValue()).thenReturn("5");
+        when(result1.isAcknowledged()).thenReturn(false);
+        when(result1.getResultDate()).thenReturn(null);
+
+        LabResult result2 = mock(LabResult.class);
+        when(result2.getId()).thenReturn(UUID.randomUUID());
+        when(result2.getResultValue()).thenReturn("10");
+        when(result2.isAcknowledged()).thenReturn(false);
+        when(result2.getResultDate()).thenReturn(LocalDateTime.now());
+
+        when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
+        when(labResultRepository.findByLabOrder_Id(orderId)).thenReturn(List.of(result1, result2));
+
+        List<DoctorResultQueueItemDTO> results = service.getResultReviewQueue(userId);
+
+        assertEquals(2, results.size());
+        // result with date should come first, null date last
+        assertNotNull(results.get(0).getResultedAt());
+    }
 }

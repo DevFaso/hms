@@ -1,10 +1,13 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.ConsultationStatus;
+import com.example.hms.enums.ConsultationUrgency;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.SignatureStatus;
 import com.example.hms.model.Appointment;
+import com.example.hms.model.Consultation;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
@@ -405,5 +408,529 @@ class DoctorWorklistServiceImplTest {
         List<DoctorWorklistItemDTO> result = service.getWorklist(userId, "ALL", null);
 
         assertEquals(1, result.size());
+    }
+
+    // ========== mapEncounterStatus / mapAppointmentStatus / urgencyRank branches ==========
+
+    @Test
+    void getWorklist_arrivedEncounter_shouldMapToCheckedIn() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "Arrived", "Patient");
+        Encounter enc = stubEncounter(UUID.randomUUID(), p, EncounterStatus.ARRIVED, LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
+                .thenReturn(List.of(enc));
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.SCHEDULED))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("CHECKED_IN", result.get(0).getEncounterStatus());
+    }
+
+    @Test
+    void getWorklist_scheduledEncounter_shouldMapToScheduled() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "Sched", "Patient");
+        Encounter enc = stubEncounter(UUID.randomUUID(), p, EncounterStatus.SCHEDULED, LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.SCHEDULED))
+                .thenReturn(List.of(enc));
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("SCHEDULED", result.get(0).getEncounterStatus());
+    }
+
+    @Test
+    void getWorklist_appointmentWithConfirmedStatus_shouldMapToCheckedIn() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "Confirmed", "Appt");
+        Appointment appt = mock(Appointment.class);
+        lenient().when(appt.getPatient()).thenReturn(p);
+        lenient().when(appt.getReason()).thenReturn("Follow-up");
+        when(appt.getStatus()).thenReturn(AppointmentStatus.CONFIRMED);
+        lenient().when(appt.getUpdatedAt()).thenReturn(null);
+        lenient().when(appt.getCreatedAt()).thenReturn(LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(List.of(appt));
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("CHECKED_IN", result.get(0).getEncounterStatus());
+        assertEquals("Follow-up", result.get(0).getChiefComplaint());
+    }
+
+    @Test
+    void getWorklist_appointmentWithInProgressStatus_shouldMapToInProgress() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "InProg", "Appt");
+        Appointment appt = mock(Appointment.class);
+        lenient().when(appt.getPatient()).thenReturn(p);
+        lenient().when(appt.getReason()).thenReturn("Checkup");
+        when(appt.getStatus()).thenReturn(AppointmentStatus.IN_PROGRESS);
+        lenient().when(appt.getUpdatedAt()).thenReturn(LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(List.of(appt));
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("IN_PROGRESS", result.get(0).getEncounterStatus());
+    }
+
+    @Test
+    void getWorklist_appointmentWithCompletedStatus_shouldMapToCompleted() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "Done", "Appt");
+        Appointment appt = mock(Appointment.class);
+        lenient().when(appt.getPatient()).thenReturn(p);
+        lenient().when(appt.getReason()).thenReturn("Finished");
+        when(appt.getStatus()).thenReturn(AppointmentStatus.COMPLETED);
+        lenient().when(appt.getUpdatedAt()).thenReturn(null);
+        lenient().when(appt.getCreatedAt()).thenReturn(LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(List.of(appt));
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("COMPLETED", result.get(0).getEncounterStatus());
+    }
+
+    @Test
+    void getWorklist_appointmentWithDefaultStatus_shouldMapToScheduled() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "Unknown", "Appt");
+        Appointment appt = mock(Appointment.class);
+        lenient().when(appt.getPatient()).thenReturn(p);
+        lenient().when(appt.getReason()).thenReturn("Misc");
+        when(appt.getStatus()).thenReturn(AppointmentStatus.NO_SHOW);
+        lenient().when(appt.getUpdatedAt()).thenReturn(LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(List.of(appt));
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("SCHEDULED", result.get(0).getEncounterStatus());
+    }
+
+    @Test
+    void getWorklist_appointmentNullPatient_shouldSkip() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Appointment appt = mock(Appointment.class);
+        when(appt.getPatient()).thenReturn(null);
+
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(List.of(appt));
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void getWorklist_appointmentStatusFilter_shouldFilterByMappedStatus() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "Filter", "Me");
+        Appointment appt = mock(Appointment.class);
+        lenient().when(appt.getPatient()).thenReturn(p);
+        lenient().when(appt.getReason()).thenReturn("Test");
+        when(appt.getStatus()).thenReturn(AppointmentStatus.CONFIRMED);
+        lenient().when(appt.getUpdatedAt()).thenReturn(LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(List.of(appt));
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        // CHECKED_IN should match CONFIRMED appointment
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, "CHECKED_IN", null);
+        assertEquals(1, result.size());
+
+        // IN_PROGRESS should NOT match CONFIRMED appointment
+        List<DoctorWorklistItemDTO> filtered = service.getWorklist(userId, "IN_PROGRESS", null);
+        assertTrue(filtered.isEmpty());
+    }
+
+    @Test
+    void getWorklist_appointmentWithNullDateOfBirth_shouldSetAgeZero() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "NoDob", "Patient");
+        lenient().when(p.getDateOfBirth()).thenReturn(null);
+        Appointment appt = mock(Appointment.class);
+        lenient().when(appt.getPatient()).thenReturn(p);
+        lenient().when(appt.getReason()).thenReturn("Visit");
+        when(appt.getStatus()).thenReturn(AppointmentStatus.SCHEDULED);
+        lenient().when(appt.getUpdatedAt()).thenReturn(LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(List.of(appt));
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals(0, result.get(0).getAge());
+    }
+
+    // ========== Consults in worklist ==========
+
+    @Test
+    void getWorklist_withPendingConsults_shouldAddConsultItems() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "Consult", "Patient");
+        Consultation consult = mock(Consultation.class);
+        lenient().when(consult.getPatient()).thenReturn(p);
+        lenient().when(consult.getReasonForConsult()).thenReturn("Cardiac eval");
+        lenient().when(consult.getUrgency()).thenReturn(ConsultationUrgency.URGENT);
+        lenient().when(consult.getRequestedAt()).thenReturn(LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(List.of(consult));
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("CONSULT_PENDING", result.get(0).getEncounterStatus());
+        assertEquals("Cardiac eval", result.get(0).getChiefComplaint());
+        assertEquals("URGENT", result.get(0).getUrgency());
+    }
+
+    @Test
+    void getWorklist_consultWithNullUrgency_shouldDefaultToRoutine() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "NoUrg", "Patient");
+        Consultation consult = mock(Consultation.class);
+        lenient().when(consult.getPatient()).thenReturn(p);
+        lenient().when(consult.getReasonForConsult()).thenReturn("Routine");
+        lenient().when(consult.getUrgency()).thenReturn(null);
+        lenient().when(consult.getRequestedAt()).thenReturn(LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(List.of(consult));
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("ROUTINE", result.get(0).getUrgency());
+    }
+
+    @Test
+    void getWorklist_consultWithNullPatient_shouldSkip() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Consultation consult = mock(Consultation.class);
+        when(consult.getPatient()).thenReturn(null);
+
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(List.of(consult));
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void getWorklist_consultQueryException_shouldReturnOtherItems() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "Alice", "Enc");
+        Encounter enc = stubEncounter(UUID.randomUUID(), p, EncounterStatus.IN_PROGRESS, LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(List.of(enc));
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.SCHEDULED))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenThrow(new RuntimeException("DB error"));
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("Alice Enc", result.get(0).getPatientName());
+    }
+
+    @Test
+    void getWorklist_statusFilterCONSULTS_shouldOnlyIncludeConsults() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient encPatient = stubPatient(UUID.randomUUID(), "Enc", "Pat");
+        Encounter enc = stubEncounter(UUID.randomUUID(), encPatient, EncounterStatus.IN_PROGRESS, LocalDateTime.now());
+
+        Patient consultPatient = stubPatient(UUID.randomUUID(), "Consult", "Pat");
+        Consultation consult = mock(Consultation.class);
+        lenient().when(consult.getPatient()).thenReturn(consultPatient);
+        lenient().when(consult.getReasonForConsult()).thenReturn("Eval");
+        lenient().when(consult.getUrgency()).thenReturn(ConsultationUrgency.ROUTINE);
+        lenient().when(consult.getRequestedAt()).thenReturn(LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(List.of(enc));
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.SCHEDULED))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(List.of(consult));
+
+        // Filter for CONSULTS only — encounter should be excluded, consult included
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, "CONSULTS", null);
+
+        assertEquals(1, result.size());
+        assertEquals("CONSULT_PENDING", result.get(0).getEncounterStatus());
+    }
+
+    @Test
+    void getWorklist_encounterWithNullDateOfBirth_shouldSetAgeZero() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "NoDob", "Enc");
+        lenient().when(p.getDateOfBirth()).thenReturn(null);
+        Encounter enc = stubEncounter(UUID.randomUUID(), p, EncounterStatus.IN_PROGRESS, LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(List.of(enc));
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.SCHEDULED))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertEquals(0, result.get(0).getAge());
+    }
+
+    @Test
+    void getWorklist_encounterWithNullEncounterDate_shouldSetWaitZero() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "NoDate", "Enc");
+        Encounter enc = stubEncounter(UUID.randomUUID(), p, EncounterStatus.IN_PROGRESS, null);
+        lenient().when(enc.getEncounterDate()).thenReturn(null);
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(List.of(enc));
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.SCHEDULED))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertEquals(0, result.get(0).getWaitMinutes());
+    }
+
+    @Test
+    void getWorklist_encounterWithUpdatedAtNull_shouldFallbackToCreatedAt() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "Updated", "Enc");
+        LocalDateTime createdAt = LocalDateTime.of(2026, 3, 14, 8, 0);
+        Encounter enc = stubEncounter(UUID.randomUUID(), p, EncounterStatus.IN_PROGRESS, LocalDateTime.now());
+        lenient().when(enc.getUpdatedAt()).thenReturn(null);
+        lenient().when(enc.getCreatedAt()).thenReturn(createdAt);
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(List.of(enc));
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.SCHEDULED))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals(createdAt, result.get(0).getUpdatedAt());
+    }
+
+    @Test
+    void getCriticalStrip_encounterWithNullDate_shouldNotCountAsLongWait() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        when(labOrderRepository.countByOrderingStaff_IdAndStatus(eq(staffId), any())).thenReturn(0L);
+
+        Encounter nullDateEnc = mock(Encounter.class);
+        when(nullDateEnc.getEncounterDate()).thenReturn(null);
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(List.of(nullDateEnc));
+
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+        when(digitalSignatureRepository.countBySignedBy_IdAndStatus(staffId, SignatureStatus.PENDING)).thenReturn(0L);
+
+        CriticalStripDTO result = service.getCriticalStrip(userId);
+
+        assertEquals(0, result.getWaitingLongCount());
+    }
+
+    @Test
+    void getWorklist_consultWithNullDob_shouldSetAgeZero() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "NoDob", "Consult");
+        lenient().when(p.getDateOfBirth()).thenReturn(null);
+        Consultation consult = mock(Consultation.class);
+        lenient().when(consult.getPatient()).thenReturn(p);
+        lenient().when(consult.getReasonForConsult()).thenReturn("Eval");
+        lenient().when(consult.getUrgency()).thenReturn(ConsultationUrgency.EMERGENCY);
+        lenient().when(consult.getRequestedAt()).thenReturn(LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(List.of(consult));
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null);
+
+        assertEquals(0, result.get(0).getAge());
+        assertEquals("EMERGENCY", result.get(0).getUrgency());
     }
 }

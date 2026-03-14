@@ -404,4 +404,311 @@ class PatientSnapshotServiceImplTest {
 
         assertEquals(0, result.getAge());
     }
+
+    // ========== Additional coverage for branches ==========
+
+    @Test
+    void getSnapshot_prescriptionQueryFails_shouldStillReturnSnapshot() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenThrow(new RuntimeException("DB error"));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertNotNull(result);
+        assertTrue(result.getActiveMedications().isEmpty());
+    }
+
+    @Test
+    void getSnapshot_vitalsQueryFails_shouldStillReturnSnapshot() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenThrow(new RuntimeException("DB error"));
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertNotNull(result);
+        assertTrue(result.getRecentVitals().isEmpty());
+    }
+
+    @Test
+    void getSnapshot_labResultsQueryFails_shouldStillReturnSnapshot() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenThrow(new RuntimeException("DB error"));
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertNotNull(result);
+        assertTrue(result.getLatestLabs().isEmpty());
+    }
+
+    @Test
+    void getSnapshot_pendingOrdersQueryFails_shouldStillReturnSnapshot() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenThrow(new RuntimeException("DB error"));
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertNotNull(result);
+        assertTrue(result.getPendingOrders().isEmpty());
+    }
+
+    @Test
+    void getSnapshot_careTeamQueryFails_shouldStillReturnSnapshot() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_Id(patientId)).thenThrow(new RuntimeException("DB error"));
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertNotNull(result);
+        assertTrue(result.getCareTeam().isEmpty());
+    }
+
+    @Test
+    void getSnapshot_vitalWithPartialNulls_shouldBuildPartialSummary() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        PatientVitalSign vital = mock(PatientVitalSign.class);
+        when(vital.getTemperatureCelsius()).thenReturn(null);
+        when(vital.getHeartRateBpm()).thenReturn(72);
+        when(vital.getSystolicBpMmHg()).thenReturn(null);
+        // diastolicBpMmHg not stubbed — short-circuit && means it won't be called
+        when(vital.getSpo2Percent()).thenReturn(97);
+        when(vital.getRecordedAt()).thenReturn(null);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(List.of(vital));
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertEquals(1, result.getRecentVitals().size());
+        PatientSnapshotDTO.VitalItem v = result.getRecentVitals().get(0);
+        assertTrue(v.getValue().contains("HR:72"));
+        assertTrue(v.getValue().contains("SpO2:97%"));
+        assertFalse(v.getValue().contains("T:"));
+        assertFalse(v.getValue().contains("BP:"));
+        assertEquals("", v.getTimestamp());
+    }
+
+    @Test
+    void getSnapshot_labResultWithNullTestDef_shouldUseFallback() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        LabOrder order = mock(LabOrder.class);
+        when(order.getLabTestDefinition()).thenReturn(null);
+
+        LabResult labResult = mock(LabResult.class);
+        when(labResult.getLabOrder()).thenReturn(order);
+        when(labResult.getResultValue()).thenReturn("5.0");
+        when(labResult.isAcknowledged()).thenReturn(false);
+        when(labResult.getResultDate()).thenReturn(null);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(labResult));
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertEquals(1, result.getLatestLabs().size());
+        assertEquals("Lab Test", result.getLatestLabs().get(0).getTest());
+        assertEquals("REVIEW", result.getLatestLabs().get(0).getFlag());
+        assertEquals("", result.getLatestLabs().get(0).getDate());
+    }
+
+    @Test
+    void getSnapshot_pendingOrderWithInProgressStatus_shouldInclude() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        LabTestDefinition testDef = mock(LabTestDefinition.class);
+        when(testDef.getName()).thenReturn("Chem Panel");
+
+        LabOrder inProgressOrder = mock(LabOrder.class);
+        when(inProgressOrder.getStatus()).thenReturn(LabOrderStatus.IN_PROGRESS);
+        when(inProgressOrder.getLabTestDefinition()).thenReturn(testDef);
+        when(inProgressOrder.getOrderDatetime()).thenReturn(null);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(List.of(inProgressOrder));
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertEquals(1, result.getPendingOrders().size());
+        assertEquals("Chem Panel", result.getPendingOrders().get(0).getDescription());
+        assertEquals("", result.getPendingOrders().get(0).getOrderedAt());
+    }
+
+    @Test
+    void getSnapshot_pendingOrderWithNullTestDef_shouldUseFallback() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        LabOrder order = mock(LabOrder.class);
+        when(order.getStatus()).thenReturn(LabOrderStatus.PENDING);
+        when(order.getLabTestDefinition()).thenReturn(null);
+        when(order.getOrderDatetime()).thenReturn(LocalDateTime.of(2026, 3, 14, 8, 0));
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(List.of(order));
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertEquals(1, result.getPendingOrders().size());
+        assertEquals("Lab Order", result.getPendingOrders().get(0).getDescription());
+    }
+
+    @Test
+    void getSnapshot_careTeamWithNullJobTitle_shouldFallbackToStaff() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        Staff staffMember = mock(Staff.class);
+        when(staffMember.getJobTitle()).thenReturn(null);
+        when(staffMember.getFullName()).thenReturn("Nurse Anon");
+
+        Encounter enc = mock(Encounter.class);
+        when(enc.getStaff()).thenReturn(staffMember);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertEquals(1, result.getCareTeam().size());
+        assertEquals("Staff", result.getCareTeam().get(0).getRole());
+        assertEquals("Nurse Anon", result.getCareTeam().get(0).getName());
+    }
+
+    @Test
+    void getSnapshot_encounterWithNullStaff_shouldBeFilteredOut() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        Encounter enc = mock(Encounter.class);
+        when(enc.getStaff()).thenReturn(null);
+
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertTrue(result.getCareTeam().isEmpty());
+    }
+
+    @Test
+    void getSnapshot_blankAllergiesLegacy_shouldNotAddEmpty() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        when(patient.getAllergies()).thenReturn("   ");
+        givenPatient(patientId, patient);
+        stubEmptySubQueries(patientId);
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertTrue(result.getAllergies().isEmpty());
+    }
+
+    @Test
+    void getSnapshot_blankChronicConditions_shouldReturnEmptyDiagnoses() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        when(patient.getChronicConditions()).thenReturn("   ");
+        givenPatient(patientId, patient);
+        stubEmptySubQueries(patientId);
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertTrue(result.getActiveDiagnoses().isEmpty());
+    }
 }
