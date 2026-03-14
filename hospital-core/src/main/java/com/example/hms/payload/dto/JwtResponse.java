@@ -40,6 +40,9 @@ public class JwtResponse {
     /** True when the user must change their password before accessing the application. */
     private boolean forcePasswordChange;
 
+    /** True when the user must choose a new username before accessing the application. */
+    private boolean forceUsernameChange;
+
     // ── Hospital assignment context (sourced from active UserRoleHospitalAssignment) ──
 
     /** The primary hospital this user is assigned to (first active assignment). */

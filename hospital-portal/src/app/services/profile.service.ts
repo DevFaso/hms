@@ -39,6 +39,7 @@ export interface CredentialHealth {
   email: string;
   active: boolean;
   forcePasswordChange: boolean;
+  forceUsernameChange: boolean;
   lastLoginAt?: string;
   mfaEnrolledCount: number;
   verifiedMfaCount: number;
@@ -148,6 +149,19 @@ export class ProfileService {
   /** POST /auth/password/request — request password reset email */
   requestPasswordReset(email: string): Observable<void> {
     return this.http.post<void>('/auth/password/request', { email });
+  }
+
+  /** POST /auth/me/change-password — change own password */
+  changePassword(currentPassword: string, newPassword: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>('/auth/me/change-password', {
+      currentPassword,
+      newPassword,
+    });
+  }
+
+  /** POST /auth/me/change-username — change own username */
+  changeUsername(newUsername: string): Observable<{ message: string }> {
+    return this.http.post<{ message: string }>('/auth/me/change-username', { newUsername });
   }
 
   /** PUT /auth/credentials/mfa — update MFA enrollments */

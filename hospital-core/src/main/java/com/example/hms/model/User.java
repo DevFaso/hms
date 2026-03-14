@@ -84,6 +84,14 @@ public class User extends BaseEntity {
     @Column(name = "force_password_change", nullable = false, columnDefinition = "boolean default false")
     private boolean forcePasswordChange = false;
 
+    /**
+     * Whether the user must choose a new username on next login (e.g., auto-generated
+     * username during patient registration).
+     */
+    @Builder.Default
+    @Column(name = "force_username_change", nullable = false, columnDefinition = "boolean default false")
+    private boolean forceUsernameChange = false;
+
     @Column(name = "password_changed_at")
     private LocalDateTime passwordChangedAt;
 
