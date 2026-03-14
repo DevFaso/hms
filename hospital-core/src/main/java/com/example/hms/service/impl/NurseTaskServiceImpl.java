@@ -1,7 +1,14 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.MedicationAdministrationStatus;
+import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.model.Announcement;
+import com.example.hms.model.Patient;
+import com.example.hms.model.PatientVitalSign;
+import com.example.hms.model.Prescription;
+import com.example.hms.model.medication.MedicationAdministrationRecord;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseAnnouncementDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateResponseDTO;
@@ -10,9 +17,16 @@ import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO
 import com.example.hms.payload.dto.nurse.NurseMedicationTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseOrderTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
+import com.example.hms.repository.AnnouncementRepository;
+import com.example.hms.repository.MedicationAdministrationRecordRepository;
+import com.example.hms.repository.PatientVitalSignRepository;
+import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.NurseDashboardService;
 import com.example.hms.service.NurseTaskService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,10 +48,10 @@ import java.util.stream.IntStream;
 public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String SAMPLE_PATIENT_NAME = "Sample Patient";
 
-
     private static final Duration DEFAULT_WINDOW = Duration.ofHours(2);
     private static final int DEFAULT_LIMIT = 6;
     private static final int MAX_LIMIT = 20;
+    private static final long VITALS_OVERDUE_HOURS = 4;
 
     private static final String STATUS_OVERDUE = "OVERDUE";
     private static final String STATUS_DUE = "DUE";
@@ -58,29 +72,118 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     );
 
     private final NurseDashboardService nurseDashboardService;
+    private final PrescriptionRepository prescriptionRepository;
+    private final PatientVitalSignRepository patientVitalSignRepository;
+    private final MedicationAdministrationRecordRepository marRepository;
+    private final AnnouncementRepository announcementRepository;
+    private final AuditEventLogService auditEventLogService;
 
     private record PatientContext(UUID patientId, String displayName) {
     }
 
+    // ── Vitals: query real PatientVitalSign to find patients with overdue vitals ──
+
     @Override
     public List<NurseVitalTaskResponseDTO> getDueVitals(UUID nurseUserId, UUID hospitalId, Duration window) {
         List<PatientContext> patients = resolvePatientContexts(nurseUserId, hospitalId);
-        Duration effectiveWindow = normalizeWindow(window);
         LocalDateTime now = LocalDateTime.now();
+        LocalDateTime overdueCutoff = now.minusHours(VITALS_OVERDUE_HOURS);
 
-        return IntStream.range(0, Math.min(DEFAULT_LIMIT, patients.size()))
-            .mapToObj(index -> createVitalTask(patients.get(index), hospitalId, now, effectiveWindow, index))
-            .sorted(Comparator.comparing(NurseVitalTaskResponseDTO::getDueTime))
-            .toList();
+        List<NurseVitalTaskResponseDTO> result = new ArrayList<>();
+        for (PatientContext patient : patients) {
+            if (patient.patientId() == null) continue;
+
+            java.util.Optional<PatientVitalSign> latest = hospitalId != null
+                ? patientVitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patient.patientId(), hospitalId)
+                : patientVitalSignRepository.findFirstByPatient_IdOrderByRecordedAtDesc(patient.patientId());
+
+            boolean overdue;
+            LocalDateTime dueTime;
+
+            if (latest.isEmpty()) {
+                overdue = true;
+                dueTime = now.minusHours(1);
+            } else {
+                LocalDateTime lastRecorded = latest.get().getRecordedAt();
+                dueTime = lastRecorded.plusHours(VITALS_OVERDUE_HOURS);
+                overdue = dueTime.isBefore(now);
+            }
+
+            result.add(NurseVitalTaskResponseDTO.builder()
+                .id(generateStableId(patient.displayName(), hospitalId, SEED_VITAL, result.size()))
+                .patientId(patient.patientId())
+                .patientName(patient.displayName())
+                .type("Full Vitals")
+                .dueTime(dueTime)
+                .overdue(overdue)
+                .build());
+        }
+
+        if (result.isEmpty()) {
+            // Fall back to synthetic data
+            Duration effectiveWindow = normalizeWindow(window);
+            return IntStream.range(0, Math.min(DEFAULT_LIMIT, patients.size()))
+                .mapToObj(index -> createSyntheticVitalTask(patients.get(index), hospitalId, now, effectiveWindow, index))
+                .sorted(Comparator.comparing(NurseVitalTaskResponseDTO::getDueTime))
+                .toList();
+        }
+
+        result.sort(Comparator.comparing(NurseVitalTaskResponseDTO::getDueTime));
+        return result;
     }
+
+    // ── Medications: query real Prescriptions and generate MAR rows ──
 
     @Override
     public List<NurseMedicationTaskResponseDTO> getMedicationTasks(UUID nurseUserId, UUID hospitalId, String statusFilter) {
         List<PatientContext> patients = resolvePatientContexts(nurseUserId, hospitalId);
         LocalDateTime now = LocalDateTime.now();
 
+        List<NurseMedicationTaskResponseDTO> realTasks = new ArrayList<>();
+        if (hospitalId != null) {
+            for (PatientContext patient : patients) {
+                if (patient.patientId() == null) continue;
+                List<Prescription> prescriptions = prescriptionRepository
+                    .findByPatient_IdAndHospital_Id(patient.patientId(), hospitalId);
+
+                for (Prescription rx : prescriptions) {
+                    if (rx.getStatus() == PrescriptionStatus.CANCELLED
+                        || rx.getStatus() == PrescriptionStatus.DISCONTINUED) {
+                        continue;
+                    }
+                    String medName = rx.getMedicationDisplayName() != null
+                        ? rx.getMedicationDisplayName() : rx.getMedicationName();
+                    String dose = rx.getDosage() != null ? rx.getDosage() : "";
+                    if (!dose.isEmpty() && rx.getDoseUnit() != null) {
+                        dose = dose + " " + rx.getDoseUnit();
+                    }
+                    String route = rx.getRoute() != null ? rx.getRoute() : "PO";
+
+                    // Generate a scheduled time based on frequency (simplified: next due now)
+                    LocalDateTime scheduledTime = now.plusMinutes(30L * (realTasks.size() + 1));
+                    String status = determineMedicationStatus(statusFilter, scheduledTime, now, realTasks.size());
+
+                    realTasks.add(NurseMedicationTaskResponseDTO.builder()
+                        .id(rx.getId())
+                        .patientId(patient.patientId())
+                        .patientName(patient.displayName())
+                        .medication(medName)
+                        .dose(dose)
+                        .route(route)
+                        .dueTime(scheduledTime)
+                        .status(status)
+                        .build());
+                }
+            }
+        }
+
+        if (!realTasks.isEmpty()) {
+            return realTasks;
+        }
+
+        // Fallback to synthetic data
         return IntStream.range(0, Math.min(MAX_LIMIT, patients.size()))
-            .mapToObj(index -> createMedicationTask(patients.get(index), hospitalId, now, statusFilter, index))
+            .mapToObj(index -> createSyntheticMedicationTask(patients.get(index), hospitalId, now, statusFilter, index))
             .toList();
     }
 
@@ -124,16 +227,38 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         getHandoffSummaries(nurseUserId, hospitalId, DEFAULT_LIMIT);
     }
 
+    // ── Announcements: query real Announcement entity ──
+
     @Override
     public List<NurseAnnouncementDTO> getAnnouncements(UUID hospitalId, int limit) {
         int effectiveLimit = clampLimit(limit);
+
+        List<Announcement> announcements = announcementRepository.findAll(
+            PageRequest.of(0, effectiveLimit, Sort.by(Sort.Direction.DESC, "date"))
+        ).getContent();
+
+        if (!announcements.isEmpty()) {
+            return announcements.stream()
+                .map(a -> NurseAnnouncementDTO.builder()
+                    .id(a.getId())
+                    .text(a.getText())
+                    .createdAt(a.getDate())
+                    .startsAt(a.getDate())
+                    .expiresAt(a.getDate().plusHours(12))
+                    .category("OPERATIONS")
+                    .build())
+                .toList();
+        }
+
+        // Fallback to synthetic announcements
         LocalDateTime now = LocalDateTime.now();
         String hospitalLabel = hospitalId != null ? abbreviateHospitalId(hospitalId) : DEFAULT_HOSPITAL_SEED;
-
         return IntStream.range(0, effectiveLimit)
-            .mapToObj(index -> createAnnouncement(now, hospitalLabel, index))
+            .mapToObj(index -> createSyntheticAnnouncement(now, hospitalLabel, index))
             .toList();
     }
+
+    // ── Medication Administration: persist to MedicationAdministrationRecord ──
 
     @Override
     @Transactional
@@ -147,6 +272,48 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             throw new BusinessException("Medication task identifier is required.");
         }
         String normalizedStatus = normalizeAdministrationStatus(request);
+
+        // Try to find a real prescription by the task ID
+        java.util.Optional<Prescription> prescriptionOpt = prescriptionRepository.findById(medicationTaskId);
+        if (prescriptionOpt.isPresent()) {
+            Prescription rx = prescriptionOpt.get();
+            Patient patient = rx.getPatient();
+
+            MedicationAdministrationStatus marStatus = mapToMarStatus(normalizedStatus);
+            String note = request != null ? request.getNote() : null;
+
+            MedicationAdministrationRecord mar = MedicationAdministrationRecord.builder()
+                .prescription(rx)
+                .patient(patient)
+                .hospital(rx.getHospital())
+                .medicationName(rx.getMedicationName())
+                .dose(rx.getDosage())
+                .route(rx.getRoute())
+                .scheduledTime(LocalDateTime.now())
+                .administeredAt(marStatus == MedicationAdministrationStatus.ADMINISTERED ? LocalDateTime.now() : null)
+                .status(marStatus)
+                .holdReason(marStatus == MedicationAdministrationStatus.HELD ? note : null)
+                .refusalReason(marStatus == MedicationAdministrationStatus.REFUSED ? note : null)
+                .note(note)
+                .build();
+
+            marRepository.save(mar);
+
+            String displayName = patient.getFullName() != null ? patient.getFullName() : "Patient";
+
+            return NurseMedicationTaskResponseDTO.builder()
+                .id(rx.getId())
+                .patientId(patient.getId())
+                .patientName(displayName)
+                .medication(rx.getMedicationDisplayName() != null ? rx.getMedicationDisplayName() : rx.getMedicationName())
+                .dose(rx.getDosage())
+                .route(rx.getRoute())
+                .dueTime(LocalDateTime.now())
+                .status(normalizedStatus)
+                .build();
+        }
+
+        // Fall back to synthetic task lookup
         List<NurseMedicationTaskResponseDTO> tasks = getMedicationTasks(nurseUserId, hospitalId, null);
 
         return tasks.stream()
@@ -181,7 +348,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             throw new BusinessException("Hospital context required to update handoff checklist.");
         }
 
-        // Check handoff exists first (before resolving patients)
         try {
             List<NurseHandoffSummaryDTO> handoffs = getHandoffSummaries(nurseUserId, hospitalId, DEFAULT_LIMIT);
             boolean handoffExists = handoffs.stream().anyMatch(handoff -> handoffId.equals(handoff.getId()));
@@ -189,7 +355,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 throw new ResourceNotFoundException("Handoff not found for checklist update.");
             }
         } catch (RuntimeException e) {
-            // Any exception during handoff lookup should be treated as handoff not found
             throw new ResourceNotFoundException("Handoff not found for checklist update.");
         }
 
@@ -201,16 +366,15 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .build();
     }
 
-    private NurseVitalTaskResponseDTO createVitalTask(PatientContext patient, UUID hospitalId, LocalDateTime now, Duration window, int index) {
+    // ── Synthetic fallback helpers ──
+
+    private NurseVitalTaskResponseDTO createSyntheticVitalTask(PatientContext patient, UUID hospitalId, LocalDateTime now, Duration window, int index) {
         long dueOffset = window.toMinutes() / 2 + 12L * index;
         LocalDateTime dueTime = now.plusMinutes(dueOffset);
         boolean overdue = dueTime.isBefore(now);
-        UUID patientId = patient.patientId() != null
-            ? patient.patientId()
-            : null;
         return NurseVitalTaskResponseDTO.builder()
             .id(generateStableId(patient.displayName(), hospitalId, SEED_VITAL, index))
-            .patientId(patientId)
+            .patientId(patient.patientId())
             .patientName(patient.displayName())
             .type(selectVitalType(index))
             .dueTime(dueTime)
@@ -218,15 +382,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .build();
     }
 
-    private NurseMedicationTaskResponseDTO createMedicationTask(PatientContext patient, UUID hospitalId, LocalDateTime now, String statusFilter, int index) {
+    private NurseMedicationTaskResponseDTO createSyntheticMedicationTask(PatientContext patient, UUID hospitalId, LocalDateTime now, String statusFilter, int index) {
         LocalDateTime dueTime = now.plusMinutes(30L * (index + 1));
         String status = determineMedicationStatus(statusFilter, dueTime, now, index);
-        UUID patientId = patient.patientId() != null
-            ? patient.patientId()
-            : null;
         return NurseMedicationTaskResponseDTO.builder()
             .id(generateStableId(patient.displayName(), hospitalId, SEED_MEDICATION, index))
-            .patientId(patientId)
+            .patientId(patient.patientId())
             .patientName(patient.displayName())
             .medication(selectMedication(index))
             .dose(selectDosage(index))
@@ -238,12 +399,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     private NurseOrderTaskResponseDTO createOrderTask(PatientContext patient, UUID hospitalId, LocalDateTime now, int index) {
         LocalDateTime dueTime = now.plusMinutes(45L * (index + 1));
-        UUID patientId = patient.patientId() != null
-            ? patient.patientId()
-            : null;
         return NurseOrderTaskResponseDTO.builder()
             .id(generateStableId(patient.displayName(), hospitalId, SEED_ORDER, index))
-            .patientId(patientId)
+            .patientId(patient.patientId())
             .patientName(patient.displayName())
             .orderType(selectOrderCategory(index))
             .priority(index % 3 == 0 ? "STAT" : "Routine")
@@ -253,12 +411,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     private NurseHandoffSummaryDTO createHandoffSummary(PatientContext patient, UUID hospitalId, LocalDate today, int index) {
         LocalDateTime updatedAt = today.atStartOfDay().plusHours(7L + index);
-        UUID patientId = patient.patientId() != null
-            ? patient.patientId()
-            : null;
         return NurseHandoffSummaryDTO.builder()
             .id(generateStableId(patient.displayName(), hospitalId, SEED_HANDOFF, index))
-            .patientId(patientId)
+            .patientId(patient.patientId())
             .patientName(patient.displayName())
             .direction(index % 2 == 0 ? "Transfer to Radiology" : "Return from OR")
             .updatedAt(updatedAt)
@@ -266,7 +421,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .build();
     }
 
-    private NurseAnnouncementDTO createAnnouncement(LocalDateTime now, String hospitalLabel, int index) {
+    private NurseAnnouncementDTO createSyntheticAnnouncement(LocalDateTime now, String hospitalLabel, int index) {
         long hoursOffset = 6L + index;
         return NurseAnnouncementDTO.builder()
             .id(UUID.randomUUID())
@@ -278,6 +433,18 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .expiresAt(now.plusHours(hoursOffset))
             .category(index % 2 == 0 ? "SHIFT" : "OPERATIONS")
             .build();
+    }
+
+    // ── Shared helpers ──
+
+    private MedicationAdministrationStatus mapToMarStatus(String status) {
+        return switch (status) {
+            case "GIVEN" -> MedicationAdministrationStatus.ADMINISTERED;
+            case "HELD" -> MedicationAdministrationStatus.HELD;
+            case "REFUSED" -> MedicationAdministrationStatus.REFUSED;
+            case "MISSED" -> MedicationAdministrationStatus.MISSED;
+            default -> MedicationAdministrationStatus.PENDING;
+        };
     }
 
     private Duration normalizeWindow(Duration window) {

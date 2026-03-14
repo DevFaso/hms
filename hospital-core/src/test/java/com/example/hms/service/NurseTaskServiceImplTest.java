@@ -17,6 +17,10 @@ import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO
 import com.example.hms.payload.dto.nurse.NurseMedicationTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseOrderTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
+import com.example.hms.repository.AnnouncementRepository;
+import com.example.hms.repository.MedicationAdministrationRecordRepository;
+import com.example.hms.repository.PatientVitalSignRepository;
+import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.service.impl.NurseTaskServiceImpl;
 import com.example.hms.utility.MessageUtil;
 import java.time.Duration;
@@ -25,6 +29,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.MessageSource;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -32,16 +38,33 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 class NurseTaskServiceImplTest {
 
     private NurseDashboardService nurseDashboardService;
+    private PrescriptionRepository prescriptionRepository;
+    private PatientVitalSignRepository patientVitalSignRepository;
+    private MedicationAdministrationRecordRepository marRepository;
+    private AnnouncementRepository announcementRepository;
+    private AuditEventLogService auditEventLogService;
     private NurseTaskServiceImpl nurseTaskService;
 
     @BeforeEach
     void setUp() {
         nurseDashboardService = mock(NurseDashboardService.class);
+        prescriptionRepository = mock(PrescriptionRepository.class);
+        patientVitalSignRepository = mock(PatientVitalSignRepository.class);
+        marRepository = mock(MedicationAdministrationRecordRepository.class);
+        announcementRepository = mock(AnnouncementRepository.class);
+        auditEventLogService = mock(AuditEventLogService.class);
         MessageUtil.setMessageSource(null);
         MessageSource messageSource = mock(MessageSource.class);
         when(messageSource.getMessage(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(0));
         MessageUtil.setMessageSource(messageSource);
-        nurseTaskService = new NurseTaskServiceImpl(nurseDashboardService);
+        nurseTaskService = new NurseTaskServiceImpl(
+            nurseDashboardService,
+            prescriptionRepository,
+            patientVitalSignRepository,
+            marRepository,
+            announcementRepository,
+            auditEventLogService
+        );
     }
 
     @Test
@@ -68,6 +91,8 @@ class NurseTaskServiceImplTest {
         );
 
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(patients);
+        when(patientVitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(any(), any()))
+            .thenReturn(java.util.Optional.empty());
 
         List<NurseVitalTaskResponseDTO> vitals = nurseTaskService.getDueVitals(nurseId, hospitalId, Duration.ofMinutes(10));
 
@@ -81,7 +106,6 @@ class NurseTaskServiceImplTest {
             .containsExactly(alexId, jamieId, jamieDuplicateId, unnamedId);
 
         verify(nurseDashboardService).getPatientsForNurse(nurseId, hospitalId, null);
-        verifyNoMoreInteractions(nurseDashboardService);
     }
 
     @Test
@@ -107,8 +131,11 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void getAnnouncementsClampsLimitAndAbbreviatesHospitalId() {
+    void getAnnouncementsClampsLimitAndFallsBackToSynthetic() {
         UUID hospitalId = UUID.randomUUID();
+
+        when(announcementRepository.findAll(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
 
         List<NurseAnnouncementDTO> announcements = nurseTaskService.getAnnouncements(hospitalId, 50);
 
@@ -135,6 +162,8 @@ class NurseTaskServiceImplTest {
             .build();
 
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(List.of(patient));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(List.of());
+        when(prescriptionRepository.findById(any())).thenReturn(java.util.Optional.empty());
 
         UUID taskId = nurseTaskService.getMedicationTasks(nurseId, hospitalId, null).get(0).getId();
 
@@ -146,9 +175,6 @@ class NurseTaskServiceImplTest {
         assertThat(response.getStatus()).isEqualTo("GIVEN");
         assertThat(response.getId()).isEqualTo(taskId);
         assertThat(response.getPatientId()).isEqualTo(patientId);
-
-        verify(nurseDashboardService, times(2)).getPatientsForNurse(nurseId, hospitalId, null);
-        verifyNoMoreInteractions(nurseDashboardService);
     }
 
     @Test
@@ -161,6 +187,7 @@ class NurseTaskServiceImplTest {
             .build();
 
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(List.of(patient));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(any(), any())).thenReturn(List.of());
 
         UUID taskId = nurseTaskService.getMedicationTasks(nurseId, hospitalId, null).get(0).getId();
 

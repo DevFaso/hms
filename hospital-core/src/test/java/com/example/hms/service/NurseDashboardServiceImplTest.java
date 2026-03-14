@@ -7,7 +7,9 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.PatientResponseDTO;
+import com.example.hms.repository.MedicationAdministrationRecordRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.service.impl.NurseDashboardServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +41,12 @@ class NurseDashboardServiceImplTest {
 
     @Mock
     private PatientVitalSignService patientVitalSignService;
+
+    @Mock
+    private PatientVitalSignRepository patientVitalSignRepository;
+
+    @Mock
+    private MedicationAdministrationRecordRepository marRepository;
 
     @InjectMocks
     private NurseDashboardServiceImpl nurseDashboardService;

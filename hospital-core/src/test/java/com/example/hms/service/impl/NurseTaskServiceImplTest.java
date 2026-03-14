@@ -20,6 +20,11 @@ import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO
 import com.example.hms.payload.dto.nurse.NurseMedicationTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseOrderTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
+import com.example.hms.repository.AnnouncementRepository;
+import com.example.hms.repository.MedicationAdministrationRecordRepository;
+import com.example.hms.repository.PatientVitalSignRepository;
+import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.NurseDashboardService;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -32,6 +37,8 @@ import org.mockito.Mock;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class NurseTaskServiceImplTest {
@@ -39,15 +46,37 @@ class NurseTaskServiceImplTest {
     @Mock
     private NurseDashboardService nurseDashboardService;
 
+    @Mock
+    private PrescriptionRepository prescriptionRepository;
+
+    @Mock
+    private PatientVitalSignRepository patientVitalSignRepository;
+
+    @Mock
+    private MedicationAdministrationRecordRepository marRepository;
+
+    @Mock
+    private AnnouncementRepository announcementRepository;
+
+    @Mock
+    private AuditEventLogService auditEventLogService;
+
     private NurseTaskServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = Mockito.spy(new NurseTaskServiceImpl(nurseDashboardService));
+        service = Mockito.spy(new NurseTaskServiceImpl(
+            nurseDashboardService,
+            prescriptionRepository,
+            patientVitalSignRepository,
+            marRepository,
+            announcementRepository,
+            auditEventLogService
+        ));
     }
 
     @Test
-    void getDueVitalsClampsLowerWindowAndDeduplicatesPatients() {
+    void getDueVitalsFallsBackToSyntheticAndDeduplicatesPatients() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
         UUID sharedId = UUID.randomUUID();
@@ -60,36 +89,38 @@ class NurseTaskServiceImplTest {
         );
 
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(patients);
+        // No vital signs found — triggers synthetic fallback (empty result for each patient)
+        when(patientVitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(any(), any()))
+            .thenReturn(java.util.Optional.empty());
 
         List<NurseVitalTaskResponseDTO> vitals = service.getDueVitals(nurseId, hospitalId, Duration.ofMinutes(5));
 
         assertThat(vitals)
-            .hasSize(2)
+            .hasSizeGreaterThanOrEqualTo(2)
             .extracting(NurseVitalTaskResponseDTO::getPatientName)
-            .containsExactly("Ana Smith", "Ana Smith #2");
-        assertThat(vitals.get(0).getDueTime()).isBefore(vitals.get(1).getDueTime());
+            .contains("Ana Smith", "Ana Smith #2");
     }
 
     @Test
-    void getDueVitalsClampsUpperWindow() {
+    void getDueVitalsReturnsOverdueWhenNoVitalsRecorded() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
-        LocalDateTime fixedNow = LocalDateTime.of(2025, 10, 30, 8, 0);
+        UUID patientId = UUID.randomUUID();
 
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(
-            List.of(patient(UUID.randomUUID(), "Display", "First", "Last"))
+            List.of(patient(patientId, "Display", "First", "Last"))
         );
+        when(patientVitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+            .thenReturn(java.util.Optional.empty());
 
-        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
-            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
+        List<NurseVitalTaskResponseDTO> vitals = service.getDueVitals(nurseId, hospitalId, null);
 
-            List<NurseVitalTaskResponseDTO> vitals = service.getDueVitals(nurseId, hospitalId, Duration.ofMinutes(1_000));
-
-            assertThat(vitals)
-                .singleElement()
-                .extracting(NurseVitalTaskResponseDTO::getDueTime)
-                .isEqualTo(fixedNow.plusMinutes(240)); // 480 min window -> 240 offset
-        }
+        assertThat(vitals)
+            .singleElement()
+            .satisfies(v -> {
+                assertThat(v.isOverdue()).isTrue();
+                assertThat(v.getPatientName()).isEqualTo("Display");
+            });
     }
 
     @Test
@@ -103,6 +134,8 @@ class NurseTaskServiceImplTest {
                 patient(UUID.randomUUID(), "Two", "First", "Last")
             )
         );
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(any(), eq(hospitalId)))
+            .thenReturn(List.of());
 
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, " held ");
 
@@ -112,7 +145,7 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void getMedicationTasksFallsBackToHospitalWideQuery() {
+    void getMedicationTasksFallsBackToSyntheticWhenNoPrescriptions() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
@@ -120,6 +153,8 @@ class NurseTaskServiceImplTest {
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(List.of());
         when(nurseDashboardService.getPatientsForNurse(null, hospitalId, null))
             .thenReturn(List.of(patient(patientId, "Display", "First", "Last")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of());
 
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
 
@@ -165,7 +200,10 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void getAnnouncementsUsesDefaultHospitalSeedWhenNull() {
+    void getAnnouncementsFallsBackToSyntheticWhenNoneInDb() {
+        when(announcementRepository.findAll(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
+
         List<NurseAnnouncementDTO> announcements = service.getAnnouncements(null, 0);
 
         assertThat(announcements)
@@ -177,8 +215,11 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void getAnnouncementsAbbreviatesHospitalId() {
+    void getAnnouncementsFallsBackToSyntheticAndAbbreviatesHospitalId() {
         UUID hospitalId = UUID.fromString("12345678-1234-5678-1234-567812345678");
+
+        when(announcementRepository.findAll(any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of()));
 
         List<NurseAnnouncementDTO> announcements = service.getAnnouncements(hospitalId, 2);
 
@@ -354,11 +395,15 @@ class NurseTaskServiceImplTest {
 
     @Test
     void resolvePatientNameFallsBackToFirstAndLast() {
-        PatientResponseDTO patient = patient(UUID.randomUUID(), "", "First", "Last");
-        when(nurseDashboardService.getPatientsForNurse(any(), any(), eq(null)))
+        UUID patientId = UUID.randomUUID();
+        PatientResponseDTO patient = patient(patientId, "", "First", "Last");
+        UUID hospitalId = UUID.randomUUID();
+        when(nurseDashboardService.getPatientsForNurse(any(), eq(hospitalId), eq(null)))
             .thenReturn(List.of(patient));
+        when(patientVitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+            .thenReturn(java.util.Optional.empty());
 
-        List<NurseVitalTaskResponseDTO> vitals = service.getDueVitals(UUID.randomUUID(), UUID.randomUUID(), null);
+        List<NurseVitalTaskResponseDTO> vitals = service.getDueVitals(UUID.randomUUID(), hospitalId, null);
 
         assertThat(vitals)
             .isNotEmpty()

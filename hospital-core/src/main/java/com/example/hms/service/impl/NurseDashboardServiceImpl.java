@@ -1,11 +1,16 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.MedicationAdministrationStatus;
 import com.example.hms.enums.PatientStayStatus;
 import com.example.hms.mapper.PatientMapper;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.model.PatientVitalSign;
 import com.example.hms.payload.dto.PatientResponseDTO;
+import com.example.hms.payload.dto.nurse.NurseDashboardSummaryDTO;
+import com.example.hms.repository.MedicationAdministrationRecordRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.service.NurseDashboardService;
 import com.example.hms.service.PatientVitalSignService;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -27,6 +33,10 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final PatientMapper patientMapper;
     private final PatientVitalSignService patientVitalSignService;
+    private final PatientVitalSignRepository patientVitalSignRepository;
+    private final MedicationAdministrationRecordRepository marRepository;
+
+    private static final long VITALS_OVERDUE_HOURS = 4;
 
     @Override
     public List<PatientResponseDTO> getPatientsForNurse(UUID nurseUserId,
@@ -42,6 +52,36 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
                 Comparator.nullsLast(Comparator.reverseOrder())))
         .map(this::enrichRegistration)
             .toList();
+    }
+
+    @Override
+    public NurseDashboardSummaryDTO getSummary(UUID nurseUserId, UUID hospitalId) {
+        List<PatientResponseDTO> patients = getPatientsForNurse(nurseUserId, hospitalId, null);
+
+        int vitalsOverdue = 0;
+        LocalDateTime vitalsCutoff = LocalDateTime.now().minusHours(VITALS_OVERDUE_HOURS);
+        for (PatientResponseDTO p : patients) {
+            if (p.getId() == null) continue;
+            Optional<PatientVitalSign> latest = hospitalId != null
+                ? patientVitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(p.getId(), hospitalId)
+                : patientVitalSignRepository.findFirstByPatient_IdOrderByRecordedAtDesc(p.getId());
+            if (latest.isEmpty() || latest.get().getRecordedAt().isBefore(vitalsCutoff)) {
+                vitalsOverdue++;
+            }
+        }
+
+        long medsOverdue = hospitalId != null
+            ? marRepository.countByHospital_IdAndStatusAndScheduledTimeBefore(
+                hospitalId, MedicationAdministrationStatus.PENDING, LocalDateTime.now())
+            : 0;
+
+        return NurseDashboardSummaryDTO.builder()
+            .patientsAssigned(patients.size())
+            .vitalsOverdueCount(vitalsOverdue)
+            .medsOverdueCount((int) medsOverdue)
+            .ordersPendingCount(0)
+            .handoffsCount(0)
+            .build();
     }
 
     private boolean matchesAssignment(PatientHospitalRegistration registration, UUID nurseUserId) {

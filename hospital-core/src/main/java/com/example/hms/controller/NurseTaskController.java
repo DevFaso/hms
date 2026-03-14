@@ -4,6 +4,7 @@ import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.nurse.NurseAnnouncementDTO;
+import com.example.hms.payload.dto.nurse.NurseDashboardSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffSummaryDTO;
@@ -11,6 +12,7 @@ import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO
 import com.example.hms.payload.dto.nurse.NurseMedicationTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseOrderTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
+import com.example.hms.service.NurseDashboardService;
 import com.example.hms.service.NurseTaskService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,7 +43,22 @@ import java.util.UUID;
 public class NurseTaskController {
 
     private final NurseTaskService nurseTaskService;
+    private final NurseDashboardService nurseDashboardService;
     private final ControllerAuthUtils authUtils;
+
+    @GetMapping("/dashboard/summary")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Get aggregated dashboard summary for the nurse station")
+    public ResponseEntity<NurseDashboardSummaryDTO> getDashboardSummary(
+        @RequestParam(name = "assignee", required = false) String assignee,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID nurseId = resolveAssignee(auth, assignee);
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        return ResponseEntity.ok(nurseDashboardService.getSummary(nurseId, scopedHospital));
+    }
 
     @GetMapping("/vitals/due")
     @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
