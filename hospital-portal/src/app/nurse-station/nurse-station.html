@@ -4,26 +4,50 @@
       <h1 class="page-title">Nurse Station</h1>
       <p class="page-subtitle">Clinical tasks, medications, and patient care</p>
     </div>
+    <div class="header-actions">
+      <div class="filter-bar">
+        <button class="filter-btn" [class.active]="filterMode() === 'me'" (click)="setFilter('me')">
+          My Patients
+        </button>
+        <button
+          class="filter-btn"
+          [class.active]="filterMode() === 'unit'"
+          (click)="setFilter('unit')"
+        >
+          My Unit
+        </button>
+        <button
+          class="filter-btn"
+          [class.active]="filterMode() === 'all'"
+          (click)="setFilter('all')"
+        >
+          All
+        </button>
+      </div>
+      <button class="refresh-btn" (click)="refresh()" title="Refresh data">
+        <span class="material-symbols-outlined">refresh</span> Refresh
+      </button>
+    </div>
   </div>
   <div class="summary-cards">
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon vitals">monitor_heart</span>
       <div class="card-info">
-        <span class="card-value">{{ vitals().length }}</span
+        <span class="card-value">{{ vitalsCount() }}</span
         ><span class="card-label">Vitals Due</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon meds">medication</span>
       <div class="card-info">
-        <span class="card-value">{{ medications().length }}</span
+        <span class="card-value">{{ medsCount() }}</span
         ><span class="card-label">Medications</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon orders">assignment</span>
       <div class="card-info">
-        <span class="card-value">{{ orders().length }}</span
+        <span class="card-value">{{ ordersCount() }}</span
         ><span class="card-label">Orders</span>
       </div>
     </div>
@@ -93,13 +117,18 @@
                   <th scope="col">Type</th>
                   <th scope="col">Due Time</th>
                   <th scope="col">Status</th>
+                  <th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 @for (v of vitals(); track v.id) {
                   <tr class="data-row" [class.overdue-row]="v.overdue">
                     <td>
-                      <div class="cell-primary">{{ v.patientName }}</div>
+                      <a
+                        class="cell-primary patient-link"
+                        [routerLink]="['/patients', v.patientId]"
+                        >{{ v.patientName }}</a
+                      >
                     </td>
                     <td>{{ v.type }}</td>
                     <td>{{ v.dueTime | date: 'shortTime' }}</td>
@@ -108,6 +137,17 @@
                         <span class="badge-overdue">Overdue</span>
                       } @else {
                         <span class="badge-pending">Pending</span>
+                      }
+                    </td>
+                    <td>
+                      @if (v.patientId) {
+                        <a
+                          class="action-btn record-btn"
+                          [routerLink]="['/patients', v.patientId]"
+                          title="Record vitals"
+                        >
+                          Record
+                        </a>
                       }
                     </td>
                   </tr>
@@ -135,13 +175,18 @@
                   <th scope="col">Route</th>
                   <th scope="col">Due</th>
                   <th scope="col">Status</th>
+                  <th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 @for (m of medications(); track m.id) {
                   <tr class="data-row">
                     <td>
-                      <div class="cell-primary">{{ m.patientName }}</div>
+                      <a
+                        class="cell-primary patient-link"
+                        [routerLink]="['/patients', m.patientId]"
+                        >{{ m.patientName }}</a
+                      >
                     </td>
                     <td>
                       <strong>{{ m.medication }}</strong>
@@ -153,6 +198,29 @@
                       <span class="status-badge status-{{ m.status | lowercase }}">{{
                         m.status
                       }}</span>
+                    </td>
+                    <td class="action-cell">
+                      <button
+                        class="action-btn administer-btn"
+                        (click)="administerMedication(m)"
+                        title="Administer medication"
+                      >
+                        Administer
+                      </button>
+                      <button
+                        class="action-btn hold-btn"
+                        (click)="holdMedication(m)"
+                        title="Hold medication"
+                      >
+                        Hold
+                      </button>
+                      <button
+                        class="action-btn refuse-btn"
+                        (click)="refuseMedication(m)"
+                        title="Refuse medication"
+                      >
+                        Refuse
+                      </button>
                     </td>
                   </tr>
                 }
@@ -183,7 +251,11 @@
                 @for (o of orders(); track o.id) {
                   <tr class="data-row">
                     <td>
-                      <div class="cell-primary">{{ o.patientName }}</div>
+                      <a
+                        class="cell-primary patient-link"
+                        [routerLink]="['/patients', o.patientId]"
+                        >{{ o.patientName }}</a
+                      >
                     </td>
                     <td>{{ o.orderType }}</td>
                     <td>
@@ -211,11 +283,22 @@
             @for (h of handoffs(); track h.id) {
               <div class="handoff-card">
                 <div class="handoff-header">
-                  <span class="cell-primary">{{ h.patientName }}</span
+                  <a class="cell-primary patient-link" [routerLink]="['/patients', h.patientId]">{{
+                    h.patientName
+                  }}</a
                   ><span class="handoff-dir">{{ h.direction }}</span>
                 </div>
                 <p class="handoff-note">{{ h.note || 'No notes' }}</p>
-                <span class="handoff-time">{{ h.updatedAt | date: 'medium' }}</span>
+                <div class="handoff-footer">
+                  <span class="handoff-time">{{ h.updatedAt | date: 'medium' }}</span>
+                  <button
+                    class="action-btn complete-btn"
+                    (click)="completeHandoff(h)"
+                    title="Complete handoff"
+                  >
+                    Complete
+                  </button>
+                </div>
               </div>
             }
           </div>

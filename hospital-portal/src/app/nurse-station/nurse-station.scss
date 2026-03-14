@@ -1,5 +1,70 @@
 @use '../shared/styles/page-common';
 
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 0.25rem;
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 0.25rem;
+}
+
+.filter-btn {
+  padding: 0.4rem 0.9rem;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 0.82rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  &.active {
+    background: #fff;
+    color: #111827;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  }
+  &:hover:not(.active) {
+    color: #374151;
+  }
+}
+
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  &:hover {
+    background: #f9fafb;
+    border-color: #9ca3af;
+  }
+  .material-symbols-outlined {
+    font-size: 1.1rem;
+  }
+}
+
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -131,6 +196,16 @@
   color: #111827;
 }
 
+.patient-link {
+  text-decoration: none;
+  color: #2563eb;
+  font-weight: 600;
+  &:hover {
+    text-decoration: underline;
+    color: #1d4ed8;
+  }
+}
+
 .badge-overdue {
   display: inline-block;
   padding: 0.2rem 0.6rem;
@@ -157,21 +232,29 @@
   border-radius: 20px;
   font-size: 0.78rem;
   font-weight: 600;
-  &.status-pending {
-    background: #fef3c7;
-    color: #92400e;
-  }
+  &.status-pending,
   &.status-due {
     background: #dbeafe;
     color: #1e40af;
   }
-  &.status-administered {
+  &.status-administered,
+  &.status-given,
+  &.status-completed {
     background: #d1fae5;
     color: #065f46;
   }
-  &.status-missed {
+  &.status-missed,
+  &.status-overdue {
     background: #fee2e2;
     color: #991b1b;
+  }
+  &.status-held {
+    background: #fef3c7;
+    color: #92400e;
+  }
+  &.status-refused {
+    background: #fce7f3;
+    color: #9d174d;
   }
 }
 
@@ -193,6 +276,75 @@
   &.priority-high {
     background: #fef3c7;
     color: #92400e;
+  }
+}
+
+.action-cell {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.7rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: #fff;
+  color: #374151;
+  text-decoration: none;
+  &:hover {
+    background: #f3f4f6;
+  }
+}
+
+.administer-btn {
+  border-color: #86efac;
+  color: #065f46;
+  background: #f0fdf4;
+  &:hover {
+    background: #dcfce7;
+  }
+}
+
+.hold-btn {
+  border-color: #fde68a;
+  color: #92400e;
+  background: #fffbeb;
+  &:hover {
+    background: #fef3c7;
+  }
+}
+
+.refuse-btn {
+  border-color: #fca5a5;
+  color: #991b1b;
+  background: #fef2f2;
+  &:hover {
+    background: #fee2e2;
+  }
+}
+
+.record-btn {
+  border-color: #93c5fd;
+  color: #1e40af;
+  background: #eff6ff;
+  &:hover {
+    background: #dbeafe;
+  }
+}
+
+.complete-btn {
+  border-color: #86efac;
+  color: #065f46;
+  background: #f0fdf4;
+  &:hover {
+    background: #dcfce7;
   }
 }
 
@@ -223,6 +375,11 @@
   font-size: 0.9rem;
   color: #374151;
   margin: 0.5rem 0;
+}
+.handoff-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 .handoff-time {
   font-size: 0.78rem;
@@ -287,5 +444,8 @@
   }
   .section-tabs {
     flex-wrap: wrap;
+  }
+  .page-header {
+    flex-direction: column;
   }
 }
