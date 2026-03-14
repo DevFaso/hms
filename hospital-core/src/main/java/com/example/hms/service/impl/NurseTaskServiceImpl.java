@@ -196,18 +196,18 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             if (!ACTIVE_RX_STATUSES.contains(rx.getStatus())) continue;
 
             String marStatus = resolveMarStatus(rx, now);
-            if (isFilteredOut(statusFilter, marStatus)) continue;
-
-            result.add(NurseMedicationTaskResponseDTO.builder()
-                .id(rx.getId())
-                .patientId(ctx.patientId())
-                .patientName(ctx.displayName())
-                .medication(rx.getMedicationName())
-                .dose(buildDoseDisplay(rx))
-                .route(rx.getRoute() != null ? rx.getRoute() : "PO")
-                .dueTime(computeMedicationDueTime(rx, now))
-                .status(marStatus)
-                .build());
+            if (!isFilteredOut(statusFilter, marStatus)) {
+                result.add(NurseMedicationTaskResponseDTO.builder()
+                    .id(rx.getId())
+                    .patientId(ctx.patientId())
+                    .patientName(ctx.displayName())
+                    .medication(rx.getMedicationName())
+                    .dose(buildDoseDisplay(rx))
+                    .route(rx.getRoute() != null ? rx.getRoute() : "PO")
+                    .dueTime(computeMedicationDueTime(rx, now))
+                    .status(marStatus)
+                    .build());
+            }
         }
         return result;
     }

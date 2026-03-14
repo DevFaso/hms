@@ -90,7 +90,7 @@ class NurseTaskControllerTest {
     @MethodSource("dueVitalsWindowArgs")
     void getDueVitalsWithVariousWindowsAndAssignees(String window, String assignee, Duration expectedDuration) {
         if (expectedDuration != null) {
-            when(nurseTaskService.getDueVitals(eq(null), eq(HOSPITAL_ID), eq(expectedDuration)))
+            when(nurseTaskService.getDueVitals(null, HOSPITAL_ID, expectedDuration))
                 .thenReturn(List.of());
         } else {
             when(nurseTaskService.getDueVitals(eq(null), eq(HOSPITAL_ID), any(Duration.class)))

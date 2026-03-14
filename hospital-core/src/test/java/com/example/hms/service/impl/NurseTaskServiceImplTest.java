@@ -843,7 +843,9 @@ class NurseTaskServiceImplTest {
 
     @Test
     void recordMedicationAdministrationRequiresTaskId() {
-        assertThatThrownBy(() -> service.recordMedicationAdministration(null, UUID.randomUUID(), UUID.randomUUID(), null))
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.recordMedicationAdministration(null, nurseId, hospitalId, null))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Medication task identifier is required");
     }
@@ -940,7 +942,7 @@ class NurseTaskServiceImplTest {
             assertThat(summary.getAssignedPatients()).isEqualTo(1);
             assertThat(summary.getVitalsDue()).isEqualTo(1);
             assertThat(summary.getMedicationsDue()).isEqualTo(1);
-            assertThat(summary.getMedicationsOverdue()).isEqualTo(0);
+            assertThat(summary.getMedicationsOverdue()).isZero();
             assertThat(summary.getAnnouncements()).isEqualTo(3);
         }
     }
@@ -987,9 +989,9 @@ class NurseTaskServiceImplTest {
 
             NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
 
-            assertThat(summary.getVitalsDue()).isEqualTo(0);
+            assertThat(summary.getVitalsDue()).isZero();
             assertThat(summary.getMedicationsOverdue()).isEqualTo(1);
-            assertThat(summary.getMedicationsDue()).isEqualTo(0);
+            assertThat(summary.getMedicationsDue()).isZero();
             assertThat(summary.getAnnouncements()).isEqualTo(6); // 0 count → default
         }
     }
