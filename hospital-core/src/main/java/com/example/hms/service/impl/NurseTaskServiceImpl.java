@@ -277,7 +277,20 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         java.util.Optional<Prescription> prescriptionOpt = prescriptionRepository.findById(medicationTaskId);
         if (prescriptionOpt.isPresent()) {
             Prescription rx = prescriptionOpt.get();
+
+            // Verify prescription belongs to the requested hospital scope
+            if (hospitalId != null && rx.getHospital() != null
+                && !rx.getHospital().getId().equals(hospitalId)) {
+                throw new ResourceNotFoundException("Medication administration task not found.");
+            }
+
             Patient patient = rx.getPatient();
+            if (patient == null) {
+                throw new BusinessException("Prescription has no associated patient.");
+            }
+            if (rx.getHospital() == null) {
+                throw new BusinessException("Prescription has no associated hospital.");
+            }
 
             MedicationAdministrationStatus marStatus = mapToMarStatus(normalizedStatus);
             String note = request != null ? request.getNote() : null;
