@@ -231,28 +231,36 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         }
         String normalizedStatus = normalizeAdministrationStatus(request);
         MedicationAdministrationStatus marStatus = MedicationAdministrationStatus.valueOf(normalizedStatus);
+        String note = request != null ? request.getNote() : null;
 
         // Try to find a real prescription matching the task ID
         Optional<Prescription> rxOpt = prescriptionRepository.findById(medicationTaskId);
         if (rxOpt.isPresent()) {
             Prescription rx = rxOpt.get();
-            return persistMarRecord(rx, nurseUserId, hospitalId, marStatus, request.getNote());
+            validateHospitalMatch(rx.getHospital(), hospitalId);
+            return persistMarRecord(rx, nurseUserId, hospitalId, marStatus, note);
         }
 
         // Fall back: check existing MAR records
         Optional<MedicationAdministrationRecord> existingMar = marRepository.findById(medicationTaskId);
         if (existingMar.isPresent()) {
             MedicationAdministrationRecord marRecord = existingMar.get();
+            validateHospitalMatch(marRecord.getHospital(), hospitalId);
             marRecord.setStatus(marStatus);
             marRecord.setAdministeredAt(LocalDateTime.now());
-            marRecord.setNotes(request.getNote());
+            marRecord.setNotes(note);
+            if (marStatus == MedicationAdministrationStatus.HELD
+                || marStatus == MedicationAdministrationStatus.REFUSED) {
+                marRecord.setReason(note);
+            }
             resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
             marRepository.save(marRecord);
 
+            Patient patient = marRecord.getPatient();
             return NurseMedicationTaskResponseDTO.builder()
                 .id(marRecord.getId())
-                .patientId(marRecord.getPatient().getId())
-                .patientName(marRecord.getMedicationName())
+                .patientId(patient.getId())
+                .patientName(patient.getFullName())
                 .medication(marRecord.getMedicationName())
                 .dose(marRecord.getDose())
                 .route(marRecord.getRoute())
@@ -765,5 +773,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     private long clampLong(long value, long min, long max) {
         return Math.clamp(value, min, max);
+    }
+
+    private void validateHospitalMatch(Hospital entityHospital, UUID scopedHospitalId) {
+        if (scopedHospitalId == null || entityHospital == null) return;
+        if (!scopedHospitalId.equals(entityHospital.getId())) {
+            throw new BusinessException(
+                "Resource does not belong to the scoped hospital.");
+        }
     }
 }

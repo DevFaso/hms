@@ -364,19 +364,25 @@
 @if (reasonPrompt()) {
   <div
     class="modal-backdrop"
+    role="button"
+    tabindex="0"
     (click)="cancelHoldRefuse()"
+    (keydown.enter)="cancelHoldRefuse()"
     (keydown.escape)="cancelHoldRefuse()"
-    role="dialog"
-    aria-modal="true"
-    tabindex="-1"
   >
     <div
       class="modal-content"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reason-dialog-title"
       tabindex="-1"
+      #reasonDialog
       (click)="$event.stopPropagation()"
-      (keydown)="$event.stopPropagation()"
+      (keydown.escape)="cancelHoldRefuse()"
     >
-      <h3>{{ reasonPrompt()?.action === 'HELD' ? 'Hold' : 'Refuse' }} Medication</h3>
+      <h3 id="reason-dialog-title">
+        {{ reasonPrompt()?.action === 'HELD' ? 'Hold' : 'Refuse' }} Medication
+      </h3>
       <p>Please provide a reason:</p>
       <textarea
         class="reason-input"

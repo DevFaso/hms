@@ -797,7 +797,6 @@ class NurseTaskServiceImplTest {
         NurseMedicationTaskResponseDTO result = service.recordMedicationAdministration(rxId, nurseId, hospitalId, request);
 
         assertThat(result.getStatus()).isEqualTo("HELD");
-        // Verify that the MAR record was saved with the reason populated
         ArgumentCaptor<MedicationAdministrationRecord> captor = ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
         verify(marRepository).save(captor.capture());
         assertThat(captor.getValue().getReason()).isEqualTo("INR too high");
@@ -812,10 +811,15 @@ class NurseTaskServiceImplTest {
 
         Patient mockPatient = Mockito.mock(Patient.class);
         when(mockPatient.getId()).thenReturn(patientId);
+        when(mockPatient.getFullName()).thenReturn("Existing Patient Name");
+
+        Hospital mockHospital = Mockito.mock(Hospital.class);
+        when(mockHospital.getId()).thenReturn(hospitalId);
 
         MedicationAdministrationRecord existingMar = Mockito.mock(MedicationAdministrationRecord.class);
         when(existingMar.getId()).thenReturn(marId);
         when(existingMar.getPatient()).thenReturn(mockPatient);
+        when(existingMar.getHospital()).thenReturn(mockHospital);
         when(existingMar.getMedicationName()).thenReturn("Existing Med");
         when(existingMar.getDose()).thenReturn("100 mg");
         when(existingMar.getRoute()).thenReturn("PO");
@@ -837,7 +841,9 @@ class NurseTaskServiceImplTest {
 
         assertThat(result.getId()).isEqualTo(marId);
         assertThat(result.getStatus()).isEqualTo("REFUSED");
+        assertThat(result.getPatientName()).isEqualTo("Existing Patient Name");
         verify(existingMar).setStatus(MedicationAdministrationStatus.REFUSED);
+        verify(existingMar).setReason("Patient refused medication");
         verify(existingMar).setAdministeredByStaff(mockStaff);
     }
 
@@ -848,6 +854,110 @@ class NurseTaskServiceImplTest {
         assertThatThrownBy(() -> service.recordMedicationAdministration(null, nurseId, hospitalId, null))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Medication task identifier is required");
+    }
+
+    @Test
+    void recordMedicationAdministrationRejectsCrossHospitalPrescription() {
+        UUID rxId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID scopedHospitalId = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+
+        Hospital otherHospital = Mockito.mock(Hospital.class);
+        when(otherHospital.getId()).thenReturn(otherHospitalId);
+
+        Prescription rx = Mockito.mock(Prescription.class);
+        when(rx.getHospital()).thenReturn(otherHospital);
+        when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(rx));
+
+        NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
+        request.setStatus("GIVEN");
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, scopedHospitalId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("does not belong to the scoped hospital");
+    }
+
+    @Test
+    void recordMedicationAdministrationRejectsCrossHospitalExistingMar() {
+        UUID marId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID scopedHospitalId = UUID.randomUUID();
+        UUID otherHospitalId = UUID.randomUUID();
+
+        Hospital otherHospital = Mockito.mock(Hospital.class);
+        when(otherHospital.getId()).thenReturn(otherHospitalId);
+
+        MedicationAdministrationRecord existingMar = Mockito.mock(MedicationAdministrationRecord.class);
+        when(existingMar.getHospital()).thenReturn(otherHospital);
+
+        when(prescriptionRepository.findById(marId)).thenReturn(Optional.empty());
+        when(marRepository.findById(marId)).thenReturn(Optional.of(existingMar));
+
+        NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
+        request.setStatus("GIVEN");
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(marId, nurseId, scopedHospitalId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("does not belong to the scoped hospital");
+    }
+
+    @Test
+    void recordMedicationAdministrationWithNullRequestDoesNotNPE() {
+        UUID taskId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+
+        List<NurseMedicationTaskResponseDTO> tasks = List.of(
+            NurseMedicationTaskResponseDTO.builder()
+                .id(taskId).patientId(UUID.randomUUID()).patientName("Demo")
+                .medication("TestMed").dose("10 mg").route("IV")
+                .dueTime(LocalDateTime.now()).status("DUE").build()
+        );
+        doReturn(tasks).when(service).getMedicationTasks(nurseId, hospitalId, null);
+
+        NurseMedicationTaskResponseDTO result = service.recordMedicationAdministration(taskId, nurseId, hospitalId, null);
+
+        assertThat(result.getStatus()).isEqualTo("GIVEN");
+    }
+
+    @Test
+    void recordMedicationAdministrationExistingMarHeldSetsReasonFromNote() {
+        UUID marId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+
+        Patient mockPatient = Mockito.mock(Patient.class);
+        when(mockPatient.getId()).thenReturn(patientId);
+        when(mockPatient.getFullName()).thenReturn("Held Patient");
+        Hospital mockHospital = Mockito.mock(Hospital.class);
+        when(mockHospital.getId()).thenReturn(hospitalId);
+
+        MedicationAdministrationRecord existingMar = Mockito.mock(MedicationAdministrationRecord.class);
+        when(existingMar.getId()).thenReturn(marId);
+        when(existingMar.getPatient()).thenReturn(mockPatient);
+        when(existingMar.getHospital()).thenReturn(mockHospital);
+        when(existingMar.getMedicationName()).thenReturn("Warfarin");
+        when(existingMar.getDose()).thenReturn("5 mg");
+        when(existingMar.getRoute()).thenReturn("PO");
+        when(existingMar.getScheduledTime()).thenReturn(LocalDateTime.now());
+
+        when(prescriptionRepository.findById(marId)).thenReturn(Optional.empty());
+        when(marRepository.findById(marId)).thenReturn(Optional.of(existingMar));
+        when(marRepository.save(existingMar)).thenReturn(existingMar);
+
+        NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
+        request.setStatus("HELD");
+        request.setNote("INR too high");
+
+        NurseMedicationTaskResponseDTO result = service.recordMedicationAdministration(marId, nurseId, hospitalId, request);
+
+        assertThat(result.getStatus()).isEqualTo("HELD");
+        assertThat(result.getPatientName()).isEqualTo("Held Patient");
+        verify(existingMar).setReason("INR too high");
+        verify(existingMar).setNotes("INR too high");
+        verify(existingMar).setStatus(MedicationAdministrationStatus.HELD);
     }
 
     @Test
