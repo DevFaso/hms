@@ -49,6 +49,16 @@ export interface NurseAnnouncement {
   category: string;
 }
 
+export interface NurseDashboardSummary {
+  assignedPatients: number;
+  vitalsDue: number;
+  medicationsDue: number;
+  medicationsOverdue: number;
+  ordersPending: number;
+  handoffsPending: number;
+  announcements: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class NurseTaskService {
   private readonly http = inject(HttpClient);
@@ -128,6 +138,18 @@ export class NurseTaskService {
     let httpParams = new HttpParams();
     if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
     return this.http.get<NurseAnnouncement[]>(`${this.baseUrl}/announcements`, {
+      params: httpParams,
+    });
+  }
+
+  getDashboardSummary(params?: {
+    hospitalId?: string;
+    assignee?: string;
+  }): Observable<NurseDashboardSummary> {
+    let httpParams = new HttpParams();
+    if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    if (params?.assignee) httpParams = httpParams.set('assignee', params.assignee);
+    return this.http.get<NurseDashboardSummary>(`${this.baseUrl}/dashboard/summary`, {
       params: httpParams,
     });
   }
