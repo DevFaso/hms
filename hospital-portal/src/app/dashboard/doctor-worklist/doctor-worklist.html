@@ -35,7 +35,7 @@
       @for (item of filteredItems(); track item.encounterId || item.patientId) {
         <div
           class="wl-row"
-          [class]="getUrgencyClass(item.urgency)"
+          [ngClass]="getUrgencyClass(item.urgency)"
           role="button"
           tabindex="0"
           (click)="selectPatient(item.patientId)"
@@ -62,7 +62,7 @@
           @if (item.chiefComplaint) {
             <div class="wl-complaint">{{ item.chiefComplaint }}</div>
           }
-          <span class="wl-status" [class]="getStatusClass(item.encounterStatus)">
+          <span class="wl-status" [ngClass]="getStatusClass(item.encounterStatus)">
             {{ getStatusLabel(item.encounterStatus) }}
           </span>
           @if (item.waitMinutes !== null) {
