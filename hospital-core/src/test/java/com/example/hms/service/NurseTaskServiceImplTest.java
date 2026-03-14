@@ -17,14 +17,23 @@ import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO
 import com.example.hms.payload.dto.nurse.NurseMedicationTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseOrderTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
+import com.example.hms.repository.AnnouncementRepository;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.MedicationAdministrationRecordRepository;
+import com.example.hms.repository.PatientVitalSignRepository;
+import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.impl.NurseTaskServiceImpl;
 import com.example.hms.utility.MessageUtil;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.MessageSource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -32,16 +41,43 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 class NurseTaskServiceImplTest {
 
     private NurseDashboardService nurseDashboardService;
+    private PrescriptionRepository prescriptionRepository;
+    private MedicationAdministrationRecordRepository marRepository;
+    private PatientVitalSignRepository vitalSignRepository;
+    private AnnouncementRepository announcementRepository;
+    private StaffRepository staffRepository;
+    private HospitalRepository hospitalRepository;
     private NurseTaskServiceImpl nurseTaskService;
 
     @BeforeEach
     void setUp() {
         nurseDashboardService = mock(NurseDashboardService.class);
+        prescriptionRepository = mock(PrescriptionRepository.class);
+        marRepository = mock(MedicationAdministrationRecordRepository.class);
+        vitalSignRepository = mock(PatientVitalSignRepository.class);
+        announcementRepository = mock(AnnouncementRepository.class);
+        staffRepository = mock(StaffRepository.class);
+        hospitalRepository = mock(HospitalRepository.class);
+
         MessageUtil.setMessageSource(null);
         MessageSource messageSource = mock(MessageSource.class);
         when(messageSource.getMessage(any(), any(), any())).thenAnswer(invocation -> invocation.getArgument(0));
         MessageUtil.setMessageSource(messageSource);
-        nurseTaskService = new NurseTaskServiceImpl(nurseDashboardService);
+
+        // Default stubs so synthetic/fallback paths activate in existing tests
+        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(any(), any()))
+            .thenReturn(Optional.empty());
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(any(), any()))
+            .thenReturn(List.of());
+        when(prescriptionRepository.findById(any())).thenReturn(Optional.empty());
+        when(marRepository.findByPatient_IdAndHospital_IdAndStatus(any(), any(), any()))
+            .thenReturn(List.of());
+        when(marRepository.findById(any())).thenReturn(Optional.empty());
+        when(announcementRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
+
+        nurseTaskService = new NurseTaskServiceImpl(
+            nurseDashboardService, prescriptionRepository, marRepository,
+            vitalSignRepository, announcementRepository, staffRepository, hospitalRepository);
     }
 
     @Test

@@ -1,42 +1,68 @@
 <div class="page-container">
+  <!-- ── Header with Refresh ──────────────────────────────── -->
   <div class="page-header">
     <div>
       <h1 class="page-title">Nurse Station</h1>
       <p class="page-subtitle">Clinical tasks, medications, and patient care</p>
     </div>
+    <div class="header-actions">
+      @if (lastRefreshed()) {
+        <span class="last-refreshed">Updated {{ lastRefreshed() | date: 'shortTime' }}</span>
+      }
+      <button class="refresh-btn" (click)="refresh()" title="Refresh now">
+        <span class="material-symbols-outlined">refresh</span>
+      </button>
+    </div>
   </div>
+
+  <!-- ── Filter Bar ───────────────────────────────────────── -->
+  <div class="filter-bar">
+    <button class="filter-btn" [class.active]="filterMode() === 'me'" (click)="setFilter('me')">
+      My Patients
+    </button>
+    <button class="filter-btn" [class.active]="filterMode() === 'unit'" (click)="setFilter('unit')">
+      My Unit
+    </button>
+    <button class="filter-btn" [class.active]="filterMode() === 'all'" (click)="setFilter('all')">
+      All
+    </button>
+  </div>
+
+  <!-- ── Summary Cards (backed by summary endpoint) ──────── -->
   <div class="summary-cards">
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon vitals">monitor_heart</span>
       <div class="card-info">
-        <span class="card-value">{{ vitals().length }}</span
-        ><span class="card-label">Vitals Due</span>
+        <span class="card-value">{{ summary()?.vitalsDue ?? vitals().length }}</span>
+        <span class="card-label">Vitals Due</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon meds">medication</span>
       <div class="card-info">
-        <span class="card-value">{{ medications().length }}</span
-        ><span class="card-label">Medications</span>
+        <span class="card-value">{{ summary()?.medicationsDue ?? medications().length }}</span>
+        <span class="card-label">Medications Due</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon orders">assignment</span>
       <div class="card-info">
-        <span class="card-value">{{ orders().length }}</span
-        ><span class="card-label">Orders</span>
+        <span class="card-value">{{ summary()?.ordersPending ?? orders().length }}</span>
+        <span class="card-label">Orders</span>
       </div>
     </div>
     <div class="summary-card overdue">
       <span class="material-symbols-outlined card-icon overdue-icon">warning</span>
       <div class="card-info">
-        <span class="card-value">{{ overdueCount() }}</span
-        ><span class="card-label">Overdue</span>
+        <span class="card-value">{{ summary()?.medicationsOverdue ?? overdueCount() }}</span>
+        <span class="card-label">Overdue</span>
       </div>
     </div>
   </div>
+
   <div class="station-layout">
     <div class="main-content">
+      <!-- ── Section Tabs ──────────────────────────────── -->
       <div class="section-tabs">
         <button
           class="tab-btn"
@@ -71,12 +97,15 @@
           Handoffs
         </button>
       </div>
+
       @if (loading()) {
         <div class="loading-state">
           <div class="spinner"></div>
           <p>Loading tasks...</p>
         </div>
       }
+
+      <!-- ═══════════ VITALS TAB ═══════════ -->
       @if (!loading() && activeSection() === 'vitals') {
         @if (vitals().length === 0) {
           <div class="empty-state">
@@ -93,13 +122,22 @@
                   <th scope="col">Type</th>
                   <th scope="col">Due Time</th>
                   <th scope="col">Status</th>
+                  <th scope="col">Action</th>
                 </tr>
               </thead>
               <tbody>
                 @for (v of vitals(); track v.id) {
                   <tr class="data-row" [class.overdue-row]="v.overdue">
                     <td>
-                      <div class="cell-primary">{{ v.patientName }}</div>
+                      @if (v.patientId) {
+                        <a
+                          class="cell-primary patient-link"
+                          [routerLink]="['/patients', v.patientId]"
+                          >{{ v.patientName }}</a
+                        >
+                      } @else {
+                        <div class="cell-primary">{{ v.patientName }}</div>
+                      }
                     </td>
                     <td>{{ v.type }}</td>
                     <td>{{ v.dueTime | date: 'shortTime' }}</td>
@@ -110,6 +148,15 @@
                         <span class="badge-pending">Pending</span>
                       }
                     </td>
+                    <td>
+                      <button
+                        class="action-btn action-record"
+                        (click)="recordVitals(v.patientId)"
+                        [disabled]="!v.patientId"
+                      >
+                        <span class="material-symbols-outlined">edit_note</span> Record
+                      </button>
+                    </td>
                   </tr>
                 }
               </tbody>
@@ -117,6 +164,8 @@
           </div>
         }
       }
+
+      <!-- ═══════════ MEDICATIONS TAB ═══════════ -->
       @if (!loading() && activeSection() === 'medications') {
         @if (medications().length === 0) {
           <div class="empty-state">
@@ -135,13 +184,22 @@
                   <th scope="col">Route</th>
                   <th scope="col">Due</th>
                   <th scope="col">Status</th>
+                  <th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 @for (m of medications(); track m.id) {
-                  <tr class="data-row">
+                  <tr class="data-row" [class.overdue-row]="m.status === 'OVERDUE'">
                     <td>
-                      <div class="cell-primary">{{ m.patientName }}</div>
+                      @if (m.patientId) {
+                        <a
+                          class="cell-primary patient-link"
+                          [routerLink]="['/patients', m.patientId]"
+                          >{{ m.patientName }}</a
+                        >
+                      } @else {
+                        <div class="cell-primary">{{ m.patientName }}</div>
+                      }
                     </td>
                     <td>
                       <strong>{{ m.medication }}</strong>
@@ -154,6 +212,38 @@
                         m.status
                       }}</span>
                     </td>
+                    <td class="action-cell">
+                      @if (m.status !== 'COMPLETED' && m.status !== 'GIVEN') {
+                        <button
+                          class="action-btn action-give"
+                          (click)="administerMedication(m.id)"
+                          [disabled]="actionInProgress() === m.id"
+                          title="Administer"
+                        >
+                          <span class="material-symbols-outlined">check_circle</span> Give
+                        </button>
+                        <button
+                          class="action-btn action-hold"
+                          (click)="promptHoldRefuse(m.id, 'HELD')"
+                          [disabled]="actionInProgress() === m.id"
+                          title="Hold"
+                        >
+                          <span class="material-symbols-outlined">pause_circle</span> Hold
+                        </button>
+                        <button
+                          class="action-btn action-refuse"
+                          (click)="promptHoldRefuse(m.id, 'REFUSED')"
+                          [disabled]="actionInProgress() === m.id"
+                          title="Refuse"
+                        >
+                          <span class="material-symbols-outlined">cancel</span> Refuse
+                        </button>
+                      } @else {
+                        <span class="action-done">
+                          <span class="material-symbols-outlined">task_alt</span> Done
+                        </span>
+                      }
+                    </td>
                   </tr>
                 }
               </tbody>
@@ -161,6 +251,8 @@
           </div>
         }
       }
+
+      <!-- ═══════════ ORDERS TAB ═══════════ -->
       @if (!loading() && activeSection() === 'orders') {
         @if (orders().length === 0) {
           <div class="empty-state">
@@ -183,7 +275,15 @@
                 @for (o of orders(); track o.id) {
                   <tr class="data-row">
                     <td>
-                      <div class="cell-primary">{{ o.patientName }}</div>
+                      @if (o.patientId) {
+                        <a
+                          class="cell-primary patient-link"
+                          [routerLink]="['/patients', o.patientId]"
+                          >{{ o.patientName }}</a
+                        >
+                      } @else {
+                        <div class="cell-primary">{{ o.patientName }}</div>
+                      }
                     </td>
                     <td>{{ o.orderType }}</td>
                     <td>
@@ -199,6 +299,8 @@
           </div>
         }
       }
+
+      <!-- ═══════════ HANDOFFS TAB ═══════════ -->
       @if (!loading() && activeSection() === 'handoffs') {
         @if (handoffs().length === 0) {
           <div class="empty-state">
@@ -211,17 +313,37 @@
             @for (h of handoffs(); track h.id) {
               <div class="handoff-card">
                 <div class="handoff-header">
-                  <span class="cell-primary">{{ h.patientName }}</span
-                  ><span class="handoff-dir">{{ h.direction }}</span>
+                  @if (h.patientId) {
+                    <a
+                      class="cell-primary patient-link"
+                      [routerLink]="['/patients', h.patientId]"
+                      >{{ h.patientName }}</a
+                    >
+                  } @else {
+                    <span class="cell-primary">{{ h.patientName }}</span>
+                  }
+                  <span class="handoff-dir">{{ h.direction }}</span>
                 </div>
                 <p class="handoff-note">{{ h.note || 'No notes' }}</p>
-                <span class="handoff-time">{{ h.updatedAt | date: 'medium' }}</span>
+                <div class="handoff-footer">
+                  <span class="handoff-time">{{ h.updatedAt | date: 'medium' }}</span>
+                  <button
+                    class="action-btn action-complete"
+                    (click)="completeHandoff(h.id)"
+                    [disabled]="actionInProgress() === h.id"
+                    title="Complete handoff"
+                  >
+                    <span class="material-symbols-outlined">check_circle</span> Complete
+                  </button>
+                </div>
               </div>
             }
           </div>
         }
       }
     </div>
+
+    <!-- ── Announcements Sidebar ──────────────────────────── -->
     <aside class="announcements-sidebar">
       <h3><span class="material-symbols-outlined">campaign</span> Announcements</h3>
       @if (announcements().length === 0) {
@@ -237,3 +359,42 @@
     </aside>
   </div>
 </div>
+
+<!-- ── Hold/Refuse Reason Modal ──────────────────────────── -->
+@if (reasonPrompt()) {
+  <div
+    class="modal-backdrop"
+    (click)="cancelHoldRefuse()"
+    (keydown.escape)="cancelHoldRefuse()"
+    role="dialog"
+    aria-modal="true"
+    tabindex="-1"
+  >
+    <div
+      class="modal-content"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+    >
+      <h3>{{ reasonPrompt()?.action === 'HELD' ? 'Hold' : 'Refuse' }} Medication</h3>
+      <p>Please provide a reason:</p>
+      <textarea
+        class="reason-input"
+        [ngModel]="reasonText()"
+        (ngModelChange)="reasonText.set($event)"
+        placeholder="Enter reason..."
+        rows="3"
+      ></textarea>
+      <div class="modal-actions">
+        <button class="modal-btn modal-cancel" (click)="cancelHoldRefuse()">Cancel</button>
+        <button
+          class="modal-btn modal-confirm"
+          (click)="confirmHoldRefuse()"
+          [disabled]="!reasonText()"
+        >
+          Confirm {{ reasonPrompt()?.action === 'HELD' ? 'Hold' : 'Refuse' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
