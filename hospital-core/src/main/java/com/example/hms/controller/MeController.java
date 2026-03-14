@@ -9,14 +9,24 @@ import com.example.hms.payload.dto.DashboardConfigResponseDTO;
 import com.example.hms.payload.dto.StaffResponseDTO;
 import com.example.hms.payload.dto.clinical.ClinicalAlertDTO;
 import com.example.hms.payload.dto.clinical.ClinicalDashboardResponseDTO;
+import com.example.hms.payload.dto.clinical.ClinicalInboxItemDTO;
+import com.example.hms.payload.dto.clinical.CriticalStripDTO;
+import com.example.hms.payload.dto.clinical.DoctorResultQueueItemDTO;
+import com.example.hms.payload.dto.clinical.DoctorWorklistItemDTO;
 import com.example.hms.payload.dto.clinical.InboxCountsDTO;
 import com.example.hms.payload.dto.clinical.OnCallStatusDTO;
+import com.example.hms.payload.dto.clinical.PatientFlowItemDTO;
+import com.example.hms.payload.dto.clinical.PatientSnapshotDTO;
 import com.example.hms.payload.dto.clinical.RoomedPatientDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.service.ClinicalDashboardService;
 import com.example.hms.service.DashboardConfigService;
+import com.example.hms.service.DoctorWorklistService;
+import com.example.hms.service.PatientFlowService;
+import com.example.hms.service.PatientSnapshotService;
+import com.example.hms.service.ResultReviewService;
 import com.example.hms.service.StaffService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -36,6 +46,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -53,6 +64,10 @@ public class MeController {
     private final ClinicalDashboardService clinicalDashboardService;
     private final StaffService staffService;
     private final DashboardConfigService dashboardConfigService;
+    private final DoctorWorklistService doctorWorklistService;
+    private final PatientFlowService patientFlowService;
+    private final ResultReviewService resultReviewService;
+    private final PatientSnapshotService patientSnapshotService;
 
     public record HospitalMinimalDTO(UUID id, String name) {
     }
@@ -178,6 +193,65 @@ public class MeController {
         UUID userId = resolveUserId(auth);
         List<StaffResponseDTO> staff = staffService.getActiveStaffByUserId(userId, LocaleContextHolder.getLocale());
         return ResponseEntity.ok(staff);
+    }
+
+    // ── Physician Cockpit endpoints ───────────────────────────────
+
+    @Operation(summary = "Get critical-strip counts for physician cockpit")
+    @GetMapping("/critical-strip")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON')")
+    public ResponseEntity<ApiResponseWrapper<CriticalStripDTO>> getCriticalStrip(Authentication auth) {
+        UUID userId = resolveUserId(auth);
+        CriticalStripDTO strip = doctorWorklistService.getCriticalStrip(userId);
+        return ResponseEntity.ok(ApiResponseWrapper.success(strip));
+    }
+
+    @Operation(summary = "Get merged physician worklist")
+    @GetMapping("/worklist")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON')")
+    public ResponseEntity<ApiResponseWrapper<List<DoctorWorklistItemDTO>>> getWorklist(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String urgency,
+            Authentication auth) {
+        UUID userId = resolveUserId(auth);
+        List<DoctorWorklistItemDTO> items = doctorWorklistService.getWorklist(userId, status, urgency);
+        return ResponseEntity.ok(ApiResponseWrapper.success(items));
+    }
+
+    @Operation(summary = "Get patient-flow board grouped by encounter state")
+    @GetMapping("/patient-flow")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON')")
+    public ResponseEntity<ApiResponseWrapper<Map<String, List<PatientFlowItemDTO>>>> getPatientFlow(Authentication auth) {
+        UUID userId = resolveUserId(auth);
+        Map<String, List<PatientFlowItemDTO>> flow = patientFlowService.getPatientFlow(userId);
+        return ResponseEntity.ok(ApiResponseWrapper.success(flow));
+    }
+
+    @Operation(summary = "Get clinical inbox items with detail")
+    @GetMapping("/inbox")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON')")
+    public ResponseEntity<ApiResponseWrapper<List<ClinicalInboxItemDTO>>> getInbox(Authentication auth) {
+        UUID userId = resolveUserId(auth);
+        List<ClinicalInboxItemDTO> items = resultReviewService.getInboxItems(userId);
+        return ResponseEntity.ok(ApiResponseWrapper.success(items));
+    }
+
+    @Operation(summary = "Get lab/imaging results review queue")
+    @GetMapping("/results/review-queue")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON')")
+    public ResponseEntity<ApiResponseWrapper<List<DoctorResultQueueItemDTO>>> getResultReviewQueue(Authentication auth) {
+        UUID userId = resolveUserId(auth);
+        List<DoctorResultQueueItemDTO> items = resultReviewService.getResultReviewQueue(userId);
+        return ResponseEntity.ok(ApiResponseWrapper.success(items));
+    }
+
+    @Operation(summary = "Get compact patient snapshot for drawer")
+    @GetMapping("/patients/{patientId}/snapshot")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON','ROLE_NURSE','ROLE_MIDWIFE')")
+    public ResponseEntity<ApiResponseWrapper<PatientSnapshotDTO>> getPatientSnapshot(
+            @PathVariable UUID patientId, Authentication auth) {
+        PatientSnapshotDTO snapshot = patientSnapshotService.getSnapshot(patientId);
+        return ResponseEntity.ok(ApiResponseWrapper.success(snapshot));
     }
 
     /* ---------- Resolution chain ---------- */

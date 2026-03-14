@@ -9,15 +9,25 @@ import com.example.hms.payload.dto.DashboardConfigResponseDTO;
 import com.example.hms.payload.dto.StaffResponseDTO;
 import com.example.hms.payload.dto.clinical.ClinicalAlertDTO;
 import com.example.hms.payload.dto.clinical.ClinicalDashboardResponseDTO;
+import com.example.hms.payload.dto.clinical.ClinicalInboxItemDTO;
+import com.example.hms.payload.dto.clinical.CriticalStripDTO;
 import com.example.hms.payload.dto.clinical.DashboardKPI;
+import com.example.hms.payload.dto.clinical.DoctorResultQueueItemDTO;
+import com.example.hms.payload.dto.clinical.DoctorWorklistItemDTO;
 import com.example.hms.payload.dto.clinical.InboxCountsDTO;
 import com.example.hms.payload.dto.clinical.OnCallStatusDTO;
+import com.example.hms.payload.dto.clinical.PatientFlowItemDTO;
+import com.example.hms.payload.dto.clinical.PatientSnapshotDTO;
 import com.example.hms.payload.dto.clinical.RoomedPatientDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.service.ClinicalDashboardService;
 import com.example.hms.service.DashboardConfigService;
+import com.example.hms.service.DoctorWorklistService;
+import com.example.hms.service.PatientFlowService;
+import com.example.hms.service.PatientSnapshotService;
+import com.example.hms.service.ResultReviewService;
 import com.example.hms.service.StaffService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,8 +44,10 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -87,6 +99,18 @@ class MeControllerTest {
     @Mock
     private DashboardConfigService dashboardConfigService;
 
+    @Mock
+    private DoctorWorklistService doctorWorklistService;
+
+    @Mock
+    private PatientFlowService patientFlowService;
+
+    @Mock
+    private ResultReviewService resultReviewService;
+
+    @Mock
+    private PatientSnapshotService patientSnapshotService;
+
     private MeController controller;
 
     private UUID testUserId;
@@ -97,7 +121,8 @@ class MeControllerTest {
     @BeforeEach
     void setUp() {
         controller = new MeController(hospitalRepository, userRepository, assignmentRepository,
-                clinicalDashboardService, staffService, dashboardConfigService);
+                clinicalDashboardService, staffService, dashboardConfigService,
+                doctorWorklistService, patientFlowService, resultReviewService, patientSnapshotService);
 
         testUserId = UUID.randomUUID();
         testHospitalId = UUID.randomUUID();
@@ -645,5 +670,124 @@ class MeControllerTest {
         MeController.HospitalMinimalDTO body = requireBody(response);
         assertEquals(testHospitalId, body.id());
         verify(assignmentRepository).findAllDetailedByUserId(testUserId);
+    }
+
+    // ========== GET /api/me/critical-strip ==========
+
+    @Test
+    void getCriticalStrip_shouldReturnStripData() {
+        CriticalStripDTO strip = CriticalStripDTO.builder()
+                .criticalLabsCount(2)
+                .waitingLongCount(1)
+                .pendingConsultsCount(3)
+                .unsignedNotesCount(4)
+                .pendingOrderReviewCount(5)
+                .build();
+        when(doctorWorklistService.getCriticalStrip(testUserId)).thenReturn(strip);
+
+        ResponseEntity<ApiResponseWrapper<CriticalStripDTO>> response = controller.getCriticalStrip(doctorAuth);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        ApiResponseWrapper<CriticalStripDTO> body = requireBody(response);
+        assertEquals(2, body.getData().getCriticalLabsCount());
+        assertEquals(3, body.getData().getPendingConsultsCount());
+        verify(doctorWorklistService).getCriticalStrip(testUserId);
+    }
+
+    // ========== GET /api/me/worklist ==========
+
+    @Test
+    void getWorklist_withoutFilters_shouldReturnAllItems() {
+        List<DoctorWorklistItemDTO> items = List.of(
+                DoctorWorklistItemDTO.builder().patientName("Pat A").encounterStatus("IN_PROGRESS").build());
+        when(doctorWorklistService.getWorklist(testUserId, null, null)).thenReturn(items);
+
+        ResponseEntity<ApiResponseWrapper<List<DoctorWorklistItemDTO>>> response =
+                controller.getWorklist(null, null, doctorAuth);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(1, requireBody(response).getData().size());
+        verify(doctorWorklistService).getWorklist(testUserId, null, null);
+    }
+
+    @Test
+    void getWorklist_withStatusAndUrgency_shouldPassFilters() {
+        when(doctorWorklistService.getWorklist(testUserId, "IN_PROGRESS", "URGENT")).thenReturn(List.of());
+
+        ResponseEntity<ApiResponseWrapper<List<DoctorWorklistItemDTO>>> response =
+                controller.getWorklist("IN_PROGRESS", "URGENT", doctorAuth);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertTrue(requireBody(response).getData().isEmpty());
+        verify(doctorWorklistService).getWorklist(testUserId, "IN_PROGRESS", "URGENT");
+    }
+
+    // ========== GET /api/me/patient-flow ==========
+
+    @Test
+    void getPatientFlow_shouldReturnFlowMap() {
+        Map<String, List<PatientFlowItemDTO>> flow = new LinkedHashMap<>();
+        flow.put("ARRIVED", List.of(PatientFlowItemDTO.builder().patientName("Pat B").build()));
+        flow.put("IN_PROGRESS", List.of());
+        when(patientFlowService.getPatientFlow(testUserId)).thenReturn(flow);
+
+        ResponseEntity<ApiResponseWrapper<Map<String, List<PatientFlowItemDTO>>>> response =
+                controller.getPatientFlow(doctorAuth);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        Map<String, List<PatientFlowItemDTO>> data = requireBody(response).getData();
+        assertEquals(1, data.get("ARRIVED").size());
+        verify(patientFlowService).getPatientFlow(testUserId);
+    }
+
+    // ========== GET /api/me/inbox ==========
+
+    @Test
+    void getInbox_shouldReturnInboxItems() {
+        List<ClinicalInboxItemDTO> items = List.of(
+                ClinicalInboxItemDTO.builder().category("MESSAGE").subject("2 unread messages").build());
+        when(resultReviewService.getInboxItems(testUserId)).thenReturn(items);
+
+        ResponseEntity<ApiResponseWrapper<List<ClinicalInboxItemDTO>>> response = controller.getInbox(doctorAuth);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(1, requireBody(response).getData().size());
+        verify(resultReviewService).getInboxItems(testUserId);
+    }
+
+    // ========== GET /api/me/results/review-queue ==========
+
+    @Test
+    void getResultReviewQueue_shouldReturnQueueItems() {
+        List<DoctorResultQueueItemDTO> items = List.of(
+                DoctorResultQueueItemDTO.builder().testName("CBC").patientName("Pat C").build());
+        when(resultReviewService.getResultReviewQueue(testUserId)).thenReturn(items);
+
+        ResponseEntity<ApiResponseWrapper<List<DoctorResultQueueItemDTO>>> response =
+                controller.getResultReviewQueue(doctorAuth);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals(1, requireBody(response).getData().size());
+        verify(resultReviewService).getResultReviewQueue(testUserId);
+    }
+
+    // ========== GET /api/me/patients/{patientId}/snapshot ==========
+
+    @Test
+    void getPatientSnapshot_shouldReturnSnapshot() {
+        UUID patientId = UUID.randomUUID();
+        PatientSnapshotDTO snapshot = PatientSnapshotDTO.builder()
+                .patientId(patientId)
+                .name("Alice Wong")
+                .age(35)
+                .build();
+        when(patientSnapshotService.getSnapshot(patientId)).thenReturn(snapshot);
+
+        ResponseEntity<ApiResponseWrapper<PatientSnapshotDTO>> response =
+                controller.getPatientSnapshot(patientId, doctorAuth);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertEquals("Alice Wong", requireBody(response).getData().getName());
+        verify(patientSnapshotService).getSnapshot(patientId);
     }
 }

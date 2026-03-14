@@ -104,6 +104,88 @@ export interface RoomedPatient {
   prepStatus: { labsDrawn: boolean; imagingOrdered: boolean; consentSigned: boolean };
 }
 
+/* ── Physician Cockpit DTOs ── */
+
+export interface CriticalStrip {
+  criticalLabsCount: number;
+  waitingLongCount: number;
+  pendingConsultsCount: number;
+  unsignedNotesCount: number;
+  pendingOrderReviewCount: number;
+  activeSafetyAlertsCount: number;
+}
+
+export interface DoctorWorklistItem {
+  patientId: string;
+  encounterId: string;
+  patientName: string;
+  mrn: string;
+  age: number;
+  sex: string;
+  room?: string;
+  bed?: string;
+  location?: string;
+  chiefComplaint?: string;
+  urgency: string;
+  encounterStatus: string;
+  waitMinutes?: number;
+  latestVitalsSummary?: string;
+  alerts?: string[];
+  updatedAt: string;
+}
+
+export interface PatientFlowItem {
+  patientId: string;
+  encounterId: string;
+  patientName: string;
+  room?: string;
+  elapsedMinutes: number;
+  nurseAssigned?: string;
+  blockerTag?: string;
+  urgency: string;
+  state: string;
+}
+
+export interface ClinicalInboxItem {
+  id: string;
+  category: string;
+  source: string;
+  patientName?: string;
+  patientId?: string;
+  subject: string;
+  urgency: string;
+  timestamp: string;
+  actionType: string;
+}
+
+export interface DoctorResultQueueItem {
+  id: string;
+  patientName: string;
+  patientId: string;
+  testName: string;
+  resultValue: string;
+  abnormalFlag: string;
+  resultedAt: string;
+  orderingContext?: string;
+}
+
+export interface PatientSnapshot {
+  patientId: string;
+  name: string;
+  age: number;
+  sex: string;
+  mrn: string;
+  allergies: string[];
+  codeStatus?: string;
+  activeDiagnoses: string[];
+  activeMedications: { name: string; dose: string; frequency: string }[];
+  recentVitals: { type: string; value: string; timestamp: string }[];
+  latestLabs: { test: string; value: string; flag: string; date: string }[];
+  pendingOrders: { type: string; description: string; orderedAt: string }[];
+  recentNotes: { author: string; type: string; date: string; snippet: string }[];
+  careTeam: { role: string; name: string }[];
+}
+
 interface ApiWrapper<T> {
   data: T;
   success: boolean;
@@ -156,6 +238,53 @@ export class DashboardService {
   getOnCallStatus(): Observable<OnCallStatus> {
     return this.http
       .get<ApiWrapper<OnCallStatus>>('/api/me/on-call-status')
+      .pipe(map((res) => res.data));
+  }
+
+  /* ── Physician Cockpit endpoints ── */
+
+  getCriticalStrip(): Observable<CriticalStrip> {
+    return this.http
+      .get<ApiWrapper<CriticalStrip>>('/api/me/critical-strip')
+      .pipe(map((res) => res.data));
+  }
+
+  getWorklist(status?: string, urgency?: string): Observable<DoctorWorklistItem[]> {
+    let params = new HttpParams();
+    if (status) params = params.set('status', status);
+    if (urgency) params = params.set('urgency', urgency);
+    return this.http.get<ApiWrapper<DoctorWorklistItem[]>>('/api/me/worklist', { params }).pipe(
+      map((res) => res.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  getPatientFlow(): Observable<Record<string, PatientFlowItem[]>> {
+    return this.http
+      .get<ApiWrapper<Record<string, PatientFlowItem[]>>>('/api/me/patient-flow')
+      .pipe(
+        map((res) => res.data ?? {}),
+        catchError(() => of({})),
+      );
+  }
+
+  getInbox(): Observable<ClinicalInboxItem[]> {
+    return this.http.get<ApiWrapper<ClinicalInboxItem[]>>('/api/me/inbox').pipe(
+      map((res) => res.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  getResultReviewQueue(): Observable<DoctorResultQueueItem[]> {
+    return this.http.get<ApiWrapper<DoctorResultQueueItem[]>>('/api/me/results/review-queue').pipe(
+      map((res) => res.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  getPatientSnapshot(patientId: string): Observable<PatientSnapshot> {
+    return this.http
+      .get<ApiWrapper<PatientSnapshot>>(`/api/me/patients/${patientId}/snapshot`)
       .pipe(map((res) => res.data));
   }
 }

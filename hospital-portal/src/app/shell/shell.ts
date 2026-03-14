@@ -183,8 +183,16 @@ export class ShellComponent implements OnInit, OnDestroy {
       items.push({ icon: 'policy', label: 'Audit Logs', route: '/audit-logs' });
     }
 
+    // Doctor role: hide admin/nurse-specific entries for a cleaner sidebar
+    const isDoctor = this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON']);
+    const doctorHiddenRoutes = isDoctor
+      ? new Set(['/nurse-station', '/scheduling', '/departments', '/staff'])
+      : new Set<string>();
+
     return items.filter(
-      (item) => !item.permission || this.permissions.hasPermission(item.permission),
+      (item) =>
+        (!item.permission || this.permissions.hasPermission(item.permission)) &&
+        !doctorHiddenRoutes.has(item.route),
     );
   });
 
