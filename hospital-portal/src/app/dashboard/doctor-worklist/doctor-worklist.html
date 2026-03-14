@@ -1,0 +1,104 @@
+<section class="worklist-panel card">
+  <div class="card-head">
+    <div class="card-title-group">
+      <span class="material-symbols-outlined card-title-icon">assignment_ind</span>
+      <h2 class="card-title">My Worklist</h2>
+      <span class="count-badge">{{ filteredItems().length }}</span>
+    </div>
+    <a routerLink="/encounters" class="card-link">View All</a>
+  </div>
+
+  <!-- Tab Bar -->
+  <div class="worklist-tabs">
+    @for (tab of tabs; track tab.key) {
+      <button
+        class="wl-tab"
+        [class.wl-tab-active]="activeTab() === tab.key"
+        (click)="setTab(tab.key)"
+      >
+        {{ tab.label }}
+        @if (tabCounts()[tab.key] > 0) {
+          <span class="wl-tab-count">{{ tabCounts()[tab.key] }}</span>
+        }
+      </button>
+    }
+  </div>
+
+  <!-- Worklist Table -->
+  @if (filteredItems().length === 0) {
+    <div class="wl-empty">
+      <span class="material-symbols-outlined">checklist</span>
+      <p>No patients in this view</p>
+    </div>
+  } @else {
+    <div class="wl-table">
+      @for (item of filteredItems(); track item.encounterId || item.patientId) {
+        <div
+          class="wl-row"
+          [class]="getUrgencyClass(item.urgency)"
+          role="button"
+          tabindex="0"
+          (click)="selectPatient(item.patientId)"
+          (keydown.enter)="selectPatient(item.patientId)"
+        >
+          <div class="wl-avatar" [style.background]="getAvatarColor(item.patientName)">
+            {{ getInitials(item.patientName) }}
+          </div>
+          <div class="wl-patient-info">
+            <span class="wl-name">{{ item.patientName }}</span>
+            <span class="wl-meta">
+              {{ item.age }}{{ item.sex ? '/' + item.sex.charAt(0) : '' }}
+              @if (item.mrn) {
+                <span class="wl-mrn">{{ item.mrn }}</span>
+              }
+            </span>
+          </div>
+          @if (item.room) {
+            <div class="wl-room">
+              <span class="material-symbols-outlined">meeting_room</span>
+              {{ item.room }}
+            </div>
+          }
+          @if (item.chiefComplaint) {
+            <div class="wl-complaint">{{ item.chiefComplaint }}</div>
+          }
+          <span class="wl-status" [class]="getStatusClass(item.encounterStatus)">
+            {{ getStatusLabel(item.encounterStatus) }}
+          </span>
+          @if (item.waitMinutes !== null) {
+            <div class="wl-wait" [class.wait-long]="(item.waitMinutes ?? 0) > 30">
+              <span class="material-symbols-outlined">hourglass_top</span>
+              {{ item.waitMinutes }}m
+            </div>
+          }
+          @if (item.alerts && item.alerts.length > 0) {
+            <div class="wl-alerts">
+              <span class="material-symbols-outlined wl-alert-icon">warning</span>
+              {{ item.alerts.length }}
+            </div>
+          }
+          <div class="wl-actions">
+            <a
+              [routerLink]="['/patients', item.patientId]"
+              class="wl-action-btn"
+              title="Open Chart"
+              (click)="$event.stopPropagation()"
+            >
+              <span class="material-symbols-outlined">open_in_new</span>
+            </a>
+            @if (item.encounterId) {
+              <a
+                [routerLink]="['/encounters', item.encounterId]"
+                class="wl-action-btn"
+                title="Open Encounter"
+                (click)="$event.stopPropagation()"
+              >
+                <span class="material-symbols-outlined">stethoscope</span>
+              </a>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+</section>

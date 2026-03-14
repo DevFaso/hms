@@ -2644,3 +2644,124 @@ $shadow-md:
     gap: 16px;
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PHYSICIAN COCKPIT — Enhanced Inbox & Compact QA
+// ─────────────────────────────────────────────────────────────────────────────
+
+.inbox-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 24px 16px;
+  color: $text-muted;
+
+  .material-symbols-outlined {
+    font-size: 28px;
+    color: $success;
+  }
+
+  p {
+    font-size: 13px;
+    margin: 0;
+  }
+}
+
+.inbox-row-detailed {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid #f1f5f9;
+
+  &:hover {
+    background: #f8fafc;
+  }
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.inbox-row-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.inbox-row-subject {
+  font-size: 12px;
+  font-weight: 600;
+  color: $text;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inbox-row-patient {
+  font-size: 11px;
+  color: $primary;
+  font-weight: 500;
+}
+
+.inbox-row-source {
+  font-size: 11px;
+  color: $text-muted;
+}
+
+.inbox-urgency-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #92400e;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &.urgency-critical {
+    background: #fee2e2;
+    color: #991b1b;
+    animation: pulse-red 2s infinite;
+  }
+}
+
+.inbox-icon-message,
+.inbox-icon-critical_result,
+.inbox-icon-consult_request,
+.inbox-icon-refill_request,
+.inbox-icon-document_to_sign,
+.inbox-icon-task {
+  background: #eff6ff;
+  color: $primary;
+}
+
+.qa-grid-compact {
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)) !important;
+  gap: 8px !important;
+}
+
+.qa-card-compact {
+  padding: 10px !important;
+
+  .qa-icon-wrap {
+    width: 28px;
+    height: 28px;
+  }
+
+  .qa-icon {
+    font-size: 16px !important;
+  }
+
+  .qa-label {
+    font-size: 11px !important;
+  }
+
+  .qa-desc {
+    display: none;
+  }
+}
