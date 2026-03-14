@@ -22,6 +22,12 @@ import {
   InboxCounts,
   OnCallStatus,
   RoomedPatient,
+  CriticalStrip,
+  DoctorWorklistItem,
+  PatientFlowItem,
+  ClinicalInboxItem,
+  DoctorResultQueueItem,
+  PatientSnapshot,
 } from '../services/dashboard.service';
 import {
   PatientPortalService,
@@ -33,6 +39,10 @@ import {
   PortalInvoice,
   CareTeamDTO,
 } from '../services/patient-portal.service';
+import { DoctorWorklistComponent } from './doctor-worklist/doctor-worklist';
+import { DoctorPatientFlowComponent } from './doctor-patient-flow/doctor-patient-flow';
+import { DoctorResultsPanelComponent } from './doctor-results-panel/doctor-results-panel';
+import { PatientSnapshotDrawerComponent } from './patient-snapshot-drawer/patient-snapshot-drawer';
 
 // ── Local interfaces ────────────────────────────────────────────────────────
 
@@ -81,7 +91,16 @@ interface NavTile {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterLink, DatePipe, TitleCasePipe],
+  imports: [
+    CommonModule,
+    RouterLink,
+    DatePipe,
+    TitleCasePipe,
+    DoctorWorklistComponent,
+    DoctorPatientFlowComponent,
+    DoctorResultsPanelComponent,
+    PatientSnapshotDrawerComponent,
+  ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -142,6 +161,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
   inboxCounts = signal<InboxCounts | null>(null);
   onCallStatus = signal<OnCallStatus | null>(null);
   roomedPatients = signal<RoomedPatient[]>([]);
+
+  // ── Physician Cockpit data ───────────────────────────────────
+  criticalStrip = signal<CriticalStrip | null>(null);
+  worklistItems = signal<DoctorWorklistItem[]>([]);
+  patientFlowData = signal<Record<string, PatientFlowItem[]>>({});
+  inboxItems = signal<ClinicalInboxItem[]>([]);
+  resultQueue = signal<DoctorResultQueueItem[]>([]);
+  patientSnapshot = signal<PatientSnapshot | null>(null);
+  snapshotDrawerOpen = signal(false);
 
   // ── Schedule & Patients ───────────────────────────────────────
   todayAppointments = signal<AppointmentResponse[]>([]);
@@ -276,7 +304,66 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return 'Staff';
   });
 
-  // ── Stat strip (doctor / clinical) ──────────────────────────
+  // ── Critical Strip (doctor — actionable cards) ───────────────
+  criticalStripCards = computed<StatCard[]>(() => {
+    const cs = this.criticalStrip();
+    if (!cs) return [];
+    return [
+      {
+        key: 'critical_labs',
+        label: 'Critical Labs',
+        value: cs.criticalLabsCount,
+        icon: 'science',
+        color: '#dc2626',
+        bgColor: '#fee2e2',
+        route: '/lab',
+      },
+      {
+        key: 'waiting_long',
+        label: 'Waiting > 30m',
+        value: cs.waitingLongCount,
+        icon: 'hourglass_top',
+        color: cs.waitingLongCount > 0 ? '#d97706' : '#64748b',
+        bgColor: cs.waitingLongCount > 0 ? '#fef3c7' : '#f1f5f9',
+      },
+      {
+        key: 'pending_consults',
+        label: 'Pending Consults',
+        value: cs.pendingConsultsCount,
+        icon: 'forum',
+        color: cs.pendingConsultsCount > 0 ? '#7c3aed' : '#64748b',
+        bgColor: cs.pendingConsultsCount > 0 ? '#ede9fe' : '#f1f5f9',
+        route: '/consultations',
+      },
+      {
+        key: 'unsigned_notes',
+        label: 'Unsigned Notes',
+        value: cs.unsignedNotesCount,
+        icon: 'draw',
+        color: cs.unsignedNotesCount > 0 ? '#d97706' : '#64748b',
+        bgColor: cs.unsignedNotesCount > 0 ? '#fef3c7' : '#f1f5f9',
+      },
+      {
+        key: 'pending_orders',
+        label: 'Orders to Review',
+        value: cs.pendingOrderReviewCount,
+        icon: 'assignment',
+        color: cs.pendingOrderReviewCount > 0 ? '#2563eb' : '#64748b',
+        bgColor: cs.pendingOrderReviewCount > 0 ? '#dbeafe' : '#f1f5f9',
+        route: '/lab',
+      },
+      {
+        key: 'safety_alerts',
+        label: 'Safety Alerts',
+        value: cs.activeSafetyAlertsCount,
+        icon: 'emergency',
+        color: cs.activeSafetyAlertsCount > 0 ? '#dc2626' : '#64748b',
+        bgColor: cs.activeSafetyAlertsCount > 0 ? '#fee2e2' : '#f1f5f9',
+      },
+    ];
+  });
+
+  // ── Stat strip (generic fallback for non-doctor clinical) ───
   statCards = computed<StatCard[]>(() => {
     const base: StatCard[] = [
       {
@@ -1021,6 +1108,54 @@ export class DashboardComponent implements OnInit, OnDestroy {
       });
     }
 
+    // Physician Cockpit (doctor-only)
+    if (this.isDoctor()) {
+      pending++;
+      this.dashboardService.getCriticalStrip().subscribe({
+        next: (cs) => {
+          this.criticalStrip.set(cs);
+          done();
+        },
+        error: () => done(),
+      });
+
+      pending++;
+      this.dashboardService.getWorklist().subscribe({
+        next: (items) => {
+          this.worklistItems.set(items);
+          done();
+        },
+        error: () => done(),
+      });
+
+      pending++;
+      this.dashboardService.getPatientFlow().subscribe({
+        next: (data) => {
+          this.patientFlowData.set(data);
+          done();
+        },
+        error: () => done(),
+      });
+
+      pending++;
+      this.dashboardService.getInbox().subscribe({
+        next: (items) => {
+          this.inboxItems.set(items);
+          done();
+        },
+        error: () => done(),
+      });
+
+      pending++;
+      this.dashboardService.getResultReviewQueue().subscribe({
+        next: (items) => {
+          this.resultQueue.set(items);
+          done();
+        },
+        error: () => done(),
+      });
+    }
+
     // Today's appointments (for roles that can see them)
     if (this.permissions.hasPermission('View Appointments')) {
       pending++;
@@ -1135,6 +1270,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   refreshDashboard(): void {
     this.loadDashboardData();
+  }
+
+  openPatientSnapshot(patientId: string): void {
+    this.snapshotDrawerOpen.set(true);
+    this.patientSnapshot.set(null);
+    this.dashboardService.getPatientSnapshot(patientId).subscribe({
+      next: (s) => this.patientSnapshot.set(s),
+      error: () => this.snapshotDrawerOpen.set(false),
+    });
+  }
+
+  closePatientSnapshot(): void {
+    this.snapshotDrawerOpen.set(false);
+    this.patientSnapshot.set(null);
   }
 
   // ────────────────────────────────────────────────────────────

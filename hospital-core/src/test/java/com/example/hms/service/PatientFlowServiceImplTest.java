@@ -1,0 +1,229 @@
+package com.example.hms.service;
+
+import com.example.hms.enums.EncounterStatus;
+import com.example.hms.model.Encounter;
+import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
+import com.example.hms.payload.dto.clinical.PatientFlowItemDTO;
+import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.StaffRepository;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+@SuppressWarnings("java:S100")
+class PatientFlowServiceImplTest {
+
+    @Mock private StaffRepository staffRepository;
+    @Mock private EncounterRepository encounterRepository;
+
+    @InjectMocks
+    private PatientFlowServiceImpl service;
+
+    // ========== Helpers ==========
+
+    private Staff stubStaff(UUID staffId) {
+        Staff staff = mock(Staff.class);
+        when(staff.getId()).thenReturn(staffId);
+        return staff;
+    }
+
+    private void givenStaffFor(UUID userId, Staff staff) {
+        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId))
+                .thenReturn(Optional.of(staff));
+    }
+
+    // ========== getPatientFlow() ==========
+
+    @Test
+    void getPatientFlow_noStaff_shouldReturnEmptyMap() {
+        UUID userId = UUID.randomUUID();
+        when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId))
+                .thenReturn(Optional.empty());
+
+        Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
+
+        assertNotNull(result);
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void getPatientFlow_withStaff_shouldInitializeAllColumns() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        // No encounters for any status
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any(EncounterStatus.class)))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
+
+        assertNotNull(result);
+        assertTrue(result.containsKey("ARRIVED"));
+        assertTrue(result.containsKey("IN_PROGRESS"));
+        assertTrue(result.containsKey("COMPLETED"));
+        assertTrue(result.containsKey("CANCELLED"));
+    }
+
+    @Test
+    void getPatientFlow_populatesColumnsFromEncounters() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        UUID patientId = UUID.randomUUID();
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(patientId);
+        when(patient.getFirstName()).thenReturn("John");
+        when(patient.getLastName()).thenReturn("Doe");
+
+        UUID encId = UUID.randomUUID();
+        Encounter enc = mock(Encounter.class);
+        when(enc.getId()).thenReturn(encId);
+        when(enc.getPatient()).thenReturn(patient);
+        when(enc.getEncounterDate()).thenReturn(LocalDateTime.now().minusMinutes(15));
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(List.of(enc));
+        // Other statuses return empty
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.ARRIVED)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.COMPLETED)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.CANCELLED)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
+
+        List<PatientFlowItemDTO> inProgress = result.get("IN_PROGRESS");
+        assertFalse(inProgress.isEmpty());
+        PatientFlowItemDTO item = inProgress.get(0);
+        assertEquals("John Doe", item.getPatientName());
+        assertEquals(patientId, item.getPatientId());
+        assertEquals(encId, item.getEncounterId());
+        assertEquals("IN_PROGRESS", item.getState());
+        assertTrue(item.getElapsedMinutes() >= 0);
+    }
+
+    @Test
+    void getPatientFlow_skipsNullPatient() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Encounter enc = mock(Encounter.class);
+        when(enc.getPatient()).thenReturn(null);
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
+                .thenReturn(List.of(enc));
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.IN_PROGRESS)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.COMPLETED)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.CANCELLED)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
+
+        assertTrue(result.get("ARRIVED").isEmpty(), "Encounters with null patient should be skipped");
+    }
+
+    @Test
+    void getPatientFlow_elapsedMinutesNonNegativeWhenDateNull() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(UUID.randomUUID());
+        when(patient.getFirstName()).thenReturn("Jane");
+        when(patient.getLastName()).thenReturn("Doe");
+
+        Encounter enc = mock(Encounter.class);
+        when(enc.getId()).thenReturn(UUID.randomUUID());
+        when(enc.getPatient()).thenReturn(patient);
+        when(enc.getEncounterDate()).thenReturn(null); // no encounter date
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.COMPLETED))
+                .thenReturn(List.of(enc));
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.ARRIVED)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.IN_PROGRESS)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.CANCELLED)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
+
+        PatientFlowItemDTO item = result.get("COMPLETED").get(0);
+        assertEquals(0L, item.getElapsedMinutes());
+    }
+
+    @Test
+    void getPatientFlow_multipleEncountersInSameColumn() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Patient p1 = mock(Patient.class);
+        when(p1.getId()).thenReturn(UUID.randomUUID());
+        when(p1.getFirstName()).thenReturn("A");
+        when(p1.getLastName()).thenReturn("B");
+
+        Patient p2 = mock(Patient.class);
+        when(p2.getId()).thenReturn(UUID.randomUUID());
+        when(p2.getFirstName()).thenReturn("C");
+        when(p2.getLastName()).thenReturn("D");
+
+        Encounter enc1 = mock(Encounter.class);
+        when(enc1.getId()).thenReturn(UUID.randomUUID());
+        when(enc1.getPatient()).thenReturn(p1);
+        when(enc1.getEncounterDate()).thenReturn(LocalDateTime.now());
+
+        Encounter enc2 = mock(Encounter.class);
+        when(enc2.getId()).thenReturn(UUID.randomUUID());
+        when(enc2.getPatient()).thenReturn(p2);
+        when(enc2.getEncounterDate()).thenReturn(LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
+                .thenReturn(List.of(enc1, enc2));
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.IN_PROGRESS)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.COMPLETED)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.CANCELLED)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
+
+        assertEquals(2, result.get("ARRIVED").size());
+    }
+}
