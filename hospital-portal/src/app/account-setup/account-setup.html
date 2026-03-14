@@ -1,0 +1,177 @@
+<div class="account-setup-container">
+  <div class="setup-card">
+    <div class="setup-header">
+      <span class="material-icons header-icon">security</span>
+      <h1>Account Setup Required</h1>
+      <p class="subtitle">For your security, please update your credentials before continuing.</p>
+    </div>
+
+    <!-- ── Username Section ── -->
+    @if (needsUsername()) {
+      <section class="setup-section" [class.completed]="usernameSuccess">
+        <div class="section-header">
+          <span class="material-icons section-icon">{{
+            usernameSuccess ? 'check_circle' : 'person'
+          }}</span>
+          <h2>Choose Your Username</h2>
+        </div>
+
+        @if (!usernameSuccess) {
+          <p class="section-desc">
+            Your account was created with a temporary username. Please choose a username you'd like
+            to use.
+          </p>
+          <div class="form-group">
+            <label for="newUsername">New Username</label>
+            <input
+              type="text"
+              id="newUsername"
+              [(ngModel)]="newUsername"
+              placeholder="e.g. john.doe"
+              maxlength="50"
+              autocomplete="username"
+              [disabled]="loading"
+            />
+            <span class="form-hint"
+              >3–50 characters. Letters, digits, dots, hyphens, underscores.</span
+            >
+          </div>
+          @if (usernameError) {
+            <div class="error-message">
+              <span class="material-icons">error</span>
+              {{ usernameError }}
+            </div>
+          }
+          <button
+            class="btn btn-primary"
+            (click)="submitUsername()"
+            [disabled]="loading || !newUsername.trim()"
+          >
+            @if (loading) {
+              <span class="spinner"></span>
+            }
+            Save Username
+          </button>
+        } @else {
+          <div class="success-message">
+            <span class="material-icons">check_circle</span>
+            Username updated to <strong>{{ newUsername }}</strong>
+          </div>
+        }
+      </section>
+    }
+
+    <!-- ── Password Section ── -->
+    @if (needsPassword()) {
+      <section class="setup-section" [class.completed]="passwordSuccess">
+        <div class="section-header">
+          <span class="material-icons section-icon">{{
+            passwordSuccess ? 'check_circle' : 'lock'
+          }}</span>
+          <h2>Set Your Password</h2>
+        </div>
+
+        @if (!passwordSuccess) {
+          <p class="section-desc">
+            Your account was created with a temporary password. Please set a new secure password.
+          </p>
+
+          <div class="form-group">
+            <label for="currentPassword">Current (Temporary) Password</label>
+            <div class="password-field">
+              <input
+                [type]="showCurrentPassword ? 'text' : 'password'"
+                id="currentPassword"
+                [(ngModel)]="currentPassword"
+                placeholder="Enter your temporary password"
+                autocomplete="current-password"
+                [disabled]="loading"
+              />
+              <button
+                type="button"
+                class="toggle-password"
+                (click)="showCurrentPassword = !showCurrentPassword"
+              >
+                <span class="material-icons">{{
+                  showCurrentPassword ? 'visibility_off' : 'visibility'
+                }}</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="newPassword">New Password</label>
+            <div class="password-field">
+              <input
+                [type]="showNewPassword ? 'text' : 'password'"
+                id="newPassword"
+                [(ngModel)]="newPassword"
+                placeholder="Choose a strong password"
+                autocomplete="new-password"
+                [disabled]="loading"
+              />
+              <button
+                type="button"
+                class="toggle-password"
+                (click)="showNewPassword = !showNewPassword"
+              >
+                <span class="material-icons">{{
+                  showNewPassword ? 'visibility_off' : 'visibility'
+                }}</span>
+              </button>
+            </div>
+            <span class="form-hint">Minimum 8 characters.</span>
+          </div>
+
+          <div class="form-group">
+            <label for="confirmPassword">Confirm New Password</label>
+            <input
+              type="password"
+              id="confirmPassword"
+              [(ngModel)]="confirmPassword"
+              placeholder="Re-enter your new password"
+              autocomplete="new-password"
+              [disabled]="loading"
+            />
+          </div>
+
+          @if (passwordError) {
+            <div class="error-message">
+              <span class="material-icons">error</span>
+              {{ passwordError }}
+            </div>
+          }
+          <button
+            class="btn btn-primary"
+            (click)="submitPassword()"
+            [disabled]="loading || !currentPassword || !newPassword || !confirmPassword"
+          >
+            @if (loading) {
+              <span class="spinner"></span>
+            }
+            Save Password
+          </button>
+        } @else {
+          <div class="success-message">
+            <span class="material-icons">check_circle</span>
+            Password updated successfully.
+          </div>
+        }
+      </section>
+    }
+
+    <!-- ── Continue Button ── -->
+    @if (allDone) {
+      <div class="continue-section">
+        <div class="success-message final-success">
+          <span class="material-icons">verified</span>
+          Your account is all set! You can now continue.
+        </div>
+        <button class="btn btn-success" (click)="continue()">
+          Continue to Dashboard
+          <span class="material-icons">arrow_forward</span>
+        </button>
+      </div>
+    }
+  </div>
+</div>

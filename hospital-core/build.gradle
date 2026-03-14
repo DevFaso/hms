@@ -25,7 +25,7 @@ dependencies {
     runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 
     // OpenAPI / Swagger
-    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.4'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.8'
     // swagger-annotations-jakarta is provided transitively by springdoc — do NOT add swagger-annotations separately
 
     // Jackson Hibernate module
@@ -38,7 +38,7 @@ dependencies {
     implementation 'com.itextpdf:kernel:8.0.2'
     implementation 'com.itextpdf:layout:8.0.2'
     implementation 'com.itextpdf:barcodes:8.0.2'
-    implementation 'org.apache.pdfbox:pdfbox:2.0.31'
+    implementation 'org.apache.pdfbox:pdfbox:2.0.34'
 
     // QR / Barcode
     implementation 'com.google.zxing:core:3.5.3'

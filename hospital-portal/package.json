@@ -30,21 +30,22 @@
   },
   "overrides": {
     "body-parser": "2.2.2",
-    "tar": "7.5.8",
-    "qs": "6.14.2"
+    "tar": "7.5.11",
+    "qs": "6.14.2",
+    "yauzl": "3.2.1"
   },
   "dependencies": {
-    "@angular/animations": "20.3.17",
+    "@angular/animations": "20.3.18",
     "@angular/cdk": "20.2.10",
-    "@angular/common": "20.3.17",
-    "@angular/compiler": "20.3.17",
-    "@angular/core": "20.3.17",
-    "@angular/forms": "20.3.17",
+    "@angular/common": "20.3.18",
+    "@angular/compiler": "20.3.18",
+    "@angular/core": "20.3.18",
+    "@angular/forms": "20.3.18",
     "@angular/material": "20.2.10",
-    "@angular/platform-browser": "20.3.17",
-    "@angular/platform-browser-dynamic": "20.3.17",
-    "@angular/platform-server": "20.3.17",
-    "@angular/router": "20.3.17",
+    "@angular/platform-browser": "20.3.18",
+    "@angular/platform-browser-dynamic": "20.3.18",
+    "@angular/platform-server": "20.3.18",
+    "@angular/router": "20.3.18",
     "@angular/ssr": "20.3.18",
     "@ngx-translate/core": "17.0.0",
     "@ngx-translate/http-loader": "17.0.0",
@@ -58,7 +59,7 @@
   "devDependencies": {
     "@angular/build": "20.3.18",
     "@angular/cli": "20.3.18",
-    "@angular/compiler-cli": "20.3.17",
+    "@angular/compiler-cli": "20.3.18",
     "@playwright/test": "1.56.1",
     "@types/express": "5.0.3",
     "@types/jasmine": "5.1.9",
@@ -75,7 +76,7 @@
     "karma-jasmine": "5.1.0",
     "karma-jasmine-html-reporter": "2.1.0",
     "prettier": "3.6.2",
-    "puppeteer": "24.17.0",
+    "puppeteer": "24.39.1",
     "typescript": "5.9.2",
     "typescript-eslint": "8.40.0"
   }

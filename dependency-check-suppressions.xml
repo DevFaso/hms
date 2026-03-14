@@ -39,4 +39,46 @@
         <filePath regex="true">.*swagger-ui.*</filePath>
         <cve>CVE-2025-26791</cve>
     </suppress>
+
+    <!-- ═══════════════ Swagger UI / DOMPurify — CVE-2025-15599 (MEDIUM) ═══════════════
+         XSS in DOMPurify 3.2.4 bundled inside swagger-ui 5.21.0. Swagger UI is
+         dev-only tooling, disabled in production profiles via spring.profiles.
+         No untrusted user content is rendered through it. Suppressed 2026-03-13. -->
+    <suppress>
+        <notes><![CDATA[ Swagger UI dev-only; DOMPurify XSS not exploitable in production ]]></notes>
+        <filePath regex="true">.*swagger-ui.*</filePath>
+        <cve>CVE-2025-15599</cve>
+    </suppress>
+
+    <!-- ═══════════════ Swagger UI / DOMPurify — CVE-2026-0540 (MEDIUM) ═══════════════
+         XSS in DOMPurify 3.3.1 bundled inside swagger-ui 5.21.0. Same as above —
+         Swagger UI is dev-only, disabled in production. Suppressed 2026-03-13. -->
+    <suppress>
+        <notes><![CDATA[ Swagger UI dev-only; DOMPurify XSS not exploitable in production ]]></notes>
+        <filePath regex="true">.*swagger-ui.*</filePath>
+        <cve>CVE-2026-0540</cve>
+    </suppress>
+
+    <!-- ═══════════════ PDFBox 2.0.34 — CVE-2026-23907 (MEDIUM) ═══════════════
+         Path traversal in the ExtractEmbeddedFiles EXAMPLE code. This CVE affects
+         sample/example code only — our PdfInvoiceService generates PDFs from
+         trusted application data and never extracts embedded files from untrusted
+         PDFs. Not applicable. Suppressed 2026-03-13. -->
+    <suppress>
+        <notes><![CDATA[ PDFBox path traversal in ExtractEmbeddedFiles example — we only generate PDFs ]]></notes>
+        <gav regex="true">org\.apache\.pdfbox:pdfbox:.*</gav>
+        <cve>CVE-2026-23907</cve>
+    </suppress>
+
+    <!-- ═══════════════ Tomcat 10.1.50 — CVE-2026-24734 (HIGH) ═══════════════
+         OCSP responder verification bypass in Tomcat Native / FFM port. Only
+         exploitable when using Tomcat Native with an OCSP responder for client
+         certificate validation. Our deployment uses standard Java SSL (JSSE),
+         not Tomcat Native, and does not use OCSP stapling. No patch available
+         yet (10.1.51 not released). Suppressed 2026-03-13. -->
+    <suppress>
+        <notes><![CDATA[ Tomcat OCSP verification bypass — not using Tomcat Native or OCSP stapling ]]></notes>
+        <gav regex="true">org\.apache\.tomcat\.embed:tomcat-embed-.*:10\.1\.50</gav>
+        <cve>CVE-2026-24734</cve>
+    </suppress>
 </suppressions>
