@@ -23,6 +23,8 @@ export interface LoginUserProfile {
   staffId?: string;
   roleName?: string;
   active: boolean;
+  forcePasswordChange?: boolean;
+  forceUsernameChange?: boolean;
   /** Primary hospital this user is assigned to (from active assignment). */
   primaryHospitalId?: string;
   /** Display name of the primary hospital. */

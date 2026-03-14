@@ -18,14 +18,12 @@ on:
       service:
         description: 'Service to deploy'
         required: true
-        default: 'all'
+        default: 'both'
         type: choice
         options:
-          - all
+          - both
           - backend
           - frontend
-          - patient-app
-          - both-frontends
 
 permissions:
   contents: read
@@ -40,9 +38,6 @@ permissions:
 # frontend-prod        b306a9e8-36f9-477c-813c-c3bb119d2679
 # frontend-uat         042b8787-7455-4cd8-81db-8f4bf7375ca4
 # frontend-dev         9ad9ae6a-6438-4a27-be1f-858644d8955d
-# patient-app-prod     <TBD — create in Railway console>
-# patient-app-uat      <TBD — create in Railway console>
-# patient-app-dev      <TBD — create in Railway console>
 # ───────────────────────────────────────────────────────────────────────────
 
 jobs:
@@ -67,31 +62,28 @@ jobs:
         run: |
           case "${{ github.event.inputs.environment }}" in
             prod)
-              echo "token=$HMS_PROD_TOKEN"              >> "$GITHUB_OUTPUT"
-              echo "backend_svc=hms-backend-core"       >> "$GITHUB_OUTPUT"
-              echo "frontend_svc=hms-frontend-prod"     >> "$GITHUB_OUTPUT"
-              echo "patient_app_svc=hms-patient-app-prod" >> "$GITHUB_OUTPUT"
-              echo "railway_env=prod"                   >> "$GITHUB_OUTPUT"
+              echo "token=$HMS_PROD_TOKEN"          >> "$GITHUB_OUTPUT"
+              echo "backend_svc=hms-backend-core"   >> "$GITHUB_OUTPUT"
+              echo "frontend_svc=hms-frontend-prod" >> "$GITHUB_OUTPUT"
+              echo "railway_env=prod"               >> "$GITHUB_OUTPUT"
               ;;
             uat)
-              echo "token=$HMS_UAT_TOKEN"               >> "$GITHUB_OUTPUT"
-              echo "backend_svc=hms-backend-uat"        >> "$GITHUB_OUTPUT"
-              echo "frontend_svc=hms-frontend-uat"      >> "$GITHUB_OUTPUT"
-              echo "patient_app_svc=hms-patient-app-uat" >> "$GITHUB_OUTPUT"
-              echo "railway_env=uat"                    >> "$GITHUB_OUTPUT"
+              echo "token=$HMS_UAT_TOKEN"           >> "$GITHUB_OUTPUT"
+              echo "backend_svc=hms-backend-uat"    >> "$GITHUB_OUTPUT"
+              echo "frontend_svc=hms-frontend-uat"  >> "$GITHUB_OUTPUT"
+              echo "railway_env=uat"                >> "$GITHUB_OUTPUT"
               ;;
             *)
-              echo "token=$HMS_DEV_TOKEN"               >> "$GITHUB_OUTPUT"
-              echo "backend_svc=hms-backend-dev"        >> "$GITHUB_OUTPUT"
-              echo "frontend_svc=hms-frontend-dev"      >> "$GITHUB_OUTPUT"
-              echo "patient_app_svc=hms-patient-app-dev" >> "$GITHUB_OUTPUT"
-              echo "railway_env=dev"                    >> "$GITHUB_OUTPUT"
+              echo "token=$HMS_DEV_TOKEN"           >> "$GITHUB_OUTPUT"
+              echo "backend_svc=hms-backend-dev"    >> "$GITHUB_OUTPUT"
+              echo "frontend_svc=hms-frontend-dev"  >> "$GITHUB_OUTPUT"
+              echo "railway_env=dev"                >> "$GITHUB_OUTPUT"
               ;;
           esac
           echo "deploy=${{ github.event.inputs.service }}" >> "$GITHUB_OUTPUT"
 
       - name: Deploy backend (${{ steps.cfg.outputs.railway_env }})
-        if: contains(fromJSON('["all","backend"]'), steps.cfg.outputs.deploy)
+        if: steps.cfg.outputs.deploy == 'both' || steps.cfg.outputs.deploy == 'backend'
         env:
           RAILWAY_TOKEN: ${{ steps.cfg.outputs.token }}
         run: |
@@ -99,23 +91,13 @@ jobs:
             --service ${{ steps.cfg.outputs.backend_svc }} \
             --environment ${{ steps.cfg.outputs.railway_env }}
 
-      - name: Deploy admin portal (${{ steps.cfg.outputs.railway_env }})
-        if: contains(fromJSON('["all","frontend","both-frontends"]'), steps.cfg.outputs.deploy)
+      - name: Deploy frontend (${{ steps.cfg.outputs.railway_env }})
+        if: steps.cfg.outputs.deploy == 'both' || steps.cfg.outputs.deploy == 'frontend'
         working-directory: hospital-portal
         env:
           RAILWAY_TOKEN: ${{ steps.cfg.outputs.token }}
         run: |
           railway up \
             --service ${{ steps.cfg.outputs.frontend_svc }} \
-            --environment ${{ steps.cfg.outputs.railway_env }}
-
-      - name: Deploy patient app (${{ steps.cfg.outputs.railway_env }})
-        if: contains(fromJSON('["all","patient-app","both-frontends"]'), steps.cfg.outputs.deploy)
-        working-directory: patient-mobile-app
-        env:
-          RAILWAY_TOKEN: ${{ steps.cfg.outputs.token }}
-        run: |
-          railway up \
-            --service ${{ steps.cfg.outputs.patient_app_svc }} \
             --environment ${{ steps.cfg.outputs.railway_env }}
 
