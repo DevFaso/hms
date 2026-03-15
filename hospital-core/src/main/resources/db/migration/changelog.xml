@@ -195,4 +195,16 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V15: Add clinical.medication_administration_records
+         Tracks per-dose nursing administration events linked to a
+         Prescription. Status: PENDING | GIVEN | HELD | REFUSED | MISSED.
+         ================================================================= -->
+    <changeSet id="V15-add-medication-administration-records" author="hms-team" runOnChange="false">
+        <sqlFile path="V15__add_medication_administration_records.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
