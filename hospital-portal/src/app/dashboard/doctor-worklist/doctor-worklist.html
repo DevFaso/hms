@@ -142,8 +142,8 @@
               <span class="material-symbols-outlined">science</span>
             </a>
             <a
-              [routerLink]="['/prescriptions/new']"
-              [queryParams]="{ patientId: item.patientId }"
+              [routerLink]="['/prescriptions']"
+              [queryParams]="{ new: '1', patientId: item.patientId }"
               class="wl-action-btn"
               title="Write Rx"
               (click)="$event.stopPropagation()"

@@ -50,6 +50,7 @@ interface QuickAction {
   icon: string;
   label: string;
   route: string;
+  queryParams?: Record<string, string>;
   color: string;
   bgColor: string;
   description: string;
@@ -503,6 +504,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
                 label: 'Discharge Patient',
                 description: 'Initiate patient discharge',
                 route: '/admissions',
+                queryParams: { tab: 'admitted' },
                 color: '#d97706',
                 bgColor: '#fef3c7',
               },
@@ -549,6 +551,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
           label: 'Write Rx',
           description: 'Prescribe medication',
           route: '/prescriptions',
+          queryParams: { new: '1' },
           color: '#2563eb',
           bgColor: '#eff6ff',
         },
