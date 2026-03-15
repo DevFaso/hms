@@ -364,12 +364,12 @@
         <div class="form-row">
           <div class="field">
             <label for="img-laterality">Laterality</label>
-            <input
-              id="img-laterality"
-              type="text"
-              [(ngModel)]="form.laterality"
-              placeholder="e.g. LEFT, RIGHT, BILATERAL"
-            />
+            <select id="img-laterality" [(ngModel)]="form.laterality" title="Laterality">
+              <option value="">Not specified</option>
+              @for (lat of lateralities; track lat.value) {
+                <option [value]="lat.value">{{ lat.label }}</option>
+              }
+            </select>
           </div>
           <div class="field full-width">
             <label for="img-clinicalQ">Clinical Question</label>
