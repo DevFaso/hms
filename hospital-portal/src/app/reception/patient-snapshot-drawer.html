@@ -1,0 +1,156 @@
+<div
+  class="drawer-overlay"
+  role="button"
+  tabindex="0"
+  aria-label="Close drawer"
+  (click)="panelClosed.emit()"
+  (keydown.enter)="panelClosed.emit()"
+  (keydown.escape)="panelClosed.emit()"
+></div>
+<div class="drawer-panel">
+  <div class="drawer-header">
+    <h2>Patient Snapshot</h2>
+    <button class="btn-icon-close" (click)="panelClosed.emit()" aria-label="Close">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+  </div>
+
+  <div class="drawer-body">
+    @if (loading()) {
+      <div class="loading-row">
+        <span class="material-symbols-outlined spin">progress_activity</span>
+        Loading…
+      </div>
+    } @else if (error()) {
+      <div class="error-msg">{{ error() }}</div>
+    } @else if (snapshot(); as s) {
+      <!-- Alert Chips -->
+      @if (
+        s.alerts.incompleteDemographics ||
+        s.alerts.missingInsurance ||
+        s.alerts.expiredInsurance ||
+        s.alerts.noPrimaryInsurance ||
+        s.alerts.outstandingBalance
+      ) {
+        <div class="alert-chips">
+          @if (s.alerts.incompleteDemographics) {
+            <span class="alert-chip warn">Incomplete Demographics</span>
+          }
+          @if (s.alerts.missingInsurance) {
+            <span class="alert-chip danger">No Insurance</span>
+          }
+          @if (s.alerts.expiredInsurance) {
+            <span class="alert-chip danger">Expired Insurance</span>
+          }
+          @if (s.alerts.noPrimaryInsurance) {
+            <span class="alert-chip warn">No Primary Insurance</span>
+          }
+          @if (s.alerts.outstandingBalance) {
+            <span class="alert-chip danger">Outstanding Balance</span>
+          }
+        </div>
+      }
+
+      <!-- Demographics -->
+      <div class="snap-card">
+        <div class="snap-card-title">
+          <span class="material-symbols-outlined">person</span>
+          Demographics
+        </div>
+        <div class="snap-field">
+          <span class="field-label">Name</span>
+          <span class="field-val">{{ s.fullName }}</span>
+        </div>
+        @if (s.mrn) {
+          <div class="snap-field">
+            <span class="field-label">MRN</span>
+            <span class="field-val">{{ s.mrn }}</span>
+          </div>
+        }
+        @if (s.dob) {
+          <div class="snap-field">
+            <span class="field-label">Date of Birth</span>
+            <span class="field-val">{{ s.dob | date: 'mediumDate' }}</span>
+          </div>
+        }
+        @if (s.phone) {
+          <div class="snap-field">
+            <span class="field-label">Phone</span>
+            <span class="field-val">{{ s.phone }}</span>
+          </div>
+        }
+        @if (s.email) {
+          <div class="snap-field">
+            <span class="field-label">Email</span>
+            <span class="field-val">{{ s.email }}</span>
+          </div>
+        }
+        @if (s.address) {
+          <div class="snap-field">
+            <span class="field-label">Address</span>
+            <span class="field-val">{{ s.address }}</span>
+          </div>
+        }
+      </div>
+
+      <!-- Insurance -->
+      <div class="snap-card">
+        <div class="snap-card-title">
+          <span class="material-symbols-outlined">health_and_safety</span>
+          Insurance
+        </div>
+        @if (s.insurance.primaryPayer) {
+          <div class="snap-field">
+            <span class="field-label">Primary Payer</span>
+            <span class="field-val">{{ s.insurance.primaryPayer }}</span>
+          </div>
+        }
+        @if (s.insurance.policyNumber) {
+          <div class="snap-field">
+            <span class="field-label">Policy #</span>
+            <span class="field-val">{{ s.insurance.policyNumber }}</span>
+          </div>
+        }
+        @if (s.insurance.expiresOn) {
+          <div class="snap-field">
+            <span class="field-label">Expires</span>
+            <span class="field-val" [class.expired-val]="s.insurance.expired">
+              {{ s.insurance.expiresOn | date: 'mediumDate' }}
+              @if (s.insurance.expired) {
+                <span class="alert-chip danger small">EXPIRED</span>
+              }
+            </span>
+          </div>
+        }
+        <div class="snap-field">
+          <span class="field-label">Active Coverage</span>
+          <span class="field-val">
+            @if (s.insurance.hasActiveCoverage) {
+              <span class="badge-yes">Yes</span>
+            } @else {
+              <span class="badge-no">No</span>
+            }
+          </span>
+        </div>
+      </div>
+
+      <!-- Billing -->
+      <div class="snap-card">
+        <div class="snap-card-title">
+          <span class="material-symbols-outlined">receipt_long</span>
+          Billing
+        </div>
+        <div class="snap-field">
+          <span class="field-label">Open Invoices</span>
+          <span class="field-val">{{ s.billing.openInvoiceCount }}</span>
+        </div>
+        <div class="snap-field">
+          <span class="field-label">Total Balance Due</span>
+          <span class="field-val" [class.balance-due]="s.billing.totalBalanceDue > 0">
+            {{ s.billing.totalBalanceDue | number: '1.2-2' }}
+          </span>
+        </div>
+      </div>
+    }
+  </div>
+</div>

@@ -79,6 +79,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     List<Appointment> findByHospital_IdOrderByAppointmentDateDesc(UUID hospitalId);
     List<Appointment> findAllByHospitalIdIn(Set<UUID> allowedHospitals);
 
+    List<Appointment> findByHospital_IdAndAppointmentDate(UUID hospitalId, LocalDate appointmentDate);
+
     /**
      * Returns all appointments with DISTINCT applied at the JPQL level.
      * This guards against Hibernate "More than one row with the given identifier" errors

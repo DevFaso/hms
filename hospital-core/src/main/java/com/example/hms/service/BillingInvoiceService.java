@@ -30,4 +30,7 @@ public interface BillingInvoiceService {
 
     /** Record a payment against an invoice — updates amountPaid and status. */
     BillingInvoiceResponseDTO recordPayment(UUID invoiceId, UUID patientId, java.math.BigDecimal amount, Locale locale);
+
+    /** Staff shortcut: record a payment without requiring the patientId (resolved from invoice). */
+    BillingInvoiceResponseDTO recordStaffPayment(UUID invoiceId, java.math.BigDecimal amount, Locale locale);
 }

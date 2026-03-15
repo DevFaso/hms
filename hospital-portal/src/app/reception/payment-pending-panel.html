@@ -1,0 +1,354 @@
+@if (items.length === 0) {
+  <div class="empty-state">No payments pending today.</div>
+} @else {
+  <table class="pay-table">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Patient</th>
+        <th>Provider</th>
+        <th>Department</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (item of items; track item.patientId + (item.appointmentId ?? '')) {
+        <tr>
+          <td>{{ item.appointmentTime ?? '—' }}</td>
+          <td>
+            <button class="patient-link" (click)="patientClicked.emit(item.patientId)">
+              {{ item.patientName }}
+            </button>
+          </td>
+          <td>{{ item.providerName ?? '—' }}</td>
+          <td>{{ item.departmentName ?? '—' }}</td>
+          <td>
+            <button class="btn-collect" (click)="openPayDialog(item)">
+              <span class="material-symbols-outlined">payments</span>
+              Collect
+            </button>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}
+
+<!-- Payment Dialog -->
+@if (payingItem()) {
+  <div
+    class="modal-overlay"
+    role="button"
+    tabindex="0"
+    aria-label="Close dialog"
+    (click)="closePayDialog()"
+    (keydown.enter)="closePayDialog()"
+    (keydown.escape)="closePayDialog()"
+  ></div>
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Collect Payment — {{ payingItem()!.patientName }}</h3>
+      <button class="btn-close" (click)="closePayDialog()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      @if (loadingInvoices()) {
+        <div class="loading-row">
+          <span class="material-symbols-outlined spin">progress_activity</span>
+          Loading invoices…
+        </div>
+      } @else if (openInvoices().length === 0) {
+        <p class="no-invoices">No open invoices found for this patient.</p>
+      } @else {
+        <div class="field-group">
+          <label for="invSelect">Invoice</label>
+          <select
+            id="invSelect"
+            class="form-control"
+            [ngModel]="selectedInvoiceId()"
+            (ngModelChange)="selectedInvoiceId.set($event)"
+          >
+            <option [value]="null">-- Select Invoice --</option>
+            @for (inv of openInvoices(); track inv.id) {
+              <option [value]="inv.id">
+                {{ inv.invoiceNumber }} — Balance: {{ inv.balanceDue | number: '1.2-2' }}
+              </option>
+            }
+          </select>
+        </div>
+        <div class="field-group">
+          <label for="payAmt">Amount</label>
+          <input
+            id="payAmt"
+            type="number"
+            class="form-control"
+            min="0.01"
+            step="0.01"
+            [ngModel]="payAmount()"
+            (ngModelChange)="payAmount.set($event)"
+            placeholder="0.00"
+          />
+        </div>
+        <div class="field-group">
+          <label for="payMeth">Method</label>
+          <select
+            id="payMeth"
+            class="form-control"
+            [ngModel]="payMethod()"
+            (ngModelChange)="payMethod.set($event)"
+          >
+            <option value="CASH">Cash</option>
+            <option value="CARD">Card</option>
+            <option value="INSURANCE">Insurance</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+      }
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="closePayDialog()">Cancel</button>
+      <button
+        class="btn-primary"
+        [disabled]="!selectedInvoiceId() || !payAmount() || (payAmount() ?? 0) <= 0 || paying()"
+        (click)="submitPayment()"
+      >
+        @if (paying()) {
+          <span class="material-symbols-outlined spin">progress_activity</span>
+        }
+        Record Payment
+      </button>
+    </div>
+  </div>
+}
+
+<style>
+  .empty-state {
+    padding: 2.5rem;
+    text-align: center;
+    color: #6b7280;
+  }
+
+  .pay-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+
+    th {
+      text-align: left;
+      padding: 0.625rem 0.75rem;
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+      font-weight: 600;
+      color: #6b7280;
+    }
+
+    td {
+      padding: 0.625rem 0.75rem;
+      border-bottom: 1px solid #e5e7eb;
+      vertical-align: middle;
+    }
+
+    tr:hover td {
+      background: #f9fafb;
+    }
+  }
+
+  .patient-link {
+    background: none;
+    border: none;
+    padding: 0;
+    color: #2563eb;
+    font-weight: 500;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    font-size: inherit;
+
+    &:hover {
+      text-decoration-style: solid;
+    }
+  }
+
+  .btn-collect {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.35rem 0.75rem;
+    background: #065f46;
+    color: #fff;
+    border: none;
+    border-radius: 0.375rem;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: opacity 0.15s;
+
+    .material-symbols-outlined {
+      font-size: 1rem;
+    }
+
+    &:hover {
+      opacity: 0.88;
+    }
+  }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 500;
+  }
+
+  .modal-box {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: #fff;
+    border-radius: 0.75rem;
+    width: 400px;
+    max-width: 95vw;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    z-index: 501;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid #e5e7eb;
+
+    h3 {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+    }
+  }
+
+  .btn-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+
+    &:hover {
+      color: #111827;
+    }
+  }
+
+  .modal-body {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .modal-footer {
+    padding: 0.875rem 1.25rem;
+    border-top: 1px solid #e5e7eb;
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+  }
+
+  .field-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+
+    label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: #374151;
+    }
+  }
+
+  .form-control {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    width: 100%;
+
+    &:focus {
+      outline: none;
+      border-color: #2563eb;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    }
+  }
+
+  .no-invoices {
+    color: #6b7280;
+    text-align: center;
+    padding: 1rem 0;
+  }
+
+  .loading-row {
+    padding: 1rem 0;
+    text-align: center;
+    color: #6b7280;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 1rem;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    &:hover:not(:disabled) {
+      opacity: 0.9;
+    }
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 1rem;
+    background: #fff;
+    color: #111827;
+    border: 1px solid #d1d5db;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+
+    &:hover {
+      background: #f3f4f6;
+    }
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .spin {
+    display: inline-block;
+    animation: spin 0.8s linear infinite;
+  }
+</style>

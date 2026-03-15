@@ -277,4 +277,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BillingInvoice saved = invoiceRepository.save(invoice);
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
     }
+
+    @Override
+    @Transactional
+    public BillingInvoiceResponseDTO recordStaffPayment(UUID invoiceId, BigDecimal amount, Locale locale) {
+        BillingInvoice invoice = invoiceRepository.findById(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
+        return recordPayment(invoiceId, invoice.getPatient().getId(), amount, locale);
+    }
 }

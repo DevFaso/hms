@@ -1,0 +1,50 @@
+@if (!board) {
+  <div class="flow-empty">Loading flow board…</div>
+} @else {
+  <div class="flow-grid">
+    @for (col of columns; track col.key) {
+      <div class="flow-col" [ngClass]="col.colorClass">
+        <div class="col-header">
+          <span class="col-title">{{ col.label }}</span>
+          <span class="col-count">{{ colItems(col.key).length }}</span>
+        </div>
+        <div class="col-body">
+          @if (colItems(col.key).length === 0) {
+            <div class="col-empty">—</div>
+          }
+          @for (
+            item of colItems(col.key);
+            track item.patientId + (item.appointmentId ?? item.encounterId ?? '')
+          ) {
+            <div
+              class="patient-card"
+              role="button"
+              tabindex="0"
+              (click)="patientClicked.emit(item.patientId)"
+              (keydown.enter)="patientClicked.emit(item.patientId)"
+            >
+              <div class="card-name">{{ item.patientName }}</div>
+              @if (item.appointmentTime) {
+                <div class="card-meta">{{ item.appointmentTime }}</div>
+              }
+              @if (item.providerName) {
+                <div class="card-meta">{{ item.providerName }}</div>
+              }
+              @if (item.waitMinutes > 0) {
+                <div class="card-wait">{{ item.waitMinutes }}m wait</div>
+              }
+              <div class="card-flags">
+                @if (item.hasInsuranceIssue) {
+                  <span class="flag-dot ins" title="Insurance issue"></span>
+                }
+                @if (item.hasOutstandingBalance) {
+                  <span class="flag-dot bal" title="Outstanding balance"></span>
+                }
+              </div>
+            </div>
+          }
+        </div>
+      </div>
+    }
+  </div>
+}

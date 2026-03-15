@@ -498,6 +498,17 @@ export const routes: Routes = [
         loadComponent: () => import('./audit-logs/audit-logs').then((m) => m.AuditLogsComponent),
       },
 
+      // Reception / Front Desk Cockpit
+      {
+        path: 'reception',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_RECEPTIONIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./reception/reception-cockpit').then((m) => m.ReceptionCockpitComponent),
+      },
+
       // Administration
       {
         path: 'admin',

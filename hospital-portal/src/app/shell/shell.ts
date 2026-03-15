@@ -183,6 +183,16 @@ export class ShellComponent implements OnInit, OnDestroy {
     if (this.permissions.hasPermission('View Audit Logs')) {
       items.push({ icon: 'policy', label: 'Audit Logs', route: '/audit-logs' });
     }
+    if (
+      this.auth.hasAnyRole([
+        'ROLE_RECEPTIONIST',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({ icon: 'space_dashboard', label: 'Front Desk', route: '/reception' });
+    }
 
     // Doctor role: hide admin/nurse-specific entries for a cleaner sidebar
     const isDoctor = this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON']);
