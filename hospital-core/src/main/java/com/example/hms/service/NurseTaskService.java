@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.payload.dto.nurse.NurseAnnouncementDTO;
+import com.example.hms.payload.dto.nurse.NurseDashboardSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO;
@@ -40,4 +41,6 @@ public interface NurseTaskService {
         UUID hospitalId,
         boolean completed
     );
+
+    NurseDashboardSummaryDTO getDashboardSummary(UUID nurseUserId, UUID hospitalId);
 }
