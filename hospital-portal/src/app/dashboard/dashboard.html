@@ -59,12 +59,6 @@
               aria-label="Search patients"
             />
           </div>
-          @if (totalInboxCount() > 0) {
-            <a routerLink="/notifications" class="notification-bell-btn">
-              <span class="material-symbols-outlined">notifications</span>
-              <span class="notif-badge">{{ totalInboxCount() }}</span>
-            </a>
-          }
         </div>
       }
     </div>
