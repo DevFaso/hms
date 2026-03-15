@@ -191,3 +191,31 @@
     font-size: 0.75rem;
   }
 }
+
+// Expanded detail panel (shown below the card when clicked)
+.notif-expanded-panel {
+  border: 1px solid #bfdbfe;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  background: #eff6ff;
+  padding: 0.875rem 1.25rem;
+  margin-top: -8px;
+
+  .notif-expanded-message {
+    margin: 0 0 6px;
+    font-size: 0.875rem;
+    color: #1e293b;
+    line-height: 1.6;
+    white-space: pre-wrap;
+  }
+
+  .notif-expanded-time {
+    font-size: 0.75rem;
+    color: #64748b;
+  }
+}
+
+.notif-card.expanded {
+  border-radius: 12px 12px 0 0;
+  border-bottom-color: transparent;
+}

@@ -38,15 +38,16 @@
         <button
           class="notif-card"
           [class.unread]="!notif.read"
-          (click)="markRead(notif)"
-          (keydown.enter)="markRead(notif)"
+          [class.expanded]="expandedId() === notif.id"
+          (click)="onNotifClick(notif)"
+          (keydown.enter)="onNotifClick(notif)"
           type="button"
         >
           <div class="notif-icon-wrap" [class]="getTypeClass(notif.type)">
             <span class="material-symbols-outlined">{{ getTypeIcon(notif.type) }}</span>
           </div>
           <div class="notif-content">
-            <h4 class="notif-title">{{ notif.title }}</h4>
+            <h4 class="notif-title">{{ notif.title || notif.message }}</h4>
             <p class="notif-message">{{ notif.message }}</p>
             <span class="notif-time">{{ notif.createdAt | date: 'medium' }}</span>
           </div>
@@ -54,6 +55,12 @@
             <div class="unread-dot"></div>
           }
         </button>
+        @if (expandedId() === notif.id) {
+          <div class="notif-expanded-panel">
+            <p class="notif-expanded-message">{{ notif.message }}</p>
+            <span class="notif-expanded-time">{{ notif.createdAt | date: 'long' }}</span>
+          </div>
+        }
       }
     </div>
   }

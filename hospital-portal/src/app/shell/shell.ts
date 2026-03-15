@@ -33,6 +33,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   protected readonly idle = inject(IdleService);
   private readonly navOrder = inject(NavOrderService);
   private notifSub?: Subscription;
+  private readCountSub?: Subscription;
 
   sidebarCollapsed = signal(false);
   profileMenuOpen = signal(false);
@@ -220,11 +221,18 @@ export class ShellComponent implements OnInit, OnDestroy {
         this.recentNotifications.update((list) => [n, ...list].slice(0, 10));
         this.unreadCount.update((c) => c + 1);
       });
+      this.readCountSub = this.notifService.getReadStream().subscribe(() => {
+        this.unreadCount.update((c) => Math.max(0, c - 1));
+      });
+      this.notifService.getAllReadStream().subscribe(() => {
+        this.unreadCount.set(0);
+      });
     }
   }
 
   ngOnDestroy(): void {
     this.notifSub?.unsubscribe();
+    this.readCountSub?.unsubscribe();
     this.notifService.disconnectWebSocket();
     this.idle.stop();
   }

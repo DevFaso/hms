@@ -7,6 +7,7 @@ import { AuthService } from '../auth/auth.service';
 
 export interface Notification {
   id: string;
+  title?: string;
   message: string;
   type: string;
   read: boolean;
@@ -26,6 +27,8 @@ export interface NotificationPage {
 export class NotificationService {
   private stompClient: Client | null = null;
   private readonly notificationSubject = new Subject<Notification>();
+  private readonly readSubject = new Subject<string>(); // emits id when marked read
+  private readonly allReadSubject = new Subject<void>();
   private readonly http = inject(HttpClient);
   private readonly auth = inject(AuthService);
 
@@ -50,6 +53,26 @@ export class NotificationService {
 
   markAsRead(id: string): Observable<void> {
     return this.http.put<void>(`/notifications/${id}/read`, {});
+  }
+
+  markAsReadAndNotify(id: string): void {
+    this.markAsRead(id).subscribe({
+      next: () => this.readSubject.next(id),
+    });
+  }
+
+  markAllReadAndNotify(): Observable<void> {
+    const obs = this.http.patch<void>('/notifications/read-all', {});
+    obs.subscribe({ next: () => this.allReadSubject.next() });
+    return obs;
+  }
+
+  getReadStream(): Observable<string> {
+    return this.readSubject.asObservable();
+  }
+
+  getAllReadStream(): Observable<void> {
+    return this.allReadSubject.asObservable();
   }
 
   connectWebSocket(): void {

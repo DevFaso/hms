@@ -1,16 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
-
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  type: string;
-  read: boolean;
-  createdAt: string;
-}
+import { Notification, NotificationService } from '../services/notification.service';
 
 @Component({
   selector: 'app-notification-list',
@@ -20,13 +11,14 @@ interface Notification {
   styleUrl: './notification-list.scss',
 })
 export class NotificationListComponent implements OnInit {
-  private readonly http = inject(HttpClient);
+  private readonly notifService = inject(NotificationService);
   private readonly toast = inject(ToastService);
 
   notifications = signal<Notification[]>([]);
   filtered = signal<Notification[]>([]);
   loading = signal(true);
   activeFilter = signal<'all' | 'unread' | 'read'>('all');
+  expandedId = signal<string | null>(null);
 
   ngOnInit(): void {
     this.load();
@@ -34,9 +26,9 @@ export class NotificationListComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.http.get<{ content: Notification[] }>('/notifications').subscribe({
-      next: (res) => {
-        const list = res?.content ?? (Array.isArray(res) ? res : []);
+    this.notifService.getNotifications({ page: 0, size: 100 }).subscribe({
+      next: (page) => {
+        const list = page?.content ?? [];
         this.notifications.set(list);
         this.applyFilter();
         this.loading.set(false);
@@ -61,24 +53,27 @@ export class NotificationListComponent implements OnInit {
     this.filtered.set(list);
   }
 
-  markRead(notif: Notification): void {
-    if (notif.read) return;
-    this.http.patch(`/notifications/${notif.id}/read`, {}).subscribe({
-      next: () => {
-        notif.read = true;
-        this.notifications.update((arr) => [...arr]);
-        this.applyFilter();
-      },
-    });
+  onNotifClick(notif: Notification): void {
+    // Toggle expanded panel
+    this.expandedId.set(this.expandedId() === notif.id ? null : notif.id);
+
+    // Mark as read (fires PUT + notifies shell to decrement badge)
+    if (!notif.read) {
+      notif.read = true;
+      this.notifications.update((arr) => [...arr]);
+      this.applyFilter();
+      this.notifService.markAsReadAndNotify(notif.id);
+    }
   }
 
   markAllRead(): void {
-    this.http.patch('/notifications/read-all', {}).subscribe({
+    this.notifService.markAllReadAndNotify().subscribe({
       next: () => {
         this.notifications.update((arr) => arr.map((n) => ({ ...n, read: true })));
         this.applyFilter();
         this.toast.success('All notifications marked as read');
       },
+      error: () => this.toast.error('Failed to mark all as read'),
     });
   }
 
