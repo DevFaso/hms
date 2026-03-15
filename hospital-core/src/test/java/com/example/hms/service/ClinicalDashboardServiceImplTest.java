@@ -18,6 +18,7 @@ import com.example.hms.repository.ChatMessageRepository;
 import com.example.hms.repository.DigitalSignatureRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
+import com.example.hms.repository.OnCallScheduleRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.StaffRepository;
 import org.junit.jupiter.api.Test;
@@ -57,6 +58,7 @@ class ClinicalDashboardServiceImplTest {
     @Mock private LabOrderRepository labOrderRepository;
     @Mock private DigitalSignatureRepository digitalSignatureRepository;
     @Mock private EncounterRepository encounterRepository;
+    @Mock private OnCallScheduleRepository onCallScheduleRepository;
 
     @InjectMocks
     private ClinicalDashboardServiceImpl service;
@@ -337,17 +339,57 @@ class ClinicalDashboardServiceImplTest {
 
     @Test
     void getOnCallStatus_shouldReturnStatusObject() {
-        OnCallStatusDTO status = service.getOnCallStatus(newUserId());
+        UUID userId = newUserId();
+        givenNoStaffFor(userId);
+
+        OnCallStatusDTO status = service.getOnCallStatus(userId);
 
         assertNotNull(status);
         assertNotNull(status.getIsOnCall(), "On-call flag should not be null");
     }
 
     @Test
-    void getOnCallStatus_shouldBeFalseWhenNoSchedulingSystem() {
-        OnCallStatusDTO status = service.getOnCallStatus(newUserId());
+    void getOnCallStatus_whenNoStaffRecord_shouldReturnNotOnCall() {
+        UUID userId = newUserId();
+        givenNoStaffFor(userId);
 
-        assertFalse(status.getIsOnCall(), "No scheduling system yet — always not on call");
+        OnCallStatusDTO status = service.getOnCallStatus(userId);
+
+        assertFalse(status.getIsOnCall(), "No staff record => not on call");
+    }
+
+    @Test
+    void getOnCallStatus_whenNoActiveSchedule_shouldReturnNotOnCall() {
+        UUID userId = newUserId();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+        when(onCallScheduleRepository.findActiveByStaffIdAt(eq(staffId), any(LocalDateTime.class)))
+                .thenReturn(Collections.emptyList());
+
+        OnCallStatusDTO status = service.getOnCallStatus(userId);
+
+        assertFalse(status.getIsOnCall(), "No active schedule => not on call");
+    }
+
+    @Test
+    void getOnCallStatus_whenActiveScheduleExists_shouldReturnOnCallWithTimes() {
+        UUID userId = newUserId();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        com.example.hms.model.OnCallSchedule schedule = mock(com.example.hms.model.OnCallSchedule.class);
+        LocalDateTime start = LocalDateTime.now().minusHours(1);
+        LocalDateTime end = LocalDateTime.now().plusHours(7);
+        when(schedule.getStartTime()).thenReturn(start);
+        when(schedule.getEndTime()).thenReturn(end);
+        when(onCallScheduleRepository.findActiveByStaffIdAt(eq(staffId), any(LocalDateTime.class)))
+                .thenReturn(List.of(schedule));
+
+        OnCallStatusDTO status = service.getOnCallStatus(userId);
+
+        assertTrue(status.getIsOnCall());
+        assertEquals(start, status.getShiftStart());
+        assertEquals(end, status.getShiftEnd());
     }
 
     // ========== generateKPIs() (via getClinicalDashboard) Tests ==========

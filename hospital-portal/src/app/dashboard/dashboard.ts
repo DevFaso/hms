@@ -8,7 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule, DatePipe, TitleCasePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { AppointmentService, AppointmentResponse } from '../services/appointment.service';
@@ -111,6 +111,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   readonly permissions = inject(PermissionService);
   private readonly appointmentService = inject(AppointmentService);
   private readonly patientService = inject(PatientService);
+  private readonly router = inject(Router);
   private readonly dashboardService = inject(DashboardService);
   private readonly portalService = inject(PatientPortalService);
 
@@ -170,6 +171,56 @@ export class DashboardComponent implements OnInit, OnDestroy {
   resultQueue = signal<DoctorResultQueueItem[]>([]);
   patientSnapshot = signal<PatientSnapshot | null>(null);
   snapshotDrawerOpen = signal(false);
+  specialization = signal<string | null>(null);
+  departmentName = signal<string | null>(null);
+
+  // ── Inbox accordion collapse state ──────────────────────────
+  inboxCollapsedSections = signal<Set<string>>(new Set());
+
+  readonly _inboxCategoryOrder = [
+    'MESSAGE',
+    'CRITICAL_RESULT',
+    'CONSULT_REQUEST',
+    'DOCUMENT_TO_SIGN',
+    'REFILL_REQUEST',
+    'PHARMACY_CLARIFICATION',
+    'TASK',
+  ];
+  readonly _inboxLabels: Record<string, string> = {
+    MESSAGE: 'Messages',
+    CRITICAL_RESULT: 'Critical Results',
+    CONSULT_REQUEST: 'Consult Requests',
+    DOCUMENT_TO_SIGN: 'Documents to Sign',
+    REFILL_REQUEST: 'Refill Requests',
+    PHARMACY_CLARIFICATION: 'Pharmacy Clarifications',
+    TASK: 'Tasks',
+  };
+  readonly _inboxIcons: Record<string, string> = {
+    MESSAGE: 'chat',
+    CRITICAL_RESULT: 'science',
+    CONSULT_REQUEST: 'forum',
+    DOCUMENT_TO_SIGN: 'draw',
+    REFILL_REQUEST: 'medication',
+    PHARMACY_CLARIFICATION: 'local_pharmacy',
+    TASK: 'task_alt',
+  };
+
+  inboxGrouped = computed(() => {
+    const groups = new Map<string, ClinicalInboxItem[]>();
+    for (const item of this.inboxItems()) {
+      const cat = item.category;
+      if (!groups.has(cat)) groups.set(cat, []);
+      groups.get(cat)!.push(item);
+    }
+    return this._inboxCategoryOrder
+      .filter((cat) => groups.has(cat))
+      .map((cat) => ({
+        category: cat,
+        label: this._inboxLabels[cat] ?? cat,
+        icon: this._inboxIcons[cat] ?? 'assignment',
+        items: groups.get(cat)!,
+      }));
+  });
 
   // ── Schedule & Patients ───────────────────────────────────────
   todayAppointments = signal<AppointmentResponse[]>([]);
@@ -431,6 +482,33 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // ── Quick Actions (permission-gated) ─────────────────────────
   quickActions = computed<QuickAction[]>(() => {
     const all: [string, QuickAction][] = [
+      // Doctor-priority shortcuts (appear first, dedup 'Start Encounter' on /encounters route)
+      ...(this.isDoctor()
+        ? ([
+            [
+              'Create Encounters',
+              {
+                icon: 'navigate_next',
+                label: 'Open Next Patient',
+                description: 'Open next waiting patient',
+                route: '/encounters',
+                color: '#059669',
+                bgColor: '#d1fae5',
+              },
+            ],
+            [
+              'Create Encounters',
+              {
+                icon: 'meeting_room',
+                label: 'Discharge Patient',
+                description: 'Initiate patient discharge',
+                route: '/admissions',
+                color: '#d97706',
+                bgColor: '#fef3c7',
+              },
+            ],
+          ] as [string, QuickAction][])
+        : []),
       [
         'Register Patients',
         {
@@ -1007,6 +1085,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.clockInterval) clearInterval(this.clockInterval);
   }
 
+  searchPatients(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const q = input.value.trim();
+    input.value = '';
+    if (q) {
+      this.router.navigate(['/patients'], { queryParams: { q } });
+    } else {
+      this.router.navigate(['/patients']);
+    }
+  }
+
   // ────────────────────────────────────────────────────────────
   // PRIVATE INITIALIZERS
   // ────────────────────────────────────────────────────────────
@@ -1102,6 +1191,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.inboxCounts.set(d.inboxCounts ?? null);
           this.onCallStatus.set(d.onCallStatus ?? null);
           this.roomedPatients.set(d.roomedPatients ?? []);
+          this.specialization.set(d.specialization ?? null);
+          this.departmentName.set(d.departmentName ?? null);
           done();
         },
         error: () => done(),
@@ -1176,10 +1267,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.scheduleLoading.set(false);
     }
 
-    // Recent patients (for roles with patient visibility)
+    // Recent patients (doctors see their own recently encountered patients)
     if (this.permissions.hasPermission('View Patient Records')) {
       pending++;
-      this.patientService.list().subscribe({
+      const recentObs = this.isDoctor()
+        ? this.dashboardService.getRecentPatients()
+        : this.patientService.list();
+      recentObs.subscribe({
         next: (patients) => {
           this.recentPatients.set(patients.slice(0, 6));
           done();
@@ -1272,6 +1366,44 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadDashboardData();
   }
 
+  toggleInboxSection(category: string): void {
+    this.inboxCollapsedSections.update((s) => {
+      const next = new Set(s);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  }
+
+  handleInboxAction(item: ClinicalInboxItem): void {
+    switch (item.actionType) {
+      case 'SIGN':
+        this.router.navigate(['/encounters']);
+        break;
+      case 'REPLY':
+        this.router.navigate(['/chat']);
+        break;
+      case 'REVIEW':
+        if (item.category === 'PHARMACY_CLARIFICATION') {
+          this.router.navigate(['/prescriptions']);
+        } else if (item.patientId) {
+          this.openPatientSnapshot(item.patientId);
+        }
+        break;
+      default:
+        if (item.patientId) this.openPatientSnapshot(item.patientId);
+    }
+  }
+
+  reloadWorklistForDate(date: string): void {
+    this.dashboardService.getWorklist(undefined, undefined, date).subscribe({
+      next: (items) => this.worklistItems.set(items),
+    });
+  }
+
   openPatientSnapshot(patientId: string): void {
     this.snapshotDrawerOpen.set(true);
     this.patientSnapshot.set(null);
@@ -1279,6 +1411,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: (s) => this.patientSnapshot.set(s),
       error: () => this.snapshotDrawerOpen.set(false),
     });
+  }
+
+  acknowledgeResult(resultId: string): void {
+    this.resultQueue.update((q) => q.filter((r) => r.id !== resultId));
   }
 
   closePatientSnapshot(): void {

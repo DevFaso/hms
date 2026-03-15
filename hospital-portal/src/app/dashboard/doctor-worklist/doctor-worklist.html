@@ -24,7 +24,43 @@
     }
   </div>
 
-  <!-- Worklist Table -->
+  <!-- Secondary Filters -->
+  <div class="wl-filters">
+    <input
+      type="date"
+      class="wl-filter-date"
+      [value]="dateFilter()"
+      (change)="setDateFilter($any($event.target).value)"
+    />
+    <select
+      class="wl-filter-select"
+      [value]="urgencyFilter()"
+      (change)="setUrgencyFilter($any($event.target).value)"
+    >
+      <option value="">All Urgencies</option>
+      <option value="EMERGENT">Emergent</option>
+      <option value="URGENT">Urgent</option>
+      <option value="ROUTINE">Routine</option>
+      <option value="LOW">Low</option>
+    </select>
+    @if (uniqueLocations().length > 0) {
+      <select
+        class="wl-filter-select"
+        [value]="locationFilter()"
+        (change)="setLocationFilter($any($event.target).value)"
+      >
+        <option value="">All Locations</option>
+        @for (loc of uniqueLocations(); track loc) {
+          <option [value]="loc">{{ loc }}</option>
+        }
+      </select>
+    }
+    @if (hasActiveFilters()) {
+      <button class="wl-filter-clear" title="Clear filters" (click)="clearFilters()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    }
+  </div>
   @if (filteredItems().length === 0) {
     <div class="wl-empty">
       <span class="material-symbols-outlined">checklist</span>
@@ -96,6 +132,24 @@
                 <span class="material-symbols-outlined">stethoscope</span>
               </a>
             }
+            <a
+              [routerLink]="['/lab/new']"
+              [queryParams]="{ patientId: item.patientId }"
+              class="wl-action-btn"
+              title="Order Labs"
+              (click)="$event.stopPropagation()"
+            >
+              <span class="material-symbols-outlined">science</span>
+            </a>
+            <a
+              [routerLink]="['/prescriptions/new']"
+              [queryParams]="{ patientId: item.patientId }"
+              class="wl-action-btn"
+              title="Write Rx"
+              (click)="$event.stopPropagation()"
+            >
+              <span class="material-symbols-outlined">medication</span>
+            </a>
           </div>
         </div>
       }

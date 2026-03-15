@@ -1,5 +1,6 @@
 package com.example.hms.repository;
 
+import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.model.LabResult;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -106,5 +107,8 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         UUID hospitalId,
         Pageable pageable
     );
+
+    /** Count CRITICAL (or any flag) results for orders placed by a given staff member. */
+    long countByLabOrder_OrderingStaff_IdAndAbnormalFlag(UUID staffId, AbnormalFlag abnormalFlag);
 }
 

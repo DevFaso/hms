@@ -14,6 +14,7 @@ import { DoctorResultQueueItem } from '../../services/dashboard.service';
 export class DoctorResultsPanelComponent {
   results = input<DoctorResultQueueItem[]>([]);
   patientSelected = output<string>();
+  resultAcknowledged = output<string>();
 
   criticalResults = computed(() => this.results().filter((r) => r.abnormalFlag === 'CRITICAL'));
   abnormalResults = computed(() => this.results().filter((r) => r.abnormalFlag === 'ABNORMAL'));
@@ -21,6 +22,10 @@ export class DoctorResultsPanelComponent {
 
   selectPatient(patientId: string): void {
     this.patientSelected.emit(patientId);
+  }
+
+  acknowledgeResult(resultId: string): void {
+    this.resultAcknowledged.emit(resultId);
   }
 
   formatDate(iso: string): string {

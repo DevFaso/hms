@@ -1,20 +1,27 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.SignatureStatus;
+import com.example.hms.enums.AdmissionStatus;
+import com.example.hms.model.Admission;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.clinical.CriticalStripDTO;
 import com.example.hms.payload.dto.clinical.DoctorWorklistItemDTO;
+import com.example.hms.model.PatientVitalSign;
+import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.ConsultationRepository;
 import com.example.hms.repository.DigitalSignatureRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
+import com.example.hms.repository.LabResultRepository;
+import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.StaffRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,8 +35,10 @@ import java.time.Period;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -45,7 +54,10 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
     private final AppointmentRepository appointmentRepository;
     private final ConsultationRepository consultationRepository;
     private final LabOrderRepository labOrderRepository;
+    private final LabResultRepository labResultRepository;
     private final DigitalSignatureRepository digitalSignatureRepository;
+    private final PatientVitalSignRepository patientVitalSignRepository;
+    private final AdmissionRepository admissionRepository;
 
     private static final int LONG_WAIT_THRESHOLD_MINUTES = 30;
 
@@ -59,9 +71,8 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         Staff staff = staffOpt.get();
         UUID staffId = staff.getId();
 
-        // Critical labs: completed lab orders (proxy for results available) — no abnormal flag
-        // field exists yet, so we just count completed orders as "review needed"
-        long criticalLabs = labOrderRepository.countByOrderingStaff_IdAndStatus(staffId, LabOrderStatus.COMPLETED);
+        // Critical labs: results flagged as CRITICAL by the lab (replaces proxy)
+        long criticalLabs = labResultRepository.countByLabOrder_OrderingStaff_IdAndAbnormalFlag(staffId, AbnormalFlag.CRITICAL);
 
         // Waiting > threshold: active encounters whose elapsed time > 30 min
         List<Encounter> activeEncounters = encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS);
@@ -93,13 +104,13 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
                 .pendingConsultsCount((int) Math.min(pendingConsults, Integer.MAX_VALUE))
                 .unsignedNotesCount((int) Math.min(unsignedNotes, Integer.MAX_VALUE))
                 .pendingOrderReviewCount((int) Math.min(pendingOrderReview, Integer.MAX_VALUE))
-                .activeSafetyAlertsCount(0) // stub — alert engine not yet implemented
+                .activeSafetyAlertsCount((int) Math.min(criticalLabs, Integer.MAX_VALUE)) // CRITICAL lab results = real safety alerts
                 .build();
     }
 
     @Override
-    public List<DoctorWorklistItemDTO> getWorklist(UUID userId, String status, String urgency) {
-        log.info("Building worklist for user: {} status={} urgency={}", userId, status, urgency);
+    public List<DoctorWorklistItemDTO> getWorklist(UUID userId, String status, String urgency, LocalDate date) {
+        log.info("Building worklist for user: {} status={} urgency={} date={}", userId, status, urgency, date);
         Optional<Staff> staffOpt = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId);
         if (staffOpt.isEmpty()) {
             return Collections.emptyList();
@@ -109,6 +120,17 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
 
         Set<UUID> seenPatients = new HashSet<>();
         List<DoctorWorklistItemDTO> items = new ArrayList<>();
+
+        // Build a map of patientId -> roomBed from active admissions for this physician
+        Map<UUID, String> patientRoomBed = new HashMap<>();
+        try {
+            admissionRepository.findByAdmittingProviderIdOrderByAdmissionDateTimeDesc(staffId)
+                    .stream()
+                    .filter(a -> a.getStatus() == AdmissionStatus.ACTIVE)
+                    .forEach(a -> patientRoomBed.putIfAbsent(a.getPatient().getId(), a.getRoomBed()));
+        } catch (Exception e) {
+            log.debug("Admission room/bed lookup unavailable: {}", e.getMessage());
+        }
 
         // 1. Active encounters
         List<EncounterStatus> encounterStatuses = List.of(
@@ -126,12 +148,13 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
                     continue;
                 }
 
-                items.add(buildWorklistItem(p, enc, mappedStatus));
+                items.add(buildWorklistItem(p, enc, mappedStatus, patientRoomBed));
             }
         }
 
         // 2. Today's appointments (not yet encountered)
-        List<Appointment> todayAppts = appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, LocalDate.now());
+        LocalDate worklistDate = date != null ? date : LocalDate.now();
+        List<Appointment> todayAppts = appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, worklistDate);
         for (Appointment appt : todayAppts) {
             Patient p = appt.getPatient();
             if (p == null || !seenPatients.add(p.getId())) continue;
@@ -198,11 +221,44 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         return items;
     }
 
-    private DoctorWorklistItemDTO buildWorklistItem(Patient p, Encounter enc, String mappedStatus) {
+    private DoctorWorklistItemDTO buildWorklistItem(Patient p, Encounter enc, String mappedStatus, Map<UUID, String> patientRoomBed) {
         int age = p.getDateOfBirth() != null ? Period.between(p.getDateOfBirth(), LocalDate.now()).getYears() : 0;
         int waitMinutes = enc.getEncounterDate() != null
                 ? (int) Math.min(Duration.between(enc.getEncounterDate(), LocalDateTime.now()).toMinutes(), Integer.MAX_VALUE)
                 : 0;
+
+        String location = enc.getDepartment() != null ? enc.getDepartment().getName() : null;
+
+        // Room / bed from active admission
+        String room = null;
+        String bed = null;
+        String rawRoomBed = patientRoomBed.get(p.getId());
+        if (rawRoomBed != null && !rawRoomBed.isBlank()) {
+            int slash = rawRoomBed.indexOf('/');
+            if (slash > 0) {
+                room = rawRoomBed.substring(0, slash).trim();
+                bed  = rawRoomBed.substring(slash + 1).trim();
+            } else {
+                room = rawRoomBed.trim();
+            }
+        }
+
+        String latestVitalsSummary = null;
+        try {
+            Optional<PatientVitalSign> vOpt =
+                    patientVitalSignRepository.findFirstByPatient_IdOrderByRecordedAtDesc(p.getId());
+            if (vOpt.isPresent()) {
+                PatientVitalSign v = vOpt.get();
+                List<String> vParts = new ArrayList<>();
+                if (v.getHeartRateBpm() != null) vParts.add("HR: " + v.getHeartRateBpm());
+                if (v.getSystolicBpMmHg() != null && v.getDiastolicBpMmHg() != null)
+                    vParts.add("BP: " + v.getSystolicBpMmHg() + "/" + v.getDiastolicBpMmHg());
+                if (v.getSpo2Percent() != null) vParts.add("SpO2: " + v.getSpo2Percent() + "%");
+                if (!vParts.isEmpty()) latestVitalsSummary = String.join(" \u00b7 ", vParts);
+            }
+        } catch (Exception ex) {
+            log.debug("Vitals query error for patient {}: {}", p.getId(), ex.getMessage());
+        }
 
         return DoctorWorklistItemDTO.builder()
                 .patientId(p.getId())
@@ -211,8 +267,12 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
                 .mrn(p.getId().toString())
                 .age(age)
                 .sex(p.getGender())
+                .room(room)
+                .bed(bed)
+                .location(location)
+                .latestVitalsSummary(latestVitalsSummary)
                 .chiefComplaint(enc.getNotes())
-                .urgency("ROUTINE")
+                .urgency(enc.getUrgency() != null ? enc.getUrgency().name() : "ROUTINE")
                 .encounterStatus(mappedStatus)
                 .waitMinutes(waitMinutes)
                 .updatedAt(enc.getUpdatedAt() != null ? enc.getUpdatedAt() : enc.getCreatedAt())

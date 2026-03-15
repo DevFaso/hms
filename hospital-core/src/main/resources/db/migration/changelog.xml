@@ -157,4 +157,42 @@
                  stripComments="true"/>
     </changeSet>
 
+
+    <!-- =================================================================
+         V12: Add force_username_change flag to security.users
+         Allows admins to require a username change on next login.
+         ================================================================= -->
+    <changeSet id="V12-add-force-username-change" author="hms-team" runOnChange="false">
+        <sqlFile path="V12__add_force_username_change.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V13: Add clinical-triage columns for Physician Cockpit
+         - lab.lab_results.abnormal_flag (NORMAL / ABNORMAL / CRITICAL)
+         - clinical.patients.code_status (FULL_CODE / DNR / DNI / COMFORT_ONLY)
+         - clinical.encounters.urgency (EMERGENT / URGENT / ROUTINE / LOW)
+         ================================================================= -->
+    <changeSet id="V13-add-abnormal-flag-code-status-encounter-urgency" author="hms-team" runOnChange="false">
+        <sqlFile path="V13__add_abnormal_flag_code_status_encounter_urgency.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V14: Add Physician Cockpit tables
+         - clinical.patient_diagnoses (active/historical diagnoses + ICD codes)
+         - clinical.clinical_alerts (patient safety + triage alerts)
+         - hospital.on_call_schedule (staff on-call roster with time range)
+         ================================================================= -->
+    <changeSet id="V14-add-patient-diagnoses-alerts-oncall" author="hms-team" runOnChange="false">
+        <sqlFile path="V14__add_patient_diagnoses_alerts_oncall.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

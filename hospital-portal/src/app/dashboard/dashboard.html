@@ -35,6 +35,38 @@
           </div>
         }
       </div>
+      @if (isDoctor()) {
+        <div class="doctor-hero-info">
+          @if (specialization()) {
+            <span class="doctor-chip specialty-chip">
+              <span class="material-symbols-outlined">medical_services</span>
+              {{ specialization() }}
+            </span>
+          }
+          @if (departmentName()) {
+            <span class="doctor-chip dept-chip">
+              <span class="material-symbols-outlined">domain</span>
+              {{ departmentName() }}
+            </span>
+          }
+          <div class="header-search-inline">
+            <span class="material-symbols-outlined">search</span>
+            <input
+              type="text"
+              placeholder="Search patients…"
+              class="header-search-input"
+              (keydown.enter)="searchPatients($event)"
+              aria-label="Search patients"
+            />
+          </div>
+          @if (totalInboxCount() > 0) {
+            <a routerLink="/notifications" class="notification-bell-btn">
+              <span class="material-symbols-outlined">notifications</span>
+              <span class="notif-badge">{{ totalInboxCount() }}</span>
+            </a>
+          }
+        </div>
+      }
     </div>
 
     <!-- Progress ring — clinicians only -->
@@ -566,6 +598,7 @@
         <app-doctor-worklist
           [items]="worklistItems()"
           (patientSelected)="openPatientSnapshot($event)"
+          (dateChanged)="reloadWorklistForDate($event)"
         />
 
         <!-- ── Patient Flow Board ── -->
@@ -699,43 +732,52 @@
             </div>
           } @else {
             <div class="inbox-items">
-              @for (item of inboxItems(); track item.id) {
-                <div
-                  class="inbox-row inbox-row-detailed"
-                  role="button"
-                  tabindex="0"
-                  (click)="item.patientId ? openPatientSnapshot(item.patientId) : null"
-                  (keydown.enter)="item.patientId ? openPatientSnapshot(item.patientId) : null"
-                >
-                  <div class="inbox-row-icon" [class]="'inbox-icon-' + item.category.toLowerCase()">
-                    <span class="material-symbols-outlined">{{
-                      item.category === 'MESSAGE'
-                        ? 'chat'
-                        : item.category === 'CRITICAL_RESULT'
-                          ? 'science'
-                          : item.category === 'CONSULT_REQUEST'
-                            ? 'forum'
-                            : item.category === 'REFILL_REQUEST'
-                              ? 'medication'
-                              : item.category === 'DOCUMENT_TO_SIGN'
-                                ? 'draw'
-                                : 'assignment'
+              @for (group of inboxGrouped(); track group.category) {
+                <div class="inbox-group">
+                  <button
+                    class="inbox-group-header"
+                    (click)="toggleInboxSection(group.category)"
+                    [attr.aria-expanded]="!inboxCollapsedSections().has(group.category)"
+                  >
+                    <span class="material-symbols-outlined inbox-group-icon">{{ group.icon }}</span>
+                    <span class="inbox-group-label">{{ group.label }}</span>
+                    <span class="count-badge count-badge-sm">{{ group.items.length }}</span>
+                    <span class="material-symbols-outlined inbox-chevron">{{
+                      inboxCollapsedSections().has(group.category) ? 'expand_more' : 'expand_less'
                     }}</span>
-                  </div>
-                  <div class="inbox-row-content">
-                    <span class="inbox-row-subject">{{ item.subject }}</span>
-                    @if (item.patientName) {
-                      <span class="inbox-row-patient">{{ item.patientName }}</span>
+                  </button>
+                  @if (!inboxCollapsedSections().has(group.category)) {
+                    @for (item of group.items; track item.id) {
+                      <div
+                        class="inbox-row inbox-row-detailed"
+                        role="button"
+                        tabindex="0"
+                        (click)="handleInboxAction(item)"
+                        (keydown.enter)="handleInboxAction(item)"
+                      >
+                        <div
+                          class="inbox-row-icon"
+                          [class]="'inbox-icon-' + item.category.toLowerCase()"
+                        >
+                          <span class="material-symbols-outlined">{{ group.icon }}</span>
+                        </div>
+                        <div class="inbox-row-content">
+                          <span class="inbox-row-subject">{{ item.subject }}</span>
+                          @if (item.patientName) {
+                            <span class="inbox-row-patient">{{ item.patientName }}</span>
+                          }
+                          <span class="inbox-row-source">{{ item.source }}</span>
+                        </div>
+                        @if (item.urgency === 'CRITICAL' || item.urgency === 'HIGH') {
+                          <span
+                            class="inbox-urgency-pill"
+                            [class.urgency-critical]="item.urgency === 'CRITICAL'"
+                          >
+                            {{ item.urgency }}
+                          </span>
+                        }
+                      </div>
                     }
-                    <span class="inbox-row-source">{{ item.source }}</span>
-                  </div>
-                  @if (item.urgency === 'CRITICAL' || item.urgency === 'HIGH') {
-                    <span
-                      class="inbox-urgency-pill"
-                      [class.urgency-critical]="item.urgency === 'CRITICAL'"
-                    >
-                      {{ item.urgency }}
-                    </span>
                   }
                 </div>
               }
@@ -747,6 +789,7 @@
         <app-doctor-results-panel
           [results]="resultQueue()"
           (patientSelected)="openPatientSnapshot($event)"
+          (resultAcknowledged)="acknowledgeResult($event)"
         />
 
         <!-- ── Recent Patients ── -->
@@ -761,10 +804,13 @@
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
-                <a
+                <div
                   class="patient-row"
-                  (click)="openPatientSnapshot(p.id); $event.preventDefault()"
-                  href="#"
+                  role="button"
+                  tabindex="0"
+                  (click)="openPatientSnapshot(p.id)"
+                  (keydown.enter)="openPatientSnapshot(p.id)"
+                  style="cursor: pointer"
                 >
                   <div
                     class="patient-avatar"
@@ -783,8 +829,21 @@
                       }
                     </span>
                   </div>
-                  <span class="material-symbols-outlined chevron">chevron_right</span>
-                </a>
+                  <div
+                    class="patient-row-actions"
+                    role="toolbar"
+                    tabindex="-1"
+                    (click)="$event.stopPropagation()"
+                    (keydown.enter)="$event.stopPropagation()"
+                  >
+                    <a class="row-action-btn" routerLink="/encounters/new" title="New Encounter">
+                      <span class="material-symbols-outlined">stethoscope</span>
+                    </a>
+                    <a class="row-action-btn" routerLink="/lab" title="View Results">
+                      <span class="material-symbols-outlined">science</span>
+                    </a>
+                  </div>
+                </div>
               }
             </div>
           </section>

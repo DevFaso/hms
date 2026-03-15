@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.enums.ConsultationStatus;
 import com.example.hms.enums.ConsultationUrgency;
 import com.example.hms.enums.EncounterStatus;
@@ -17,10 +18,12 @@ import com.example.hms.payload.dto.clinical.ClinicalInboxItemDTO;
 import com.example.hms.payload.dto.clinical.DoctorResultQueueItemDTO;
 import com.example.hms.repository.ChatMessageRepository;
 import com.example.hms.repository.ConsultationRepository;
+import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.repository.DigitalSignatureRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
+import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.StaffRepository;
 import org.junit.jupiter.api.Test;
@@ -56,6 +59,7 @@ class ResultReviewServiceImplTest {
     @Mock private RefillRequestRepository refillRequestRepository;
     @Mock private DigitalSignatureRepository digitalSignatureRepository;
     @Mock private EncounterRepository encounterRepository;
+    @Mock private PrescriptionRepository prescriptionRepository;
 
     @InjectMocks
     private ResultReviewServiceImpl service;
@@ -118,7 +122,7 @@ class ResultReviewServiceImplTest {
         LabResult labResult = mock(LabResult.class);
         when(labResult.getId()).thenReturn(resultId);
         when(labResult.getResultValue()).thenReturn("12.5 g/dL");
-        when(labResult.isAcknowledged()).thenReturn(false);
+        when(labResult.getAbnormalFlag()).thenReturn(AbnormalFlag.ABNORMAL);
         when(labResult.getResultDate()).thenReturn(LocalDateTime.now().minusHours(2));
 
         when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
@@ -157,7 +161,6 @@ class ResultReviewServiceImplTest {
         LabResult labResult = mock(LabResult.class);
         when(labResult.getId()).thenReturn(UUID.randomUUID());
         when(labResult.getResultValue()).thenReturn("Normal");
-        when(labResult.isAcknowledged()).thenReturn(true);
         when(labResult.getResultDate()).thenReturn(LocalDateTime.now());
 
         when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
@@ -220,17 +223,17 @@ class ResultReviewServiceImplTest {
         when(order.getPatient()).thenReturn(patient);
         when(order.getLabTestDefinition()).thenReturn(null);
 
-        // Two results: one acknowledged (NORMAL), one not (ABNORMAL)
+        // Two results: one NORMAL, one ABNORMAL
         LabResult normalResult = mock(LabResult.class);
         when(normalResult.getId()).thenReturn(UUID.randomUUID());
         when(normalResult.getResultValue()).thenReturn("Normal");
-        when(normalResult.isAcknowledged()).thenReturn(true);
+        when(normalResult.getAbnormalFlag()).thenReturn(AbnormalFlag.NORMAL);
         when(normalResult.getResultDate()).thenReturn(LocalDateTime.now());
 
         LabResult abnormalResult = mock(LabResult.class);
         when(abnormalResult.getId()).thenReturn(UUID.randomUUID());
         when(abnormalResult.getResultValue()).thenReturn("Critical");
-        when(abnormalResult.isAcknowledged()).thenReturn(false);
+        when(abnormalResult.getAbnormalFlag()).thenReturn(AbnormalFlag.ABNORMAL);
         when(abnormalResult.getResultDate()).thenReturn(LocalDateTime.now().minusHours(1));
 
         when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
@@ -686,13 +689,11 @@ class ResultReviewServiceImplTest {
         LabResult result1 = mock(LabResult.class);
         when(result1.getId()).thenReturn(UUID.randomUUID());
         when(result1.getResultValue()).thenReturn("5");
-        when(result1.isAcknowledged()).thenReturn(false);
         when(result1.getResultDate()).thenReturn(null);
 
         LabResult result2 = mock(LabResult.class);
         when(result2.getId()).thenReturn(UUID.randomUUID());
         when(result2.getResultValue()).thenReturn("10");
-        when(result2.isAcknowledged()).thenReturn(false);
         when(result2.getResultDate()).thenReturn(LocalDateTime.now());
 
         when(labOrderRepository.findByOrderingStaff_Id(staffId)).thenReturn(List.of(order));
@@ -703,5 +704,44 @@ class ResultReviewServiceImplTest {
         assertEquals(2, results.size());
         // result with date should come first, null date last
         assertNotNull(results.get(0).getResultedAt());
+    }
+
+    @Test
+    void getInboxItems_withPharmacyClarifications_shouldAddHighUrgencyItem() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        when(prescriptionRepository.countByStaff_IdAndStatus(staffId, PrescriptionStatus.PENDING_CLARIFICATION))
+                .thenReturn(2L);
+
+        List<ClinicalInboxItemDTO> result = service.getInboxItems(userId);
+
+        ClinicalInboxItemDTO pharmItem = result.stream()
+                .filter(i -> "PHARMACY_CLARIFICATION".equals(i.getCategory()))
+                .findFirst().orElse(null);
+        assertNotNull(pharmItem);
+        assertEquals("HIGH", pharmItem.getUrgency());
+        assertEquals("2 prescriptions need clarification", pharmItem.getSubject());
+        assertEquals("REVIEW", pharmItem.getActionType());
+        assertEquals("Pharmacy", pharmItem.getSource());
+    }
+
+    @Test
+    void getInboxItems_withSinglePharmacyClarification_shouldUseSingularLabel() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        when(prescriptionRepository.countByStaff_IdAndStatus(staffId, PrescriptionStatus.PENDING_CLARIFICATION))
+                .thenReturn(1L);
+
+        List<ClinicalInboxItemDTO> result = service.getInboxItems(userId);
+
+        ClinicalInboxItemDTO pharmItem = result.stream()
+                .filter(i -> "PHARMACY_CLARIFICATION".equals(i.getCategory()))
+                .findFirst().orElse(null);
+        assertNotNull(pharmItem);
+        assertEquals("1 prescription need clarification", pharmItem.getSubject());
     }
 }

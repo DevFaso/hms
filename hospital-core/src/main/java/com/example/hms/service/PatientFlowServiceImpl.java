@@ -31,9 +31,10 @@ public class PatientFlowServiceImpl implements PatientFlowService {
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
 
-    /** Column order for the flow board. */
+    /** Column order for the flow board (7 lanes matching frontend). */
     private static final List<String> FLOW_COLUMNS = List.of(
-            "ARRIVED", "IN_PROGRESS", "COMPLETED", "CANCELLED"
+            "ARRIVED", "IN_PROGRESS", "WAITING_FOR_PHYSICIAN",
+            "AWAITING_RESULTS", "READY_FOR_DISCHARGE", "COMPLETED", "CANCELLED"
     );
 
     @Override
@@ -66,13 +67,22 @@ public class PatientFlowServiceImpl implements PatientFlowService {
                 long elapsedMinutes = enc.getEncounterDate() != null
                         ? Duration.between(enc.getEncounterDate(), LocalDateTime.now()).toMinutes()
                         : 0;
+                long elapsed = Math.max(elapsedMinutes, 0);
+
+                // Prefer explicit clinical urgency; fall back to elapsed-time derivation
+                String derivedUrgency;
+                if (enc.getUrgency() != null) {
+                    derivedUrgency = enc.getUrgency().name();
+                } else if (elapsed >= 60) derivedUrgency = "EMERGENT";
+                else if (elapsed >= 30) derivedUrgency = "URGENT";
+                else derivedUrgency = "ROUTINE";
 
                 flow.get(column).add(PatientFlowItemDTO.builder()
                         .patientId(p.getId())
                         .encounterId(enc.getId())
                         .patientName(p.getFirstName() + " " + p.getLastName())
-                        .elapsedMinutes(Math.max(elapsedMinutes, 0))
-                        .urgency("ROUTINE")
+                        .elapsedMinutes(elapsed)
+                        .urgency(derivedUrgency)
                         .state(column)
                         .build());
             }

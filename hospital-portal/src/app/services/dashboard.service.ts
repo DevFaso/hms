@@ -46,6 +46,8 @@ export interface ClinicalDashboard {
   inboxCounts: InboxCounts;
   onCallStatus: OnCallStatus;
   roomedPatients: RoomedPatient[];
+  specialization?: string;
+  departmentName?: string;
 }
 
 export interface DashboardKPI {
@@ -235,6 +237,17 @@ export class DashboardService {
     );
   }
 
+  getRecentPatients(): Observable<import('../services/patient.service').PatientResponse[]> {
+    return this.http
+      .get<
+        ApiWrapper<import('../services/patient.service').PatientResponse[]>
+      >('/api/me/recent-patients')
+      .pipe(
+        map((res) => res.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
   getOnCallStatus(): Observable<OnCallStatus> {
     return this.http
       .get<ApiWrapper<OnCallStatus>>('/api/me/on-call-status')
@@ -249,10 +262,11 @@ export class DashboardService {
       .pipe(map((res) => res.data));
   }
 
-  getWorklist(status?: string, urgency?: string): Observable<DoctorWorklistItem[]> {
+  getWorklist(status?: string, urgency?: string, date?: string): Observable<DoctorWorklistItem[]> {
     let params = new HttpParams();
     if (status) params = params.set('status', status);
     if (urgency) params = params.set('urgency', urgency);
+    if (date) params = params.set('date', date);
     return this.http.get<ApiWrapper<DoctorWorklistItem[]>>('/api/me/worklist', { params }).pipe(
       map((res) => res.data ?? []),
       catchError(() => of([])),

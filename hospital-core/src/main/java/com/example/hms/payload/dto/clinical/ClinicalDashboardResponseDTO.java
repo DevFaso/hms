@@ -25,4 +25,8 @@ public class ClinicalDashboardResponseDTO {
     private OnCallStatusDTO onCallStatus;
 
     private List<RoomedPatientDTO> roomedPatients;
+
+    /** Doctor identity enrichment */
+    private String specialization;
+    private String departmentName;
 }

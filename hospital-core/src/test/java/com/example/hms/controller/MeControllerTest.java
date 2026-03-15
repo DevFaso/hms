@@ -700,26 +700,26 @@ class MeControllerTest {
     void getWorklist_withoutFilters_shouldReturnAllItems() {
         List<DoctorWorklistItemDTO> items = List.of(
                 DoctorWorklistItemDTO.builder().patientName("Pat A").encounterStatus("IN_PROGRESS").build());
-        when(doctorWorklistService.getWorklist(testUserId, null, null)).thenReturn(items);
+        when(doctorWorklistService.getWorklist(testUserId, null, null, null)).thenReturn(items);
 
         ResponseEntity<ApiResponseWrapper<List<DoctorWorklistItemDTO>>> response =
-                controller.getWorklist(null, null, doctorAuth);
+                controller.getWorklist(null, null, null, doctorAuth);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(1, requireBody(response).getData().size());
-        verify(doctorWorklistService).getWorklist(testUserId, null, null);
+        verify(doctorWorklistService).getWorklist(testUserId, null, null, null);
     }
 
     @Test
     void getWorklist_withStatusAndUrgency_shouldPassFilters() {
-        when(doctorWorklistService.getWorklist(testUserId, "IN_PROGRESS", "URGENT")).thenReturn(List.of());
+        when(doctorWorklistService.getWorklist(testUserId, "IN_PROGRESS", "URGENT", null)).thenReturn(List.of());
 
         ResponseEntity<ApiResponseWrapper<List<DoctorWorklistItemDTO>>> response =
-                controller.getWorklist("IN_PROGRESS", "URGENT", doctorAuth);
+                controller.getWorklist("IN_PROGRESS", "URGENT", null, doctorAuth);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertTrue(requireBody(response).getData().isEmpty());
-        verify(doctorWorklistService).getWorklist(testUserId, "IN_PROGRESS", "URGENT");
+        verify(doctorWorklistService).getWorklist(testUserId, "IN_PROGRESS", "URGENT", null);
     }
 
     // ========== GET /api/me/patient-flow ==========

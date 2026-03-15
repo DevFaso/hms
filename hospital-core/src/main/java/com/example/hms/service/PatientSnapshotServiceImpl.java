@@ -4,6 +4,7 @@ import com.example.hms.model.LabOrder;
 import com.example.hms.model.LabResult;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientAllergy;
+import com.example.hms.model.PatientDiagnosis;
 import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Prescription;
 import com.example.hms.payload.dto.clinical.PatientSnapshotDTO;
@@ -11,6 +12,7 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.PatientAllergyRepository;
+import com.example.hms.repository.PatientDiagnosisRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
@@ -41,6 +43,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     private final LabOrderRepository labOrderRepository;
     private final LabResultRepository labResultRepository;
     private final EncounterRepository encounterRepository;
+    private final PatientDiagnosisRepository patientDiagnosisRepository;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
@@ -68,9 +71,24 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             allergies.add(patient.getAllergies());
         }
 
-        // Active diagnoses from chronic conditions
+        // Active diagnoses — prefer structured diagnosis records; fall back to chronicConditions string
         List<String> diagnoses = new ArrayList<>();
-        if (patient.getChronicConditions() != null && !patient.getChronicConditions().isBlank()) {
+        try {
+            List<PatientDiagnosis> structured =
+                    patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE");
+            if (!structured.isEmpty()) {
+                for (PatientDiagnosis d : structured) {
+                    String label = d.getIcdCode() != null
+                            ? d.getIcdCode() + " – " + d.getDescription()
+                            : d.getDescription();
+                    diagnoses.add(label);
+                }
+            }
+        } catch (Exception e) {
+            log.debug("PatientDiagnosis query error: {}", e.getMessage());
+        }
+        // Fallback: parse legacy chronicConditions free-text field when no structured records exist
+        if (diagnoses.isEmpty() && patient.getChronicConditions() != null && !patient.getChronicConditions().isBlank()) {
             for (String cond : patient.getChronicConditions().split("[,;]")) {
                 String trimmed = cond.trim();
                 if (!trimmed.isEmpty()) diagnoses.add(trimmed);
@@ -120,7 +138,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                     .forEach(r -> labs.add(PatientSnapshotDTO.LabItem.builder()
                             .test(r.getLabOrder().getLabTestDefinition() != null ? r.getLabOrder().getLabTestDefinition().getName() : "Lab Test")
                             .value(r.getResultValue())
-                            .flag(r.isAcknowledged() ? "NORMAL" : "REVIEW")
+                            .flag(r.getAbnormalFlag() != null ? r.getAbnormalFlag().name() : (r.isAcknowledged() ? "NORMAL" : "REVIEW"))
                             .date(r.getResultDate() != null ? r.getResultDate().format(DATE_FMT) : "")
                             .build()));
         } catch (Exception e) {
@@ -159,19 +177,43 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             log.debug("Care team query error: {}", e.getMessage());
         }
 
+        List<PatientSnapshotDTO.NoteItem> recentNotes = new ArrayList<>();
+        try {
+            encounterRepository.findByPatient_Id(patientId).stream()
+                    .filter(e -> e.getNotes() != null && !e.getNotes().isBlank())
+                    .sorted(java.util.Comparator.comparing(
+                            e -> e.getEncounterDate() != null ? e.getEncounterDate() : java.time.LocalDateTime.MIN,
+                            java.util.Comparator.reverseOrder()))
+                    .limit(5)
+                    .forEach(e -> {
+                        String snippet = e.getNotes().length() > 200
+                                ? e.getNotes().substring(0, 200) + "…"
+                                : e.getNotes();
+                        recentNotes.add(PatientSnapshotDTO.NoteItem.builder()
+                                .author(e.getStaff() != null ? e.getStaff().getFullName() : "Unknown")
+                                .type(e.getEncounterType() != null ? e.getEncounterType().name() : "Encounter")
+                                .date(e.getEncounterDate() != null ? e.getEncounterDate().format(DATE_FMT) : "")
+                                .snippet(snippet)
+                                .build());
+                    });
+        } catch (Exception e) {
+            log.debug("Recent notes query error: {}", e.getMessage());
+        }
+
         return PatientSnapshotDTO.builder()
                 .patientId(patient.getId())
                 .name(patient.getFirstName() + " " + patient.getLastName())
                 .age(age)
                 .sex(patient.getGender())
                 .mrn(patient.getId().toString())
+                .codeStatus(patient.getCodeStatus())
                 .allergies(allergies)
                 .activeDiagnoses(diagnoses)
                 .activeMedications(medications)
                 .recentVitals(vitals)
                 .latestLabs(labs)
                 .pendingOrders(pendingOrders)
-                .recentNotes(Collections.emptyList())
+                .recentNotes(recentNotes)
                 .careTeam(careTeam)
                 .build();
     }
