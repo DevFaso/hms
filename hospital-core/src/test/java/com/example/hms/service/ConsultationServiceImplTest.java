@@ -13,6 +13,8 @@ import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.consultation.ConsultationRequestDTO;
 import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
 import com.example.hms.payload.dto.consultation.ConsultationUpdateDTO;
+import com.example.hms.payload.dto.consultation.CompleteConsultationRequestDTO;
+import com.example.hms.service.NotificationService;
 import com.example.hms.repository.ConsultationRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
@@ -50,6 +52,7 @@ class ConsultationServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private EncounterRepository encounterRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks
     private ConsultationServiceImpl service;
@@ -440,7 +443,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.acknowledgeConsultation(consultationId, consultantId))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("already been acknowledged");
+                    .hasMessageContaining("ACKNOWLEDGED");
         }
     }
 
@@ -508,7 +511,7 @@ class ConsultationServiceImplTest {
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
             when(consultationRepository.save(any(Consultation.class))).thenAnswer(inv -> inv.getArgument(0));
 
-            ConsultationUpdateDTO updateDTO = ConsultationUpdateDTO.builder()
+            CompleteConsultationRequestDTO updateDTO = CompleteConsultationRequestDTO.builder()
                     .consultantNote("Final note")
                     .recommendations("Discharge")
                     .followUpRequired(false)
@@ -527,7 +530,7 @@ class ConsultationServiceImplTest {
             Consultation consultation = buildConsultation(ConsultationStatus.COMPLETED);
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
 
-            ConsultationUpdateDTO updateDTO = ConsultationUpdateDTO.builder().build();
+            CompleteConsultationRequestDTO updateDTO = CompleteConsultationRequestDTO.builder().recommendations("x").build();
 
             assertThatThrownBy(() -> service.completeConsultation(consultationId, updateDTO))
                     .isInstanceOf(BusinessException.class)
@@ -540,7 +543,7 @@ class ConsultationServiceImplTest {
             Consultation consultation = buildConsultation(ConsultationStatus.CANCELLED);
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
 
-            ConsultationUpdateDTO updateDTO = ConsultationUpdateDTO.builder().build();
+            CompleteConsultationRequestDTO updateDTO = CompleteConsultationRequestDTO.builder().recommendations("x").build();
 
             assertThatThrownBy(() -> service.completeConsultation(consultationId, updateDTO))
                     .isInstanceOf(BusinessException.class)

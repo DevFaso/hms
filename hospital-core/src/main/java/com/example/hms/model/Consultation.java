@@ -133,4 +133,19 @@ public class Consultation extends BaseEntity {
     @Column(name = "is_curbside")
     @Builder.Default
     private Boolean isCurbside = Boolean.FALSE;
+
+    @Column(name = "assigned_at")
+    private LocalDateTime assignedAt;
+
+    @Column(name = "assigned_by_id")
+    private java.util.UUID assignedById;
+
+    @Column(name = "started_at")
+    private LocalDateTime startedAt;
+
+    @Column(name = "declined_at")
+    private LocalDateTime declinedAt;
+
+    @Column(name = "decline_reason", columnDefinition = "TEXT")
+    private String declineReason;
 }

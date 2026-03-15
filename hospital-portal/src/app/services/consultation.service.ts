@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 
 export type ConsultationStatus =
   | 'REQUESTED'
+  | 'ASSIGNED'
   | 'ACKNOWLEDGED'
   | 'SCHEDULED'
   | 'IN_PROGRESS'
@@ -50,6 +51,11 @@ export interface ConsultationResponse {
   followUpInstructions: string;
   slaDueBy: string;
   isCurbside: boolean;
+  assignedAt: string;
+  assignedById: string;
+  startedAt: string;
+  declinedAt: string;
+  declineReason: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -77,6 +83,19 @@ export interface ConsultationUpdateRequest {
   recommendations?: string;
   followUpRequired?: boolean;
   followUpInstructions?: string;
+}
+
+export interface ConsultationStats {
+  total: number;
+  requested: number;
+  active: number;
+  completed: number;
+  cancelled: number;
+  declined: number;
+  overdue: number;
+  avgHoursToAssign: number;
+  avgHoursToComplete: number;
+  bySpecialty: Record<string, number>;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -119,23 +138,84 @@ export class ConsultationService {
     return this.http.get<ConsultationResponse[]>(`${this.baseUrl}/assigned-to/${consultantId}`);
   }
 
-  acknowledge(id: string, consultantId: string): Observable<ConsultationResponse> {
-    return this.http.post<ConsultationResponse>(`${this.baseUrl}/${id}/acknowledge`, {
-      consultantId,
-    });
+  acknowledge(id: string): Observable<ConsultationResponse> {
+    return this.http.post<ConsultationResponse>(`${this.baseUrl}/${id}/acknowledge`, {});
   }
 
   update(id: string, req: ConsultationUpdateRequest): Observable<ConsultationResponse> {
     return this.http.put<ConsultationResponse>(`${this.baseUrl}/${id}`, req);
   }
 
-  complete(id: string, data: ConsultationUpdateRequest): Observable<ConsultationResponse> {
+  complete(
+    id: string,
+    data: {
+      recommendations: string;
+      consultantNote?: string;
+      followUpRequired?: boolean;
+      followUpInstructions?: string;
+    },
+  ): Observable<ConsultationResponse> {
     return this.http.post<ConsultationResponse>(`${this.baseUrl}/${id}/complete`, data);
+  }
+
+  schedule(
+    id: string,
+    scheduledAt: string,
+    scheduleNote?: string,
+  ): Observable<ConsultationResponse> {
+    return this.http.post<ConsultationResponse>(`${this.baseUrl}/${id}/schedule`, {
+      scheduledAt,
+      scheduleNote,
+    });
+  }
+
+  start(id: string): Observable<ConsultationResponse> {
+    return this.http.post<ConsultationResponse>(`${this.baseUrl}/${id}/start`, {});
+  }
+
+  decline(id: string, declineReason: string): Observable<ConsultationResponse> {
+    return this.http.post<ConsultationResponse>(`${this.baseUrl}/${id}/decline`, { declineReason });
   }
 
   cancel(id: string, reason: string): Observable<ConsultationResponse> {
     return this.http.post<ConsultationResponse>(`${this.baseUrl}/${id}/cancel`, {
       cancellationReason: reason,
     });
+  }
+
+  assign(
+    id: string,
+    consultantId: string,
+    assignmentNote?: string,
+  ): Observable<ConsultationResponse> {
+    return this.http.post<ConsultationResponse>(`${this.baseUrl}/${id}/assign`, {
+      consultantId,
+      assignmentNote,
+    });
+  }
+
+  reassign(
+    id: string,
+    consultantId: string,
+    reassignmentReason: string,
+  ): Observable<ConsultationResponse> {
+    return this.http.post<ConsultationResponse>(`${this.baseUrl}/${id}/reassign`, {
+      consultantId,
+      reassignmentReason,
+    });
+  }
+
+  getMine(): Observable<ConsultationResponse[]> {
+    return this.http.get<ConsultationResponse[]>(`${this.baseUrl}/mine`);
+  }
+
+  getOverdue(hospitalId?: string): Observable<ConsultationResponse[]> {
+    const params = hospitalId ? `?hospitalId=${hospitalId}` : '';
+    return this.http.get<ConsultationResponse[]>(`${this.baseUrl}/overdue${params}`);
+  }
+
+  getStats(hospitalId?: string): Observable<ConsultationStats> {
+    const params = hospitalId ? `?hospitalId=${hospitalId}` : '';
+    return this.http.get<ConsultationStats>(`${this.baseUrl}/stats${params}`);
   }
 }

@@ -9,8 +9,10 @@ import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
+import com.example.hms.payload.dto.consultation.CompleteConsultationRequestDTO;
 import com.example.hms.payload.dto.consultation.ConsultationRequestDTO;
 import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
+import com.example.hms.payload.dto.consultation.ConsultationStatsDTO;
 import com.example.hms.payload.dto.consultation.ConsultationUpdateDTO;
 import com.example.hms.repository.ConsultationRepository;
 import com.example.hms.repository.EncounterRepository;
@@ -18,6 +20,7 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.service.ConsultationService;
+import com.example.hms.service.NotificationService;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,10 +28,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -42,6 +49,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
     private final RoleValidator roleValidator;
+    private final NotificationService notificationService;
 
     @Override
     public ConsultationResponseDTO createConsultation(ConsultationRequestDTO request, UUID requestingProviderId) {
@@ -198,8 +206,9 @@ public class ConsultationServiceImpl implements ConsultationService {
     public ConsultationResponseDTO acknowledgeConsultation(UUID consultationId, UUID consultantId) {
         Consultation consultation = getConsultationEntity(consultationId);
 
-        if (consultation.getStatus() != ConsultationStatus.REQUESTED) {
-            throw new BusinessException("Consultation has already been acknowledged");
+        if (consultation.getStatus() != ConsultationStatus.ASSIGNED &&
+            consultation.getStatus() != ConsultationStatus.REQUESTED) {
+            throw new BusinessException("Consultation must be in ASSIGNED or REQUESTED status to acknowledge (current: " + consultation.getStatus() + ")");
         }
 
         Staff consultant = staffRepository.findById(consultantId)
@@ -227,7 +236,9 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         if (updateDTO.getScheduledAt() != null) {
             consultation.setScheduledAt(updateDTO.getScheduledAt());
-            if (consultation.getStatus() == ConsultationStatus.ACKNOWLEDGED || consultation.getStatus() == ConsultationStatus.REQUESTED) {
+            if (consultation.getStatus() == ConsultationStatus.ACKNOWLEDGED ||
+                consultation.getStatus() == ConsultationStatus.ASSIGNED ||
+                consultation.getStatus() == ConsultationStatus.REQUESTED) {
                 consultation.setStatus(ConsultationStatus.SCHEDULED);
             }
         }
@@ -253,32 +264,25 @@ public class ConsultationServiceImpl implements ConsultationService {
     }
 
     @Override
-    public ConsultationResponseDTO completeConsultation(UUID consultationId, ConsultationUpdateDTO updateDTO) {
+    public ConsultationResponseDTO completeConsultation(UUID consultationId, CompleteConsultationRequestDTO request) {
         Consultation consultation = getConsultationEntity(consultationId);
 
         if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
             throw new BusinessException("Consultation is already completed");
         }
-
         if (consultation.getStatus() == ConsultationStatus.CANCELLED) {
             throw new BusinessException("Cannot complete a cancelled consultation");
         }
 
-        // Apply updates
-        if (updateDTO.getConsultantNote() != null) {
-            consultation.setConsultantNote(updateDTO.getConsultantNote());
+        consultation.setRecommendations(request.getRecommendations());
+        if (request.getConsultantNote() != null) {
+            consultation.setConsultantNote(request.getConsultantNote());
         }
-
-        if (updateDTO.getRecommendations() != null) {
-            consultation.setRecommendations(updateDTO.getRecommendations());
+        if (request.getFollowUpRequired() != null) {
+            consultation.setFollowUpRequired(request.getFollowUpRequired());
         }
-
-        if (updateDTO.getFollowUpRequired() != null) {
-            consultation.setFollowUpRequired(updateDTO.getFollowUpRequired());
-        }
-
-        if (updateDTO.getFollowUpInstructions() != null) {
-            consultation.setFollowUpInstructions(updateDTO.getFollowUpInstructions());
+        if (request.getFollowUpInstructions() != null) {
+            consultation.setFollowUpInstructions(request.getFollowUpInstructions());
         }
 
         consultation.setStatus(ConsultationStatus.COMPLETED);
@@ -286,6 +290,22 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         Consultation saved = consultationRepository.save(consultation);
         log.info("Consultation {} completed", consultationId);
+
+        // Notify the requesting provider
+        try {
+            if (consultation.getRequestingProvider() != null) {
+                String requesterUsername = consultation.getRequestingProvider().getUser().getUsername();
+                String consultantName = consultation.getConsultant() != null ? consultation.getConsultant().getFullName() : "The consultant";
+                String patientName = consultation.getPatient() != null ? consultation.getPatient().getFullName() : "your patient";
+                notificationService.createNotification(
+                    "Consultation completed for " + patientName +
+                    " (" + consultation.getSpecialtyRequested() + ") by " + consultantName +
+                    ". Recommendations are now available.",
+                    requesterUsername);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to send completion notification for consultation {}: {}", consultationId, e.getMessage());
+        }
 
         return toResponseDTO(saved);
     }
@@ -313,6 +333,134 @@ public class ConsultationServiceImpl implements ConsultationService {
     }
 
     @Override
+    public ConsultationResponseDTO scheduleConsultation(UUID consultationId, LocalDateTime scheduledAt, String scheduleNote) {
+        Consultation consultation = getConsultationEntity(consultationId);
+
+        if (consultation.getStatus() == ConsultationStatus.COMPLETED ||
+            consultation.getStatus() == ConsultationStatus.CANCELLED ||
+            consultation.getStatus() == ConsultationStatus.DECLINED) {
+            throw new BusinessException("Cannot schedule a " + consultation.getStatus() + " consultation");
+        }
+
+        consultation.setScheduledAt(scheduledAt);
+        consultation.setStatus(ConsultationStatus.SCHEDULED);
+        if (scheduleNote != null && !scheduleNote.isBlank()) {
+            consultation.setConsultantNote(scheduleNote);
+        }
+
+        Consultation saved = consultationRepository.save(consultation);
+        log.info("Consultation {} scheduled for {}", consultationId, scheduledAt);
+
+        return toResponseDTO(saved);
+    }
+
+    @Override
+    public ConsultationResponseDTO startConsultation(UUID consultationId) {
+        Consultation consultation = getConsultationEntity(consultationId);
+
+        if (consultation.getStatus() != ConsultationStatus.SCHEDULED &&
+            consultation.getStatus() != ConsultationStatus.ACKNOWLEDGED &&
+            consultation.getStatus() != ConsultationStatus.ASSIGNED) {
+            throw new BusinessException("Consultation must be ASSIGNED, ACKNOWLEDGED or SCHEDULED to start (current: " + consultation.getStatus() + ")");
+        }
+
+        consultation.setStatus(ConsultationStatus.IN_PROGRESS);
+        consultation.setStartedAt(LocalDateTime.now());
+
+        Consultation saved = consultationRepository.save(consultation);
+        log.info("Consultation {} started", consultationId);
+
+        return toResponseDTO(saved);
+    }
+
+    @Override
+    public ConsultationResponseDTO declineConsultation(UUID consultationId, String declineReason) {
+        Consultation consultation = getConsultationEntity(consultationId);
+
+        if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
+            throw new BusinessException("Cannot decline a completed consultation");
+        }
+        if (consultation.getStatus() == ConsultationStatus.CANCELLED) {
+            throw new BusinessException("Cannot decline a cancelled consultation");
+        }
+        if (consultation.getStatus() == ConsultationStatus.DECLINED) {
+            throw new BusinessException("Consultation is already declined");
+        }
+
+        consultation.setStatus(ConsultationStatus.DECLINED);
+        consultation.setDeclinedAt(LocalDateTime.now());
+        consultation.setDeclineReason(declineReason);
+
+        Consultation saved = consultationRepository.save(consultation);
+        log.info("Consultation {} declined: {}", consultationId, declineReason);
+
+        return toResponseDTO(saved);
+    }
+
+    @Override
+    public ConsultationResponseDTO assignConsultation(UUID consultationId, UUID consultantId, UUID assignedById, String assignmentNote) {
+        Consultation consultation = getConsultationEntity(consultationId);
+
+        if (consultation.getStatus() != ConsultationStatus.REQUESTED) {
+            throw new BusinessException("Only REQUESTED consultations can be assigned (current status: " + consultation.getStatus() + ")");
+        }
+
+        Staff consultant = staffRepository.findById(consultantId)
+            .orElseThrow(() -> new ResourceNotFoundException("Consultant not found with ID: " + consultantId));
+
+        consultation.setConsultant(consultant);
+        consultation.setStatus(ConsultationStatus.ASSIGNED);
+        consultation.setAssignedAt(LocalDateTime.now());
+        consultation.setAssignedById(assignedById);
+        if (assignmentNote != null && !assignmentNote.isBlank()) {
+            consultation.setConsultantNote(assignmentNote);
+        }
+
+        Consultation saved = consultationRepository.save(consultation);
+        log.info("Consultation {} assigned to consultant {} by {}", consultationId, consultantId, assignedById);
+
+        // Notify the assigned consultant
+        try {
+            String consultantUsername = consultant.getUser().getUsername();
+            String patientName = consultation.getPatient() != null ? consultation.getPatient().getFullName() : "a patient";
+            notificationService.createNotification(
+                "You have been assigned a consultation request for " + patientName +
+                " — Specialty: " + consultation.getSpecialtyRequested() +
+                " (Urgency: " + consultation.getUrgency() + ")",
+                consultantUsername);
+        } catch (Exception e) {
+            log.warn("Failed to send assignment notification for consultation {}: {}", consultationId, e.getMessage());
+        }
+
+        return toResponseDTO(saved);
+    }
+
+    @Override
+    public ConsultationResponseDTO reassignConsultation(UUID consultationId, UUID consultantId, UUID assignedById, String reassignmentReason) {
+        Consultation consultation = getConsultationEntity(consultationId);
+
+        if (consultation.getStatus() == ConsultationStatus.COMPLETED) {
+            throw new BusinessException("Cannot reassign a completed consultation");
+        }
+        if (consultation.getStatus() == ConsultationStatus.CANCELLED) {
+            throw new BusinessException("Cannot reassign a cancelled consultation");
+        }
+
+        Staff consultant = staffRepository.findById(consultantId)
+            .orElseThrow(() -> new ResourceNotFoundException("Consultant not found with ID: " + consultantId));
+
+        UUID previousConsultantId = consultation.getConsultant() != null ? consultation.getConsultant().getId() : null;
+        consultation.setConsultant(consultant);
+        consultation.setStatus(ConsultationStatus.ASSIGNED);
+        consultation.setAssignedAt(LocalDateTime.now());
+        consultation.setAssignedById(assignedById);
+
+        Consultation saved = consultationRepository.save(consultation);
+        log.info("Consultation {} reassigned from {} to {} — reason: {}", consultationId, previousConsultantId, consultantId, reassignmentReason);
+        return toResponseDTO(saved);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public List<ConsultationResponseDTO> getPendingConsultations(UUID hospitalId) {
         List<Consultation> consultations = consultationRepository.findByHospitalAndStatuses(
@@ -322,6 +470,85 @@ public class ConsultationServiceImpl implements ConsultationService {
         return consultations.stream()
             .map(this::toResponseDTO)
             .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ConsultationResponseDTO> getMyConsultations(UUID consultantStaffId) {
+        List<Consultation> consultations = consultationRepository.findByConsultant_IdOrderByRequestedAtDesc(consultantStaffId);
+        UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        if (activeHospitalId != null) {
+            consultations = consultations.stream()
+                .filter(c -> c.getHospital() != null && activeHospitalId.equals(c.getHospital().getId()))
+                .toList();
+        }
+        return consultations.stream().map(this::toResponseDTO).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ConsultationResponseDTO> getOverdueConsultations(UUID hospitalId) {
+        List<ConsultationStatus> terminalStatuses = Arrays.asList(
+            ConsultationStatus.COMPLETED, ConsultationStatus.CANCELLED, ConsultationStatus.DECLINED);
+        List<Consultation> overdue = consultationRepository.findOverdueConsultations(LocalDateTime.now(), terminalStatuses);
+        if (hospitalId != null) {
+            overdue = overdue.stream()
+                .filter(c -> c.getHospital() != null && hospitalId.equals(c.getHospital().getId()))
+                .toList();
+        }
+        return overdue.stream().map(this::toResponseDTO).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ConsultationStatsDTO getStats(UUID hospitalId) {
+        List<Consultation> all = hospitalId != null
+            ? consultationRepository.findAllByOrderByRequestedAtDesc().stream()
+                .filter(c -> c.getHospital() != null && hospitalId.equals(c.getHospital().getId()))
+                .toList()
+            : consultationRepository.findAllByOrderByRequestedAtDesc();
+
+        List<ConsultationStatus> terminalStatuses = Arrays.asList(
+            ConsultationStatus.COMPLETED, ConsultationStatus.CANCELLED, ConsultationStatus.DECLINED);
+        LocalDateTime now = LocalDateTime.now();
+
+        long total = all.size();
+        long requested = all.stream().filter(c -> c.getStatus() == ConsultationStatus.REQUESTED).count();
+        long active = all.stream().filter(c -> List.of(ConsultationStatus.ASSIGNED,
+            ConsultationStatus.ACKNOWLEDGED, ConsultationStatus.SCHEDULED,
+            ConsultationStatus.IN_PROGRESS).contains(c.getStatus())).count();
+        long completed = all.stream().filter(c -> c.getStatus() == ConsultationStatus.COMPLETED).count();
+        long cancelled = all.stream().filter(c -> c.getStatus() == ConsultationStatus.CANCELLED).count();
+        long declined = all.stream().filter(c -> c.getStatus() == ConsultationStatus.DECLINED).count();
+        long overdue = all.stream().filter(c ->
+            c.getSlaDueBy() != null && c.getSlaDueBy().isBefore(now)
+            && !terminalStatuses.contains(c.getStatus())).count();
+
+        double avgHoursToAssign = all.stream()
+            .filter(c -> c.getAssignedAt() != null && c.getRequestedAt() != null)
+            .mapToLong(c -> ChronoUnit.MINUTES.between(c.getRequestedAt(), c.getAssignedAt()))
+            .average().orElse(0) / 60.0;
+
+        double avgHoursToComplete = all.stream()
+            .filter(c -> c.getCompletedAt() != null && c.getRequestedAt() != null)
+            .mapToLong(c -> ChronoUnit.MINUTES.between(c.getRequestedAt(), c.getCompletedAt()))
+            .average().orElse(0) / 60.0;
+
+        Map<String, Long> bySpecialty = all.stream()
+            .filter(c -> c.getSpecialtyRequested() != null)
+            .collect(Collectors.groupingBy(Consultation::getSpecialtyRequested, Collectors.counting()))
+            .entrySet().stream()
+            .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue,
+                (a, b) -> a, LinkedHashMap::new));
+
+        return ConsultationStatsDTO.builder()
+            .total(total).requested(requested).active(active)
+            .completed(completed).cancelled(cancelled).declined(declined).overdue(overdue)
+            .avgHoursToAssign(Math.round(avgHoursToAssign * 10.0) / 10.0)
+            .avgHoursToComplete(Math.round(avgHoursToComplete * 10.0) / 10.0)
+            .bySpecialty(bySpecialty)
+            .build();
     }
 
     // Helper methods
@@ -402,6 +629,11 @@ public class ConsultationServiceImpl implements ConsultationService {
             .followUpInstructions(consultation.getFollowUpInstructions())
             .slaDueBy(consultation.getSlaDueBy())
             .isCurbside(consultation.getIsCurbside())
+            .assignedAt(consultation.getAssignedAt())
+            .assignedById(consultation.getAssignedById())
+            .startedAt(consultation.getStartedAt())
+            .declinedAt(consultation.getDeclinedAt())
+            .declineReason(consultation.getDeclineReason())
             .createdAt(consultation.getCreatedAt())
             .updatedAt(consultation.getUpdatedAt())
             .build();

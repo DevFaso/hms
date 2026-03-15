@@ -7,11 +7,13 @@ import {
   ConsultationService,
   ConsultationResponse,
   ConsultationRequest,
+  ConsultationStats,
   ConsultationType,
   ConsultationUrgency,
 } from '../services/consultation.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
+import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 
@@ -26,6 +28,7 @@ export class ConsultationsComponent implements OnInit {
   private readonly consultService = inject(ConsultationService);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
+  private readonly staffService = inject(StaffService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
 
@@ -33,8 +36,12 @@ export class ConsultationsComponent implements OnInit {
   filtered = signal<ConsultationResponse[]>([]);
   loading = signal(true);
   searchTerm = '';
-  activeTab = signal<'all' | 'pending' | 'active' | 'completed'>('all');
+  activeTab = signal<'all' | 'pending' | 'active' | 'completed' | 'mine' | 'overdue'>('all');
   selectedConsult = signal<ConsultationResponse | null>(null);
+
+  stats = signal<ConsultationStats | null>(null);
+  statsLoading = signal(false);
+  showStats = signal(false);
 
   hospitals = signal<HospitalResponse[]>([]);
 
@@ -54,6 +61,41 @@ export class ConsultationsComponent implements OnInit {
   showDeleteConfirm = signal(false);
   deletingItem = signal<ConsultationResponse | null>(null);
   deleting = signal(false);
+  cancelReason = signal('');
+
+  /* ── Assign modal ── */
+  showAssignModal = signal(false);
+  assigningItem = signal<ConsultationResponse | null>(null);
+  assignStaff = signal<StaffResponse[]>([]);
+  assignStaffLoading = signal(false);
+  assignConsultantId = signal('');
+  assignNote = signal('');
+  assigning = signal(false);
+  isReassign = signal(false);
+  assignSpecialtyFilter = signal('');
+
+  /* ── Schedule modal ── */
+  showScheduleModal = signal(false);
+  schedulingItem = signal<ConsultationResponse | null>(null);
+  scheduling = signal(false);
+  scheduleForm = { scheduledAt: '', scheduleNote: '' };
+
+  /* ── Complete modal ── */
+  showCompleteModal = signal(false);
+  completingItem = signal<ConsultationResponse | null>(null);
+  completing = signal(false);
+  completeForm = {
+    recommendations: '',
+    consultantNote: '',
+    followUpRequired: false,
+    followUpInstructions: '',
+  };
+
+  /* ── Decline modal ── */
+  showDeclineModal = signal(false);
+  decliningItem = signal<ConsultationResponse | null>(null);
+  declining = signal(false);
+  declineReasonValue = signal('');
 
   consultationTypes: ConsultationType[] = [
     'OUTPATIENT_CONSULT',
@@ -76,6 +118,7 @@ export class ConsultationsComponent implements OnInit {
     this.load();
     this.loadAssignedHospitals();
     this.initPatientSearch();
+    this.loadStats();
   }
 
   emptyForm(): ConsultationRequest {
@@ -194,6 +237,7 @@ export class ConsultationsComponent implements OnInit {
 
   confirmCancel(c: ConsultationResponse): void {
     this.deletingItem.set(c);
+    this.cancelReason.set('');
     this.showDeleteConfirm.set(true);
   }
   cancelDeleteAction(): void {
@@ -201,8 +245,13 @@ export class ConsultationsComponent implements OnInit {
     this.deletingItem.set(null);
   }
   executeCancel(): void {
+    const reason = this.cancelReason().trim();
+    if (!reason) {
+      this.toast.error('Please enter a cancellation reason');
+      return;
+    }
     this.deleting.set(true);
-    this.consultService.cancel(this.deletingItem()!.id, 'Cancelled by admin').subscribe({
+    this.consultService.cancel(this.deletingItem()!.id, reason).subscribe({
       next: () => {
         this.toast.success('Consultation cancelled');
         this.cancelDeleteAction();
@@ -218,7 +267,15 @@ export class ConsultationsComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    this.consultService.getAll().subscribe({
+    const tab = this.activeTab();
+    const source$ =
+      tab === 'mine'
+        ? this.consultService.getMine()
+        : tab === 'overdue'
+          ? this.consultService.getOverdue(this.roleContext.activeHospitalId ?? undefined)
+          : this.consultService.getAll();
+
+    source$.subscribe({
       next: (list) => {
         this.consultations.set(Array.isArray(list) ? list : []);
         this.applyFilter();
@@ -231,9 +288,20 @@ export class ConsultationsComponent implements OnInit {
     });
   }
 
-  setTab(tab: 'all' | 'pending' | 'active' | 'completed'): void {
+  loadStats(): void {
+    this.statsLoading.set(true);
+    this.consultService.getStats(this.roleContext.activeHospitalId ?? undefined).subscribe({
+      next: (s) => {
+        this.stats.set(s);
+        this.statsLoading.set(false);
+      },
+      error: () => this.statsLoading.set(false),
+    });
+  }
+
+  setTab(tab: 'all' | 'pending' | 'active' | 'completed' | 'mine' | 'overdue'): void {
     this.activeTab.set(tab);
-    this.applyFilter();
+    this.load();
   }
 
   applyFilter(): void {
@@ -241,9 +309,12 @@ export class ConsultationsComponent implements OnInit {
     const tab = this.activeTab();
     if (tab === 'pending') list = list.filter((c) => ['REQUESTED'].includes(c.status));
     else if (tab === 'active')
-      list = list.filter((c) => ['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(c.status));
+      list = list.filter((c) =>
+        ['ASSIGNED', 'ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(c.status),
+      );
     else if (tab === 'completed')
-      list = list.filter((c) => ['COMPLETED', 'CANCELLED'].includes(c.status));
+      list = list.filter((c) => ['COMPLETED', 'CANCELLED', 'DECLINED'].includes(c.status));
+    // 'mine' and 'overdue' come pre-filtered from the API
     const term = this.searchTerm.toLowerCase().trim();
     if (term) {
       list = list.filter(
@@ -267,6 +338,7 @@ export class ConsultationsComponent implements OnInit {
     switch (status) {
       case 'REQUESTED':
         return 'status-requested';
+      case 'ASSIGNED':
       case 'ACKNOWLEDGED':
       case 'SCHEDULED':
         return 'status-acknowledged';
@@ -275,6 +347,8 @@ export class ConsultationsComponent implements OnInit {
       case 'COMPLETED':
         return 'status-completed';
       case 'CANCELLED':
+        return 'status-cancelled';
+      case 'DECLINED':
         return 'status-cancelled';
       default:
         return '';
@@ -295,15 +369,257 @@ export class ConsultationsComponent implements OnInit {
     }
   }
 
+  /* ── Assign / Reassign ── */
+  openAssign(c: ConsultationResponse, isReassign = false): void {
+    this.assigningItem.set(c);
+    this.isReassign.set(isReassign);
+    this.assignConsultantId.set('');
+    this.assignNote.set('');
+    this.assignSpecialtyFilter.set('');
+    this.showAssignModal.set(true);
+    this.loadAssignableStaff(c.hospitalId);
+  }
+
+  filteredAssignStaff(): StaffResponse[] {
+    const filter = this.assignSpecialtyFilter().toLowerCase().trim();
+    if (!filter) return this.assignStaff();
+    return this.assignStaff().filter(
+      (s) =>
+        (s.specialization ?? '').toLowerCase().includes(filter) ||
+        (s.roleName ?? '').toLowerCase().includes(filter) ||
+        (s.departmentName ?? '').toLowerCase().includes(filter),
+    );
+  }
+
+  closeAssignModal(): void {
+    this.showAssignModal.set(false);
+    this.assigningItem.set(null);
+    this.assignStaff.set([]);
+  }
+
+  private loadAssignableStaff(hospitalId: string): void {
+    this.assignStaffLoading.set(true);
+    this.staffService.list(hospitalId).subscribe({
+      next: (staff) => {
+        this.assignStaff.set(staff.filter((s) => s.active));
+        this.assignStaffLoading.set(false);
+      },
+      error: () => {
+        this.assignStaffLoading.set(false);
+      },
+    });
+  }
+
+  submitAssign(): void {
+    const consultantId = this.assignConsultantId();
+    if (!consultantId) {
+      this.toast.error('Please select a consultant');
+      return;
+    }
+    const item = this.assigningItem()!;
+    this.assigning.set(true);
+    if (this.isReassign()) {
+      const reason = this.assignNote().trim();
+      if (!reason) {
+        this.toast.error('Please enter a reassignment reason');
+        this.assigning.set(false);
+        return;
+      }
+      this.consultService.reassign(item.id, consultantId, reason).subscribe({
+        next: () => {
+          this.toast.success('Consultation reassigned');
+          this.closeAssignModal();
+          this.assigning.set(false);
+          this.load();
+        },
+        error: () => {
+          this.toast.error('Reassignment failed');
+          this.assigning.set(false);
+        },
+      });
+    } else {
+      this.consultService.assign(item.id, consultantId, this.assignNote() || undefined).subscribe({
+        next: () => {
+          this.toast.success('Consultation assigned');
+          this.closeAssignModal();
+          this.assigning.set(false);
+          this.load();
+        },
+        error: () => {
+          this.toast.error('Assignment failed');
+          this.assigning.set(false);
+        },
+      });
+    }
+  }
+
   countByGroup(group: string): number {
     if (group === 'pending')
       return this.consultations().filter((c) => c.status === 'REQUESTED').length;
     if (group === 'active')
       return this.consultations().filter((c) =>
-        ['ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(c.status),
+        ['ASSIGNED', 'ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(c.status),
       ).length;
     if (group === 'completed')
       return this.consultations().filter((c) => c.status === 'COMPLETED').length;
+    if (group === 'overdue')
+      return this.stats()?.overdue ?? this.consultations().filter((c) => this.isOverdue(c)).length;
     return 0;
+  }
+
+  isOverdue(c: ConsultationResponse): boolean {
+    if (!c.slaDueBy) return false;
+    if (['COMPLETED', 'CANCELLED', 'DECLINED'].includes(c.status)) return false;
+    return new Date(c.slaDueBy) < new Date();
+  }
+
+  getTimelineEvents(c: ConsultationResponse): { label: string; date: string }[] {
+    const events: { label: string; date: string }[] = [];
+    if (c.requestedAt) events.push({ label: 'Requested', date: c.requestedAt });
+    if (c.assignedAt) events.push({ label: 'Assigned', date: c.assignedAt });
+    if (c.acknowledgedAt) events.push({ label: 'Acknowledged', date: c.acknowledgedAt });
+    if (c.scheduledAt) events.push({ label: 'Scheduled For', date: c.scheduledAt });
+    if (c.startedAt) events.push({ label: 'Started', date: c.startedAt });
+    if (c.completedAt) events.push({ label: 'Completed', date: c.completedAt });
+    if (c.cancelledAt) events.push({ label: 'Cancelled', date: c.cancelledAt });
+    if (c.declinedAt) events.push({ label: 'Declined', date: c.declinedAt });
+    return events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }
+
+  /* ── Schedule workflow ── */
+  openSchedule(c: ConsultationResponse): void {
+    this.schedulingItem.set(c);
+    this.scheduleForm = { scheduledAt: '', scheduleNote: '' };
+    this.showScheduleModal.set(true);
+  }
+
+  closeScheduleModal(): void {
+    this.showScheduleModal.set(false);
+    this.schedulingItem.set(null);
+  }
+
+  submitSchedule(): void {
+    if (!this.scheduleForm.scheduledAt) {
+      this.toast.error('Please select a scheduled date/time');
+      return;
+    }
+    this.scheduling.set(true);
+    this.consultService
+      .schedule(
+        this.schedulingItem()!.id,
+        this.scheduleForm.scheduledAt,
+        this.scheduleForm.scheduleNote || undefined,
+      )
+      .subscribe({
+        next: () => {
+          this.toast.success('Consultation scheduled');
+          this.closeScheduleModal();
+          this.scheduling.set(false);
+          this.load();
+        },
+        error: () => {
+          this.toast.error('Schedule failed');
+          this.scheduling.set(false);
+        },
+      });
+  }
+
+  /* ── Acknowledge workflow ── */
+  acknowledgeConsultation(c: ConsultationResponse): void {
+    this.consultService.acknowledge(c.id).subscribe({
+      next: () => {
+        this.toast.success('Consultation acknowledged');
+        this.load();
+      },
+      error: () => this.toast.error('Acknowledge failed'),
+    });
+  }
+
+  /* ── Start workflow ── */
+  startConsultation(c: ConsultationResponse): void {
+    this.consultService.start(c.id).subscribe({
+      next: () => {
+        this.toast.success('Consultation started');
+        this.load();
+      },
+      error: () => this.toast.error('Start failed'),
+    });
+  }
+
+  /* ── Complete workflow ── */
+  openComplete(c: ConsultationResponse): void {
+    this.completingItem.set(c);
+    this.completeForm = {
+      recommendations: '',
+      consultantNote: '',
+      followUpRequired: false,
+      followUpInstructions: '',
+    };
+    this.showCompleteModal.set(true);
+  }
+
+  closeCompleteModal(): void {
+    this.showCompleteModal.set(false);
+    this.completingItem.set(null);
+  }
+
+  submitComplete(): void {
+    if (!this.completeForm.recommendations.trim()) {
+      this.toast.error('Recommendations are required');
+      return;
+    }
+    this.completing.set(true);
+    this.consultService
+      .complete(this.completingItem()!.id, {
+        recommendations: this.completeForm.recommendations,
+        consultantNote: this.completeForm.consultantNote || undefined,
+        followUpRequired: this.completeForm.followUpRequired,
+        followUpInstructions: this.completeForm.followUpInstructions || undefined,
+      })
+      .subscribe({
+        next: () => {
+          this.toast.success('Consultation completed');
+          this.closeCompleteModal();
+          this.completing.set(false);
+          this.load();
+        },
+        error: () => {
+          this.toast.error('Complete failed');
+          this.completing.set(false);
+        },
+      });
+  }
+
+  /* ── Decline workflow ── */
+  openDecline(c: ConsultationResponse): void {
+    this.decliningItem.set(c);
+    this.declineReasonValue.set('');
+    this.showDeclineModal.set(true);
+  }
+
+  closeDeclineModal(): void {
+    this.showDeclineModal.set(false);
+    this.decliningItem.set(null);
+  }
+
+  submitDecline(): void {
+    const reason = this.declineReasonValue().trim();
+    if (!reason) {
+      this.toast.error('Please enter a decline reason');
+      return;
+    }
+    this.declining.set(true);
+    this.consultService.decline(this.decliningItem()!.id, reason).subscribe({
+      next: () => {
+        this.toast.success('Consultation declined');
+        this.closeDeclineModal();
+        this.declining.set(false);
+        this.load();
+      },
+      error: () => {
+        this.toast.error('Decline failed');
+        this.declining.set(false);
+      },
+    });
   }
 }
