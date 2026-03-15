@@ -218,4 +218,28 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V17: Add assignment tracking fields to clinical.consultations
+         Tracks when a consultation was assigned and who performed it.
+         Required by ConsultationServiceImpl.assignConsultation().
+         ================================================================= -->
+    <changeSet id="V17-add-consultation-assignment-tracking" author="hms-team" runOnChange="false">
+        <sqlFile path="V17__add_consultation_assignment_tracking.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V18: Add workflow progress fields to clinical.consultations
+         - started_at: set when consultant begins the consult
+         - declined_at / decline_reason: set when consultant declines
+         ================================================================= -->
+    <changeSet id="V18-add-consultation-workflow-fields" author="hms-team" runOnChange="false">
+        <sqlFile path="V18__add_consultation_workflow_fields.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
