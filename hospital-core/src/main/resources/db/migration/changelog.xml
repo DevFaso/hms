@@ -207,4 +207,15 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V16: Add missing updated_at to hospital.on_call_schedule
+         BaseEntity requires updated_at; V14 only created created_at.
+         ================================================================= -->
+    <changeSet id="V16-add-updated-at-on-call-schedule" author="hms-team" runOnChange="false">
+        <sqlFile path="V16__add_updated_at_on_call_schedule.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
