@@ -738,7 +738,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     {
       icon: 'analytics',
       label: 'Analytics',
-      route: '/dashboard',
+      route: '/analytics',
       color: '#2563eb',
       bg: '#eff6ff',
     },
@@ -746,6 +746,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
       icon: 'notifications',
       label: 'Notifications',
       route: '/notifications',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'verified',
+      label: 'Digital Signatures',
+      route: '/digital-signatures',
       color: '#2563eb',
       bg: '#eff6ff',
     },

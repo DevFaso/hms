@@ -32,12 +32,16 @@ public class FrontDeskPatientSnapshotDTO {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class InsuranceSummary {
+        private UUID insuranceId;   // MVP 11: needed for eligibility attestation
         private boolean hasActiveCoverage;
         private String primaryPayer;
         private String policyNumber;
         private LocalDate expiresOn;
         private boolean expired;
         private boolean hasPrimary;
+        // MVP 11: attestation fields
+        private java.time.LocalDateTime verifiedAt;
+        private String verifiedBy;
     }
 
     @Data

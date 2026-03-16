@@ -3,22 +3,35 @@ package com.example.hms.service;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.InvoiceStatus;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Appointment;
+import com.example.hms.model.AppointmentWaitlist;
 import com.example.hms.model.BillingInvoice;
+import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.PatientInsurance;
+import com.example.hms.model.Staff;
+import com.example.hms.payload.dto.DuplicateCandidateDTO;
+import com.example.hms.payload.dto.EligibilityAttestationRequestDTO;
 import com.example.hms.payload.dto.FlowBoardDTO;
 import com.example.hms.payload.dto.FrontDeskPatientSnapshotDTO;
 import com.example.hms.payload.dto.InsuranceIssueDTO;
 import com.example.hms.payload.dto.ReceptionDashboardSummaryDTO;
 import com.example.hms.payload.dto.ReceptionQueueItemDTO;
+import com.example.hms.payload.dto.WaitlistEntryRequestDTO;
+import com.example.hms.payload.dto.WaitlistEntryResponseDTO;
 import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.AppointmentWaitlistRepository;
 import com.example.hms.repository.BillingInvoiceRepository;
+import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.EncounterRepository;
+import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientInsuranceRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.StaffRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -38,7 +51,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Slf4j
 @Service
@@ -53,6 +65,10 @@ public class ReceptionServiceImpl implements ReceptionService {
     private final PatientInsuranceRepository insuranceRepo;
     private final BillingInvoiceRepository invoiceRepo;
     private final PatientRepository patientRepo;
+    private final AppointmentWaitlistRepository waitlistRepo;
+    private final HospitalRepository hospitalRepo;
+    private final DepartmentRepository departmentRepo;
+    private final StaffRepository staffRepo;
 
     // ── MVP 9: Dashboard Summary ─────────────────────────────────────────────
 
@@ -192,12 +208,15 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .orElse(insurances.isEmpty() ? null : insurances.get(0));
 
         FrontDeskPatientSnapshotDTO.InsuranceSummary insuranceSummary = FrontDeskPatientSnapshotDTO.InsuranceSummary.builder()
+                .insuranceId(primary != null ? primary.getId() : null)
                 .hasActiveCoverage(hasActive)
                 .primaryPayer(primary != null ? primary.getProviderName() : null)
                 .policyNumber(primary != null ? primary.getPolicyNumber() : null)
                 .expiresOn(primary != null ? primary.getExpirationDate() : null)
                 .expired(primary != null && primary.getExpirationDate() != null && primary.getExpirationDate().isBefore(today))
                 .hasPrimary(hasPrimary)
+                .verifiedAt(primary != null ? primary.getVerifiedAt() : null)
+                .verifiedBy(primary != null ? primary.getVerifiedBy() : null)
                 .build();
 
         // Billing
@@ -432,5 +451,178 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     private List<ReceptionQueueItemDTO> filterByStatus(List<ReceptionQueueItemDTO> items, String status) {
         return items.stream().filter(i -> status.equals(i.getStatus())).toList();
+    }
+
+    // ── MVP 11: Duplicate Candidate Detection ─────────────────────────────────
+
+    @Override
+    public List<DuplicateCandidateDTO> getDuplicateCandidates(String name, String dob, String phone,
+                                                               UUID hospitalId) {
+        String namePattern = (name != null && !name.isBlank())
+                ? "%" + name.trim().toLowerCase() + "%" : null;
+        String phonePattern = (phone != null && !phone.isBlank())
+                ? "%" + phone.trim() + "%" : null;
+        List<Patient> candidates = patientRepo.searchPatientsExtended(
+                null, namePattern, dob, phonePattern, null, hospitalId, true,
+                PageRequest.of(0, 20)).getContent();
+
+        return candidates.stream()
+                .map(p -> {
+                    int score = computeConfidenceScore(p, name, dob, phone);
+                    String mrn = p.getHospitalRegistrations().stream()
+                            .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
+                            .map(PatientHospitalRegistration::getMrn)
+                            .findFirst().orElse(null);
+                    return DuplicateCandidateDTO.builder()
+                            .patientId(p.getId())
+                            .fullName(p.getFirstName() + " " + p.getLastName())
+                            .mrn(mrn)
+                            .dateOfBirth(p.getDateOfBirth())
+                            .phone(p.getPhoneNumberPrimary())
+                            .email(p.getEmail())
+                            .confidenceScore(score)
+                            .build();
+                })
+                .filter(c -> c.getConfidenceScore() >= 40)
+                .sorted(Comparator.comparingInt(DuplicateCandidateDTO::getConfidenceScore).reversed())
+                .toList();
+    }
+
+    private int computeConfidenceScore(Patient p, String name, String dob, String phone) {
+        int score = 0;
+        if (name != null && !name.isBlank()) {
+            String fullName = (p.getFirstName() + " " + p.getLastName()).toLowerCase();
+            if (fullName.contains(name.trim().toLowerCase())) score += 50;
+        }
+        if (dob != null && !dob.isBlank() && p.getDateOfBirth() != null
+                && p.getDateOfBirth().toString().equals(dob)) {
+            score += 30;
+        }
+        if (phone != null && !phone.isBlank() && p.getPhoneNumberPrimary() != null
+                && p.getPhoneNumberPrimary().contains(phone.trim())) {
+            score += 20;
+        }
+        return Math.min(score, 100);
+    }
+
+    // ── MVP 11: Waitlist ──────────────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public WaitlistEntryResponseDTO addToWaitlist(WaitlistEntryRequestDTO req, UUID hospitalId,
+                                                   String actorUsername) {
+        Hospital hospital = hospitalRepo.findById(hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+        Department department = departmentRepo.findById(req.getDepartmentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
+        Patient patient = patientRepo.findById(req.getPatientId())
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+        Staff provider = (req.getPreferredProviderId() != null)
+                ? staffRepo.findById(req.getPreferredProviderId()).orElse(null)
+                : null;
+
+        AppointmentWaitlist entry = AppointmentWaitlist.builder()
+                .hospital(hospital)
+                .department(department)
+                .patient(patient)
+                .preferredProvider(provider)
+                .requestedDateFrom(req.getRequestedDateFrom())
+                .requestedDateTo(req.getRequestedDateTo())
+                .priority(req.getPriority() != null ? req.getPriority() : "ROUTINE")
+                .reason(req.getReason())
+                .status("WAITING")
+                .createdBy(actorUsername)
+                .build();
+
+        entry = waitlistRepo.save(entry);
+        return toWaitlistResponse(entry, hospitalId);
+    }
+
+    @Override
+    public List<WaitlistEntryResponseDTO> getWaitlist(UUID hospitalId, UUID departmentId,
+                                                       String status) {
+        return waitlistRepo.findByHospitalFiltered(hospitalId, departmentId, status)
+                .stream()
+                .map(e -> toWaitlistResponse(e, hospitalId))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public WaitlistEntryResponseDTO offerWaitlistSlot(UUID waitlistId, UUID hospitalId) {
+        AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Waitlist entry not found"));
+        entry.setStatus("OFFERED");
+        return toWaitlistResponse(waitlistRepo.save(entry), hospitalId);
+    }
+
+    @Override
+    @Transactional
+    public void closeWaitlistEntry(UUID waitlistId, UUID hospitalId) {
+        AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Waitlist entry not found"));
+        entry.setStatus("CLOSED");
+        waitlistRepo.save(entry);
+    }
+
+    // ── MVP 11: Eligibility Attestation ──────────────────────────────────────
+
+    @Override
+    @Transactional
+    public void attestEligibility(UUID insuranceId, UUID hospitalId, String actorUsername,
+                                   EligibilityAttestationRequestDTO req) {
+        PatientInsurance insurance = insuranceRepo.findByIdAndAssignment_Hospital_Id(insuranceId, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Insurance record not found or out of scope"));
+        insurance.setVerifiedAt(LocalDateTime.now());
+        insurance.setVerifiedBy(actorUsername);
+        insurance.setEligibilityNotes(req.getEligibilityNotes());
+        insuranceRepo.save(insurance);
+    }
+
+    // ── MVP 11: Encounter status update (flow board drag-and-drop) ────────────
+
+    @Override
+    @Transactional
+    public void updateEncounterStatus(UUID encounterId, EncounterStatus status, UUID hospitalId) {
+        Encounter encounter = encounterRepo.findByIdAndHospital_Id(encounterId, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("Encounter not found"));
+        encounter.setStatus(status);
+        encounterRepo.save(encounter);
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    private WaitlistEntryResponseDTO toWaitlistResponse(AppointmentWaitlist e, UUID hospitalId) {
+        Patient p = e.getPatient();
+        String mrn = p.getHospitalRegistrations().stream()
+                .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
+                .map(PatientHospitalRegistration::getMrn)
+                .findFirst().orElse(null);
+        String provName = null;
+        UUID provId = null;
+        if (e.getPreferredProvider() != null) {
+            provId = e.getPreferredProvider().getId();
+            var pu = e.getPreferredProvider().getUser();
+            if (pu != null) provName = pu.getFirstName() + " " + pu.getLastName();
+        }
+        return WaitlistEntryResponseDTO.builder()
+                .id(e.getId())
+                .hospitalId(e.getHospital().getId())
+                .patientId(p.getId())
+                .patientName(p.getFirstName() + " " + p.getLastName())
+                .mrn(mrn)
+                .departmentId(e.getDepartment().getId())
+                .departmentName(e.getDepartment().getName())
+                .preferredProviderId(provId)
+                .preferredProviderName(provName)
+                .requestedDateFrom(e.getRequestedDateFrom())
+                .requestedDateTo(e.getRequestedDateTo())
+                .priority(e.getPriority())
+                .reason(e.getReason())
+                .status(e.getStatus())
+                .offeredAppointmentId(e.getOfferedAppointment() != null ? e.getOfferedAppointment().getId() : null)
+                .createdAt(e.getCreatedAt())
+                .createdBy(e.getCreatedBy())
+                .build();
     }
 }

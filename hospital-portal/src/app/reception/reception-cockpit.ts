@@ -12,10 +12,11 @@ import { ToastService } from '../core/toast.service';
 import { PatientSnapshotDrawerComponent } from './patient-snapshot-drawer';
 import { InsuranceIssuesPanelComponent } from './insurance-issues-panel';
 import { PaymentPendingPanelComponent } from './payment-pending-panel';
-import { FlowBoardComponent } from './flow-board';
+import { FlowBoardComponent, FlowBoardStatusChange } from './flow-board';
 import { WalkInDialogComponent } from './walkin-dialog';
+import { WaitlistPanelComponent } from './waitlist-panel';
 
-type Tab = 'queue' | 'insurance' | 'payments' | 'flowboard';
+type Tab = 'queue' | 'insurance' | 'payments' | 'flowboard' | 'waitlist';
 type StatusFilter =
   | 'ALL'
   | 'SCHEDULED'
@@ -41,6 +42,7 @@ function todayIso(): string {
     PaymentPendingPanelComponent,
     FlowBoardComponent,
     WalkInDialogComponent,
+    WaitlistPanelComponent,
   ],
   templateUrl: './reception-cockpit.html',
   styleUrl: './reception-cockpit.scss',
@@ -164,5 +166,17 @@ export class ReceptionCockpitComponent implements OnInit {
 
   filterLabel(f: StatusFilter): string {
     return f === 'ALL' ? 'All' : f.replace(/_/g, ' ');
+  }
+
+  onFlowBoardStatusChanged(change: FlowBoardStatusChange): void {
+    this.receptionService.updateEncounterStatus(change.encounterId, change.newStatus).subscribe({
+      next: () => {
+        this.toast.success('Status updated');
+        this.receptionService.getFlowBoard(this.selectedDate()).subscribe({
+          next: (board) => this.flowBoard.set(board),
+        });
+      },
+      error: () => this.toast.error('Failed to update encounter status'),
+    });
   }
 }

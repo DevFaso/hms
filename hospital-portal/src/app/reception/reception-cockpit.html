@@ -83,6 +83,9 @@
     <button [class.active]="activeTab() === 'flowboard'" (click)="activeTab.set('flowboard')">
       Flow Board
     </button>
+    <button [class.active]="activeTab() === 'waitlist'" (click)="activeTab.set('waitlist')">
+      Waitlist
+    </button>
   </div>
 
   <!-- Tab: Queue -->
@@ -192,7 +195,18 @@
   <!-- Tab: Flow Board -->
   @if (activeTab() === 'flowboard') {
     <div class="tab-content flow-tab">
-      <app-flow-board [board]="flowBoard()" (patientClicked)="openSnapshot($event)" />
+      <app-flow-board
+        [board]="flowBoard()"
+        (patientClicked)="openSnapshot($event)"
+        (statusChanged)="onFlowBoardStatusChanged($event)"
+      />
+    </div>
+  }
+
+  <!-- Tab: Waitlist -->
+  @if (activeTab() === 'waitlist') {
+    <div class="tab-content">
+      <app-waitlist-panel (patientClicked)="openSnapshot($event)" />
     </div>
   }
 </div>

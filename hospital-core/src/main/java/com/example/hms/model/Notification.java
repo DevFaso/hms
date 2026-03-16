@@ -29,6 +29,10 @@ public class Notification {
     @Column(nullable = false)
     private String message;
 
+    /** Categorises the notification (nullable for backward compat with existing rows). */
+    @Column(name = "type", length = 40)
+    private String type;
+
     @Column(nullable = false)
     private LocalDateTime createdAt;
 

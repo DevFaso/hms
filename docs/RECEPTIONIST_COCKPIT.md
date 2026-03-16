@@ -2,6 +2,12 @@
 
 > Implementation spec for MVPs 9, 10, and 11.
 > Based on deep-research analysis of the DevFaso/hms codebase.
+>
+> | MVP | Status |
+> |-----|--------|
+> | MVP 9 — Core Queue | ✅ Shipped — commit `ddbbb71` (2026-03-15) |
+> | MVP 10 — Operational Clearance | ✅ Shipped — commit `ddbbb71` (2026-03-15) |
+> | MVP 11 — Advanced Workflows | ⬜ Not started |
 
 ---
 

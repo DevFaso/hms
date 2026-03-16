@@ -23,6 +23,19 @@ export interface NotificationPage {
   number: number;
 }
 
+export interface NotificationPreference {
+  id?: string;
+  notificationType: string;
+  channel: string;
+  enabled: boolean;
+}
+
+export interface NotificationPreferenceUpdate {
+  notificationType: string;
+  channel: string;
+  enabled: boolean;
+}
+
 @Injectable({ providedIn: 'root' })
 export class NotificationService {
   private stompClient: Client | null = null;
@@ -177,5 +190,15 @@ export class NotificationService {
     this.stompClient?.deactivate().catch(() => undefined);
     this.stompClient = null;
     this.reconnectAttempts = 0;
+  }
+
+  // ── Notification Preferences ──────────────────────────────────────
+
+  getPreferences(): Observable<NotificationPreference[]> {
+    return this.http.get<NotificationPreference[]>('/notifications/preferences');
+  }
+
+  updatePreferences(updates: NotificationPreferenceUpdate[]): Observable<NotificationPreference[]> {
+    return this.http.put<NotificationPreference[]>('/notifications/preferences', updates);
   }
 }

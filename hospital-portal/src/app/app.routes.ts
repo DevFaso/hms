@@ -106,6 +106,13 @@ export const routes: Routes = [
           import('./patient-portal/my-sharing').then((m) => m.MySharingComponent),
       },
       {
+        path: 'my-family-access',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-family-access').then((m) => m.MyFamilyAccessComponent),
+      },
+      {
         path: 'my-summaries',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
@@ -289,6 +296,13 @@ export const routes: Routes = [
         path: 'notifications',
         loadComponent: () =>
           import('./notifications/notification-list').then((m) => m.NotificationListComponent),
+      },
+      {
+        path: 'notification-settings',
+        loadComponent: () =>
+          import('./notifications/notification-settings').then(
+            (m) => m.NotificationSettingsComponent,
+          ),
       },
 
       // Chat / Messages
@@ -515,6 +529,34 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./admin/admin').then((m) => m.AdminComponent),
+      },
+
+      // Feature Flags Management
+      {
+        path: 'feature-flags',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./feature-flags/feature-flags').then((m) => m.FeatureFlagsComponent),
+      },
+
+      // Platform Analytics
+      {
+        path: 'analytics',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () => import('./analytics/analytics').then((m) => m.AnalyticsComponent),
+      },
+
+      // Digital Signatures
+      {
+        path: 'digital-signatures',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./digital-signatures/digital-signatures').then(
+            (m) => m.DigitalSignaturesComponent,
+          ),
       },
 
       // Error pages inside shell

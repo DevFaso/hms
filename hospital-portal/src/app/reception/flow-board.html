@@ -1,28 +1,40 @@
 @if (!board) {
   <div class="flow-empty">Loading flow board…</div>
 } @else {
-  <div class="flow-grid">
+  <div class="flow-grid" cdkDropListGroup>
     @for (col of columns; track col.key) {
       <div class="flow-col" [ngClass]="col.colorClass">
         <div class="col-header">
           <span class="col-title">{{ col.label }}</span>
-          <span class="col-count">{{ colItems(col.key).length }}</span>
+          <span class="col-count">{{ localBoard[col.key].length }}</span>
         </div>
-        <div class="col-body">
-          @if (colItems(col.key).length === 0) {
+        <div
+          class="col-body"
+          cdkDropList
+          [id]="listId(col.key)"
+          [cdkDropListData]="localBoard[col.key]"
+          [cdkDropListConnectedTo]="listIds"
+          (cdkDropListDropped)="drop($event, col.key)"
+        >
+          @if (localBoard[col.key].length === 0) {
             <div class="col-empty">—</div>
           }
           @for (
-            item of colItems(col.key);
+            item of localBoard[col.key];
             track item.patientId + (item.appointmentId ?? item.encounterId ?? '')
           ) {
             <div
               class="patient-card"
+              cdkDrag
+              [cdkDragDisabled]="!item.encounterId"
               role="button"
               tabindex="0"
               (click)="patientClicked.emit(item.patientId)"
               (keydown.enter)="patientClicked.emit(item.patientId)"
             >
+              <div class="card-drag-handle" cdkDragHandle title="Drag to move">
+                <span class="drag-dots">⠿</span>
+              </div>
               <div class="card-name">{{ item.patientName }}</div>
               @if (item.appointmentTime) {
                 <div class="card-meta">{{ item.appointmentTime }}</div>
@@ -41,6 +53,9 @@
                   <span class="flag-dot bal" title="Outstanding balance"></span>
                 }
               </div>
+              @if (!item.encounterId) {
+                <div class="card-no-drag" title="No encounter – cannot drag">🔒</div>
+              }
             </div>
           }
         </div>

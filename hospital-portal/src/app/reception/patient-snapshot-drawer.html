@@ -132,6 +132,25 @@
             }
           </span>
         </div>
+
+        <!-- MVP 11: Eligibility attestation badge + button -->
+        @if (s.insurance.verifiedAt) {
+          <div class="snap-field">
+            <span class="field-label">Eligibility Verified</span>
+            <span class="field-val attested-chip">
+              <span class="material-symbols-outlined small">verified</span>
+              {{ s.insurance.verifiedBy }} · {{ s.insurance.verifiedAt | date: 'mediumDate' }}
+            </span>
+          </div>
+        }
+        @if (s.insurance.insuranceId) {
+          <div class="snap-field">
+            <button class="btn-attest" (click)="openAttestModal()">
+              <span class="material-symbols-outlined small">task_alt</span>
+              {{ s.insurance.verifiedAt ? 'Re-verify Eligibility' : 'Mark Eligibility Verified' }}
+            </button>
+          </div>
+        }
       </div>
 
       <!-- Billing -->
@@ -154,3 +173,47 @@
     }
   </div>
 </div>
+
+<!-- MVP 11: Eligibility attestation modal -->
+@if (showAttestModal()) {
+  <div
+    class="attest-backdrop"
+    role="button"
+    tabindex="0"
+    aria-label="Close attestation modal"
+    (click)="showAttestModal.set(false)"
+    (keydown.escape)="showAttestModal.set(false)"
+  ></div>
+  <div class="attest-modal" role="dialog" aria-modal="true" aria-label="Attest Eligibility">
+    <div class="attest-header">
+      <h3>Attest Insurance Eligibility</h3>
+      <button class="btn-icon-close" (click)="showAttestModal.set(false)" aria-label="Close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="attest-body">
+      <p class="attest-desc">
+        Manually confirm that the patient's insurance eligibility has been verified. This is a
+        placeholder until a live clearinghouse integration is available.
+      </p>
+      <label class="form-label" for="attest-notes">Notes (optional)</label>
+      <textarea
+        id="attest-notes"
+        class="form-textarea"
+        rows="3"
+        placeholder="e.g. Called CNSS — eligibility confirmed for 2026"
+        [ngModel]="attestNotes()"
+        (ngModelChange)="attestNotes.set($event)"
+      ></textarea>
+    </div>
+    <div class="attest-footer">
+      <button class="btn-secondary-sm" (click)="showAttestModal.set(false)">Cancel</button>
+      <button class="btn-primary-sm" [disabled]="attestSaving()" (click)="submitAttestation()">
+        @if (attestSaving()) {
+          <span class="material-symbols-outlined spin-sm">progress_activity</span>
+        }
+        Mark Verified
+      </button>
+    </div>
+  </div>
+}

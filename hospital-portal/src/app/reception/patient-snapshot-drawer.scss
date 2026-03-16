@@ -200,3 +200,132 @@
   display: inline-block;
   animation: spin 0.8s linear infinite;
 }
+
+// ── MVP 11: Eligibility attestation ──────────────────────────────────────────
+.attested-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #065f46;
+  background: #d1fae5;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.btn-attest {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  font-size: 0.8rem;
+  border: 1px solid var(--primary, #4f46e5);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--primary, #4f46e5);
+  cursor: pointer;
+  margin-top: 4px;
+
+  &:hover {
+    background: var(--primary-light, #eef2ff);
+  }
+}
+
+.small {
+  font-size: 16px;
+}
+
+.attest-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0 0 0 / 0.25);
+  z-index: 600;
+}
+.attest-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0 0 0 / 0.18);
+  z-index: 601;
+  width: min(400px, 95vw);
+}
+.attest-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  h3 {
+    margin: 0;
+    font-size: 1rem;
+  }
+}
+.attest-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.attest-desc {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin: 0;
+}
+.attest-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid #e2e8f0;
+}
+.form-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #64748b;
+}
+.form-textarea {
+  padding: 7px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  &:focus {
+    outline: none;
+    border-color: var(--primary, #4f46e5);
+  }
+}
+.btn-primary-sm {
+  background: var(--primary, #4f46e5);
+  color: #fff;
+  border: none;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+.btn-secondary-sm {
+  background: transparent;
+  border: 1px solid #e2e8f0;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #0f172a;
+}
+.spin-sm {
+  font-size: 16px;
+  animation: spin 0.8s linear infinite;
+}

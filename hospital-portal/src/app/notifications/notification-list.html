@@ -4,12 +4,18 @@
       <h1 class="page-title">Notifications</h1>
       <p class="page-subtitle">{{ unreadCount() }} unread notifications</p>
     </div>
-    @if (unreadCount() > 0) {
-      <button class="btn-secondary" (click)="markAllRead()">
-        <span class="material-symbols-outlined">done_all</span>
-        Mark all read
-      </button>
-    }
+    <div class="header-actions">
+      @if (unreadCount() > 0) {
+        <button class="btn-secondary" (click)="markAllRead()">
+          <span class="material-symbols-outlined">done_all</span>
+          Mark all read
+        </button>
+      }
+      <a class="btn-secondary" routerLink="/notification-settings">
+        <span class="material-symbols-outlined">tune</span>
+        Preferences
+      </a>
+    </div>
   </div>
 
   <!-- Filters -->

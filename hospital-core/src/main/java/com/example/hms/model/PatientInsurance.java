@@ -104,6 +104,17 @@ public class PatientInsurance extends BaseEntity {
     @Column(name = "linked_as", length = 10)
     private String linkedAs;
 
+    // ── MVP 11: Eligibility attestation ──────────────────────────────────────
+    @Column(name = "verified_at")
+    private java.time.LocalDateTime verifiedAt;
+
+    @Size(max = 255)
+    @Column(name = "verified_by", length = 255)
+    private String verifiedBy;
+
+    @Column(name = "eligibility_notes", columnDefinition = "TEXT")
+    private String eligibilityNotes;
+
     @PrePersist
     @PreUpdate
     private void validateAndNormalize() {

@@ -11,6 +11,8 @@ import com.example.hms.payload.dto.portal.MedicationRefillRequestDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
 import com.example.hms.payload.dto.portal.CareTeamDTO;
 import com.example.hms.payload.dto.portal.AccessLogEntryDTO;
+import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
+import com.example.hms.payload.dto.portal.ProxyResponseDTO;
 import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
 import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
 import com.example.hms.payload.dto.medication.PatientMedicationResponseDTO;
@@ -127,4 +129,20 @@ public interface PatientPortalService {
 
     // ── Access log (who viewed my records) ───────────────────────────────
     Page<AccessLogEntryDTO> getMyAccessLog(Authentication auth, Pageable pageable);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // PHASE 3 — Proxy / Family Access
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** List proxies I have granted (people who can view my data). */
+    List<ProxyResponseDTO> getMyProxies(Authentication auth);
+
+    /** Grant proxy access to another user. */
+    ProxyResponseDTO grantProxy(Authentication auth, ProxyGrantRequestDTO dto);
+
+    /** Revoke a previously granted proxy. */
+    void revokeProxy(Authentication auth, UUID proxyId);
+
+    /** List patients whose data I can view as proxy. */
+    List<ProxyResponseDTO> getMyProxyAccess(Authentication auth);
 }

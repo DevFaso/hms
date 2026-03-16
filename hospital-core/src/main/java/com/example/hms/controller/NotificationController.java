@@ -1,18 +1,27 @@
 package com.example.hms.controller;
 
+import com.example.hms.controller.support.ControllerAuthUtils;
+import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Notification;
+import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
 import com.example.hms.service.NotificationService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.security.Principal;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -23,6 +32,7 @@ import org.springframework.data.domain.Pageable;
 @RequiredArgsConstructor
 public class NotificationController {
     private final NotificationService notificationService;
+    private final ControllerAuthUtils authUtils;
 
     @GetMapping
     public ResponseEntity<Page<Notification>> getNotifications(
@@ -55,4 +65,23 @@ public class NotificationController {
         return ResponseEntity.ok().build();
     }
 
+    // ── Notification preferences ─────────────────────────────────────────
+
+    @GetMapping("/preferences")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<NotificationPreferenceDTO>> getMyPreferences(Authentication auth) {
+        UUID userId = authUtils.resolveUserId(auth)
+                .orElseThrow(() -> new BusinessException("Unable to resolve user"));
+        return ResponseEntity.ok(notificationService.getPreferences(userId));
+    }
+
+    @PutMapping("/preferences")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<NotificationPreferenceDTO>> updateMyPreferences(
+            Authentication auth,
+            @Valid @RequestBody List<NotificationPreferenceUpdateDTO> updates) {
+        UUID userId = authUtils.resolveUserId(auth)
+                .orElseThrow(() -> new BusinessException("Unable to resolve user"));
+        return ResponseEntity.ok(notificationService.updatePreferences(userId, updates));
+    }
 }

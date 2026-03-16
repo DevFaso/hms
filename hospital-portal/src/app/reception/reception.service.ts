@@ -43,12 +43,15 @@ export interface ReceptionQueueItem {
 }
 
 export interface InsuranceSummary {
+  insuranceId: string | null;
   hasActiveCoverage: boolean;
   primaryPayer: string | null;
   policyNumber: string | null;
   expiresOn: string | null;
   expired: boolean;
   hasPrimary: boolean;
+  verifiedAt: string | null;
+  verifiedBy: string | null;
 }
 
 export interface BillingSummary {
@@ -96,6 +99,49 @@ export interface FlowBoard {
   noShow: ReceptionQueueItem[];
   completed: ReceptionQueueItem[];
   walkIn: ReceptionQueueItem[];
+}
+
+// ── MVP 11 types ────────────────────────────────────────────────────────────
+
+export interface DuplicateCandidate {
+  patientId: string;
+  fullName: string;
+  mrn: string | null;
+  dateOfBirth: string | null;
+  phone: string | null;
+  email: string | null;
+  confidenceScore: number;
+}
+
+export interface WaitlistEntryRequest {
+  patientId: string;
+  departmentId: string;
+  preferredProviderId?: string | null;
+  requestedDateFrom?: string | null;
+  requestedDateTo?: string | null;
+  priority?: 'ROUTINE' | 'URGENT' | 'STAT';
+  reason?: string | null;
+}
+
+export interface WaitlistEntryResponse {
+  id: string;
+  hospitalId: string;
+  patientId: string;
+  patientName: string;
+  mrn: string | null;
+  departmentId: string;
+  departmentName: string;
+  preferredProviderId: string | null;
+  preferredProviderName: string | null;
+  requestedDateFrom: string | null;
+  requestedDateTo: string | null;
+  priority: string;
+  reason: string | null;
+  /** WAITING | OFFERED | CLOSED */
+  status: string;
+  offeredAppointmentId: string | null;
+  createdAt: string;
+  createdBy: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -148,5 +194,59 @@ export class ReceptionService {
 
   recordPayment(invoiceId: string, amount: number, method = 'CASH'): Observable<unknown> {
     return this.http.post(`/billing-invoices/${invoiceId}/payments`, { amount, method });
+  }
+
+  // ── MVP 11: Duplicate candidate detection ──────────────────────────────────
+
+  getDuplicateCandidates(opts: {
+    name?: string;
+    dob?: string;
+    phone?: string;
+  }): Observable<DuplicateCandidate[]> {
+    let params = new HttpParams();
+    if (opts.name) params = params.set('name', opts.name);
+    if (opts.dob) params = params.set('dob', opts.dob);
+    if (opts.phone) params = params.set('phone', opts.phone);
+    return this.http.get<DuplicateCandidate[]>(`${this.base}/patients/duplicate-candidates`, {
+      params,
+    });
+  }
+
+  // ── MVP 11: Waitlist ───────────────────────────────────────────────────────
+
+  addToWaitlist(request: WaitlistEntryRequest): Observable<WaitlistEntryResponse> {
+    return this.http.post<WaitlistEntryResponse>(`${this.base}/waitlist`, request);
+  }
+
+  getWaitlist(opts?: {
+    departmentId?: string;
+    status?: string;
+  }): Observable<WaitlistEntryResponse[]> {
+    let params = new HttpParams();
+    if (opts?.departmentId) params = params.set('departmentId', opts.departmentId);
+    if (opts?.status) params = params.set('status', opts.status);
+    return this.http.get<WaitlistEntryResponse[]>(`${this.base}/waitlist`, { params });
+  }
+
+  offerWaitlistSlot(id: string): Observable<WaitlistEntryResponse> {
+    return this.http.post<WaitlistEntryResponse>(`${this.base}/waitlist/${id}/offer`, {});
+  }
+
+  closeWaitlistEntry(id: string): Observable<void> {
+    return this.http.post<void>(`${this.base}/waitlist/${id}/close`, {});
+  }
+
+  // ── MVP 11: Eligibility attestation ───────────────────────────────────────
+
+  attestEligibility(insuranceId: string, eligibilityNotes: string): Observable<void> {
+    return this.http.post<void>(`${this.base}/insurance/${insuranceId}/attest-eligibility`, {
+      eligibilityNotes,
+    });
+  }
+
+  // ── MVP 11: Flow board encounter status update ─────────────────────────────
+
+  updateEncounterStatus(encounterId: string, status: string): Observable<void> {
+    return this.http.patch<void>(`${this.base}/encounters/${encounterId}/status`, { status });
   }
 }

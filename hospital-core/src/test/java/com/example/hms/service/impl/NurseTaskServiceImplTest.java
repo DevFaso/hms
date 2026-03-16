@@ -31,12 +31,18 @@ import com.example.hms.payload.dto.nurse.NurseMedicationTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseOrderTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
 import com.example.hms.model.PatientVitalSign;
+import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.AnnouncementRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.MedicationAdministrationRecordRepository;
+import com.example.hms.repository.NotificationRepository;
+import com.example.hms.repository.NursingNoteRepository;
+import com.example.hms.repository.NursingTaskRepository;
+import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRepository;
 import com.example.hms.service.NurseDashboardService;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -65,6 +71,12 @@ class NurseTaskServiceImplTest {
     @Mock private AnnouncementRepository announcementRepository;
     @Mock private StaffRepository staffRepository;
     @Mock private HospitalRepository hospitalRepository;
+    @Mock private AdmissionRepository admissionRepository;
+    @Mock private PatientRepository patientRepository;
+    @Mock private NursingTaskRepository nursingTaskRepository;
+    @Mock private NursingNoteRepository nursingNoteRepository;
+    @Mock private NotificationRepository notificationRepository;
+    @Mock private UserRepository userRepository;
 
     private NurseTaskServiceImpl service;
 
@@ -72,7 +84,9 @@ class NurseTaskServiceImplTest {
     void setUp() {
         service = Mockito.spy(new NurseTaskServiceImpl(
             nurseDashboardService, prescriptionRepository, marRepository,
-            vitalSignRepository, announcementRepository, staffRepository, hospitalRepository));
+            vitalSignRepository, announcementRepository, staffRepository, hospitalRepository,
+            admissionRepository, patientRepository, nursingTaskRepository,
+            nursingNoteRepository, notificationRepository, userRepository));
 
         // Default stubs so synthetic/fallback paths activate in existing tests
         lenient().when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(any(), any()))

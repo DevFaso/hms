@@ -193,6 +193,45 @@ interface ApiWrapper<T> {
   success: boolean;
 }
 
+/* ── Platform Analytics DTOs ── */
+
+export interface PlatformAnalytics {
+  totalPatients: number;
+  totalEncounters: number;
+  totalAppointments: number;
+  totalInvoices: number;
+  totalLabOrders: number;
+  totalPrescriptions: number;
+  totalUsers: number;
+  activeHospitals: number;
+  appointmentTrend: TrendPoint[];
+  encounterTrend: TrendPoint[];
+  patientRegistrationTrend: TrendPoint[];
+  appointmentsByStatus: Record<string, number>;
+  encountersByStatus: Record<string, number>;
+  invoicesByStatus: Record<string, number>;
+  departmentUtilization: DepartmentUtilization[];
+  hospitalMetrics: HospitalMetric[];
+}
+
+export interface TrendPoint {
+  date: string;
+  count: number;
+}
+
+export interface DepartmentUtilization {
+  departmentName: string;
+  appointmentCount: number;
+  encounterCount: number;
+}
+
+export interface HospitalMetric {
+  hospitalName: string;
+  patientCount: number;
+  appointmentCount: number;
+  staffCount: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class DashboardService {
   private readonly http = inject(HttpClient);
@@ -300,5 +339,14 @@ export class DashboardService {
     return this.http
       .get<ApiWrapper<PatientSnapshot>>(`/api/me/patients/${patientId}/snapshot`)
       .pipe(map((res) => res.data));
+  }
+
+  /* ── Platform Analytics (Super Admin) ── */
+
+  getAnalytics(trendDays = 14): Observable<PlatformAnalytics> {
+    const params = new HttpParams().set('trendDays', trendDays);
+    return this.http
+      .get<PlatformAnalytics>('/api/super-admin/analytics', { params })
+      .pipe(catchError(() => of({} as PlatformAnalytics)));
   }
 }

@@ -573,3 +573,607 @@
     flex-wrap: wrap;
   }
 }
+
+/* ══════════════════════════════════════════════════════════
+   MVP-12: Workboard
+   ══════════════════════════════════════════════════════════ */
+
+.workboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  padding: 0.5rem 0;
+}
+
+.workboard-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+
+  &.workboard-card-alert {
+    border-left: 4px solid #f59e0b;
+  }
+}
+
+.workboard-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.workboard-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: #6b7280;
+
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+
+    .material-symbols-outlined {
+      font-size: 1rem;
+    }
+  }
+}
+
+.workboard-card-indicators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 20px;
+
+  .material-symbols-outlined {
+    font-size: 0.95rem;
+  }
+
+  &.indicator-warn {
+    background: #fff7ed;
+    color: #c2410c;
+    border: 1px solid #fed7aa;
+  }
+  &.indicator-ok {
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+  }
+  &.indicator-neutral {
+    background: #f9fafb;
+    color: #374151;
+    border: 1px solid #e5e7eb;
+  }
+}
+
+.workboard-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+/* ══════════════════════════════════════════════════════════
+   MVP-12: Flow Board
+   ══════════════════════════════════════════════════════════ */
+
+.flow-board {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  min-height: 400px;
+
+  @media (max-width: 1100px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.flow-column {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.flow-column-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #fff;
+
+  .material-symbols-outlined {
+    font-size: 1.1rem;
+  }
+
+  .flow-count {
+    margin-left: auto;
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    width: 1.4rem;
+    height: 1.4rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+  }
+
+  &.flow-header-pending {
+    background: #6b7280;
+  }
+  &.flow-header-active {
+    background: #2563eb;
+  }
+  &.flow-header-critical {
+    background: #dc2626;
+  }
+  &.flow-header-discharge {
+    background: #7c3aed;
+  }
+}
+
+.flow-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.flow-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.82rem;
+
+  &.flow-card-critical {
+    border-left: 3px solid #dc2626;
+  }
+
+  .flow-card-name {
+    font-weight: 600;
+    margin-bottom: 0.2rem;
+    a {
+      color: #2563eb;
+      text-decoration: none;
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+
+  .flow-card-room {
+    color: #6b7280;
+    font-size: 0.75rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .flow-card-wait {
+    color: #9ca3af;
+    font-size: 0.72rem;
+    margin-top: 0.25rem;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   MVP-12: Acuity Badges
+   ══════════════════════════════════════════════════════════ */
+
+.acuity-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 20px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+
+  &.acuity-1 {
+    background: #d1fae5;
+    color: #065f46;
+  }
+  &.acuity-2 {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+  &.acuity-3 {
+    background: #fef3c7;
+    color: #92400e;
+  }
+  &.acuity-4 {
+    background: #fee2e2;
+    color: #b91c1c;
+  }
+  &.acuity-5 {
+    background: #fecaca;
+    color: #7f1d1d;
+    font-weight: 900;
+  }
+}
+
+/* ══════════════════════════════════════════════════════════
+   MVP-12: Vitals Capture Modal
+   ══════════════════════════════════════════════════════════ */
+
+.modal-vitals {
+  max-width: 640px;
+  width: 95vw;
+
+  h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    .material-symbols-outlined {
+      color: #2563eb;
+    }
+  }
+}
+
+.vitals-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem 1rem;
+  margin-top: 1rem;
+
+  @media (max-width: 480px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.vitals-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+
+  &.vitals-field-full {
+    grid-column: 1 / -1;
+  }
+
+  label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #374151;
+  }
+
+  input {
+    padding: 0.4rem 0.65rem;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.15s;
+
+    &:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+    }
+    &::placeholder {
+      color: #9ca3af;
+    }
+  }
+}
+
+/* Admissions row highlight */
+.discharge-row {
+  background: #faf5ff;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MVP 13 — Task Board · Inbox · Care Notes
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── Task Board ──────────────────────────────────────────── */
+
+.task-board-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+
+  h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #111827;
+  }
+}
+
+.task-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.task-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  transition: box-shadow 0.15s;
+
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  }
+
+  &.task-overdue {
+    border-left: 3px solid #dc2626;
+  }
+
+  &.priority-stat {
+    border-left: 3px solid #dc2626;
+  }
+  &.priority-urgent {
+    border-left: 3px solid #f59e0b;
+  }
+}
+
+.task-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.4rem;
+}
+
+.task-category {
+  font-weight: 600;
+  font-size: 0.82rem;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.task-priority-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  text-transform: uppercase;
+}
+
+.priority-stat .task-priority-badge {
+  background: #fef2f2;
+  color: #dc2626;
+}
+.priority-urgent .task-priority-badge {
+  background: #fffbeb;
+  color: #d97706;
+}
+.task-priority-badge {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.task-card-body {
+  margin-bottom: 0.5rem;
+}
+
+.task-patient {
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.task-mrn {
+  margin-left: 0.5rem;
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+
+.task-description {
+  margin: 0.15rem 0;
+  font-size: 0.82rem;
+  color: #6b7280;
+}
+
+.task-due {
+  font-size: 0.78rem;
+  color: #6b7280;
+
+  &.overdue-text {
+    color: #dc2626;
+    font-weight: 600;
+  }
+}
+
+.overdue-badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  padding: 0.1rem 0.35rem;
+  border-radius: 6px;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.task-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.task-completed-info {
+  font-size: 0.78rem;
+  color: #6b7280;
+  font-style: italic;
+}
+
+/* ── Inbox ───────────────────────────────────────────────── */
+
+.inbox-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+
+  h3 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #111827;
+  }
+}
+
+.inbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.inbox-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    box-shadow 0.15s;
+
+  &:hover {
+    background: #f9fafb;
+  }
+
+  &.inbox-unread {
+    border-left: 3px solid #2563eb;
+    background: #eff6ff;
+  }
+}
+
+.inbox-icon {
+  .material-symbols-outlined {
+    font-size: 1.25rem;
+    color: #6b7280;
+  }
+
+  .inbox-unread & .material-symbols-outlined {
+    color: #2563eb;
+  }
+}
+
+.inbox-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.inbox-message {
+  margin: 0 0 0.25rem;
+  font-size: 0.88rem;
+  color: #111827;
+  line-height: 1.4;
+}
+
+.inbox-time {
+  font-size: 0.75rem;
+  color: #9ca3af;
+}
+
+.badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  margin-left: 0.35rem;
+  vertical-align: middle;
+}
+
+/* ── Care Note & Task Create Modals ──────────────────────── */
+
+.modal-medium {
+  max-width: 520px;
+}
+
+.modal-large {
+  max-width: 640px;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.75rem;
+
+  label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #374151;
+  }
+
+  select.reason-input {
+    appearance: auto;
+  }
+}
+
+.form-row-inline {
+  display: flex;
+  gap: 1rem;
+
+  .form-row {
+    flex: 1;
+  }
+}
+
+.template-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  overflow: hidden;
+  width: fit-content;
+}
+
+.toggle-btn {
+  padding: 0.4rem 1.2rem;
+  border: none;
+  background: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &.active {
+    background: #1e40af;
+    color: #fff;
+  }
+
+  &:not(.active):hover {
+    background: #f3f4f6;
+  }
+}
+
+.care-note-fields {
+  margin-top: 0.5rem;
+}

@@ -203,6 +203,15 @@ public class DigitalSignatureServiceImpl implements DigitalSignatureService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<SignatureResponseDTO> getAllSignatures() {
+        log.debug("Fetching all signatures for admin listing");
+        return signatureRepository.findAll().stream()
+            .map(signatureMapper::toResponseDTO)
+            .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<SignatureResponseDTO> getSignaturesByReportId(SignatureType reportType, UUID reportId) {
         log.debug("Fetching signatures for report type: {}, ID: {}", reportType, reportId);
 

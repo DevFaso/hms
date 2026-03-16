@@ -242,4 +242,50 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V19: MVP 11 — Waitlist management + insurance attestation
+         Adds reception.waitlist table and insurance verification columns.
+         ================================================================= -->
+    <changeSet id="V19-mvp11-waitlist-and-insurance-attestation" author="hms-team" runOnChange="false">
+        <sqlFile path="V19__mvp11_waitlist_and_insurance_attestation.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V20: MVP 12 — Nurse Station Phase 2 indexes
+         Composite indexes for admissions + patient vital signs lookups.
+         ================================================================= -->
+    <changeSet id="V20-mvp12-nurse-station-phase2" author="hms-team" runOnChange="false">
+        <sqlFile path="V20__mvp12_nurse_station_phase2.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V21: MVP 13 — Nursing Task Board
+         Creates clinical.nursing_tasks table for bedside care tracking.
+         ================================================================= -->
+    <changeSet id="V21-mvp13-nursing-tasks" author="hms-team" runOnChange="false">
+        <sqlFile path="V21__mvp13_nursing_tasks.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V22: MVP 14 — Proxy/Family Access + Notification Preferences
+         - clinical.patient_proxies: proxy/family linked-account grants
+         - security.notification_preferences: per-user delivery settings
+         - security.notifications.type column for categorisation
+         ================================================================= -->
+    <changeSet id="V22-mvp14-proxy-access-notification-preferences" author="hms-team" runOnChange="false">
+        <sqlFile path="V22__mvp14_proxy_access_notification_preferences.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

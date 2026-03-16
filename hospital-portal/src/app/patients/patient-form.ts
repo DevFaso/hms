@@ -8,7 +8,8 @@ import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
-import { switchMap, catchError } from 'rxjs/operators';
+import { ReceptionService, DuplicateCandidate } from '../reception/reception.service';
+import { switchMap, catchError, debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 import { EMPTY } from 'rxjs';
 
 @Component({
@@ -26,11 +27,18 @@ export class PatientFormComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly hospitalService = inject(HospitalService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly receptionService = inject(ReceptionService);
 
   saving = false;
   hospitals: HospitalResponse[] = [];
   /** true when the logged-in user already has a hospital in their JWT / context */
   hasContextHospital = false;
+
+  // ── MVP 11: Duplicate warning ───────────────────────────────────────────
+  duplicateCandidates: DuplicateCandidate[] = [];
+  showDuplicateWarning = false;
+  private lastDuplicateCheck = '';
+  private duplicateCheckSubject = new Subject<{ name: string; dob: string }>();
 
   form: PatientCreateRequest = {
     userId: '',
@@ -73,6 +81,27 @@ export class PatientFormComponent implements OnInit {
         error: () => this.toast.error('Failed to load hospital'),
       });
     }
+
+    // ── MVP 11: debounce duplicate check on name + dob changes ────────────
+    this.duplicateCheckSubject
+      .pipe(
+        debounceTime(600),
+        distinctUntilChanged((a, b) => a.name === b.name && a.dob === b.dob),
+      )
+      .subscribe(({ name, dob }) => {
+        if (name.length < 3) {
+          this.duplicateCandidates = [];
+          return;
+        }
+        this.receptionService.getDuplicateCandidates({ name, dob }).subscribe({
+          next: (candidates) => {
+            this.duplicateCandidates = candidates;
+          },
+          error: () => {
+            /* silent — don't block registration */
+          },
+        });
+      });
   }
 
   get lockedHospitalName(): string {
@@ -81,6 +110,19 @@ export class PatientFormComponent implements OnInit {
 
   get hospitalLocked(): boolean {
     return !this.roleContext.isSuperAdmin();
+  }
+
+  /** Called when first name, last name, or date of birth changes. */
+  onNameOrDobChange(): void {
+    const name = `${this.form.firstName} ${this.form.lastName}`.trim();
+    const dob = this.form.dateOfBirth ?? '';
+    this.duplicateCheckSubject.next({ name, dob });
+  }
+
+  /** Dismiss the duplicate warning and allow submission to continue. */
+  proceedDespiteDuplicate(): void {
+    this.showDuplicateWarning = false;
+    this.submitRegistration();
   }
 
   onSubmit(): void {
@@ -101,6 +143,17 @@ export class PatientFormComponent implements OnInit {
       this.toast.error('Please select a hospital');
       return;
     }
+
+    // ── MVP 11: Show duplicate warning if candidates exist ─────────────────
+    if (this.duplicateCandidates.length > 0) {
+      this.showDuplicateWarning = true;
+      return;
+    }
+
+    this.submitRegistration();
+  }
+
+  private submitRegistration(): void {
     this.saving = true;
 
     // Step 1: Create a User account with ROLE_PATIENT via admin-register
