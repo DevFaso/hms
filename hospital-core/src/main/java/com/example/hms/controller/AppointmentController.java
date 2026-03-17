@@ -14,6 +14,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -152,13 +153,17 @@ public class AppointmentController {
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
         @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
         @RequestParam(required = false) String search,
+        @RequestParam(name = "page", defaultValue = "0") int page,
+        @RequestParam(name = "size", defaultValue = "50") int size,
         @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication authentication
     ) {
         Locale locale = parseLocale(lang);
+        // Normalize blank search to null so it does not bypass the no-filters branch
+        String normalizedSearch = (search != null && search.isBlank()) ? null : search;
         // When no filters provided, fall back to the original user-scoped list
         if (patientId == null && staffId == null && hospitalId == null
-                && fromDate == null && toDate == null && search == null) {
+                && fromDate == null && toDate == null && normalizedSearch == null) {
             return ResponseEntity.ok(
                 appointmentService.getAppointmentsForUser(getUsername(authentication), locale)
             );
@@ -169,12 +174,16 @@ public class AppointmentController {
             .hospitalId(hospitalId)
             .fromDate(fromDate)
             .toDate(toDate)
-            .search(search)
+            .search(normalizedSearch)
             .build();
-        Pageable pageable = PageRequest.of(0, 500, Sort.by(Sort.Direction.DESC, "appointmentDate"));
-        Page<AppointmentResponseDTO> page = appointmentService.searchAppointments(
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200), Sort.by(Sort.Direction.DESC, "appointmentDate"));
+        Page<AppointmentResponseDTO> resultPage = appointmentService.searchAppointments(
             filter, pageable, locale, getUsername(authentication));
-        return ResponseEntity.ok(page.getContent());
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("X-Total-Count", String.valueOf(resultPage.getTotalElements()));
+        headers.add("X-Total-Pages", String.valueOf(resultPage.getTotalPages()));
+        headers.add("X-Has-Next", String.valueOf(resultPage.hasNext()));
+        return ResponseEntity.ok().headers(headers).body(resultPage.getContent());
     }
 
     // ---- DELETE ----

@@ -83,7 +83,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                         .patientId(order.getPatient().getId())
                         .testName(testName)
                         .resultValue(result.getResultValue())
-                        .abnormalFlag(result.getAbnormalFlag() != null ? result.getAbnormalFlag().name() : "NORMAL") // real flag when set
+                        .abnormalFlag(result.getAbnormalFlag() != null ? result.getAbnormalFlag().name() : (result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name())) // real flag when set
                         .resultedAt(result.getResultDate())
                         .orderingContext(order.getClinicalIndication())
                         .build());
@@ -190,7 +190,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                         .id(UUID.randomUUID())
                         .category("PHARMACY_CLARIFICATION")
                         .source("Pharmacy")
-                        .subject(clarificationCount + " prescription" + (clarificationCount > 1 ? "s" : "") + " need clarification")
+                        .subject(clarificationCount + " prescription" + (clarificationCount > 1 ? "s" : "") + (clarificationCount == 1 ? " needs clarification" : " need clarification"))
                         .urgency("HIGH")
                         .timestamp(LocalDateTime.now())
                         .actionType("REVIEW")

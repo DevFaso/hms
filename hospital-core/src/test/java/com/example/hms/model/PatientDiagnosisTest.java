@@ -4,7 +4,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -49,7 +50,7 @@ class PatientDiagnosisTest {
         void fullBuild() {
             Patient patient = new Patient();
             Staff diagnosedBy = new Staff();
-            LocalDateTime diagnosedAt = LocalDateTime.of(2026, 3, 14, 10, 0);
+            OffsetDateTime diagnosedAt = OffsetDateTime.of(2026, 3, 14, 10, 0, 0, 0, ZoneOffset.UTC);
 
             PatientDiagnosis d = PatientDiagnosis.builder()
                     .patient(patient)
@@ -104,7 +105,7 @@ class PatientDiagnosisTest {
         @DisplayName("setter updates are reflected by getters")
         void settersWork() {
             PatientDiagnosis d = new PatientDiagnosis();
-            LocalDateTime now = LocalDateTime.now();
+            OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
 
             d.setIcdCode("I10");
             d.setDescription("Hypertension");

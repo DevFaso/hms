@@ -13,7 +13,8 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 /**
  * A structured, persistable patient diagnosis record.
@@ -56,5 +57,5 @@ public class PatientDiagnosis extends BaseEntity {
 
     @Column(nullable = false)
     @Builder.Default
-    private LocalDateTime diagnosedAt = LocalDateTime.now();
+    private OffsetDateTime diagnosedAt = OffsetDateTime.now(ZoneOffset.UTC);
 }

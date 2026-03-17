@@ -114,13 +114,15 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
     }
 
     private List<PlatformAnalyticsDTO.DepartmentUtilization> buildDepartmentUtilization() {
+        // Preload all appointments once and group by department ID to avoid N+1
+        Map<UUID, Long> countsByDept = appointmentRepository.findAll().stream()
+                .filter(a -> a.getDepartment() != null)
+                .collect(Collectors.groupingBy(a -> a.getDepartment().getId(), Collectors.counting()));
+
         return departmentRepository.findAll().stream()
                 .map(dept -> PlatformAnalyticsDTO.DepartmentUtilization.builder()
                         .departmentName(dept.getName())
-                        .appointmentCount(appointmentRepository.findByHospital_Id(dept.getHospital().getId())
-                                .stream()
-                                .filter(a -> a.getDepartment() != null && a.getDepartment().getId().equals(dept.getId()))
-                                .count())
+                        .appointmentCount(countsByDept.getOrDefault(dept.getId(), 0L))
                         .encounterCount(0)
                         .build())
                 .sorted(Comparator.comparingLong(PlatformAnalyticsDTO.DepartmentUtilization::getAppointmentCount).reversed())
@@ -129,14 +131,20 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
     }
 
     private List<PlatformAnalyticsDTO.HospitalMetric> buildHospitalMetrics() {
+        // Preload all patients and appointments once to avoid N+1
+        Map<UUID, Long> patientsByHospital = patientRepository.findAll().stream()
+                .filter(p -> p.getHospitalId() != null)
+                .collect(Collectors.groupingBy(p -> p.getHospitalId(), Collectors.counting()));
+        Map<UUID, Long> appointmentsByHospital = appointmentRepository.findAll().stream()
+                .filter(a -> a.getHospital() != null)
+                .collect(Collectors.groupingBy(a -> a.getHospital().getId(), Collectors.counting()));
+
         return hospitalRepository.findAll().stream()
                 .filter(h -> h.isActive())
                 .map(h -> PlatformAnalyticsDTO.HospitalMetric.builder()
                         .hospitalName(h.getName())
-                        .patientCount(patientRepository.findAll().stream()
-                                .filter(p -> h.getId().equals(p.getHospitalId()))
-                                .count())
-                        .appointmentCount(appointmentRepository.findByHospital_Id(h.getId()).size())
+                        .patientCount(patientsByHospital.getOrDefault(h.getId(), 0L))
+                        .appointmentCount(appointmentsByHospital.getOrDefault(h.getId(), 0L))
                         .staffCount(0)
                         .build())
                 .sorted(Comparator.comparingLong(PlatformAnalyticsDTO.HospitalMetric::getPatientCount).reversed())

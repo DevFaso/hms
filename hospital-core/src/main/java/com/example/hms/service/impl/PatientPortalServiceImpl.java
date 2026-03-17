@@ -718,7 +718,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<ProxyResponseDTO> getMyProxies(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
-        return patientProxyRepository.findByGrantorPatientIdAndStatus(patientId, ProxyStatus.ACTIVE)
+        return patientProxyRepository.findByGrantorPatient_IdAndStatus(patientId, ProxyStatus.ACTIVE)
                 .stream().map(this::toProxyResponseDTO).toList();
     }
 
@@ -736,7 +736,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
 
         // Prevent duplicate active proxy
-        patientProxyRepository.findByGrantorPatientIdAndProxyUserIdAndStatus(
+        patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
                 patient.getId(), proxyUser.getId(), ProxyStatus.ACTIVE
         ).ifPresent(existing -> {
             throw new BusinessException("An active proxy already exists for this user");
@@ -776,7 +776,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<ProxyResponseDTO> getMyProxyAccess(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication"));
-        return patientProxyRepository.findByProxyUserIdAndStatus(userId, ProxyStatus.ACTIVE)
+        return patientProxyRepository.findByProxyUser_IdAndStatus(userId, ProxyStatus.ACTIVE)
                 .stream().map(this::toProxyResponseDTO).toList();
     }
 

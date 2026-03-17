@@ -15,16 +15,16 @@ import java.util.UUID;
 public interface PatientProxyRepository extends JpaRepository<PatientProxy, UUID> {
 
     /** Proxies granted BY a patient (I granted others access to my data) */
-    Page<PatientProxy> findByGrantorPatientIdAndStatus(UUID grantorPatientId, ProxyStatus status, Pageable pageable);
+    Page<PatientProxy> findByGrantorPatient_IdAndStatus(UUID grantorPatientId, ProxyStatus status, Pageable pageable);
 
-    List<PatientProxy> findByGrantorPatientIdAndStatus(UUID grantorPatientId, ProxyStatus status);
+    List<PatientProxy> findByGrantorPatient_IdAndStatus(UUID grantorPatientId, ProxyStatus status);
 
     /** Proxies granted TO a user (I can view someone else's data) */
-    Page<PatientProxy> findByProxyUserIdAndStatus(UUID proxyUserId, ProxyStatus status, Pageable pageable);
+    Page<PatientProxy> findByProxyUser_IdAndStatus(UUID proxyUserId, ProxyStatus status, Pageable pageable);
 
-    List<PatientProxy> findByProxyUserIdAndStatus(UUID proxyUserId, ProxyStatus status);
+    List<PatientProxy> findByProxyUser_IdAndStatus(UUID proxyUserId, ProxyStatus status);
 
     /** Check for duplicate active proxy */
-    Optional<PatientProxy> findByGrantorPatientIdAndProxyUserIdAndStatus(
+    Optional<PatientProxy> findByGrantorPatient_IdAndProxyUser_IdAndStatus(
             UUID grantorPatientId, UUID proxyUserId, ProxyStatus status);
 }
