@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Encounter;
@@ -44,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -779,5 +781,76 @@ class PatientSnapshotServiceImplTest {
 
         assertEquals(1, result.getActiveDiagnoses().size());
         assertEquals("Hypertension", result.getActiveDiagnoses().get(0));
+    }
+
+    // ========== Branch coverage: recent notes, diagnosis exception ==========
+
+    @Test
+    void getSnapshot_withRecentNotes_shouldPopulateShortNotes() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        Staff noteStaff = mock(Staff.class);
+        when(noteStaff.getFullName()).thenReturn("Dr. Smith");
+
+        Encounter encWithNotes = mock(Encounter.class);
+        lenient().when(encWithNotes.getNotes()).thenReturn("Patient presents with headache and dizziness");
+        lenient().when(encWithNotes.getStaff()).thenReturn(noteStaff);
+        lenient().when(encWithNotes.getEncounterType()).thenReturn(EncounterType.OUTPATIENT);
+        lenient().when(encWithNotes.getEncounterDate()).thenReturn(LocalDateTime.of(2026, 3, 14, 10, 0));
+
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(encWithNotes));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+                .thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertFalse(result.getRecentNotes().isEmpty());
+        assertEquals("Dr. Smith", result.getRecentNotes().get(0).getAuthor());
+        assertEquals("OUTPATIENT", result.getRecentNotes().get(0).getType());
+        assertTrue(result.getRecentNotes().get(0).getSnippet().contains("headache"));
+    }
+
+    @Test
+    void getSnapshot_withLongNotes_shouldTruncateTo200() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        String longNote = "A".repeat(250);
+
+        Encounter enc = mock(Encounter.class);
+        lenient().when(enc.getNotes()).thenReturn(longNote);
+        lenient().when(enc.getStaff()).thenReturn(null);
+        lenient().when(enc.getEncounterType()).thenReturn(null);
+        lenient().when(enc.getEncounterDate()).thenReturn(null);
+
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+                .thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertFalse(result.getRecentNotes().isEmpty());
+        PatientSnapshotDTO.NoteItem note = result.getRecentNotes().get(0);
+        assertTrue(note.getSnippet().length() <= 201); // 200 + ellipsis char
+        assertEquals("Unknown", note.getAuthor()); // null staff → Unknown
+        assertEquals("Encounter", note.getType()); // null encounterType → Encounter
+        assertEquals("", note.getDate()); // null date → empty
     }
 }

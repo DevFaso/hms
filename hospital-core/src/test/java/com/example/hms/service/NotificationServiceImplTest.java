@@ -1,8 +1,17 @@
 package com.example.hms.service;
 
 import com.example.hms.controller.NotificationWebSocketController;
+import com.example.hms.enums.NotificationChannel;
+import com.example.hms.enums.NotificationType;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Notification;
+import com.example.hms.model.NotificationPreference;
+import com.example.hms.model.User;
+import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
+import com.example.hms.repository.NotificationPreferenceRepository;
 import com.example.hms.repository.NotificationRepository;
+import com.example.hms.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -23,6 +32,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -37,6 +47,12 @@ class NotificationServiceImplTest {
 
     @Mock
     private NotificationWebSocketController notificationWebSocketController;
+
+    @Mock
+    private NotificationPreferenceRepository notificationPreferenceRepository;
+
+    @Mock
+    private UserRepository userRepository;
 
     @InjectMocks
     private NotificationServiceImpl service;
@@ -246,6 +262,97 @@ class NotificationServiceImplTest {
             service.markAsRead(notificationId);
 
             verify(notificationRepository, never()).save(any());
+        }
+    }
+
+    // ── getPreferences ───────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("getPreferences")
+    class GetPreferences {
+
+        @Test
+        @DisplayName("returns mapped DTOs from repository")
+        void returnsMappedDTOs() {
+            UUID userId = UUID.randomUUID();
+            NotificationPreference pref = NotificationPreference.builder()
+                    .notificationType(NotificationType.APPOINTMENT_REMINDER)
+                    .channel(NotificationChannel.EMAIL)
+                    .enabled(true)
+                    .build();
+            pref.setId(UUID.randomUUID());
+
+            when(notificationPreferenceRepository.findByUser_Id(userId))
+                    .thenReturn(List.of(pref));
+
+            List<NotificationPreferenceDTO> result = service.getPreferences(userId);
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).getNotificationType()).isEqualTo(NotificationType.APPOINTMENT_REMINDER);
+            assertThat(result.get(0).getChannel()).isEqualTo(NotificationChannel.EMAIL);
+            assertThat(result.get(0).isEnabled()).isTrue();
+        }
+
+        @Test
+        @DisplayName("returns empty list when no preferences exist")
+        void returnsEmptyWhenNone() {
+            UUID userId = UUID.randomUUID();
+            when(notificationPreferenceRepository.findByUser_Id(userId))
+                    .thenReturn(List.of());
+
+            List<NotificationPreferenceDTO> result = service.getPreferences(userId);
+
+            assertThat(result).isEmpty();
+        }
+    }
+
+    // ── updatePreferences ────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("updatePreferences")
+    class UpdatePreferences {
+
+        @Test
+        @DisplayName("deletes old prefs, saves new, and returns DTOs")
+        void deletesOldAndSavesNew() {
+            UUID userId = UUID.randomUUID();
+            User user = new User();
+            user.setId(userId);
+
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            NotificationPreferenceUpdateDTO update = new NotificationPreferenceUpdateDTO();
+            update.setNotificationType(NotificationType.LAB_RESULT);
+            update.setChannel(NotificationChannel.SMS);
+            update.setEnabled(true);
+
+            NotificationPreference saved = NotificationPreference.builder()
+                    .user(user)
+                    .notificationType(NotificationType.LAB_RESULT)
+                    .channel(NotificationChannel.SMS)
+                    .enabled(true)
+                    .build();
+            saved.setId(UUID.randomUUID());
+
+            when(notificationPreferenceRepository.saveAll(any()))
+                    .thenReturn(List.of(saved));
+
+            List<NotificationPreferenceDTO> result = service.updatePreferences(userId, List.of(update));
+
+            verify(notificationPreferenceRepository).deleteByUser_Id(userId);
+            verify(notificationPreferenceRepository).flush();
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).getNotificationType()).isEqualTo(NotificationType.LAB_RESULT);
+        }
+
+        @Test
+        @DisplayName("throws when user not found")
+        void throwsWhenUserNotFound() {
+            UUID userId = UUID.randomUUID();
+            when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.updatePreferences(userId, List.of()))
+                    .isInstanceOf(ResourceNotFoundException.class);
         }
     }
 }
