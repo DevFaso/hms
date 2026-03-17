@@ -30,11 +30,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.Authentication;
 
 @RestController
@@ -140,17 +142,39 @@ public class AppointmentController {
         return ResponseEntity.ok(result);
     }
 
-    // ---- LIST ALL ----
+    // ---- LIST ALL (with optional query-param filtering) ----
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE')")
     public ResponseEntity<List<AppointmentResponseDTO>> getAllAppointments(
-    @RequestHeader(name = "Accept-Language", required = false) String lang,
+        @RequestParam(required = false) UUID patientId,
+        @RequestParam(required = false) UUID staffId,
+        @RequestParam(required = false) UUID hospitalId,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+        @RequestParam(required = false) String search,
+        @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication authentication
     ) {
-    Locale locale = parseLocale(lang);
-        return ResponseEntity.ok(
-            appointmentService.getAppointmentsForUser(getUsername(authentication), locale)
-        );
+        Locale locale = parseLocale(lang);
+        // When no filters provided, fall back to the original user-scoped list
+        if (patientId == null && staffId == null && hospitalId == null
+                && fromDate == null && toDate == null && search == null) {
+            return ResponseEntity.ok(
+                appointmentService.getAppointmentsForUser(getUsername(authentication), locale)
+            );
+        }
+        AppointmentFilterDTO filter = AppointmentFilterDTO.builder()
+            .patientId(patientId)
+            .staffId(staffId)
+            .hospitalId(hospitalId)
+            .fromDate(fromDate)
+            .toDate(toDate)
+            .search(search)
+            .build();
+        Pageable pageable = PageRequest.of(0, 500, Sort.by(Sort.Direction.DESC, "appointmentDate"));
+        Page<AppointmentResponseDTO> page = appointmentService.searchAppointments(
+            filter, pageable, locale, getUsername(authentication));
+        return ResponseEntity.ok(page.getContent());
     }
 
     // ---- DELETE ----

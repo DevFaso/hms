@@ -362,51 +362,66 @@
        ══════════════════════════════════════════ -->
   @if (!loading() && activeView() === 'hospitaladmin') {
     <section class="stat-strip">
-      <a class="stat-card" routerLink="/appointments">
-        <div class="stat-icon-wrap">
-          <span class="material-symbols-outlined stat-icon">calendar_today</span>
-        </div>
-        <div class="stat-body">
-          <span class="stat-value">{{ todayAppointments().length }}</span
-          ><span class="stat-label">Today's Appointments</span>
-        </div>
-      </a>
-      <a class="stat-card" routerLink="/appointments">
-        <div class="stat-icon-wrap">
-          <span class="material-symbols-outlined stat-icon">task_alt</span>
-        </div>
-        <div class="stat-body">
-          <span class="stat-value">{{ completedToday() }}</span
-          ><span class="stat-label">Completed Today</span>
-        </div>
-      </a>
-      <a class="stat-card" routerLink="/patients">
-        <div class="stat-icon-wrap">
-          <span class="material-symbols-outlined stat-icon">people</span>
-        </div>
-        <div class="stat-body">
-          <span class="stat-value">{{ recentPatients().length }}</span
-          ><span class="stat-label">Recent Patients</span>
-        </div>
-      </a>
-      <a class="stat-card" routerLink="/appointments">
-        <div class="stat-icon-wrap">
-          <span class="material-symbols-outlined stat-icon">pending</span>
-        </div>
-        <div class="stat-body">
-          <span class="stat-value">{{ pendingToday() }}</span
-          ><span class="stat-label">Pending</span>
-        </div>
-      </a>
-      <a class="stat-card" routerLink="/appointments">
-        <div class="stat-icon-wrap">
-          <span class="material-symbols-outlined stat-icon">person_play</span>
-        </div>
-        <div class="stat-body">
-          <span class="stat-value">{{ inProgressNow() }}</span
-          ><span class="stat-label">In Progress</span>
-        </div>
-      </a>
+      @for (card of hospitalAdminStatCards(); track card.key) {
+        <a class="stat-card" [routerLink]="card.route ?? null">
+          <div class="stat-icon-wrap" [style.background]="card.bgColor">
+            <span class="material-symbols-outlined stat-icon" [style.color]="card.color">{{
+              card.icon
+            }}</span>
+          </div>
+          <div class="stat-body">
+            <span class="stat-value">{{ card.value }}</span
+            ><span class="stat-label">{{ card.label }}</span>
+          </div>
+        </a>
+      }
+      @if (hospitalAdminStatCards().length === 0) {
+        <a class="stat-card" routerLink="/appointments">
+          <div class="stat-icon-wrap">
+            <span class="material-symbols-outlined stat-icon">calendar_today</span>
+          </div>
+          <div class="stat-body">
+            <span class="stat-value">{{ todayAppointments().length }}</span
+            ><span class="stat-label">Today's Appointments</span>
+          </div>
+        </a>
+        <a class="stat-card" routerLink="/appointments">
+          <div class="stat-icon-wrap">
+            <span class="material-symbols-outlined stat-icon">task_alt</span>
+          </div>
+          <div class="stat-body">
+            <span class="stat-value">{{ completedToday() }}</span
+            ><span class="stat-label">Completed Today</span>
+          </div>
+        </a>
+        <a class="stat-card" routerLink="/patients">
+          <div class="stat-icon-wrap">
+            <span class="material-symbols-outlined stat-icon">people</span>
+          </div>
+          <div class="stat-body">
+            <span class="stat-value">{{ recentPatients().length }}</span
+            ><span class="stat-label">Recent Patients</span>
+          </div>
+        </a>
+        <a class="stat-card" routerLink="/appointments">
+          <div class="stat-icon-wrap">
+            <span class="material-symbols-outlined stat-icon">pending</span>
+          </div>
+          <div class="stat-body">
+            <span class="stat-value">{{ pendingToday() }}</span
+            ><span class="stat-label">Pending</span>
+          </div>
+        </a>
+        <a class="stat-card" routerLink="/appointments">
+          <div class="stat-icon-wrap">
+            <span class="material-symbols-outlined stat-icon">person_play</span>
+          </div>
+          <div class="stat-body">
+            <span class="stat-value">{{ inProgressNow() }}</span
+            ><span class="stat-label">In Progress</span>
+          </div>
+        </a>
+      }
     </section>
 
     <div class="admin-workspace">
@@ -494,6 +509,268 @@
             }
           </div>
         </div>
+
+        <!-- MVP 17: Staffing by Department -->
+        @if (staffingByDepartment().length > 0) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">groups</span>
+                <h2 class="card-title">Staffing by Department</h2>
+                <span class="count-badge">{{ staffingByDepartment().length }}</span>
+              </div>
+              <a routerLink="/staff" class="card-link">Manage Staff</a>
+            </div>
+            <div style="overflow-x: auto; padding: 0 16px 16px">
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px">
+                <thead>
+                  <tr style="border-bottom: 2px solid #e2e8f0; text-align: left">
+                    <th style="padding: 8px 12px; font-weight: 600; color: #475569">Department</th>
+                    <th
+                      style="
+                        padding: 8px 12px;
+                        font-weight: 600;
+                        color: #475569;
+                        text-align: center;
+                      "
+                    >
+                      Scheduled
+                    </th>
+                    <th
+                      style="
+                        padding: 8px 12px;
+                        font-weight: 600;
+                        color: #475569;
+                        text-align: center;
+                      "
+                    >
+                      Cancelled
+                    </th>
+                    <th
+                      style="
+                        padding: 8px 12px;
+                        font-weight: 600;
+                        color: #475569;
+                        text-align: center;
+                      "
+                    >
+                      Active
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of staffingByDepartment(); track row.departmentId) {
+                    <tr style="border-bottom: 1px solid #f1f5f9">
+                      <td style="padding: 8px 12px">{{ row.departmentName }}</td>
+                      <td style="padding: 8px 12px; text-align: center">
+                        {{ row.scheduledShifts }}
+                      </td>
+                      <td style="padding: 8px 12px; text-align: center; color: #dc2626">
+                        {{ row.cancelledShifts }}
+                      </td>
+                      <td
+                        style="
+                          padding: 8px 12px;
+                          text-align: center;
+                          color: #059669;
+                          font-weight: 600;
+                        "
+                      >
+                        {{ row.activeStaff }}
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+        }
+
+        <!-- MVP 17: Consultation Backlog -->
+        @if (consultBacklog().length > 0) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">forum</span>
+                <h2 class="card-title">Consultation Backlog</h2>
+                <span class="count-badge">{{ consultBacklog().length }}</span>
+                @if (overdueConsults() > 0) {
+                  <span
+                    class="count-badge"
+                    style="background: #fee2e2; color: #dc2626; margin-left: 4px"
+                    >{{ overdueConsults() }} overdue</span
+                  >
+                }
+              </div>
+              <a routerLink="/consultations" class="card-link">View All</a>
+            </div>
+            <div class="schedule-list">
+              @for (c of consultBacklog(); track c.consultationId) {
+                <div
+                  class="sched-row"
+                  [style.border-left]="c.overdue ? '3px solid #dc2626' : '3px solid transparent'"
+                >
+                  <div class="sched-info" style="flex: 1">
+                    <span class="sched-name">{{ c.patientName }}</span>
+                    <span class="sched-reason"
+                      >{{ c.specialtyRequested }} — {{ c.urgency | titlecase }}</span
+                    >
+                  </div>
+                  <div
+                    style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px"
+                  >
+                    <span [class]="'appt-status appt-status-' + c.status.toLowerCase()">{{
+                      c.status | titlecase
+                    }}</span>
+                    @if (c.overdue) {
+                      <span style="font-size: 11px; color: #dc2626; font-weight: 600"
+                        >SLA OVERDUE</span
+                      >
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+        }
+
+        <!-- MVP 18: Invoice Aging -->
+        @if (invoiceAging()) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">receipt_long</span>
+                <h2 class="card-title">Invoice Aging</h2>
+              </div>
+              <a routerLink="/billing" class="card-link">View Billing</a>
+            </div>
+            <div style="padding: 0 16px 16px">
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px">
+                @for (bucket of invoiceAgingBuckets(); track bucket.label; let i = $index) {
+                  <div
+                    style="
+                      flex: 1;
+                      min-width: 100px;
+                      padding: 10px;
+                      border-radius: 8px;
+                      text-align: center;
+                    "
+                    [style.background]="getAgingBucketColor(i) + '15'"
+                    [style.border-left]="'3px solid ' + getAgingBucketColor(i)"
+                  >
+                    <div style="font-size: 11px; color: #64748b; font-weight: 500">
+                      {{ bucket.label }}
+                    </div>
+                    <div
+                      style="font-size: 18px; font-weight: 700; margin: 2px 0"
+                      [style.color]="getAgingBucketColor(i)"
+                    >
+                      {{ bucket.count }}
+                    </div>
+                    <div style="font-size: 11px; color: #475569">
+                      ${{ bucket.total | number: '1.0-0' }}
+                    </div>
+                  </div>
+                }
+              </div>
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  padding: 8px 12px;
+                  background: #f8fafc;
+                  border-radius: 8px;
+                "
+              >
+                <span style="font-size: 13px; color: #475569; font-weight: 500"
+                  >Total Outstanding</span
+                >
+                <span style="font-size: 16px; font-weight: 700; color: #0f172a"
+                  >${{ invoiceAging()!.grandTotal | number: '1.0-0' }}</span
+                >
+              </div>
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  padding: 8px 12px;
+                  margin-top: 6px;
+                  background: #f0fdf4;
+                  border-radius: 8px;
+                "
+              >
+                <span style="font-size: 13px; color: #475569; font-weight: 500"
+                  >Collection Rate</span
+                >
+                <span style="font-size: 16px; font-weight: 700; color: #059669"
+                  >{{ paymentCollectionRate() | number: '1.1-1' }}%</span
+                >
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- MVP 20: Daily Collection Trend (30 days) -->
+        @if (paymentTrend().length > 0) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">trending_up</span>
+                <h2 class="card-title">Daily Collections (30d)</h2>
+              </div>
+              <a routerLink="/billing" class="card-link">View Billing</a>
+            </div>
+            <div style="padding: 0 16px 16px">
+              <div
+                style="
+                  display: flex;
+                  align-items: flex-end;
+                  gap: 2px;
+                  height: 120px;
+                  padding: 8px 0;
+                "
+              >
+                @for (point of paymentTrend(); track point.date) {
+                  <div
+                    style="
+                      flex: 1;
+                      display: flex;
+                      flex-direction: column;
+                      align-items: center;
+                      justify-content: flex-end;
+                      height: 100%;
+                    "
+                    [title]="point.date + ': $' + (point.amount | number: '1.0-0')"
+                  >
+                    <div
+                      style="
+                        width: 100%;
+                        min-height: 2px;
+                        border-radius: 2px 2px 0 0;
+                        background: #059669;
+                      "
+                      [style.height.%]="(point.amount / paymentTrendMax()) * 100"
+                    ></div>
+                  </div>
+                }
+              </div>
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  font-size: 10px;
+                  color: #94a3b8;
+                  margin-top: 4px;
+                "
+              >
+                <span>{{ paymentTrend()[0]?.date | date: 'MMM d' }}</span>
+                <span>{{ paymentTrend()[paymentTrend().length - 1]?.date | date: 'MMM d' }}</span>
+              </div>
+            </div>
+          </section>
+        }
       </div>
 
       <div class="admin-workspace-right">
@@ -553,6 +830,553 @@
                   <span class="material-symbols-outlined chevron">chevron_right</span>
                 </a>
               }
+            </div>
+          </section>
+        }
+        @if (hospitalAdminAuditEvents().length > 0) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">policy</span>
+                <h2 class="card-title">Recent Activity</h2>
+                <span class="count-badge">{{ hospitalAdminAuditEvents().length }}</span>
+              </div>
+              <a routerLink="/audit-logs" class="card-link">View All</a>
+            </div>
+            <div class="schedule-list">
+              @for (evt of hospitalAdminAuditEvents(); track evt.id) {
+                <div class="sched-row">
+                  <div class="sched-time">
+                    <span class="time-val">{{ evt.eventTimestamp | date: 'shortTime' }}</span>
+                  </div>
+                  <div class="sched-info">
+                    <span class="sched-name">{{ evt.userName ?? 'System' }}</span>
+                    <span class="sched-reason"
+                      >{{ evt.eventType | titlecase }} — {{ evt.entityType ?? '' }}
+                      {{ evt.resourceName ?? '' }}</span
+                    >
+                  </div>
+                  <span class="appt-status">{{ evt.status | titlecase }}</span>
+                </div>
+              }
+            </div>
+          </section>
+        }
+        <!-- MVP 17: Audit Trend (last 7 days) -->
+        @if (auditTrend().length > 0) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">trending_up</span>
+                <h2 class="card-title">Activity Trend (7d)</h2>
+              </div>
+            </div>
+            <div
+              style="display: flex; align-items: flex-end; gap: 6px; padding: 16px; height: 100px"
+            >
+              @for (day of auditTrend(); track day.date) {
+                <div
+                  style="
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    flex: 1;
+                    gap: 4px;
+                  "
+                >
+                  <span style="font-size: 11px; color: #64748b; font-weight: 600">{{
+                    day.count
+                  }}</span>
+                  <div
+                    [style.height.px]="
+                      auditTrendMax() > 0 ? (day.count / auditTrendMax()) * 60 + 4 : 4
+                    "
+                    style="
+                      width: 100%;
+                      max-width: 32px;
+                      background: #3b82f6;
+                      border-radius: 4px 4px 0 0;
+                      min-height: 4px;
+                    "
+                  ></div>
+                  <span style="font-size: 10px; color: #94a3b8">{{ day.date | date: 'EEE' }}</span>
+                </div>
+              }
+            </div>
+          </section>
+        }
+        <!-- MVP 18: Integrations Visibility -->
+        @if (integrations().length > 0) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">hub</span>
+                <h2 class="card-title">Integrations</h2>
+                <span class="count-badge">{{ integrations().length }}</span>
+              </div>
+            </div>
+            <div style="padding: 0 16px 16px">
+              @for (svc of integrations(); track svc.serviceType + svc.provider) {
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 8px 0;
+                    border-bottom: 1px solid #f1f5f9;
+                  "
+                >
+                  <span class="material-symbols-outlined" style="font-size: 20px; color: #64748b">
+                    @switch (svc.serviceType) {
+                      @case ('EHR') {
+                        clinical_notes
+                      }
+                      @case ('BILLING') {
+                        receipt_long
+                      }
+                      @case ('INVENTORY') {
+                        inventory_2
+                      }
+                      @case ('LIMS') {
+                        science
+                      }
+                      @case ('ANALYTICS') {
+                        analytics
+                      }
+                      @default {
+                        extension
+                      }
+                    }
+                  </span>
+                  <div style="flex: 1; min-width: 0">
+                    <div style="font-size: 13px; font-weight: 600; color: #0f172a">
+                      {{ svc.provider ?? svc.serviceType }}
+                    </div>
+                    <div style="font-size: 11px; color: #94a3b8">{{ svc.serviceType }}</div>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 6px">
+                    @if (svc.enabled) {
+                      <span
+                        style="width: 8px; height: 8px; border-radius: 50%; background: #22c55e"
+                      ></span>
+                    } @else {
+                      <span
+                        style="width: 8px; height: 8px; border-radius: 50%; background: #94a3b8"
+                      ></span>
+                    }
+                    <span
+                      [class]="getIntegrationStatusClass(svc.status)"
+                      style="
+                        font-size: 11px;
+                        font-weight: 600;
+                        padding: 2px 8px;
+                        border-radius: 12px;
+                      "
+                    >
+                      {{ svc.status | titlecase }}
+                    </span>
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+        }
+
+        <!-- MVP 19: License Expiry Alerts -->
+        @if (licenseAlerts().length > 0) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">gpp_maybe</span>
+                <h2 class="card-title">License Expiry Alerts</h2>
+                <span class="count-badge">{{ licenseAlerts().length }}</span>
+                @if (expiredLicenseCount() > 0) {
+                  <span
+                    class="count-badge"
+                    style="background: #fee2e2; color: #dc2626; margin-left: 4px"
+                    >{{ expiredLicenseCount() }} expired</span
+                  >
+                }
+              </div>
+              <a routerLink="/staff" class="card-link">Manage Staff</a>
+            </div>
+            <div class="schedule-list">
+              @for (alert of licenseAlerts(); track alert.staffId) {
+                <div
+                  class="sched-row"
+                  [style.border-left]="
+                    alert.severity === 'EXPIRED'
+                      ? '3px solid #dc2626'
+                      : alert.severity === 'CRITICAL'
+                        ? '3px solid #d97706'
+                        : '3px solid #eab308'
+                  "
+                >
+                  <div class="sched-info" style="flex: 1">
+                    <span class="sched-name">{{ alert.staffName }}</span>
+                    <span class="sched-reason"
+                      >{{ alert.jobTitle | titlecase }} — {{ alert.departmentName }}</span
+                    >
+                    <span class="sched-reason"
+                      >License: {{ alert.licenseNumber }} — Expires:
+                      {{ alert.licenseExpiryDate }}</span
+                    >
+                  </div>
+                  <div
+                    style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px"
+                  >
+                    <span
+                      [class]="'license-severity license-severity-' + alert.severity.toLowerCase()"
+                    >
+                      @if (alert.severity === 'EXPIRED') {
+                        EXPIRED
+                      } @else if (alert.severity === 'CRITICAL') {
+                        {{ alert.daysUntilExpiry }}d — CRITICAL
+                      } @else {
+                        {{ alert.daysUntilExpiry }}d
+                      }
+                    </span>
+                  </div>
+                </div>
+              }
+            </div>
+          </section>
+        }
+
+        <!-- MVP 19: Leave Summary -->
+        @if (leaveMetrics()) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">event_busy</span>
+                <h2 class="card-title">Workforce Absence</h2>
+              </div>
+              <a routerLink="/staff" class="card-link">View Staff</a>
+            </div>
+            <div class="stat-strip" style="padding: 0 16px 16px">
+              <div class="stat-card" style="--stat-color: #d97706; --stat-bg: #fef3c7; flex: 1">
+                <div class="stat-icon-wrap">
+                  <span class="material-symbols-outlined stat-icon">event_busy</span>
+                </div>
+                <div class="stat-body">
+                  <span class="stat-value">{{ leaveMetrics()!.onLeaveToday }}</span>
+                  <span class="stat-label">On Leave Today</span>
+                </div>
+              </div>
+              <div class="stat-card" style="--stat-color: #2563eb; --stat-bg: #eff6ff; flex: 1">
+                <div class="stat-icon-wrap">
+                  <span class="material-symbols-outlined stat-icon">date_range</span>
+                </div>
+                <div class="stat-body">
+                  <span class="stat-value">{{ leaveMetrics()!.upcomingLeaveNext7Days }}</span>
+                  <span class="stat-label">Upcoming (7 days)</span>
+                </div>
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- MVP 20: Payment Method Breakdown -->
+        @if (paymentMethodBreakdown().length > 0) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">credit_card</span>
+                <h2 class="card-title">Payment Methods (30d)</h2>
+              </div>
+            </div>
+            <div style="padding: 0 16px 16px">
+              @for (pm of paymentMethodBreakdown(); track pm.method) {
+                <div
+                  style="
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 8px 0;
+                    border-bottom: 1px solid #f1f5f9;
+                  "
+                >
+                  <div
+                    style="width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0"
+                    [style.background]="getPaymentMethodColor(pm.method)"
+                  ></div>
+                  <span style="flex: 1; font-size: 13px; font-weight: 500; color: #334155">{{
+                    formatMethodLabel(pm.method)
+                  }}</span>
+                  <span
+                    style="font-size: 12px; color: #64748b; min-width: 30px; text-align: right"
+                    >{{ pm.count }}</span
+                  >
+                  <span
+                    style="
+                      font-size: 13px;
+                      font-weight: 600;
+                      color: #0f172a;
+                      min-width: 70px;
+                      text-align: right;
+                    "
+                    >${{ pm.total | number: '1.0-0' }}</span
+                  >
+                </div>
+              }
+              @if (paymentMethodTotal() > 0) {
+                <div
+                  style="
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    padding: 10px 0 0;
+                    margin-top: 4px;
+                  "
+                >
+                  <span style="font-size: 13px; font-weight: 600; color: #475569"
+                    >Total Collected</span
+                  >
+                  <span style="font-size: 15px; font-weight: 700; color: #059669"
+                    >${{ paymentMethodTotal() | number: '1.0-0' }}</span
+                  >
+                </div>
+              }
+            </div>
+          </section>
+        }
+
+        <!-- MVP 20: Write-Off Tracking -->
+        @if (writeOffs()) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">cancel</span>
+                <h2 class="card-title">Write-Offs</h2>
+              </div>
+              <a routerLink="/billing" class="card-link">View Billing</a>
+            </div>
+            <div class="stat-strip" style="padding: 0 16px 16px">
+              <div class="stat-card" style="--stat-color: #dc2626; --stat-bg: #fee2e2; flex: 1">
+                <div class="stat-icon-wrap">
+                  <span class="material-symbols-outlined stat-icon">block</span>
+                </div>
+                <div class="stat-body">
+                  <span class="stat-value">{{ writeOffs()!.cancelledCount }}</span>
+                  <span class="stat-label">Cancelled Invoices</span>
+                </div>
+              </div>
+              <div class="stat-card" style="--stat-color: #d97706; --stat-bg: #fef3c7; flex: 1">
+                <div class="stat-icon-wrap">
+                  <span class="material-symbols-outlined stat-icon">money_off</span>
+                </div>
+                <div class="stat-body">
+                  <span class="stat-value"
+                    >${{ writeOffs()!.cancelledTotal | number: '1.0-0' }}</span
+                  >
+                  <span class="stat-label">Written Off</span>
+                </div>
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- MVP 21: Bed Occupancy Overview -->
+        @if (bedOccupancy()) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">bed</span>
+                <h2 class="card-title">Bed Occupancy</h2>
+              </div>
+            </div>
+            <div style="padding: 0 16px 16px">
+              <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px">
+                <div
+                  style="
+                    flex: 1;
+                    min-width: 80px;
+                    padding: 10px;
+                    border-radius: 8px;
+                    text-align: center;
+                    background: #eff6ff;
+                    border-left: 3px solid #2563eb;
+                  "
+                >
+                  <div style="font-size: 11px; color: #64748b; font-weight: 500">Total</div>
+                  <div style="font-size: 18px; font-weight: 700; color: #2563eb">
+                    {{ bedOccupancy()!.totalBeds }}
+                  </div>
+                </div>
+                <div
+                  style="
+                    flex: 1;
+                    min-width: 80px;
+                    padding: 10px;
+                    border-radius: 8px;
+                    text-align: center;
+                    background: #fef2f2;
+                    border-left: 3px solid #dc2626;
+                  "
+                >
+                  <div style="font-size: 11px; color: #64748b; font-weight: 500">Occupied</div>
+                  <div style="font-size: 18px; font-weight: 700; color: #dc2626">
+                    {{ bedOccupancy()!.occupiedBeds }}
+                  </div>
+                </div>
+                <div
+                  style="
+                    flex: 1;
+                    min-width: 80px;
+                    padding: 10px;
+                    border-radius: 8px;
+                    text-align: center;
+                    background: #f0fdf4;
+                    border-left: 3px solid #059669;
+                  "
+                >
+                  <div style="font-size: 11px; color: #64748b; font-weight: 500">Available</div>
+                  <div style="font-size: 18px; font-weight: 700; color: #059669">
+                    {{ bedOccupancy()!.availableBeds }}
+                  </div>
+                </div>
+                <div
+                  style="
+                    flex: 1;
+                    min-width: 80px;
+                    padding: 10px;
+                    border-radius: 8px;
+                    text-align: center;
+                    background: #fefce8;
+                    border-left: 3px solid #d97706;
+                  "
+                >
+                  <div style="font-size: 11px; color: #64748b; font-weight: 500">Reserved</div>
+                  <div style="font-size: 18px; font-weight: 700; color: #d97706">
+                    {{ bedOccupancy()!.reservedBeds }}
+                  </div>
+                </div>
+              </div>
+              <div
+                style="
+                  display: flex;
+                  justify-content: space-between;
+                  align-items: center;
+                  padding: 8px 12px;
+                  background: #f8fafc;
+                  border-radius: 8px;
+                "
+              >
+                <span style="font-size: 13px; color: #475569; font-weight: 500"
+                  >Occupancy Rate</span
+                >
+                <span
+                  style="font-size: 16px; font-weight: 700"
+                  [style.color]="
+                    bedOccupancy()!.occupancyRate > 90
+                      ? '#dc2626'
+                      : bedOccupancy()!.occupancyRate > 75
+                        ? '#d97706'
+                        : '#059669'
+                  "
+                  >{{ bedOccupancy()!.occupancyRate | number: '1.1-1' }}%</span
+                >
+              </div>
+            </div>
+          </section>
+        }
+
+        <!-- MVP 21: Ward-Level Occupancy Table -->
+        @if (wardOccupancy().length > 0) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">domain</span>
+                <h2 class="card-title">Ward Occupancy</h2>
+                <span class="count-badge">{{ wardOccupancy().length }}</span>
+              </div>
+            </div>
+            <div style="overflow-x: auto; padding: 0 16px 16px">
+              <table style="width: 100%; border-collapse: collapse; font-size: 13px">
+                <thead>
+                  <tr style="border-bottom: 2px solid #e2e8f0; text-align: left">
+                    <th style="padding: 8px 12px; font-weight: 600; color: #475569">Ward</th>
+                    <th
+                      style="
+                        padding: 8px 12px;
+                        font-weight: 600;
+                        color: #475569;
+                        text-align: center;
+                      "
+                    >
+                      Total
+                    </th>
+                    <th
+                      style="
+                        padding: 8px 12px;
+                        font-weight: 600;
+                        color: #475569;
+                        text-align: center;
+                      "
+                    >
+                      Occupied
+                    </th>
+                    <th
+                      style="
+                        padding: 8px 12px;
+                        font-weight: 600;
+                        color: #475569;
+                        text-align: center;
+                      "
+                    >
+                      Available
+                    </th>
+                    <th
+                      style="
+                        padding: 8px 12px;
+                        font-weight: 600;
+                        color: #475569;
+                        text-align: center;
+                      "
+                    >
+                      Rate
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of wardOccupancy(); track row.wardId) {
+                    <tr style="border-bottom: 1px solid #f1f5f9">
+                      <td style="padding: 8px 12px">
+                        <div>{{ row.wardName }}</div>
+                        <div style="font-size: 11px; color: #94a3b8">
+                          {{ row.wardType | titlecase }}
+                        </div>
+                      </td>
+                      <td style="padding: 8px 12px; text-align: center">{{ row.totalBeds }}</td>
+                      <td style="padding: 8px 12px; text-align: center; color: #dc2626">
+                        {{ row.occupiedBeds }}
+                      </td>
+                      <td
+                        style="
+                          padding: 8px 12px;
+                          text-align: center;
+                          color: #059669;
+                          font-weight: 600;
+                        "
+                      >
+                        {{ row.availableBeds }}
+                      </td>
+                      <td
+                        style="padding: 8px 12px; text-align: center; font-weight: 600"
+                        [style.color]="
+                          row.occupancyRate > 90
+                            ? '#dc2626'
+                            : row.occupancyRate > 75
+                              ? '#d97706'
+                              : '#059669'
+                        "
+                      >
+                        {{ row.occupancyRate | number: '1.1-1' }}%
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
             </div>
           </section>
         }
