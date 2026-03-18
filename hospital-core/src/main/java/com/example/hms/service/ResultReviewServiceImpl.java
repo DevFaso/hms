@@ -41,6 +41,8 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class ResultReviewServiceImpl implements ResultReviewService {
 
+    private static final String URGENCY_NORMAL = "NORMAL";
+
     private final StaffRepository staffRepository;
     private final LabOrderRepository labOrderRepository;
     private final LabResultRepository labResultRepository;
@@ -77,13 +79,17 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                         ? order.getLabTestDefinition().getName()
                         : "Lab Test";
 
+                String abnormalFlag = result.getAbnormalFlag() != null
+                        ? result.getAbnormalFlag().name()
+                        : result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name();
+
                 queue.add(DoctorResultQueueItemDTO.builder()
                         .id(result.getId())
                         .patientName(order.getPatient().getFirstName() + " " + order.getPatient().getLastName())
                         .patientId(order.getPatient().getId())
                         .testName(testName)
                         .resultValue(result.getResultValue())
-                        .abnormalFlag(result.getAbnormalFlag() != null ? result.getAbnormalFlag().name() : (result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name())) // real flag when set
+                        .abnormalFlag(abnormalFlag)
                         .resultedAt(result.getResultDate())
                         .orderingContext(order.getClinicalIndication())
                         .build());
@@ -119,7 +125,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                         .category("MESSAGE")
                         .source("Chat")
                         .subject(unreadCount + " unread message" + (unreadCount > 1 ? "s" : ""))
-                        .urgency("NORMAL")
+                        .urgency(URGENCY_NORMAL)
                         .timestamp(LocalDateTime.now())
                         .actionType("REPLY")
                         .build());
@@ -139,7 +145,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                                 .patientName(consult.getPatient() != null ? consult.getPatient().getFirstName() + " " + consult.getPatient().getLastName() : null)
                                 .patientId(consult.getPatient() != null ? consult.getPatient().getId() : null)
                                 .subject(consult.getReasonForConsult() != null ? truncate(consult.getReasonForConsult(), 80) : "Consultation Request")
-                                .urgency(consult.getUrgency() != null ? mapConsultUrgency(consult.getUrgency().name()) : "NORMAL")
+                                .urgency(consult.getUrgency() != null ? mapConsultUrgency(consult.getUrgency().name()) : URGENCY_NORMAL)
                                 .timestamp(consult.getRequestedAt())
                                 .actionType("ACCEPT")
                                 .build());
@@ -158,7 +164,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                                 .category("DOCUMENT_TO_SIGN")
                                 .source("System")
                                 .subject(docLabel + " – awaiting your signature")
-                                .urgency("NORMAL")
+                                .urgency(URGENCY_NORMAL)
                                 .timestamp(sig.getCreatedAt())
                                 .actionType("SIGN")
                                 .build());
@@ -176,7 +182,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                     .patientName(enc.getPatient() != null ? enc.getPatient().getFirstName() + " " + enc.getPatient().getLastName() : null)
                     .patientId(enc.getPatient() != null ? enc.getPatient().getId() : null)
                     .subject("Active encounter in progress")
-                    .urgency("NORMAL")
+                    .urgency(URGENCY_NORMAL)
                     .timestamp(enc.getEncounterDate())
                     .actionType("OPEN_CHART")
                     .build());
@@ -213,7 +219,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         return switch (flag.toUpperCase()) {
             case "CRITICAL" -> 3;
             case "ABNORMAL" -> 2;
-            case "NORMAL" -> 1;
+            case URGENCY_NORMAL -> 1;
             default -> 0;
         };
     }
@@ -223,7 +229,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         return switch (urgency.toUpperCase()) {
             case "CRITICAL" -> 4;
             case "HIGH" -> 3;
-            case "NORMAL" -> 2;
+            case URGENCY_NORMAL -> 2;
             case "LOW" -> 1;
             default -> 0;
         };
@@ -233,7 +239,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         return switch (consultUrgency) {
             case "STAT", "EMERGENCY" -> "CRITICAL";
             case "URGENT" -> "HIGH";
-            default -> "NORMAL";
+            default -> URGENCY_NORMAL;
         };
     }
 

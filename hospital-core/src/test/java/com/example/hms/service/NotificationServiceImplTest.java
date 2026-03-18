@@ -351,7 +351,8 @@ class NotificationServiceImplTest {
             UUID userId = UUID.randomUUID();
             when(userRepository.findById(userId)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.updatePreferences(userId, List.of()))
+            List<NotificationPreferenceUpdateDTO> emptyList = List.of();
+            assertThatThrownBy(() -> service.updatePreferences(userId, emptyList))
                     .isInstanceOf(ResourceNotFoundException.class);
         }
     }

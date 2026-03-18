@@ -46,6 +46,8 @@ import org.springframework.security.core.Authentication;
 @RequiredArgsConstructor
 public class AppointmentController {
 
+    private static final String SORT_APPOINTMENT_DATE = "appointmentDate";
+
     // ---- LIST BY PATIENT USERNAME ----
     @GetMapping("/patients/username/{patientUsername}")
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE', 'PATIENT')")
@@ -176,7 +178,7 @@ public class AppointmentController {
             .toDate(toDate)
             .search(normalizedSearch)
             .build();
-        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200), Sort.by(Sort.Direction.DESC, "appointmentDate"));
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200), Sort.by(Sort.Direction.DESC, SORT_APPOINTMENT_DATE));
         Page<AppointmentResponseDTO> resultPage = appointmentService.searchAppointments(
             filter, pageable, locale, getUsername(authentication));
         HttpHeaders headers = new HttpHeaders();
@@ -346,13 +348,13 @@ public class AppointmentController {
 
     private Sort parseSort(String sort) {
         if (sort == null || sort.isBlank()) {
-            return Sort.by(Sort.Direction.DESC, "appointmentDate");
+            return Sort.by(Sort.Direction.DESC, SORT_APPOINTMENT_DATE);
         }
 
         String[] parts = sort.split(",");
         String property = parts[0].trim();
         if (property.isEmpty()) {
-            property = "appointmentDate";
+            property = SORT_APPOINTMENT_DATE;
         }
 
         Sort.Direction direction = Sort.Direction.DESC;

@@ -56,38 +56,49 @@ public class PatientFlowServiceImpl implements PatientFlowService {
 
         // Populate from encounters by status
         for (EncounterStatus es : EncounterStatus.values()) {
-            String column = es.name(); // use enum name directly
+            String column = es.name();
             if (!flow.containsKey(column)) {
                 flow.put(column, new ArrayList<>());
             }
             for (Encounter enc : encounterRepository.findByStaff_IdAndStatus(staffId, es)) {
-                Patient p = enc.getPatient();
-                if (p == null) continue;
-
-                long elapsedMinutes = enc.getEncounterDate() != null
-                        ? Duration.between(enc.getEncounterDate(), LocalDateTime.now()).toMinutes()
-                        : 0;
-                long elapsed = Math.max(elapsedMinutes, 0);
-
-                // Prefer explicit clinical urgency; fall back to elapsed-time derivation
-                String derivedUrgency;
-                if (enc.getUrgency() != null) {
-                    derivedUrgency = enc.getUrgency().name();
-                } else if (elapsed >= 60) derivedUrgency = "EMERGENT";
-                else if (elapsed >= 30) derivedUrgency = "URGENT";
-                else derivedUrgency = "ROUTINE";
-
-                flow.get(column).add(PatientFlowItemDTO.builder()
-                        .patientId(p.getId())
-                        .encounterId(enc.getId())
-                        .patientName(p.getFirstName() + " " + p.getLastName())
-                        .elapsedMinutes(elapsed)
-                        .urgency(derivedUrgency)
-                        .state(column)
-                        .build());
+                PatientFlowItemDTO item = buildFlowItem(enc, column);
+                if (item != null) {
+                    flow.get(column).add(item);
+                }
             }
         }
 
         return flow;
+    }
+
+    private PatientFlowItemDTO buildFlowItem(Encounter enc, String column) {
+        Patient p = enc.getPatient();
+        if (p == null) return null;
+
+        long elapsed = computeElapsedMinutes(enc);
+        String derivedUrgency = deriveUrgency(enc, elapsed);
+
+        return PatientFlowItemDTO.builder()
+                .patientId(p.getId())
+                .encounterId(enc.getId())
+                .patientName(p.getFirstName() + " " + p.getLastName())
+                .elapsedMinutes(elapsed)
+                .urgency(derivedUrgency)
+                .state(column)
+                .build();
+    }
+
+    private long computeElapsedMinutes(Encounter enc) {
+        if (enc.getEncounterDate() == null) return 0;
+        return Math.max(Duration.between(enc.getEncounterDate(), LocalDateTime.now()).toMinutes(), 0);
+    }
+
+    private String deriveUrgency(Encounter enc, long elapsedMinutes) {
+        if (enc.getUrgency() != null) {
+            return enc.getUrgency().name();
+        }
+        if (elapsedMinutes >= 60) return "EMERGENT";
+        if (elapsedMinutes >= 30) return "URGENT";
+        return "ROUTINE";
     }
 }

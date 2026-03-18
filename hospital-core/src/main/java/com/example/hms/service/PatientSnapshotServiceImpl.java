@@ -135,12 +135,17 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         try {
             labResultRepository.findByLabOrder_Patient_Id(patientId).stream()
                     .limit(10)
-                    .forEach(r -> labs.add(PatientSnapshotDTO.LabItem.builder()
+                    .forEach(r -> {
+                        String flag = r.getAbnormalFlag() != null
+                                ? r.getAbnormalFlag().name()
+                                : r.isAcknowledged() ? "NORMAL" : "REVIEW";
+                        labs.add(PatientSnapshotDTO.LabItem.builder()
                             .test(r.getLabOrder().getLabTestDefinition() != null ? r.getLabOrder().getLabTestDefinition().getName() : "Lab Test")
                             .value(r.getResultValue())
-                            .flag(r.getAbnormalFlag() != null ? r.getAbnormalFlag().name() : (r.isAcknowledged() ? "NORMAL" : "REVIEW"))
+                            .flag(flag)
                             .date(r.getResultDate() != null ? r.getResultDate().format(DATE_FMT) : "")
-                            .build()));
+                            .build());
+                    });
         } catch (Exception e) {
             log.debug("Lab results query error: {}", e.getMessage());
         }

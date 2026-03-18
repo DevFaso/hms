@@ -15,7 +15,6 @@ import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
 import com.example.hms.payload.dto.consultation.ConsultationStatsDTO;
 import com.example.hms.payload.dto.consultation.ConsultationUpdateDTO;
 import com.example.hms.payload.dto.consultation.CompleteConsultationRequestDTO;
-import com.example.hms.service.NotificationService;
 import com.example.hms.repository.ConsultationRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
@@ -663,7 +662,8 @@ class ConsultationServiceImplTest {
             Consultation consultation = buildConsultation(ConsultationStatus.COMPLETED);
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
 
-            assertThatThrownBy(() -> service.scheduleConsultation(consultationId, LocalDateTime.now(), null))
+            LocalDateTime now = LocalDateTime.now();
+            assertThatThrownBy(() -> service.scheduleConsultation(consultationId, now, null))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("Cannot schedule");
         }
@@ -674,7 +674,8 @@ class ConsultationServiceImplTest {
             Consultation consultation = buildConsultation(ConsultationStatus.CANCELLED);
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
 
-            assertThatThrownBy(() -> service.scheduleConsultation(consultationId, LocalDateTime.now(), null))
+            LocalDateTime now = LocalDateTime.now();
+            assertThatThrownBy(() -> service.scheduleConsultation(consultationId, now, null))
                     .isInstanceOf(BusinessException.class);
         }
 
@@ -684,7 +685,8 @@ class ConsultationServiceImplTest {
             Consultation consultation = buildConsultation(ConsultationStatus.DECLINED);
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
 
-            assertThatThrownBy(() -> service.scheduleConsultation(consultationId, LocalDateTime.now(), null))
+            LocalDateTime now = LocalDateTime.now();
+            assertThatThrownBy(() -> service.scheduleConsultation(consultationId, now, null))
                     .isInstanceOf(BusinessException.class);
         }
 
@@ -828,7 +830,8 @@ class ConsultationServiceImplTest {
             Consultation consultation = buildConsultation(ConsultationStatus.IN_PROGRESS);
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
 
-            assertThatThrownBy(() -> service.assignConsultation(consultationId, consultantId, UUID.randomUUID(), null))
+            UUID assignedById = UUID.randomUUID();
+            assertThatThrownBy(() -> service.assignConsultation(consultationId, consultantId, assignedById, null))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("Only REQUESTED");
         }
@@ -840,7 +843,8 @@ class ConsultationServiceImplTest {
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
             when(staffRepository.findById(consultantId)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.assignConsultation(consultationId, consultantId, UUID.randomUUID(), null))
+            UUID assignedById = UUID.randomUUID();
+            assertThatThrownBy(() -> service.assignConsultation(consultationId, consultantId, assignedById, null))
                     .isInstanceOf(ResourceNotFoundException.class);
         }
     }
@@ -875,7 +879,9 @@ class ConsultationServiceImplTest {
             Consultation consultation = buildConsultation(ConsultationStatus.COMPLETED);
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
 
-            assertThatThrownBy(() -> service.reassignConsultation(consultationId, UUID.randomUUID(), UUID.randomUUID(), "reason"))
+            UUID newConsultantId = UUID.randomUUID();
+            UUID reassignedById = UUID.randomUUID();
+            assertThatThrownBy(() -> service.reassignConsultation(consultationId, newConsultantId, reassignedById, "reason"))
                     .isInstanceOf(BusinessException.class);
         }
 
@@ -885,7 +891,9 @@ class ConsultationServiceImplTest {
             Consultation consultation = buildConsultation(ConsultationStatus.CANCELLED);
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
 
-            assertThatThrownBy(() -> service.reassignConsultation(consultationId, UUID.randomUUID(), UUID.randomUUID(), "reason"))
+            UUID newConsultantId = UUID.randomUUID();
+            UUID reassignedById = UUID.randomUUID();
+            assertThatThrownBy(() -> service.reassignConsultation(consultationId, newConsultantId, reassignedById, "reason"))
                     .isInstanceOf(BusinessException.class);
         }
     }

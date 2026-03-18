@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.model.Patient;
 import com.example.hms.payload.dto.analytics.PlatformAnalyticsDTO;
 import com.example.hms.repository.*;
 import com.example.hms.service.PlatformAnalyticsService;
@@ -134,7 +135,7 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
         // Preload all patients and appointments once to avoid N+1
         Map<UUID, Long> patientsByHospital = patientRepository.findAll().stream()
                 .filter(p -> p.getHospitalId() != null)
-                .collect(Collectors.groupingBy(p -> p.getHospitalId(), Collectors.counting()));
+                .collect(Collectors.groupingBy(Patient::getHospitalId, Collectors.counting()));
         Map<UUID, Long> appointmentsByHospital = appointmentRepository.findAll().stream()
                 .filter(a -> a.getHospital() != null)
                 .collect(Collectors.groupingBy(a -> a.getHospital().getId(), Collectors.counting()));

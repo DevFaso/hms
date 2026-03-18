@@ -1468,14 +1468,20 @@ class NurseTaskServiceImplTest {
 
     @Test
     void captureVitalsThrowsWhenPatientIdNull() {
-        assertThatThrownBy(() -> service.captureVitals(null, UUID.randomUUID(), UUID.randomUUID(), new NurseVitalCaptureRequestDTO()))
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        NurseVitalCaptureRequestDTO request = new NurseVitalCaptureRequestDTO();
+        assertThatThrownBy(() -> service.captureVitals(null, nurseId, hospitalId, request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Patient ID");
     }
 
     @Test
     void captureVitalsThrowsWhenHospitalIdNull() {
-        assertThatThrownBy(() -> service.captureVitals(UUID.randomUUID(), UUID.randomUUID(), null, new NurseVitalCaptureRequestDTO()))
+        UUID patientId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        NurseVitalCaptureRequestDTO request = new NurseVitalCaptureRequestDTO();
+        assertThatThrownBy(() -> service.captureVitals(patientId, nurseId, null, request))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("Hospital context");
     }
@@ -1716,7 +1722,8 @@ class NurseTaskServiceImplTest {
         req.setCategory("ASSESSMENT");
         req.setDescription("Test");
 
-        assertThatThrownBy(() -> service.createNursingTask(UUID.randomUUID(), hospitalId, req))
+        UUID nurseUserId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.createNursingTask(nurseUserId, hospitalId, req))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -1765,7 +1772,8 @@ class NurseTaskServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         when(nursingTaskRepository.findByIdAndHospital_Id(taskId, hospitalId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.completeNursingTask(taskId, UUID.randomUUID(), hospitalId, null))
+        UUID nurseId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.completeNursingTask(taskId, nurseId, hospitalId, null))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -1913,7 +1921,9 @@ class NurseTaskServiceImplTest {
         NurseCareNoteRequestDTO req = new NurseCareNoteRequestDTO();
         req.setTemplate("DAR");
 
-        assertThatThrownBy(() -> service.createCareNote(patientId, UUID.randomUUID(), UUID.randomUUID(), req))
+        UUID nurseUserId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.createCareNote(patientId, nurseUserId, hospitalId, req))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 }

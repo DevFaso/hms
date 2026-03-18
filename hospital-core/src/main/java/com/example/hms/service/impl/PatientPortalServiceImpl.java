@@ -89,6 +89,8 @@ import java.util.UUID;
 @Slf4j
 public class PatientPortalServiceImpl implements PatientPortalService {
 
+    private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
+
     private final PatientRepository patientRepository;
     private final PatientProxyRepository patientProxyRepository;
     private final ControllerAuthUtils authUtils;
@@ -123,7 +125,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     public UUID resolvePatientId(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication"));
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
         return patientRepository.findByUserId(userId)
                 .map(Patient::getId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -543,7 +545,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private Patient findPatient(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication"));
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
         return patientRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No patient record linked to your account. Contact your care team."));
@@ -775,7 +777,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<ProxyResponseDTO> getMyProxyAccess(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication"));
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
         return patientProxyRepository.findByProxyUser_IdAndStatus(userId, ProxyStatus.ACTIVE)
                 .stream().map(this::toProxyResponseDTO).toList();
     }

@@ -59,6 +59,10 @@ import java.util.stream.Collectors;
 public class ReceptionServiceImpl implements ReceptionService {
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
+    private static final String STATUS_ARRIVED = "ARRIVED";
+    private static final String STATUS_WALK_IN = "WALK_IN";
+    private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
+    private static final String STATUS_COMPLETED = "COMPLETED";
 
     private final AppointmentRepository appointmentRepo;
     private final EncounterRepository encounterRepo;
@@ -125,59 +129,21 @@ public class ReceptionServiceImpl implements ReceptionService {
     @Override
     public List<ReceptionQueueItemDTO> getQueue(LocalDate date, UUID hospitalId, String status,
                                                   UUID departmentId, UUID providerId) {
-        List<Appointment> appointments = appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, date);
+        List<Appointment> appointments = applyQueueFilters(
+                appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, date),
+                departmentId, providerId);
 
-        // Apply department / provider filters
-        if (departmentId != null) {
-            appointments = appointments.stream()
-                    .filter(a -> a.getDepartment() != null && departmentId.equals(a.getDepartment().getId()))
-                    .toList();
-        }
-        if (providerId != null) {
-            appointments = appointments.stream()
-                    .filter(a -> a.getStaff() != null && providerId.equals(a.getStaff().getId()))
-                    .toList();
-        }
-
-        List<UUID> appointmentIds = appointments.stream().map(Appointment::getId).toList();
-        List<Encounter> linkedEncounters = appointmentIds.isEmpty()
-                ? Collections.emptyList()
-                : encounterRepo.findByAppointmentIdIn(appointmentIds);
-        Map<UUID, Encounter> encounterByApptId = linkedEncounters.stream()
-                .filter(e -> e.getAppointment() != null)
-                .collect(Collectors.toMap(e -> e.getAppointment().getId(), e -> e, (a, b) -> a));
-
-        // Walk-in encounters (no appointment binding, today)
-        LocalDateTime dayStart = date.atStartOfDay();
-        LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
-        List<Encounter> walkIns = encounterRepo.findWalkInsForHospitalAndPeriod(hospitalId, dayStart, dayEnd);
-
+        Map<UUID, Encounter> encounterByApptId = buildEncounterMap(appointments);
         List<ReceptionQueueItemDTO> items = new ArrayList<>();
 
-        // Appointment-based items
         for (Appointment appt : appointments) {
             Encounter encounter = encounterByApptId.get(appt.getId());
             String computedStatus = computeStatus(appt, encounter);
-            if (!"ALL".equalsIgnoreCase(status) && status != null && !computedStatus.equals(status)) {
-                continue;
-            }
-            items.add(buildQueueItem(appt, encounter, computedStatus, date, hospitalId));
+            if (excludedByStatusFilter(status, computedStatus)) continue;
+            items.add(buildQueueItem(appt, encounter, computedStatus, hospitalId));
         }
 
-        // Walk-in items (no status filter restricts these unless filter = specific non-walk-in status)
-        if (status == null || "ALL".equalsIgnoreCase(status) || "ARRIVED".equals(status)
-                || "IN_PROGRESS".equals(status) || "WALK_IN".equals(status)) {
-            for (Encounter walkIn : walkIns) {
-                String computedStatus = "WALK_IN";
-                if (walkIn.getStatus() == EncounterStatus.IN_PROGRESS) computedStatus = "IN_PROGRESS";
-                else if (walkIn.getStatus() == EncounterStatus.COMPLETED) computedStatus = "COMPLETED";
-                if (status != null && !"ALL".equalsIgnoreCase(status) && !computedStatus.equals(status)) {
-                    continue;
-                }
-                items.add(buildWalkInQueueItem(walkIn, computedStatus));
-            }
-        }
-
+        addWalkInItems(items, hospitalId, date, status);
         items.sort(Comparator.comparing(i -> i.getAppointmentTime() == null ? "" : i.getAppointmentTime()));
         return items;
     }
@@ -339,11 +305,11 @@ public class ReceptionServiceImpl implements ReceptionService {
         return FlowBoardDTO.builder()
                 .scheduled(filterByStatus(all, "SCHEDULED"))
                 .confirmed(filterByStatus(all, "CONFIRMED"))
-                .arrived(filterByStatus(all, "ARRIVED"))
-                .inProgress(filterByStatus(all, "IN_PROGRESS"))
+                .arrived(filterByStatus(all, STATUS_ARRIVED))
+                .inProgress(filterByStatus(all, STATUS_IN_PROGRESS))
                 .noShow(filterByStatus(all, "NO_SHOW"))
-                .completed(filterByStatus(all, "COMPLETED"))
-                .walkIn(filterByStatus(all, "WALK_IN"))
+                .completed(filterByStatus(all, STATUS_COMPLETED))
+                .walkIn(filterByStatus(all, STATUS_WALK_IN))
                 .build();
     }
 
@@ -352,58 +318,37 @@ public class ReceptionServiceImpl implements ReceptionService {
     private String computeStatus(Appointment appt, Encounter encounter) {
         if (appt.getStatus() == AppointmentStatus.NO_SHOW) return "NO_SHOW";
         if (appt.getStatus() == AppointmentStatus.CANCELLED) return "CANCELLED";
-        if (appt.getStatus() == AppointmentStatus.COMPLETED && encounter == null) return "COMPLETED";
+        if (appt.getStatus() == AppointmentStatus.COMPLETED && encounter == null) return STATUS_COMPLETED;
         if (encounter == null) return appt.getStatus().name();
         return switch (encounter.getStatus()) {
-            case ARRIVED -> "ARRIVED";
-            case IN_PROGRESS -> "IN_PROGRESS";
-            case COMPLETED -> "COMPLETED";
+            case ARRIVED -> STATUS_ARRIVED;
+            case IN_PROGRESS -> STATUS_IN_PROGRESS;
+            case COMPLETED -> STATUS_COMPLETED;
             case CANCELLED -> "CANCELLED";
             default -> appt.getStatus().name();
         };
     }
 
     private ReceptionQueueItemDTO buildQueueItem(Appointment appt, Encounter encounter,
-                                                   String computedStatus, LocalDate date, UUID hospitalId) {
+                                                   String computedStatus, UUID hospitalId) {
         Patient p = appt.getPatient();
         UUID pid = p.getId();
-
-        List<PatientInsurance> insurances = insuranceRepo
-                .findByPatient_IdAndAssignment_Hospital_Id(pid, hospitalId);
-        LocalDate today = LocalDate.now();
-        boolean hasInsuranceIssue = insurances.isEmpty()
-                || insurances.stream().noneMatch(i -> i.getExpirationDate() == null || !i.getExpirationDate().isBefore(today))
-                || insurances.stream().noneMatch(PatientInsurance::isPrimary);
-
-        List<BillingInvoice> openInvoices = invoiceRepo
-                .findByPatient_IdAndHospital_Id(pid, hospitalId, PageRequest.of(0, 5)).getContent()
-                .stream()
-                .filter(inv -> inv.getStatus() != InvoiceStatus.PAID
-                        && inv.getStatus() != InvoiceStatus.CANCELLED
-                        && inv.getStatus() != InvoiceStatus.DRAFT)
-                .filter(inv -> balanceDue(inv).compareTo(BigDecimal.ZERO) > 0)
-                .toList();
-
-        int waitMins = 0;
-        if (encounter != null && encounter.getStatus() == EncounterStatus.ARRIVED) {
-            waitMins = (int) ChronoUnit.MINUTES.between(encounter.getEncounterDate(), LocalDateTime.now());
-        }
 
         return ReceptionQueueItemDTO.builder()
                 .appointmentId(appt.getId())
                 .patientId(pid)
                 .patientName(p.getFirstName() + " " + p.getLastName())
-                .mrn(null) // populated lazily via snapshot endpoint
+                .mrn(null)
                 .dateOfBirth(p.getDateOfBirth())
                 .appointmentTime(appt.getStartTime() != null ? appt.getStartTime().format(TIME_FMT) : null)
                 .providerName(providerName(appt))
                 .departmentName(appt.getDepartment() != null ? appt.getDepartment().getName() : null)
                 .appointmentReason(appt.getReason())
                 .status(computedStatus)
-                .waitMinutes(waitMins)
+                .waitMinutes(computeWaitMinutes(encounter))
                 .encounterId(encounter != null ? encounter.getId() : null)
-                .hasInsuranceIssue(hasInsuranceIssue)
-                .hasOutstandingBalance(!openInvoices.isEmpty())
+                .hasInsuranceIssue(detectInsuranceIssue(pid, hospitalId))
+                .hasOutstandingBalance(detectOutstandingBalance(pid, hospitalId))
                 .build();
     }
 
@@ -437,6 +382,85 @@ public class ReceptionServiceImpl implements ReceptionService {
     private String providerName(Appointment appt) {
         if (appt.getStaff() == null || appt.getStaff().getUser() == null) return null;
         return appt.getStaff().getUser().getFirstName() + " " + appt.getStaff().getUser().getLastName();
+    }
+
+    private List<Appointment> applyQueueFilters(List<Appointment> appointments,
+                                                 UUID departmentId, UUID providerId) {
+        if (departmentId != null) {
+            appointments = appointments.stream()
+                    .filter(a -> a.getDepartment() != null && departmentId.equals(a.getDepartment().getId()))
+                    .toList();
+        }
+        if (providerId != null) {
+            appointments = appointments.stream()
+                    .filter(a -> a.getStaff() != null && providerId.equals(a.getStaff().getId()))
+                    .toList();
+        }
+        return appointments;
+    }
+
+    private Map<UUID, Encounter> buildEncounterMap(List<Appointment> appointments) {
+        List<UUID> appointmentIds = appointments.stream().map(Appointment::getId).toList();
+        List<Encounter> linkedEncounters = appointmentIds.isEmpty()
+                ? Collections.emptyList()
+                : encounterRepo.findByAppointmentIdIn(appointmentIds);
+        return linkedEncounters.stream()
+                .filter(e -> e.getAppointment() != null)
+                .collect(Collectors.toMap(e -> e.getAppointment().getId(), e -> e, (a, b) -> a));
+    }
+
+    private boolean excludedByStatusFilter(String filter, String computedStatus) {
+        return filter != null && !"ALL".equalsIgnoreCase(filter) && !computedStatus.equals(filter);
+    }
+
+    private void addWalkInItems(List<ReceptionQueueItemDTO> items, UUID hospitalId,
+                                 LocalDate date, String status) {
+        if (excludedByStatusFilter(status, STATUS_WALK_IN)
+                && excludedByStatusFilter(status, STATUS_ARRIVED)
+                && excludedByStatusFilter(status, STATUS_IN_PROGRESS)) {
+            return;
+        }
+        LocalDateTime dayStart = date.atStartOfDay();
+        LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
+        List<Encounter> walkIns = encounterRepo.findWalkInsForHospitalAndPeriod(hospitalId, dayStart, dayEnd);
+
+        for (Encounter walkIn : walkIns) {
+            String computedStatus = computeWalkInStatus(walkIn);
+            if (excludedByStatusFilter(status, computedStatus)) continue;
+            items.add(buildWalkInQueueItem(walkIn, computedStatus));
+        }
+    }
+
+    private String computeWalkInStatus(Encounter walkIn) {
+        if (walkIn.getStatus() == EncounterStatus.IN_PROGRESS) return STATUS_IN_PROGRESS;
+        if (walkIn.getStatus() == EncounterStatus.COMPLETED) return STATUS_COMPLETED;
+        return STATUS_WALK_IN;
+    }
+
+    private boolean detectInsuranceIssue(UUID patientId, UUID hospitalId) {
+        List<PatientInsurance> insurances = insuranceRepo
+                .findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId);
+        if (insurances.isEmpty()) return true;
+        LocalDate today = LocalDate.now();
+        boolean hasActive = insurances.stream()
+                .anyMatch(i -> i.getExpirationDate() == null || !i.getExpirationDate().isBefore(today));
+        return !hasActive || insurances.stream().noneMatch(PatientInsurance::isPrimary);
+    }
+
+    private boolean detectOutstandingBalance(UUID patientId, UUID hospitalId) {
+        return invoiceRepo.findByPatient_IdAndHospital_Id(patientId, hospitalId, PageRequest.of(0, 5))
+                .getContent().stream()
+                .filter(inv -> inv.getStatus() != InvoiceStatus.PAID
+                        && inv.getStatus() != InvoiceStatus.CANCELLED
+                        && inv.getStatus() != InvoiceStatus.DRAFT)
+                .anyMatch(inv -> balanceDue(inv).compareTo(BigDecimal.ZERO) > 0);
+    }
+
+    private int computeWaitMinutes(Encounter encounter) {
+        if (encounter != null && encounter.getStatus() == EncounterStatus.ARRIVED) {
+            return (int) ChronoUnit.MINUTES.between(encounter.getEncounterDate(), LocalDateTime.now());
+        }
+        return 0;
     }
 
     private BigDecimal balanceDue(BillingInvoice inv) {

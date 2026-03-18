@@ -973,11 +973,11 @@ class DoctorWorklistServiceImplTest {
         lenient().when(enc.getDepartment()).thenReturn(dept);
         lenient().when(enc.getUrgency()).thenReturn(null);
 
-        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.IN_PROGRESS)))
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(List.of(enc));
-        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.ARRIVED)))
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
                 .thenReturn(Collections.emptyList());
-        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.SCHEDULED))
                 .thenReturn(Collections.emptyList());
         lenient().when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
                 .thenReturn(Collections.emptyList());
@@ -1010,11 +1010,11 @@ class DoctorWorklistServiceImplTest {
                 .thenReturn(List.of(adm));
 
         Encounter enc = stubEncounter(UUID.randomUUID(), p, EncounterStatus.IN_PROGRESS, LocalDateTime.now());
-        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.IN_PROGRESS)))
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(List.of(enc));
-        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.ARRIVED)))
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
                 .thenReturn(Collections.emptyList());
-        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.SCHEDULED))
                 .thenReturn(Collections.emptyList());
         lenient().when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
                 .thenReturn(Collections.emptyList());
@@ -1038,11 +1038,11 @@ class DoctorWorklistServiceImplTest {
         Patient p = stubPatient(patientId, "Vital", "Pat");
 
         Encounter enc = stubEncounter(UUID.randomUUID(), p, EncounterStatus.IN_PROGRESS, LocalDateTime.now().minusMinutes(5));
-        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.IN_PROGRESS)))
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(List.of(enc));
-        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.ARRIVED)))
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
                 .thenReturn(Collections.emptyList());
-        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.SCHEDULED))
                 .thenReturn(Collections.emptyList());
         lenient().when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
                 .thenReturn(Collections.emptyList());
@@ -1074,11 +1074,11 @@ class DoctorWorklistServiceImplTest {
 
         Patient p = stubPatient(UUID.randomUUID(), "VErr", "Pat");
         Encounter enc = stubEncounter(UUID.randomUUID(), p, EncounterStatus.IN_PROGRESS, LocalDateTime.now());
-        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.IN_PROGRESS)))
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(List.of(enc));
-        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.ARRIVED)))
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
                 .thenReturn(Collections.emptyList());
-        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.SCHEDULED))
                 .thenReturn(Collections.emptyList());
         lenient().when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
                 .thenReturn(Collections.emptyList());
@@ -1133,11 +1133,11 @@ class DoctorWorklistServiceImplTest {
         Encounter enc = stubEncounter(UUID.randomUUID(), p, EncounterStatus.IN_PROGRESS, LocalDateTime.now());
         lenient().when(enc.getUrgency()).thenReturn(EncounterUrgency.EMERGENT);
 
-        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.IN_PROGRESS)))
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(List.of(enc));
-        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.ARRIVED)))
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
                 .thenReturn(Collections.emptyList());
-        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.SCHEDULED))
                 .thenReturn(Collections.emptyList());
         lenient().when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
                 .thenReturn(Collections.emptyList());
@@ -1161,11 +1161,11 @@ class DoctorWorklistServiceImplTest {
 
         Patient p = stubPatient(UUID.randomUUID(), "Adm", "Err");
         Encounter enc = stubEncounter(UUID.randomUUID(), p, EncounterStatus.IN_PROGRESS, LocalDateTime.now());
-        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.IN_PROGRESS)))
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
                 .thenReturn(List.of(enc));
-        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.ARRIVED)))
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
                 .thenReturn(Collections.emptyList());
-        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.SCHEDULED))
                 .thenReturn(Collections.emptyList());
         lenient().when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
                 .thenReturn(Collections.emptyList());

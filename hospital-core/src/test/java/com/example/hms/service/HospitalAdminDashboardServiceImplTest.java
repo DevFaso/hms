@@ -135,20 +135,6 @@ class HospitalAdminDashboardServiceImplTest {
         return c;
     }
 
-    private StaffShift shift(String deptName, StaffShiftStatus status) {
-        Department dept = new Department();
-        dept.setId(UUID.randomUUID());
-        dept.setName(deptName);
-        StaffShift s = StaffShift.builder()
-            .hospital(hospital())
-            .department(dept)
-            .shiftDate(TODAY)
-            .status(status)
-            .build();
-        s.setId(UUID.randomUUID());
-        return s;
-    }
-
     private AuditEventLog auditEvent() {
         AuditEventLog e = AuditEventLog.builder()
             .eventType(com.example.hms.enums.AuditEventType.USER_CREATE)

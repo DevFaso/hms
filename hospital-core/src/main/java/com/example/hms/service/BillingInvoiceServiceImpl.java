@@ -20,6 +20,8 @@ import com.example.hms.repository.InvoiceItemRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -46,6 +48,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private final PdfInvoiceService pdfInvoiceService;
     private final BillingInvoiceMapper invoiceMapper;
     private final RoleValidator roleValidator;
+
+    @Lazy @Autowired
+    private BillingInvoiceService self;
 
     @Override
     @Transactional
@@ -283,6 +288,6 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     public BillingInvoiceResponseDTO recordStaffPayment(UUID invoiceId, BigDecimal amount, Locale locale) {
         BillingInvoice invoice = invoiceRepository.findById(invoiceId)
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND));
-        return recordPayment(invoiceId, invoice.getPatient().getId(), amount, locale);
+        return self.recordPayment(invoiceId, invoice.getPatient().getId(), amount, locale);
     }
 }

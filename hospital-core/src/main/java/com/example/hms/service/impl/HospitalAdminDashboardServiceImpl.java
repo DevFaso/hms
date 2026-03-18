@@ -49,6 +49,8 @@ import java.time.temporal.ChronoUnit;
 @Transactional(readOnly = true)
 public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboardService {
 
+    private static final String KEY_COUNTS = "counts";
+
     private final AppointmentRepository appointmentRepository;
     private final AdmissionRepository admissionRepository;
     private final ConsultationRepository consultationRepository;
@@ -478,19 +480,19 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
     private List<HospitalAdminSummaryDTO.WardOccupancyRow> buildWardOccupancy(UUID hospitalId) {
         List<Object[]> rows = bedRepository.countByHospitalGroupByWardAndStatus(hospitalId);
 
-        // Group by wardId -> { wardName, wardType, statusCounts }
+        // Group by wardId wardName, wardType, statusCounts 
         Map<UUID, Map<String, Object>> wardMap = new LinkedHashMap<>();
         for (Object[] r : rows) {
             UUID wardId = (UUID) r[0];
             wardMap.computeIfAbsent(wardId, k -> {
                 Map<String, Object> m = new LinkedHashMap<>();
-                m.put("name", (String) r[1]);
+                m.put("name", r[1]);
                 m.put("type", ((WardType) r[2]).name());
-                m.put("counts", new EnumMap<>(BedStatus.class));
+                m.put(KEY_COUNTS, new EnumMap<>(BedStatus.class));
                 return m;
             });
             @SuppressWarnings("unchecked")
-            Map<BedStatus, Long> c = (Map<BedStatus, Long>) wardMap.get(wardId).get("counts");
+            Map<BedStatus, Long> c = (Map<BedStatus, Long>) wardMap.get(wardId).get(KEY_COUNTS);
             c.put((BedStatus) r[3], (Long) r[4]);
         }
 
@@ -499,7 +501,7 @@ public class HospitalAdminDashboardServiceImpl implements HospitalAdminDashboard
             UUID wardId = entry.getKey();
             Map<String, Object> data = entry.getValue();
             @SuppressWarnings("unchecked")
-            Map<BedStatus, Long> counts = (Map<BedStatus, Long>) data.get("counts");
+            Map<BedStatus, Long> counts = (Map<BedStatus, Long>) data.get(KEY_COUNTS);
             long occupied  = counts.getOrDefault(BedStatus.OCCUPIED, 0L);
             long avail     = counts.getOrDefault(BedStatus.AVAILABLE, 0L);
             long total     = counts.values().stream().mapToLong(Long::longValue).sum();
