@@ -32,8 +32,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import jakarta.validation.constraints.NotBlank;
+
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -148,10 +149,10 @@ public class LabOrderController {
     @ApiResponse(responseCode = "404", description = "Lab order not found")
     public ResponseEntity<ApiResponseWrapper<LabOrderResponseDTO>> transitionLabOrderStatus(
         @PathVariable UUID id,
-        @RequestBody Map<String, String> body,
+        @Valid @RequestBody TransitionLabOrderStatusRequestDTO request,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
-        String rawStatus = body == null ? null : body.get("status");
+        String rawStatus = request == null ? null : request.getStatus();
         if (rawStatus == null || rawStatus.isBlank()) {
             throw new com.example.hms.exception.BusinessException("Request body must include a 'status' field.");
         }
@@ -163,5 +164,14 @@ public class LabOrderController {
         }
         LabOrderResponseDTO result = labOrderService.transitionLabOrderStatus(id, toStatus, locale);
         return ResponseEntity.ok(ApiResponseWrapper.success(result));
+    }
+
+    /** Request DTO for transitioning a lab order's status. */
+    private static class TransitionLabOrderStatusRequestDTO {
+        @NotBlank(message = "Request body must include a 'status' field.")
+        private String status;
+
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
     }
 }

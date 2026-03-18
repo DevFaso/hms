@@ -57,12 +57,12 @@ public interface AuditEventLogRepository extends JpaRepository<AuditEventLog, UU
     Page<AuditEventLog> findByAssignment_Hospital_IdOrderByEventTimestampDesc(UUID hospitalId, Pageable pageable);
 
     /** Daily audit event counts for a hospital within a date range. */
-    @Query("SELECT CAST(a.eventTimestamp AS LocalDate) AS day, COUNT(a) " +
+    @Query("SELECT function('date', a.eventTimestamp) AS day, COUNT(a) " +
            "FROM AuditEventLog a " +
            "WHERE a.assignment.hospital.id = :hospitalId " +
            "AND a.eventTimestamp >= :from " +
-           "GROUP BY CAST(a.eventTimestamp AS LocalDate) " +
-           "ORDER BY CAST(a.eventTimestamp AS LocalDate)")
+           "GROUP BY function('date', a.eventTimestamp) " +
+           "ORDER BY function('date', a.eventTimestamp)")
     List<Object[]> countDailyByHospital(@Param("hospitalId") UUID hospitalId,
                                         @Param("from") LocalDateTime from);
 }

@@ -56,7 +56,7 @@ public class InstrumentOutboxController {
     // ── HL7v2 inbound ─────────────────────────────────────────────────────────
 
     /**
-     * POST /lab/hl7/inbound
+     * POST /lab-instrument-outbox/hl7/parse
      * Accepts a raw HL7v2 message (text/plain or application/hl7-v2) from a connected analyzer
      * and returns the parsed observation fields for verification. This endpoint serves as the
      * integration gateway for inbound ORU^R01 and OUL result messages.
@@ -65,7 +65,7 @@ public class InstrumentOutboxController {
      * {@code POST /lab-results}) uses these fields to create the corresponding {@code LabResult}.
      */
     @PostMapping(
-        path = "/lab/hl7/inbound",
+        path = "/lab-instrument-outbox/hl7/parse",
         consumes = {MediaType.TEXT_PLAIN_VALUE, "application/hl7-v2", MediaType.APPLICATION_OCTET_STREAM_VALUE},
         produces = MediaType.APPLICATION_JSON_VALUE
     )

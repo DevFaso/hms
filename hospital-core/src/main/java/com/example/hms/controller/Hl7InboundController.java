@@ -38,7 +38,7 @@ import java.util.UUID;
  */
 @Slf4j
 @RestController
-@RequestMapping("/lab/hl7")
+@RequestMapping("/lab/hl7/adapter")
 @Tag(name = "HL7v2 Inbound Adapter", description = "Accepts inbound HL7v2 ORU^R01 messages from lab analyzers")
 @RequiredArgsConstructor
 public class Hl7InboundController {

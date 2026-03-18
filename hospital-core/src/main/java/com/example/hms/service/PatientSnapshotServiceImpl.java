@@ -46,6 +46,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     private final PatientDiagnosisRepository patientDiagnosisRepository;
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+    private static final String DIAGNOSIS_STATUS_ACTIVE = "ACTIVE";
 
     @Override
     public PatientSnapshotDTO getSnapshot(UUID patientId) {
@@ -64,7 +65,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             patientAllergyRepository.findByPatient_Id(patientId).forEach(a ->
                     allergies.add(a.getAllergenDisplay()));
         } catch (Exception e) {
-            log.debug("Allergy query error: {}", e.getMessage());
+            log.debug("Allergy query error", e);
         }
         // Also include legacy free-text allergies from patient record
         if (patient.getAllergies() != null && !patient.getAllergies().isBlank()) {
@@ -75,7 +76,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         List<String> diagnoses = new ArrayList<>();
         try {
             List<PatientDiagnosis> structured =
-                    patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE");
+                    patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, DIAGNOSIS_STATUS_ACTIVE);
             if (!structured.isEmpty()) {
                 for (PatientDiagnosis d : structured) {
                     String label = d.getIcdCode() != null
@@ -85,7 +86,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                 }
             }
         } catch (Exception e) {
-            log.debug("PatientDiagnosis query error: {}", e.getMessage());
+            log.debug("PatientDiagnosis query error", e);
         }
         // Fallback: parse legacy chronicConditions free-text field when no structured records exist
         if (diagnoses.isEmpty() && patient.getChronicConditions() != null && !patient.getChronicConditions().isBlank()) {
