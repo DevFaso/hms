@@ -43,6 +43,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -1091,7 +1092,7 @@ class DoctorWorklistServiceImplTest {
         List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);
 
         assertEquals(1, result.size());
-        assertTrue(result.get(0).getLatestVitalsSummary() == null);
+        assertNull(result.get(0).getLatestVitalsSummary());
     }
 
     @Test

@@ -14,7 +14,6 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.PatientInsurance;
 import com.example.hms.model.Staff;
-import com.example.hms.model.User;
 import com.example.hms.payload.dto.DuplicateCandidateDTO;
 import com.example.hms.payload.dto.EligibilityAttestationRequestDTO;
 import com.example.hms.payload.dto.FlowBoardDTO;
@@ -43,7 +42,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.quality.Strictness;
 import org.mockito.junit.jupiter.MockitoSettings;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 

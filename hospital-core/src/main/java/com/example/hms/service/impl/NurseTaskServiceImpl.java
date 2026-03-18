@@ -1117,7 +1117,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     @Override
     public List<NurseInboxItemDTO> getNurseInboxItems(String nurseUsername, int limit) {
         if (nurseUsername == null || nurseUsername.isBlank()) return List.of();
-        int effectiveLimit = Math.max(1, Math.min(limit, 50));
+        int effectiveLimit = (int) Math.clamp(limit, 1, 50);
         Pageable pageable = PageRequest.of(0, effectiveLimit);
         return notificationRepository
             .findByRecipientUsername(nurseUsername, pageable)

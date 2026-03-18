@@ -19,8 +19,6 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.InvoiceItemRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.utility.RoleValidator;
-import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,7 +33,6 @@ import java.util.Locale;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     private static final String BILLING_INVOICE_NOT_FOUND = "billinginvoice.notfound";
@@ -48,9 +45,28 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private final PdfInvoiceService pdfInvoiceService;
     private final BillingInvoiceMapper invoiceMapper;
     private final RoleValidator roleValidator;
+    private final BillingInvoiceService self;
 
-    @Lazy @Autowired
-    private BillingInvoiceService self;
+    public BillingInvoiceServiceImpl(
+            BillingInvoiceRepository invoiceRepository,
+            PatientRepository patientRepository,
+            HospitalRepository hospitalRepository,
+            EncounterRepository encounterRepository,
+            InvoiceItemRepository invoiceItemRepository,
+            PdfInvoiceService pdfInvoiceService,
+            BillingInvoiceMapper invoiceMapper,
+            RoleValidator roleValidator,
+            @Lazy BillingInvoiceService self) {
+        this.invoiceRepository = invoiceRepository;
+        this.patientRepository = patientRepository;
+        this.hospitalRepository = hospitalRepository;
+        this.encounterRepository = encounterRepository;
+        this.invoiceItemRepository = invoiceItemRepository;
+        this.pdfInvoiceService = pdfInvoiceService;
+        this.invoiceMapper = invoiceMapper;
+        this.roleValidator = roleValidator;
+        this.self = self;
+    }
 
     @Override
     @Transactional

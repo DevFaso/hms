@@ -314,10 +314,6 @@ class NurseTaskControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
 
-    /* ═══════════════════════════════════════════════════════════════════
-       PATCH /nurse/handoffs/{handoffId}/tasks/{taskId}
-       ═══════════════════════════════════════════════════════════════════ */
-
     @Test
     void updateHandoffChecklistComplete() {
         UUID handoffId = UUID.randomUUID();

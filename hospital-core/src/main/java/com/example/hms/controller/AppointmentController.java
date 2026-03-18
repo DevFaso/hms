@@ -178,7 +178,7 @@ public class AppointmentController {
             .toDate(toDate)
             .search(normalizedSearch)
             .build();
-        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200), Sort.by(Sort.Direction.DESC, SORT_APPOINTMENT_DATE));
+        Pageable pageable = PageRequest.of(Math.max(page, 0), (int) Math.clamp(size, 1, 200), Sort.by(Sort.Direction.DESC, SORT_APPOINTMENT_DATE));
         Page<AppointmentResponseDTO> resultPage = appointmentService.searchAppointments(
             filter, pageable, locale, getUsername(authentication));
         HttpHeaders headers = new HttpHeaders();

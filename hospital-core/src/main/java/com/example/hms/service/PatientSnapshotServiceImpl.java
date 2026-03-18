@@ -136,9 +136,12 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
             labResultRepository.findByLabOrder_Patient_Id(patientId).stream()
                     .limit(10)
                     .forEach(r -> {
-                        String flag = r.getAbnormalFlag() != null
-                                ? r.getAbnormalFlag().name()
-                                : r.isAcknowledged() ? "NORMAL" : "REVIEW";
+                        String flag;
+                        if (r.getAbnormalFlag() != null) {
+                            flag = r.getAbnormalFlag().name();
+                        } else {
+                            flag = r.isAcknowledged() ? "NORMAL" : "REVIEW";
+                        }
                         labs.add(PatientSnapshotDTO.LabItem.builder()
                             .test(r.getLabOrder().getLabTestDefinition() != null ? r.getLabOrder().getLabTestDefinition().getName() : "Lab Test")
                             .value(r.getResultValue())

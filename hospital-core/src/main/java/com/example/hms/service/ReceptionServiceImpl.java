@@ -244,48 +244,57 @@ public class ReceptionServiceImpl implements ReceptionService {
             List<PatientInsurance> insurances = insuranceRepo
                     .findByPatient_IdAndAssignment_Hospital_Id(pid, hospitalId);
 
-            String issueType = null;
-            if (insurances.isEmpty()) {
-                issueType = "MISSING_INSURANCE";
-            } else {
-                boolean hasActive = insurances.stream()
-                        .anyMatch(i -> i.getExpirationDate() == null || !i.getExpirationDate().isBefore(today));
-                boolean hasPrimary = insurances.stream().anyMatch(PatientInsurance::isPrimary);
-                if (!hasActive) issueType = "EXPIRED_INSURANCE";
-                else if (!hasPrimary) issueType = "NO_PRIMARY";
-            }
-
+            String issueType = detectInsuranceIssue(insurances, today);
             if (issueType != null) {
-                Patient p = appt.getPatient();
-                // Embed the first relevant insurance record for the panel (null for MISSING)
-                PatientInsurance relevantInsurance = insurances.isEmpty() ? null : insurances.stream()
-                        .filter(i -> i.isPrimary())
-                        .findFirst()
-                        .orElse(insurances.get(0));
-                com.example.hms.patient.dto.PatientInsuranceDto insuranceDto = null;
-                if (relevantInsurance != null) {
-                    insuranceDto = new com.example.hms.patient.dto.PatientInsuranceDto();
-                    insuranceDto.setId(relevantInsurance.getId());
-                    insuranceDto.setProviderName(relevantInsurance.getProviderName());
-                    insuranceDto.setPolicyNumber(relevantInsurance.getPolicyNumber());
-                    insuranceDto.setCoverageStart(relevantInsurance.getEffectiveDate());
-                    insuranceDto.setCoverageEnd(relevantInsurance.getExpirationDate());
-                    insuranceDto.setPrimaryPlan(relevantInsurance.isPrimary());
-                }
-                issues.add(InsuranceIssueDTO.builder()
-                        .appointmentId(appt.getId())
-                        .patientId(pid)
-                        .patientName(p.getFirstName() + " " + p.getLastName())
-                        .mrn(null)
-                        .appointmentTime(appt.getStartTime() != null ? appt.getStartTime().format(TIME_FMT) : null)
-                        .issueType(issueType)
-                        .clinicianName(providerName(appt))
-                        .departmentName(appt.getDepartment() != null ? appt.getDepartment().getName() : null)
-                        .insurance(insuranceDto)
-                        .build());
+                issues.add(buildInsuranceIssueItem(appt, pid, issueType, insurances));
             }
         }
         return issues;
+    }
+
+    private String detectInsuranceIssue(List<PatientInsurance> insurances, LocalDate today) {
+        if (insurances.isEmpty()) {
+            return "MISSING_INSURANCE";
+        }
+        boolean hasActive = insurances.stream()
+                .anyMatch(i -> i.getExpirationDate() == null || !i.getExpirationDate().isBefore(today));
+        if (!hasActive) return "EXPIRED_INSURANCE";
+        boolean hasPrimary = insurances.stream().anyMatch(PatientInsurance::isPrimary);
+        if (!hasPrimary) return "NO_PRIMARY";
+        return null;
+    }
+
+    private InsuranceIssueDTO buildInsuranceIssueItem(Appointment appt, UUID pid,
+                                                       String issueType, List<PatientInsurance> insurances) {
+        Patient p = appt.getPatient();
+        PatientInsurance relevantInsurance = insurances.isEmpty() ? null : insurances.stream()
+                .filter(PatientInsurance::isPrimary)
+                .findFirst()
+                .orElse(insurances.get(0));
+        com.example.hms.patient.dto.PatientInsuranceDto insuranceDto = mapInsuranceDto(relevantInsurance);
+        return InsuranceIssueDTO.builder()
+                .appointmentId(appt.getId())
+                .patientId(pid)
+                .patientName(p.getFirstName() + " " + p.getLastName())
+                .mrn(null)
+                .appointmentTime(appt.getStartTime() != null ? appt.getStartTime().format(TIME_FMT) : null)
+                .issueType(issueType)
+                .clinicianName(providerName(appt))
+                .departmentName(appt.getDepartment() != null ? appt.getDepartment().getName() : null)
+                .insurance(insuranceDto)
+                .build();
+    }
+
+    private com.example.hms.patient.dto.PatientInsuranceDto mapInsuranceDto(PatientInsurance ins) {
+        if (ins == null) return null;
+        com.example.hms.patient.dto.PatientInsuranceDto dto = new com.example.hms.patient.dto.PatientInsuranceDto();
+        dto.setId(ins.getId());
+        dto.setProviderName(ins.getProviderName());
+        dto.setPolicyNumber(ins.getPolicyNumber());
+        dto.setCoverageStart(ins.getEffectiveDate());
+        dto.setCoverageEnd(ins.getExpirationDate());
+        dto.setPrimaryPlan(ins.isPrimary());
+        return dto;
     }
 
     // ── MVP 10: Payments Pending ──────────────────────────────────────────────

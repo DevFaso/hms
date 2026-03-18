@@ -17,6 +17,8 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
 
+    private static final String STATUS_UNKNOWN = "UNKNOWN";
+
     private final PatientRepository patientRepository;
     private final AppointmentRepository appointmentRepository;
     private final EncounterRepository encounterRepository;
@@ -82,7 +84,7 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
         Map<String, Long> result = new LinkedHashMap<>();
         appointmentRepository.findAll().stream()
                 .collect(Collectors.groupingBy(
-                        a -> a.getStatus() != null ? a.getStatus().name() : "UNKNOWN",
+                        a -> a.getStatus() != null ? a.getStatus().name() : STATUS_UNKNOWN,
                         Collectors.counting()))
                 .entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
@@ -94,7 +96,7 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
         Map<String, Long> result = new LinkedHashMap<>();
         encounterRepository.findAll().stream()
                 .collect(Collectors.groupingBy(
-                        e -> e.getStatus() != null ? e.getStatus().name() : "UNKNOWN",
+                        e -> e.getStatus() != null ? e.getStatus().name() : STATUS_UNKNOWN,
                         Collectors.counting()))
                 .entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
@@ -106,7 +108,7 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
         Map<String, Long> result = new LinkedHashMap<>();
         billingInvoiceRepository.findAll().stream()
                 .collect(Collectors.groupingBy(
-                        inv -> inv.getStatus() != null ? inv.getStatus().name() : "UNKNOWN",
+                        inv -> inv.getStatus() != null ? inv.getStatus().name() : STATUS_UNKNOWN,
                         Collectors.counting()))
                 .entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())

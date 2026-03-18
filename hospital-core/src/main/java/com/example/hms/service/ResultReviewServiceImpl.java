@@ -79,9 +79,12 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                         ? order.getLabTestDefinition().getName()
                         : "Lab Test";
 
-                String abnormalFlag = result.getAbnormalFlag() != null
-                        ? result.getAbnormalFlag().name()
-                        : result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name();
+                String abnormalFlag;
+                if (result.getAbnormalFlag() != null) {
+                    abnormalFlag = result.getAbnormalFlag().name();
+                } else {
+                    abnormalFlag = result.isAcknowledged() ? AbnormalFlag.NORMAL.name() : AbnormalFlag.ABNORMAL.name();
+                }
 
                 queue.add(DoctorResultQueueItemDTO.builder()
                         .id(result.getId())
