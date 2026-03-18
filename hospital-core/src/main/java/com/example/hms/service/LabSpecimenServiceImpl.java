@@ -11,7 +11,6 @@ import com.example.hms.payload.dto.LabSpecimenResponseDTO;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabSpecimenRepository;
 import com.example.hms.utility.RoleValidator;
-import com.example.hms.service.InstrumentOutboxService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +26,7 @@ import java.util.UUID;
 public class LabSpecimenServiceImpl implements LabSpecimenService {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final java.security.SecureRandom SECURE_RNG = new java.security.SecureRandom();
 
     private final LabSpecimenRepository labSpecimenRepository;
     private final LabOrderRepository labOrderRepository;
@@ -142,9 +142,8 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     private static String generateRandomSuffix(int length) {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         var sb = new StringBuilder(length);
-        var rng = new java.security.SecureRandom();
         for (int i = 0; i < length; i++) {
-            sb.append(chars.charAt(rng.nextInt(chars.length())));
+            sb.append(chars.charAt(SECURE_RNG.nextInt(chars.length())));
         }
         return sb.toString();
     }

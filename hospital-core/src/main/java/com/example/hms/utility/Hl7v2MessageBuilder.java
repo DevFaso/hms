@@ -104,23 +104,29 @@ public class Hl7v2MessageBuilder {
         if (hl7Message == null || hl7Message.isBlank()) return null;
         try {
             String[] segments = hl7Message.split("[\r\n]+");
-            String patientId = extractPid(segments);
-            for (String seg : segments) {
-                if (seg.startsWith("OBX")) {
-                    String[] f = seg.split("\\|", -1);
-                    String testCode  = f.length > 3  ? firstComponent(f[3])  : "";
-                    String value     = f.length > 5  ? f[5]                  : "";
-                    String unit      = f.length > 6  ? f[6]                  : "";
-                    String abnFlag   = f.length > 8  ? f[8]                  : "N";
-                    String datePart  = f.length > 14 ? f[14]                 : "";
-                    LocalDateTime resultDate = parseHl7DateTime(datePart);
-                    return new ParsedObservation(patientId, testCode, value, unit, abnFlag, resultDate);
-                }
-            }
+            return parseFirstObx(segments, extractPid(segments));
         } catch (Exception ignored) {
-            // Return null on any parse error; caller handles
+            return null;
+        }
+    }
+
+    private ParsedObservation parseFirstObx(String[] segments, String patientId) {
+        for (String seg : segments) {
+            if (seg.startsWith("OBX")) {
+                return parseObxSegment(seg, patientId);
+            }
         }
         return null;
+    }
+
+    private ParsedObservation parseObxSegment(String seg, String patientId) {
+        String[] f = seg.split("\\|", -1);
+        String testCode = f.length > 3  ? firstComponent(f[3]) : "";
+        String value    = f.length > 5  ? f[5]                 : "";
+        String unit     = f.length > 6  ? f[6]                 : "";
+        String abnFlag  = f.length > 8  ? f[8]                 : "N";
+        String datePart = f.length > 14 ? f[14]                : "";
+        return new ParsedObservation(patientId, testCode, value, unit, abnFlag, parseHl7DateTime(datePart));
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

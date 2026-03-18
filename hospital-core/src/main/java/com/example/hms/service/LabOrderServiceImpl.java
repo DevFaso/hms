@@ -342,23 +342,11 @@ public class LabOrderServiceImpl implements LabOrderService {
 
         switch (to) {
             case PENDING -> { /* Doctor/nurse/lab staff can acknowledge */ }
-            case COLLECTED, RECEIVED -> {
-                if (!roleValidator.isLabStaff(currentUserId, hospitalId)) {
-                    throw new BusinessException("Only lab staff may perform specimen collection/receipt operations.");
-                }
-            }
-            case IN_PROGRESS, RESULTED -> {
-                if (!roleValidator.isLabScientist(currentUserId, hospitalId)
-                        && !roleValidator.isLabManager(currentUserId, hospitalId)) {
-                    throw new BusinessException("Only lab scientists or managers may advance analytical steps.");
-                }
-            }
-            case VERIFIED, COMPLETED -> {
-                if (!roleValidator.isLabScientist(currentUserId, hospitalId)
-                        && !roleValidator.isLabManager(currentUserId, hospitalId)) {
-                    throw new BusinessException("Only lab scientists or managers may verify or complete a lab order.");
-                }
-            }
+            case COLLECTED, RECEIVED -> requireLabStaff(currentUserId, hospitalId);
+            case IN_PROGRESS, RESULTED -> requireLabScientistOrManager(currentUserId, hospitalId,
+                    "advance analytical steps");
+            case VERIFIED, COMPLETED -> requireLabScientistOrManager(currentUserId, hospitalId,
+                    "verify or complete a lab order");
             default -> throw new BusinessException(
                 "Status " + to.name() + " cannot be set via transition.");
         }
@@ -616,6 +604,18 @@ public class LabOrderServiceImpl implements LabOrderService {
             return HEX_FORMAT.formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
+    }
+
+    private void requireLabStaff(UUID userId, UUID hospitalId) {
+        if (!roleValidator.isLabStaff(userId, hospitalId)) {
+            throw new BusinessException("Only lab staff may perform specimen collection/receipt operations.");
+        }
+    }
+
+    private void requireLabScientistOrManager(UUID userId, UUID hospitalId, String action) {
+        if (!roleValidator.isLabScientist(userId, hospitalId) && !roleValidator.isLabManager(userId, hospitalId)) {
+            throw new BusinessException("Only lab scientists or managers may " + action + ".");
         }
     }
 }
