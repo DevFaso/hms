@@ -18,6 +18,13 @@
 | **MVP 12** | Nurse Station Cockpit — Phase 2 (Workboard + Flow Board + Vitals Capture) | 2-3 weeks | High | ✅ Done |
 | **MVP 13** | Nurse Station Cockpit — Phase 3 (Task Board + Inbox + Care Notes) | 2-3 weeks | High | ✅ Done |
 | **MVP 14** | Patient Portal Phase 3 — Proxy/Family Access + Notification Preferences | 2-3 weeks | Medium | ✅ Done |
+| **MVP 15** | Admin Operations — Feature Flags + Platform Analytics + Digital Signatures UI | 2-3 weeks | Medium | ✅ Done |
+| **MVP 16** | Hospital Admin Cockpit — Phase A (Appointments Fix + Ops Summary + Dashboard) | 2-3 weeks | Critical | ✅ Done |
+| **MVP 17** | Hospital Admin Cockpit — Phase B (Staffing KPIs + Consult Backlog + Audit) | 2-3 weeks | High | ✅ Done |
+| **MVP 18** | Hospital Admin Cockpit — Phase C (Invoice Aging + Integrations Visibility) | 2-3 weeks | Medium | ✅ Done |
+| **MVP 19** | Staff Compliance & Consultation Dispatch Board | 2-3 weeks | High | ✅ Done |
+| **MVP 20** | Payment Transaction Ledger & Financial Trending | 2-3 weeks | Medium | ✅ Done |
+| **MVP 21** | Bed/Ward Inventory & Occupancy Dashboard | 1-2 weeks | Medium | ✅ Done |
 
 ---
 
@@ -717,4 +724,170 @@ RECEPTION_QUEUE_ITEM  (computed DTO — not persisted)
 
 ### Migration
 - `V22__mvp14_proxy_access_notification_preferences.sql` — Liquibase changeset V22
+
+---
+
+## MVP 15: Admin Operations — Feature Flags + Platform Analytics + Digital Signatures UI ✅
+
+### Platform Analytics
+- **PlatformAnalyticsService** — aggregates total patients, encounters, appointments, invoices, lab orders, prescriptions, users, hospitals; trend data for appointments/encounters/registrations; status breakdowns; department utilization; hospital metrics
+- **PlatformAnalyticsDTO.java** — nested DTOs: `TrendPointDTO`, `DepartmentUtilizationDTO`, `HospitalMetricDTO`
+- **SuperAdminDashboardController** extended with `GET /super-admin/analytics?trendDays=14`
+- **Angular**: `AnalyticsComponent` (analytics/analytics.ts) — trend charts, status breakdowns, department/hospital tables
+
+### Feature Flags UI
+- **Angular**: `FeatureFlagsComponent` (feature-flags/feature-flags.ts) — list, toggle, create/edit feature flags
+- Leverages existing `FeatureFlagService` and `/feature-flags` backend endpoints
+
+### Digital Signatures Management
+- **DigitalSignatureService** extended with `getAllSignatures()` method
+- **DigitalSignatureController** extended with `GET /signatures/all`
+- **Angular**: `DigitalSignaturesComponent` (digital-signatures/digital-signatures.ts) — signature list/management
+
+---
+
+## MVP 16: Hospital Admin Cockpit — Phase A (Appointments Fix + Ops Summary + Dashboard)
+
+> **Goal**: Fix the critical appointments filtering mismatch + add a hospital-scoped admin summary API + enhance the Hospital Admin dashboard to an Epic-style operational cockpit.
+
+### P0 Fix GET /appointments to Support Query Filters
+- **AppointmentController.getAllAppointments()** extended with `@RequestParam` for `fromDate`, `toDate`, `hospitalId`, `staffId`, `patientId`, `search`
+- Delegates to existing `AppointmentService.searchAppointments()` (which already uses `AppointmentFilterDTO` + JPA Specification)
+- Frontend `AppointmentService.list(filters)` already sends these params — backend now honours them
+- This fixes "Today's Schedule" showing all appointments regardless of date
+
+### P0 Hospital Admin Summary Endpoint
+- **HospitalAdminSummaryDTO** — consolidated payload: appointments (today/noShows/cancelled), admissions (active/admittedToday/dischargedToday), consultations (requested/acknowledged/pending), staffing (activeStaff/onShiftNow), billing (overdueInvoices/openBalanceTotal), recentAuditEvents
+- **HospitalAdminDashboardService** + Impl — composes data from existing `AppointmentRepository`, `AdmissionRepository`, `ConsultationRepository`, `BillingInvoiceRepository`, `StaffRepository`, `StaffAvailabilityRepository`, `AuditEventLogRepository`
+- **DashboardController** extended with `GET /dashboard/hospital-admin/summary?date=&auditLimit=`
+- Hospital scoping via `HospitalContextHolder` (X-Hospital-Id header)
+
+### P1 Hospital-Scoped Audit Query
+- **AuditEventLogRepository** extended with `findByAssignment_Hospital_IdOrderByEventTimestampDesc(UUID hospitalId, Pageable pageable)`
+
+### Frontend — Hospital Admin Dashboard Enhancement
+- **DashboardService** extended with `getHospitalAdminSummary()` method
+- **DashboardComponent** enhanced:
+  - New signals: `hospitalAdminSummary`, audit events, staffing data
+  - Operational stat cards: appointments (today + no-shows + cancelled), admissions (active + today's admits/discharges), consultations (pending + acknowledged)
+  - Staffing snapshot cards: active staff, on-shift-now
+  - Finance cards: overdue invoices, open balance
+  - Right-rail: recent audit events table, announcements link
+  - "Today's Schedule" now backed by correct filtered data
+
+---
+
+## MVP 17: Hospital Admin Cockpit — Phase B (Staffing KPIs + Consult Backlog + Audit)
+
+> **Scope**: Deeper staffing/workforce analytics, consultation pipeline management, hospital-scoped audit browsing
+
+### Staffing Coverage KPIs
+- On-shift staff by department breakdown
+- Leave requests pending count
+- Shift coverage gaps (understaffed departments)
+
+### Consultation Backlog Cards
+- Pending consults list with urgency + SLA countdown
+- Overdue consults highlighting (past `slaDueBy`)
+- Admin-driven consult assignment endpoint (optional)
+
+### Hospital-Scoped Audit Browsing
+- Audit log page filtered to active hospital context
+- Trend widget: audit events per day (last 7 days)
+
+---
+
+## MVP 18: Hospital Admin Cockpit — Phase C (Invoice Aging + Integrations Visibility)
+
+> **Scope**: Financial oversight + integration health monitoring for hospital admins
+
+### Invoice Aging & Open Balance Trends
+- Aging buckets: 0-30, 31-60, 61-90, 90+ days overdue
+- Open balance trend chart (last 30 days)
+- Payment collection rate KPI
+
+### Integrations Visibility Widget
+- Hospital-linked platform services status
+- Integration health/uptime indicators
+- Quick link to integration registry (read-only for hospital admins)
+
+---
+
+## MVP 19: Staff Compliance & Consultation Dispatch Board
+
+> **Goal**: Close the P2 compliance gap (staff license expiry tracking) + surface existing consultation assignment capabilities in the Hospital Admin cockpit + add workforce absence visibility.
+
+### Liquibase V23: Add License Expiry Date to Staff
+- New column `license_expiry_date DATE` on `staff` table
+- Nullable (not all staff have time-limited licenses)
+- Enables compliance tracking for regulated clinical staff
+
+### Staff License Expiry Alerts
+- **StaffRepository** extended with hospital-scoped expiry queries
+- **HospitalAdminSummaryDTO** extended with `licenseAlerts` list:
+  - Staff with **expired** licenses (past due)
+  - Staff with licenses expiring in **30 days** (critical)
+  - Staff with licenses expiring in **90 days** (warning)
+- Dashboard widget: color-coded alert rows (red/amber/yellow)
+
+### Workforce Absence Summary
+- **StaffingMetrics** extended with `staffOnLeaveToday` and `upcomingLeave` counts
+- Derived from `StaffAvailability` (dayOff == true, active == true for hospital)
+- Dashboard cards: today's absences + next-7-days leave count
+
+### Consultation Dispatch (Cockpit Surface)
+- Consult backlog cards enhanced with "Assign" action button
+- Links to existing `POST /consultations/{id}/assign` endpoint
+- Consultant picker: lists active staff in requested specialty
+- Enables hospital admin to dispatch pending consultations without leaving cockpit
+
+### Frontend Enhancements
+- License expiry alert panel with severity indicators
+- Absence summary cards in staffing section
+- Assign consultant inline action on consult backlog items
+- Staff search/select for consultant assignment
+
+---
+
+## MVP 20: Payment Transaction Ledger & Financial Trending
+
+> **Goal**: Close the P2 financial reliability gap by adding payment transaction history + enable AR trending for hospital admin financial oversight.
+
+### Payment Transaction Entity & Migration
+- New `payment_transactions` table (V24 migration)
+- Fields: invoiceId, amount, paymentDate, paymentMethod, referenceNumber, recordedBy, notes
+- Linked to BillingInvoice via FK
+
+### Payment Service Extension
+- `BillingInvoiceService.recordPayment()` creates transaction record alongside updating invoice
+- Payment history endpoint: `GET /billing-invoices/{id}/payments`
+- Hospital payment trend: `GET /dashboard/hospital-admin/payment-trend?days=30`
+
+### Financial Dashboard Widgets
+- Daily collection trend chart (last 30 days)
+- Payment method breakdown (cash/insurance/card)
+- Write-off tracking (cancelled/adjusted invoices)
+
+---
+
+## MVP 21: Bed/Ward Inventory & Occupancy Dashboard
+
+> **Goal**: Close the last Hospital Admin gap (P3 #11) by introducing structured Ward/Bed entities and real-time occupancy visibility on the admin dashboard.
+
+### Ward & Bed Entities (V25 Migration)
+- `hospital.wards` table: hospital FK, optional department FK, name, code (unique per hospital), ward_type enum, floor, description, active
+- `hospital.beds` table: ward FK, bed_number (unique per ward), bed_status enum (AVAILABLE/OCCUPIED/RESERVED/MAINTENANCE/OUT_OF_SERVICE), bed_type, floor, room_number, notes, active
+- Optional `bed_id` FK added to `admissions` table (preserving existing `room_bed` text field)
+
+### Enums & Repositories
+- `BedStatus` enum: AVAILABLE, OCCUPIED, RESERVED, MAINTENANCE, OUT_OF_SERVICE
+- `WardType` enum: GENERAL, SURGICAL, MATERNITY, PEDIATRIC, ICU, CCU, NICU, PSYCHIATRIC, ISOLATION, PRIVATE, SEMI_PRIVATE, EMERGENCY, RECOVERY
+- `WardRepository`: findByHospital, findByHospitalAndActive
+- `BedRepository`: countByHospitalGroupByStatus, countByHospitalGroupByWardAndStatus
+
+### Dashboard Integration
+- `BedOccupancy` DTO: totalBeds, occupiedBeds, availableBeds, reservedBeds, maintenanceBeds, occupancyRate
+- `WardOccupancyRow` DTO: per-ward breakdown with occupancy rate
+- Bed Occupancy overview card (color-coded stats + occupancy rate gauge)
+- Ward Occupancy table (name, type, total/occupied/available, rate)
 

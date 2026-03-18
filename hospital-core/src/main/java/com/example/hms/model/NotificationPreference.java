@@ -13,6 +13,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -31,6 +32,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @lombok.Builder
+@EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class NotificationPreference extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

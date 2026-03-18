@@ -52,6 +52,8 @@ import java.util.UUID;
 @Tag(name = "Nurse Workflow", description = "Operational queues powering the nurse dashboard")
 public class NurseTaskController {
 
+    private static final String NURSE_IDENTITY_ERROR = "Unable to resolve nurse identity.";
+
     private final NurseTaskService nurseTaskService;
     private final ControllerAuthUtils authUtils;
 
@@ -254,7 +256,7 @@ public class NurseTaskController {
     ) {
         authUtils.requireAuth(auth);
         UUID nurseUserId = authUtils.resolveUserId(auth)
-            .orElseThrow(() -> new BusinessException("Unable to resolve nurse identity."));
+            .orElseThrow(() -> new BusinessException(NURSE_IDENTITY_ERROR));
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         nurseTaskService.captureVitals(patientId, nurseUserId, scopedHospital, request);
         return ResponseEntity.noContent().build();
@@ -298,7 +300,7 @@ public class NurseTaskController {
     ) {
         authUtils.requireAuth(auth);
         UUID nurseId = authUtils.resolveUserId(auth)
-            .orElseThrow(() -> new BusinessException("Unable to resolve nurse identity."));
+            .orElseThrow(() -> new BusinessException(NURSE_IDENTITY_ERROR));
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         NurseTaskItemDTO created = nurseTaskService.createNursingTask(nurseId, scopedHospital, request);
         return ResponseEntity.status(201).body(created);
@@ -315,7 +317,7 @@ public class NurseTaskController {
     ) {
         authUtils.requireAuth(auth);
         UUID nurseId = authUtils.resolveUserId(auth)
-            .orElseThrow(() -> new BusinessException("Unable to resolve nurse identity."));
+            .orElseThrow(() -> new BusinessException(NURSE_IDENTITY_ERROR));
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         return ResponseEntity.ok(nurseTaskService.completeNursingTask(taskId, nurseId, scopedHospital, request));
     }
@@ -357,7 +359,7 @@ public class NurseTaskController {
     ) {
         authUtils.requireAuth(auth);
         UUID nurseId = authUtils.resolveUserId(auth)
-            .orElseThrow(() -> new BusinessException("Unable to resolve nurse identity."));
+            .orElseThrow(() -> new BusinessException(NURSE_IDENTITY_ERROR));
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         return ResponseEntity.status(201).body(
             nurseTaskService.createCareNote(patientId, nurseId, scopedHospital, request));

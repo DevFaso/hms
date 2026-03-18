@@ -4,7 +4,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -48,8 +49,8 @@ class OnCallScheduleTest {
         void fullBuild() {
             Staff staff = new Staff();
             Department department = new Department();
-            LocalDateTime start = LocalDateTime.of(2026, 3, 14, 20, 0);
-            LocalDateTime end   = LocalDateTime.of(2026, 3, 15, 8, 0);
+            OffsetDateTime start = OffsetDateTime.of(2026, 3, 14, 20, 0, 0, 0, ZoneOffset.UTC);
+            OffsetDateTime end   = OffsetDateTime.of(2026, 3, 15, 8, 0, 0, 0, ZoneOffset.UTC);
 
             OnCallSchedule s = OnCallSchedule.builder()
                     .staff(staff)
@@ -72,8 +73,8 @@ class OnCallScheduleTest {
         @DisplayName("department and notes are optional — can be null")
         void optionalFields() {
             Staff staff = new Staff();
-            LocalDateTime start = LocalDateTime.of(2026, 3, 14, 8, 0);
-            LocalDateTime end   = LocalDateTime.of(2026, 3, 14, 16, 0);
+            OffsetDateTime start = OffsetDateTime.of(2026, 3, 14, 8, 0, 0, 0, ZoneOffset.UTC);
+            OffsetDateTime end   = OffsetDateTime.of(2026, 3, 14, 16, 0, 0, 0, ZoneOffset.UTC);
 
             OnCallSchedule s = OnCallSchedule.builder()
                     .staff(staff)
@@ -99,8 +100,8 @@ class OnCallScheduleTest {
         @DisplayName("setter updates are reflected by getters")
         void settersWork() {
             OnCallSchedule s = new OnCallSchedule();
-            LocalDateTime start = LocalDateTime.of(2026, 3, 14, 20, 0);
-            LocalDateTime end   = LocalDateTime.of(2026, 3, 15, 8, 0);
+            OffsetDateTime start = OffsetDateTime.of(2026, 3, 14, 20, 0, 0, 0, ZoneOffset.UTC);
+            OffsetDateTime end   = OffsetDateTime.of(2026, 3, 15, 8, 0, 0, 0, ZoneOffset.UTC);
 
             s.setStartTime(start);
             s.setEndTime(end);

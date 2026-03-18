@@ -97,6 +97,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String STATUS_OVERDUE = "OVERDUE";
     private static final String STATUS_DUE = "DUE";
     private static final String STATUS_COMPLETED = "COMPLETED";
+    private static final String MSG_PATIENT_NOT_FOUND = "Patient not found: ";
+    private static final String MSG_HOSPITAL_NOT_FOUND = "Hospital not found: ";
     private static final String SEED_PATIENT = "PATIENT";
     private static final String SEED_VITAL = "VITAL";
     private static final String SEED_ORDER = "ORDER";
@@ -942,9 +944,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (request == null) throw new BusinessException("Vital sign data required.");
 
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found: " + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
 
         boolean clinicallySig = isClinicallySignificant(request);
 
@@ -972,14 +974,29 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     /** Auto-flag a vital set as clinically significant when values fall outside safe ranges. */
     private boolean isClinicallySignificant(NurseVitalCaptureRequestDTO req) {
-        if (req.getHeartRateBpm() != null && (req.getHeartRateBpm() < 40 || req.getHeartRateBpm() > 150)) return true;
-        if (req.getSpo2Percent() != null && req.getSpo2Percent() < 90) return true;
-        if (req.getRespiratoryRateBpm() != null && (req.getRespiratoryRateBpm() < 8 || req.getRespiratoryRateBpm() > 30)) return true;
-        if (req.getSystolicBpMmHg() != null && (req.getSystolicBpMmHg() < 80 || req.getSystolicBpMmHg() > 200)) return true;
-        if (req.getDiastolicBpMmHg() != null && req.getDiastolicBpMmHg() > 120) return true;
-        if (req.getTemperatureCelsius() != null && (req.getTemperatureCelsius() < 35.0 || req.getTemperatureCelsius() > 40.0)) return true;
-        if (req.getBloodGlucoseMgDl() != null && (req.getBloodGlucoseMgDl() < 50 || req.getBloodGlucoseMgDl() > 400)) return true;
-        return false;
+        return isOutOfRange(req.getHeartRateBpm(), 40, 150)
+                || isBelow(req.getSpo2Percent(), 90)
+                || isOutOfRange(req.getRespiratoryRateBpm(), 8, 30)
+                || isOutOfRange(req.getSystolicBpMmHg(), 80, 200)
+                || isAbove(req.getDiastolicBpMmHg(), 120)
+                || isOutOfDoubleRange(req.getTemperatureCelsius(), 35.0, 40.0)
+                || isOutOfRange(req.getBloodGlucoseMgDl(), 50, 400);
+    }
+
+    private static boolean isOutOfRange(Integer value, int min, int max) {
+        return value != null && (value < min || value > max);
+    }
+
+    private static boolean isBelow(Integer value, int min) {
+        return value != null && value < min;
+    }
+
+    private static boolean isAbove(Integer value, int max) {
+        return value != null && value > max;
+    }
+
+    private static boolean isOutOfDoubleRange(Double value, double min, double max) {
+        return value != null && (value < min || value > max);
     }
 
     @Override
@@ -1045,7 +1062,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             tasks = nursingTaskRepository.findByHospital_IdAndStatusOrderByDueAtAsc(hospitalId, statusFilter.toUpperCase(Locale.ROOT));
         } else {
             // Default: show PENDING and IN_PROGRESS only (exclude COMPLETED/CANCELLED)
-            tasks = nursingTaskRepository.findByHospital_IdAndStatusNotOrderByDueAtAsc(hospitalId, "COMPLETED");
+            tasks = nursingTaskRepository.findByHospital_IdAndStatusNotOrderByDueAtAsc(hospitalId, STATUS_COMPLETED);
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -1058,9 +1075,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     @Transactional
     public NurseTaskItemDTO createNursingTask(UUID nurseUserId, UUID hospitalId, NurseTaskCreateRequestDTO request) {
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
         Patient patient = patientRepository.findById(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found: " + request.getPatientId()));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + request.getPatientId()));
 
         String createdByName = resolveNurseName(nurseUserId);
 
@@ -1086,7 +1103,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .orElseThrow(() -> new ResourceNotFoundException("Nursing task not found: " + taskId));
 
         String nurseName = resolveNurseName(nurseUserId);
-        task.setStatus("COMPLETED");
+        task.setStatus(STATUS_COMPLETED);
         task.setCompletedAt(LocalDateTime.now());
         task.setCompletedByName(nurseName);
         if (request != null && request.getCompletionNote() != null) {
@@ -1100,7 +1117,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     @Override
     public List<NurseInboxItemDTO> getNurseInboxItems(String nurseUsername, int limit) {
         if (nurseUsername == null || nurseUsername.isBlank()) return List.of();
-        int effectiveLimit = Math.max(1, Math.min(limit, 50));
+        int effectiveLimit = Math.clamp(limit, 1, 50);
         Pageable pageable = PageRequest.of(0, effectiveLimit);
         return notificationRepository
             .findByRecipientUsername(nurseUsername, pageable)
@@ -1132,9 +1149,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     public NurseCareNoteResponseDTO createCareNote(UUID patientId, UUID nurseUserId,
                                                    UUID hospitalId, NurseCareNoteRequestDTO request) {
         Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found: " + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
         Hospital hospital = hospitalRepository.findById(hospitalId)
-            .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + hospitalId));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
         User author = userRepository.findById(nurseUserId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found: " + nurseUserId));
 
@@ -1145,9 +1162,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             template = NursingNoteTemplate.DAR;
         }
 
-        String authorName = author.getFirstName() != null
-            ? author.getFirstName() + (author.getLastName() != null ? " " + author.getLastName() : "")
-            : author.getUsername();
+        String authorName = formatFullName(author.getFirstName(), author.getLastName(), author.getUsername());
 
         NursingNote.NursingNoteBuilder noteBuilder = NursingNote.builder()
             .patient(patient)
@@ -1226,10 +1241,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private String resolveNurseName(UUID nurseUserId) {
         if (nurseUserId == null) return "Nurse";
         return userRepository.findById(nurseUserId)
-            .map(u -> u.getFirstName() != null
-                ? u.getFirstName() + (u.getLastName() != null ? " " + u.getLastName() : "")
-                : u.getUsername())
+            .map(u -> formatFullName(u.getFirstName(), u.getLastName(), u.getUsername()))
             .orElse("Nurse");
+    }
+
+    private String formatFullName(String firstName, String lastName, String fallback) {
+        if (firstName == null) return fallback;
+        return lastName != null ? firstName + " " + lastName : firstName;
     }
 
     private String buildNoteSummary(NurseCareNoteRequestDTO req, NursingNoteTemplate template) {

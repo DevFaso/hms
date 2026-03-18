@@ -79,7 +79,7 @@ public class NotificationServiceImpl implements NotificationService {
     @Override
     @Transactional(readOnly = true)
     public List<NotificationPreferenceDTO> getPreferences(UUID userId) {
-        return notificationPreferenceRepository.findByUserId(userId)
+        return notificationPreferenceRepository.findByUser_Id(userId)
                 .stream().map(this::toDTO).toList();
     }
 
@@ -89,7 +89,7 @@ public class NotificationServiceImpl implements NotificationService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        notificationPreferenceRepository.deleteByUserId(userId);
+        notificationPreferenceRepository.deleteByUser_Id(userId);
         notificationPreferenceRepository.flush();
 
         List<NotificationPreference> entities = updates.stream().map(u ->

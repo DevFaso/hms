@@ -193,6 +193,175 @@ interface ApiWrapper<T> {
   success: boolean;
 }
 
+/* ── Hospital Admin Summary DTOs ── */
+
+export interface HospitalAdminSummary {
+  hospitalId: string;
+  asOfDate: string;
+  appointments: HospitalAdminAppointmentMetrics;
+  admissions: HospitalAdminAdmissionMetrics;
+  consultations: HospitalAdminConsultationMetrics;
+  staffing: HospitalAdminStaffingMetrics;
+  billing: HospitalAdminBillingMetrics;
+  recentAuditEvents: HospitalAdminAuditSnippet[];
+  staffingByDepartment?: DepartmentStaffingRow[];
+  consultBacklog?: ConsultBacklogItem[];
+  auditTrend?: AuditDayCount[];
+  invoiceAging?: InvoiceAgingBuckets;
+  integrations?: IntegrationStatusRow[];
+  paymentCollectionRate?: number;
+  licenseAlerts?: LicenseExpiryAlert[];
+  leave?: LeaveMetrics;
+  paymentTrend?: PaymentTrendPoint[];
+  paymentMethodBreakdown?: PaymentMethodBreakdown[];
+  writeOffs?: WriteOffSummary;
+  bedOccupancy?: BedOccupancy;
+  wardOccupancy?: WardOccupancyRow[];
+}
+
+export interface HospitalAdminAppointmentMetrics {
+  todayTotal: number;
+  completed: number;
+  noShows: number;
+  cancelled: number;
+  pending: number;
+  inProgress: number;
+}
+
+export interface HospitalAdminAdmissionMetrics {
+  active: number;
+  admittedToday: number;
+  dischargedToday: number;
+  awaitingDischarge: number;
+}
+
+export interface HospitalAdminConsultationMetrics {
+  requested: number;
+  acknowledged: number;
+  inProgress: number;
+  overdue: number;
+}
+
+export interface HospitalAdminStaffingMetrics {
+  activeStaff: number;
+  onShiftToday: number;
+  staffOnLeaveToday: number;
+  upcomingLeave: number;
+}
+
+export interface HospitalAdminBillingMetrics {
+  overdueInvoices: number;
+  openBalanceTotal: number;
+}
+
+export interface HospitalAdminAuditSnippet {
+  id: string;
+  eventType: string;
+  status: string;
+  entityType: string;
+  resourceName: string;
+  userName: string;
+  eventTimestamp: string;
+}
+
+export interface DepartmentStaffingRow {
+  departmentId: string;
+  departmentName: string;
+  scheduledShifts: number;
+  cancelledShifts: number;
+  activeStaff: number;
+}
+
+export interface ConsultBacklogItem {
+  consultationId: string;
+  patientName: string;
+  specialtyRequested: string;
+  urgency: string;
+  status: string;
+  requestedAt: string;
+  slaDueBy: string;
+  overdue: boolean;
+}
+
+export interface AuditDayCount {
+  date: string;
+  count: number;
+}
+
+export interface InvoiceAgingBucket {
+  label: string;
+  count: number;
+  total: number;
+}
+
+export interface InvoiceAgingBuckets {
+  current: InvoiceAgingBucket;
+  days1to30: InvoiceAgingBucket;
+  days31to60: InvoiceAgingBucket;
+  days61to90: InvoiceAgingBucket;
+  over90: InvoiceAgingBucket;
+  grandTotal: number;
+}
+
+export interface IntegrationStatusRow {
+  serviceType: string;
+  provider: string;
+  status: string;
+  enabled: boolean;
+  baseUrl: string;
+}
+
+export interface LicenseExpiryAlert {
+  staffId: string;
+  staffName: string;
+  jobTitle: string;
+  departmentName: string;
+  licenseNumber: string;
+  licenseExpiryDate: string;
+  severity: 'EXPIRED' | 'CRITICAL' | 'WARNING';
+  daysUntilExpiry: number;
+}
+
+export interface LeaveMetrics {
+  onLeaveToday: number;
+  upcomingLeaveNext7Days: number;
+}
+
+export interface PaymentTrendPoint {
+  date: string;
+  amount: number;
+}
+
+export interface PaymentMethodBreakdown {
+  method: string;
+  count: number;
+  total: number;
+}
+
+export interface WriteOffSummary {
+  cancelledCount: number;
+  cancelledTotal: number;
+}
+
+export interface BedOccupancy {
+  totalBeds: number;
+  occupiedBeds: number;
+  availableBeds: number;
+  reservedBeds: number;
+  maintenanceBeds: number;
+  occupancyRate: number;
+}
+
+export interface WardOccupancyRow {
+  wardId: string;
+  wardName: string;
+  wardType: string;
+  totalBeds: number;
+  occupiedBeds: number;
+  availableBeds: number;
+  occupancyRate: number;
+}
+
 /* ── Platform Analytics DTOs ── */
 
 export interface PlatformAnalytics {
@@ -348,5 +517,15 @@ export class DashboardService {
     return this.http
       .get<PlatformAnalytics>('/api/super-admin/analytics', { params })
       .pipe(catchError(() => of({} as PlatformAnalytics)));
+  }
+
+  /* ── Hospital Admin Summary ── */
+
+  getHospitalAdminSummary(date?: string, auditLimit = 10): Observable<HospitalAdminSummary> {
+    let params = new HttpParams().set('auditLimit', auditLimit);
+    if (date) params = params.set('date', date);
+    return this.http
+      .get<HospitalAdminSummary>('/api/dashboard/hospital-admin/summary', { params })
+      .pipe(catchError(() => of({} as HospitalAdminSummary)));
   }
 }

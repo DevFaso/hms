@@ -225,7 +225,7 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                 return OnCallStatusDTO.builder().isOnCall(false).build();
             }
             UUID staffId = staffOpt.get().getId();
-            LocalDateTime now = LocalDateTime.now();
+            java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
             var schedules = onCallScheduleRepository.findActiveByStaffIdAt(staffId, now);
             if (!schedules.isEmpty()) {
                 var entry = schedules.get(0);

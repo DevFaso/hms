@@ -11,26 +11,44 @@ import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.example.hms.enums.AcuityLevel;
+import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.MedicationAdministrationStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.model.Admission;
 import com.example.hms.model.Announcement;
+import com.example.hms.model.Department;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.MedicationAdministrationRecord;
+import com.example.hms.model.Notification;
+import com.example.hms.model.NursingNote;
+import com.example.hms.model.NursingTask;
 import com.example.hms.model.Patient;
+import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
+import com.example.hms.model.User;
 import com.example.hms.payload.dto.PatientResponseDTO;
+import com.example.hms.payload.dto.nurse.NurseAdmissionSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseAnnouncementDTO;
+import com.example.hms.payload.dto.nurse.NurseCareNoteRequestDTO;
+import com.example.hms.payload.dto.nurse.NurseCareNoteResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseDashboardSummaryDTO;
+import com.example.hms.payload.dto.nurse.NurseFlowBoardDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffSummaryDTO;
+import com.example.hms.payload.dto.nurse.NurseInboxItemDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseOrderTaskResponseDTO;
+import com.example.hms.payload.dto.nurse.NurseTaskCompleteRequestDTO;
+import com.example.hms.payload.dto.nurse.NurseTaskCreateRequestDTO;
+import com.example.hms.payload.dto.nurse.NurseTaskItemDTO;
+import com.example.hms.payload.dto.nurse.NurseVitalCaptureRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
-import com.example.hms.model.PatientVitalSign;
+import com.example.hms.payload.dto.nurse.NurseWorkboardPatientDTO;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.AnnouncementRepository;
 import com.example.hms.repository.HospitalRepository;
@@ -1257,5 +1275,653 @@ class NurseTaskServiceImplTest {
             assertThat(vitals).hasSize(1);
             assertThat(vitals.get(0).isOverdue()).isTrue();
         }
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       MVP-12: getWorkboard
+       ════════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void getWorkboardReturnsEmptyWhenHospitalIdNull() {
+        assertThat(service.getWorkboard(UUID.randomUUID(), null)).isEmpty();
+    }
+
+    @Test
+    void getWorkboardBuildsCardsFromActiveAdmissions() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+
+        Patient pat = Patient.builder().firstName("John").lastName("Doe").build();
+        pat.setId(patientId);
+        Department dept = Department.builder().name("Cardiology").build();
+        User drUser = User.builder().firstName("Dr").lastName("Smith").build();
+        Staff provider = Staff.builder().user(drUser).build();
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+
+        Admission adm = new Admission();
+        adm.setId(UUID.randomUUID());
+        adm.setPatient(pat);
+        adm.setHospital(hosp);
+        adm.setDepartment(dept);
+        adm.setAdmittingProvider(provider);
+        adm.setAcuityLevel(AcuityLevel.LEVEL_3_MAJOR);
+        adm.setRoomBed("201-A");
+        adm.setAdmissionDateTime(LocalDateTime.now().minusDays(1));
+        adm.setStatus(AdmissionStatus.ACTIVE);
+
+        when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(adm));
+        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.empty());
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of());
+
+        List<NurseWorkboardPatientDTO> result = service.getWorkboard(nurseId, hospitalId);
+
+        assertThat(result).hasSize(1);
+        NurseWorkboardPatientDTO card = result.get(0);
+        assertThat(card.getPatientId()).isEqualTo(patientId);
+        assertThat(card.getPatientName()).isEqualTo("John Doe");
+        assertThat(card.getRoomBed()).isEqualTo("201-A");
+        assertThat(card.getDepartmentName()).isEqualTo("Cardiology");
+        assertThat(card.getAttendingDoctor()).isEqualTo("Dr Smith");
+        assertThat(card.isVitalsDue()).isTrue(); // no vitals recorded
+        assertThat(card.getMedsDue()).isZero();
+    }
+
+    @Test
+    void getWorkboardCountsMedsDueFromActivePrescriptions() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+
+        Patient pat = Patient.builder().firstName("Jane").lastName("Doe").build();
+        pat.setId(patientId);
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+
+        Admission adm = new Admission();
+        adm.setId(UUID.randomUUID());
+        adm.setPatient(pat);
+        adm.setHospital(hosp);
+        adm.setStatus(AdmissionStatus.ACTIVE);
+        adm.setAdmissionDateTime(LocalDateTime.now().minusHours(5));
+
+        Prescription activePending = Prescription.builder()
+            .patient(pat)
+            .hospital(hosp)
+            .status(PrescriptionStatus.SIGNED)
+            .build();
+        activePending.setId(UUID.randomUUID());
+        activePending.setCreatedAt(LocalDateTime.now().minusHours(6));
+
+        when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(adm));
+        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+            .thenReturn(Optional.of(PatientVitalSign.builder().recordedAt(LocalDateTime.now()).build()));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(activePending));
+        when(marRepository.findByPatient_IdAndHospital_IdAndStatus(patientId, hospitalId, MedicationAdministrationStatus.GIVEN))
+            .thenReturn(List.of()); // not given yet
+
+        List<NurseWorkboardPatientDTO> result = service.getWorkboard(UUID.randomUUID(), hospitalId);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).isVitalsDue()).isFalse(); // recent vitals
+        assertThat(result.get(0).getMedsDue()).isEqualTo(1L); // one active pending med
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       MVP-12: getPatientFlow
+       ════════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void getPatientFlowReturnsEmptyBoardWhenHospitalIdNull() {
+        NurseFlowBoardDTO result = service.getPatientFlow(null, null);
+        assertThat(result.getPending()).isEmpty();
+        assertThat(result.getActive()).isEmpty();
+        assertThat(result.getCritical()).isEmpty();
+        assertThat(result.getAwaitingDischarge()).isEmpty();
+    }
+
+    @Test
+    void getPatientFlowCategorizesByAcuityAndStatus() {
+        UUID hospitalId = UUID.randomUUID();
+        Patient p1 = Patient.builder().firstName("Critical").lastName("Pat").build();
+        p1.setId(UUID.randomUUID());
+        Patient p2 = Patient.builder().firstName("Normal").lastName("Pat").build();
+        p2.setId(UUID.randomUUID());
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+
+        Admission criticalAdm = new Admission();
+        criticalAdm.setId(UUID.randomUUID());
+        criticalAdm.setPatient(p1);
+        criticalAdm.setHospital(hosp);
+        criticalAdm.setAcuityLevel(AcuityLevel.LEVEL_5_CRITICAL);
+        criticalAdm.setStatus(AdmissionStatus.ACTIVE);
+        criticalAdm.setAdmissionDateTime(LocalDateTime.now().minusHours(2));
+
+        Admission activeAdm = new Admission();
+        activeAdm.setId(UUID.randomUUID());
+        activeAdm.setPatient(p2);
+        activeAdm.setHospital(hosp);
+        activeAdm.setAcuityLevel(AcuityLevel.LEVEL_2_MODERATE);
+        activeAdm.setStatus(AdmissionStatus.ACTIVE);
+        activeAdm.setAdmissionDateTime(LocalDateTime.now().minusHours(1));
+
+        Patient p3 = Patient.builder().firstName("Discharge").lastName("Pat").build();
+        p3.setId(UUID.randomUUID());
+        Admission dischargeAdm = new Admission();
+        dischargeAdm.setId(UUID.randomUUID());
+        dischargeAdm.setPatient(p3);
+        dischargeAdm.setHospital(hosp);
+        dischargeAdm.setAcuityLevel(AcuityLevel.LEVEL_1_MINIMAL);
+        dischargeAdm.setStatus(AdmissionStatus.AWAITING_DISCHARGE);
+        dischargeAdm.setAdmissionDateTime(LocalDateTime.now().minusDays(3));
+
+        when(admissionRepository.findActiveAdmissionsByHospital(hospitalId))
+            .thenReturn(List.of(criticalAdm, activeAdm));
+        when(admissionRepository.findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(hospitalId, AdmissionStatus.AWAITING_DISCHARGE))
+            .thenReturn(List.of(dischargeAdm));
+
+        NurseFlowBoardDTO board = service.getPatientFlow(hospitalId, null);
+
+        assertThat(board.getCritical()).hasSize(1);
+        assertThat(board.getCritical().get(0).getPatientName()).isEqualTo("Critical Pat");
+        assertThat(board.getActive()).hasSize(1);
+        assertThat(board.getAwaitingDischarge()).hasSize(1);
+    }
+
+    @Test
+    void getPatientFlowFiltersByDepartment() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID deptId = UUID.randomUUID();
+        Patient pat = Patient.builder().firstName("Dept").lastName("Pat").build();
+        pat.setId(UUID.randomUUID());
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+
+        Admission adm = new Admission();
+        adm.setId(UUID.randomUUID());
+        adm.setPatient(pat);
+        adm.setHospital(hosp);
+        adm.setAcuityLevel(AcuityLevel.LEVEL_2_MODERATE);
+        adm.setStatus(AdmissionStatus.ACTIVE);
+        adm.setAdmissionDateTime(LocalDateTime.now().minusHours(1));
+
+        when(admissionRepository.findByDepartmentIdAndStatusOrderByAdmissionDateTimeDesc(deptId, AdmissionStatus.ACTIVE))
+            .thenReturn(List.of(adm));
+        when(admissionRepository.findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(hospitalId, AdmissionStatus.AWAITING_DISCHARGE))
+            .thenReturn(List.of());
+
+        NurseFlowBoardDTO board = service.getPatientFlow(hospitalId, deptId);
+
+        assertThat(board.getActive()).hasSize(1);
+        assertThat(board.getActive().get(0).getPatientName()).isEqualTo("Dept Pat");
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       MVP-12: captureVitals
+       ════════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void captureVitalsThrowsWhenPatientIdNull() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        NurseVitalCaptureRequestDTO request = new NurseVitalCaptureRequestDTO();
+        assertThatThrownBy(() -> service.captureVitals(null, nurseId, hospitalId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Patient ID");
+    }
+
+    @Test
+    void captureVitalsThrowsWhenHospitalIdNull() {
+        UUID patientId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        NurseVitalCaptureRequestDTO request = new NurseVitalCaptureRequestDTO();
+        assertThatThrownBy(() -> service.captureVitals(patientId, nurseId, null, request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Hospital context");
+    }
+
+    @Test
+    void captureVitalsSavesNormalVitals() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+
+        Patient pat = Patient.builder().build();
+        pat.setId(patientId);
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(pat));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.empty());
+
+        NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
+            .heartRateBpm(72)
+            .spo2Percent(98)
+            .temperatureCelsius(36.8)
+            .systolicBpMmHg(120)
+            .diastolicBpMmHg(80)
+            .build();
+
+        service.captureVitals(patientId, nurseId, hospitalId, req);
+
+        ArgumentCaptor<PatientVitalSign> captor = ArgumentCaptor.forClass(PatientVitalSign.class);
+        verify(vitalSignRepository).save(captor.capture());
+        PatientVitalSign saved = captor.getValue();
+        assertThat(saved.getHeartRateBpm()).isEqualTo(72);
+        assertThat(saved.isClinicallySignificant()).isFalse();
+    }
+
+    @Test
+    void captureVitalsFlagsClinicallySignificantWhenHeartRateHigh() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+
+        Patient pat6 = Patient.builder().build();
+        pat6.setId(patientId);
+        Hospital hosp6 = Hospital.builder().build();
+        hosp6.setId(hospitalId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(pat6));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp6));
+
+        NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
+            .heartRateBpm(160) // > 150
+            .build();
+
+        service.captureVitals(patientId, UUID.randomUUID(), hospitalId, req);
+
+        ArgumentCaptor<PatientVitalSign> captor = ArgumentCaptor.forClass(PatientVitalSign.class);
+        verify(vitalSignRepository).save(captor.capture());
+        assertThat(captor.getValue().isClinicallySignificant()).isTrue();
+    }
+
+    @Test
+    void captureVitalsFlagsClinicallySignificantWhenSpO2Low() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+
+        Patient pat7 = Patient.builder().build();
+        pat7.setId(patientId);
+        Hospital hosp7 = Hospital.builder().build();
+        hosp7.setId(hospitalId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(pat7));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp7));
+
+        NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
+            .spo2Percent(85) // < 90
+            .build();
+
+        service.captureVitals(patientId, UUID.randomUUID(), hospitalId, req);
+
+        ArgumentCaptor<PatientVitalSign> captor = ArgumentCaptor.forClass(PatientVitalSign.class);
+        verify(vitalSignRepository).save(captor.capture());
+        assertThat(captor.getValue().isClinicallySignificant()).isTrue();
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       MVP-12: getPendingAdmissions
+       ════════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void getPendingAdmissionsReturnsEmptyWhenHospitalIdNull() {
+        assertThat(service.getPendingAdmissions(null, null)).isEmpty();
+    }
+
+    @Test
+    void getPendingAdmissionsReturnsNewArrivalsAndAwaitingDischarge() {
+        UUID hospitalId = UUID.randomUUID();
+        Patient pat1 = Patient.builder().firstName("New").lastName("Arrival").build();
+        pat1.setId(UUID.randomUUID());
+        Patient pat2 = Patient.builder().firstName("Awaiting").lastName("Discharge").build();
+        pat2.setId(UUID.randomUUID());
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+
+        Admission newAdm = new Admission();
+        newAdm.setId(UUID.randomUUID());
+        newAdm.setPatient(pat1);
+        newAdm.setHospital(hosp);
+        newAdm.setStatus(AdmissionStatus.PENDING);
+        newAdm.setAcuityLevel(AcuityLevel.LEVEL_2_MODERATE);
+        newAdm.setAdmissionDateTime(LocalDateTime.now().minusMinutes(30));
+
+        Admission dischAdm = new Admission();
+        dischAdm.setId(UUID.randomUUID());
+        dischAdm.setPatient(pat2);
+        dischAdm.setHospital(hosp);
+        dischAdm.setStatus(AdmissionStatus.AWAITING_DISCHARGE);
+        dischAdm.setAdmissionDateTime(LocalDateTime.now().minusDays(2));
+
+        when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(newAdm));
+        when(admissionRepository.findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(hospitalId, AdmissionStatus.AWAITING_DISCHARGE))
+            .thenReturn(List.of(dischAdm));
+
+        List<NurseAdmissionSummaryDTO> result = service.getPendingAdmissions(hospitalId, null);
+
+        assertThat(result).hasSize(2);
+        assertThat(result).extracting(NurseAdmissionSummaryDTO::getPatientName)
+            .containsExactly("New Arrival", "Awaiting Discharge");
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       MVP-13: getNursingTaskBoard
+       ════════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void getNursingTaskBoardReturnsEmptyWhenHospitalIdNull() {
+        assertThat(service.getNursingTaskBoard(null, null)).isEmpty();
+    }
+
+    @Test
+    void getNursingTaskBoardFiltersWithStatusFilter() {
+        UUID hospitalId = UUID.randomUUID();
+
+        Patient taskPat1 = Patient.builder().firstName("P").lastName("One").build();
+        taskPat1.setId(UUID.randomUUID());
+        Hospital taskHosp1 = Hospital.builder().build();
+        taskHosp1.setId(hospitalId);
+        NursingTask task = NursingTask.builder()
+            .patient(taskPat1)
+            .hospital(taskHosp1)
+            .category("ASSESSMENT").description("Check vitals").priority("ROUTINE")
+            .status("PENDING").dueAt(LocalDateTime.now().plusHours(1))
+            .createdByName("Nurse Jane")
+            .build();
+        task.setId(UUID.randomUUID());
+
+        when(nursingTaskRepository.findByHospital_IdAndStatusOrderByDueAtAsc(hospitalId, "PENDING"))
+            .thenReturn(List.of(task));
+
+        List<NurseTaskItemDTO> result = service.getNursingTaskBoard(hospitalId, "PENDING");
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getStatus()).isEqualTo("PENDING");
+        assertThat(result.get(0).getCategory()).isEqualTo("ASSESSMENT");
+    }
+
+    @Test
+    void getNursingTaskBoardUsesDefaultExclusionWhenNoFilter() {
+        UUID hospitalId = UUID.randomUUID();
+
+        Patient taskPat2 = Patient.builder().firstName("P").lastName("Two").build();
+        taskPat2.setId(UUID.randomUUID());
+        Hospital taskHosp2 = Hospital.builder().build();
+        taskHosp2.setId(hospitalId);
+        NursingTask task = NursingTask.builder()
+            .patient(taskPat2)
+            .hospital(taskHosp2)
+            .category("WOUND_CARE").description("Dressing change").priority("URGENT")
+            .status("IN_PROGRESS").dueAt(LocalDateTime.now().minusMinutes(10))
+            .createdByName("Nurse Bob")
+            .build();
+        task.setId(UUID.randomUUID());
+
+        when(nursingTaskRepository.findByHospital_IdAndStatusNotOrderByDueAtAsc(hospitalId, "COMPLETED"))
+            .thenReturn(List.of(task));
+
+        List<NurseTaskItemDTO> result = service.getNursingTaskBoard(hospitalId, null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getPriority()).isEqualTo("URGENT");
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       MVP-13: createNursingTask
+       ════════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void createNursingTaskSavesAndReturnsDTO() {
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+        Patient pat = Patient.builder().firstName("Task").lastName("Pat").build();
+        pat.setId(patientId);
+        User nurse = User.builder().firstName("Jane").lastName("Nurse").build();
+        nurse.setId(nurseId);
+
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(pat));
+        when(userRepository.findById(nurseId)).thenReturn(Optional.of(nurse));
+
+        NurseTaskCreateRequestDTO req = new NurseTaskCreateRequestDTO();
+        req.setPatientId(patientId);
+        req.setCategory("assessment");
+        req.setDescription("Neuro check q2h");
+        req.setPriority("routine");
+        req.setDueAt(LocalDateTime.now().plusHours(2));
+
+        when(nursingTaskRepository.save(any(NursingTask.class))).thenAnswer(inv -> {
+            NursingTask t = inv.getArgument(0);
+            t.setId(UUID.randomUUID());
+            return t;
+        });
+
+        NurseTaskItemDTO result = service.createNursingTask(nurseId, hospitalId, req);
+
+        assertThat(result.getCategory()).isEqualTo("ASSESSMENT");
+        assertThat(result.getStatus()).isEqualTo("PENDING");
+        assertThat(result.getPatientName()).isEqualTo("Task Pat");
+        assertThat(result.getCreatedByName()).isEqualTo("Jane Nurse");
+    }
+
+    @Test
+    void createNursingTaskThrowsWhenHospitalNotFound() {
+        UUID hospitalId = UUID.randomUUID();
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+
+        NurseTaskCreateRequestDTO req = new NurseTaskCreateRequestDTO();
+        req.setPatientId(UUID.randomUUID());
+        req.setCategory("ASSESSMENT");
+        req.setDescription("Test");
+
+        UUID nurseUserId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.createNursingTask(nurseUserId, hospitalId, req))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       MVP-13: completeNursingTask
+       ════════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void completeNursingTaskSetsCompletedFields() {
+        UUID taskId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+
+        Patient pat = Patient.builder().firstName("P").lastName("Done").build();
+        pat.setId(UUID.randomUUID());
+        Hospital taskHosp = Hospital.builder().build();
+        taskHosp.setId(hospitalId);
+        NursingTask task = NursingTask.builder()
+            .patient(pat)
+            .hospital(taskHosp)
+            .category("WOUND_CARE").description("Dressing change")
+            .priority("ROUTINE").status("PENDING")
+            .createdByName("Creator")
+            .build();
+        task.setId(taskId);
+
+        User nurse = User.builder().firstName("Complete").lastName("Nurse").build();
+        nurse.setId(nurseId);
+        when(nursingTaskRepository.findByIdAndHospital_Id(taskId, hospitalId)).thenReturn(Optional.of(task));
+        when(userRepository.findById(nurseId)).thenReturn(Optional.of(nurse));
+        when(nursingTaskRepository.save(any(NursingTask.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        NurseTaskCompleteRequestDTO req = new NurseTaskCompleteRequestDTO();
+        req.setCompletionNote("Done well");
+
+        NurseTaskItemDTO result = service.completeNursingTask(taskId, nurseId, hospitalId, req);
+
+        assertThat(result.getStatus()).isEqualTo("COMPLETED");
+        assertThat(result.getCompletedByName()).isEqualTo("Complete Nurse");
+        assertThat(result.getCompletionNote()).isEqualTo("Done well");
+    }
+
+    @Test
+    void completeNursingTaskThrowsWhenNotFound() {
+        UUID taskId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(nursingTaskRepository.findByIdAndHospital_Id(taskId, hospitalId)).thenReturn(Optional.empty());
+
+        UUID nurseId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.completeNursingTask(taskId, nurseId, hospitalId, null))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       MVP-13: getNurseInboxItems
+       ════════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void getNurseInboxItemsReturnsEmptyWhenUsernameBlank() {
+        assertThat(service.getNurseInboxItems("", 10)).isEmpty();
+        assertThat(service.getNurseInboxItems(null, 10)).isEmpty();
+    }
+
+    @Test
+    void getNurseInboxItemsMapsNotifications() {
+        UUID notifId = UUID.randomUUID();
+        Notification n = Notification.builder()
+            .id(notifId).message("New order").read(false)
+            .createdAt(LocalDateTime.now().minusMinutes(5))
+            .recipientUsername("nurse1")
+            .build();
+
+        when(notificationRepository.findByRecipientUsername(eq("nurse1"), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(n)));
+
+        List<NurseInboxItemDTO> result = service.getNurseInboxItems("nurse1", 10);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getMessage()).isEqualTo("New order");
+        assertThat(result.get(0).isRead()).isFalse();
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       MVP-13: markNurseInboxRead
+       ════════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void markNurseInboxReadSetsReadFlag() {
+        UUID itemId = UUID.randomUUID();
+        Notification n = Notification.builder()
+            .id(itemId).recipientUsername("nurse1").read(false).build();
+        when(notificationRepository.findById(itemId)).thenReturn(Optional.of(n));
+
+        service.markNurseInboxRead(itemId, "nurse1");
+
+        assertThat(n.isRead()).isTrue();
+        verify(notificationRepository).save(n);
+    }
+
+    @Test
+    void markNurseInboxReadThrowsWhenNotOwnNotification() {
+        UUID itemId = UUID.randomUUID();
+        Notification n = Notification.builder()
+            .id(itemId).recipientUsername("other_nurse").read(false).build();
+        when(notificationRepository.findById(itemId)).thenReturn(Optional.of(n));
+
+        assertThatThrownBy(() -> service.markNurseInboxRead(itemId, "nurse1"))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Access denied");
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       MVP-13: createCareNote
+       ════════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void createCareNoteWithDARTemplate() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+
+        Patient pat = Patient.builder().firstName("Note").lastName("Patient").build();
+        pat.setId(patientId);
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+        User author = User.builder().firstName("Jane").lastName("RN").username("jane.rn").build();
+        author.setId(nurseId);
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(pat));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(userRepository.findById(nurseId)).thenReturn(Optional.of(author));
+        when(nursingNoteRepository.save(any(NursingNote.class))).thenAnswer(inv -> {
+            NursingNote n = inv.getArgument(0);
+            n.setId(UUID.randomUUID());
+            return n;
+        });
+
+        NurseCareNoteRequestDTO req = new NurseCareNoteRequestDTO();
+        req.setTemplate("DAR");
+        req.setNarrative("Patient resting comfortably");
+        req.setDataPart("Vital signs stable");
+        req.setActionPart("Repositioned patient");
+        req.setResponsePart("Patient comfortable after repositioning");
+
+        NurseCareNoteResponseDTO result = service.createCareNote(patientId, nurseId, hospitalId, req);
+
+        assertThat(result.getTemplate()).isEqualTo("DAR");
+        assertThat(result.getAuthorName()).isEqualTo("Jane RN");
+        assertThat(result.getPatientName()).isEqualTo("Note Patient");
+        assertThat(result.getSummary()).isNotBlank();
+    }
+
+    @Test
+    void createCareNoteWithSOAPIETemplate() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+
+        Patient pat = Patient.builder().firstName("Soapie").lastName("Pat").build();
+        pat.setId(patientId);
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+        User author = User.builder().username("soap_nurse").build(); // no first name → uses username
+        author.setId(nurseId);
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(pat));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(userRepository.findById(nurseId)).thenReturn(Optional.of(author));
+        when(nursingNoteRepository.save(any(NursingNote.class))).thenAnswer(inv -> {
+            NursingNote n = inv.getArgument(0);
+            n.setId(UUID.randomUUID());
+            return n;
+        });
+
+        NurseCareNoteRequestDTO req = new NurseCareNoteRequestDTO();
+        req.setTemplate("SOAPIE");
+        req.setSubjective("Reports pain 6/10");
+        req.setObjective("Guarding abdomen");
+        req.setAssessment("Acute pain");
+        req.setPlan("Administer analgesic");
+        req.setImplementation("Morphine 4mg IV given");
+        req.setEvaluation("Pain reduced to 3/10 after 30 min");
+
+        NurseCareNoteResponseDTO result = service.createCareNote(patientId, nurseId, hospitalId, req);
+
+        assertThat(result.getTemplate()).isEqualTo("SOAPIE");
+        assertThat(result.getAuthorName()).isEqualTo("soap_nurse"); // fallback to username
+    }
+
+    @Test
+    void createCareNoteThrowsWhenPatientNotFound() {
+        UUID patientId = UUID.randomUUID();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+
+        NurseCareNoteRequestDTO req = new NurseCareNoteRequestDTO();
+        req.setTemplate("DAR");
+
+        UUID nurseUserId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.createCareNote(patientId, nurseUserId, hospitalId, req))
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 }

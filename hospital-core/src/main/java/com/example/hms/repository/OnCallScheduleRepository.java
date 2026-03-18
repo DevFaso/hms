@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -22,7 +22,7 @@ public interface OnCallScheduleRepository extends JpaRepository<OnCallSchedule, 
            "ORDER BY o.startTime ASC")
     List<OnCallSchedule> findActiveByStaffIdAt(
             @Param("staffId") UUID staffId,
-            @Param("now") LocalDateTime now);
+            @Param("now") OffsetDateTime now);
 
     List<OnCallSchedule> findByStaff_IdOrderByStartTimeDesc(UUID staffId);
 }

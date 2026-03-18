@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -90,6 +91,20 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
 
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
     List<Staff> findByHospital_IdIn(Collection<UUID> hospitalIds);
+
+    // ── MVP 19: License expiry alerts ───────────────────────────
+    @EntityGraph(attributePaths = {"user","department","hospital"})
+    @Query("""
+        SELECT s FROM Staff s
+        WHERE s.hospital.id = :hospitalId
+          AND s.active = true
+          AND s.user.isDeleted = false
+          AND s.licenseExpiryDate IS NOT NULL
+          AND s.licenseExpiryDate <= :cutoff
+    """)
+    List<Staff> findByHospitalIdAndLicenseExpiringBefore(
+        @Param("hospitalId") UUID hospitalId,
+        @Param("cutoff") LocalDate cutoff);
 
 }
 

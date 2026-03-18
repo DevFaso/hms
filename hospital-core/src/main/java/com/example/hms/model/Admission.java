@@ -87,6 +87,13 @@ public class Admission {
     private String roomBed;
 
     /**
+     * Structured bed reference (optional, links to hospital.beds)
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "bed_id")
+    private Bed bed;
+
+    /**
      * Type of admission
      */
     @Enumerated(EnumType.STRING)

@@ -89,6 +89,8 @@ import java.util.UUID;
 @Slf4j
 public class PatientPortalServiceImpl implements PatientPortalService {
 
+    private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
+
     private final PatientRepository patientRepository;
     private final PatientProxyRepository patientProxyRepository;
     private final ControllerAuthUtils authUtils;
@@ -123,7 +125,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     public UUID resolvePatientId(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication"));
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
         return patientRepository.findByUserId(userId)
                 .map(Patient::getId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -543,7 +545,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private Patient findPatient(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication"));
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
         return patientRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No patient record linked to your account. Contact your care team."));
@@ -718,7 +720,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<ProxyResponseDTO> getMyProxies(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
-        return patientProxyRepository.findByGrantorPatientIdAndStatus(patientId, ProxyStatus.ACTIVE)
+        return patientProxyRepository.findByGrantorPatient_IdAndStatus(patientId, ProxyStatus.ACTIVE)
                 .stream().map(this::toProxyResponseDTO).toList();
     }
 
@@ -736,7 +738,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
 
         // Prevent duplicate active proxy
-        patientProxyRepository.findByGrantorPatientIdAndProxyUserIdAndStatus(
+        patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
                 patient.getId(), proxyUser.getId(), ProxyStatus.ACTIVE
         ).ifPresent(existing -> {
             throw new BusinessException("An active proxy already exists for this user");
@@ -775,8 +777,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<ProxyResponseDTO> getMyProxyAccess(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication"));
-        return patientProxyRepository.findByProxyUserIdAndStatus(userId, ProxyStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
+        return patientProxyRepository.findByProxyUser_IdAndStatus(userId, ProxyStatus.ACTIVE)
                 .stream().map(this::toProxyResponseDTO).toList();
     }
 

@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.model.Patient;
 import com.example.hms.payload.dto.analytics.PlatformAnalyticsDTO;
 import com.example.hms.repository.*;
 import com.example.hms.service.PlatformAnalyticsService;
@@ -15,6 +16,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
+
+    private static final String STATUS_UNKNOWN = "UNKNOWN";
 
     private final PatientRepository patientRepository;
     private final AppointmentRepository appointmentRepository;
@@ -81,7 +84,7 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
         Map<String, Long> result = new LinkedHashMap<>();
         appointmentRepository.findAll().stream()
                 .collect(Collectors.groupingBy(
-                        a -> a.getStatus() != null ? a.getStatus().name() : "UNKNOWN",
+                        a -> a.getStatus() != null ? a.getStatus().name() : STATUS_UNKNOWN,
                         Collectors.counting()))
                 .entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
@@ -93,7 +96,7 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
         Map<String, Long> result = new LinkedHashMap<>();
         encounterRepository.findAll().stream()
                 .collect(Collectors.groupingBy(
-                        e -> e.getStatus() != null ? e.getStatus().name() : "UNKNOWN",
+                        e -> e.getStatus() != null ? e.getStatus().name() : STATUS_UNKNOWN,
                         Collectors.counting()))
                 .entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
@@ -105,7 +108,7 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
         Map<String, Long> result = new LinkedHashMap<>();
         billingInvoiceRepository.findAll().stream()
                 .collect(Collectors.groupingBy(
-                        inv -> inv.getStatus() != null ? inv.getStatus().name() : "UNKNOWN",
+                        inv -> inv.getStatus() != null ? inv.getStatus().name() : STATUS_UNKNOWN,
                         Collectors.counting()))
                 .entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
@@ -114,13 +117,15 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
     }
 
     private List<PlatformAnalyticsDTO.DepartmentUtilization> buildDepartmentUtilization() {
+        // Preload all appointments once and group by department ID to avoid N+1
+        Map<UUID, Long> countsByDept = appointmentRepository.findAll().stream()
+                .filter(a -> a.getDepartment() != null)
+                .collect(Collectors.groupingBy(a -> a.getDepartment().getId(), Collectors.counting()));
+
         return departmentRepository.findAll().stream()
                 .map(dept -> PlatformAnalyticsDTO.DepartmentUtilization.builder()
                         .departmentName(dept.getName())
-                        .appointmentCount(appointmentRepository.findByHospital_Id(dept.getHospital().getId())
-                                .stream()
-                                .filter(a -> a.getDepartment() != null && a.getDepartment().getId().equals(dept.getId()))
-                                .count())
+                        .appointmentCount(countsByDept.getOrDefault(dept.getId(), 0L))
                         .encounterCount(0)
                         .build())
                 .sorted(Comparator.comparingLong(PlatformAnalyticsDTO.DepartmentUtilization::getAppointmentCount).reversed())
@@ -129,14 +134,20 @@ public class PlatformAnalyticsServiceImpl implements PlatformAnalyticsService {
     }
 
     private List<PlatformAnalyticsDTO.HospitalMetric> buildHospitalMetrics() {
+        // Preload all patients and appointments once to avoid N+1
+        Map<UUID, Long> patientsByHospital = patientRepository.findAll().stream()
+                .filter(p -> p.getHospitalId() != null)
+                .collect(Collectors.groupingBy(Patient::getHospitalId, Collectors.counting()));
+        Map<UUID, Long> appointmentsByHospital = appointmentRepository.findAll().stream()
+                .filter(a -> a.getHospital() != null)
+                .collect(Collectors.groupingBy(a -> a.getHospital().getId(), Collectors.counting()));
+
         return hospitalRepository.findAll().stream()
                 .filter(h -> h.isActive())
                 .map(h -> PlatformAnalyticsDTO.HospitalMetric.builder()
                         .hospitalName(h.getName())
-                        .patientCount(patientRepository.findAll().stream()
-                                .filter(p -> h.getId().equals(p.getHospitalId()))
-                                .count())
-                        .appointmentCount(appointmentRepository.findByHospital_Id(h.getId()).size())
+                        .patientCount(patientsByHospital.getOrDefault(h.getId(), 0L))
+                        .appointmentCount(appointmentsByHospital.getOrDefault(h.getId(), 0L))
                         .staffCount(0)
                         .build())
                 .sorted(Comparator.comparingLong(PlatformAnalyticsDTO.HospitalMetric::getPatientCount).reversed())

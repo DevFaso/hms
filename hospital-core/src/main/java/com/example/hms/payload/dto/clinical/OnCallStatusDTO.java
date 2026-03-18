@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
@@ -19,9 +19,9 @@ public class OnCallStatusDTO {
 
     private Boolean isOnCall;
 
-    private LocalDateTime shiftStart;
+    private OffsetDateTime shiftStart;
 
-    private LocalDateTime shiftEnd;
+    private OffsetDateTime shiftEnd;
 
     private List<String> coveringFor;
 

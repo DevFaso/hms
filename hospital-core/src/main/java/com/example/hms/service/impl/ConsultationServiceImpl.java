@@ -43,6 +43,8 @@ import java.util.stream.Collectors;
 @Transactional
 public class ConsultationServiceImpl implements ConsultationService {
 
+    private static final String MSG_CONSULTANT_NOT_FOUND = "Consultant not found with ID: ";
+
     private final ConsultationRepository consultationRepository;
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
@@ -212,7 +214,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
 
         Staff consultant = staffRepository.findById(consultantId)
-            .orElseThrow(() -> new ResourceNotFoundException("Consultant not found with ID: " + consultantId));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + consultantId));
 
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ACKNOWLEDGED);
@@ -230,7 +232,7 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         if (updateDTO.getConsultantId() != null && !updateDTO.getConsultantId().equals(consultation.getConsultant() != null ? consultation.getConsultant().getId() : null)) {
             Staff consultant = staffRepository.findById(updateDTO.getConsultantId())
-                .orElseThrow(() -> new ResourceNotFoundException("Consultant not found with ID: " + updateDTO.getConsultantId()));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + updateDTO.getConsultantId()));
             consultation.setConsultant(consultant);
         }
 
@@ -406,7 +408,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
 
         Staff consultant = staffRepository.findById(consultantId)
-            .orElseThrow(() -> new ResourceNotFoundException("Consultant not found with ID: " + consultantId));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + consultantId));
 
         consultation.setConsultant(consultant);
         consultation.setStatus(ConsultationStatus.ASSIGNED);
@@ -447,7 +449,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         }
 
         Staff consultant = staffRepository.findById(consultantId)
-            .orElseThrow(() -> new ResourceNotFoundException("Consultant not found with ID: " + consultantId));
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_CONSULTANT_NOT_FOUND + consultantId));
 
         UUID previousConsultantId = consultation.getConsultant() != null ? consultation.getConsultant().getId() : null;
         consultation.setConsultant(consultant);

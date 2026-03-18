@@ -2599,6 +2599,52 @@ $shadow-md:
   color: #dc2626;
 }
 
+// ── MVP 18: Integration status badges ───────────────────────
+.integration-badge {
+  display: inline-block;
+}
+.integration-active {
+  background: #dcfce7;
+  color: #166534;
+}
+.integration-pilot {
+  background: #dbeafe;
+  color: #1e40af;
+}
+.integration-inactive {
+  background: #f1f5f9;
+  color: #64748b;
+}
+.integration-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+.integration-decommissioned {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+// ── MVP 19: License severity badges ─────────────────────────
+.license-severity {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+.license-severity-expired {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.license-severity-critical {
+  background: #fef3c7;
+  color: #92400e;
+}
+.license-severity-warning {
+  background: #fefce8;
+  color: #854d0e;
+}
+
 .hg-chip-condition {
   background: #dbeafe;
   color: #2563eb;

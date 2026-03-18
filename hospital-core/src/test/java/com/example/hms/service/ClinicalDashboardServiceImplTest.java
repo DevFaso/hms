@@ -38,9 +38,11 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -363,7 +365,7 @@ class ClinicalDashboardServiceImplTest {
         UUID userId = newUserId();
         UUID staffId = UUID.randomUUID();
         givenStaffFor(userId, stubStaff(staffId));
-        when(onCallScheduleRepository.findActiveByStaffIdAt(eq(staffId), any(LocalDateTime.class)))
+        when(onCallScheduleRepository.findActiveByStaffIdAt(eq(staffId), any(java.time.OffsetDateTime.class)))
                 .thenReturn(Collections.emptyList());
 
         OnCallStatusDTO status = service.getOnCallStatus(userId);
@@ -378,11 +380,11 @@ class ClinicalDashboardServiceImplTest {
         givenStaffFor(userId, stubStaff(staffId));
 
         com.example.hms.model.OnCallSchedule schedule = mock(com.example.hms.model.OnCallSchedule.class);
-        LocalDateTime start = LocalDateTime.now().minusHours(1);
-        LocalDateTime end = LocalDateTime.now().plusHours(7);
+        java.time.OffsetDateTime start = java.time.OffsetDateTime.now().minusHours(1);
+        java.time.OffsetDateTime end = java.time.OffsetDateTime.now().plusHours(7);
         when(schedule.getStartTime()).thenReturn(start);
         when(schedule.getEndTime()).thenReturn(end);
-        when(onCallScheduleRepository.findActiveByStaffIdAt(eq(staffId), any(LocalDateTime.class)))
+        when(onCallScheduleRepository.findActiveByStaffIdAt(eq(staffId), any(java.time.OffsetDateTime.class)))
                 .thenReturn(List.of(schedule));
 
         OnCallStatusDTO status = service.getOnCallStatus(userId);
@@ -494,5 +496,131 @@ class ClinicalDashboardServiceImplTest {
             assertNotNull(kpi.getLabel());
             assertNotNull(kpi.getValue());
         }
+    }
+
+    // ========== getRecentPatients() Tests ==========
+
+    @Test
+    void getRecentPatients_whenNoStaffRecord_returnsEmptyList() {
+        UUID userId = newUserId();
+        givenNoStaffFor(userId);
+
+        List<com.example.hms.patient.dto.PatientResponse> patients = service.getRecentPatients(userId);
+
+        assertNotNull(patients);
+        assertTrue(patients.isEmpty());
+    }
+
+    @Test
+    void getRecentPatients_whenNoEncounters_returnsEmptyList() {
+        UUID userId = newUserId();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+        when(encounterRepository.findByStaff_Id(staffId)).thenReturn(Collections.emptyList());
+
+        List<com.example.hms.patient.dto.PatientResponse> patients = service.getRecentPatients(userId);
+
+        assertTrue(patients.isEmpty());
+    }
+
+    @Test
+    void getRecentPatients_mapsEncounterToPatientResponse() {
+        UUID userId = newUserId();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Patient patient = mock(Patient.class);
+        UUID patientId = UUID.randomUUID();
+        when(patient.getId()).thenReturn(patientId);
+        when(patient.getFirstName()).thenReturn("Bob");
+        when(patient.getLastName()).thenReturn("Jones");
+        when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1980, 5, 20));
+        when(patient.getGender()).thenReturn("M");
+        when(patient.getPhoneNumberPrimary()).thenReturn("555-4321");
+
+        com.example.hms.model.Department dept = mock(com.example.hms.model.Department.class);
+        when(dept.getName()).thenReturn("Cardiology");
+
+        Encounter encounter = mock(Encounter.class);
+        when(encounter.getPatient()).thenReturn(patient);
+        when(encounter.getEncounterDate()).thenReturn(LocalDateTime.now().minusHours(2));
+        when(encounter.getDepartment()).thenReturn(dept);
+
+        when(encounterRepository.findByStaff_Id(staffId)).thenReturn(List.of(encounter));
+
+        List<com.example.hms.patient.dto.PatientResponse> result = service.getRecentPatients(userId);
+
+        assertFalse(result.isEmpty());
+        assertEquals("Bob", result.get(0).getFirstName());
+        assertEquals("Jones", result.get(0).getLastName());
+        assertEquals("Cardiology", result.get(0).getLastLocation());
+    }
+
+    @Test
+    void getRecentPatients_deduplicatesAndLimitsToSix() {
+        UUID userId = newUserId();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        // Create 8 encounters with same patient — should deduplicate to 1
+        Patient p = mock(Patient.class);
+        UUID pid = UUID.randomUUID();
+        when(p.getId()).thenReturn(pid);
+        when(p.getFirstName()).thenReturn("Alice");
+        when(p.getLastName()).thenReturn("Smith");
+
+        List<Encounter> encounters = new java.util.ArrayList<>();
+        for (int i = 0; i < 8; i++) {
+            Encounter enc = mock(Encounter.class);
+            when(enc.getPatient()).thenReturn(p);
+            when(enc.getEncounterDate()).thenReturn(LocalDateTime.now().minusDays(i));
+            encounters.add(enc);
+        }
+        when(encounterRepository.findByStaff_Id(staffId)).thenReturn(encounters);
+
+        List<com.example.hms.patient.dto.PatientResponse> result = service.getRecentPatients(userId);
+
+        assertEquals(1, result.size(), "Same patient should appear only once");
+    }
+
+    @Test
+    void getRecentPatients_skipsEncountersWithNullPatient() {
+        UUID userId = newUserId();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Encounter enc = mock(Encounter.class);
+        when(enc.getPatient()).thenReturn(null);
+        lenient().when(enc.getEncounterDate()).thenReturn(LocalDateTime.now());
+
+        when(encounterRepository.findByStaff_Id(staffId)).thenReturn(List.of(enc));
+
+        List<com.example.hms.patient.dto.PatientResponse> result = service.getRecentPatients(userId);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void getRecentPatients_handlesNullDepartmentGracefully() {
+        UUID userId = newUserId();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(UUID.randomUUID());
+        when(patient.getFirstName()).thenReturn("Eve");
+        when(patient.getLastName()).thenReturn("Brown");
+
+        Encounter encounter = mock(Encounter.class);
+        when(encounter.getPatient()).thenReturn(patient);
+        when(encounter.getEncounterDate()).thenReturn(LocalDateTime.now());
+        when(encounter.getDepartment()).thenReturn(null);
+
+        when(encounterRepository.findByStaff_Id(staffId)).thenReturn(List.of(encounter));
+
+        List<com.example.hms.patient.dto.PatientResponse> result = service.getRecentPatients(userId);
+
+        assertFalse(result.isEmpty());
+        assertNull(result.get(0).getLastLocation());
     }
 }

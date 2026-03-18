@@ -288,4 +288,34 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V23: MVP 19 — Staff Compliance: license_expiry_date on staff
+         ================================================================= -->
+    <changeSet id="V23-mvp19-staff-license-expiry" author="hms-team" runOnChange="false">
+        <sqlFile path="V23__mvp19_staff_license_expiry.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V24: MVP 20 — Payment Transaction Ledger
+         ================================================================= -->
+    <changeSet id="V24-mvp20-payment-transactions" author="hms-team" runOnChange="false">
+        <sqlFile path="V24__mvp20_payment_transactions.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V25: Ward & Bed Management
+         ================================================================= -->
+    <changeSet id="V25-ward-bed-management" author="hms-team" runOnChange="false">
+        <sqlFile path="V25__ward_bed_management.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

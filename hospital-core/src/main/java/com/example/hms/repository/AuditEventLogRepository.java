@@ -7,10 +7,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import com.example.hms.enums.AuditStatus;
 
 import jakarta.persistence.QueryHint;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -50,4 +52,17 @@ public interface AuditEventLogRepository extends JpaRepository<AuditEventLog, UU
     /** Aggregate count of audit events grouped by event type (database-level). */
     @Query("SELECT a.eventType AS eventType, COUNT(a) AS cnt FROM AuditEventLog a GROUP BY a.eventType")
     List<Object[]> countByEventType();
+
+    /** Hospital-scoped audit events, ordered by timestamp descending. */
+    Page<AuditEventLog> findByAssignment_Hospital_IdOrderByEventTimestampDesc(UUID hospitalId, Pageable pageable);
+
+    /** Daily audit event counts for a hospital within a date range. */
+    @Query("SELECT CAST(a.eventTimestamp AS LocalDate) AS day, COUNT(a) " +
+           "FROM AuditEventLog a " +
+           "WHERE a.assignment.hospital.id = :hospitalId " +
+           "AND a.eventTimestamp >= :from " +
+           "GROUP BY CAST(a.eventTimestamp AS LocalDate) " +
+           "ORDER BY CAST(a.eventTimestamp AS LocalDate)")
+    List<Object[]> countDailyByHospital(@Param("hospitalId") UUID hospitalId,
+                                        @Param("from") LocalDateTime from);
 }

@@ -440,8 +440,8 @@ class MeControllerTest {
         // Arrange
         OnCallStatusDTO expectedStatus = OnCallStatusDTO.builder()
                 .isOnCall(true)
-                .shiftStart(LocalDateTime.of(LocalDate.now(), LocalTime.of(8, 0)))
-                .shiftEnd(LocalDateTime.of(LocalDate.now(), LocalTime.of(20, 0)))
+                .shiftStart(java.time.OffsetDateTime.now())
+                .shiftEnd(java.time.OffsetDateTime.now().plusHours(12))
                 .coveringFor(List.of("Emergency"))
                 .backupProvider("Dr. Brown")
                 .build();
