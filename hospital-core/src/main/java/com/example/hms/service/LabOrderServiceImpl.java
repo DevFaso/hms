@@ -38,9 +38,13 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.EnumSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 @Slf4j
@@ -220,7 +224,8 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Override
     @Transactional(readOnly = true)
     public Page<LabOrderResponseDTO> searchLabOrders(UUID patientId, LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable, Locale locale) {
-        return labOrderRepository.search(patientId, fromDate, toDate, pageable)
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        return labOrderRepository.search(hospitalId, patientId, fromDate, toDate, pageable)
             .map(labOrderMapper::toLabOrderResponseDTO);
     }
 
@@ -283,6 +288,80 @@ public class LabOrderServiceImpl implements LabOrderService {
         return labOrderRepository.findByStatus(status).stream()
             .map(labOrderMapper::toLabOrderResponseDTO)
             .toList();
+    }
+
+    // ── Valid forward transitions (CANCELLED handled separately) ──────────────
+    private static final Map<LabOrderStatus, Set<LabOrderStatus>> ALLOWED_TRANSITIONS;
+    static {
+        ALLOWED_TRANSITIONS = new EnumMap<>(LabOrderStatus.class);
+        ALLOWED_TRANSITIONS.put(LabOrderStatus.ORDERED,     EnumSet.of(LabOrderStatus.PENDING,     LabOrderStatus.CANCELLED));
+        ALLOWED_TRANSITIONS.put(LabOrderStatus.PENDING,     EnumSet.of(LabOrderStatus.COLLECTED,   LabOrderStatus.CANCELLED));
+        ALLOWED_TRANSITIONS.put(LabOrderStatus.COLLECTED,   EnumSet.of(LabOrderStatus.RECEIVED,    LabOrderStatus.CANCELLED));
+        ALLOWED_TRANSITIONS.put(LabOrderStatus.RECEIVED,    EnumSet.of(LabOrderStatus.IN_PROGRESS, LabOrderStatus.CANCELLED));
+        ALLOWED_TRANSITIONS.put(LabOrderStatus.IN_PROGRESS, EnumSet.of(LabOrderStatus.RESULTED,    LabOrderStatus.CANCELLED));
+        ALLOWED_TRANSITIONS.put(LabOrderStatus.RESULTED,    EnumSet.of(LabOrderStatus.VERIFIED,    LabOrderStatus.CANCELLED));
+        ALLOWED_TRANSITIONS.put(LabOrderStatus.VERIFIED,    EnumSet.of(LabOrderStatus.COMPLETED,   LabOrderStatus.CANCELLED));
+    }
+
+    @Override
+    @Transactional
+    public LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, Locale locale) {
+        LabOrder labOrder = labOrderRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));
+
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId != null && labOrder.getHospital() != null
+                && !labOrder.getHospital().getId().equals(hospitalId)) {
+            throw new ResourceNotFoundException("laborder.notfound");
+        }
+
+        LabOrderStatus current = labOrder.getStatus();
+        UUID labHospitalId = labOrder.getHospital().getId();
+        validateStatusTransition(current, toStatus, labHospitalId);
+        labOrder.setStatus(toStatus);
+        return labOrderMapper.toLabOrderResponseDTO(labOrderRepository.save(labOrder));
+    }
+
+    private void validateStatusTransition(LabOrderStatus from, LabOrderStatus to, UUID hospitalId) {
+        Set<LabOrderStatus> allowed = ALLOWED_TRANSITIONS.getOrDefault(from, Set.of());
+        if (!allowed.contains(to)) {
+            throw new BusinessException(
+                "Invalid lab order status transition: " + from.name() + " \u2192 " + to.name() + ".");
+        }
+
+        UUID currentUserId = roleValidator.getCurrentUserId();
+
+        if (to == LabOrderStatus.CANCELLED) {
+            if (!roleValidator.isLabManager(currentUserId, hospitalId)
+                    && !roleValidator.isHospitalAdmin(currentUserId, hospitalId)
+                    && !roleValidator.isSuperAdminFromAuth()) {
+                throw new BusinessException("Only lab managers or admins may cancel a lab order.");
+            }
+            return;
+        }
+
+        switch (to) {
+            case PENDING -> { /* Doctor/nurse/lab staff can acknowledge */ }
+            case COLLECTED, RECEIVED -> {
+                if (!roleValidator.isLabStaff(currentUserId, hospitalId)) {
+                    throw new BusinessException("Only lab staff may perform specimen collection/receipt operations.");
+                }
+            }
+            case IN_PROGRESS, RESULTED -> {
+                if (!roleValidator.isLabScientist(currentUserId, hospitalId)
+                        && !roleValidator.isLabManager(currentUserId, hospitalId)) {
+                    throw new BusinessException("Only lab scientists or managers may advance analytical steps.");
+                }
+            }
+            case VERIFIED, COMPLETED -> {
+                if (!roleValidator.isLabScientist(currentUserId, hospitalId)
+                        && !roleValidator.isLabManager(currentUserId, hospitalId)) {
+                    throw new BusinessException("Only lab scientists or managers may verify or complete a lab order.");
+                }
+            }
+            default -> throw new BusinessException(
+                "Status " + to.name() + " cannot be set via transition.");
+        }
     }
 
     private String normalizeRequiredText(String value, String errorMessage) {

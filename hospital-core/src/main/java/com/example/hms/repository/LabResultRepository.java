@@ -2,6 +2,7 @@ package com.example.hms.repository;
 
 import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.model.LabResult;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -76,6 +77,18 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         "assignment.user"
     })
     List<LabResult> findByLabOrder_Hospital_IdIn(Collection<UUID> hospitalIds);
+
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
+    Page<LabResult> findByLabOrder_Hospital_IdIn(Collection<UUID> hospitalIds, Pageable pageable);
 
     @EntityGraph(attributePaths = {
         "labOrder",

@@ -1,436 +1,399 @@
-DevFaso/hms already has a real lab domain footprint (orders, results, test catalog, reference ranges) on the backend and a dedicated Lab page on the Angular portal. The backend includes LabOrder, LabResult, and LabTestDefinition entities, APIs for lab orders/results/test definitions, and service-layer logic for signature capture, “release/sign” behaviors, and result trending. 
- 
- 
- 
- 
+﻿# Lab Technician — Implementation Gaps & Enhancement Roadmap
 
-Today, however, the implementation is not yet an Epic Beaker–style LIS workflow. The biggest blockers (P0) are RBAC drift, frontend/back-end contract mismatches, and multi-hospital scoping holes that would prevent safe, reliable lab operation at scale. In particular:
+## Overview
 
-The portal UI and permission mappings reference a ROLE_LAB_TECHNICIAN, but backend security rules and seed roles are centered on ROLE_LAB_SCIENTIST, and the SQL/seed catalog does not consistently create the technician/manager roles needed for a two-step lab workflow. 
- 
- 
- 
- 
-The Angular LabService expects wrapped + paginated result responses, but the lab results API shape in the backend is not aligned to that expectation, so the lab UI will 500/undefined in realistic use. 
- 
-Lab order search/worklist logic is implemented via a custom repository search that does not obviously constrain by hospital; combined with multi-hospital deployments, that is a serious data-partitioning risk for lab worklists. 
- 
-An Epic Beaker–style workflow emphasizes integrated LIS + EHR operation, barcoded specimen collection with positive patient identification (PPID), and robust instrument interfaces. A public Epic Beaker implementation summary explicitly highlights “barcoded specimen collection” and PPID scanning/collection workflows. 
- Epic’s Open interface catalog also describes HL7v2-style interfaces from Beaker “Outgoing Orders to Lab Instruments,” including triggers for “new specimen received,” add-on tests, and cancellations. 
+HMS already has a real lab domain footprint: `LabOrder`, `LabResult`, and `LabTestDefinition` entities, APIs for orders/results/test definitions, service-layer logic for signature capture, release/sign behaviors, and result trending. A dedicated Lab page exists in the Angular portal.
 
-The recommended approach is an MVP roadmap that first makes the current codebase correct and operable for lab staff (MVP1), then adds specimen/accessioning/custody (MVP2), then adds analyzer/QC/reflex/autoverification scaffolding (MVP3).
+However, the implementation is **not yet an Epic Beaker-style LIS workflow**. Three categories of work are needed:
 
-Report exports: Download Word (.docx) • Download PDF • Download Markdown
+| Layer | Today's state |
+|---|---|
+| Roles & RBAC | `ROLE_LAB_TECHNICIAN` referenced in frontend but missing from backend seed/security |
+| API contract | Angular `LabService` expects paginated wrapper; backend returns raw list — lab UI will break |
+| Hospital scoping | Worklist search does not filter by hospital; data-partition risk in multi-hospital deployments |
 
-Repository inventory for lab workflows and lab roles
-This inventory is based on targeted repo searches (lab, LabOrder, LabResult, lab_scientist, etc.) and inspection of the corresponding implementation files.
+The roadmap below addresses these in three MVPs: **MVP1** makes the current code correct and operable, **MVP2** adds specimen/accessioning/custody, **MVP3** adds analyzer integration, QC, and reflex workflows.
 
-Frontend lab surfaces and services
-The hospital portal has an explicit Lab feature module and associated service:
+---
 
-Lab page component and template: hospital-portal/src/app/lab/lab.ts and hospital-portal/src/app/lab/lab.html. 
- 
-Lab API client: hospital-portal/src/app/services/lab.service.ts. 
-Role-based routing includes lab roles: hospital-portal/src/app/app.routes.ts. 
-Frontend role/permission mapping includes ROLE_LAB_SCIENTIST and ROLE_LAB_TECHNICIAN: hospital-portal/src/app/core/permission.service.ts. 
-Additionally, there is a patient-facing lab results view (not lab-staff workflow, but relevant for release semantics):
+## Current Codebase Inventory
 
-Patient portal lab results page: hospital-portal/src/app/patient-portal/my-lab-results.ts. 
-Backend lab APIs, services, and persistence
-Core lab controllers:
+### Frontend lab surfaces
 
-LabOrderController: lab order create/list/update/cancel flows. 
-LabResultController: lab result entry/update/release/sign/trends. 
-LabTestDefinitionController: test catalog management and active test listing. 
-Super-admin cross-scope lab administration: SuperAdminLabOrderController. 
-Core lab services:
+| File | Purpose |
+|---|---|
+| `hospital-portal/src/app/lab/lab.ts` + `lab.html` | Lab page component and template |
+| `hospital-portal/src/app/services/lab.service.ts` | Lab API client |
+| `hospital-portal/src/app/app.routes.ts` | Route guards (includes lab roles) |
+| `hospital-portal/src/app/core/permission.service.ts` | Role/permission mapping for `ROLE_LAB_SCIENTIST` and `ROLE_LAB_TECHNICIAN` |
+| `hospital-portal/src/app/patient-portal/my-lab-results.ts` | Patient-facing lab results view |
 
-LabOrderServiceImpl contains key order integrity checks and signature/digest behavior. 
-LabResultServiceImpl contains result entry + “release/sign” model, and result comparisons/trends. 
-LabTestDefinitionServiceImpl manages test definition creation/update and reference ranges. 
-Patient-facing results logic: PatientLabResultServiceImpl (status derivation for patient portal). 
-Super-admin lab order service: SuperAdminLabOrderServiceImpl. 
-Entities and enums:
+### Backend controllers, services, entities
 
-LabOrder entity (lab.lab_orders) and core fields (patient, hospital, test definition, signing metadata). 
-LabResult entity (lab.lab_results) with basic measurement semantics and release/sign flags. 
-LabTestDefinition entity (lab.lab_test_definitions) with JSON-like reference ranges. 
-LabOrderStatus and LabOrderChannel enums define the order lifecycle primitives currently available. 
- 
-DTOs and mappers (key for contract accuracy):
+**Controllers:** `LabOrderController`, `LabResultController`, `LabTestDefinitionController`, `SuperAdminLabOrderController`
 
-LabOrderRequestDTO includes fields like priority, providerSignature, ordering context, and other values that are not all persisted in the current entity model. 
-LabOrderResponseDTO. 
-LabResultRequestDTO and LabResultResponseDTO define the backend contract; this contract does not match the Angular LabService result interface. 
- 
- 
-Signature request DTO used for signing: LabResultSignatureRequestDTO. 
-Result trend and comparison DTOs: LabResultTrendPointDTO and LabResultComparisonDTO. 
- 
-Mappers: LabOrderMapper, LabResultMapper, LabTestDefinitionMapper. 
- 
- 
-Repositories (worklist correctness + hospital scoping):
+**Services:** `LabOrderServiceImpl`, `LabResultServiceImpl`, `LabTestDefinitionServiceImpl`, `PatientLabResultServiceImpl`, `SuperAdminLabOrderServiceImpl`
 
-LabOrderRepository contains native exists-check queries and custom search hooks; schema/table naming should be reviewed (lab_orders without explicit schema is referenced in a native query). 
- 
-LabOrderCustomRepositoryImpl implements search functionality (patient + date range + free-text). 
-LabResultRepository includes paging queries; must be used to back lab worklists if standardizing response shapes. 
-LabTestDefinitionRepository. 
-Liquibase schema and lab tables:
+**Entities / enums:** `LabOrder` (`lab.lab_orders`), `LabResult` (`lab.lab_results`), `LabTestDefinition` (`lab.lab_test_definitions`), `LabOrderStatus`, `LabOrderChannel`
 
-The initial schema migration includes creation of lab schema and tables lab.lab_test_definitions, lab.lab_orders, lab.lab_results. 
-Docs and tooling:
+**DTOs:** `LabOrderRequestDTO` / `LabOrderResponseDTO`, `LabResultRequestDTO` / `LabResultResponseDTO`, `LabResultSignatureRequestDTO`, `LabResultTrendPointDTO`, `LabResultComparisonDTO`
 
-docs/ENTITY_RELATIONSHIPS.md includes a more complete conceptual lab workflow (statuses and steps) than the runtime enums currently support. 
-http/14-lab.http exists as a manual test file but appears drifted relative to current DTOs/fields (implementation-level contract drift). 
-Tests already present:
+**Mappers:** `LabOrderMapper`, `LabResultMapper`, `LabTestDefinitionMapper`
 
-LabOrderServiceImplTest covers signature digest, documentation reference, and standing-order metadata behaviors—good coverage for order safety, but not the full LIS workflow. 
-SuperAdminLabOrderServiceImplTest and PatientLabResultServiceImplTest exist; there is no visible dedicated LabResultServiceImplTest, which is a gap given release/sign logic complexity. 
- 
- 
-Epic‑style lab capabilities compared to current HMS features
-Epic Beaker workflow characteristics to emulate
-Publicly available Epic Beaker descriptions and interface specs highlight:
+**Repositories:** `LabOrderRepository`, `LabOrderCustomRepositoryImpl` (patient + date range + free-text search), `LabResultRepository`, `LabTestDefinitionRepository`
 
-Beaker is Epic’s LIS integrated into the unified record, used by lab technologists/phlebotomists/pathologists, reducing interface lag/maintenance. 
-“Barcoded specimen collection” and PPID scanning/collection workflows. 
-Explicit HL7v2 integration patterns for lab instruments: outgoing orders to instruments can trigger messages when specimens are received, add-ons ordered, or cancellations occur. 
-A standards-aligned model for a modern LIS often looks like:
+**Schema:** Liquibase initial migration creates `lab.lab_test_definitions`, `lab.lab_orders`, `lab.lab_results`.
 
-Order: FHIR ServiceRequest 
-Specimen and specimen processing: FHIR Specimen (FHIR itself notes container/location tracking can be complex and context-dependent). 
-Atomic results: FHIR Observation and report context: DiagnosticReport linking group/panel results, potentially attaching PDFs. 
-Required vs implemented mapping
-Legend: Implemented, Partial, Missing.
+**Tests present:** `LabOrderServiceImplTest` (signature digest), `SuperAdminLabOrderServiceImplTest`, `PatientLabResultServiceImplTest`. No `LabResultServiceImplTest` — a gap given release/sign complexity.
 
-Required Epic-style lab capability	HMS status	Repo evidence and notes
-Order intake (provider places order)	Implemented	Lab orders can be created via LabOrderController and LabOrderServiceImpl with signature/digest-related validations. 
- 
-Role-based worklists (lab scientist/tech)	Partial / inconsistent	Lab UI exists, but backend security is primarily ROLE_LAB_SCIENTIST and role seed does not consistently create ROLE_LAB_TECHNICIAN; frontend route/permission includes it. 
- 
- 
- 
-STAT handling (priority queues)	Partial (DTO-only)	LabOrderRequestDTO includes priority, but the LabOrder entity does not persist that field and the mapper cannot store it, so STAT cannot drive true triage. 
- 
- 
-Specimen tracking (collection/receipt/processing)	Missing	No Specimen entity/DB tables; order statuses do not include collected/received; docs/UI reference such lifecycle while enums do not. 
- 
- 
-Accessioning / accession numbers	Missing	Lab order “code” is effectively the DB UUID; no accession number model in DTO/entity. 
- 
-Result entry (numeric, unit, ref range flags)	Partial	LabResult supports single resultValue + unit + referenceRangeUsed + severityFlag, and mapper computes flags; but did not implement multi-analyte/panel structure or multiple components. 
- 
-Result verification / technical review / release	Partial	There are boolean flags and endpoints to release/sign, but workflow granularity and role separation (tech enters, scientist verifies) is not encoded; backend method-security is scientist-centric. 
- 
- 
-QC and calibration workflows	Missing	No QC entity/endpoint patterns observed in lab module. (Contrast with Epic Beaker instrument workflows and PPID/QC expectations.) 
-Reflex testing / add-ons	Missing	No reflex rules or add-on workflow in code; no “add-on test” concept despite open.epic describing add-on triggers. 
-Instrument integration (HL7v2 to analyzers/middleware)	Missing	No interface engine / outbound queue in repo; open.epic shows canonical Beaker pattern for analyzer orders. 
-Chain-of-custody / custody events	Missing	No custody event table or per-specimen tracking. 
- 
-Lab reporting (DiagnosticReport grouping, PDF export)	Partial	There are trend/comparison DTOs; no structured report resource that groups Observations; FHIR recommends DiagnosticReport for lab reporting with Observation references. 
- 
- 
+---
 
-Gap analysis with priorities and exact missing artifacts
-P0 gaps
-Role/RBAC drift blocks lab_technician workflows
+## Feature Gap Matrix (vs. Epic Beaker-style LIS)
 
-Evidence: frontend allows/mentions ROLE_LAB_TECHNICIAN in routing and permission mapping. 
- 
-Evidence: backend security rules focus on ROLE_LAB_SCIENTIST and lab endpoint matchers do not include technician, while core role seed script does not consistently create technician/manager roles. 
- 
- 
-Missing artifacts: role seed for ROLE_LAB_TECHNICIAN and (if desired) ROLE_LAB_MANAGER; backend matchers; service-layer role checks for technician actions (result entry vs verification).
-Likely cause: role catalog drift across Angular permission catalog, Spring security configuration, and SQL seeding.
-Necessity: Necessary (otherwise “lab technician” cannot function or will produce inconsistent 403s).
-Frontend/Backend response-shape mismatch for lab results
+| Capability | Status | Notes |
+|---|---|---|
+| Order intake (provider places order) | Implemented | `LabOrderController` + `LabOrderServiceImpl` with signature/digest validations |
+| Role-based worklists (tech/scientist) | Partial | Lab UI exists; backend security is scientist-only; technician role not seeded |
+| STAT / priority queues | Partial (DTO only) | `LabOrderRequestDTO` has `priority` but `LabOrder` entity does not persist it |
+| Specimen tracking (collection/receipt) | Missing | No `Specimen` entity or DB table; order status enum lacks `COLLECTED`/`RECEIVED` |
+| Accessioning / accession numbers | Missing | Order "code" is DB UUID; no accession number model |
+| Result entry (numeric, unit, ref range) | Partial | Single-analyte only; no multi-component/panel structure |
+| Result verification / release workflow | Partial | Boolean flags exist; role separation (tech enters, scientist verifies) not enforced |
+| QC and calibration workflows | Missing | No QC entity or endpoints |
+| Reflex / add-on testing | Missing | No reflex rules engine |
+| Instrument integration (HL7v2) | Missing | No interface engine or outbound queue |
+| Chain-of-custody / custody events | Missing | No custody event table |
+| Lab reporting (DiagnosticReport / PDF) | Partial | Trend/comparison DTOs exist; no structured DiagnosticReport grouping |
 
-Evidence: Angular LabService.getResults() expects an ApiWrapper with content (paged response). 
-Evidence: backend LabResultResponseDTO does not contain fields the Angular interface expects (e.g., status, performedAt, etc.), and the controller/service patterns are not aligned to the same wrapper conventions used by lab orders. 
- 
-Missing artifacts: either (A) backend wrapper/page endpoint matching the Angular contract, or (B) Angular contract matching backend list response.
-Likely cause: API drift + incomplete convergence on a single response wrapper convention across controllers (order controller uses wrapper; results do not). 
- 
-Necessity: Necessary (lab page will break).
-Multi-hospital scoping risk in lab worklists
+---
 
-Evidence: lab orders and results include a hospital_id in the schema; all worklists should be scoped by hospital context. 
-Evidence: custom search repository exists and does not obviously accept a hospitalId parameter; service uses search in a way that may allow cross-hospital results if not constrained elsewhere. 
-Missing artifacts: a hospital-scoped search method (search(patientId, hospitalId, ...)) and/or mandatory hospital scoping in service methods for lab roles.
-Likely cause: search added for convenience before multi-hospital enforcement was complete.
-Necessity: Necessary for multi-hospital deployments.
-P1 gaps
-Order lifecycle and STAT semantics are not operational (priority isn’t persisted)
+---
 
-Evidence: request DTO contains priority but entity does not. 
- 
-Evidence: the lab UI contains priority concepts, but STAT cannot drive a true triage queue if priority is dropped. 
-Missing artifacts: DB column + entity field for priority; worklist queries that sort by priority and createdAt; status transitions.
-Necessity: Necessary for STAT handling.
-Specimen lifecycle modeled in docs/UI but not in runtime enums
+## MVP 1 — Make Lab Roles Operable and Correct
 
-Evidence: LabOrderStatus enum is minimal (no collected/received/resulted/verified), while repo docs/UI use these concepts. 
- 
- 
-Missing artifacts: expanded status model and the corresponding state-transition endpoints/guards.
-Necessity: Necessary for a real lab bench workflow even without full specimen entity.
-Security config references a lab-result attachments endpoint that does not exist
+**Goal:** Fix the three P0 blockers so lab staff can reliably log in, see their worklist scoped to their hospital, and enter/verify results without 403 errors or broken UI.
 
-Evidence: SecurityConfig includes matcher(s) for lab result attachments at a path that does not appear elsewhere in the repo. 
- 
-Missing artifacts: either implement /lab-results/{id}/attachments or remove/align the matcher.
-Necessity: Likely necessary depending on whether you want PDFs/images from analyzers.
-P2 gaps
-Specimen tracking, accessioning, labels, chain-of-custody
+### Deliverables
 
-Repo currently has no specimen entity/table, and the workflow is constrained to order/result. 
-Epic-style Beaker implementations describe barcoded specimen workflows and PPID. 
-FHIR Specimen exists specifically to model specimen collection / container / processing context, and even notes deeper container/location tracking can be needed in lab contexts. 
-Missing artifacts: lab_specimens schema/table + entity; accession numbering; custody events table.
-Instrument integration, QC, reflex testing
+1. `ROLE_LAB_TECHNICIAN` and `ROLE_LAB_MANAGER` seeded in the database
+2. `SecurityConfig` matchers updated for technician/scientist separation of duties
+3. Lab results list endpoint returns the same paginated wrapper as lab orders
+4. `LabOrderCustomRepositoryImpl` enforces `hospitalId` on all worklist queries
+5. Angular `LabService` and TypeScript interfaces aligned to backend contract
+6. Lab UI refactored into a staff worklist (hide provider-ordering for lab roles)
 
-open.epic describes outgoing orders to lab instruments (Beaker) with triggers for specimen receipt, add-on orders, cancel, etc. 
-HL7 v2 ORU^R01 is a standard for transmitting lab results, and OUL supports lab automation processes. 
-Missing artifacts: outbound messages queue + interface adapter; QC event model; reflex rules engine.
-Minimal-change implementation plan
-The plan below is written for a senior Spring Boot + Angular + Postgres + Liquibase team and emphasizes “edit existing modules first; create new files only when the domain requires new persistence.”
+---
 
-P0 changes
-Align lab roles and RBAC
-Effort: Low–Medium (depends on your deployment environment count and data migration constraints)
+### P0-A — Align Lab Roles and RBAC
 
-Backend tasks (minimal-change):
+**Effort:** Low–Medium
 
-Add missing roles via a new Liquibase SQL migration (do not edit V2__seed_roles.sql in a live system) adding at minimum ROLE_LAB_TECHNICIAN; optionally add ROLE_LAB_MANAGER. Evidence that roles are currently seeded via V2__seed_roles.sql and RoleSeeder. 
- 
-Update SecurityConfig request matchers so read endpoints (GET /lab-orders, GET /lab-results, GET /lab-test-definitions) allow both scientist and technician, while sensitive actions (release/sign) remain scientist/manager. 
-Extend RoleValidator with isLabTechnician() and/or a “lab staff” predicate to make service-layer rules explicit. 
-Example Liquibase SQL migration (new file, minimal schema touch):
+Add a new Liquibase SQL migration (do **not** edit `V2__seed_roles.sql` on a live system):
 
-sql
-Copy
+```sql
 -- VXX__add_lab_technician_and_manager_roles.sql
 INSERT INTO security.roles (id, name, description, created_at, updated_at)
 SELECT gen_random_uuid(), 'ROLE_LAB_TECHNICIAN', 'Lab Technician', now(), now()
-WHERE NOT EXISTS (SELECT 1 FROM security.roles WHERE name='ROLE_LAB_TECHNICIAN');
+WHERE NOT EXISTS (SELECT 1 FROM security.roles WHERE name = 'ROLE_LAB_TECHNICIAN');
 
 INSERT INTO security.roles (id, name, description, created_at, updated_at)
 SELECT gen_random_uuid(), 'ROLE_LAB_MANAGER', 'Lab Manager', now(), now()
-WHERE NOT EXISTS (SELECT 1 FROM security.roles WHERE name='ROLE_LAB_MANAGER');
-(Adjust schema/table names to your actual roles table; the seed pattern is evident in V2 and RoleSeeder.) 
- 
+WHERE NOT EXISTS (SELECT 1 FROM security.roles WHERE name = 'ROLE_LAB_MANAGER');
+```
 
-Frontend tasks:
+**Backend tasks:**
 
-Make app.routes.ts consistent with what backend actually supports (remove technician route access until backend is updated, or update backend to match). 
-Ensure PermissionService role mappings reflect the final canonical role catalog. 
-Fix lab results API contract mismatch
-Effort: Medium
+- Update `SecurityConfig` request matchers: read endpoints (`GET /lab-orders`, `GET /lab-results`, `GET /lab-test-definitions`) allow `LAB_SCIENTIST`, `LAB_TECHNICIAN`, `LAB_MANAGER`; sensitive actions (release/sign) remain `LAB_SCIENTIST`/`LAB_MANAGER` only
+- Extend `RoleValidator` with `isLabTechnician()` and `isLabStaff()` predicates
 
-Two minimal-change options:
+**Frontend tasks:**
 
-Option A (recommended): make backend consistent with lab-orders wrapper/pagination style.
+- Align `app.routes.ts` with what the backend now supports
+- Ensure `PermissionService` role mappings reflect the canonical role catalog
 
-Update LabResultController list endpoint to return the same wrapper pattern as LabOrderController list (which already wraps and pages). 
- 
-New contract example:
-GET /api/lab-results?page=0&size=50&hospitalId=<optional for superadmin>
-Response: ApiResponseWrapper<Page<LabResultResponseDTO>>
-Option B: change Angular LabService.getResults() to match backend list response exactly.
+---
 
-Simpler but diverges from the wrapper convention already used by orders. 
-Backend pseudo-code (Option A):
+### P0-B — Fix Lab Results API Contract Mismatch
 
-java
-Copy
+**Effort:** Medium
+
+**Root cause:** `LabResultController` list endpoint returns a raw response; Angular `LabService.getResults()` expects `ApiResponseWrapper<Page<LabResultResponseDTO>>` (the same pattern used by `LabOrderController`).
+
+**Recommended fix — align backend to wrapper convention:**
+
+```java
+// LabResultController.java
 @GetMapping
 @PreAuthorize("hasAnyRole('LAB_SCIENTIST','LAB_TECHNICIAN','LAB_MANAGER','HOSPITAL_ADMIN','SUPER_ADMIN')")
 public ResponseEntity<ApiResponseWrapper<Page<LabResultResponseDTO>>> list(
-    @RequestParam(defaultValue="0") int page,
-    @RequestParam(defaultValue="50") int size,
+    @RequestParam(defaultValue = "0") int page,
+    @RequestParam(defaultValue = "50") int size,
     Authentication auth
 ) {
-  UUID hospitalId = roleValidator.requireActiveHospitalId(auth.getName());
-  Page<LabResultResponseDTO> results = labResultService.searchForHospital(hospitalId, PageRequest.of(page, size));
-  return ResponseEntity.ok(ApiResponseWrapper.success(results));
+    UUID hospitalId = roleValidator.requireActiveHospitalId(auth.getName());
+    Page<LabResultResponseDTO> results =
+        labResultService.searchForHospital(hospitalId, PageRequest.of(page, size));
+    return ResponseEntity.ok(ApiResponseWrapper.success(results));
 }
-(You will need a hospital-scoped query; see next P0 item.) 
+```
 
-Frontend pseudo (Option A):
-
-ts
-Copy
-getResults(page=0, size=50) {
+```typescript
+// lab.service.ts
+getResults(page = 0, size = 50) {
   return this.http.get<ApiWrapper<PageResponse<LabResultResponse>>>(
     `${this.api}/lab-results`,
     { params: { page, size } }
   );
 }
-Align Typescript interfaces to backend LabResultResponseDTO. 
- 
+```
 
-Enforce hospital scoping in lab worklists
-Effort: Medium
+Align TypeScript `LabResultResponse` interface fields to `LabResultResponseDTO`.
 
-Backend tasks:
+---
 
-Modify LabOrderCustomRepositoryImpl and its interface method to accept hospitalId and filter labOrder.hospital.id for list/search. 
- 
-In LabOrderServiceImpl.searchLabOrders(...), require hospital context for non-superadmin and hand it into repository search. 
- 
-Add parallel scoping for lab results by joining from LabResult to LabOrder.hospital.id (requires repository methods if not present). 
- 
-Pseudo-code (repository signature change, minimal files updated):
+### P0-C — Enforce Hospital Scoping in Lab Worklists
 
-java
-Copy
-Page<LabOrder> search(UUID hospitalId, UUID patientId, LocalDateTime from, LocalDateTime to, String query, Pageable pageable);
-P1 changes
-Persist priority + expand lifecycle statuses to support STAT queues
-Effort: Medium–High (includes DB migration)
+**Effort:** Medium
 
-Why: LabOrderRequestDTO includes priority but it is not persisted in LabOrder. 
- 
+**Root cause:** `LabOrderCustomRepositoryImpl` search method does not accept or filter by `hospitalId`; cross-hospital data leakage is possible.
 
-DB change (Liquibase SQL example; new migration file):
+1. Change the custom repository interface signature:
+   ```java
+   Page<LabOrder> search(UUID hospitalId, UUID patientId,
+       LocalDateTime from, LocalDateTime to, String query, Pageable pageable);
+   ```
+2. In `LabOrderServiceImpl.searchLabOrders(...)`, resolve and pass `hospitalId` for non-superadmin callers.
+3. Add equivalent hospital-scoped query to `LabResultRepository` (join via `LabOrder.hospital.id`).
 
-sql
-Copy
+---
+
+### MVP 1 — Tests
+
+**Backend:**
+- RBAC MVC tests for each endpoint: lab technician can view worklist and enter preliminary results; lab scientist can verify/release/sign; clinician can order but cannot bench-process
+- Multi-hospital scoping test: two hospitals seeded; lab tech in Hospital A cannot see Hospital B orders via search/list
+
+**Frontend E2E:**
+- Lab tech login → worklist loads and shows only active-hospital orders
+- 403 is never returned for read operations after role seed fix
+
+**Acceptance fixtures:**
+- Hospitals A and B; staff: `doctor(A)`, `lab_tech(A)`, `lab_scientist(A)`, `doctor(B)`, `lab_tech(B)`
+- Test definitions: CBC, BMP
+- Orders: 2 routine + 1 STAT in Hospital A; 1 routine in Hospital B
+
+---
+
+---
+
+## MVP 2 — Specimen Tracking, Accessioning & Chain of Custody
+
+**Goal:** Introduce the specimen lifecycle so the bench workflow matches real phlebotomy/LIS operations: collect → accession → receive → process, with barcode labels and custody trail.
+
+### Deliverables
+
+1. `lab.lab_specimens` table and `LabSpecimen` entity (linked to `LabOrder` 1:N)
+2. Accession number generation + barcode label payload API
+3. `LabOrderStatus` enum expanded: `COLLECTED`, `RECEIVED`, `RESULTED`, `VERIFIED`
+4. `STAT` priority persisted on `LabOrder` (DB column + entity + mapper)
+5. Status transition endpoint with RBAC guards
+6. Attachments endpoint resolved (`/lab-results/{id}/attachments`) or dangling security matcher removed
+
+---
+
+### P1-A — Persist Priority + Expand Lifecycle Statuses
+
+**Effort:** Medium–High
+
+**DB migration (new file):**
+
+```sql
+-- VXX__lab_order_priority_and_status.sql
 ALTER TABLE lab.lab_orders ADD COLUMN IF NOT EXISTS priority VARCHAR(20) DEFAULT 'ROUTINE';
 CREATE INDEX IF NOT EXISTS idx_lab_orders_priority ON lab.lab_orders(priority);
-Then:
+```
 
-Add priority field to LabOrder entity.
-Update LabOrderServiceImpl.buildLabOrder to persist it.
-Update LabOrderMapper and LabOrderResponseDTO population accordingly. 
- 
- 
-Status lifecycle:
+**Backend tasks:**
+- Add `priority` field to `LabOrder` entity and persist it from `LabOrderRequestDTO` in `LabOrderServiceImpl.buildLabOrder(...)`
+- Update `LabOrderMapper` and `LabOrderResponseDTO` accordingly
+- Expand `LabOrderStatus` enum: `PENDING → COLLECTED → RECEIVED → RESULTED → VERIFIED → RELEASED`
+- Add transition endpoint:
+  ```
+  POST /lab-orders/{id}/transition  { "toStatus": "RECEIVED" }
+  ```
+  RBAC: technician moves `PENDING → RECEIVED`; scientist moves `RESULTED → VERIFIED/RELEASED`
+- Align `docs/ENTITY_RELATIONSHIPS.md` with the updated enum/UI labels
 
-Expand LabOrderStatus enum to include at minimum COLLECTED, RECEIVED, RESULTED, VERIFIED (and keep existing). 
-Add endpoint(s) like:
-POST /lab-orders/{id}/transition { "toStatus": "RECEIVED" }
-RBAC: tech can move PENDING→RECEIVED; scientist moves RESULTED→VERIFIED/RELEASED.
-Align docs/ENTITY_RELATIONSHIPS.md conceptual flow with actual enums and UI labels. 
-Resolve missing attachments endpoint
-Effort: Low–Medium
+---
 
-Either implement /lab-results/{id}/attachments or remove/align the matcher in SecurityConfig. 
-P2 changes
-Specimen tracking + accessioning + chain-of-custody
-Effort: High (new persistence concepts)
+### P1-B — Specimen Entity, Accession Numbers & Barcode Labels
 
-Justification:
+**Effort:** High (new persistence)
 
-Epic Beaker implementations highlight barcoded specimen collection and PPID as a core value proposition. 
-FHIR provides Specimen resource patterns for specimen collection and processing; it explicitly calls out the complexity of container/location tracking in lab contexts. 
-Minimal domain additions:
+**New DB table:**
 
-New table: lab.lab_specimens
-New entity: LabSpecimen linked to LabOrder (1:N if multiple tubes)
-Fields: accessionNumber, barcodeValue, specimenType, collectedAt/by, receivedAt/by, currentLocation, status, custody trail pointer
-API contracts:
+```sql
+CREATE TABLE lab.lab_specimens (
+    id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lab_order_id     UUID NOT NULL REFERENCES lab.lab_orders(id),
+    accession_number VARCHAR(50) NOT NULL UNIQUE,
+    barcode_value    VARCHAR(100),
+    specimen_type    VARCHAR(50),
+    collected_at     TIMESTAMP,
+    collected_by     UUID,
+    received_at      TIMESTAMP,
+    received_by      UUID,
+    current_location VARCHAR(100),
+    status           VARCHAR(30) DEFAULT 'PENDING',
+    created_at       TIMESTAMP DEFAULT now(),
+    updated_at       TIMESTAMP DEFAULT now()
+);
+```
 
-POST /lab-orders/{id}/specimens create specimen + accession + generate label payload
-POST /lab-specimens/{id}/receive
-GET /lab-specimens/{id} for inquiry
-Instrument integration scaffolding (HL7v2 orders-to-instruments)
-Effort: High
+**New entity:** `LabSpecimen` linked to `LabOrder` (`@ManyToOne`)
 
-Implement an outbound queue table (lab.instrument_outbox) and a message builder.
-Use HL7v2 (or instrumentation middleware) patterns; Epic’s open interface catalog describes outgoing orders to instruments from Beaker and mentions triggers such as specimen received, add-ons, cancellations. 
-For results returning from instruments, HL7 v2 ORU^R01 is commonly used for transmitting observations/results; OUL supports lab automation processes. 
-Tests & QA
-Unit tests and integration tests to add
-Backend:
+**New API contracts:**
 
-Add LabResultServiceImplTest coverage (currently missing while LabResult release/sign logic is substantial). 
-RBAC tests (MVC) for each endpoint:
-lab technician can view worklist and enter preliminary results
-lab scientist can verify/release/sign
-clinician can order but cannot “bench-process”
-Multi-hospital scoping tests:
-Two hospitals seeded; verify lab tech in Hospital A cannot see Hospital B lab orders via search/list. 
-Existing tests worth extending:
+| Method | Path | RBAC | Description |
+|---|---|---|---|
+| `POST` | `/lab-orders/{id}/specimens` | `LAB_TECHNICIAN`, `LAB_SCIENTIST` | Create specimen + accession number + barcode label payload |
+| `POST` | `/lab-specimens/{id}/receive` | `LAB_TECHNICIAN`, `LAB_SCIENTIST` | Mark specimen received |
+| `GET` | `/lab-specimens/{id}` | Lab staff | Specimen inquiry with custody trail |
 
-LabOrderServiceImplTest already covers signature digest and compliance metadata. 
-Frontend E2E cases:
+---
 
-Lab tech login → worklist loads and only shows orders for active hospital
-STAT order appears at top of queue once priority is persisted
-Specimen receipt moves status transitions and appears in “received” worklist lane
-Lab scientist verifies/releases; clinician and patient portal visibility differs (patient sees released results only). 
- 
-Sample acceptance fixtures
-Minimal fixture set for integration tests:
+### P1-C — Resolve Lab-Result Attachments Endpoint
 
-Hospitals: A and B
-Staff: doctor (A), lab_tech (A), lab_scientist (A); doctor (B), lab_tech (B)
-Test definitions: CBC, BMP
-Orders: 2 routine + 1 STAT in Hospital A; 1 routine in Hospital B
-Results: one abnormal high, one normal; verify severity flags use reference ranges. 
-MVP roadmap with deliverables and timelines
-MVP durations are unspecified (team velocity/cadence not provided). The timeline below is illustrative sequencing only.
+**Effort:** Low–Medium
 
-MVP1: Make lab roles operable and correct
+`SecurityConfig` contains a matcher for `/lab-results/{id}/attachments` with no corresponding controller. Either:
+- Implement `GET/POST /lab-results/{id}/attachments` to support PDF/image uploads from analyzers, **or**
+- Remove the dangling matcher from `SecurityConfig`
 
-RBAC/role seeding alignment (technician/scientist/manager)
-Fix /lab-results API contract mismatch (choose backend wrapper or frontend change)
-Enforce hospital scoping for lab worklists
-Refactor Lab UI into a lab-staff worklist (hide provider ordering for lab roles; worklist actions instead). 
- 
-MVP2: Specimen + accessioning + custody
+---
 
-Specimen entity/table
-Accession numbers + barcode labels
-Chain-of-custody events and “specimen inquiry” style history
-MVP3: Analyzer integration + QC + reflex workflows
+### MVP 2 — Tests
 
-Orders-to-instruments queue + HL7v2 adapter scaffolding
-QC events, autoverification rules, reflex/add-on testing
-Mar 22
-Mar 29
-Apr 05
-Apr 12
-Apr 19
-Apr 26
-May 03
-May 10
-May 17
-May 24
-May 31
-Jun 07
-Jun 14
-RBAC + role seed consistency
-Fix lab-results API contract
-Hospital-scoped lab worklists
-Lab UI worklist refactor
-Specimen + accessioning + barcode labels
-Chain-of-custody / specimen inquiry
-Instrument interface scaffolding (HL7 v2)
-QC + autoverification + reflex testing
-MVP1
-MVP2
-MVP3
-Lab Workflow Roadmap (illustrative sequencing)
+**Backend:**
+- `LabResultServiceImplTest` — currently missing; cover release/sign, severity flag computation, and comparison logic
+- Specimen create → receive → status transition integration tests
+- Accession number uniqueness constraint test
 
+**Frontend E2E:**
+- Specimen receipt moves order to "Received" worklist lane
+- STAT order sorts to top of queue after priority is persisted
 
-Show code
-Assumptions and risks
-Assumptions:
+---
 
-Multi-hospital behavior exists and is enforced elsewhere in the platform; lab module must participate in that scoping explicitly at the repository/service level. 
- 
-Lab roles should follow an LIS-like separation of duties:
-Technician (bench): receive/collect, enter results/prelim
-Scientist/Manager: verify/release/finalize
-Key risks:
+---
 
-RBAC drift and implicit assumptions about role names will create production outages or silent 403s unless a single canonical role catalog is enforced in seed + backend + frontend. 
- 
- 
-Without explicit hospital scoping in worklists, lab queues can leak cross-hospital data. 
-Specimen tracking, accessioning, and analyzer integration are not “nice-to-haves” for LIS parity; they introduce new persistence concepts and will require at least one new table/entity (and thus new migration + code files). 
+## MVP 3 — Analyzer Integration, QC & Reflex Workflows
+
+**Goal:** Connect HMS to external analyzers via an HL7v2-style interface engine, implement QC/calibration event tracking, and add reflex/add-on test rules — reaching Epic Beaker-style LIS parity.
+
+### Deliverables
+
+1. Outbound orders queue (`lab.instrument_outbox`) and HL7v2 OML message builder
+2. Inbound results adapter (HL7v2 ORU^R01 / OUL) parsing into `LabResult`
+3. QC event entity and endpoints
+4. Autoverification rules engine (reference-range-based auto-release)
+5. Reflex / add-on test rule model and trigger on result entry
+
+---
+
+### P2-A — Instrument Integration Scaffolding (HL7v2)
+
+**Effort:** High
+
+Epic's Open interface catalog describes outgoing orders to lab instruments from Beaker with triggers on: new specimen received, add-on ordered, and cancellation. HL7v2 ORU^R01 is the standard for transmitting observations; OUL supports lab automation.
+
+**New DB table:**
+
+```sql
+CREATE TABLE lab.instrument_outbox (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    lab_order_id UUID NOT NULL REFERENCES lab.lab_orders(id),
+    message_type VARCHAR(20) NOT NULL,  -- OML^O21, cancel, add-on
+    payload      TEXT NOT NULL,          -- HL7v2 message string
+    status       VARCHAR(20) DEFAULT 'PENDING',  -- PENDING, SENT, ACK, ERROR
+    created_at   TIMESTAMP DEFAULT now(),
+    sent_at      TIMESTAMP
+);
+```
+
+- **Outbound:** `LabOrderServiceImpl` enqueues message on specimen receipt / add-on / cancel
+- **Inbound:** HL7v2 ORU^R01 listener parses and calls `LabResultServiceImpl.enterResult(...)`
+
+---
+
+### P2-B — QC Events and Calibration Tracking
+
+**Effort:** Medium
+
+```sql
+CREATE TABLE lab.qc_events (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    hospital_id        UUID NOT NULL,
+    analyzer_id        VARCHAR(100),
+    test_definition_id UUID REFERENCES lab.lab_test_definitions(id),
+    qc_level           VARCHAR(20),   -- LOW_CONTROL, HIGH_CONTROL
+    measured_value     NUMERIC,
+    expected_value     NUMERIC,
+    passed             BOOLEAN,
+    recorded_at        TIMESTAMP DEFAULT now(),
+    recorded_by        UUID
+);
+```
+
+---
+
+### P2-C — Reflex / Add-On Test Rules
+
+**Effort:** Medium–High
+
+```sql
+CREATE TABLE lab.reflex_rules (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    trigger_test_id UUID NOT NULL REFERENCES lab.lab_test_definitions(id),
+    condition       JSONB NOT NULL,   -- e.g. { "severityFlag": "H", "threshold": 11.0 }
+    reflex_test_id  UUID NOT NULL REFERENCES lab.lab_test_definitions(id),
+    active          BOOLEAN DEFAULT TRUE
+);
+```
+
+On result entry, `LabResultServiceImpl` evaluates active reflex rules and auto-creates child `LabOrder` records. The outbound queue then notifies the analyzer.
+
+---
+
+### MVP 3 — Tests
+
+**Backend:**
+- HL7v2 message builder unit tests (OML^O21 for a known order)
+- ORU^R01 inbound parser unit tests
+- Reflex rule trigger integration test: abnormal CBC result auto-creates differential order
+- QC event pass/fail assertion
+
+**Frontend E2E:**
+- Autoverified results appear as "Released" without manual scientist action
+- Add-on test visible in worklist linked to parent order
+
+---
+
+---
+
+## Assumptions & Key Risks
+
+**Assumptions:**
+
+- Multi-hospital enforcement already works elsewhere in the platform; the lab module must explicitly participate at the repository/service level.
+- Lab roles follow LIS separation of duties:
+  - **Technician (bench):** receive/collect, enter preliminary results
+  - **Scientist / Manager:** verify, release, finalize
+
+**Key risks:**
+
+| Risk | Impact | Mitigation |
+|---|---|---|
+| RBAC drift (role names inconsistent across seed / backend / frontend) | Silent 403s or full lab UI outage | Single canonical role catalog enforced in migration + `SecurityConfig` + `PermissionService` |
+| Missing hospital scoping in worklists | Cross-hospital data leak | Mandatory `hospitalId` parameter in all custom repository search methods |
+| Specimen / accessioning / instrument integration scope | New DB tables, new migration complexity | Stage behind MVP gates; these are LIS parity requirements, not nice-to-haves |

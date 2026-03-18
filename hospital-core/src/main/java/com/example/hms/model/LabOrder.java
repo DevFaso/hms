@@ -79,6 +79,11 @@ public class LabOrder extends BaseEntity {
     @Column(nullable = false, length = 50)
     private LabOrderStatus status;
 
+    /** Clinical priority: ROUTINE, URGENT, STAT. Defaults to ROUTINE. */
+    @Column(name = "priority", nullable = false, length = 20)
+    @Builder.Default
+    private String priority = "ROUTINE";
+
     @NotBlank
     @Column(name = "clinical_indication", nullable = false, length = 2048)
     private String clinicalIndication;

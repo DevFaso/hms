@@ -32,5 +32,11 @@ public interface LabOrderService {
     List<LabOrderResponseDTO> getLabOrdersByLabTestDefinitionId(UUID labTestDefinitionId, Locale locale);
 
     List<LabOrderResponseDTO> getLabOrdersByStatus(LabOrderStatus status, Locale locale);
+
+    /**
+     * Transitions a lab order to the given {@code toStatus}, enforcing
+     * role-based transition rules.
+     */
+    LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, Locale locale);
 }
 

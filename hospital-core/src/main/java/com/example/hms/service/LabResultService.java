@@ -4,6 +4,8 @@ import com.example.hms.payload.dto.LabResultComparisonDTO;
 import com.example.hms.payload.dto.LabResultRequestDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
 import com.example.hms.payload.dto.LabResultSignatureRequestDTO;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -17,6 +19,8 @@ public interface LabResultService {
     LabResultResponseDTO getLabResultById(UUID id, Locale locale);
 
     List<LabResultResponseDTO> getAllLabResults(Locale locale);
+
+    Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale);
 
     List<LabResultResponseDTO> getPendingReviewResults(UUID providerId, Locale locale);
 

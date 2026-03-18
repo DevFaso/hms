@@ -318,4 +318,51 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V26: MVP1 — Add Lab Technician and Lab Manager Roles
+         Seeds ROLE_LAB_TECHNICIAN and ROLE_LAB_MANAGER into security.roles.
+         ================================================================= -->
+    <changeSet id="V26-add-lab-technician-manager-roles" author="hms-team" runOnChange="false">
+        <sqlFile path="V26__add_lab_technician_manager_roles.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V27: MVP2 — Lab Order Priority + Specimen Tracking
+         - Adds priority VARCHAR(20) NOT NULL DEFAULT 'ROUTINE' to lab.lab_orders
+         - Creates lab.lab_specimens table with accession number and custody fields
+         ================================================================= -->
+    <changeSet id="V27-mvp2-lab-order-priority-and-specimens" author="hms-team" runOnChange="false">
+        <sqlFile path="V27__mvp2_lab_order_priority_and_specimens.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V28: MVP3 — Instrument Integration, QC Events & Reflex Rules
+         - Creates lab.instrument_outbox (outbound HL7v2 queue)
+         - Creates lab.qc_events (analyzer calibration tracking)
+         - Creates lab.reflex_rules (auto add-on test rules)
+         ================================================================= -->
+    <changeSet id="V28-mvp3-instrument-outbox-qc-reflex" author="hms-team" runOnChange="false">
+        <sqlFile path="V28__mvp3_instrument_outbox_qc_reflex.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V29: Hotfix — add missing updated_at to lab.instrument_outbox
+         BaseEntity requires updated_at on every table; V28 omitted it.
+         ================================================================= -->
+    <changeSet id="V29-fix-instrument-outbox-updated-at" author="hms-team" runOnChange="false">
+        <sqlFile path="V29__fix_instrument_outbox_updated_at.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabResultComparisonDTO;
 import com.example.hms.payload.dto.LabResultRequestDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
@@ -10,6 +11,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.MessageSource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -42,7 +46,7 @@ public class LabResultController {
     private final MessageSource messageSource;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Create Lab Result", description = "Creates a new lab result.")
     public ResponseEntity<LabResultResponseDTO> createLabResult(
             @Valid @RequestBody LabResultRequestDTO requestDTO,
@@ -52,7 +56,7 @@ public class LabResultController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Get Lab Result by ID", description = "Fetches a lab result by its ID.")
     public ResponseEntity<LabResultResponseDTO> getLabResultById(
             @PathVariable UUID id,
@@ -61,12 +65,12 @@ public class LabResultController {
     }
 
     @GetMapping
-    // Doctors and nurses consume this list from their dashboards
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'DOCTOR', 'NURSE', 'MIDWIFE')")
-    @Operation(summary = "Get All Lab Results", description = "Retrieves all lab results.")
-    public ResponseEntity<List<LabResultResponseDTO>> getAllLabResults(
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'DOCTOR', 'NURSE', 'MIDWIFE')")
+    @Operation(summary = "Get All Lab Results", description = "Retrieves a paginated, hospital-scoped list of lab results.")
+    public ResponseEntity<ApiResponseWrapper<Page<LabResultResponseDTO>>> getAllLabResults(
+            @PageableDefault(size = 20) Pageable pageable,
             @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(labResultService.getAllLabResults(locale));
+        return ResponseEntity.ok(ApiResponseWrapper.success(labResultService.getLabResultsPage(pageable, locale)));
     }
 
     @GetMapping("/pending-review")
@@ -79,7 +83,7 @@ public class LabResultController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Update Lab Result", description = "Updates an existing lab result.")
     public ResponseEntity<LabResultResponseDTO> updateLabResult(
             @PathVariable UUID id,
