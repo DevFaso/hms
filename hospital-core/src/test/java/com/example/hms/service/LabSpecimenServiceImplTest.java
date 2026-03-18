@@ -54,8 +54,10 @@ class LabSpecimenServiceImplTest {
         hospitalId  = UUID.randomUUID();
         labOrderId  = UUID.randomUUID();
         specimenId  = UUID.randomUUID();
-        hospital    = Hospital.builder().id(hospitalId).build();
-        labOrder    = LabOrder.builder().id(labOrderId).hospital(hospital).build();
+        hospital    = Hospital.builder().build();
+        hospital.setId(hospitalId);
+        labOrder    = LabOrder.builder().hospital(hospital).build();
+        labOrder.setId(labOrderId);
         responseDTO = LabSpecimenResponseDTO.builder().id(specimenId).build();
     }
 

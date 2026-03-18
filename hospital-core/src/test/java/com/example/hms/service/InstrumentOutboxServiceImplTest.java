@@ -41,7 +41,8 @@ class InstrumentOutboxServiceImplTest {
     @BeforeEach
     void setUp() {
         labOrderId = UUID.randomUUID();
-        labOrder   = LabOrder.builder().id(labOrderId).build();
+        labOrder   = LabOrder.builder().build();
+        labOrder.setId(labOrderId);
     }
 
     // ── enqueueSpecimenReceived ───────────────────────────────────────────────
