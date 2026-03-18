@@ -1,6 +1,5 @@
 package com.example.hms.repository;
 
-import com.example.hms.enums.BedStatus;
 import com.example.hms.model.Bed;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
