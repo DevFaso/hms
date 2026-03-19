@@ -40,7 +40,9 @@ import { PatientPortalService, ImmunizationDTO } from '../services/patient-porta
         </div>
       } @else {
         <section class="portal-section">
-          <p class="vax-count">{{ vaccinations().length }} vaccination(s) in the next {{ selectedMonths }} month(s)</p>
+          <p class="vax-count">
+            {{ vaccinations().length }} vaccination(s) in the next {{ selectedMonths }} month(s)
+          </p>
           <div class="vax-list">
             @for (v of vaccinations(); track v.id) {
               <div class="vax-card" [class.overdue]="v.overdue">
@@ -58,7 +60,9 @@ import { PatientPortalService, ImmunizationDTO } from '../services/patient-porta
                       {{ v.nextDoseDueDate | date: 'MMMM d, yyyy' }}
                     </span>
                     @if (v.doseNumber && v.totalDosesInSeries) {
-                      <span class="dose-info">Dose {{ v.doseNumber }} of {{ v.totalDosesInSeries }}</span>
+                      <span class="dose-info"
+                        >Dose {{ v.doseNumber }} of {{ v.totalDosesInSeries }}</span
+                      >
                     }
                   </div>
                   @if (v.notes) {

@@ -1,75 +1,88 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
-import { PatientPortalService, ImagingOrderDTO } from '../services/patient-portal.service';
+import { PatientPortalService, ProcedureOrderDTO } from '../services/patient-portal.service';
 
 @Component({
-  selector: 'app-my-imaging-orders',
+  selector: 'app-my-procedures',
   standalone: true,
   imports: [CommonModule, DatePipe],
   template: `
     <div class="portal-page">
       <div class="portal-page-header">
         <h1>
-          <span class="material-symbols-outlined">radiology</span>
-          My Imaging Orders
+          <span class="material-symbols-outlined">surgical</span>
+          My Procedures
         </h1>
       </div>
 
       @if (loading()) {
         <div class="portal-loading">
           <div class="portal-spinner"></div>
-          <p>Loading imaging orders...</p>
+          <p>Loading procedure orders...</p>
         </div>
       } @else if (orders().length === 0) {
         <div class="portal-empty">
-          <span class="material-symbols-outlined">radiology</span>
-          <h3>No imaging orders found</h3>
-          <p>You have no imaging or radiology orders on record.</p>
+          <span class="material-symbols-outlined">surgical</span>
+          <h3>No procedure orders found</h3>
+          <p>You have no surgical or procedural orders on record.</p>
         </div>
       } @else {
         <section class="portal-section">
-          <p class="count-label">{{ orders().length }} order(s) on record</p>
+          <p class="count-label">{{ orders().length }} procedure order(s) on record</p>
           <div class="orders-list">
             @for (o of orders(); track o.id) {
               <div class="order-card">
-                <div class="order-icon" [ngClass]="statusColorClass(o.status)">
-                  <span class="material-symbols-outlined">radiology</span>
+                <div class="order-icon" [ngClass]="urgencyColorClass(o.urgency)">
+                  <span class="material-symbols-outlined">surgical</span>
                 </div>
                 <div class="order-body">
-                  <h4 class="order-name">
-                    {{ o.modality }}{{ o.studyType ? ' — ' + o.studyType : '' }}
-                  </h4>
+                  <h4 class="order-name">{{ o.procedureName }}</h4>
                   <p class="order-sub">
-                    {{ o.bodyRegion ? o.bodyRegion + ' · ' : '' }}{{ o.hospitalName }}
+                    {{ o.procedureCode ? o.procedureCode + ' · ' : ''
+                    }}{{ o.procedureCategory || '' }}
+                    {{ o.procedureCategory || o.procedureCode ? '· ' : '' }}{{ o.hospitalName }}
                   </p>
                   <div class="meta-row">
                     <span class="status-badge" [ngClass]="statusColorClass(o.status)">
                       {{ o.status | titlecase }}
                     </span>
-                    <span class="priority-chip" [ngClass]="priorityColorClass(o.priority)">
-                      {{ o.priority | titlecase }}
+                    <span class="urgency-chip" [ngClass]="urgencyColorClass(o.urgency)">
+                      {{ o.urgency | titlecase }}
                     </span>
-                    @if (o.contrastRequired) {
-                      <span class="contrast-chip">Contrast Required</span>
-                    }
                     <span class="date-chip">
                       <span class="material-symbols-outlined icon-sm">schedule</span>
                       Ordered {{ o.orderedAt | date: 'MMM d, yyyy' }}
                     </span>
+                    @if (o.scheduledDatetime) {
+                      <span class="scheduled-chip">
+                        <span class="material-symbols-outlined icon-sm">event</span>
+                        Scheduled {{ o.scheduledDatetime | date: 'MMM d, yyyy' }}
+                      </span>
+                    }
                   </div>
-                  @if (o.scheduledDate) {
-                    <p class="scheduled-info">
-                      <span class="material-symbols-outlined icon-sm">event</span>
-                      Scheduled: {{ o.scheduledDate | date: 'MMMM d, yyyy' }}
-                      {{ o.scheduledTime ? 'at ' + o.scheduledTime : '' }}
-                      {{ o.appointmentLocation ? '· ' + o.appointmentLocation : '' }}
+                  @if (o.requiresAnesthesia || o.requiresSedation) {
+                    <div class="flags-row">
+                      @if (o.requiresAnesthesia) {
+                        <span class="flag-chip anesthesia">
+                          Anesthesia{{ o.anesthesiaType ? ': ' + o.anesthesiaType : '' }}
+                        </span>
+                      }
+                      @if (o.requiresSedation) {
+                        <span class="flag-chip sedation">Sedation required</span>
+                      }
+                    </div>
+                  }
+                  @if (o.indication) {
+                    <p class="indication">Indication: {{ o.indication }}</p>
+                  }
+                  @if (o.preProcedureInstructions) {
+                    <p class="instructions">
+                      <span class="material-symbols-outlined icon-sm">info</span>
+                      {{ o.preProcedureInstructions }}
                     </p>
                   }
                   @if (o.orderingProviderName) {
                     <p class="provider-info">Ordered by: {{ o.orderingProviderName }}</p>
-                  }
-                  @if (o.clinicalQuestion) {
-                    <p class="clinical-q">Clinical question: {{ o.clinicalQuestion }}</p>
                   }
                   @if (o.cancelledAt) {
                     <p class="cancelled-info">
@@ -121,17 +134,17 @@ import { PatientPortalService, ImagingOrderDTO } from '../services/patient-porta
         background: #dbeafe;
         color: #2563eb;
       }
-      .order-icon.green {
-        background: #dcfce7;
-        color: #16a34a;
+      .order-icon.red {
+        background: #fee2e2;
+        color: #dc2626;
       }
       .order-icon.amber {
         background: #fef9c3;
         color: #ca8a04;
       }
-      .order-icon.red {
-        background: #fee2e2;
-        color: #dc2626;
+      .order-icon.green {
+        background: #dcfce7;
+        color: #16a34a;
       }
       .order-body {
         flex: 1;
@@ -155,13 +168,18 @@ import { PatientPortalService, ImagingOrderDTO } from '../services/patient-porta
         margin-bottom: 8px;
       }
       .status-badge,
-      .priority-chip,
+      .urgency-chip,
       .date-chip,
-      .contrast-chip {
+      .scheduled-chip,
+      .flag-chip {
         font-size: 12px;
         font-weight: 600;
         padding: 3px 10px;
         border-radius: 20px;
+      }
+      .status-badge {
+        background: #dbeafe;
+        color: #1d4ed8;
       }
       .status-badge.green {
         background: #dcfce7;
@@ -175,19 +193,20 @@ import { PatientPortalService, ImagingOrderDTO } from '../services/patient-porta
         background: #fee2e2;
         color: #dc2626;
       }
-      .status-badge {
-        background: #dbeafe;
-        color: #1d4ed8;
-      }
-      .priority-chip {
+      .urgency-chip {
         background: #f1f5f9;
         color: #475569;
       }
-      .priority-chip.red {
+      .urgency-chip.red {
         background: #fee2e2;
         color: #dc2626;
       }
-      .date-chip {
+      .urgency-chip.amber {
+        background: #fef9c3;
+        color: #a16207;
+      }
+      .date-chip,
+      .scheduled-chip {
         display: flex;
         align-items: center;
         gap: 4px;
@@ -198,18 +217,28 @@ import { PatientPortalService, ImagingOrderDTO } from '../services/patient-porta
       .icon-sm {
         font-size: 14px;
       }
-      .contrast-chip {
+      .flags-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .flag-chip.anesthesia {
         background: #fdf4ff;
         color: #9333ea;
       }
-      .scheduled-info,
-      .provider-info,
-      .clinical-q {
+      .flag-chip.sedation {
+        background: #fff7ed;
+        color: #c2410c;
+      }
+      .indication,
+      .instructions,
+      .provider-info {
         font-size: 13px;
         color: #475569;
         margin: 4px 0 0;
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 4px;
       }
       .cancelled-info {
@@ -222,14 +251,14 @@ import { PatientPortalService, ImagingOrderDTO } from '../services/patient-porta
   ],
   styleUrl: './patient-portal-pages.scss',
 })
-export class MyImagingOrdersComponent implements OnInit {
+export class MyProceduresComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
 
-  orders = signal<ImagingOrderDTO[]>([]);
+  orders = signal<ProcedureOrderDTO[]>([]);
   loading = signal(true);
 
   ngOnInit() {
-    this.portal.getMyImagingOrders().subscribe({
+    this.portal.getMyProcedureOrders().subscribe({
       next: (data) => {
         this.orders.set(data);
         this.loading.set(false);
@@ -240,15 +269,16 @@ export class MyImagingOrdersComponent implements OnInit {
 
   statusColorClass(status: string): string {
     const s = status?.toUpperCase();
-    if (s === 'COMPLETED' || s === 'REPORTED') return 'green';
+    if (s === 'COMPLETED') return 'green';
     if (s === 'CANCELLED') return 'red';
-    if (s === 'SCHEDULED' || s === 'IN_PROGRESS') return 'amber';
+    if (s === 'IN_PROGRESS' || s === 'READY_FOR_PROCEDURE' || s === 'SCHEDULED') return 'amber';
     return '';
   }
 
-  priorityColorClass(priority: string): string {
-    const p = priority?.toUpperCase();
-    if (p === 'STAT' || p === 'URGENT') return 'red';
+  urgencyColorClass(urgency: string): string {
+    const u = urgency?.toUpperCase();
+    if (u === 'STAT' || u === 'EMERGENT') return 'red';
+    if (u === 'URGENT') return 'amber';
     return '';
   }
 }

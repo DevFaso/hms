@@ -13,12 +13,36 @@ interface VitalSeries {
 
 const VITAL_SERIES: VitalSeries[] = [
   { label: 'Heart Rate', key: 'heartRateBpm', unit: 'bpm', icon: 'favorite', color: '#ef4444' },
-  { label: 'Systolic BP', key: 'systolicBpMmHg', unit: 'mmHg', icon: 'vital_signs', color: '#8b5cf6' },
-  { label: 'Diastolic BP', key: 'diastolicBpMmHg', unit: 'mmHg', icon: 'vital_signs', color: '#7c3aed' },
+  {
+    label: 'Systolic BP',
+    key: 'systolicBpMmHg',
+    unit: 'mmHg',
+    icon: 'vital_signs',
+    color: '#8b5cf6',
+  },
+  {
+    label: 'Diastolic BP',
+    key: 'diastolicBpMmHg',
+    unit: 'mmHg',
+    icon: 'vital_signs',
+    color: '#7c3aed',
+  },
   { label: 'SpO₂', key: 'spo2Percent', unit: '%', icon: 'air', color: '#06b6d4' },
-  { label: 'Temperature', key: 'temperatureCelsius', unit: '°C', icon: 'thermostat', color: '#f59e0b' },
+  {
+    label: 'Temperature',
+    key: 'temperatureCelsius',
+    unit: '°C',
+    icon: 'thermostat',
+    color: '#f59e0b',
+  },
   { label: 'Weight', key: 'weightKg', unit: 'kg', icon: 'monitor_weight', color: '#10b981' },
-  { label: 'Blood Glucose', key: 'bloodGlucoseMgDl', unit: 'mg/dL', icon: 'water_drop', color: '#f97316' },
+  {
+    label: 'Blood Glucose',
+    key: 'bloodGlucoseMgDl',
+    unit: 'mg/dL',
+    icon: 'water_drop',
+    color: '#f97316',
+  },
 ];
 
 @Component({
@@ -72,8 +96,9 @@ const VITAL_SERIES: VitalSeries[] = [
                 <div>
                   <h3 class="trend-title">{{ series.label }}</h3>
                   <p class="trend-meta">
-                    Latest: <strong>{{ latestValue(series.key) }} {{ series.unit }}</strong>
-                    &nbsp;·&nbsp; {{ vitals().length }} readings
+                    Latest:
+                    <strong>{{ latestValue(series.key) }} {{ series.unit }}</strong> &nbsp;·&nbsp;
+                    {{ vitals().length }} readings
                   </p>
                 </div>
               </div>
@@ -82,7 +107,9 @@ const VITAL_SERIES: VitalSeries[] = [
                 @for (v of vitals(); track v.id) {
                   @if (v[series.key] !== null && v[series.key] !== undefined) {
                     <div class="reading-chip">
-                      <span class="reading-val">{{ v[series.key] }}<small> {{ series.unit }}</small></span>
+                      <span class="reading-val"
+                        >{{ v[series.key] }}<small> {{ series.unit }}</small></span
+                      >
                       <span class="reading-date">{{ v.recordedAt | date: 'MMM d' }}</span>
                     </div>
                   }

@@ -158,7 +158,10 @@ const CHANNELS = [
       .slider {
         position: absolute;
         cursor: pointer;
-        top: 0; left: 0; right: 0; bottom: 0;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         background: #cbd5e1;
         border-radius: 22px;
         transition: 0.2s;
@@ -166,8 +169,10 @@ const CHANNELS = [
       .slider::before {
         content: '';
         position: absolute;
-        height: 16px; width: 16px;
-        left: 3px; bottom: 3px;
+        height: 16px;
+        width: 16px;
+        left: 3px;
+        bottom: 3px;
         background: #fff;
         border-radius: 50%;
         transition: 0.2s;
@@ -237,9 +242,7 @@ export class MyNotificationsComponent implements OnInit {
   }
 
   isEnabled(type: string, channel: string): boolean {
-    const pref = this.prefs().find(
-      (p) => p.notificationType === type && p.channel === channel,
-    );
+    const pref = this.prefs().find((p) => p.notificationType === type && p.channel === channel);
     return pref?.enabled ?? true; // default to enabled if no saved preference
   }
 

@@ -361,6 +361,89 @@ export interface PharmacyFillDTO {
   updatedAt: string;
 }
 
+export interface ProcedureOrderDTO {
+  id: string;
+  patientId: string;
+  patientName: string | null;
+  hospitalName: string;
+  encounterId: string | null;
+  procedureCode: string | null;
+  procedureName: string;
+  procedureCategory: string | null;
+  indication: string | null;
+  clinicalNotes: string | null;
+  urgency: string;
+  scheduledDatetime: string | null;
+  estimatedDurationMinutes: number | null;
+  requiresAnesthesia: boolean | null;
+  anesthesiaType: string | null;
+  requiresSedation: boolean | null;
+  preProcedureInstructions: string | null;
+  consentObtained: boolean | null;
+  laterality: string | null;
+  siteMarked: boolean | null;
+  status: string;
+  orderingProviderName: string | null;
+  orderedAt: string;
+  scheduledDatetime2: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  cancellationReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdmissionDTO {
+  id: string;
+  patientId: string;
+  patientName: string;
+  patientMrn: string | null;
+  hospitalName: string;
+  admittingProviderName: string | null;
+  departmentName: string | null;
+  roomBed: string | null;
+  admissionType: string;
+  status: string;
+  acuityLevel: string | null;
+  admissionDateTime: string;
+  expectedDischargeDateTime: string | null;
+  actualDischargeDateTime: string | null;
+  chiefComplaint: string | null;
+  primaryDiagnosisCode: string | null;
+  primaryDiagnosisDescription: string | null;
+  admissionSource: string | null;
+  admissionNotes: string | null;
+  attendingPhysicianName: string | null;
+  dischargeDisposition: string | null;
+  dischargeSummary: string | null;
+  dischargeInstructions: string | null;
+  lengthOfStayDays: number | null;
+  insuranceAuthNumber: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EducationProgressDTO {
+  id: string;
+  patientId: string;
+  resourceId: string;
+  comprehensionStatus: string;
+  progressPercentage: number | null;
+  startedAt: string | null;
+  completedAt: string | null;
+  lastAccessedAt: string | null;
+  timeSpentSeconds: number | null;
+  accessCount: number | null;
+  rating: number | null;
+  feedback: string | null;
+  needsClarification: boolean | null;
+  clarificationRequest: string | null;
+  confirmedUnderstanding: boolean | null;
+  providerNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface ApiWrapper<T> {
   data: T;
   success: boolean;
@@ -602,7 +685,9 @@ export class PatientPortalService {
       );
   }
 
-  setNotificationPreference(dto: NotificationPreferenceUpdateDTO): Observable<NotificationPreferenceDTO> {
+  setNotificationPreference(
+    dto: NotificationPreferenceUpdateDTO,
+  ): Observable<NotificationPreferenceDTO> {
     return this.http
       .put<ApiWrapper<NotificationPreferenceDTO>>(`${this.base}/notifications/preferences`, dto)
       .pipe(map((r) => r.data));
@@ -629,7 +714,9 @@ export class PatientPortalService {
 
   getUpcomingVaccinations(months = 6): Observable<ImmunizationDTO[]> {
     return this.http
-      .get<ApiWrapper<ImmunizationDTO[]>>(`${this.base}/immunizations/upcoming`, { params: { months } })
+      .get<
+        ApiWrapper<ImmunizationDTO[]>
+      >(`${this.base}/immunizations/upcoming`, { params: { months } })
       .pipe(
         map((r) => r.data ?? []),
         catchError(() => of([])),
@@ -639,30 +726,78 @@ export class PatientPortalService {
   // ── Lab Orders ──────────────────────────────────────────────────────
 
   getMyLabOrders(): Observable<LabOrderDTO[]> {
-    return this.http
-      .get<ApiWrapper<LabOrderDTO[]>>(`${this.base}/lab-orders`)
-      .pipe(
-        map((r) => r.data ?? []),
-        catchError(() => of([])),
-      );
+    return this.http.get<ApiWrapper<LabOrderDTO[]>>(`${this.base}/lab-orders`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
   }
 
   // ── Imaging Orders ───────────────────────────────────────────────
 
   getMyImagingOrders(): Observable<ImagingOrderDTO[]> {
+    return this.http.get<ApiWrapper<ImagingOrderDTO[]>>(`${this.base}/imaging/orders`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  // ── Pharmacy Fill History ───────────────────────────────────────────
+
+  getMyPharmacyFills(): Observable<PharmacyFillDTO[]> {
+    return this.http.get<ApiWrapper<PharmacyFillDTO[]>>(`${this.base}/medications/fills`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  // ── Procedure Orders ──────────────────────────────────────────────────
+
+  getMyProcedureOrders(): Observable<ProcedureOrderDTO[]> {
+    return this.http.get<ApiWrapper<ProcedureOrderDTO[]>>(`${this.base}/procedure-orders`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  // ── Admissions ───────────────────────────────────────────────────────
+
+  getMyAdmissions(): Observable<AdmissionDTO[]> {
+    return this.http.get<ApiWrapper<AdmissionDTO[]>>(`${this.base}/admissions`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  getMyCurrentAdmission(): Observable<AdmissionDTO | null> {
+    return this.http.get<ApiWrapper<AdmissionDTO | null>>(`${this.base}/admissions/current`).pipe(
+      map((r) => r.data ?? null),
+      catchError(() => of(null)),
+    );
+  }
+
+  // ── Patient Education Progress ────────────────────────────────────────
+
+  getMyEducationProgress(): Observable<EducationProgressDTO[]> {
     return this.http
-      .get<ApiWrapper<ImagingOrderDTO[]>>(`${this.base}/imaging/orders`)
+      .get<ApiWrapper<EducationProgressDTO[]>>(`${this.base}/education/progress`)
       .pipe(
         map((r) => r.data ?? []),
         catchError(() => of([])),
       );
   }
 
-  // ── Pharmacy Fill History ───────────────────────────────────────────
-
-  getMyPharmacyFills(): Observable<PharmacyFillDTO[]> {
+  getMyInProgressEducation(): Observable<EducationProgressDTO[]> {
     return this.http
-      .get<ApiWrapper<PharmacyFillDTO[]>>(`${this.base}/medications/fills`)
+      .get<ApiWrapper<EducationProgressDTO[]>>(`${this.base}/education/in-progress`)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  getMyCompletedEducation(): Observable<EducationProgressDTO[]> {
+    return this.http
+      .get<ApiWrapper<EducationProgressDTO[]>>(`${this.base}/education/completed`)
       .pipe(
         map((r) => r.data ?? []),
         catchError(() => of([])),

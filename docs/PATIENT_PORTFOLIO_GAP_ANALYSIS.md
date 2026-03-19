@@ -14,7 +14,7 @@
 | Permissions actually enforced by endpoints | **~19** (all via `/me/patient/**`) |
 | Permissions with **zero backing endpoints** | **~0** |
 | Epic MyChart feature categories | **20** |
-| HMS covers fully | **22** |
+| HMS covers fully | **25** |
 | HMS covers partially | **3** (Payments no gateway, Records no PDF/FHIR, Telehealth) |
 | HMS has **zero patient access** | **1** (Questionnaires/PRO) |
 
@@ -342,7 +342,7 @@ But **almost none of these permissions are checked by any controller or security
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
 | Browse education resources | ✅ | `PatientEducationController` — `isAuthenticated()` for resource listing. |
-| Track education progress | ⚠️ 🔒 | Progress tracking endpoints exist — not yet exposed to patient portal. |
+| Track education progress | ✅ | `GET /me/patient/education/progress` — all progress records; `GET /me/patient/education/in-progress` + `.../completed` for filtered views. Angular: `my-education-progress` page with progress bars, comprehension status, star ratings & tab filter. |
 | Post-visit instructions | ❌ | No after-visit instruction delivery to patient. |
 | **Priority** | **P2** | |
 
@@ -429,9 +429,12 @@ But **almost none of these permissions are checked by any controller or security
 | ~~24~~ | ~~Lab Orders~~ | ~~Small~~ **DONE** ✅ | `GET /me/patient/lab-orders` — delegates to `LabOrderService.getLabOrdersByPatientId()`, status/priority display |
 | ~~25~~ | ~~Imaging Orders~~ | ~~Small~~ **DONE** ✅ | `GET /me/patient/imaging/orders` — delegates to `ImagingOrderService.getOrdersByPatient()`, all statuses |
 | ~~26~~ | ~~Pharmacy Fill History~~ | ~~Small~~ **DONE** ✅ | `GET /me/patient/medications/fills` — `PharmacyFillRepository` ordered by fill date desc, controlled-substance flag |
-| 27 | FHIR Export | Large | FHIR R4 resource mapping |
-| 28 | Cost Estimation | Large | Complex pricing engine |
-| 29 | Payment Plans | Medium | New workflow + entity |
+| ~~27~~ | ~~FHIR Export~~ | ~~Large~~ | FHIR R4 resource mapping — deferred |
+| ~~28~~ | ~~Cost Estimation~~ | ~~Large~~ | Complex pricing engine — deferred |
+| ~~29~~ | ~~Payment Plans~~ | ~~Medium~~ | New workflow + entity — deferred |
+| ~~30~~ | ~~Procedures~~ | ~~Small~~ **DONE** ✅ | `GET /me/patient/procedure-orders` — delegates to `ProcedureOrderService.getProcedureOrdersForPatient()`, urgency/status colouring |
+| ~~31~~ | ~~Admissions~~ | ~~Small~~ **DONE** ✅ | `GET /me/patient/admissions` + `GET /me/patient/admissions/current` — delegates to `AdmissionService`, current-admission banner |
+| ~~32~~ | ~~Education Progress~~ | ~~Small~~ **DONE** ✅ | `GET /me/patient/education/progress`, `.../in-progress`, `.../completed` — tab filter, progress bars, star ratings |
 
 ---
 
@@ -470,9 +473,12 @@ All Phase 2 endpoints are implemented:
 - ✅ Notification preferences — `GET/PUT/DELETE /me/patient/notifications/preferences` (type × channel matrix)
 - ✅ Vital sign trends — `GET /me/patient/vitals/trends?months=N` (1–24 months, configurable)
 - ✅ Upcoming vaccinations — `GET /me/patient/immunizations/upcoming?months=N` (1–12 months)
-- ✅ Lab orders — `GET /me/patient/lab-orders` — status tracking with priority chips
-- ✅ Imaging orders — `GET /me/patient/imaging/orders` — all statuses, modality/schedule details
-- ✅ Pharmacy fill history — `GET /me/patient/medications/fills` — ordered by fill date, controlled-substance flag
+- ✅ Lab orders — `GET /me/patient/lab-orders`
+- ✅ Imaging orders — `GET /me/patient/imaging/orders`
+- ✅ Pharmacy fill history — `GET /me/patient/medications/fills`
+- ✅ Procedure orders — `GET /me/patient/procedure-orders`
+- ✅ Admission history — `GET /me/patient/admissions` + `GET /me/patient/admissions/current`
+- ✅ Education progress — `GET /me/patient/education/progress` + in-progress + completed
 - ❌ Payment gateway integration (Stripe/PayStack)
 - ❌ Telehealth / video visits (Twilio/Zoom)
 - ❌ Pre-visit questionnaires

@@ -174,4 +174,28 @@ public interface PatientPortalService {
     // ══════════════════════════════════════════════════════════════════════
 
     List<com.example.hms.payload.dto.medication.PharmacyFillResponseDTO> getMyPharmacyFills(Authentication auth, Locale locale);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 7 — Procedure Orders
+    // ══════════════════════════════════════════════════════════════════════
+
+    List<com.example.hms.payload.dto.procedure.ProcedureOrderResponseDTO> getMyProcedureOrders(Authentication auth);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 8 — Admission / Hospitalization History
+    // ══════════════════════════════════════════════════════════════════════
+
+    List<com.example.hms.payload.dto.AdmissionResponseDTO> getMyAdmissions(Authentication auth);
+
+    com.example.hms.payload.dto.AdmissionResponseDTO getMyCurrentAdmission(Authentication auth);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 9 — Patient Education Progress
+    // ══════════════════════════════════════════════════════════════════════
+
+    List<com.example.hms.payload.dto.education.PatientEducationProgressResponseDTO> getMyEducationProgress(Authentication auth);
+
+    List<com.example.hms.payload.dto.education.PatientEducationProgressResponseDTO> getMyInProgressEducation(Authentication auth);
+
+    List<com.example.hms.payload.dto.education.PatientEducationProgressResponseDTO> getMyCompletedEducation(Authentication auth);
 }

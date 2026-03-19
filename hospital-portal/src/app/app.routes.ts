@@ -163,6 +163,29 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./patient-portal/my-pharmacy-fills').then((m) => m.MyPharmacyFillsComponent),
       },
+      {
+        path: 'my-procedures',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-procedures').then((m) => m.MyProceduresComponent),
+      },
+      {
+        path: 'my-admissions',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-admissions').then((m) => m.MyAdmissionsComponent),
+      },
+      {
+        path: 'my-education-progress',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-education-progress').then(
+            (m) => m.MyEducationProgressComponent,
+          ),
+      },
 
       // Patients
       {

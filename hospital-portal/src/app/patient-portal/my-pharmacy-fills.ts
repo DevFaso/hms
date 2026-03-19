@@ -43,7 +43,10 @@ import { PatientPortalService, PharmacyFillDTO } from '../services/patient-porta
                     }
                   </div>
                   @if (f.strength || f.dosageForm) {
-                    <p class="fill-sub">{{ f.strength }}{{ f.strength && f.dosageForm ? ' · ' : '' }}{{ f.dosageForm }}</p>
+                    <p class="fill-sub">
+                      {{ f.strength }}{{ f.strength && f.dosageForm ? ' · ' : ''
+                      }}{{ f.dosageForm }}
+                    </p>
                   }
                   <div class="meta-row">
                     <span class="date-chip">
@@ -57,7 +60,10 @@ import { PatientPortalService, PharmacyFillDTO } from '../services/patient-porta
                       <span class="refill-chip">Refill #{{ f.refillNumber }}</span>
                     }
                     @if (f.quantityDispensed) {
-                      <span class="qty-chip">Qty: {{ f.quantityDispensed }}{{ f.quantityUnit ? ' ' + f.quantityUnit : '' }}</span>
+                      <span class="qty-chip"
+                        >Qty: {{ f.quantityDispensed
+                        }}{{ f.quantityUnit ? ' ' + f.quantityUnit : '' }}</span
+                      >
                     }
                   </div>
                   @if (f.directions) {

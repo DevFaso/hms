@@ -66,8 +66,11 @@ import com.example.hms.service.EncounterService;
 import com.example.hms.service.GeneralReferralService;
 import com.example.hms.service.ImmunizationService;
 import com.example.hms.service.ImagingOrderService;
+import com.example.hms.service.AdmissionService;
 import com.example.hms.service.LabOrderService;
 import com.example.hms.service.MedicationHistoryService;
+import com.example.hms.service.PatientEducationService;
+import com.example.hms.service.ProcedureOrderService;
 import com.example.hms.service.PatientConsentService;
 import com.example.hms.service.PatientLabResultService;
 import com.example.hms.service.PatientMedicationService;
@@ -139,6 +142,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final ImagingOrderService imagingOrderService;
     private final PharmacyFillRepository pharmacyFillRepository;
     private final com.example.hms.mapper.PharmacyFillMapper pharmacyFillMapper;
+    // Feature 7/8/9 additions
+    private final ProcedureOrderService procedureOrderService;
+    private final AdmissionService admissionService;
+    private final PatientEducationService patientEducationService;
 
     // ── Identity resolution ──────────────────────────────────────────────
 
@@ -948,5 +955,59 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .stream()
                 .map(pharmacyFillMapper::toResponseDTO)
                 .toList();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 7 — Procedure Orders
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.procedure.ProcedureOrderResponseDTO> getMyProcedureOrders(Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        return procedureOrderService.getProcedureOrdersForPatient(patientId);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 8 — Admissions / Hospitalization History
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.AdmissionResponseDTO> getMyAdmissions(Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        return admissionService.getAdmissionsByPatient(patientId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.AdmissionResponseDTO getMyCurrentAdmission(Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        return admissionService.getCurrentAdmissionForPatient(patientId);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 9 — Patient Education Progress
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.education.PatientEducationProgressResponseDTO> getMyEducationProgress(Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        return patientEducationService.getPatientProgress(patientId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.education.PatientEducationProgressResponseDTO> getMyInProgressEducation(Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        return patientEducationService.getInProgressResources(patientId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.education.PatientEducationProgressResponseDTO> getMyCompletedEducation(Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        return patientEducationService.getCompletedResources(patientId);
     }
 }
