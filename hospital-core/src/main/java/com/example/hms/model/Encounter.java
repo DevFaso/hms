@@ -2,6 +2,7 @@ package com.example.hms.model;
 
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
+import com.example.hms.enums.EncounterUrgency;
 import com.example.hms.model.encounter.EncounterNote;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.CascadeType;
@@ -80,6 +81,11 @@ public class Encounter extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "encounter_type", nullable = false, length = 50)
     private EncounterType encounterType;
+
+    /** Clinical triage urgency set at encounter creation/triage. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "urgency", length = 20)
+    private EncounterUrgency urgency;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "appointment_id", foreignKey = @ForeignKey(name = "fk_encounter_appointment"))

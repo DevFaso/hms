@@ -44,6 +44,13 @@ public interface DigitalSignatureService {
     SignatureResponseDTO revokeSignature(UUID signatureId, SignatureRevocationRequestDTO request);
 
     /**
+     * Get all signatures (admin listing)
+     *
+     * @return list of all signatures
+     */
+    List<SignatureResponseDTO> getAllSignatures();
+
+    /**
      * Get all signatures for a specific report
      * 
      * @param reportType type of report

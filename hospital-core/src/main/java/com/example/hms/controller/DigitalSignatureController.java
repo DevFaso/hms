@@ -77,6 +77,18 @@ public class DigitalSignatureController {
     }
 
     /**
+     * List all signatures (admin)
+     */
+    @GetMapping("/all")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "List all signatures",
+        description = "Retrieve all digital signatures for admin management")
+    public ResponseEntity<List<SignatureResponseDTO>> getAllSignatures() {
+        List<SignatureResponseDTO> signatures = signatureService.getAllSignatures();
+        return ResponseEntity.ok(signatures);
+    }
+
+    /**
      * Get signatures for a specific report
      */
     @GetMapping("/report/{reportType}/{reportId}")

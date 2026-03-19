@@ -39,6 +39,20 @@
         ><span class="card-label">Total</span>
       </div>
     </div>
+    <div
+      class="summary-card overdue"
+      role="button"
+      tabindex="0"
+      (click)="setTab('overdue')"
+      (keydown.enter)="setTab('overdue')"
+      (keydown.space)="setTab('overdue')"
+    >
+      <span class="material-symbols-outlined card-icon overdue">schedule</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByGroup('overdue') }}</span
+        ><span class="card-label">Overdue</span>
+      </div>
+    </div>
   </div>
   <div class="filter-bar">
     <div class="tabs">
@@ -73,6 +87,22 @@
         title="Show completed"
       >
         Completed
+      </button>
+      <button
+        class="tab-btn"
+        [class.active]="activeTab() === 'mine'"
+        (click)="setTab('mine')"
+        title="Consultations assigned to me"
+      >
+        Mine
+      </button>
+      <button
+        class="tab-btn overdue-tab"
+        [class.active]="activeTab() === 'overdue'"
+        (click)="setTab('overdue')"
+        title="Overdue consultations"
+      >
+        Overdue
       </button>
     </div>
     <div class="search-box">
@@ -127,6 +157,9 @@
               <td>{{ c.requestedAt ? (c.requestedAt | date: 'mediumDate') : '—' }}</td>
               <td>
                 <span class="status-badge {{ getStatusClass(c.status) }}">{{ c.status }}</span>
+                @if (isOverdue(c)) {
+                  <span class="overdue-badge">OVERDUE</span>
+                }
               </td>
               <td>
                 <div class="action-group">
@@ -137,7 +170,70 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  @if (!['COMPLETED', 'CANCELLED'].includes(c.status)) {
+                  @if (c.status === 'REQUESTED') {
+                    <button
+                      class="action-link assign"
+                      (click)="openAssign(c, false)"
+                      title="Assign consultant"
+                    >
+                      <span class="material-symbols-outlined">person_add</span>
+                    </button>
+                  }
+                  @if (c.status === 'ASSIGNED') {
+                    <button
+                      class="action-link assign"
+                      (click)="openAssign(c, true)"
+                      title="Reassign consultant"
+                    >
+                      <span class="material-symbols-outlined">person_search</span>
+                    </button>
+                    <button
+                      class="action-link"
+                      (click)="acknowledgeConsultation(c)"
+                      title="Acknowledge consultation"
+                    >
+                      <span class="material-symbols-outlined">check_circle</span>
+                    </button>
+                  }
+                  @if (['ASSIGNED', 'ACKNOWLEDGED'].includes(c.status)) {
+                    <button
+                      class="action-link"
+                      (click)="openSchedule(c)"
+                      title="Schedule consultation"
+                    >
+                      <span class="material-symbols-outlined">event</span>
+                    </button>
+                  }
+                  @if (['ASSIGNED', 'ACKNOWLEDGED', 'SCHEDULED'].includes(c.status)) {
+                    <button
+                      class="action-link"
+                      (click)="startConsultation(c)"
+                      title="Start consultation"
+                    >
+                      <span class="material-symbols-outlined">play_arrow</span>
+                    </button>
+                  }
+                  @if (c.status === 'IN_PROGRESS') {
+                    <button
+                      class="action-link complete"
+                      (click)="openComplete(c)"
+                      title="Complete consultation"
+                    >
+                      <span class="material-symbols-outlined">task_alt</span>
+                    </button>
+                  }
+                  @if (
+                    ['ASSIGNED', 'ACKNOWLEDGED', 'SCHEDULED', 'IN_PROGRESS'].includes(c.status)
+                  ) {
+                    <button
+                      class="action-link decline"
+                      (click)="openDecline(c)"
+                      title="Decline consultation"
+                    >
+                      <span class="material-symbols-outlined">thumb_down</span>
+                    </button>
+                  }
+                  @if (!['COMPLETED', 'CANCELLED', 'DECLINED'].includes(c.status)) {
                     <button
                       class="action-link delete"
                       (click)="confirmCancel(c)"
@@ -219,6 +315,50 @@
                 con.completedAt ? (con.completedAt | date: 'medium') : '—'
               }}</span>
             </div>
+            @if (con.assignedAt) {
+              <div class="detail-field">
+                <span class="field-label">Assigned</span
+                ><span class="field-value">{{ con.assignedAt | date: 'medium' }}</span>
+              </div>
+            }
+            @if (con.startedAt) {
+              <div class="detail-field">
+                <span class="field-label">Started</span
+                ><span class="field-value">{{ con.startedAt | date: 'medium' }}</span>
+              </div>
+            }
+            @if (con.acknowledgedAt) {
+              <div class="detail-field">
+                <span class="field-label">Acknowledged</span
+                ><span class="field-value">{{ con.acknowledgedAt | date: 'medium' }}</span>
+              </div>
+            }
+            @if (con.scheduledAt) {
+              <div class="detail-field">
+                <span class="field-label">Scheduled For</span
+                ><span class="field-value">{{ con.scheduledAt | date: 'medium' }}</span>
+              </div>
+            }
+            @if (con.declinedAt) {
+              <div class="detail-field">
+                <span class="field-label">Declined</span
+                ><span class="field-value">{{ con.declinedAt | date: 'medium' }}</span>
+              </div>
+            }
+            @if (con.followUpRequired !== null) {
+              <div class="detail-field">
+                <span class="field-label">Follow-up Required</span
+                ><span class="field-value">{{ con.followUpRequired ? 'Yes' : 'No' }}</span>
+              </div>
+            }
+            @if (con.slaDueBy) {
+              <div class="detail-field">
+                <span class="field-label">SLA Due</span
+                ><span class="field-value" [class.overdue-text]="isOverdue(con)">{{
+                  con.slaDueBy | date: 'medium'
+                }}</span>
+              </div>
+            }
           </div>
           @if (con.reasonForConsult) {
             <div class="detail-notes">
@@ -244,10 +384,42 @@
               <p>{{ con.currentMedications }}</p>
             </div>
           }
+          @if (con.declineReason) {
+            <div class="detail-notes">
+              <span class="field-label">Decline Reason</span>
+              <p>{{ con.declineReason }}</p>
+            </div>
+          }
+          @if (con.consultantNote) {
+            <div class="detail-notes">
+              <span class="field-label">Consultant Note</span>
+              <p>{{ con.consultantNote }}</p>
+            </div>
+          }
           @if (con.recommendations) {
             <div class="detail-notes">
               <span class="field-label">Recommendations</span>
               <p>{{ con.recommendations }}</p>
+            </div>
+          }
+          @if (con.followUpInstructions) {
+            <div class="detail-notes">
+              <span class="field-label">Follow-up Instructions</span>
+              <p>{{ con.followUpInstructions }}</p>
+            </div>
+          }
+          @if (getTimelineEvents(con).length) {
+            <div class="detail-timeline">
+              <span class="field-label">Timeline</span>
+              <div class="timeline-track">
+                @for (evt of getTimelineEvents(con); track evt.label) {
+                  <div class="timeline-event">
+                    <span class="timeline-dot"></span>
+                    <span class="timeline-label">{{ evt.label }}</span>
+                    <span class="timeline-date">{{ evt.date | date: 'medium' }}</span>
+                  </div>
+                }
+              </div>
             </div>
           }
         </div>
@@ -420,6 +592,224 @@
     </div>
   }
 
+  <!-- Assign / Reassign Consultant Modal -->
+  @if (showAssignModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeAssignModal()"
+      (keydown.escape)="closeAssignModal()"
+    ></div>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>{{ isReassign() ? 'Reassign Consultant' : 'Assign Consultant' }}</h2>
+        <button class="modal-close" (click)="closeAssignModal()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-context">
+          {{ isReassign() ? 'Reassign' : 'Assign' }} consultant for
+          <strong>{{ assigningItem()?.patientName }}</strong> —
+          <strong>{{ assigningItem()?.specialtyRequested }}</strong>
+        </p>
+        <div class="field">
+          <label for="assign-consultant">Consultant *</label>
+          <div class="field" style="margin-bottom: 0.5rem">
+            <input
+              type="text"
+              id="assign-specialty-filter"
+              [value]="assignSpecialtyFilter()"
+              (input)="assignSpecialtyFilter.set($any($event.target).value)"
+              placeholder="Filter by specialty, role or department..."
+            />
+          </div>
+          @if (assignStaffLoading()) {
+            <p class="loading-hint">Loading staff...</p>
+          } @else {
+            <select
+              id="assign-consultant"
+              [value]="assignConsultantId()"
+              (change)="assignConsultantId.set($any($event.target).value)"
+              title="Select consultant"
+            >
+              <option value="">Select consultant</option>
+              @for (s of filteredAssignStaff(); track s.id) {
+                <option [value]="s.id">
+                  {{ s.name }} \u2014 {{ s.specialization || s.roleName || s.jobTitle || '' }}
+                </option>
+              }
+            </select>
+          }
+        </div>
+        <div class="field">
+          <label for="assign-note">{{
+            isReassign() ? 'Reassignment Reason *' : 'Assignment Note (optional)'
+          }}</label>
+          <textarea
+            id="assign-note"
+            [value]="assignNote()"
+            (input)="assignNote.set($any($event.target).value)"
+            rows="3"
+            [placeholder]="
+              isReassign() ? 'Enter reason for reassignment...' : 'Optional note for the consultant'
+            "
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeAssignModal()">Cancel</button>
+        <button class="btn-primary" (click)="submitAssign()" [disabled]="assigning()">
+          {{ assigning() ? 'Saving...' : isReassign() ? 'Reassign' : 'Assign' }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Schedule Consultation Modal -->
+  @if (showScheduleModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeScheduleModal()"
+      (keydown.escape)="closeScheduleModal()"
+    ></div>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Schedule Consultation</h2>
+        <button class="modal-close" (click)="closeScheduleModal()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-context">
+          Schedule consultation for <strong>{{ schedulingItem()?.patientName }}</strong> —
+          <strong>{{ schedulingItem()?.specialtyRequested }}</strong>
+        </p>
+        <div class="field">
+          <label for="sched-at">Scheduled Date &amp; Time *</label>
+          <input id="sched-at" type="datetime-local" [(ngModel)]="scheduleForm.scheduledAt" />
+        </div>
+        <div class="field">
+          <label for="sched-note">Note (optional)</label>
+          <textarea
+            id="sched-note"
+            [(ngModel)]="scheduleForm.scheduleNote"
+            rows="2"
+            placeholder="Optional scheduling note..."
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeScheduleModal()">Cancel</button>
+        <button class="btn-primary" (click)="submitSchedule()" [disabled]="scheduling()">
+          {{ scheduling() ? 'Saving...' : 'Schedule' }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Complete Consultation Modal -->
+  @if (showCompleteModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeCompleteModal()"
+      (keydown.escape)="closeCompleteModal()"
+    ></div>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Complete Consultation</h2>
+        <button class="modal-close" (click)="closeCompleteModal()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-context">
+          Complete consultation for <strong>{{ completingItem()?.patientName }}</strong> —
+          <strong>{{ completingItem()?.specialtyRequested }}</strong>
+        </p>
+        <div class="field">
+          <label for="complete-recommendations">Recommendations *</label>
+          <textarea
+            id="complete-recommendations"
+            [(ngModel)]="completeForm.recommendations"
+            rows="4"
+            placeholder="Enter clinical recommendations..."
+          ></textarea>
+        </div>
+        <div class="field">
+          <label for="complete-note">Consultant Note (optional)</label>
+          <textarea
+            id="complete-note"
+            [(ngModel)]="completeForm.consultantNote"
+            rows="2"
+            placeholder="Additional notes..."
+          ></textarea>
+        </div>
+        <div class="field">
+          <label class="checkbox-label">
+            <input type="checkbox" [(ngModel)]="completeForm.followUpRequired" />
+            Follow-up Required
+          </label>
+        </div>
+        @if (completeForm.followUpRequired) {
+          <div class="field">
+            <label for="complete-followup">Follow-up Instructions</label>
+            <textarea
+              id="complete-followup"
+              [(ngModel)]="completeForm.followUpInstructions"
+              rows="2"
+              placeholder="Describe follow-up instructions..."
+            ></textarea>
+          </div>
+        }
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeCompleteModal()">Cancel</button>
+        <button class="btn-primary" (click)="submitComplete()" [disabled]="completing()">
+          {{ completing() ? 'Saving...' : 'Mark Complete' }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Decline Consultation Modal -->
+  @if (showDeclineModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeDeclineModal()"
+      (keydown.escape)="closeDeclineModal()"
+    ></div>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Decline Consultation</h2>
+        <button class="modal-close" (click)="closeDeclineModal()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="delete-warning">
+          <span class="material-symbols-outlined">warning</span>
+          <p>
+            Decline the consultation for <strong>{{ decliningItem()?.patientName }}</strong> —
+            <strong>{{ decliningItem()?.specialtyRequested }}</strong
+            >?
+          </p>
+        </div>
+        <div class="field" style="margin-top: 1rem">
+          <label for="decline-reason">Decline Reason *</label>
+          <textarea
+            id="decline-reason"
+            [value]="declineReasonValue()"
+            (input)="declineReasonValue.set($any($event.target).value)"
+            rows="3"
+            placeholder="Enter reason for declining..."
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeDeclineModal()">Cancel</button>
+        <button class="btn-danger" (click)="submitDecline()" [disabled]="declining()">
+          {{ declining() ? 'Declining...' : 'Decline Consultation' }}
+        </button>
+      </div>
+    </div>
+  }
+
   <!-- Cancel Consultation Confirmation -->
   @if (showDeleteConfirm()) {
     <div
@@ -441,6 +831,16 @@
             <strong>{{ deletingItem()?.specialtyRequested }}</strong
             >?
           </p>
+        </div>
+        <div class="field" style="margin-top: 1rem">
+          <label for="cancel-reason">Cancellation Reason *</label>
+          <textarea
+            id="cancel-reason"
+            [value]="cancelReason()"
+            (input)="cancelReason.set($any($event.target).value)"
+            rows="3"
+            placeholder="Enter reason for cancellation..."
+          ></textarea>
         </div>
       </div>
       <div class="modal-actions">

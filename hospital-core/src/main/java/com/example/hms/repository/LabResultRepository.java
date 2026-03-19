@@ -1,6 +1,8 @@
 package com.example.hms.repository;
 
+import com.example.hms.enums.AbnormalFlag;
 import com.example.hms.model.LabResult;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -86,6 +88,18 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         "assignment",
         "assignment.user"
     })
+    Page<LabResult> findByLabOrder_Hospital_IdIn(Collection<UUID> hospitalIds, Pageable pageable);
+
+    @EntityGraph(attributePaths = {
+        "labOrder",
+        "labOrder.patient",
+        "labOrder.hospital",
+        "labOrder.labTestDefinition",
+        "labOrder.orderingStaff",
+        "labOrder.orderingStaff.user",
+        "assignment",
+        "assignment.user"
+    })
     List<LabResult> findTop12ByLabOrder_Patient_IdAndLabOrder_LabTestDefinition_IdOrderByResultDateDesc(
         UUID patientId,
         UUID labTestDefinitionId
@@ -106,5 +120,8 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         UUID hospitalId,
         Pageable pageable
     );
+
+    /** Count CRITICAL (or any flag) results for orders placed by a given staff member. */
+    long countByLabOrder_OrderingStaff_IdAndAbnormalFlag(UUID staffId, AbnormalFlag abnormalFlag);
 }
 

@@ -156,6 +156,16 @@ public class BillingInvoiceController {
         return ResponseEntity.ok(invoiceService.searchInvoices(searchRequest, pageable, locale));
     }
 
+    @PostMapping("/{invoiceId}/payments")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "Record a payment on an invoice")
+    public ResponseEntity<BillingInvoiceResponseDTO> recordStaffPayment(
+        @PathVariable UUID invoiceId,
+        @Valid @RequestBody com.example.hms.payload.dto.StaffPaymentRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
+        return ResponseEntity.ok(invoiceService.recordStaffPayment(invoiceId, request.getAmount(), locale));
+    }
+
     @PostMapping("/{id}/email")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
     @Operation(summary = "Email Billing Invoice")

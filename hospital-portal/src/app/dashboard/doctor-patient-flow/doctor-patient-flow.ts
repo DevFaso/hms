@@ -25,6 +25,24 @@ export class DoctorPatientFlowComponent {
   readonly columns: FlowColumn[] = [
     { key: 'ARRIVED', label: 'Checked In', icon: 'how_to_reg', color: '#0891b2' },
     { key: 'IN_PROGRESS', label: 'In Encounter', icon: 'stethoscope', color: '#2563eb' },
+    {
+      key: 'WAITING_FOR_PHYSICIAN',
+      label: 'Waiting for MD',
+      icon: 'person_search',
+      color: '#d97706',
+    },
+    {
+      key: 'AWAITING_RESULTS',
+      label: 'Awaiting Results',
+      icon: 'hourglass_empty',
+      color: '#7c3aed',
+    },
+    {
+      key: 'READY_FOR_DISCHARGE',
+      label: 'Ready to Discharge',
+      icon: 'exit_to_app',
+      color: '#059669',
+    },
     { key: 'COMPLETED', label: 'Completed', icon: 'task_alt', color: '#059669' },
     { key: 'CANCELLED', label: 'Cancelled', icon: 'cancel', color: '#94a3b8' },
   ];

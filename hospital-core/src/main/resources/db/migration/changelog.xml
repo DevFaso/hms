@@ -157,4 +157,212 @@
                  stripComments="true"/>
     </changeSet>
 
+
+    <!-- =================================================================
+         V12: Add force_username_change flag to security.users
+         Allows admins to require a username change on next login.
+         ================================================================= -->
+    <changeSet id="V12-add-force-username-change" author="hms-team" runOnChange="false">
+        <sqlFile path="V12__add_force_username_change.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V13: Add clinical-triage columns for Physician Cockpit
+         - lab.lab_results.abnormal_flag (NORMAL / ABNORMAL / CRITICAL)
+         - clinical.patients.code_status (FULL_CODE / DNR / DNI / COMFORT_ONLY)
+         - clinical.encounters.urgency (EMERGENT / URGENT / ROUTINE / LOW)
+         ================================================================= -->
+    <changeSet id="V13-add-abnormal-flag-code-status-encounter-urgency" author="hms-team" runOnChange="false">
+        <sqlFile path="V13__add_abnormal_flag_code_status_encounter_urgency.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V14: Add Physician Cockpit tables
+         - clinical.patient_diagnoses (active/historical diagnoses + ICD codes)
+         - clinical.clinical_alerts (patient safety + triage alerts)
+         - hospital.on_call_schedule (staff on-call roster with time range)
+         ================================================================= -->
+    <changeSet id="V14-add-patient-diagnoses-alerts-oncall" author="hms-team" runOnChange="false">
+        <sqlFile path="V14__add_patient_diagnoses_alerts_oncall.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V15: Add clinical.medication_administration_records
+         Tracks per-dose nursing administration events linked to a
+         Prescription. Status: PENDING | GIVEN | HELD | REFUSED | MISSED.
+         ================================================================= -->
+    <changeSet id="V15-add-medication-administration-records" author="hms-team" runOnChange="false">
+        <sqlFile path="V15__add_medication_administration_records.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V16: Add missing updated_at to hospital.on_call_schedule
+         BaseEntity requires updated_at; V14 only created created_at.
+         ================================================================= -->
+    <changeSet id="V16-add-updated-at-on-call-schedule" author="hms-team" runOnChange="false">
+        <sqlFile path="V16__add_updated_at_on_call_schedule.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V17: Add assignment tracking fields to clinical.consultations
+         Tracks when a consultation was assigned and who performed it.
+         Required by ConsultationServiceImpl.assignConsultation().
+         ================================================================= -->
+    <changeSet id="V17-add-consultation-assignment-tracking" author="hms-team" runOnChange="false">
+        <sqlFile path="V17__add_consultation_assignment_tracking.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V18: Add workflow progress fields to clinical.consultations
+         - started_at: set when consultant begins the consult
+         - declined_at / decline_reason: set when consultant declines
+         ================================================================= -->
+    <changeSet id="V18-add-consultation-workflow-fields" author="hms-team" runOnChange="false">
+        <sqlFile path="V18__add_consultation_workflow_fields.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V19: MVP 11 — Waitlist management + insurance attestation
+         Adds reception.waitlist table and insurance verification columns.
+         ================================================================= -->
+    <changeSet id="V19-mvp11-waitlist-and-insurance-attestation" author="hms-team" runOnChange="false">
+        <sqlFile path="V19__mvp11_waitlist_and_insurance_attestation.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V20: MVP 12 — Nurse Station Phase 2 indexes
+         Composite indexes for admissions + patient vital signs lookups.
+         ================================================================= -->
+    <changeSet id="V20-mvp12-nurse-station-phase2" author="hms-team" runOnChange="false">
+        <sqlFile path="V20__mvp12_nurse_station_phase2.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V21: MVP 13 — Nursing Task Board
+         Creates clinical.nursing_tasks table for bedside care tracking.
+         ================================================================= -->
+    <changeSet id="V21-mvp13-nursing-tasks" author="hms-team" runOnChange="false">
+        <sqlFile path="V21__mvp13_nursing_tasks.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V22: MVP 14 — Proxy/Family Access + Notification Preferences
+         - clinical.patient_proxies: proxy/family linked-account grants
+         - security.notification_preferences: per-user delivery settings
+         - security.notifications.type column for categorisation
+         ================================================================= -->
+    <changeSet id="V22-mvp14-proxy-access-notification-preferences" author="hms-team" runOnChange="false">
+        <sqlFile path="V22__mvp14_proxy_access_notification_preferences.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V23: MVP 19 — Staff Compliance: license_expiry_date on staff
+         ================================================================= -->
+    <changeSet id="V23-mvp19-staff-license-expiry" author="hms-team" runOnChange="false">
+        <sqlFile path="V23__mvp19_staff_license_expiry.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V24: MVP 20 — Payment Transaction Ledger
+         ================================================================= -->
+    <changeSet id="V24-mvp20-payment-transactions" author="hms-team" runOnChange="false">
+        <sqlFile path="V24__mvp20_payment_transactions.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V25: Ward & Bed Management
+         ================================================================= -->
+    <changeSet id="V25-ward-bed-management" author="hms-team" runOnChange="false">
+        <sqlFile path="V25__ward_bed_management.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V26: MVP1 — Add Lab Technician and Lab Manager Roles
+         Seeds ROLE_LAB_TECHNICIAN and ROLE_LAB_MANAGER into security.roles.
+         ================================================================= -->
+    <changeSet id="V26-add-lab-technician-manager-roles" author="hms-team" runOnChange="false">
+        <sqlFile path="V26__add_lab_technician_manager_roles.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V27: MVP2 — Lab Order Priority + Specimen Tracking
+         - Adds priority VARCHAR(20) NOT NULL DEFAULT 'ROUTINE' to lab.lab_orders
+         - Creates lab.lab_specimens table with accession number and custody fields
+         ================================================================= -->
+    <changeSet id="V27-mvp2-lab-order-priority-and-specimens" author="hms-team" runOnChange="false">
+        <sqlFile path="V27__mvp2_lab_order_priority_and_specimens.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V28: MVP3 — Instrument Integration, QC Events & Reflex Rules
+         - Creates lab.instrument_outbox (outbound HL7v2 queue)
+         - Creates lab.qc_events (analyzer calibration tracking)
+         - Creates lab.reflex_rules (auto add-on test rules)
+         ================================================================= -->
+    <changeSet id="V28-mvp3-instrument-outbox-qc-reflex" author="hms-team" runOnChange="false">
+        <sqlFile path="V28__mvp3_instrument_outbox_qc_reflex.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V29: Hotfix — add missing updated_at to lab.instrument_outbox
+         BaseEntity requires updated_at on every table; V28 omitted it.
+         ================================================================= -->
+    <changeSet id="V29-fix-instrument-outbox-updated-at" author="hms-team" runOnChange="false">
+        <sqlFile path="V29__fix_instrument_outbox_updated_at.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

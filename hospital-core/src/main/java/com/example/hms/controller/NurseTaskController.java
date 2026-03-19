@@ -3,14 +3,25 @@ package com.example.hms.controller;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.payload.dto.nurse.NurseAdmissionSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseAnnouncementDTO;
+import com.example.hms.payload.dto.nurse.NurseCareNoteRequestDTO;
+import com.example.hms.payload.dto.nurse.NurseCareNoteResponseDTO;
+import com.example.hms.payload.dto.nurse.NurseDashboardSummaryDTO;
+import com.example.hms.payload.dto.nurse.NurseFlowBoardDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffSummaryDTO;
+import com.example.hms.payload.dto.nurse.NurseInboxItemDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseOrderTaskResponseDTO;
+import com.example.hms.payload.dto.nurse.NurseTaskCompleteRequestDTO;
+import com.example.hms.payload.dto.nurse.NurseTaskCreateRequestDTO;
+import com.example.hms.payload.dto.nurse.NurseTaskItemDTO;
+import com.example.hms.payload.dto.nurse.NurseVitalCaptureRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
+import com.example.hms.payload.dto.nurse.NurseWorkboardPatientDTO;
 import com.example.hms.service.NurseTaskService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -22,6 +33,7 @@ import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -39,6 +51,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Tag(name = "Nurse Workflow", description = "Operational queues powering the nurse dashboard")
 public class NurseTaskController {
+
+    private static final String NURSE_IDENTITY_ERROR = "Unable to resolve nurse identity.";
 
     private final NurseTaskService nurseTaskService;
     private final ControllerAuthUtils authUtils;
@@ -186,6 +200,169 @@ public class NurseTaskController {
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         int effectiveLimit = safeLimit(limit, 5, 20);
         return ResponseEntity.ok(nurseTaskService.getAnnouncements(scopedHospital, effectiveLimit));
+    }
+
+    @GetMapping("/dashboard/summary")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Aggregated summary counts powering the nurse dashboard header cards")
+    public ResponseEntity<NurseDashboardSummaryDTO> getDashboardSummary(
+        @RequestParam(name = "assignee", required = false) String assignee,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID nurseId = resolveAssignee(auth, assignee);
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        return ResponseEntity.ok(nurseTaskService.getDashboardSummary(nurseId, scopedHospital));
+    }
+
+    // ── MVP 12 endpoints ──────────────────────────────────────────────
+
+    @GetMapping("/workboard")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Patient workboard — active admissions list for the nurse unit")
+    public ResponseEntity<java.util.List<NurseWorkboardPatientDTO>> getWorkboard(
+        @RequestParam(name = "assignee", required = false) String assignee,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID nurseId = resolveAssignee(auth, assignee);
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        return ResponseEntity.ok(nurseTaskService.getWorkboard(nurseId, scopedHospital));
+    }
+
+    @GetMapping("/patient-flow")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Patient flow board — Kanban lanes by admission status/acuity")
+    public ResponseEntity<NurseFlowBoardDTO> getPatientFlow(
+        @RequestParam(name = "departmentId", required = false) UUID departmentId,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        return ResponseEntity.ok(nurseTaskService.getPatientFlow(scopedHospital, departmentId));
+    }
+
+    @PostMapping("/patients/{patientId}/vitals")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Inline vital sign capture from the nurse station")
+    public ResponseEntity<Void> captureVitals(
+        @PathVariable UUID patientId,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        @Valid @RequestBody NurseVitalCaptureRequestDTO request,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID nurseUserId = authUtils.resolveUserId(auth)
+            .orElseThrow(() -> new BusinessException(NURSE_IDENTITY_ERROR));
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        nurseTaskService.captureVitals(patientId, nurseUserId, scopedHospital, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/admissions/pending")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Pending admissions and discharge-ready patients")
+    public ResponseEntity<java.util.List<NurseAdmissionSummaryDTO>> getPendingAdmissions(
+        @RequestParam(name = "departmentId", required = false) UUID departmentId,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        return ResponseEntity.ok(nurseTaskService.getPendingAdmissions(scopedHospital, departmentId));
+    }
+
+    // ── MVP 13 endpoints ──────────────────────────────────────────────
+
+    @GetMapping("/tasks")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Nursing task board — bedside care tasks for the unit")
+    public ResponseEntity<java.util.List<NurseTaskItemDTO>> getNursingTaskBoard(
+        @RequestParam(name = "status", required = false) String status,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        return ResponseEntity.ok(nurseTaskService.getNursingTaskBoard(scopedHospital, status));
+    }
+
+    @PostMapping("/tasks")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Create a new bedside nursing task")
+    public ResponseEntity<NurseTaskItemDTO> createNursingTask(
+        @Valid @RequestBody NurseTaskCreateRequestDTO request,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID nurseId = authUtils.resolveUserId(auth)
+            .orElseThrow(() -> new BusinessException(NURSE_IDENTITY_ERROR));
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        NurseTaskItemDTO created = nurseTaskService.createNursingTask(nurseId, scopedHospital, request);
+        return ResponseEntity.status(201).body(created);
+    }
+
+    @PutMapping("/tasks/{taskId}/complete")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Mark a nursing task as completed")
+    public ResponseEntity<NurseTaskItemDTO> completeNursingTask(
+        @PathVariable UUID taskId,
+        @RequestBody(required = false) NurseTaskCompleteRequestDTO request,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID nurseId = authUtils.resolveUserId(auth)
+            .orElseThrow(() -> new BusinessException(NURSE_IDENTITY_ERROR));
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        return ResponseEntity.ok(nurseTaskService.completeNursingTask(taskId, nurseId, scopedHospital, request));
+    }
+
+    @GetMapping("/inbox")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Nurse communication inbox — recent clinical notifications")
+    public ResponseEntity<java.util.List<NurseInboxItemDTO>> getNurseInbox(
+        @RequestParam(name = "limit", required = false) Integer limit,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        String username = auth.getName();
+        int effectiveLimit = safeLimit(limit, 20, 50);
+        return ResponseEntity.ok(nurseTaskService.getNurseInboxItems(username, effectiveLimit));
+    }
+
+    @PatchMapping("/inbox/{itemId}/read")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Mark a nurse inbox notification as read")
+    public ResponseEntity<Void> markInboxRead(
+        @PathVariable UUID itemId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        String username = auth.getName();
+        nurseTaskService.markNurseInboxRead(itemId, username);
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/patients/{patientId}/care-note")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Create a quick bedside care note (DAR or SOAPIE) from the nurse dashboard")
+    public ResponseEntity<NurseCareNoteResponseDTO> createCareNote(
+        @PathVariable UUID patientId,
+        @Valid @RequestBody NurseCareNoteRequestDTO request,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID nurseId = authUtils.resolveUserId(auth)
+            .orElseThrow(() -> new BusinessException(NURSE_IDENTITY_ERROR));
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        return ResponseEntity.status(201).body(
+            nurseTaskService.createCareNote(patientId, nurseId, scopedHospital, request));
     }
 
     private UUID ensureHospitalScope(Authentication auth, UUID requestedHospital) {

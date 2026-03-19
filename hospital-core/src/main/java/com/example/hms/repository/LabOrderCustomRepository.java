@@ -8,6 +8,6 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 public interface LabOrderCustomRepository {
-    Page<LabOrder> search(UUID patientId, LocalDateTime from, LocalDateTime to, Pageable pageable);
+    Page<LabOrder> search(UUID hospitalId, UUID patientId, LocalDateTime from, LocalDateTime to, Pageable pageable);
 
 }

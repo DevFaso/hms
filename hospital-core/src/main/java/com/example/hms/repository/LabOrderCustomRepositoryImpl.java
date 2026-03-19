@@ -27,12 +27,12 @@ public class LabOrderCustomRepositoryImpl implements LabOrderCustomRepository {
     private EntityManager entityManager;
 
     @Override
-    public Page<LabOrder> search(UUID patientId, LocalDateTime from, LocalDateTime to, Pageable pageable) {
+    public Page<LabOrder> search(UUID hospitalId, UUID patientId, LocalDateTime from, LocalDateTime to, Pageable pageable) {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<LabOrder> query = cb.createQuery(LabOrder.class);
         Root<LabOrder> root = query.from(LabOrder.class);
 
-        Predicate[] predicates = buildPredicates(cb, root, patientId, from, to);
+        Predicate[] predicates = buildPredicates(cb, root, hospitalId, patientId, from, to);
 
         if (predicates.length > 0) {
             query.where(cb.and(predicates));
@@ -50,7 +50,7 @@ public class LabOrderCustomRepositoryImpl implements LabOrderCustomRepository {
         CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
         Root<LabOrder> countRoot = countQuery.from(LabOrder.class);
         countQuery.select(cb.count(countRoot));
-        Predicate[] countPredicates = buildPredicates(cb, countRoot, patientId, from, to);
+        Predicate[] countPredicates = buildPredicates(cb, countRoot, hospitalId, patientId, from, to);
         if (countPredicates.length > 0) {
             countQuery.where(cb.and(countPredicates));
         }
@@ -59,9 +59,13 @@ public class LabOrderCustomRepositoryImpl implements LabOrderCustomRepository {
         return new PageImpl<>(resultList, pageable, count);
     }
 
-    private Predicate[] buildPredicates(CriteriaBuilder cb, Root<LabOrder> root, UUID patientId, LocalDateTime from, LocalDateTime to) {
+    private Predicate[] buildPredicates(CriteriaBuilder cb, Root<LabOrder> root,
+            UUID hospitalId, UUID patientId, LocalDateTime from, LocalDateTime to) {
         List<Predicate> predicates = new ArrayList<>();
 
+        if (hospitalId != null) {
+            predicates.add(cb.equal(root.get("hospital").get("id"), hospitalId));
+        }
         if (patientId != null) {
             predicates.add(cb.equal(root.get("patient").get("id"), patientId));
         }

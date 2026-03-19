@@ -12,7 +12,9 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.consultation.ConsultationRequestDTO;
 import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
+import com.example.hms.payload.dto.consultation.ConsultationStatsDTO;
 import com.example.hms.payload.dto.consultation.ConsultationUpdateDTO;
+import com.example.hms.payload.dto.consultation.CompleteConsultationRequestDTO;
 import com.example.hms.repository.ConsultationRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
@@ -50,6 +52,7 @@ class ConsultationServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private EncounterRepository encounterRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks
     private ConsultationServiceImpl service;
@@ -440,7 +443,7 @@ class ConsultationServiceImplTest {
 
             assertThatThrownBy(() -> service.acknowledgeConsultation(consultationId, consultantId))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("already been acknowledged");
+                    .hasMessageContaining("ACKNOWLEDGED");
         }
     }
 
@@ -508,7 +511,7 @@ class ConsultationServiceImplTest {
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
             when(consultationRepository.save(any(Consultation.class))).thenAnswer(inv -> inv.getArgument(0));
 
-            ConsultationUpdateDTO updateDTO = ConsultationUpdateDTO.builder()
+            CompleteConsultationRequestDTO updateDTO = CompleteConsultationRequestDTO.builder()
                     .consultantNote("Final note")
                     .recommendations("Discharge")
                     .followUpRequired(false)
@@ -527,7 +530,7 @@ class ConsultationServiceImplTest {
             Consultation consultation = buildConsultation(ConsultationStatus.COMPLETED);
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
 
-            ConsultationUpdateDTO updateDTO = ConsultationUpdateDTO.builder().build();
+            CompleteConsultationRequestDTO updateDTO = CompleteConsultationRequestDTO.builder().recommendations("x").build();
 
             assertThatThrownBy(() -> service.completeConsultation(consultationId, updateDTO))
                     .isInstanceOf(BusinessException.class)
@@ -540,7 +543,7 @@ class ConsultationServiceImplTest {
             Consultation consultation = buildConsultation(ConsultationStatus.CANCELLED);
             when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
 
-            ConsultationUpdateDTO updateDTO = ConsultationUpdateDTO.builder().build();
+            CompleteConsultationRequestDTO updateDTO = CompleteConsultationRequestDTO.builder().recommendations("x").build();
 
             assertThatThrownBy(() -> service.completeConsultation(consultationId, updateDTO))
                     .isInstanceOf(BusinessException.class)
@@ -630,5 +633,369 @@ class ConsultationServiceImplTest {
         List<ConsultationResponseDTO> result = service.getConsultationsRequestedBy(staffId);
 
         assertThat(result).isEmpty();
+    }
+
+    // ── scheduleConsultation ─────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("scheduleConsultation")
+    class ScheduleConsultation {
+
+        @Test
+        @DisplayName("schedules a requested consultation")
+        void schedulesRequested() {
+            Consultation consultation = buildConsultation(ConsultationStatus.REQUESTED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+            when(consultationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            LocalDateTime scheduledAt = LocalDateTime.now().plusDays(2);
+            ConsultationResponseDTO result = service.scheduleConsultation(consultationId, scheduledAt, "Room 5");
+
+            assertThat(result.getStatus()).isEqualTo(ConsultationStatus.SCHEDULED);
+            assertThat(result.getScheduledAt()).isEqualTo(scheduledAt);
+            assertThat(result.getConsultantNote()).isEqualTo("Room 5");
+        }
+
+        @Test
+        @DisplayName("throws for completed consultation")
+        void throwsForCompleted() {
+            Consultation consultation = buildConsultation(ConsultationStatus.COMPLETED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+
+            LocalDateTime now = LocalDateTime.now();
+            assertThatThrownBy(() -> service.scheduleConsultation(consultationId, now, null))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("Cannot schedule");
+        }
+
+        @Test
+        @DisplayName("throws for cancelled consultation")
+        void throwsForCancelled() {
+            Consultation consultation = buildConsultation(ConsultationStatus.CANCELLED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+
+            LocalDateTime now = LocalDateTime.now();
+            assertThatThrownBy(() -> service.scheduleConsultation(consultationId, now, null))
+                    .isInstanceOf(BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("throws for declined consultation")
+        void throwsForDeclined() {
+            Consultation consultation = buildConsultation(ConsultationStatus.DECLINED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+
+            LocalDateTime now = LocalDateTime.now();
+            assertThatThrownBy(() -> service.scheduleConsultation(consultationId, now, null))
+                    .isInstanceOf(BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("does not overwrite note when blank")
+        void doesNotOverwriteNoteWhenBlank() {
+            Consultation consultation = buildConsultation(ConsultationStatus.REQUESTED);
+            consultation.setConsultantNote("Existing note");
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+            when(consultationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            service.scheduleConsultation(consultationId, LocalDateTime.now().plusDays(1), "  ");
+
+            assertThat(consultation.getConsultantNote()).isEqualTo("Existing note");
+        }
+    }
+
+    // ── startConsultation ────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("startConsultation")
+    class StartConsultation {
+
+        @Test
+        @DisplayName("starts a scheduled consultation")
+        void startsScheduled() {
+            Consultation consultation = buildConsultation(ConsultationStatus.SCHEDULED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+            when(consultationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            ConsultationResponseDTO result = service.startConsultation(consultationId);
+
+            assertThat(result.getStatus()).isEqualTo(ConsultationStatus.IN_PROGRESS);
+            assertThat(consultation.getStartedAt()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("starts an acknowledged consultation")
+        void startsAcknowledged() {
+            Consultation consultation = buildConsultation(ConsultationStatus.ACKNOWLEDGED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+            when(consultationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            ConsultationResponseDTO result = service.startConsultation(consultationId);
+
+            assertThat(result.getStatus()).isEqualTo(ConsultationStatus.IN_PROGRESS);
+        }
+
+        @Test
+        @DisplayName("throws when status is REQUESTED")
+        void throwsWhenRequested() {
+            Consultation consultation = buildConsultation(ConsultationStatus.REQUESTED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+
+            assertThatThrownBy(() -> service.startConsultation(consultationId))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("ASSIGNED, ACKNOWLEDGED or SCHEDULED");
+        }
+    }
+
+    // ── declineConsultation ──────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("declineConsultation")
+    class DeclineConsultation {
+
+        @Test
+        @DisplayName("declines a requested consultation")
+        void declinesRequested() {
+            Consultation consultation = buildConsultation(ConsultationStatus.REQUESTED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+            when(consultationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            ConsultationResponseDTO result = service.declineConsultation(consultationId, "Not my specialty");
+
+            assertThat(result.getStatus()).isEqualTo(ConsultationStatus.DECLINED);
+            assertThat(result.getDeclineReason()).isEqualTo("Not my specialty");
+        }
+
+        @Test
+        @DisplayName("throws when completed")
+        void throwsWhenCompleted() {
+            Consultation consultation = buildConsultation(ConsultationStatus.COMPLETED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+
+            assertThatThrownBy(() -> service.declineConsultation(consultationId, "reason"))
+                    .isInstanceOf(BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("throws when cancelled")
+        void throwsWhenCancelled() {
+            Consultation consultation = buildConsultation(ConsultationStatus.CANCELLED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+
+            assertThatThrownBy(() -> service.declineConsultation(consultationId, "reason"))
+                    .isInstanceOf(BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("throws when already declined")
+        void throwsWhenAlreadyDeclined() {
+            Consultation consultation = buildConsultation(ConsultationStatus.DECLINED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+
+            assertThatThrownBy(() -> service.declineConsultation(consultationId, "reason"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("already declined");
+        }
+    }
+
+    // ── assignConsultation ───────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("assignConsultation")
+    class AssignConsultation {
+
+        @Test
+        @DisplayName("assigns a requested consultation to a consultant")
+        void assignsRequested() {
+            Consultation consultation = buildConsultation(ConsultationStatus.REQUESTED);
+            consultation.setConsultant(null);
+            com.example.hms.model.User consultantUser = new com.example.hms.model.User();
+            consultantUser.setUsername("dr.smith");
+            consultant.setUser(consultantUser);
+
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+            when(staffRepository.findById(consultantId)).thenReturn(Optional.of(consultant));
+            when(consultationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            UUID assignedById = UUID.randomUUID();
+            ConsultationResponseDTO result = service.assignConsultation(consultationId, consultantId, assignedById, "Please prioritize");
+
+            assertThat(result.getStatus()).isEqualTo(ConsultationStatus.ASSIGNED);
+            assertThat(result.getConsultantId()).isEqualTo(consultantId);
+        }
+
+        @Test
+        @DisplayName("throws when consultation is not REQUESTED")
+        void throwsWhenNotRequested() {
+            Consultation consultation = buildConsultation(ConsultationStatus.IN_PROGRESS);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+
+            UUID assignedById = UUID.randomUUID();
+            assertThatThrownBy(() -> service.assignConsultation(consultationId, consultantId, assignedById, null))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("Only REQUESTED");
+        }
+
+        @Test
+        @DisplayName("throws when consultant not found")
+        void throwsWhenConsultantNotFound() {
+            Consultation consultation = buildConsultation(ConsultationStatus.REQUESTED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+            when(staffRepository.findById(consultantId)).thenReturn(Optional.empty());
+
+            UUID assignedById = UUID.randomUUID();
+            assertThatThrownBy(() -> service.assignConsultation(consultationId, consultantId, assignedById, null))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+    }
+
+    // ── reassignConsultation ─────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("reassignConsultation")
+    class ReassignConsultation {
+
+        @Test
+        @DisplayName("reassigns an assigned consultation")
+        void reassignsAssigned() {
+            Consultation consultation = buildConsultation(ConsultationStatus.ASSIGNED);
+            UUID newConsultantId = UUID.randomUUID();
+            Staff newConsultant = new Staff();
+            newConsultant.setId(newConsultantId);
+
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+            when(staffRepository.findById(newConsultantId)).thenReturn(Optional.of(newConsultant));
+            when(consultationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            ConsultationResponseDTO result = service.reassignConsultation(consultationId, newConsultantId, UUID.randomUUID(), "out of office");
+
+            assertThat(result.getStatus()).isEqualTo(ConsultationStatus.ASSIGNED);
+            assertThat(result.getConsultantId()).isEqualTo(newConsultantId);
+        }
+
+        @Test
+        @DisplayName("throws when completed")
+        void throwsWhenCompleted() {
+            Consultation consultation = buildConsultation(ConsultationStatus.COMPLETED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+
+            UUID newConsultantId = UUID.randomUUID();
+            UUID reassignedById = UUID.randomUUID();
+            assertThatThrownBy(() -> service.reassignConsultation(consultationId, newConsultantId, reassignedById, "reason"))
+                    .isInstanceOf(BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("throws when cancelled")
+        void throwsWhenCancelled() {
+            Consultation consultation = buildConsultation(ConsultationStatus.CANCELLED);
+            when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(consultation));
+
+            UUID newConsultantId = UUID.randomUUID();
+            UUID reassignedById = UUID.randomUUID();
+            assertThatThrownBy(() -> service.reassignConsultation(consultationId, newConsultantId, reassignedById, "reason"))
+                    .isInstanceOf(BusinessException.class);
+        }
+    }
+
+    // ── getMyConsultations ───────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("getMyConsultations returns consultant's consultations")
+    void getMyConsultations_returnsForConsultant() {
+        Consultation c = buildConsultation(ConsultationStatus.ASSIGNED);
+        when(consultationRepository.findByConsultant_IdOrderByRequestedAtDesc(consultantId))
+                .thenReturn(List.of(c));
+
+        List<ConsultationResponseDTO> result = service.getMyConsultations(consultantId);
+
+        assertThat(result).hasSize(1);
+    }
+
+    // ── getOverdueConsultations ──────────────────────────────────────────────
+
+    @Test
+    @DisplayName("getOverdueConsultations returns overdue for hospital")
+    void getOverdueConsultations_returnsOverdue() {
+        Consultation c = buildConsultation(ConsultationStatus.REQUESTED);
+        c.setSlaDueBy(LocalDateTime.now().minusHours(1));
+        when(consultationRepository.findOverdueConsultations(any(), any()))
+                .thenReturn(List.of(c));
+
+        List<ConsultationResponseDTO> result = service.getOverdueConsultations(hospitalId);
+
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("getOverdueConsultations with null hospitalId returns all")
+    void getOverdueConsultations_nullHospital() {
+        when(consultationRepository.findOverdueConsultations(any(), any()))
+                .thenReturn(List.of());
+
+        List<ConsultationResponseDTO> result = service.getOverdueConsultations(null);
+
+        assertThat(result).isEmpty();
+    }
+
+    // ── getStats ─────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("getStats")
+    class GetStats {
+
+        @Test
+        @DisplayName("returns correct stats for hospital consultations")
+        void returnsStats() {
+            Consultation requested = buildConsultation(ConsultationStatus.REQUESTED);
+            Consultation completed = buildConsultation(ConsultationStatus.COMPLETED);
+            completed.setRequestedAt(LocalDateTime.now().minusHours(10));
+            completed.setAssignedAt(LocalDateTime.now().minusHours(8));
+            completed.setCompletedAt(LocalDateTime.now().minusHours(1));
+            Consultation overdue = buildConsultation(ConsultationStatus.ASSIGNED);
+            overdue.setSlaDueBy(LocalDateTime.now().minusHours(2));
+
+            when(consultationRepository.findAllByOrderByRequestedAtDesc())
+                    .thenReturn(List.of(requested, completed, overdue));
+
+            ConsultationStatsDTO result = service.getStats(hospitalId);
+
+            assertThat(result.getTotal()).isEqualTo(3);
+            assertThat(result.getRequested()).isEqualTo(1);
+            assertThat(result.getCompleted()).isEqualTo(1);
+            assertThat(result.getOverdue()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("returns zero stats when no consultations")
+        void returnsZeroStats() {
+            when(consultationRepository.findAllByOrderByRequestedAtDesc())
+                    .thenReturn(List.of());
+
+            ConsultationStatsDTO result = service.getStats(null);
+
+            assertThat(result.getTotal()).isZero();
+            assertThat(result.getAvgHoursToAssign()).isZero();
+            assertThat(result.getAvgHoursToComplete()).isZero();
+        }
+
+        @Test
+        @DisplayName("groups by specialty")
+        void groupsBySpecialty() {
+            Consultation c1 = buildConsultation(ConsultationStatus.REQUESTED);
+            c1.setSpecialtyRequested("Cardiology");
+            Consultation c2 = buildConsultation(ConsultationStatus.REQUESTED);
+            c2.setSpecialtyRequested("Cardiology");
+            Consultation c3 = buildConsultation(ConsultationStatus.REQUESTED);
+            c3.setSpecialtyRequested("Neurology");
+
+            when(consultationRepository.findAllByOrderByRequestedAtDesc())
+                    .thenReturn(List.of(c1, c2, c3));
+
+            ConsultationStatsDTO result = service.getStats(hospitalId);
+
+            assertThat(result.getBySpecialty()).containsEntry("Cardiology", 2L);
+            assertThat(result.getBySpecialty()).containsEntry("Neurology", 1L);
+        }
     }
 }

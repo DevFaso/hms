@@ -39,6 +39,9 @@ export interface PatientResponse {
   active: boolean;
   createdAt?: string;
   updatedAt?: string;
+  /** Populated by doctor-specific endpoints */
+  lastEncounterDate?: string;
+  lastLocation?: string;
 }
 
 export interface PatientCreateRequest {

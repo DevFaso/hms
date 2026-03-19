@@ -14,6 +14,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -30,11 +31,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.Authentication;
 
 @RestController
@@ -42,6 +45,8 @@ import org.springframework.security.core.Authentication;
 @Tag(name = "Appointment Management", description = "Endpoints for creating and managing patient appointments with role-based treatment access.")
 @RequiredArgsConstructor
 public class AppointmentController {
+
+    private static final String SORT_APPOINTMENT_DATE = "appointmentDate";
 
     // ---- LIST BY PATIENT USERNAME ----
     @GetMapping("/patients/username/{patientUsername}")
@@ -140,17 +145,47 @@ public class AppointmentController {
         return ResponseEntity.ok(result);
     }
 
-    // ---- LIST ALL ----
+    // ---- LIST ALL (with optional query-param filtering) ----
     @GetMapping
     @PreAuthorize("hasAnyRole('SUPER_ADMIN', 'HOSPITAL_ADMIN', 'STAFF', 'RECEPTIONIST', 'DOCTOR', 'NURSE', 'MIDWIFE')")
     public ResponseEntity<List<AppointmentResponseDTO>> getAllAppointments(
-    @RequestHeader(name = "Accept-Language", required = false) String lang,
+        @RequestParam(required = false) UUID patientId,
+        @RequestParam(required = false) UUID staffId,
+        @RequestParam(required = false) UUID hospitalId,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
+        @RequestParam(required = false) String search,
+        @RequestParam(name = "page", defaultValue = "0") int page,
+        @RequestParam(name = "size", defaultValue = "50") int size,
+        @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication authentication
     ) {
-    Locale locale = parseLocale(lang);
-        return ResponseEntity.ok(
-            appointmentService.getAppointmentsForUser(getUsername(authentication), locale)
-        );
+        Locale locale = parseLocale(lang);
+        // Normalize blank search to null so it does not bypass the no-filters branch
+        String normalizedSearch = (search != null && search.isBlank()) ? null : search;
+        // When no filters provided, fall back to the original user-scoped list
+        if (patientId == null && staffId == null && hospitalId == null
+                && fromDate == null && toDate == null && normalizedSearch == null) {
+            return ResponseEntity.ok(
+                appointmentService.getAppointmentsForUser(getUsername(authentication), locale)
+            );
+        }
+        AppointmentFilterDTO filter = AppointmentFilterDTO.builder()
+            .patientId(patientId)
+            .staffId(staffId)
+            .hospitalId(hospitalId)
+            .fromDate(fromDate)
+            .toDate(toDate)
+            .search(normalizedSearch)
+            .build();
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 200), Sort.by(Sort.Direction.DESC, SORT_APPOINTMENT_DATE));
+        Page<AppointmentResponseDTO> resultPage = appointmentService.searchAppointments(
+            filter, pageable, locale, getUsername(authentication));
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("X-Total-Count", String.valueOf(resultPage.getTotalElements()));
+        headers.add("X-Total-Pages", String.valueOf(resultPage.getTotalPages()));
+        headers.add("X-Has-Next", String.valueOf(resultPage.hasNext()));
+        return ResponseEntity.ok().headers(headers).body(resultPage.getContent());
     }
 
     // ---- DELETE ----
@@ -313,13 +348,13 @@ public class AppointmentController {
 
     private Sort parseSort(String sort) {
         if (sort == null || sort.isBlank()) {
-            return Sort.by(Sort.Direction.DESC, "appointmentDate");
+            return Sort.by(Sort.Direction.DESC, SORT_APPOINTMENT_DATE);
         }
 
         String[] parts = sort.split(",");
         String property = parts[0].trim();
         if (property.isEmpty()) {
-            property = "appointmentDate";
+            property = SORT_APPOINTMENT_DATE;
         }
 
         Sort.Direction direction = Sort.Direction.DESC;

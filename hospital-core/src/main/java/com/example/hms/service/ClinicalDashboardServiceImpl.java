@@ -17,6 +17,7 @@ import com.example.hms.repository.ChatMessageRepository;
 import com.example.hms.repository.DigitalSignatureRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
+import com.example.hms.repository.OnCallScheduleRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.StaffRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,12 +25,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.example.hms.patient.dto.PatientResponse;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -49,10 +55,17 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
     private final LabOrderRepository labOrderRepository;
     private final DigitalSignatureRepository digitalSignatureRepository;
     private final EncounterRepository encounterRepository;
+    private final OnCallScheduleRepository onCallScheduleRepository;
 
     @Override
     public ClinicalDashboardResponseDTO getClinicalDashboard(UUID userId) {
         log.info("Fetching clinical dashboard for user: {}", userId);
+
+        java.util.Optional<Staff> staffOpt = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId);
+        String specialization = staffOpt.map(Staff::getSpecialization).orElse(null);
+        String departmentName = staffOpt
+                .map(s -> s.getDepartment() != null ? s.getDepartment().getName() : null)
+                .orElse(null);
 
         return ClinicalDashboardResponseDTO.builder()
                 .kpis(generateKPIs(userId))
@@ -60,6 +73,8 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                 .inboxCounts(getInboxCounts(userId))
                 .onCallStatus(getOnCallStatus(userId))
                 .roomedPatients(getRoomedPatients(userId))
+                .specialization(specialization)
+                .departmentName(departmentName)
                 .build();
     }
 
@@ -164,12 +179,66 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
     }
 
     @Override
+    public List<PatientResponse> getRecentPatients(UUID userId) {
+        Optional<Staff> staffOpt = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId);
+        if (staffOpt.isEmpty()) return Collections.emptyList();
+        Staff staff = staffOpt.get();
+
+        List<PatientResponse> result = new ArrayList<>();
+        Set<UUID> seen = new LinkedHashSet<>();
+        try {
+            encounterRepository.findByStaff_Id(staff.getId()).stream()
+                    .filter(e -> e.getPatient() != null)
+                    .sorted(Comparator.comparing(
+                            e -> e.getEncounterDate() != null ? e.getEncounterDate() : LocalDateTime.MIN,
+                            Comparator.reverseOrder()))
+                    .filter(e -> seen.add(e.getPatient().getId()))
+                    .limit(6)
+                    .forEach(e -> {
+                        Patient p = e.getPatient();
+                        PatientResponse dto = new PatientResponse();
+                        dto.setId(p.getId());
+                        dto.setMrn(p.getId().toString());
+                        dto.setFirstName(p.getFirstName());
+                        dto.setLastName(p.getLastName());
+                        dto.setDateOfBirth(p.getDateOfBirth());
+                        dto.setGender(p.getGender());
+                        dto.setPhone(p.getPhoneNumberPrimary());
+                        if (e.getEncounterDate() != null) {
+                            dto.setLastEncounterDate(e.getEncounterDate().toString());
+                        }
+                        dto.setLastLocation(e.getDepartment() != null ? e.getDepartment().getName() : null);
+                        result.add(dto);
+                    });
+        } catch (Exception ex) {
+            log.debug("Recent patients query error: {}", ex.getMessage());
+        }
+        return result;
+    }
+
+    @Override
     public OnCallStatusDTO getOnCallStatus(UUID userId) {
         log.info("Fetching on-call status for user: {}", userId);
-        // No scheduling/on-call system yet — always not on call
-        return OnCallStatusDTO.builder()
-                .isOnCall(false)
-                .build();
+        try {
+            Optional<Staff> staffOpt = staffRepository.findFirstByUserIdOrderByCreatedAtAsc(userId);
+            if (staffOpt.isEmpty()) {
+                return OnCallStatusDTO.builder().isOnCall(false).build();
+            }
+            UUID staffId = staffOpt.get().getId();
+            java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
+            var schedules = onCallScheduleRepository.findActiveByStaffIdAt(staffId, now);
+            if (!schedules.isEmpty()) {
+                var entry = schedules.get(0);
+                return OnCallStatusDTO.builder()
+                        .isOnCall(true)
+                        .shiftStart(entry.getStartTime())
+                        .shiftEnd(entry.getEndTime())
+                        .build();
+            }
+        } catch (Exception e) {
+            log.debug("On-call schedule query unavailable: {}", e.getMessage());
+        }
+        return OnCallStatusDTO.builder().isOnCall(false).build();
     }
 
     /**

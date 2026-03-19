@@ -1,9 +1,16 @@
 package com.example.hms.controller;
 
 import com.example.hms.enums.ConsultationStatus;
+import com.example.hms.payload.dto.consultation.AssignConsultationRequestDTO;
+import com.example.hms.payload.dto.consultation.CancelConsultationRequestDTO;
+import com.example.hms.payload.dto.consultation.CompleteConsultationRequestDTO;
 import com.example.hms.payload.dto.consultation.ConsultationRequestDTO;
 import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
+import com.example.hms.payload.dto.consultation.ConsultationStatsDTO;
 import com.example.hms.payload.dto.consultation.ConsultationUpdateDTO;
+import com.example.hms.payload.dto.consultation.DeclineConsultationRequestDTO;
+import com.example.hms.payload.dto.consultation.ReassignConsultationRequestDTO;
+import com.example.hms.payload.dto.consultation.ScheduleConsultationRequestDTO;
 import com.example.hms.security.CustomUserDetails;
 import com.example.hms.service.ConsultationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,7 +34,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -101,6 +107,34 @@ public class ConsultationController {
         return ResponseEntity.ok(consultations);
     }
 
+    @GetMapping("/mine")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','DOCTOR') or hasAuthority('VIEW_CONSULTATIONS')")
+    @Operation(summary = "My consultations", description = "List consultations assigned to the authenticated consultant")
+    public ResponseEntity<List<ConsultationResponseDTO>> getMyConsultations(Authentication authentication) {
+        UUID staffId = extractUserId(authentication);
+        List<ConsultationResponseDTO> consultations = consultationService.getMyConsultations(staffId);
+        return ResponseEntity.ok(consultations);
+    }
+
+    @GetMapping("/overdue")
+    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR')")
+    @Operation(summary = "Overdue consultations", description = "List consultations past their SLA due date")
+    public ResponseEntity<List<ConsultationResponseDTO>> getOverdueConsultations(
+        @RequestParam(required = false) UUID hospitalId
+    ) {
+        List<ConsultationResponseDTO> consultations = consultationService.getOverdueConsultations(hospitalId);
+        return ResponseEntity.ok(consultations);
+    }
+
+    @GetMapping("/stats")
+    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR')")
+    @Operation(summary = "Consultation statistics", description = "Aggregated counts and averages for analytics")
+    public ResponseEntity<ConsultationStatsDTO> getStats(
+        @RequestParam(required = false) UUID hospitalId
+    ) {
+        return ResponseEntity.ok(consultationService.getStats(hospitalId));
+    }
+
     @GetMapping("/requested-by/{providerId}")
     @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','DOCTOR','NURSE','MIDWIFE')")
     @Operation(summary = "List consultations requested by a provider")
@@ -146,15 +180,46 @@ public class ConsultationController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/{consultationId}/schedule")
+    @PreAuthorize("hasAuthority('UPDATE_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','DOCTOR')")
+    @Operation(summary = "Schedule consultation", description = "Set scheduled date/time; status transitions to SCHEDULED")
+    public ResponseEntity<ConsultationResponseDTO> scheduleConsultation(
+        @PathVariable UUID consultationId,
+        @Valid @RequestBody ScheduleConsultationRequestDTO request
+    ) {
+        ConsultationResponseDTO response = consultationService.scheduleConsultation(
+            consultationId, request.getScheduledAt(), request.getScheduleNote());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{consultationId}/start")
+    @PreAuthorize("hasAuthority('UPDATE_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','DOCTOR')")
+    @Operation(summary = "Start consultation", description = "Mark consultation as in progress; status transitions to IN_PROGRESS")
+    public ResponseEntity<ConsultationResponseDTO> startConsultation(@PathVariable UUID consultationId) {
+        ConsultationResponseDTO response = consultationService.startConsultation(consultationId);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/{consultationId}/complete")
     @PreAuthorize("hasAuthority('COMPLETE_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','DOCTOR')")
     @Operation(summary = "Complete consultation",
-               description = "Mark consultation as completed with final notes and recommendations")
+               description = "Submit final recommendations and mark consultation as complete")
     public ResponseEntity<ConsultationResponseDTO> completeConsultation(
         @PathVariable UUID consultationId,
-        @Valid @RequestBody ConsultationUpdateDTO updateDTO
+        @Valid @RequestBody CompleteConsultationRequestDTO request
     ) {
-        ConsultationResponseDTO response = consultationService.completeConsultation(consultationId, updateDTO);
+        ConsultationResponseDTO response = consultationService.completeConsultation(consultationId, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{consultationId}/decline")
+    @PreAuthorize("hasAuthority('UPDATE_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','DOCTOR')")
+    @Operation(summary = "Decline consultation", description = "Decline consultation with required reason; status transitions to DECLINED")
+    public ResponseEntity<ConsultationResponseDTO> declineConsultation(
+        @PathVariable UUID consultationId,
+        @Valid @RequestBody DeclineConsultationRequestDTO request
+    ) {
+        ConsultationResponseDTO response = consultationService.declineConsultation(consultationId, request.getDeclineReason());
         return ResponseEntity.ok(response);
     }
 
@@ -164,9 +229,39 @@ public class ConsultationController {
                description = "Cancel consultation with reason (patient improved, consultation no longer needed, etc.)")
     public ResponseEntity<ConsultationResponseDTO> cancelConsultation(
         @PathVariable UUID consultationId,
-        @RequestParam String cancellationReason
+        @Valid @RequestBody CancelConsultationRequestDTO request
     ) {
-        ConsultationResponseDTO response = consultationService.cancelConsultation(consultationId, cancellationReason);
+        ConsultationResponseDTO response = consultationService.cancelConsultation(consultationId, request.getCancellationReason());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{consultationId}/assign")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR') or hasAuthority('ASSIGN_CONSULTATIONS')")
+    @Operation(summary = "Assign consultation to consultant",
+               description = "Assign a REQUESTED consultation to a specific consultant; status changes to ASSIGNED")
+    public ResponseEntity<ConsultationResponseDTO> assignConsultation(
+        @PathVariable UUID consultationId,
+        @Valid @RequestBody AssignConsultationRequestDTO request,
+        Authentication authentication
+    ) {
+        UUID assignedById = extractUserId(authentication);
+        ConsultationResponseDTO response = consultationService.assignConsultation(
+            consultationId, request.getConsultantId(), assignedById, request.getAssignmentNote());
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/{consultationId}/reassign")
+    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR') or hasAuthority('ASSIGN_CONSULTATIONS')")
+    @Operation(summary = "Reassign consultation to a different consultant",
+               description = "Reassign a consultation to a different consultant with a required reason; status reverts to ASSIGNED")
+    public ResponseEntity<ConsultationResponseDTO> reassignConsultation(
+        @PathVariable UUID consultationId,
+        @Valid @RequestBody ReassignConsultationRequestDTO request,
+        Authentication authentication
+    ) {
+        UUID assignedById = extractUserId(authentication);
+        ConsultationResponseDTO response = consultationService.reassignConsultation(
+            consultationId, request.getConsultantId(), assignedById, request.getReassignmentReason());
         return ResponseEntity.ok(response);
     }
 

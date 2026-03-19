@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
@@ -26,6 +27,7 @@ export class PrescriptionsComponent implements OnInit {
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
 
   prescriptions = signal<PrescriptionResponse[]>([]);
   filtered = signal<PrescriptionResponse[]>([]);
@@ -59,6 +61,20 @@ export class PrescriptionsComponent implements OnInit {
     this.load();
     this.staffService.list().subscribe((s) => this.staffMembers.set(s ?? []));
     this.initPatientSearch();
+
+    const params = this.route.snapshot.queryParamMap;
+    if (params.get('new') === '1') {
+      const patientId = params.get('patientId');
+      this.openCreate();
+      if (patientId) {
+        this.form.patientId = patientId;
+        const hid = this.roleContext.activeHospitalId ?? undefined;
+        this.patientService.list(hid, '').subscribe((list) => {
+          const match = list.find((p) => p.id === patientId);
+          if (match) this.selectPatient(match);
+        });
+      }
+    }
   }
 
   prescriptionStatuses = [

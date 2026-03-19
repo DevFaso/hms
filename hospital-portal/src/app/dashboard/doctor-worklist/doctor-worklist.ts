@@ -16,8 +16,28 @@ type WorklistTab = 'ALL' | 'WAITING' | 'IN_PROGRESS' | 'CONSULTS' | 'COMPLETED';
 export class DoctorWorklistComponent {
   items = input<DoctorWorklistItem[]>([]);
   patientSelected = output<string>();
+  dateChanged = output<string>();
+
+  readonly today = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
 
   activeTab = signal<WorklistTab>('ALL');
+  urgencyFilter = signal<string>('');
+  locationFilter = signal<string>('');
+  dateFilter = signal<string>(this.today);
+
+  uniqueLocations = computed(() => [
+    ...new Set(
+      this.items()
+        .map((i) => i.location)
+        .filter((l): l is string => !!l),
+    ),
+  ]);
+  hasActiveFilters = computed(
+    () => !!(this.urgencyFilter() || this.locationFilter() || this.dateFilter() !== this.today),
+  );
 
   readonly tabs: { key: WorklistTab; label: string }[] = [
     { key: 'ALL', label: 'All' },
@@ -29,16 +49,20 @@ export class DoctorWorklistComponent {
 
   filteredItems = computed(() => {
     const tab = this.activeTab();
-    const all = this.items();
-    if (tab === 'ALL') return all;
+    const urgency = this.urgencyFilter();
+    const location = this.locationFilter();
+    let items = this.items();
     if (tab === 'WAITING')
-      return all.filter(
+      items = items.filter(
         (i) => i.encounterStatus === 'ARRIVED' || i.encounterStatus === 'SCHEDULED',
       );
-    if (tab === 'IN_PROGRESS') return all.filter((i) => i.encounterStatus === 'IN_PROGRESS');
-    if (tab === 'CONSULTS') return all.filter((i) => i.encounterStatus === 'CONSULTATION');
-    if (tab === 'COMPLETED') return all.filter((i) => i.encounterStatus === 'COMPLETED');
-    return all;
+    else if (tab === 'IN_PROGRESS')
+      items = items.filter((i) => i.encounterStatus === 'IN_PROGRESS');
+    else if (tab === 'CONSULTS') items = items.filter((i) => i.encounterStatus === 'CONSULTATION');
+    else if (tab === 'COMPLETED') items = items.filter((i) => i.encounterStatus === 'COMPLETED');
+    if (urgency) items = items.filter((i) => i.urgency === urgency);
+    if (location) items = items.filter((i) => i.location === location);
+    return items;
   });
 
   tabCounts = computed(() => {
@@ -56,6 +80,26 @@ export class DoctorWorklistComponent {
 
   setTab(tab: WorklistTab): void {
     this.activeTab.set(tab);
+  }
+
+  setUrgencyFilter(urgency: string): void {
+    this.urgencyFilter.set(urgency);
+  }
+
+  setLocationFilter(location: string): void {
+    this.locationFilter.set(location);
+  }
+
+  clearFilters(): void {
+    this.urgencyFilter.set('');
+    this.locationFilter.set('');
+    this.dateFilter.set(this.today);
+    this.dateChanged.emit(this.today);
+  }
+
+  setDateFilter(date: string): void {
+    this.dateFilter.set(date);
+    this.dateChanged.emit(date);
   }
 
   selectPatient(patientId: string): void {

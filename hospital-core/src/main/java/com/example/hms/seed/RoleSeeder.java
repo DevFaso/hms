@@ -78,6 +78,8 @@ public class RoleSeeder implements CommandLineRunner {
         roles.put("ROLE_MIDWIFE",            "Certified midwife specializing in maternal care, labor support, and newborn assessment");
         roles.put("ROLE_ANESTHESIOLOGIST",   "Anesthesia specialist managing pre-operative assessment, sedation, and pain management");
         roles.put("ROLE_LAB_SCIENTIST",      "Laboratory scientist responsible for processing specimens, running tests, and publishing results");
+        roles.put("ROLE_LAB_TECHNICIAN",     "Lab technician responsible for specimen collection, receipt, bench processing, and preliminary result entry");
+        roles.put("ROLE_LAB_MANAGER",        "Lab manager overseeing technician workflows, result verification, quality control, and lab operations");
         roles.put("ROLE_PHARMACIST",         "Licensed pharmacist handling medication dispensing, drug interaction checks, and inventory management");
         roles.put("ROLE_RECEPTIONIST",       "Front-desk receptionist managing patient check-in, appointments, and visitor coordination");
         roles.put("ROLE_ADMIN",              "General administrative user with elevated operational privileges");

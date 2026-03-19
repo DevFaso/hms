@@ -8,7 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule, DatePipe, TitleCasePipe } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { AppointmentService, AppointmentResponse } from '../services/appointment.service';
@@ -28,6 +28,21 @@ import {
   ClinicalInboxItem,
   DoctorResultQueueItem,
   PatientSnapshot,
+  HospitalAdminSummary,
+  HospitalAdminAuditSnippet,
+  DepartmentStaffingRow,
+  ConsultBacklogItem,
+  AuditDayCount,
+  InvoiceAgingBuckets,
+  InvoiceAgingBucket,
+  IntegrationStatusRow,
+  LicenseExpiryAlert,
+  LeaveMetrics,
+  PaymentTrendPoint,
+  PaymentMethodBreakdown,
+  WriteOffSummary,
+  BedOccupancy,
+  WardOccupancyRow,
 } from '../services/dashboard.service';
 import {
   PatientPortalService,
@@ -50,6 +65,7 @@ interface QuickAction {
   icon: string;
   label: string;
   route: string;
+  queryParams?: Record<string, string>;
   color: string;
   bgColor: string;
   description: string;
@@ -111,6 +127,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   readonly permissions = inject(PermissionService);
   private readonly appointmentService = inject(AppointmentService);
   private readonly patientService = inject(PatientService);
+  private readonly router = inject(Router);
   private readonly dashboardService = inject(DashboardService);
   private readonly portalService = inject(PatientPortalService);
 
@@ -155,6 +172,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
   adminSummary = signal<SuperAdminSummary | null>(null);
   recentAuditEvents = signal<RecentAuditEvent[]>([]);
 
+  // ── Hospital-Admin data ────────────────────────────────────
+  hospitalAdminSummary = signal<HospitalAdminSummary | null>(null);
+
   // ── Clinical Dashboard data ───────────────────────────────────
   kpis = signal<DashboardKPI[]>([]);
   alerts = signal<ClinicalAlert[]>([]);
@@ -170,6 +190,56 @@ export class DashboardComponent implements OnInit, OnDestroy {
   resultQueue = signal<DoctorResultQueueItem[]>([]);
   patientSnapshot = signal<PatientSnapshot | null>(null);
   snapshotDrawerOpen = signal(false);
+  specialization = signal<string | null>(null);
+  departmentName = signal<string | null>(null);
+
+  // ── Inbox accordion collapse state ──────────────────────────
+  inboxCollapsedSections = signal<Set<string>>(new Set());
+
+  readonly _inboxCategoryOrder = [
+    'MESSAGE',
+    'CRITICAL_RESULT',
+    'CONSULT_REQUEST',
+    'DOCUMENT_TO_SIGN',
+    'REFILL_REQUEST',
+    'PHARMACY_CLARIFICATION',
+    'TASK',
+  ];
+  readonly _inboxLabels: Record<string, string> = {
+    MESSAGE: 'Messages',
+    CRITICAL_RESULT: 'Critical Results',
+    CONSULT_REQUEST: 'Consult Requests',
+    DOCUMENT_TO_SIGN: 'Documents to Sign',
+    REFILL_REQUEST: 'Refill Requests',
+    PHARMACY_CLARIFICATION: 'Pharmacy Clarifications',
+    TASK: 'Tasks',
+  };
+  readonly _inboxIcons: Record<string, string> = {
+    MESSAGE: 'chat',
+    CRITICAL_RESULT: 'science',
+    CONSULT_REQUEST: 'forum',
+    DOCUMENT_TO_SIGN: 'draw',
+    REFILL_REQUEST: 'medication',
+    PHARMACY_CLARIFICATION: 'local_pharmacy',
+    TASK: 'task_alt',
+  };
+
+  inboxGrouped = computed(() => {
+    const groups = new Map<string, ClinicalInboxItem[]>();
+    for (const item of this.inboxItems()) {
+      const cat = item.category;
+      if (!groups.has(cat)) groups.set(cat, []);
+      groups.get(cat)!.push(item);
+    }
+    return this._inboxCategoryOrder
+      .filter((cat) => groups.has(cat))
+      .map((cat) => ({
+        category: cat,
+        label: this._inboxLabels[cat] ?? cat,
+        icon: this._inboxIcons[cat] ?? 'assignment',
+        items: groups.get(cat)!,
+      }));
+  });
 
   // ── Schedule & Patients ───────────────────────────────────────
   todayAppointments = signal<AppointmentResponse[]>([]);
@@ -431,6 +501,34 @@ export class DashboardComponent implements OnInit, OnDestroy {
   // ── Quick Actions (permission-gated) ─────────────────────────
   quickActions = computed<QuickAction[]>(() => {
     const all: [string, QuickAction][] = [
+      // Doctor-priority shortcuts (appear first, dedup 'Start Encounter' on /encounters route)
+      ...(this.isDoctor()
+        ? ([
+            [
+              'Create Encounters',
+              {
+                icon: 'navigate_next',
+                label: 'Open Next Patient',
+                description: 'Open next waiting patient',
+                route: '/encounters',
+                color: '#059669',
+                bgColor: '#d1fae5',
+              },
+            ],
+            [
+              'Create Encounters',
+              {
+                icon: 'meeting_room',
+                label: 'Discharge Patient',
+                description: 'Initiate patient discharge',
+                route: '/admissions',
+                queryParams: { tab: 'admitted' },
+                color: '#d97706',
+                bgColor: '#fef3c7',
+              },
+            ],
+          ] as [string, QuickAction][])
+        : []),
       [
         'Register Patients',
         {
@@ -471,6 +569,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
           label: 'Write Rx',
           description: 'Prescribe medication',
           route: '/prescriptions',
+          queryParams: { new: '1' },
           color: '#2563eb',
           bgColor: '#eff6ff',
         },
@@ -657,7 +756,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     {
       icon: 'analytics',
       label: 'Analytics',
-      route: '/dashboard',
+      route: '/analytics',
       color: '#2563eb',
       bg: '#eff6ff',
     },
@@ -665,6 +764,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
       icon: 'notifications',
       label: 'Notifications',
       route: '/notifications',
+      color: '#2563eb',
+      bg: '#eff6ff',
+    },
+    {
+      icon: 'verified',
+      label: 'Digital Signatures',
+      route: '/digital-signatures',
       color: '#2563eb',
       bg: '#eff6ff',
     },
@@ -711,6 +817,245 @@ export class DashboardComponent implements OnInit, OnDestroy {
     },
     { icon: 'policy', label: 'Audit Logs', route: '/audit-logs', color: '#2563eb', bg: '#eff6ff' },
   ]);
+
+  // ── Hospital Admin stat cards (from summary API) ────────────
+  hospitalAdminStatCards = computed<StatCard[]>(() => {
+    const s = this.hospitalAdminSummary();
+    if (!s || !s.appointments) return [];
+    return [
+      {
+        key: 'appts_today',
+        label: "Today's Appointments",
+        value: s.appointments.todayTotal,
+        icon: 'calendar_today',
+        color: '#2563eb',
+        bgColor: '#eff6ff',
+        route: '/appointments',
+      },
+      {
+        key: 'appts_completed',
+        label: 'Completed',
+        value: s.appointments.completed,
+        icon: 'task_alt',
+        color: '#059669',
+        bgColor: '#d1fae5',
+        route: '/appointments',
+      },
+      {
+        key: 'appts_noshow',
+        label: 'No-Shows',
+        value: s.appointments.noShows,
+        icon: 'person_off',
+        color: s.appointments.noShows > 0 ? '#dc2626' : '#64748b',
+        bgColor: s.appointments.noShows > 0 ? '#fee2e2' : '#f1f5f9',
+        route: '/appointments',
+      },
+      {
+        key: 'admissions_active',
+        label: 'Active Admissions',
+        value: s.admissions.active,
+        icon: 'hotel',
+        color: '#7c3aed',
+        bgColor: '#ede9fe',
+        route: '/admissions',
+      },
+      {
+        key: 'admissions_today',
+        label: 'Admitted Today',
+        value: s.admissions.admittedToday,
+        icon: 'login',
+        color: '#2563eb',
+        bgColor: '#dbeafe',
+        route: '/admissions',
+      },
+      {
+        key: 'discharged_today',
+        label: 'Discharged Today',
+        value: s.admissions.dischargedToday,
+        icon: 'logout',
+        color: '#059669',
+        bgColor: '#d1fae5',
+        route: '/admissions',
+      },
+      {
+        key: 'consults_pending',
+        label: 'Consults Pending',
+        value: s.consultations.requested + s.consultations.acknowledged,
+        icon: 'forum',
+        color: '#d97706',
+        bgColor: '#fef3c7',
+        route: '/consultations',
+      },
+      {
+        key: 'consults_overdue',
+        label: 'Consults Overdue',
+        value: s.consultations.overdue,
+        icon: 'warning',
+        color: s.consultations.overdue > 0 ? '#dc2626' : '#64748b',
+        bgColor: s.consultations.overdue > 0 ? '#fee2e2' : '#f1f5f9',
+        route: '/consultations',
+      },
+      {
+        key: 'staff_active',
+        label: 'Active Staff',
+        value: s.staffing.activeStaff,
+        icon: 'badge',
+        color: '#0891b2',
+        bgColor: '#cffafe',
+        route: '/staff',
+      },
+      {
+        key: 'staff_on_shift',
+        label: 'On-Shift Today',
+        value: s.staffing.onShiftToday,
+        icon: 'work',
+        color: '#059669',
+        bgColor: '#d1fae5',
+        route: '/staff',
+      },
+      {
+        key: 'staff_on_leave',
+        label: 'On Leave Today',
+        value: s.staffing.staffOnLeaveToday ?? 0,
+        icon: 'event_busy',
+        color: (s.staffing.staffOnLeaveToday ?? 0) > 0 ? '#d97706' : '#64748b',
+        bgColor: (s.staffing.staffOnLeaveToday ?? 0) > 0 ? '#fef3c7' : '#f1f5f9',
+        route: '/staff',
+      },
+      {
+        key: 'license_alerts',
+        label: 'License Alerts',
+        value: (s.licenseAlerts ?? []).length,
+        icon: 'gpp_maybe',
+        color: (s.licenseAlerts ?? []).some((a) => a.severity === 'EXPIRED')
+          ? '#dc2626'
+          : (s.licenseAlerts ?? []).length > 0
+            ? '#d97706'
+            : '#64748b',
+        bgColor: (s.licenseAlerts ?? []).some((a) => a.severity === 'EXPIRED')
+          ? '#fee2e2'
+          : (s.licenseAlerts ?? []).length > 0
+            ? '#fef3c7'
+            : '#f1f5f9',
+        route: '/staff',
+      },
+      {
+        key: 'invoices_overdue',
+        label: 'Overdue Invoices',
+        value: s.billing.overdueInvoices,
+        icon: 'receipt_long',
+        color: s.billing.overdueInvoices > 0 ? '#dc2626' : '#64748b',
+        bgColor: s.billing.overdueInvoices > 0 ? '#fee2e2' : '#f1f5f9',
+        route: '/billing',
+      },
+      {
+        key: 'open_balance',
+        label: 'Open Balance',
+        value: '$' + (s.billing.openBalanceTotal ?? 0).toLocaleString(),
+        icon: 'account_balance',
+        color: '#d97706',
+        bgColor: '#fef3c7',
+        route: '/billing',
+      },
+    ];
+  });
+
+  hospitalAdminAuditEvents = computed<HospitalAdminAuditSnippet[]>(() => {
+    return this.hospitalAdminSummary()?.recentAuditEvents ?? [];
+  });
+
+  // ── MVP 17: Staffing by department ──────────────────────────
+  staffingByDepartment = computed<DepartmentStaffingRow[]>(() => {
+    return this.hospitalAdminSummary()?.staffingByDepartment ?? [];
+  });
+
+  // ── MVP 17: Consult backlog ─────────────────────────────────
+  consultBacklog = computed<ConsultBacklogItem[]>(() => {
+    return this.hospitalAdminSummary()?.consultBacklog ?? [];
+  });
+
+  overdueConsults = computed<number>(() => {
+    return this.consultBacklog().filter((c) => c.overdue).length;
+  });
+
+  // ── MVP 17: Audit trend (last 7 days) ──────────────────────
+  auditTrend = computed<AuditDayCount[]>(() => {
+    return this.hospitalAdminSummary()?.auditTrend ?? [];
+  });
+
+  auditTrendMax = computed<number>(() => {
+    const trend = this.auditTrend();
+    return trend.length > 0 ? Math.max(...trend.map((t) => t.count)) : 1;
+  });
+
+  // ── MVP 18: Invoice aging buckets ──────────────────────────
+  invoiceAging = computed<InvoiceAgingBuckets | null>(() => {
+    return this.hospitalAdminSummary()?.invoiceAging ?? null;
+  });
+
+  invoiceAgingBuckets = computed<InvoiceAgingBucket[]>(() => {
+    const aging = this.invoiceAging();
+    if (!aging) return [];
+    return [aging.current, aging.days1to30, aging.days31to60, aging.days61to90, aging.over90];
+  });
+
+  paymentCollectionRate = computed<number>(() => {
+    return this.hospitalAdminSummary()?.paymentCollectionRate ?? 0;
+  });
+
+  // ── MVP 18: Integration status ──────────────────────────────
+  integrations = computed<IntegrationStatusRow[]>(() => {
+    return this.hospitalAdminSummary()?.integrations ?? [];
+  });
+
+  // ── MVP 19: License expiry alerts ──────────────────────────
+  licenseAlerts = computed<LicenseExpiryAlert[]>(() => {
+    return this.hospitalAdminSummary()?.licenseAlerts ?? [];
+  });
+
+  expiredLicenseCount = computed<number>(() => {
+    return this.licenseAlerts().filter((a) => a.severity === 'EXPIRED').length;
+  });
+
+  criticalLicenseCount = computed<number>(() => {
+    return this.licenseAlerts().filter((a) => a.severity === 'CRITICAL').length;
+  });
+
+  // ── MVP 19: Leave metrics ──────────────────────────────────
+  leaveMetrics = computed<LeaveMetrics | null>(() => {
+    return this.hospitalAdminSummary()?.leave ?? null;
+  });
+
+  // ── MVP 20: Payment trend ─────────────────────────────────
+  paymentTrend = computed<PaymentTrendPoint[]>(() => {
+    return this.hospitalAdminSummary()?.paymentTrend ?? [];
+  });
+
+  paymentTrendMax = computed<number>(() => {
+    const trend = this.paymentTrend();
+    return trend.length > 0 ? Math.max(...trend.map((t) => t.amount)) : 1;
+  });
+
+  paymentMethodBreakdown = computed<PaymentMethodBreakdown[]>(() => {
+    return this.hospitalAdminSummary()?.paymentMethodBreakdown ?? [];
+  });
+
+  paymentMethodTotal = computed<number>(() => {
+    return this.paymentMethodBreakdown().reduce((sum, m) => sum + m.total, 0);
+  });
+
+  writeOffs = computed<WriteOffSummary | null>(() => {
+    return this.hospitalAdminSummary()?.writeOffs ?? null;
+  });
+
+  // ── MVP 21: Bed occupancy ─────────────────────────────────
+  bedOccupancy = computed<BedOccupancy | null>(() => {
+    return this.hospitalAdminSummary()?.bedOccupancy ?? null;
+  });
+
+  wardOccupancy = computed<WardOccupancyRow[]>(() => {
+    return this.hospitalAdminSummary()?.wardOccupancy ?? [];
+  });
 
   // ── Nurse workflow tiles (Epic-style My Activities) ──────────
   nurseWorkflowTiles = computed<NavTile[]>(() => [
@@ -1007,6 +1352,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.clockInterval) clearInterval(this.clockInterval);
   }
 
+  searchPatients(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const q = input.value.trim();
+    input.value = '';
+    if (q) {
+      this.router.navigate(['/patients'], { queryParams: { q } });
+    } else {
+      this.router.navigate(['/patients']);
+    }
+  }
+
   // ────────────────────────────────────────────────────────────
   // PRIVATE INITIALIZERS
   // ────────────────────────────────────────────────────────────
@@ -1092,6 +1448,19 @@ export class DashboardComponent implements OnInit, OnDestroy {
       });
     }
 
+    // Hospital-admin summary
+    if (this.isHospitalAdmin() && !this.isSuperAdmin()) {
+      pending++;
+      const today = new Date().toISOString().split('T')[0];
+      this.dashboardService.getHospitalAdminSummary(today).subscribe({
+        next: (s) => {
+          this.hospitalAdminSummary.set(s);
+          done();
+        },
+        error: () => done(),
+      });
+    }
+
     // Clinical dashboard (doctor / nurse / midwife)
     if (this.isClinician()) {
       pending++;
@@ -1102,6 +1471,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
           this.inboxCounts.set(d.inboxCounts ?? null);
           this.onCallStatus.set(d.onCallStatus ?? null);
           this.roomedPatients.set(d.roomedPatients ?? []);
+          this.specialization.set(d.specialization ?? null);
+          this.departmentName.set(d.departmentName ?? null);
           done();
         },
         error: () => done(),
@@ -1176,10 +1547,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.scheduleLoading.set(false);
     }
 
-    // Recent patients (for roles with patient visibility)
+    // Recent patients (doctors see their own recently encountered patients)
     if (this.permissions.hasPermission('View Patient Records')) {
       pending++;
-      this.patientService.list().subscribe({
+      const recentObs = this.isDoctor()
+        ? this.dashboardService.getRecentPatients()
+        : this.patientService.list();
+      recentObs.subscribe({
         next: (patients) => {
           this.recentPatients.set(patients.slice(0, 6));
           done();
@@ -1272,6 +1646,44 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadDashboardData();
   }
 
+  toggleInboxSection(category: string): void {
+    this.inboxCollapsedSections.update((s) => {
+      const next = new Set(s);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  }
+
+  handleInboxAction(item: ClinicalInboxItem): void {
+    switch (item.actionType) {
+      case 'SIGN':
+        this.router.navigate(['/encounters']);
+        break;
+      case 'REPLY':
+        this.router.navigate(['/chat']);
+        break;
+      case 'REVIEW':
+        if (item.category === 'PHARMACY_CLARIFICATION') {
+          this.router.navigate(['/prescriptions']);
+        } else if (item.patientId) {
+          this.openPatientSnapshot(item.patientId);
+        }
+        break;
+      default:
+        if (item.patientId) this.openPatientSnapshot(item.patientId);
+    }
+  }
+
+  reloadWorklistForDate(date: string): void {
+    this.dashboardService.getWorklist(undefined, undefined, date).subscribe({
+      next: (items) => this.worklistItems.set(items),
+    });
+  }
+
   openPatientSnapshot(patientId: string): void {
     this.snapshotDrawerOpen.set(true);
     this.patientSnapshot.set(null);
@@ -1279,6 +1691,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
       next: (s) => this.patientSnapshot.set(s),
       error: () => this.snapshotDrawerOpen.set(false),
     });
+  }
+
+  acknowledgeResult(resultId: string): void {
+    this.resultQueue.update((q) => q.filter((r) => r.id !== resultId));
   }
 
   closePatientSnapshot(): void {
@@ -1392,5 +1808,38 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private formatTime(d: Date): string {
     return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  }
+
+  getIntegrationStatusClass(status: string): string {
+    const map: Record<string, string> = {
+      ACTIVE: 'integration-active',
+      PILOT: 'integration-pilot',
+      INACTIVE: 'integration-inactive',
+      PENDING: 'integration-pending',
+      DECOMMISSIONED: 'integration-decommissioned',
+    };
+    return `integration-badge ${map[status] ?? ''}`;
+  }
+
+  getAgingBucketColor(index: number): string {
+    const colors = ['#059669', '#2563eb', '#d97706', '#ea580c', '#dc2626'];
+    return colors[index] ?? '#64748b';
+  }
+
+  getPaymentMethodColor(method: string): string {
+    const map: Record<string, string> = {
+      CASH: '#059669',
+      CREDIT_CARD: '#2563eb',
+      DEBIT_CARD: '#7c3aed',
+      INSURANCE: '#0891b2',
+      BANK_TRANSFER: '#d97706',
+      CHECK: '#ea580c',
+      OTHER: '#64748b',
+    };
+    return map[method] ?? '#64748b';
+  }
+
+  formatMethodLabel(method: string): string {
+    return method.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   }
 }

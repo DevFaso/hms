@@ -3,6 +3,7 @@ package com.example.hms.controller;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabOrderRequestDTO;
 import com.example.hms.payload.dto.LabOrderResponseDTO;
+import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.service.LabOrderService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,6 +32,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import jakarta.validation.constraints.NotBlank;
+
 import java.util.Locale;
 import java.util.UUID;
 
@@ -131,5 +134,44 @@ public class LabOrderController {
         labOrderService.deleteLabOrder(id, locale);
         String message = messageSource.getMessage("laborder.deleted", new Object[]{id}, locale);
         return ResponseEntity.ok(ApiResponseWrapper.success(message));
+    }
+
+    /**
+     * Transition a lab order to a new status.
+     * Allowed roles vary by target status (see LabOrderServiceImpl for rules).
+     */
+    @PostMapping("/{id}/transition")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Transition Lab Order Status",
+               description = "Advances a lab order through its lifecycle: ORDERED → PENDING → COLLECTED → RECEIVED → IN_PROGRESS → RESULTED → VERIFIED → COMPLETED. Role-based guards are enforced per transition.")
+    @ApiResponse(responseCode = "200", description = "Lab order transitioned successfully")
+    @ApiResponse(responseCode = "400", description = "Invalid transition")
+    @ApiResponse(responseCode = "404", description = "Lab order not found")
+    public ResponseEntity<ApiResponseWrapper<LabOrderResponseDTO>> transitionLabOrderStatus(
+        @PathVariable UUID id,
+        @Valid @RequestBody TransitionLabOrderStatusRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
+
+        String rawStatus = request == null ? null : request.getStatus();
+        if (rawStatus == null || rawStatus.isBlank()) {
+            throw new com.example.hms.exception.BusinessException("Request body must include a 'status' field.");
+        }
+        LabOrderStatus toStatus;
+        try {
+            toStatus = LabOrderStatus.valueOf(rawStatus.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException ex) {
+            throw new com.example.hms.exception.BusinessException("Unknown lab order status: " + rawStatus);
+        }
+        LabOrderResponseDTO result = labOrderService.transitionLabOrderStatus(id, toStatus, locale);
+        return ResponseEntity.ok(ApiResponseWrapper.success(result));
+    }
+
+    /** Request DTO for transitioning a lab order's status. */
+    private static class TransitionLabOrderStatusRequestDTO {
+        @NotBlank(message = "Request body must include a 'status' field.")
+        private String status;
+
+        public String getStatus() { return status; }
+        public void setStatus(String status) { this.status = status; }
     }
 }

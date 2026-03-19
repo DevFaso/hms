@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import jakarta.persistence.QueryHint;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -35,4 +36,11 @@ public interface StaffAvailabilityRepository extends JpaRepository<StaffAvailabi
            "ORDER BY sa.date DESC")
     @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
     Page<StaffAvailability> findAllByOrderByDateDesc(Pageable pageable);
+
+    // ── MVP 19: Hospital-scoped leave/absence queries ───────────
+    @Query("SELECT sa FROM StaffAvailability sa WHERE sa.hospital.id = :hospitalId AND sa.date = :date AND sa.dayOff = true AND sa.active = true")
+    List<StaffAvailability> findOnLeaveByHospitalAndDate(@org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId, @org.springframework.data.repository.query.Param("date") LocalDate date);
+
+    @Query("SELECT sa FROM StaffAvailability sa WHERE sa.hospital.id = :hospitalId AND sa.date BETWEEN :from AND :to AND sa.dayOff = true AND sa.active = true")
+    List<StaffAvailability> findOnLeaveByHospitalAndDateRange(@org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId, @org.springframework.data.repository.query.Param("from") LocalDate from, @org.springframework.data.repository.query.Param("to") LocalDate to);
 }

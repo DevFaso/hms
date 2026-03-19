@@ -9,11 +9,16 @@ import {
   ImagingOrderRequest,
   ImagingModality,
   ImagingPriority,
+  ImagingLaterality,
 } from '../services/imaging.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+
+type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
+  laterality?: ImagingLaterality | '';
+};
 
 @Component({
   selector: 'app-imaging',
@@ -51,7 +56,7 @@ export class ImagingComponent implements OnInit {
   editing = signal(false);
   saving = signal(false);
   editId = '';
-  form: ImagingOrderRequest = this.emptyForm();
+  form: ImagingForm = this.emptyForm();
 
   showDeleteConfirm = signal(false);
   deletingItem = signal<ImagingOrderResponse | null>(null);
@@ -71,6 +76,13 @@ export class ImagingComponent implements OnInit {
     'OTHER',
   ];
   priorities: ImagingPriority[] = ['ROUTINE', 'URGENT', 'STAT'];
+  lateralities: { value: ImagingLaterality; label: string }[] = [
+    { value: 'LEFT', label: 'Left' },
+    { value: 'RIGHT', label: 'Right' },
+    { value: 'BILATERAL', label: 'Bilateral' },
+    { value: 'MIDLINE', label: 'Midline' },
+    { value: 'NOT_APPLICABLE', label: 'N/A' },
+  ];
 
   ngOnInit(): void {
     this.load();
@@ -78,13 +90,14 @@ export class ImagingComponent implements OnInit {
     this.initPatientSearch();
   }
 
-  emptyForm(): ImagingOrderRequest {
+  emptyForm(): ImagingForm {
     return {
       patientId: '',
       hospitalId: '',
       modality: 'XRAY' as ImagingModality,
       studyType: '',
       priority: 'ROUTINE' as ImagingPriority,
+      laterality: undefined,
     };
   }
 
@@ -179,7 +192,7 @@ export class ImagingComponent implements OnInit {
       studyType: o.studyType ?? '',
       bodyRegion: o.bodyRegion ?? '',
       priority: o.priority ?? 'ROUTINE',
-      laterality: o.laterality ?? '',
+      laterality: (o.laterality as ImagingLaterality) || '',
       clinicalQuestion: o.clinicalQuestion ?? '',
     };
     this.selectedPatient.set({
@@ -200,9 +213,13 @@ export class ImagingComponent implements OnInit {
 
   submitForm(): void {
     this.saving.set(true);
+    const payload: ImagingOrderRequest = {
+      ...this.form,
+      laterality: this.form.laterality || undefined,
+    };
     const op = this.editing()
-      ? this.imagingService.updateOrder(this.editId, this.form)
-      : this.imagingService.createOrder(this.form);
+      ? this.imagingService.updateOrder(this.editId, payload)
+      : this.imagingService.createOrder(payload);
     op.subscribe({
       next: () => {
         this.toast.success(this.editing() ? 'Order updated' : 'Order created');

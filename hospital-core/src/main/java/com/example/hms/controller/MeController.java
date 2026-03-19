@@ -44,7 +44,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.format.annotation.DateTimeFormat.ISO;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -177,6 +180,15 @@ public class MeController {
         return ResponseEntity.ok(ApiResponseWrapper.success(patients));
     }
 
+    @Operation(summary = "Get recently seen patients for current doctor")
+    @GetMapping("/recent-patients")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON')")
+    public ResponseEntity<ApiResponseWrapper<java.util.List<com.example.hms.patient.dto.PatientResponse>>> getRecentPatients(Authentication auth) {
+        UUID userId = resolveUserId(auth);
+        java.util.List<com.example.hms.patient.dto.PatientResponse> patients = clinicalDashboardService.getRecentPatients(userId);
+        return ResponseEntity.ok(ApiResponseWrapper.success(patients));
+    }
+
     @Operation(summary = "Get on-call status")
     @GetMapping("/on-call-status")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON')")
@@ -212,9 +224,10 @@ public class MeController {
     public ResponseEntity<ApiResponseWrapper<List<DoctorWorklistItemDTO>>> getWorklist(
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String urgency,
+            @RequestParam(required = false) @DateTimeFormat(iso = ISO.DATE) LocalDate date,
             Authentication auth) {
         UUID userId = resolveUserId(auth);
-        List<DoctorWorklistItemDTO> items = doctorWorklistService.getWorklist(userId, status, urgency);
+        List<DoctorWorklistItemDTO> items = doctorWorklistService.getWorklist(userId, status, urgency, date);
         return ResponseEntity.ok(ApiResponseWrapper.success(items));
     }
 

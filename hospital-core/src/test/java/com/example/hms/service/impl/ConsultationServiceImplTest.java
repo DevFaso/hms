@@ -11,6 +11,8 @@ import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.consultation.ConsultationRequestDTO;
 import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
 import com.example.hms.payload.dto.consultation.ConsultationUpdateDTO;
+import com.example.hms.payload.dto.consultation.CompleteConsultationRequestDTO;
+import com.example.hms.service.NotificationService;
 import com.example.hms.repository.ConsultationRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
@@ -43,6 +45,7 @@ class ConsultationServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private EncounterRepository encounterRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
+    @Mock private NotificationService notificationService;
 
     @InjectMocks private ConsultationServiceImpl service;
 
@@ -130,7 +133,7 @@ class ConsultationServiceImplTest {
     }
 
     @Test void completeConsultation_success() {
-        ConsultationUpdateDTO u = new ConsultationUpdateDTO(); u.setConsultantNote("All good");
+        CompleteConsultationRequestDTO u = CompleteConsultationRequestDTO.builder().recommendations("All good").consultantNote("All good").build();
         when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.IN_PROGRESS)));
         when(consultationRepository.save(any())).thenAnswer(i -> i.getArgument(0));
         ConsultationResponseDTO r = service.completeConsultation(consultationId, u);
@@ -140,13 +143,13 @@ class ConsultationServiceImplTest {
 
     @Test void completeConsultation_alreadyCompleted() {
         when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.COMPLETED)));
-        ConsultationUpdateDTO dto = new ConsultationUpdateDTO();
+        CompleteConsultationRequestDTO dto = CompleteConsultationRequestDTO.builder().recommendations("x").build();
         assertThatThrownBy(() -> service.completeConsultation(consultationId, dto)).isInstanceOf(BusinessException.class);
     }
 
     @Test void completeConsultation_cancelled() {
         when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.CANCELLED)));
-        ConsultationUpdateDTO dto = new ConsultationUpdateDTO();
+        CompleteConsultationRequestDTO dto = CompleteConsultationRequestDTO.builder().recommendations("x").build();
         assertThatThrownBy(() -> service.completeConsultation(consultationId, dto)).isInstanceOf(BusinessException.class);
     }
 

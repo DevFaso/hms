@@ -41,9 +41,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -440,8 +438,8 @@ class MeControllerTest {
         // Arrange
         OnCallStatusDTO expectedStatus = OnCallStatusDTO.builder()
                 .isOnCall(true)
-                .shiftStart(LocalDateTime.of(LocalDate.now(), LocalTime.of(8, 0)))
-                .shiftEnd(LocalDateTime.of(LocalDate.now(), LocalTime.of(20, 0)))
+                .shiftStart(java.time.OffsetDateTime.now())
+                .shiftEnd(java.time.OffsetDateTime.now().plusHours(12))
                 .coveringFor(List.of("Emergency"))
                 .backupProvider("Dr. Brown")
                 .build();
@@ -700,26 +698,26 @@ class MeControllerTest {
     void getWorklist_withoutFilters_shouldReturnAllItems() {
         List<DoctorWorklistItemDTO> items = List.of(
                 DoctorWorklistItemDTO.builder().patientName("Pat A").encounterStatus("IN_PROGRESS").build());
-        when(doctorWorklistService.getWorklist(testUserId, null, null)).thenReturn(items);
+        when(doctorWorklistService.getWorklist(testUserId, null, null, null)).thenReturn(items);
 
         ResponseEntity<ApiResponseWrapper<List<DoctorWorklistItemDTO>>> response =
-                controller.getWorklist(null, null, doctorAuth);
+                controller.getWorklist(null, null, null, doctorAuth);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals(1, requireBody(response).getData().size());
-        verify(doctorWorklistService).getWorklist(testUserId, null, null);
+        verify(doctorWorklistService).getWorklist(testUserId, null, null, null);
     }
 
     @Test
     void getWorklist_withStatusAndUrgency_shouldPassFilters() {
-        when(doctorWorklistService.getWorklist(testUserId, "IN_PROGRESS", "URGENT")).thenReturn(List.of());
+        when(doctorWorklistService.getWorklist(testUserId, "IN_PROGRESS", "URGENT", null)).thenReturn(List.of());
 
         ResponseEntity<ApiResponseWrapper<List<DoctorWorklistItemDTO>>> response =
-                controller.getWorklist("IN_PROGRESS", "URGENT", doctorAuth);
+                controller.getWorklist("IN_PROGRESS", "URGENT", null, doctorAuth);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertTrue(requireBody(response).getData().isEmpty());
-        verify(doctorWorklistService).getWorklist(testUserId, "IN_PROGRESS", "URGENT");
+        verify(doctorWorklistService).getWorklist(testUserId, "IN_PROGRESS", "URGENT", null);
     }
 
     // ========== GET /api/me/patient-flow ==========
