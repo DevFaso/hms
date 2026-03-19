@@ -14,7 +14,7 @@
 | Permissions actually enforced by endpoints | **~19** (all via `/me/patient/**`) |
 | Permissions with **zero backing endpoints** | **~0** |
 | Epic MyChart feature categories | **20** |
-| HMS covers fully | **19** |
+| HMS covers fully | **22** |
 | HMS covers partially | **3** (Payments no gateway, Records no PDF/FHIR, Telehealth) |
 | HMS has **zero patient access** | **1** (Questionnaires/PRO) |
 
@@ -75,8 +75,8 @@ But **almost none of these permissions are checked by any controller or security
 |------------|-----------|--------|
 | View own lab results | ✅ | `GET /me/patient/lab-results` — patient-scoped, uses existing `PatientLabResultService`. |
 | View lab result trends | ❌ | No trend/chart data endpoint. |
-| View pending lab orders | ⚠️ 🔒 | `LabOrderController` — staff-only. |
-| View imaging results | ⚠️ 🔒 | `ImagingResultController` — staff-only. |
+| View pending lab orders | ✅ | `GET /me/patient/lab-orders` — delegates to `LabOrderService.getLabOrdersByPatientId()`. Angular: `my-lab-orders` page with status/priority chips. |
+| View imaging results | ✅ | `GET /me/patient/imaging/orders` — delegates to `ImagingOrderService.getOrdersByPatient()` (all statuses). Angular: `my-imaging-orders` page with modality, schedule & status details. |
 | **Priority** | **P0** | #1 most-used MyChart feature by patients. |
 
 **What to build:**
@@ -96,7 +96,7 @@ But **almost none of these permissions are checked by any controller or security
 | View current medications | ✅ | `GET /me/patient/medications` — patient-scoped via `PatientMedicationService`. |
 | View medication instructions | ✅ | Included in `GET /me/patient/medications` response. |
 | Request refills | ✅ | `POST /me/patient/refills` — creates `RefillRequest` entity, view via `GET /me/patient/refills`, cancel via `PUT /me/patient/refills/{id}/cancel`. |
-| View medication history | ⚠️ 🔒 | `MedicationHistoryController` — staff-only. `VIEW_MEDICATION_HISTORY` not in PATIENT_SELF_SERVICE group. |
+| View medication history | ✅ | `GET /me/patient/medications/fills` — pharmacy fill/dispense history via `PharmacyFillRepository.findByPatient_IdOrderByFillDateDesc()`. Angular: `my-pharmacy-fills` page with controlled-substance flag & depletion date. |
 | Pharmacy information | ⚠️ | `Patient.preferredPharmacy` field exists. `PharmacyDirectoryController` exists (unclear patient access). |
 | **Priority** | **P0** | Patient medication safety is critical. |
 
@@ -426,9 +426,12 @@ But **almost none of these permissions are checked by any controller or security
 | ~~21~~ | ~~Notification Preferences~~ | ~~Small~~ **DONE** ✅ | `GET/PUT/DELETE /me/patient/notifications/preferences` — `NotificationPreference` entity (type × channel) |
 | ~~22~~ | ~~Vital Sign Trends~~ | ~~Medium~~ **DONE** ✅ | `GET /me/patient/vitals/trends?months=N` — 1–24 months, delegates to `PatientVitalSignService.getVitals()` |
 | ~~23~~ | ~~Upcoming Vaccinations~~ | ~~Small~~ **DONE** ✅ | `GET /me/patient/immunizations/upcoming?months=N` — 1–12 months, delegates to `ImmunizationService.getUpcomingImmunizations()` |
-| 24 | FHIR Export | Large | FHIR R4 resource mapping |
-| 25 | Cost Estimation | Large | Complex pricing engine |
-| 26 | Payment Plans | Medium | New workflow + entity |
+| ~~24~~ | ~~Lab Orders~~ | ~~Small~~ **DONE** ✅ | `GET /me/patient/lab-orders` — delegates to `LabOrderService.getLabOrdersByPatientId()`, status/priority display |
+| ~~25~~ | ~~Imaging Orders~~ | ~~Small~~ **DONE** ✅ | `GET /me/patient/imaging/orders` — delegates to `ImagingOrderService.getOrdersByPatient()`, all statuses |
+| ~~26~~ | ~~Pharmacy Fill History~~ | ~~Small~~ **DONE** ✅ | `GET /me/patient/medications/fills` — `PharmacyFillRepository` ordered by fill date desc, controlled-substance flag |
+| 27 | FHIR Export | Large | FHIR R4 resource mapping |
+| 28 | Cost Estimation | Large | Complex pricing engine |
+| 29 | Payment Plans | Medium | New workflow + entity |
 
 ---
 
@@ -467,6 +470,9 @@ All Phase 2 endpoints are implemented:
 - ✅ Notification preferences — `GET/PUT/DELETE /me/patient/notifications/preferences` (type × channel matrix)
 - ✅ Vital sign trends — `GET /me/patient/vitals/trends?months=N` (1–24 months, configurable)
 - ✅ Upcoming vaccinations — `GET /me/patient/immunizations/upcoming?months=N` (1–12 months)
+- ✅ Lab orders — `GET /me/patient/lab-orders` — status tracking with priority chips
+- ✅ Imaging orders — `GET /me/patient/imaging/orders` — all statuses, modality/schedule details
+- ✅ Pharmacy fill history — `GET /me/patient/medications/fills` — ordered by fill date, controlled-substance flag
 - ❌ Payment gateway integration (Stripe/PayStack)
 - ❌ Telehealth / video visits (Twilio/Zoom)
 - ❌ Pre-visit questionnaires

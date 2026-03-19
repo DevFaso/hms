@@ -26,6 +26,9 @@ import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
+import com.example.hms.payload.dto.LabOrderResponseDTO;
+import com.example.hms.payload.dto.imaging.ImagingOrderResponseDTO;
+import com.example.hms.payload.dto.medication.PharmacyFillResponseDTO;
 import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
 import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
@@ -496,4 +499,35 @@ public class PatientPortalController {
         return ResponseEntity.ok(ApiResponseWrapper.success(
                 portalService.getMyUpcomingVaccinations(auth, months)));
     }
-}
+    // \u2500\u2500 Lab Orders \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+    @Operation(summary = "My lab orders",
+            description = "Returns all lab orders for the authenticated patient, with status tracking (PENDING, IN_PROGRESS, COMPLETED, etc.)")
+    @GetMapping("/lab-orders")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<LabOrderResponseDTO>>> getMyLabOrders(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyLabOrders(auth, LocaleContextHolder.getLocale())));
+    }
+
+    // \u2500\u2500 Imaging Orders \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+    @Operation(summary = "My imaging orders",
+            description = "Returns all imaging orders (X-ray, MRI, CT, ultrasound, etc.) for the authenticated patient")
+    @GetMapping("/imaging/orders")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<ImagingOrderResponseDTO>>> getMyImagingOrders(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyImagingOrders(auth)));
+    }
+
+    // \u2500\u2500 Pharmacy Fill History \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+    @Operation(summary = "My pharmacy fill history",
+            description = "Returns medication dispense/fill records for the authenticated patient, most recent first")
+    @GetMapping("/medications/fills")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<PharmacyFillResponseDTO>>> getMyPharmacyFills(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyPharmacyFills(auth, LocaleContextHolder.getLocale())));
+    }}

@@ -303,6 +303,64 @@ export interface ImmunizationDTO {
   active: boolean;
 }
 
+export interface LabOrderDTO {
+  id: string;
+  labOrderCode: string;
+  hospitalName: string;
+  labTestName: string;
+  labTestCode: string;
+  orderDatetime: string;
+  status: string;
+  priority: string;
+  clinicalIndication: string | null;
+  notes: string | null;
+  standingOrder: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ImagingOrderDTO {
+  id: string;
+  patientId: string;
+  hospitalName: string;
+  modality: string;
+  studyType: string | null;
+  bodyRegion: string | null;
+  priority: string;
+  status: string;
+  clinicalQuestion: string | null;
+  contrastRequired: boolean | null;
+  scheduledDate: string | null;
+  scheduledTime: string | null;
+  appointmentLocation: string | null;
+  orderedAt: string;
+  orderingProviderName: string | null;
+  cancelledAt: string | null;
+  cancellationReason: string | null;
+  updatedAt: string;
+}
+
+export interface PharmacyFillDTO {
+  id: string;
+  medicationName: string;
+  strength: string | null;
+  dosageForm: string | null;
+  fillDate: string;
+  quantityDispensed: number | null;
+  quantityUnit: string | null;
+  daysSupply: number | null;
+  refillNumber: number | null;
+  directions: string | null;
+  expectedDepletionDate: string | null;
+  pharmacyName: string | null;
+  pharmacyPhone: string | null;
+  prescriberName: string | null;
+  controlledSubstance: boolean;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface ApiWrapper<T> {
   data: T;
   success: boolean;
@@ -572,6 +630,39 @@ export class PatientPortalService {
   getUpcomingVaccinations(months = 6): Observable<ImmunizationDTO[]> {
     return this.http
       .get<ApiWrapper<ImmunizationDTO[]>>(`${this.base}/immunizations/upcoming`, { params: { months } })
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  // ── Lab Orders ──────────────────────────────────────────────────────
+
+  getMyLabOrders(): Observable<LabOrderDTO[]> {
+    return this.http
+      .get<ApiWrapper<LabOrderDTO[]>>(`${this.base}/lab-orders`)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  // ── Imaging Orders ───────────────────────────────────────────────
+
+  getMyImagingOrders(): Observable<ImagingOrderDTO[]> {
+    return this.http
+      .get<ApiWrapper<ImagingOrderDTO[]>>(`${this.base}/imaging/orders`)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  // ── Pharmacy Fill History ───────────────────────────────────────────
+
+  getMyPharmacyFills(): Observable<PharmacyFillDTO[]> {
+    return this.http
+      .get<ApiWrapper<PharmacyFillDTO[]>>(`${this.base}/medications/fills`)
       .pipe(
         map((r) => r.data ?? []),
         catchError(() => of([])),

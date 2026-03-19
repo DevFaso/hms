@@ -23,6 +23,9 @@ import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.PatientPrimaryCareResponseDTO;
 import com.example.hms.payload.dto.PatientVitalSignRequestDTO;
 import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
+import com.example.hms.payload.dto.LabOrderResponseDTO;
+import com.example.hms.payload.dto.imaging.ImagingOrderResponseDTO;
+import com.example.hms.payload.dto.medication.PharmacyFillResponseDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
 import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
@@ -51,6 +54,7 @@ import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProxyRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.PharmacyFillRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.service.AppointmentService;
@@ -61,6 +65,9 @@ import com.example.hms.service.DischargeSummaryService;
 import com.example.hms.service.EncounterService;
 import com.example.hms.service.GeneralReferralService;
 import com.example.hms.service.ImmunizationService;
+import com.example.hms.service.ImagingOrderService;
+import com.example.hms.service.LabOrderService;
+import com.example.hms.service.MedicationHistoryService;
 import com.example.hms.service.PatientConsentService;
 import com.example.hms.service.PatientLabResultService;
 import com.example.hms.service.PatientMedicationService;
@@ -126,6 +133,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final com.example.hms.repository.UserRepository userRepository;
     private final NotificationPreferenceRepository notificationPreferenceRepository;
+
+    // Feature 4/5/6 additions
+    private final LabOrderService labOrderService;
+    private final ImagingOrderService imagingOrderService;
+    private final PharmacyFillRepository pharmacyFillRepository;
+    private final com.example.hms.mapper.PharmacyFillMapper pharmacyFillMapper;
 
     // ── Identity resolution ──────────────────────────────────────────────
 
@@ -898,5 +911,42 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .notes(p.getNotes())
                 .createdAt(p.getCreatedAt())
                 .build();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 4 — Lab Orders (status tracking)
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LabOrderResponseDTO> getMyLabOrders(Authentication auth, java.util.Locale locale) {
+        UUID patientId = resolvePatientId(auth);
+        return labOrderService.getLabOrdersByPatientId(patientId, locale);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 5 — Imaging Orders + Results
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ImagingOrderResponseDTO> getMyImagingOrders(Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        // null status = all statuses
+        return imagingOrderService.getOrdersByPatient(patientId, null);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 6 — Pharmacy Fill History
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PharmacyFillResponseDTO> getMyPharmacyFills(Authentication auth, java.util.Locale locale) {
+        UUID patientId = resolvePatientId(auth);
+        return pharmacyFillRepository.findByPatient_IdOrderByFillDateDesc(patientId)
+                .stream()
+                .map(pharmacyFillMapper::toResponseDTO)
+                .toList();
     }
 }

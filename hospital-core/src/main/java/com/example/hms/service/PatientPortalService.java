@@ -156,4 +156,22 @@ public interface PatientPortalService {
 
     /** List patients whose data I can view as proxy. */
     List<ProxyResponseDTO> getMyProxyAccess(Authentication auth);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 4 — Lab Orders (status tracking)
+    // ══════════════════════════════════════════════════════════════════════
+
+    List<com.example.hms.payload.dto.LabOrderResponseDTO> getMyLabOrders(Authentication auth, Locale locale);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 5 — Imaging Orders + Results
+    // ══════════════════════════════════════════════════════════════════════
+
+    List<com.example.hms.payload.dto.imaging.ImagingOrderResponseDTO> getMyImagingOrders(Authentication auth);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 6 — Pharmacy Fill History
+    // ══════════════════════════════════════════════════════════════════════
+
+    List<com.example.hms.payload.dto.medication.PharmacyFillResponseDTO> getMyPharmacyFills(Authentication auth, Locale locale);
 }

@@ -142,6 +142,27 @@ export const routes: Routes = [
             (m) => m.MyUpcomingVaccinesComponent,
           ),
       },
+      {
+        path: 'my-lab-orders',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-lab-orders').then((m) => m.MyLabOrdersComponent),
+      },
+      {
+        path: 'my-imaging-orders',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-imaging-orders').then((m) => m.MyImagingOrdersComponent),
+      },
+      {
+        path: 'my-pharmacy-fills',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-pharmacy-fills').then((m) => m.MyPharmacyFillsComponent),
+      },
 
       // Patients
       {
