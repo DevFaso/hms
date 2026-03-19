@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
@@ -30,6 +31,7 @@ export class AdmissionsComponent implements OnInit {
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly route = inject(ActivatedRoute);
 
   admissions = signal<AdmissionResponse[]>([]);
   filtered = signal<AdmissionResponse[]>([]);
@@ -98,6 +100,11 @@ export class AdmissionsComponent implements OnInit {
       this.staffMembers.set(s ?? []);
     });
     this.initPatientSearch();
+
+    const tab = this.route.snapshot.queryParamMap.get('tab');
+    if (tab === 'admitted' || tab === 'discharged') {
+      this.activeTab.set(tab);
+    }
   }
 
   emptyForm(): AdmissionRequest {

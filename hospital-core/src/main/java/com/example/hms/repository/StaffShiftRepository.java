@@ -87,4 +87,7 @@ public interface StaffShiftRepository extends JpaRepository<StaffShift, UUID> {
         LocalDate startDate,
         LocalDate endDate
     );
+
+    /** Hospital-scoped shifts for a specific date (includes all statuses). */
+    List<StaffShift> findByHospital_IdAndShiftDate(UUID hospitalId, LocalDate shiftDate);
 }

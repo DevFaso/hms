@@ -1,42 +1,68 @@
 <div class="page-container">
+  <!-- ── Header with Refresh ──────────────────────────────── -->
   <div class="page-header">
     <div>
       <h1 class="page-title">Nurse Station</h1>
       <p class="page-subtitle">Clinical tasks, medications, and patient care</p>
     </div>
+    <div class="header-actions">
+      @if (lastRefreshed()) {
+        <span class="last-refreshed">Updated {{ lastRefreshed() | date: 'shortTime' }}</span>
+      }
+      <button class="refresh-btn" (click)="refresh()" title="Refresh now">
+        <span class="material-symbols-outlined">refresh</span>
+      </button>
+    </div>
   </div>
+
+  <!-- ── Filter Bar ───────────────────────────────────────── -->
+  <div class="filter-bar">
+    <button class="filter-btn" [class.active]="filterMode() === 'me'" (click)="setFilter('me')">
+      My Patients
+    </button>
+    <button class="filter-btn" [class.active]="filterMode() === 'unit'" (click)="setFilter('unit')">
+      My Unit
+    </button>
+    <button class="filter-btn" [class.active]="filterMode() === 'all'" (click)="setFilter('all')">
+      All
+    </button>
+  </div>
+
+  <!-- ── Summary Cards (backed by summary endpoint) ──────── -->
   <div class="summary-cards">
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon vitals">monitor_heart</span>
       <div class="card-info">
-        <span class="card-value">{{ vitals().length }}</span
-        ><span class="card-label">Vitals Due</span>
+        <span class="card-value">{{ summary()?.vitalsDue ?? vitals().length }}</span>
+        <span class="card-label">Vitals Due</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon meds">medication</span>
       <div class="card-info">
-        <span class="card-value">{{ medications().length }}</span
-        ><span class="card-label">Medications</span>
+        <span class="card-value">{{ summary()?.medicationsDue ?? medications().length }}</span>
+        <span class="card-label">Medications Due</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon orders">assignment</span>
       <div class="card-info">
-        <span class="card-value">{{ orders().length }}</span
-        ><span class="card-label">Orders</span>
+        <span class="card-value">{{ summary()?.ordersPending ?? orders().length }}</span>
+        <span class="card-label">Orders</span>
       </div>
     </div>
     <div class="summary-card overdue">
       <span class="material-symbols-outlined card-icon overdue-icon">warning</span>
       <div class="card-info">
-        <span class="card-value">{{ overdueCount() }}</span
-        ><span class="card-label">Overdue</span>
+        <span class="card-value">{{ summary()?.medicationsOverdue ?? overdueCount() }}</span>
+        <span class="card-label">Overdue</span>
       </div>
     </div>
   </div>
+
   <div class="station-layout">
     <div class="main-content">
+      <!-- ── Section Tabs ──────────────────────────────── -->
       <div class="section-tabs">
         <button
           class="tab-btn"
@@ -70,13 +96,59 @@
         >
           Handoffs
         </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeSection() === 'workboard'"
+          (click)="setSection('workboard')"
+          title="Patient workboard"
+        >
+          Workboard
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeSection() === 'flowboard'"
+          (click)="setSection('flowboard')"
+          title="Patient flow board"
+        >
+          Flow Board
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeSection() === 'admissions'"
+          (click)="setSection('admissions')"
+          title="Pending admissions"
+        >
+          Admissions
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeSection() === 'tasks'"
+          (click)="setSection('tasks')"
+          title="Nursing task board"
+        >
+          Task Board
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeSection() === 'inbox'"
+          (click)="setSection('inbox')"
+          title="Nurse communication inbox"
+        >
+          Inbox
+          @if (inboxUnreadCount() > 0) {
+            <span class="badge-count">{{ inboxUnreadCount() }}</span>
+          }
+        </button>
       </div>
+
       @if (loading()) {
         <div class="loading-state">
           <div class="spinner"></div>
           <p>Loading tasks...</p>
         </div>
       }
+
+      <!-- ═══════════ VITALS TAB ═══════════ -->
       @if (!loading() && activeSection() === 'vitals') {
         @if (vitals().length === 0) {
           <div class="empty-state">
@@ -93,13 +165,22 @@
                   <th scope="col">Type</th>
                   <th scope="col">Due Time</th>
                   <th scope="col">Status</th>
+                  <th scope="col">Action</th>
                 </tr>
               </thead>
               <tbody>
                 @for (v of vitals(); track v.id) {
                   <tr class="data-row" [class.overdue-row]="v.overdue">
                     <td>
-                      <div class="cell-primary">{{ v.patientName }}</div>
+                      @if (v.patientId) {
+                        <a
+                          class="cell-primary patient-link"
+                          [routerLink]="['/patients', v.patientId]"
+                          >{{ v.patientName }}</a
+                        >
+                      } @else {
+                        <div class="cell-primary">{{ v.patientName }}</div>
+                      }
                     </td>
                     <td>{{ v.type }}</td>
                     <td>{{ v.dueTime | date: 'shortTime' }}</td>
@@ -110,6 +191,15 @@
                         <span class="badge-pending">Pending</span>
                       }
                     </td>
+                    <td>
+                      <button
+                        class="action-btn action-record"
+                        (click)="recordVitals(v.patientId)"
+                        [disabled]="!v.patientId"
+                      >
+                        <span class="material-symbols-outlined">edit_note</span> Record
+                      </button>
+                    </td>
                   </tr>
                 }
               </tbody>
@@ -117,6 +207,8 @@
           </div>
         }
       }
+
+      <!-- ═══════════ MEDICATIONS TAB ═══════════ -->
       @if (!loading() && activeSection() === 'medications') {
         @if (medications().length === 0) {
           <div class="empty-state">
@@ -135,13 +227,22 @@
                   <th scope="col">Route</th>
                   <th scope="col">Due</th>
                   <th scope="col">Status</th>
+                  <th scope="col">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 @for (m of medications(); track m.id) {
-                  <tr class="data-row">
+                  <tr class="data-row" [class.overdue-row]="m.status === 'OVERDUE'">
                     <td>
-                      <div class="cell-primary">{{ m.patientName }}</div>
+                      @if (m.patientId) {
+                        <a
+                          class="cell-primary patient-link"
+                          [routerLink]="['/patients', m.patientId]"
+                          >{{ m.patientName }}</a
+                        >
+                      } @else {
+                        <div class="cell-primary">{{ m.patientName }}</div>
+                      }
                     </td>
                     <td>
                       <strong>{{ m.medication }}</strong>
@@ -154,6 +255,38 @@
                         m.status
                       }}</span>
                     </td>
+                    <td class="action-cell">
+                      @if (m.status !== 'COMPLETED' && m.status !== 'GIVEN') {
+                        <button
+                          class="action-btn action-give"
+                          (click)="administerMedication(m.id)"
+                          [disabled]="actionInProgress() === m.id"
+                          title="Administer"
+                        >
+                          <span class="material-symbols-outlined">check_circle</span> Give
+                        </button>
+                        <button
+                          class="action-btn action-hold"
+                          (click)="promptHoldRefuse(m.id, 'HELD')"
+                          [disabled]="actionInProgress() === m.id"
+                          title="Hold"
+                        >
+                          <span class="material-symbols-outlined">pause_circle</span> Hold
+                        </button>
+                        <button
+                          class="action-btn action-refuse"
+                          (click)="promptHoldRefuse(m.id, 'REFUSED')"
+                          [disabled]="actionInProgress() === m.id"
+                          title="Refuse"
+                        >
+                          <span class="material-symbols-outlined">cancel</span> Refuse
+                        </button>
+                      } @else {
+                        <span class="action-done">
+                          <span class="material-symbols-outlined">task_alt</span> Done
+                        </span>
+                      }
+                    </td>
                   </tr>
                 }
               </tbody>
@@ -161,6 +294,8 @@
           </div>
         }
       }
+
+      <!-- ═══════════ ORDERS TAB ═══════════ -->
       @if (!loading() && activeSection() === 'orders') {
         @if (orders().length === 0) {
           <div class="empty-state">
@@ -183,7 +318,15 @@
                 @for (o of orders(); track o.id) {
                   <tr class="data-row">
                     <td>
-                      <div class="cell-primary">{{ o.patientName }}</div>
+                      @if (o.patientId) {
+                        <a
+                          class="cell-primary patient-link"
+                          [routerLink]="['/patients', o.patientId]"
+                          >{{ o.patientName }}</a
+                        >
+                      } @else {
+                        <div class="cell-primary">{{ o.patientName }}</div>
+                      }
                     </td>
                     <td>{{ o.orderType }}</td>
                     <td>
@@ -199,6 +342,8 @@
           </div>
         }
       }
+
+      <!-- ═══════════ HANDOFFS TAB ═══════════ -->
       @if (!loading() && activeSection() === 'handoffs') {
         @if (handoffs().length === 0) {
           <div class="empty-state">
@@ -211,17 +356,462 @@
             @for (h of handoffs(); track h.id) {
               <div class="handoff-card">
                 <div class="handoff-header">
-                  <span class="cell-primary">{{ h.patientName }}</span
-                  ><span class="handoff-dir">{{ h.direction }}</span>
+                  @if (h.patientId) {
+                    <a
+                      class="cell-primary patient-link"
+                      [routerLink]="['/patients', h.patientId]"
+                      >{{ h.patientName }}</a
+                    >
+                  } @else {
+                    <span class="cell-primary">{{ h.patientName }}</span>
+                  }
+                  <span class="handoff-dir">{{ h.direction }}</span>
                 </div>
                 <p class="handoff-note">{{ h.note || 'No notes' }}</p>
-                <span class="handoff-time">{{ h.updatedAt | date: 'medium' }}</span>
+                <div class="handoff-footer">
+                  <span class="handoff-time">{{ h.updatedAt | date: 'medium' }}</span>
+                  <button
+                    class="action-btn action-complete"
+                    (click)="completeHandoff(h.id)"
+                    [disabled]="actionInProgress() === h.id"
+                    title="Complete handoff"
+                  >
+                    <span class="material-symbols-outlined">check_circle</span> Complete
+                  </button>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      }
+
+      <!-- ═══════════ WORKBOARD TAB ═══════════ -->
+      @if (!loading() && activeSection() === 'workboard') {
+        @if (workboard().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">grid_view</span>
+            <h3>No active patients on workboard</h3>
+            <p>Active admissions will appear here.</p>
+          </div>
+        }
+        @if (workboard().length > 0) {
+          <div class="workboard-grid">
+            @for (p of workboard(); track p.patientId) {
+              <div
+                class="workboard-card"
+                [class.workboard-card-alert]="p.vitalsDue || p.medsDue > 0"
+              >
+                <div class="workboard-card-header">
+                  @if (p.patientId) {
+                    <a class="cell-primary patient-link" [routerLink]="['/patients', p.patientId]">
+                      {{ p.patientName }}
+                    </a>
+                  } @else {
+                    <span class="cell-primary">{{ p.patientName }}</span>
+                  }
+                  @if (p.acuityLevel) {
+                    <span class="acuity-badge {{ acuityCssClass(p.acuityLevel) }}">
+                      {{ acuityLabel(p.acuityLevel) }}
+                    </span>
+                  }
+                </div>
+                <div class="workboard-card-meta">
+                  @if (p.roomBed) {
+                    <span class="meta-item">
+                      <span class="material-symbols-outlined">bed</span> {{ p.roomBed }}
+                    </span>
+                  }
+                  @if (p.mrn) {
+                    <span class="meta-item">MRN: {{ p.mrn }}</span>
+                  }
+                  @if (p.departmentName) {
+                    <span class="meta-item">{{ p.departmentName }}</span>
+                  }
+                  @if (p.attendingDoctor) {
+                    <span class="meta-item">
+                      <span class="material-symbols-outlined">stethoscope</span>
+                      {{ p.attendingDoctor }}
+                    </span>
+                  }
+                </div>
+                <div class="workboard-card-indicators">
+                  @if (p.vitalsDue) {
+                    <span class="indicator indicator-warn">
+                      <span class="material-symbols-outlined">monitor_heart</span> Vitals Due
+                    </span>
+                  } @else if (p.lastVitalsTime) {
+                    <span class="indicator indicator-ok">
+                      <span class="material-symbols-outlined">monitor_heart</span>
+                      {{ p.lastVitalsTime | date: 'shortTime' }}
+                    </span>
+                  }
+                  @if (p.medsDue > 0) {
+                    <span class="indicator indicator-warn">
+                      <span class="material-symbols-outlined">medication</span>
+                      {{ p.medsDue }} Med{{ p.medsDue > 1 ? 's' : '' }} Due
+                    </span>
+                  }
+                  @if (p.admittedAt) {
+                    <span class="indicator indicator-neutral">
+                      <span class="material-symbols-outlined">login</span>
+                      Admitted {{ p.admittedAt | date: 'shortDate' }}
+                    </span>
+                  }
+                </div>
+                <div class="workboard-card-actions">
+                  <button
+                    class="action-btn action-record"
+                    (click)="recordVitals(p.patientId, p.patientName)"
+                    title="Record vitals inline"
+                  >
+                    <span class="material-symbols-outlined">edit_note</span> Vitals
+                  </button>
+                  @if (p.patientId) {
+                    <a
+                      class="action-btn action-view"
+                      [routerLink]="['/patients', p.patientId]"
+                      title="View patient record"
+                    >
+                      <span class="material-symbols-outlined">open_in_new</span> Chart
+                    </a>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      }
+
+      <!-- ═══════════ FLOW BOARD TAB ═══════════ -->
+      @if (!loading() && activeSection() === 'flowboard') {
+        @if (
+          !flowBoard() ||
+          (flowBoard()!.pending.length === 0 &&
+            flowBoard()!.active.length === 0 &&
+            flowBoard()!.critical.length === 0 &&
+            flowBoard()!.awaitingDischarge.length === 0)
+        ) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">view_kanban</span>
+            <h3>No patients on flow board</h3>
+            <p>Active admissions will appear here sorted by status.</p>
+          </div>
+        } @else {
+          <div class="flow-board">
+            <!-- Pending column -->
+            <div class="flow-column">
+              <div class="flow-column-header flow-header-pending">
+                <span class="material-symbols-outlined">pending</span>
+                Pending
+                <span class="flow-count">{{ flowBoard()!.pending.length }}</span>
+              </div>
+              <div class="flow-cards">
+                @for (c of flowBoard()!.pending; track c.admissionId) {
+                  <div class="flow-card">
+                    <div class="flow-card-name">
+                      @if (c.patientId) {
+                        <a [routerLink]="['/patients', c.patientId]">{{ c.patientName }}</a>
+                      } @else {
+                        {{ c.patientName }}
+                      }
+                    </div>
+                    @if (c.roomBed) {
+                      <div class="flow-card-room">{{ c.roomBed }}</div>
+                    }
+                    @if (c.acuityLevel) {
+                      <span class="acuity-badge {{ acuityCssClass(c.acuityLevel) }}">
+                        {{ acuityLabel(c.acuityLevel) }}
+                      </span>
+                    }
+                    <div class="flow-card-wait">{{ c.waitMinutes }} min</div>
+                  </div>
+                }
+              </div>
+            </div>
+
+            <!-- Active column -->
+            <div class="flow-column">
+              <div class="flow-column-header flow-header-active">
+                <span class="material-symbols-outlined">local_hospital</span>
+                Active
+                <span class="flow-count">{{ flowBoard()!.active.length }}</span>
+              </div>
+              <div class="flow-cards">
+                @for (c of flowBoard()!.active; track c.admissionId) {
+                  <div class="flow-card">
+                    <div class="flow-card-name">
+                      @if (c.patientId) {
+                        <a [routerLink]="['/patients', c.patientId]">{{ c.patientName }}</a>
+                      } @else {
+                        {{ c.patientName }}
+                      }
+                    </div>
+                    @if (c.roomBed) {
+                      <div class="flow-card-room">{{ c.roomBed }}</div>
+                    }
+                    @if (c.acuityLevel) {
+                      <span class="acuity-badge {{ acuityCssClass(c.acuityLevel) }}">
+                        {{ acuityLabel(c.acuityLevel) }}
+                      </span>
+                    }
+                    <div class="flow-card-wait">{{ c.waitMinutes }} min</div>
+                  </div>
+                }
+              </div>
+            </div>
+
+            <!-- Critical column -->
+            <div class="flow-column">
+              <div class="flow-column-header flow-header-critical">
+                <span class="material-symbols-outlined">warning</span>
+                Critical / Severe
+                <span class="flow-count">{{ flowBoard()!.critical.length }}</span>
+              </div>
+              <div class="flow-cards">
+                @for (c of flowBoard()!.critical; track c.admissionId) {
+                  <div class="flow-card flow-card-critical">
+                    <div class="flow-card-name">
+                      @if (c.patientId) {
+                        <a [routerLink]="['/patients', c.patientId]">{{ c.patientName }}</a>
+                      } @else {
+                        {{ c.patientName }}
+                      }
+                    </div>
+                    @if (c.roomBed) {
+                      <div class="flow-card-room">{{ c.roomBed }}</div>
+                    }
+                    @if (c.acuityLevel) {
+                      <span class="acuity-badge {{ acuityCssClass(c.acuityLevel) }}">
+                        {{ acuityLabel(c.acuityLevel) }}
+                      </span>
+                    }
+                    <div class="flow-card-wait">{{ c.waitMinutes }} min</div>
+                  </div>
+                }
+              </div>
+            </div>
+
+            <!-- Awaiting Discharge column -->
+            <div class="flow-column">
+              <div class="flow-column-header flow-header-discharge">
+                <span class="material-symbols-outlined">logout</span>
+                Awaiting Discharge
+                <span class="flow-count">{{ flowBoard()!.awaitingDischarge.length }}</span>
+              </div>
+              <div class="flow-cards">
+                @for (c of flowBoard()!.awaitingDischarge; track c.admissionId) {
+                  <div class="flow-card">
+                    <div class="flow-card-name">
+                      @if (c.patientId) {
+                        <a [routerLink]="['/patients', c.patientId]">{{ c.patientName }}</a>
+                      } @else {
+                        {{ c.patientName }}
+                      }
+                    </div>
+                    @if (c.roomBed) {
+                      <div class="flow-card-room">{{ c.roomBed }}</div>
+                    }
+                    @if (c.acuityLevel) {
+                      <span class="acuity-badge {{ acuityCssClass(c.acuityLevel) }}">
+                        {{ acuityLabel(c.acuityLevel) }}
+                      </span>
+                    }
+                    <div class="flow-card-wait">{{ c.waitMinutes }} min</div>
+                  </div>
+                }
+              </div>
+            </div>
+          </div>
+        }
+      }
+
+      <!-- ═══════════ ADMISSIONS TAB ═══════════ -->
+      @if (!loading() && activeSection() === 'admissions') {
+        @if (pendingAdmissions().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">transfer_within_a_station</span>
+            <h3>No pending admissions or discharges</h3>
+            <p>New arrivals and discharge-ready patients will appear here.</p>
+          </div>
+        }
+        @if (pendingAdmissions().length > 0) {
+          <div class="data-table">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Patient</th>
+                  <th scope="col">MRN</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Acuity</th>
+                  <th scope="col">Room/Bed</th>
+                  <th scope="col">Department</th>
+                  <th scope="col">Doctor</th>
+                  <th scope="col">Admitted</th>
+                  <th scope="col">Type</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (a of pendingAdmissions(); track a.admissionId) {
+                  <tr class="data-row" [class.discharge-row]="a.status === 'AWAITING_DISCHARGE'">
+                    <td>
+                      @if (a.patientId) {
+                        <a
+                          class="cell-primary patient-link"
+                          [routerLink]="['/patients', a.patientId]"
+                        >
+                          {{ a.patientName }}
+                        </a>
+                      } @else {
+                        <div class="cell-primary">{{ a.patientName }}</div>
+                      }
+                    </td>
+                    <td>{{ a.mrn || '—' }}</td>
+                    <td>
+                      <span class="status-badge status-{{ a.status | lowercase }}">{{
+                        a.status
+                      }}</span>
+                    </td>
+                    <td>
+                      @if (a.acuityLevel) {
+                        <span class="acuity-badge {{ acuityCssClass(a.acuityLevel) }}">
+                          {{ acuityLabel(a.acuityLevel) }}
+                        </span>
+                      } @else {
+                        —
+                      }
+                    </td>
+                    <td>{{ a.roomBed || '—' }}</td>
+                    <td>{{ a.departmentName || '—' }}</td>
+                    <td>{{ a.admittingDoctor || '—' }}</td>
+                    <td>{{ a.admissionDateTime | date: 'short' }}</td>
+                    <td>{{ a.admissionType || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+
+      <!-- ═══════════ TASK BOARD TAB ═══════════ -->
+      @if (!loading() && activeSection() === 'tasks') {
+        <div class="task-board-header">
+          <h3>Nursing Task Board</h3>
+          <button class="btn-small btn-primary" (click)="openTaskCreate()">
+            <span class="material-symbols-outlined">add_task</span> New Task
+          </button>
+        </div>
+        @if (nursingTasks().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">task_alt</span>
+            <h3>No active nursing tasks</h3>
+            <p>Create a new task to track bedside care activities.</p>
+          </div>
+        }
+        @if (nursingTasks().length > 0) {
+          <div class="task-list">
+            @for (task of nursingTasks(); track task.id) {
+              <div
+                class="task-card"
+                [class.task-overdue]="task.overdue"
+                [class]="taskPriorityClass(task.priority)"
+              >
+                <div class="task-card-header">
+                  <span class="task-category">{{ taskCategoryLabel(task.category) }}</span>
+                  <span class="task-priority-badge">{{ task.priority }}</span>
+                </div>
+                <div class="task-card-body">
+                  <div class="task-patient">
+                    <strong>{{ task.patientName }}</strong>
+                    @if (task.mrn) {
+                      <span class="task-mrn">{{ task.mrn }}</span>
+                    }
+                  </div>
+                  @if (task.description) {
+                    <p class="task-description">{{ task.description }}</p>
+                  }
+                  @if (task.dueAt) {
+                    <span class="task-due" [class.overdue-text]="task.overdue">
+                      Due: {{ task.dueAt | date: 'shortTime' }}
+                      @if (task.overdue) {
+                        <span class="overdue-badge">OVERDUE</span>
+                      }
+                    </span>
+                  }
+                </div>
+                <div class="task-card-actions">
+                  @if (task.status === 'PENDING' || task.status === 'IN_PROGRESS') {
+                    <button
+                      class="btn-small btn-success"
+                      (click)="completeTask(task.id)"
+                      [disabled]="actionInProgress() === task.id"
+                    >
+                      <span class="material-symbols-outlined">check_circle</span> Complete
+                    </button>
+                    <button
+                      class="btn-small btn-outline"
+                      (click)="openCareNote(task.patientId, task.patientName)"
+                    >
+                      <span class="material-symbols-outlined">edit_note</span> Note
+                    </button>
+                  } @else {
+                    <span class="task-completed-info">
+                      Completed {{ task.completedAt | date: 'short' }}
+                      @if (task.completedByName) {
+                        by {{ task.completedByName }}
+                      }
+                    </span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      }
+
+      <!-- ═══════════ INBOX TAB ═══════════ -->
+      @if (!loading() && activeSection() === 'inbox') {
+        <div class="inbox-header">
+          <h3>Communication Inbox</h3>
+          @if (inboxUnreadCount() > 0) {
+            <button class="btn-small btn-outline" (click)="markAllRead()">Mark All Read</button>
+          }
+        </div>
+        @if (inboxItems().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">inbox</span>
+            <h3>No messages</h3>
+            <p>Physician orders, lab requests, and handoff communications will appear here.</p>
+          </div>
+        }
+        @if (inboxItems().length > 0) {
+          <div class="inbox-list">
+            @for (item of inboxItems(); track item.id) {
+              <div
+                class="inbox-item"
+                [class.inbox-unread]="!item.read"
+                (click)="markRead(item.id)"
+                (keydown.enter)="markRead(item.id)"
+                tabindex="0"
+                role="button"
+              >
+                <div class="inbox-icon">
+                  <span class="material-symbols-outlined">{{
+                    item.read ? 'mark_email_read' : 'mail'
+                  }}</span>
+                </div>
+                <div class="inbox-body">
+                  <p class="inbox-message">{{ item.message }}</p>
+                  <span class="inbox-time">{{ item.createdAt | date: 'short' }}</span>
+                </div>
               </div>
             }
           </div>
         }
       }
     </div>
+
+    <!-- ── Announcements Sidebar ──────────────────────────── -->
     <aside class="announcements-sidebar">
       <h3><span class="material-symbols-outlined">campaign</span> Announcements</h3>
       @if (announcements().length === 0) {
@@ -237,3 +827,519 @@
     </aside>
   </div>
 </div>
+
+<!-- ── Hold/Refuse Reason Modal ──────────────────────────── -->
+@if (reasonPrompt()) {
+  <div
+    class="modal-backdrop"
+    role="button"
+    tabindex="0"
+    (click)="cancelHoldRefuse()"
+    (keydown.enter)="cancelHoldRefuse()"
+    (keydown.escape)="cancelHoldRefuse()"
+  >
+    <div
+      class="modal-content"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="reason-dialog-title"
+      tabindex="-1"
+      #reasonDialog
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="cancelHoldRefuse()"
+    >
+      <h3 id="reason-dialog-title">
+        {{ reasonPrompt()?.action === 'HELD' ? 'Hold' : 'Refuse' }} Medication
+      </h3>
+      <p>Please provide a reason:</p>
+      <textarea
+        class="reason-input"
+        [ngModel]="reasonText()"
+        (ngModelChange)="reasonText.set($event)"
+        placeholder="Enter reason..."
+        rows="3"
+      ></textarea>
+      <div class="modal-actions">
+        <button class="modal-btn modal-cancel" (click)="cancelHoldRefuse()">Cancel</button>
+        <button
+          class="modal-btn modal-confirm"
+          (click)="confirmHoldRefuse()"
+          [disabled]="!reasonText()"
+        >
+          Confirm {{ reasonPrompt()?.action === 'HELD' ? 'Hold' : 'Refuse' }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Inline Vitals Capture Modal ───────────────────────── -->
+@if (vitalsCaptureFor()) {
+  <div
+    class="modal-backdrop"
+    role="button"
+    tabindex="0"
+    (click)="closeVitalsDialog()"
+    (keydown.enter)="closeVitalsDialog()"
+    (keydown.escape)="closeVitalsDialog()"
+  >
+    <div
+      class="modal-content modal-vitals"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="vitals-dialog-title"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="closeVitalsDialog()"
+    >
+      <h3 id="vitals-dialog-title">
+        <span class="material-symbols-outlined">monitor_heart</span>
+        Record Vitals — {{ vitalsCaptureFor()?.patientName }}
+      </h3>
+      <div class="vitals-form-grid">
+        <div class="vitals-field">
+          <label for="vf-temp">Temperature (°C)</label>
+          <input
+            id="vf-temp"
+            type="number"
+            step="0.1"
+            min="30"
+            max="45"
+            placeholder="e.g. 37.2"
+            [value]="vitalsForm().temperatureCelsius ?? ''"
+            (input)="updateVitalsField('temperatureCelsius', $any($event.target).value)"
+          />
+        </div>
+        <div class="vitals-field">
+          <label for="vf-hr">Heart Rate (bpm)</label>
+          <input
+            id="vf-hr"
+            type="number"
+            min="20"
+            max="300"
+            placeholder="e.g. 72"
+            [value]="vitalsForm().heartRateBpm ?? ''"
+            (input)="updateVitalsField('heartRateBpm', $any($event.target).value)"
+          />
+        </div>
+        <div class="vitals-field">
+          <label for="vf-rr">Resp. Rate (bpm)</label>
+          <input
+            id="vf-rr"
+            type="number"
+            min="1"
+            max="60"
+            placeholder="e.g. 16"
+            [value]="vitalsForm().respiratoryRateBpm ?? ''"
+            (input)="updateVitalsField('respiratoryRateBpm', $any($event.target).value)"
+          />
+        </div>
+        <div class="vitals-field">
+          <label for="vf-sbp">Systolic BP (mmHg)</label>
+          <input
+            id="vf-sbp"
+            type="number"
+            min="40"
+            max="300"
+            placeholder="e.g. 120"
+            [value]="vitalsForm().systolicBpMmHg ?? ''"
+            (input)="updateVitalsField('systolicBpMmHg', $any($event.target).value)"
+          />
+        </div>
+        <div class="vitals-field">
+          <label for="vf-dbp">Diastolic BP (mmHg)</label>
+          <input
+            id="vf-dbp"
+            type="number"
+            min="20"
+            max="200"
+            placeholder="e.g. 80"
+            [value]="vitalsForm().diastolicBpMmHg ?? ''"
+            (input)="updateVitalsField('diastolicBpMmHg', $any($event.target).value)"
+          />
+        </div>
+        <div class="vitals-field">
+          <label for="vf-spo2">SpO₂ (%)</label>
+          <input
+            id="vf-spo2"
+            type="number"
+            min="50"
+            max="100"
+            placeholder="e.g. 98"
+            [value]="vitalsForm().spo2Percent ?? ''"
+            (input)="updateVitalsField('spo2Percent', $any($event.target).value)"
+          />
+        </div>
+        <div class="vitals-field">
+          <label for="vf-glucose">Blood Glucose (mg/dL)</label>
+          <input
+            id="vf-glucose"
+            type="number"
+            min="10"
+            max="1000"
+            placeholder="e.g. 100"
+            [value]="vitalsForm().bloodGlucoseMgDl ?? ''"
+            (input)="updateVitalsField('bloodGlucoseMgDl', $any($event.target).value)"
+          />
+        </div>
+        <div class="vitals-field">
+          <label for="vf-weight">Weight (kg)</label>
+          <input
+            id="vf-weight"
+            type="number"
+            step="0.1"
+            min="1"
+            max="500"
+            placeholder="e.g. 70.5"
+            [value]="vitalsForm().weightKg ?? ''"
+            (input)="updateVitalsField('weightKg', $any($event.target).value)"
+          />
+        </div>
+        <div class="vitals-field vitals-field-full">
+          <label for="vf-notes">Notes</label>
+          <textarea
+            id="vf-notes"
+            class="reason-input"
+            placeholder="Clinical notes (optional)"
+            rows="2"
+            [value]="vitalsForm().notes ?? ''"
+            (input)="updateVitalsNotes($any($event.target).value)"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button
+          class="modal-btn modal-cancel"
+          (click)="closeVitalsDialog()"
+          [disabled]="vitalsCapturing()"
+        >
+          Cancel
+        </button>
+        <button
+          class="modal-btn modal-confirm"
+          (click)="submitVitals()"
+          [disabled]="vitalsCapturing()"
+        >
+          @if (vitalsCapturing()) {
+            <span class="material-symbols-outlined">hourglass_empty</span> Saving...
+          } @else {
+            <span class="material-symbols-outlined">save</span> Save Vitals
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══════════ TASK CREATE MODAL ═══════════ -->
+@if (taskCreateOpen()) {
+  <div
+    class="modal-backdrop"
+    (click)="closeTaskCreate()"
+    (keydown.enter)="closeTaskCreate()"
+    tabindex="0"
+    role="button"
+  >
+    <div
+      class="modal-card modal-medium"
+      (click)="$event.stopPropagation()"
+      (keydown.enter)="$event.stopPropagation()"
+      tabindex="-1"
+      role="dialog"
+    >
+      <div class="modal-header">
+        <h3>Create Nursing Task</h3>
+        <button class="modal-close" (click)="closeTaskCreate()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label for="tc-patient">Patient ID</label>
+          <input
+            id="tc-patient"
+            type="text"
+            class="reason-input"
+            placeholder="Patient UUID"
+            [value]="taskForm().patientId"
+            (input)="updateTaskField('patientId', $any($event.target).value)"
+          />
+        </div>
+        <div class="form-row">
+          <label for="tc-category">Category</label>
+          <select
+            id="tc-category"
+            class="reason-input"
+            [value]="taskForm().category"
+            (change)="updateTaskField('category', $any($event.target).value)"
+          >
+            <option value="">Select…</option>
+            <option value="DRESSING_CHANGE">Dressing Change</option>
+            <option value="IV_CHECK">IV Check</option>
+            <option value="CATHETER_CARE">Catheter Care</option>
+            <option value="PAIN_REASSESSMENT">Pain Reassessment</option>
+            <option value="MOBILITY_ASSIST">Mobility Assist</option>
+            <option value="INTAKE_OUTPUT">Intake &amp; Output</option>
+            <option value="WOUND_CARE">Wound Care</option>
+            <option value="OTHER">Other</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label for="tc-description">Description</label>
+          <textarea
+            id="tc-description"
+            class="reason-input"
+            rows="2"
+            placeholder="Task details (optional)"
+            [value]="taskForm().description ?? ''"
+            (input)="updateTaskField('description', $any($event.target).value)"
+          ></textarea>
+        </div>
+        <div class="form-row-inline">
+          <div class="form-row">
+            <label for="tc-priority">Priority</label>
+            <select
+              id="tc-priority"
+              class="reason-input"
+              [value]="taskForm().priority"
+              (change)="updateTaskField('priority', $any($event.target).value)"
+            >
+              <option value="ROUTINE">Routine</option>
+              <option value="URGENT">Urgent</option>
+              <option value="STAT">Stat</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label for="tc-due">Due At</label>
+            <input
+              id="tc-due"
+              type="datetime-local"
+              class="reason-input"
+              [value]="taskForm().dueAt ?? ''"
+              (input)="updateTaskField('dueAt', $any($event.target).value)"
+            />
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button
+          class="modal-btn modal-cancel"
+          (click)="closeTaskCreate()"
+          [disabled]="taskCreating()"
+        >
+          Cancel
+        </button>
+        <button
+          class="modal-btn modal-confirm"
+          (click)="submitCreateTask()"
+          [disabled]="taskCreating() || !taskForm().patientId || !taskForm().category"
+        >
+          @if (taskCreating()) {
+            <span class="material-symbols-outlined">hourglass_empty</span> Creating...
+          } @else {
+            <span class="material-symbols-outlined">add_task</span> Create Task
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══════════ CARE NOTE MODAL ═══════════ -->
+@if (careNoteFor()) {
+  <div
+    class="modal-backdrop"
+    (click)="closeCareNote()"
+    (keydown.enter)="closeCareNote()"
+    tabindex="0"
+    role="button"
+  >
+    <div
+      class="modal-card modal-large"
+      (click)="$event.stopPropagation()"
+      (keydown.enter)="$event.stopPropagation()"
+      tabindex="-1"
+      role="dialog"
+    >
+      <div class="modal-header">
+        <h3>Care Note — {{ careNoteFor()!.patientName }}</h3>
+        <button class="modal-close" (click)="closeCareNote()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label for="cn-title">Title</label>
+          <input
+            id="cn-title"
+            type="text"
+            class="reason-input"
+            placeholder="Note title"
+            [value]="careNoteForm().title ?? ''"
+            (input)="updateCareNoteField('title', $any($event.target).value)"
+          />
+        </div>
+        <div class="form-row">
+          <span class="form-label">Template</span>
+          <div class="template-toggle">
+            <button
+              class="toggle-btn"
+              [class.active]="careNoteForm().template === 'DAR'"
+              (click)="updateCareNoteField('template', 'DAR')"
+            >
+              DAR
+            </button>
+            <button
+              class="toggle-btn"
+              [class.active]="careNoteForm().template === 'SOAPIE'"
+              (click)="updateCareNoteField('template', 'SOAPIE')"
+            >
+              SOAPIE
+            </button>
+          </div>
+        </div>
+
+        @if (careNoteForm().template === 'DAR') {
+          <div class="care-note-fields">
+            <div class="form-row">
+              <label for="cn-data">Data (Subjective + Objective)</label>
+              <textarea
+                id="cn-data"
+                class="reason-input"
+                rows="2"
+                placeholder="Patient data and assessment findings"
+                [value]="careNoteForm().dataPart ?? ''"
+                (input)="updateCareNoteField('dataPart', $any($event.target).value)"
+              ></textarea>
+            </div>
+            <div class="form-row">
+              <label for="cn-action">Action</label>
+              <textarea
+                id="cn-action"
+                class="reason-input"
+                rows="2"
+                placeholder="Interventions performed"
+                [value]="careNoteForm().actionPart ?? ''"
+                (input)="updateCareNoteField('actionPart', $any($event.target).value)"
+              ></textarea>
+            </div>
+            <div class="form-row">
+              <label for="cn-response">Response</label>
+              <textarea
+                id="cn-response"
+                class="reason-input"
+                rows="2"
+                placeholder="Patient response to interventions"
+                [value]="careNoteForm().responsePart ?? ''"
+                (input)="updateCareNoteField('responsePart', $any($event.target).value)"
+              ></textarea>
+            </div>
+          </div>
+        }
+
+        @if (careNoteForm().template === 'SOAPIE') {
+          <div class="care-note-fields">
+            <div class="form-row">
+              <label for="cn-subj">Subjective</label>
+              <textarea
+                id="cn-subj"
+                class="reason-input"
+                rows="2"
+                placeholder="Patient's complaints and statements"
+                [value]="careNoteForm().subjective ?? ''"
+                (input)="updateCareNoteField('subjective', $any($event.target).value)"
+              ></textarea>
+            </div>
+            <div class="form-row">
+              <label for="cn-obj">Objective</label>
+              <textarea
+                id="cn-obj"
+                class="reason-input"
+                rows="2"
+                placeholder="Measurable findings, vital signs"
+                [value]="careNoteForm().objective ?? ''"
+                (input)="updateCareNoteField('objective', $any($event.target).value)"
+              ></textarea>
+            </div>
+            <div class="form-row">
+              <label for="cn-assess">Assessment</label>
+              <textarea
+                id="cn-assess"
+                class="reason-input"
+                rows="2"
+                placeholder="Nursing diagnosis / clinical assessment"
+                [value]="careNoteForm().assessment ?? ''"
+                (input)="updateCareNoteField('assessment', $any($event.target).value)"
+              ></textarea>
+            </div>
+            <div class="form-row">
+              <label for="cn-plan">Plan</label>
+              <textarea
+                id="cn-plan"
+                class="reason-input"
+                rows="2"
+                placeholder="Care plan and goals"
+                [value]="careNoteForm().plan ?? ''"
+                (input)="updateCareNoteField('plan', $any($event.target).value)"
+              ></textarea>
+            </div>
+            <div class="form-row">
+              <label for="cn-impl">Implementation</label>
+              <textarea
+                id="cn-impl"
+                class="reason-input"
+                rows="2"
+                placeholder="Interventions carried out"
+                [value]="careNoteForm().implementation ?? ''"
+                (input)="updateCareNoteField('implementation', $any($event.target).value)"
+              ></textarea>
+            </div>
+            <div class="form-row">
+              <label for="cn-eval">Evaluation</label>
+              <textarea
+                id="cn-eval"
+                class="reason-input"
+                rows="2"
+                placeholder="Outcome of interventions"
+                [value]="careNoteForm().evaluation ?? ''"
+                (input)="updateCareNoteField('evaluation', $any($event.target).value)"
+              ></textarea>
+            </div>
+          </div>
+        }
+
+        <div class="form-row">
+          <label for="cn-narrative">Narrative / Free Text</label>
+          <textarea
+            id="cn-narrative"
+            class="reason-input"
+            rows="3"
+            placeholder="Additional narrative notes"
+            [value]="careNoteForm().narrative ?? ''"
+            (input)="updateCareNoteField('narrative', $any($event.target).value)"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button
+          class="modal-btn modal-cancel"
+          (click)="closeCareNote()"
+          [disabled]="careNoteCreating()"
+        >
+          Cancel
+        </button>
+        <button
+          class="modal-btn modal-confirm"
+          (click)="submitCareNote()"
+          [disabled]="careNoteCreating()"
+        >
+          @if (careNoteCreating()) {
+            <span class="material-symbols-outlined">hourglass_empty</span> Saving...
+          } @else {
+            <span class="material-symbols-outlined">save</span> Save Note
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}

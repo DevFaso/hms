@@ -60,6 +60,9 @@ class BillingInvoiceServiceImplTest {
     @Mock
     private com.example.hms.utility.RoleValidator roleValidator;
 
+    @Mock
+    private BillingInvoiceService self;
+
     private BillingInvoiceServiceImpl billingInvoiceService;
     private BillingInvoiceMapper invoiceMapper;
     private AutoCloseable mocks;
@@ -76,7 +79,8 @@ class BillingInvoiceServiceImplTest {
             invoiceItemRepository,
             pdfInvoiceService,
             invoiceMapper,
-            roleValidator
+            roleValidator,
+            self
         );
     }
 

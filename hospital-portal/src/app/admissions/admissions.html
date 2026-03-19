@@ -11,14 +11,28 @@
     </div>
   </div>
   <div class="summary-cards">
-    <div class="summary-card">
+    <div
+      class="summary-card"
+      role="button"
+      tabindex="0"
+      (click)="setTab('admitted')"
+      (keydown.enter)="setTab('admitted')"
+      (keydown.space)="setTab('admitted')"
+    >
       <span class="material-symbols-outlined card-icon admitted">hotel</span>
       <div class="card-info">
         <span class="card-value">{{ countByStatus('ACTIVE') }}</span
         ><span class="card-label">Admitted</span>
       </div>
     </div>
-    <div class="summary-card">
+    <div
+      class="summary-card"
+      role="button"
+      tabindex="0"
+      (click)="setTab('discharged')"
+      (keydown.enter)="setTab('discharged')"
+      (keydown.space)="setTab('discharged')"
+    >
       <span class="material-symbols-outlined card-icon discharged">logout</span>
       <div class="card-info">
         <span class="card-value">{{ countByStatus('DISCHARGED') }}</span
@@ -32,7 +46,14 @@
         ><span class="card-label">Pending</span>
       </div>
     </div>
-    <div class="summary-card">
+    <div
+      class="summary-card"
+      role="button"
+      tabindex="0"
+      (click)="setTab('all')"
+      (keydown.enter)="setTab('all')"
+      (keydown.space)="setTab('all')"
+    >
       <span class="material-symbols-outlined card-icon total">bar_chart</span>
       <div class="card-info">
         <span class="card-value">{{ admissions().length }}</span

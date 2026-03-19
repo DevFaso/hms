@@ -7,5 +7,7 @@ public enum PrescriptionStatus {
     TRANSMITTED,
     TRANSMISSION_FAILED,
     CANCELLED,
-    DISCONTINUED
+    DISCONTINUED,
+    /** Prescription flagged by pharmacy and awaiting physician clarification. */
+    PENDING_CLARIFICATION
 }

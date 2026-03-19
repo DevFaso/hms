@@ -1,0 +1,156 @@
+<div class="feature-flags-page">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="header-left">
+      <span class="material-icons header-icon">flag</span>
+      <div>
+        <h1>Feature Flags</h1>
+        <p class="subtitle">Manage platform feature toggles</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="stat-pills">
+        <span class="pill enabled">{{ enabledCount() }} Enabled</span>
+        <span class="pill disabled">{{ disabledCount() }} Disabled</span>
+      </div>
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-icons">add</span> New Flag
+      </button>
+    </div>
+  </div>
+
+  <!-- Search -->
+  <div class="search-bar">
+    <span class="material-icons search-icon">search</span>
+    <input
+      type="text"
+      placeholder="Search flags..."
+      [ngModel]="search()"
+      (ngModelChange)="search.set($event)"
+    />
+  </div>
+
+  <!-- Loading state -->
+  @if (loading()) {
+    <div class="loading-state">
+      <span class="material-icons spin">sync</span>
+      <p>Loading feature flags...</p>
+    </div>
+  }
+
+  <!-- Flags table -->
+  @if (!loading()) {
+    <div class="flags-table">
+      <div class="table-header">
+        <span class="col-status">Status</span>
+        <span class="col-key">Flag Key</span>
+        <span class="col-actions">Actions</span>
+      </div>
+
+      @for (flag of filteredFlags(); track flag.key) {
+        <div class="flag-row" [class.enabled]="flag.enabled" [class.disabled]="!flag.enabled">
+          <div class="col-status">
+            <button
+              class="toggle-btn"
+              [class.on]="flag.enabled"
+              (click)="toggleFlag(flag)"
+              [attr.aria-label]="flag.enabled ? 'Disable ' + flag.key : 'Enable ' + flag.key"
+            >
+              <span class="toggle-track">
+                <span class="toggle-thumb"></span>
+              </span>
+            </button>
+          </div>
+          <div class="col-key">
+            <span class="flag-name">{{ flag.key }}</span>
+            <span class="flag-badge" [class.on]="flag.enabled">
+              {{ flag.enabled ? 'ON' : 'OFF' }}
+            </span>
+          </div>
+          <div class="col-actions">
+            <button class="btn-icon" (click)="toggleFlag(flag)" title="Toggle">
+              <span class="material-icons">{{ flag.enabled ? 'toggle_on' : 'toggle_off' }}</span>
+            </button>
+            <button class="btn-icon danger" (click)="removeOverride(flag)" title="Remove override">
+              <span class="material-icons">delete_outline</span>
+            </button>
+          </div>
+        </div>
+      }
+
+      @if (filteredFlags().length === 0) {
+        <div class="empty-state">
+          <span class="material-icons">search_off</span>
+          <p>No flags found matching "{{ search() }}"</p>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Create Modal -->
+  @if (showCreateModal()) {
+    <div
+      class="modal-backdrop"
+      (click)="closeCreate()"
+      (keydown.enter)="closeCreate()"
+      tabindex="0"
+      role="button"
+    >
+      <div
+        class="modal-content"
+        (click)="$event.stopPropagation()"
+        (keydown.enter)="$event.stopPropagation()"
+        tabindex="-1"
+        role="dialog"
+      >
+        <div class="modal-header">
+          <h2>Create Feature Flag</h2>
+          <button class="btn-icon" (click)="closeCreate()">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="flag-key">Flag Key</label>
+            <input
+              id="flag-key"
+              type="text"
+              placeholder="e.g. TELEHEALTH_ENABLED"
+              [ngModel]="newFlagKey()"
+              (ngModelChange)="newFlagKey.set($event)"
+            />
+          </div>
+          <div class="form-group">
+            <label for="flag-description">Description</label>
+            <input
+              id="flag-description"
+              type="text"
+              placeholder="Optional description"
+              [ngModel]="newFlagDescription()"
+              (ngModelChange)="newFlagDescription.set($event)"
+            />
+          </div>
+          <div class="form-group toggle-group">
+            <span class="toggle-group-label">Initial State</span>
+            <button
+              class="toggle-btn"
+              [class.on]="newFlagEnabled()"
+              (click)="newFlagEnabled.set(!newFlagEnabled())"
+            >
+              <span class="toggle-track">
+                <span class="toggle-thumb"></span>
+              </span>
+            </button>
+            <span class="toggle-label">{{ newFlagEnabled() ? 'Enabled' : 'Disabled' }}</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeCreate()">Cancel</button>
+          <button class="btn-primary" (click)="createFlag()" [disabled]="saving()">
+            {{ saving() ? 'Creating...' : 'Create Flag' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>

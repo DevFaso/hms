@@ -33,6 +33,7 @@ export class ShellComponent implements OnInit, OnDestroy {
   protected readonly idle = inject(IdleService);
   private readonly navOrder = inject(NavOrderService);
   private notifSub?: Subscription;
+  private readCountSub?: Subscription;
 
   sidebarCollapsed = signal(false);
   profileMenuOpen = signal(false);
@@ -182,6 +183,16 @@ export class ShellComponent implements OnInit, OnDestroy {
     if (this.permissions.hasPermission('View Audit Logs')) {
       items.push({ icon: 'policy', label: 'Audit Logs', route: '/audit-logs' });
     }
+    if (
+      this.auth.hasAnyRole([
+        'ROLE_RECEPTIONIST',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({ icon: 'space_dashboard', label: 'Front Desk', route: '/reception' });
+    }
 
     // Doctor role: hide admin/nurse-specific entries for a cleaner sidebar
     const isDoctor = this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON']);
@@ -220,11 +231,18 @@ export class ShellComponent implements OnInit, OnDestroy {
         this.recentNotifications.update((list) => [n, ...list].slice(0, 10));
         this.unreadCount.update((c) => c + 1);
       });
+      this.readCountSub = this.notifService.getReadStream().subscribe(() => {
+        this.unreadCount.update((c) => Math.max(0, c - 1));
+      });
+      this.notifService.getAllReadStream().subscribe(() => {
+        this.unreadCount.set(0);
+      });
     }
   }
 
   ngOnDestroy(): void {
     this.notifSub?.unsubscribe();
+    this.readCountSub?.unsubscribe();
     this.notifService.disconnectWebSocket();
     this.idle.stop();
   }

@@ -210,3 +210,26 @@
     font-size: 16px;
   }
 }
+
+.rp-ack-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 0.15s;
+
+  &:hover {
+    background: #dcfce7;
+    color: #16a34a;
+  }
+
+  .material-symbols-outlined {
+    font-size: 16px;
+  }
+}

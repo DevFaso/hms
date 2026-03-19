@@ -1,0 +1,237 @@
+<div class="waitlist-panel">
+  <!-- Toolbar -->
+  <div class="panel-toolbar">
+    <div class="filter-group">
+      @for (opt of statusOptions; track opt) {
+        <button
+          class="filter-btn"
+          [class.active]="statusFilter() === opt"
+          (click)="statusFilter.set(opt); loadEntries()"
+        >
+          {{ opt }}
+        </button>
+      }
+    </div>
+    <button class="btn-primary" (click)="openAddForm()">
+      <span class="material-symbols-outlined">playlist_add</span>
+      Add to Waitlist
+    </button>
+  </div>
+
+  <!-- List -->
+  @if (loading()) {
+    <div class="loading-row">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+      Loading…
+    </div>
+  } @else if (entries().length === 0) {
+    <div class="empty-state">No waitlist entries for this filter.</div>
+  } @else {
+    <table class="waitlist-table">
+      <thead>
+        <tr>
+          <th>Patient</th>
+          <th>Department</th>
+          <th>Provider</th>
+          <th>Priority</th>
+          <th>Requested Dates</th>
+          <th>Reason</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (entry of entries(); track entry.id) {
+          <tr>
+            <td>
+              <button class="patient-link" (click)="patientClicked.emit(entry.patientId)">
+                {{ entry.patientName }}
+              </button>
+              @if (entry.mrn) {
+                <span class="mrn-tag">{{ entry.mrn }}</span>
+              }
+            </td>
+            <td>{{ entry.departmentName }}</td>
+            <td>{{ entry.preferredProviderName ?? '—' }}</td>
+            <td>
+              <span [ngClass]="priorityClass(entry.priority)">{{ entry.priority }}</span>
+            </td>
+            <td>
+              @if (entry.requestedDateFrom || entry.requestedDateTo) {
+                {{ entry.requestedDateFrom ?? '?' }} → {{ entry.requestedDateTo ?? '?' }}
+              } @else {
+                —
+              }
+            </td>
+            <td class="reason-cell">{{ entry.reason ?? '—' }}</td>
+            <td>
+              <span [ngClass]="statusClass(entry.status)">{{ entry.status }}</span>
+            </td>
+            <td class="actions-cell">
+              @if (entry.status === 'WAITING') {
+                <button class="btn-sm btn-primary" (click)="offerSlot(entry.id)">Offer Slot</button>
+                <button class="btn-sm btn-ghost" (click)="closeEntry(entry.id)">Close</button>
+              } @else if (entry.status === 'OFFERED') {
+                <button class="btn-sm btn-ghost" (click)="closeEntry(entry.id)">Close</button>
+              }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</div>
+
+<!-- Add to Waitlist Modal -->
+@if (showAddForm()) {
+  <div
+    class="modal-backdrop"
+    (click)="showAddForm.set(false)"
+    (keydown.enter)="showAddForm.set(false)"
+    tabindex="0"
+    role="button"
+  ></div>
+  <div class="modal-panel" role="dialog" aria-modal="true" aria-label="Add to Waitlist">
+    <div class="modal-header">
+      <h2>Add to Waitlist</h2>
+      <button class="btn-icon-close" (click)="showAddForm.set(false)" aria-label="Close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <!-- Patient search -->
+      <div class="form-group">
+        <label class="form-label" for="wl-patient">Patient *</label>
+        <div class="autocomplete-wrap">
+          <input
+            id="wl-patient"
+            class="form-input"
+            type="text"
+            placeholder="Search patient by name…"
+            [ngModel]="patientQuery()"
+            (ngModelChange)="onPatientQueryChange($event)"
+            autocomplete="off"
+          />
+          @if (patientResults().length > 0) {
+            <ul class="autocomplete-list">
+              @for (p of patientResults(); track p.id) {
+                <li (click)="selectPatient(p)" (keydown.enter)="selectPatient(p)" tabindex="0">
+                  {{ p.firstName }} {{ p.lastName }}
+                  @if (p.dateOfBirth) {
+                    <span class="dob-hint">({{ p.dateOfBirth | date: 'mediumDate' }})</span>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+
+      <!-- Department -->
+      <div class="form-group">
+        <label class="form-label" for="wl-dept">Department *</label>
+        <select
+          id="wl-dept"
+          class="form-select"
+          [ngModel]="selectedDeptId()"
+          (ngModelChange)="selectedDeptId.set($event)"
+        >
+          <option value="">— Select department —</option>
+          @for (d of departments(); track d.id) {
+            <option [value]="d.id">{{ d.name }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- Preferred provider -->
+      <div class="form-group">
+        <label class="form-label" for="wl-staff">Preferred Provider (optional)</label>
+        <div class="autocomplete-wrap">
+          <input
+            id="wl-staff"
+            class="form-input"
+            type="text"
+            placeholder="Search provider…"
+            [ngModel]="staffQuery()"
+            (ngModelChange)="staffQuery.set($event)"
+            autocomplete="off"
+          />
+          @if (staffQuery().length > 0 && filteredStaff().length > 0) {
+            <ul class="autocomplete-list">
+              @for (s of filteredStaff(); track s.id) {
+                <li
+                  (click)="selectedStaff.set(s); staffQuery.set(s.name)"
+                  (keydown.enter)="selectedStaff.set(s); staffQuery.set(s.name)"
+                  tabindex="0"
+                >
+                  {{ s.name }}
+                </li>
+              }
+            </ul>
+          }
+        </div>
+      </div>
+
+      <!-- Date range -->
+      <div class="form-row-2">
+        <div class="form-group">
+          <label class="form-label" for="wl-from">Preferred From</label>
+          <input
+            id="wl-from"
+            class="form-input"
+            type="date"
+            [ngModel]="dateFrom()"
+            (ngModelChange)="dateFrom.set($event)"
+          />
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="wl-to">Preferred To</label>
+          <input
+            id="wl-to"
+            class="form-input"
+            type="date"
+            [ngModel]="dateTo()"
+            (ngModelChange)="dateTo.set($event)"
+          />
+        </div>
+      </div>
+
+      <!-- Priority -->
+      <div class="form-group">
+        <label class="form-label" for="wl-priority">Priority</label>
+        <select
+          id="wl-priority"
+          class="form-select"
+          [ngModel]="priority()"
+          (ngModelChange)="priority.set($event)"
+        >
+          @for (p of priorities; track p) {
+            <option [value]="p">{{ p }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- Reason -->
+      <div class="form-group">
+        <label class="form-label" for="wl-reason">Reason</label>
+        <textarea
+          id="wl-reason"
+          class="form-textarea"
+          rows="2"
+          placeholder="Clinical reason for waiting…"
+          [ngModel]="reason()"
+          (ngModelChange)="reason.set($event)"
+        ></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="showAddForm.set(false)">Cancel</button>
+      <button class="btn-primary" [disabled]="saving()" (click)="submitAdd()">
+        @if (saving()) {
+          <span class="material-symbols-outlined spin">progress_activity</span>
+        }
+        Add to Waitlist
+      </button>
+    </div>
+  </div>
+}

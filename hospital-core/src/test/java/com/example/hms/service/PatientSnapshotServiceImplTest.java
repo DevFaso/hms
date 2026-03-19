@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Encounter;
@@ -12,10 +13,12 @@ import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
 import com.example.hms.payload.dto.clinical.PatientSnapshotDTO;
+import com.example.hms.model.PatientDiagnosis;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.PatientAllergyRepository;
+import com.example.hms.repository.PatientDiagnosisRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
@@ -42,6 +45,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -55,6 +59,7 @@ class PatientSnapshotServiceImplTest {
     @Mock private LabOrderRepository labOrderRepository;
     @Mock private LabResultRepository labResultRepository;
     @Mock private EncounterRepository encounterRepository;
+    @Mock private PatientDiagnosisRepository patientDiagnosisRepository;
 
     @InjectMocks
     private PatientSnapshotServiceImpl service;
@@ -79,6 +84,8 @@ class PatientSnapshotServiceImplTest {
 
     private void stubEmptySubQueries(UUID patientId) {
         when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+                .thenReturn(Collections.emptyList());
         when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
                 .thenReturn(Collections.emptyList());
         when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
@@ -710,5 +717,140 @@ class PatientSnapshotServiceImplTest {
         PatientSnapshotDTO result = service.getSnapshot(patientId);
 
         assertTrue(result.getActiveDiagnoses().isEmpty());
+    }
+
+    @Test
+    void getSnapshot_withStructuredDiagnoses_shouldFormatWithIcdCode() {
+        UUID patientId = UUID.randomUUID();
+        // Inline patient mock — not using stubPatient() because getChronicConditions()
+        // is never called when structured diagnoses are non-empty (short-circuit)
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(patientId);
+        when(patient.getFirstName()).thenReturn("Alice");
+        when(patient.getLastName()).thenReturn("Wong");
+        when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
+        givenPatient(patientId, patient);
+
+        PatientDiagnosis dx = mock(PatientDiagnosis.class);
+        when(dx.getIcdCode()).thenReturn("E11.9");
+        when(dx.getDescription()).thenReturn("Type 2 Diabetes");
+
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+                .thenReturn(List.of(dx));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertEquals(1, result.getActiveDiagnoses().size());
+        assertEquals("E11.9 \u2013 Type 2 Diabetes", result.getActiveDiagnoses().get(0));
+    }
+
+    @Test
+    void getSnapshot_withStructuredDiagnosisNoIcdCode_shouldShowDescriptionOnly() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(patientId);
+        when(patient.getFirstName()).thenReturn("Alice");
+        when(patient.getLastName()).thenReturn("Wong");
+        when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
+        givenPatient(patientId, patient);
+
+        PatientDiagnosis dx = mock(PatientDiagnosis.class);
+        when(dx.getIcdCode()).thenReturn(null);
+        when(dx.getDescription()).thenReturn("Hypertension");
+
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+                .thenReturn(List.of(dx));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertEquals(1, result.getActiveDiagnoses().size());
+        assertEquals("Hypertension", result.getActiveDiagnoses().get(0));
+    }
+
+    // ========== Branch coverage: recent notes, diagnosis exception ==========
+
+    @Test
+    void getSnapshot_withRecentNotes_shouldPopulateShortNotes() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        Staff noteStaff = mock(Staff.class);
+        when(noteStaff.getFullName()).thenReturn("Dr. Smith");
+
+        Encounter encWithNotes = mock(Encounter.class);
+        lenient().when(encWithNotes.getNotes()).thenReturn("Patient presents with headache and dizziness");
+        lenient().when(encWithNotes.getStaff()).thenReturn(noteStaff);
+        lenient().when(encWithNotes.getEncounterType()).thenReturn(EncounterType.OUTPATIENT);
+        lenient().when(encWithNotes.getEncounterDate()).thenReturn(LocalDateTime.of(2026, 3, 14, 10, 0));
+
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(encWithNotes));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+                .thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertFalse(result.getRecentNotes().isEmpty());
+        assertEquals("Dr. Smith", result.getRecentNotes().get(0).getAuthor());
+        assertEquals("OUTPATIENT", result.getRecentNotes().get(0).getType());
+        assertTrue(result.getRecentNotes().get(0).getSnippet().contains("headache"));
+    }
+
+    @Test
+    void getSnapshot_withLongNotes_shouldTruncateTo200() {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = stubPatient(patientId);
+        givenPatient(patientId, patient);
+
+        String longNote = "A".repeat(250);
+
+        Encounter enc = mock(Encounter.class);
+        lenient().when(enc.getNotes()).thenReturn(longNote);
+        lenient().when(enc.getStaff()).thenReturn(null);
+        lenient().when(enc.getEncounterType()).thenReturn(null);
+        lenient().when(enc.getEncounterDate()).thenReturn(null);
+
+        when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientVitalSignRepository.findByPatient_IdOrderByRecordedAtDesc(eq(patientId), any()))
+                .thenReturn(Collections.emptyList());
+        when(prescriptionRepository.findByPatient_Id(eq(patientId), any()))
+                .thenReturn(new PageImpl<>(Collections.emptyList()));
+        when(labOrderRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
+                .thenReturn(Collections.emptyList());
+
+        PatientSnapshotDTO result = service.getSnapshot(patientId);
+
+        assertFalse(result.getRecentNotes().isEmpty());
+        PatientSnapshotDTO.NoteItem note = result.getRecentNotes().get(0);
+        assertTrue(note.getSnippet().length() <= 201); // 200 + ellipsis char
+        assertEquals("Unknown", note.getAuthor()); // null staff → Unknown
+        assertEquals("Encounter", note.getType()); // null encounterType → Encounter
+        assertEquals("", note.getDate()); // null date → empty
     }
 }

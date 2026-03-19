@@ -229,6 +229,30 @@ export interface PatientPaymentRequest {
   notes?: string;
 }
 
+export interface ProxyResponse {
+  id: string;
+  grantorPatientId: string;
+  grantorName: string;
+  proxyUserId: string;
+  proxyUsername: string;
+  proxyDisplayName: string;
+  relationship: string;
+  status: string;
+  permissions: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface ProxyGrantRequest {
+  proxyUsername: string;
+  relationship: string;
+  permissions: string;
+  expiresAt?: string;
+  notes?: string;
+}
+
 interface ApiWrapper<T> {
   data: T;
   success: boolean;
@@ -429,5 +453,33 @@ export class PatientPortalService {
     return this.http
       .put<ApiWrapper<MedicationRefill>>(`${this.base}/refills/${refillId}/cancel`, {})
       .pipe(map((r) => r.data));
+  }
+
+  // ── Proxy / Family Access ─────────────────────────────────────────
+
+  getMyProxies(): Observable<ProxyResponse[]> {
+    return this.http.get<ApiWrapper<ProxyResponse[]>>(`${this.base}/proxies`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  grantProxy(dto: ProxyGrantRequest): Observable<ProxyResponse> {
+    return this.http
+      .post<ApiWrapper<ProxyResponse>>(`${this.base}/proxies`, dto)
+      .pipe(map((r) => r.data));
+  }
+
+  revokeProxy(proxyId: string): Observable<void> {
+    return this.http
+      .delete<ApiWrapper<void>>(`${this.base}/proxies/${proxyId}`)
+      .pipe(map(() => void 0));
+  }
+
+  getMyProxyAccess(): Observable<ProxyResponse[]> {
+    return this.http.get<ApiWrapper<ProxyResponse[]>>(`${this.base}/proxy-access`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
   }
 }

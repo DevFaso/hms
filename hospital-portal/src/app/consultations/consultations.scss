@@ -39,6 +39,10 @@
     background: #e0e7ff;
     color: #3730a3;
   }
+  &.overdue {
+    background: #fee2e2;
+    color: #991b1b;
+  }
 }
 .card-info {
   display: flex;
@@ -321,6 +325,112 @@
 }
 .action-link.delete:hover {
   background: #fef2f2;
+}
+.action-link.assign {
+  color: #059669;
+}
+.action-link.assign:hover {
+  background: #ecfdf5;
+}
+.summary-card.overdue {
+  cursor: pointer;
+  &:hover {
+    background: #fef2f2;
+    border-color: #fca5a5;
+  }
+}
+.overdue-tab.active,
+.overdue-tab:hover {
+  color: #dc2626;
+  border-color: #dc2626;
+}
+.overdue-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
+}
+.overdue-text {
+  color: #dc2626;
+  font-weight: 600;
+}
+.detail-timeline {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid #f3f4f6;
+  .field-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+    margin-bottom: 0.5rem;
+  }
+}
+.timeline-track {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-left: 0.5rem;
+  border-left: 2px solid #e5e7eb;
+}
+.timeline-event {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+}
+.timeline-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6366f1;
+  margin-left: -5px;
+  flex-shrink: 0;
+}
+.timeline-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #374151;
+  min-width: 110px;
+}
+.timeline-date {
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+.action-link.complete {
+  color: #0891b2;
+}
+.action-link.complete:hover {
+  background: #ecfeff;
+}
+.action-link.decline {
+  color: #d97706;
+}
+.action-link.decline:hover {
+  background: #fffbeb;
+}
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #374151;
+}
+.modal-context {
+  margin: 0 0 1rem;
+  color: #374151;
+}
+.loading-hint {
+  color: #6b7280;
+  font-size: 0.875rem;
 }
 .modal-backdrop {
   position: fixed;

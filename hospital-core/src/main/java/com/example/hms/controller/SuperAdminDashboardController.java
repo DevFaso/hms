@@ -6,8 +6,10 @@ import com.example.hms.payload.dto.PatientConsentResponseDTO;
 import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.payload.dto.StaffAvailabilityResponseDTO;
 import com.example.hms.payload.dto.SuperAdminSummaryDTO;
+import com.example.hms.payload.dto.analytics.PlatformAnalyticsDTO;
 import com.example.hms.service.AppointmentService;
 import com.example.hms.service.PatientService;
+import com.example.hms.service.PlatformAnalyticsService;
 import com.example.hms.service.SuperAdminDashboardService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +30,7 @@ public class SuperAdminDashboardController {
     private final SuperAdminDashboardService dashboardService;
     private final AppointmentService appointmentService;
     private final PatientService patientService;
+    private final PlatformAnalyticsService analyticsService;
 
     /**
      * Aggregated metrics + a slice of recent audit events for dashboard widgets.
@@ -126,5 +129,16 @@ public class SuperAdminDashboardController {
         @RequestParam(name = "limit", required = false, defaultValue = "20") int limit
     ) {
         return ResponseEntity.ok(dashboardService.getRecentPatientConsents(limit));
+    }
+
+    /**
+     * Platform analytics with trend data, status breakdowns, and utilisation metrics.
+     */
+    @GetMapping("/analytics")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<PlatformAnalyticsDTO> getAnalytics(
+        @RequestParam(name = "trendDays", required = false, defaultValue = "14") int trendDays
+    ) {
+        return ResponseEntity.ok(analyticsService.getAnalytics(trendDays));
     }
 }

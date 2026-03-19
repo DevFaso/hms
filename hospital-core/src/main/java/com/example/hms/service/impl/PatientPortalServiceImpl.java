@@ -1,13 +1,16 @@
 package com.example.hms.service.impl;
 
 import com.example.hms.enums.AppointmentStatus;
+import com.example.hms.enums.ProxyStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Patient;
+import com.example.hms.model.PatientProxy;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.RefillRequest;
+import com.example.hms.model.User;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
 import com.example.hms.payload.dto.BillingInvoiceResponseDTO;
@@ -35,9 +38,12 @@ import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
 import com.example.hms.payload.dto.portal.PatientProfileDTO;
 import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
+import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
+import com.example.hms.payload.dto.portal.ProxyResponseDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
+import com.example.hms.repository.PatientProxyRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
@@ -83,7 +89,10 @@ import java.util.UUID;
 @Slf4j
 public class PatientPortalServiceImpl implements PatientPortalService {
 
+    private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
+
     private final PatientRepository patientRepository;
+    private final PatientProxyRepository patientProxyRepository;
     private final ControllerAuthUtils authUtils;
 
     // Existing clinical services — we delegate, not duplicate
@@ -109,13 +118,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final PatientPrimaryCareService primaryCareService;
     private final AuditEventLogService auditEventLogService;
     private final PatientHospitalRegistrationRepository registrationRepository;
+    private final com.example.hms.repository.UserRepository userRepository;
 
     // ── Identity resolution ──────────────────────────────────────────────
 
     @Override
     public UUID resolvePatientId(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication"));
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
         return patientRepository.findByUserId(userId)
                 .map(Patient::getId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -535,7 +545,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private Patient findPatient(Authentication auth) {
         UUID userId = authUtils.resolveUserId(auth)
-                .orElseThrow(() -> new BusinessException("Unable to resolve user from authentication"));
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
         return patientRepository.findByUserId(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "No patient record linked to your account. Contact your care team."));
@@ -699,6 +709,96 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .description(audit.getEventDescription())
                 .status(audit.getStatus())
                 .timestamp(audit.getEventTimestamp())
+                .build();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // PHASE 3 — Proxy / Family Access
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProxyResponseDTO> getMyProxies(Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        return patientProxyRepository.findByGrantorPatient_IdAndStatus(patientId, ProxyStatus.ACTIVE)
+                .stream().map(this::toProxyResponseDTO).toList();
+    }
+
+    @Override
+    @Transactional
+    public ProxyResponseDTO grantProxy(Authentication auth, ProxyGrantRequestDTO dto) {
+        Patient patient = findPatient(auth);
+
+        User proxyUser = userRepository.findByUsername(dto.getProxyUsername())
+                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + dto.getProxyUsername()));
+
+        // Prevent granting proxy to yourself
+        if (patient.getUser() != null && patient.getUser().getId().equals(proxyUser.getId())) {
+            throw new BusinessException("You cannot grant proxy access to yourself");
+        }
+
+        // Prevent duplicate active proxy
+        patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
+                patient.getId(), proxyUser.getId(), ProxyStatus.ACTIVE
+        ).ifPresent(existing -> {
+            throw new BusinessException("An active proxy already exists for this user");
+        });
+
+        PatientProxy proxy = PatientProxy.builder()
+                .grantorPatient(patient)
+                .proxyUser(proxyUser)
+                .relationship(dto.getRelationship())
+                .status(ProxyStatus.ACTIVE)
+                .permissions(dto.getPermissions())
+                .expiresAt(dto.getExpiresAt())
+                .notes(dto.getNotes())
+                .build();
+
+        return toProxyResponseDTO(patientProxyRepository.save(proxy));
+    }
+
+    @Override
+    @Transactional
+    public void revokeProxy(Authentication auth, UUID proxyId) {
+        UUID patientId = resolvePatientId(auth);
+        PatientProxy proxy = patientProxyRepository.findById(proxyId)
+                .orElseThrow(() -> new ResourceNotFoundException("Proxy grant not found"));
+
+        if (!proxy.getGrantorPatient().getId().equals(patientId)) {
+            throw new AccessDeniedException("You can only revoke proxies you have granted");
+        }
+
+        proxy.setStatus(ProxyStatus.REVOKED);
+        proxy.setRevokedAt(java.time.LocalDateTime.now());
+        patientProxyRepository.save(proxy);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ProxyResponseDTO> getMyProxyAccess(Authentication auth) {
+        UUID userId = authUtils.resolveUserId(auth)
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
+        return patientProxyRepository.findByProxyUser_IdAndStatus(userId, ProxyStatus.ACTIVE)
+                .stream().map(this::toProxyResponseDTO).toList();
+    }
+
+    private ProxyResponseDTO toProxyResponseDTO(PatientProxy p) {
+        Patient grantor = p.getGrantorPatient();
+        User proxy = p.getProxyUser();
+        return ProxyResponseDTO.builder()
+                .id(p.getId())
+                .grantorPatientId(grantor.getId())
+                .grantorName(grantor.getFirstName() + " " + grantor.getLastName())
+                .proxyUserId(proxy.getId())
+                .proxyUsername(proxy.getUsername())
+                .proxyDisplayName(proxy.getFirstName() + " " + proxy.getLastName())
+                .relationship(p.getRelationship())
+                .status(p.getStatus())
+                .permissions(p.getPermissions())
+                .expiresAt(p.getExpiresAt())
+                .revokedAt(p.getRevokedAt())
+                .notes(p.getNotes())
+                .createdAt(p.getCreatedAt())
                 .build();
     }
 }

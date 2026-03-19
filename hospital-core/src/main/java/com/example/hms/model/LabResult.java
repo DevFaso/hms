@@ -1,7 +1,10 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.AbnormalFlag;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
@@ -57,6 +60,10 @@ public class LabResult extends BaseEntity {
 
     @Column(name = "notes", length = 2048)
     private String notes;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "abnormal_flag", length = 20)
+    private AbnormalFlag abnormalFlag;
 
     /** Context (role@hospital) of the user posting the result. */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)

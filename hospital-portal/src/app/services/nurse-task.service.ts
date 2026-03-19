@@ -49,6 +49,141 @@ export interface NurseAnnouncement {
   category: string;
 }
 
+export interface NurseDashboardSummary {
+  assignedPatients: number;
+  vitalsDue: number;
+  medicationsDue: number;
+  medicationsOverdue: number;
+  ordersPending: number;
+  handoffsPending: number;
+  announcements: number;
+}
+
+// ── MVP 12 interfaces ──────────────────────────────────────────────
+
+export interface NurseWorkboardPatient {
+  patientId: string;
+  patientName: string;
+  mrn: string;
+  roomBed: string;
+  acuityLevel: string;
+  admissionId: string;
+  departmentName: string;
+  attendingDoctor: string;
+  admittedAt: string;
+  lastVitalsTime: string | null;
+  vitalsDue: boolean;
+  medsDue: number;
+}
+
+export interface NurseFlowPatientCard {
+  patientId: string;
+  patientName: string;
+  mrn: string;
+  admissionId: string;
+  acuityLevel: string;
+  waitMinutes: number;
+  roomBed: string;
+  departmentName: string;
+  admittedAt: string;
+}
+
+export interface NurseFlowBoard {
+  pending: NurseFlowPatientCard[];
+  active: NurseFlowPatientCard[];
+  critical: NurseFlowPatientCard[];
+  awaitingDischarge: NurseFlowPatientCard[];
+}
+
+export interface NurseAdmissionSummary {
+  admissionId: string;
+  patientId: string;
+  patientName: string;
+  mrn: string;
+  status: string;
+  acuityLevel: string;
+  roomBed: string;
+  departmentName: string;
+  admittingDoctor: string;
+  admissionDateTime: string;
+  admissionType: string;
+}
+
+export interface NurseVitalCaptureRequest {
+  temperatureCelsius?: number;
+  heartRateBpm?: number;
+  respiratoryRateBpm?: number;
+  systolicBpMmHg?: number;
+  diastolicBpMmHg?: number;
+  spo2Percent?: number;
+  bloodGlucoseMgDl?: number;
+  weightKg?: number;
+  notes?: string;
+}
+
+// ── MVP 13 interfaces ─────────────────────────────────────────────
+
+export interface NurseTaskItem {
+  id: string;
+  patientId: string;
+  patientName: string;
+  mrn: string;
+  category: string;
+  description: string;
+  priority: string;
+  status: string;
+  dueAt: string | null;
+  overdue: boolean;
+  completedAt: string | null;
+  completedByName: string | null;
+  completionNote: string | null;
+  createdByName: string | null;
+}
+
+export interface NurseTaskCreateRequest {
+  patientId: string;
+  category: string;
+  description?: string;
+  priority?: string;
+  dueAt?: string;
+}
+
+export interface NurseInboxItem {
+  id: string;
+  message: string;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface NurseCareNoteRequest {
+  template: 'DAR' | 'SOAPIE';
+  // DAR fields
+  dataPart?: string;
+  actionPart?: string;
+  responsePart?: string;
+  // SOAPIE fields
+  subjective?: string;
+  objective?: string;
+  assessment?: string;
+  plan?: string;
+  implementation?: string;
+  evaluation?: string;
+  // shared
+  narrative?: string;
+  title?: string;
+}
+
+export interface NurseCareNoteResponse {
+  noteId: string;
+  patientId: string;
+  patientName: string;
+  template: string;
+  title: string;
+  summary: string;
+  authorName: string;
+  documentedAt: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class NurseTaskService {
   private readonly http = inject(HttpClient);
@@ -130,5 +265,108 @@ export class NurseTaskService {
     return this.http.get<NurseAnnouncement[]>(`${this.baseUrl}/announcements`, {
       params: httpParams,
     });
+  }
+
+  getDashboardSummary(params?: {
+    hospitalId?: string;
+    assignee?: string;
+  }): Observable<NurseDashboardSummary> {
+    let httpParams = new HttpParams();
+    if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    if (params?.assignee) httpParams = httpParams.set('assignee', params.assignee);
+    return this.http.get<NurseDashboardSummary>(`${this.baseUrl}/dashboard/summary`, {
+      params: httpParams,
+    });
+  }
+
+  // ── MVP 12 methods ────────────────────────────────────────────────
+
+  getWorkboard(params?: {
+    hospitalId?: string;
+    assignee?: string;
+  }): Observable<NurseWorkboardPatient[]> {
+    let httpParams = new HttpParams();
+    if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    if (params?.assignee) httpParams = httpParams.set('assignee', params.assignee);
+    return this.http.get<NurseWorkboardPatient[]>(`${this.baseUrl}/workboard`, {
+      params: httpParams,
+    });
+  }
+
+  getPatientFlow(params?: {
+    hospitalId?: string;
+    departmentId?: string;
+  }): Observable<NurseFlowBoard> {
+    let httpParams = new HttpParams();
+    if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    if (params?.departmentId) httpParams = httpParams.set('departmentId', params.departmentId);
+    return this.http.get<NurseFlowBoard>(`${this.baseUrl}/patient-flow`, { params: httpParams });
+  }
+
+  captureVitals(patientId: string, data: NurseVitalCaptureRequest): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/patients/${patientId}/vitals`, data);
+  }
+
+  getPendingAdmissions(params?: {
+    hospitalId?: string;
+    departmentId?: string;
+  }): Observable<NurseAdmissionSummary[]> {
+    let httpParams = new HttpParams();
+    if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    if (params?.departmentId) httpParams = httpParams.set('departmentId', params.departmentId);
+    return this.http.get<NurseAdmissionSummary[]>(`${this.baseUrl}/admissions/pending`, {
+      params: httpParams,
+    });
+  }
+
+  // ── MVP 13 methods ────────────────────────────────────────────────
+
+  getNursingTasks(params?: { hospitalId?: string; status?: string }): Observable<NurseTaskItem[]> {
+    let httpParams = new HttpParams();
+    if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    if (params?.status) httpParams = httpParams.set('status', params.status);
+    return this.http.get<NurseTaskItem[]>(`${this.baseUrl}/tasks`, { params: httpParams });
+  }
+
+  createNursingTask(data: NurseTaskCreateRequest, hospitalId?: string): Observable<NurseTaskItem> {
+    let httpParams = new HttpParams();
+    if (hospitalId) httpParams = httpParams.set('hospitalId', hospitalId);
+    return this.http.post<NurseTaskItem>(`${this.baseUrl}/tasks`, data, { params: httpParams });
+  }
+
+  completeNursingTask(
+    taskId: string,
+    data?: { completionNote?: string },
+    hospitalId?: string,
+  ): Observable<NurseTaskItem> {
+    let httpParams = new HttpParams();
+    if (hospitalId) httpParams = httpParams.set('hospitalId', hospitalId);
+    return this.http.put<NurseTaskItem>(`${this.baseUrl}/tasks/${taskId}/complete`, data ?? {}, {
+      params: httpParams,
+    });
+  }
+
+  getNurseInbox(params?: { limit?: number }): Observable<NurseInboxItem[]> {
+    let httpParams = new HttpParams();
+    if (params?.limit != null) httpParams = httpParams.set('limit', params.limit);
+    return this.http.get<NurseInboxItem[]>(`${this.baseUrl}/inbox`, { params: httpParams });
+  }
+
+  markInboxRead(itemId: string): Observable<void> {
+    return this.http.patch<void>(`${this.baseUrl}/inbox/${itemId}/read`, {});
+  }
+
+  createCareNote(
+    patientId: string,
+    data: NurseCareNoteRequest,
+    hospitalId?: string,
+  ): Observable<NurseCareNoteResponse> {
+    let httpParams = new HttpParams();
+    if (hospitalId) httpParams = httpParams.set('hospitalId', hospitalId);
+    return this.http.post<NurseCareNoteResponse>(
+      `${this.baseUrl}/patients/${patientId}/care-note`,
+      data,
+      { params: httpParams },
+    );
   }
 }

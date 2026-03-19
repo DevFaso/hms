@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.patient.dto.PatientResponse;
 import com.example.hms.payload.dto.clinical.ClinicalAlertDTO;
 import com.example.hms.payload.dto.clinical.ClinicalDashboardResponseDTO;
 import com.example.hms.payload.dto.clinical.InboxCountsDTO;
@@ -62,4 +63,13 @@ public interface ClinicalDashboardService {
      * @return on-call status
      */
     OnCallStatusDTO getOnCallStatus(UUID userId);
+
+    /**
+     * Get the 6 most recently seen patients for a doctor, enriched with
+     * lastEncounterDate and lastLocation.
+     *
+     * @param userId the doctor's user ID
+     * @return list of up to 6 recent patients
+     */
+    List<PatientResponse> getRecentPatients(UUID userId);
 }

@@ -27,6 +27,10 @@ public class PatientResponse {
     private Instant createdAt;
     private Instant updatedAt;
 
+    /** Enrichment fields populated by doctor-specific endpoints */
+    private String lastEncounterDate;
+    private String lastLocation;
+
     /**
      * Custom setter to guard against null insurance list.
      */

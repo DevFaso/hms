@@ -14,7 +14,14 @@
     <div class="form-grid">
       <div class="form-group">
         <label for="firstName">First Name *</label>
-        <input id="firstName" type="text" [(ngModel)]="form.firstName" name="firstName" required />
+        <input
+          id="firstName"
+          type="text"
+          [(ngModel)]="form.firstName"
+          name="firstName"
+          required
+          (ngModelChange)="onNameOrDobChange()"
+        />
       </div>
       <div class="form-group">
         <label for="middleName">Middle Name</label>
@@ -22,7 +29,14 @@
       </div>
       <div class="form-group">
         <label for="lastName">Last Name *</label>
-        <input id="lastName" type="text" [(ngModel)]="form.lastName" name="lastName" required />
+        <input
+          id="lastName"
+          type="text"
+          [(ngModel)]="form.lastName"
+          name="lastName"
+          required
+          (ngModelChange)="onNameOrDobChange()"
+        />
       </div>
       <div class="form-group">
         <label for="email">Email *</label>
@@ -49,7 +63,14 @@
       </div>
       <div class="form-group">
         <label for="dob">Date of Birth *</label>
-        <input id="dob" type="date" [(ngModel)]="form.dateOfBirth" name="dateOfBirth" required />
+        <input
+          id="dob"
+          type="date"
+          [(ngModel)]="form.dateOfBirth"
+          name="dateOfBirth"
+          required
+          (ngModelChange)="onNameOrDobChange()"
+        />
       </div>
       <div class="form-group">
         <label for="gender">Gender *</label>
@@ -206,6 +227,18 @@
     </div>
 
     <div class="form-actions">
+      <!-- MVP 11: Inline duplicate warning strip -->
+      @if (duplicateCandidates.length > 0 && !showDuplicateWarning) {
+        <div class="duplicate-warning-strip">
+          <span class="material-symbols-outlined">warning</span>
+          <span>
+            {{ duplicateCandidates.length }} possible duplicate
+            {{ duplicateCandidates.length === 1 ? 'record' : 'records' }} found. Review before
+            registering.
+          </span>
+          <button type="button" class="btn-link" (click)="showDuplicateWarning = true">View</button>
+        </div>
+      }
       <button type="submit" class="btn-primary" [disabled]="saving">
         @if (saving) {
           <span class="spinner-sm"></span>
@@ -216,3 +249,59 @@
     </div>
   </form>
 </div>
+
+<!-- MVP 11: Duplicate confirmation modal -->
+@if (showDuplicateWarning) {
+  <div class="dup-modal-backdrop"></div>
+  <div class="dup-modal" role="alertdialog" aria-modal="true">
+    <div class="dup-modal-header">
+      <span class="material-symbols-outlined warn-icon">warning</span>
+      <h2>Possible Duplicate Patients</h2>
+    </div>
+    <p class="dup-modal-desc">
+      The following existing records closely match the information you've entered. Please review
+      before proceeding.
+    </p>
+    <table class="dup-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>MRN</th>
+          <th>Date of Birth</th>
+          <th>Phone</th>
+          <th>Match</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (c of duplicateCandidates; track c.patientId) {
+          <tr>
+            <td>{{ c.fullName }}</td>
+            <td>{{ c.mrn ?? '—' }}</td>
+            <td>{{ c.dateOfBirth ?? '—' }}</td>
+            <td>{{ c.phone ?? '—' }}</td>
+            <td>
+              <span class="confidence-bar">
+                <span
+                  class="confidence-fill"
+                  [style.width]="c.confidenceScore + '%'"
+                  [class.high]="c.confidenceScore >= 80"
+                  [class.medium]="c.confidenceScore >= 50 && c.confidenceScore < 80"
+                  [class.low]="c.confidenceScore < 50"
+                ></span>
+              </span>
+              {{ c.confidenceScore }}%
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <div class="dup-modal-footer">
+      <button type="button" class="btn-secondary" (click)="showDuplicateWarning = false">
+        Go Back &amp; Review
+      </button>
+      <button type="button" class="btn-danger" (click)="proceedDespiteDuplicate()">
+        Proceed Anyway (New Patient)
+      </button>
+    </div>
+  </div>
+}

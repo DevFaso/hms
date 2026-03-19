@@ -147,6 +147,10 @@ public class Patient extends BaseEntity implements TenantScoped {
     @Column(name = "chronic_conditions", length = 2048)
     private String chronicConditions;
 
+    /** Resuscitation status, e.g. FULL_CODE, DNR, DNI, COMFORT_ONLY. */
+    @Column(name = "code_status", length = 30)
+    private String codeStatus;
+
     @Column(name = "organization_id")
     private UUID organizationId;
 

@@ -26,6 +26,7 @@ public class LabOrderResponseDTO {
     private String labTestCode;
     private LocalDateTime orderDatetime;
     private String status;
+    private String priority;
     private String clinicalIndication;
     private String medicalNecessityNote;
     private String notes;

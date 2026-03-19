@@ -14,6 +14,14 @@ allprojects {
     repositories {
         mavenCentral()
     }
+
+    // Redirect build output outside OneDrive on Windows to prevent Files On-Demand
+    // from offloading .class files between compile and test phases.
+    def oneDriveRoot = System.getenv('OneDrive') ?: System.getenv('OneDriveConsumer') ?: ''
+    if (!oneDriveRoot.isEmpty() && projectDir.absolutePath.replace('\\', '/').startsWith(oneDriveRoot.replace('\\', '/'))) {
+        def tempBase = System.getenv('TEMP') ?: System.getenv('TMP') ?: 'C:/Temp'
+        layout.buildDirectory.set(file("${tempBase}/gradle-hms-build/${name}"))
+    }
 }
 
 sonar {
@@ -163,6 +171,30 @@ subprojects {
             events 'failed', 'skipped', 'passed'
             exceptionFormat 'full'
             showStandardStreams = true
+        }
+
+        // Work around transient file locks (Windows Defender / Search Indexer / OneDrive)
+        // on the binary test-results directory that cause
+        // "Unable to delete directory …test-results\test\binary"
+        doFirst {
+            def binDir = binaryResultsDirectory.asFile.get()
+            if (binDir.exists()) {
+                def maxAttempts = 5
+                for (int i = 1; i <= maxAttempts; i++) {
+                    try {
+                        project.delete(binDir)
+                        logger.lifecycle("Cleaned stale test-results binary dir (attempt ${i})")
+                        break
+                    } catch (Exception e) {
+                        if (i < maxAttempts) {
+                            logger.warn("Could not delete ${binDir} (attempt ${i}/${maxAttempts}), retrying in 2 s…")
+                            Thread.sleep(2000)
+                        } else {
+                            logger.warn("Could not delete ${binDir} after ${maxAttempts} attempts – proceeding anyway")
+                        }
+                    }
+                }
+            }
         }
     }
 

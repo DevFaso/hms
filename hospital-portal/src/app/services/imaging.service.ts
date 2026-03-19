@@ -24,6 +24,7 @@ export type ImagingOrderStatus =
   | 'RESULTS_AVAILABLE'
   | 'CANCELLED';
 export type ImagingPriority = 'ROUTINE' | 'URGENT' | 'STAT';
+export type ImagingLaterality = 'LEFT' | 'RIGHT' | 'BILATERAL' | 'MIDLINE' | 'NOT_APPLICABLE';
 
 export interface ImagingOrderResponse {
   id: string;
@@ -35,7 +36,7 @@ export interface ImagingOrderResponse {
   modality: ImagingModality;
   studyType: string;
   bodyRegion: string;
-  laterality: string;
+  laterality: ImagingLaterality | '';
   priority: ImagingPriority;
   status: ImagingOrderStatus;
   clinicalQuestion: string;
@@ -57,7 +58,7 @@ export interface ImagingOrderRequest {
   studyType: string;
   bodyRegion?: string;
   priority: ImagingPriority;
-  laterality?: string;
+  laterality?: ImagingLaterality;
   clinicalQuestion?: string;
 }
 

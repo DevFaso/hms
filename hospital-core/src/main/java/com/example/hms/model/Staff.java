@@ -94,6 +94,9 @@ public class Staff extends BaseEntity {
     @Column(name = "license_number", length = 100)
     private String licenseNumber;
 
+    @Column(name = "license_expiry_date")
+    private LocalDate licenseExpiryDate;
+
     @Column(name = "npi", length = 20, unique = true)
     private String npi;
 

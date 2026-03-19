@@ -26,6 +26,8 @@ import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
+import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
+import com.example.hms.payload.dto.portal.ProxyResponseDTO;
 import com.example.hms.service.PatientPortalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -394,5 +396,45 @@ public class PatientPortalController {
             Authentication auth, @PageableDefault(size = 20) Pageable pageable) {
         Page<AccessLogEntryDTO> logs = portalService.getMyAccessLog(auth, pageable);
         return ResponseEntity.ok(ApiResponseWrapper.success(logs));
+    }
+
+    // ── Proxy / Family Access ─────────────────────────────────────────────
+
+    @Operation(summary = "List my proxy grants",
+            description = "People I have granted access to view my health data")
+    @GetMapping("/proxies")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<ProxyResponseDTO>>> getMyProxies(Authentication auth) {
+        List<ProxyResponseDTO> proxies = portalService.getMyProxies(auth);
+        return ResponseEntity.ok(ApiResponseWrapper.success(proxies));
+    }
+
+    @Operation(summary = "Grant proxy access",
+            description = "Allow another user (family member/caregiver) to view your portal data")
+    @PostMapping("/proxies")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<ProxyResponseDTO>> grantProxy(
+            Authentication auth, @Valid @RequestBody ProxyGrantRequestDTO dto) {
+        ProxyResponseDTO result = portalService.grantProxy(auth, dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponseWrapper.success(result));
+    }
+
+    @Operation(summary = "Revoke proxy access",
+            description = "Remove a previously granted proxy/family access")
+    @DeleteMapping("/proxies/{proxyId}")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Void>> revokeProxy(
+            Authentication auth, @PathVariable UUID proxyId) {
+        portalService.revokeProxy(auth, proxyId);
+        return ResponseEntity.ok(ApiResponseWrapper.success(null));
+    }
+
+    @Operation(summary = "List patients I can access as proxy",
+            description = "Patients who have granted me proxy/family access to their data")
+    @GetMapping("/proxy-access")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponseWrapper<List<ProxyResponseDTO>>> getMyProxyAccess(Authentication auth) {
+        List<ProxyResponseDTO> access = portalService.getMyProxyAccess(auth);
+        return ResponseEntity.ok(ApiResponseWrapper.success(access));
     }
 }

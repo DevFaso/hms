@@ -5,6 +5,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -86,4 +88,10 @@ public interface EncounterRepository
 
     // Find active (in-progress) encounters for a specific doctor — used for "roomed patients"
     List<Encounter> findByStaff_IdAndStatus(UUID staffId, EncounterStatus status);
+
+    @Query("SELECT e FROM Encounter e WHERE e.appointment.id IN :appointmentIds")
+    List<Encounter> findByAppointmentIdIn(@Param("appointmentIds") List<UUID> appointmentIds);
+
+    @Query("SELECT e FROM Encounter e WHERE e.hospital.id = :hospitalId AND e.appointment IS NULL AND e.encounterDate >= :from AND e.encounterDate < :to")
+    List<Encounter> findWalkInsForHospitalAndPeriod(@Param("hospitalId") UUID hospitalId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 }

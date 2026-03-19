@@ -23,6 +23,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -38,6 +40,13 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import com.example.hms.enums.AbnormalFlag;
+import com.example.hms.enums.LabOrderStatus;
+import com.example.hms.model.LabReflexRule;
+import com.example.hms.model.LabTestDefinition;
+import com.example.hms.repository.LabReflexRuleRepository;
+import com.example.hms.repository.LabTestDefinitionRepository;
 
 @Service
 @RequiredArgsConstructor
@@ -59,6 +68,9 @@ public class LabResultServiceImpl implements LabResultService {
     private final RoleValidator roleValidator;
     private final AuthService authService;
     private final UserRepository userRepository;
+    private final InstrumentOutboxService instrumentOutboxService;
+    private final LabReflexRuleRepository labReflexRuleRepository;
+    private final LabTestDefinitionRepository labTestDefinitionRepository;
 
     @Override
     @Transactional
@@ -76,6 +88,10 @@ public class LabResultServiceImpl implements LabResultService {
 
         LabResult result = labResultMapper.toEntity(request, labOrder, assignment);
         LabResult saved = labResultRepository.save(result);
+
+        performAutoVerification(saved);
+        triggerReflexOrders(saved);
+        instrumentOutboxService.enqueueResultObservation(saved);
 
         return labResultMapper.toResponseDTO(saved);
     }
@@ -127,6 +143,19 @@ public class LabResultServiceImpl implements LabResultService {
         return labResultRepository.findByLabOrder_Hospital_IdIn(hospitalIds).stream()
             .map(labResultMapper::toResponseDTO)
             .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<LabResultResponseDTO> getLabResultsPage(Pageable pageable, Locale locale) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            // Super-admin: return all paged
+            return labResultRepository.findAll(pageable)
+                .map(labResultMapper::toResponseDTO);
+        }
+        return labResultRepository.findByLabOrder_Hospital_IdIn(Set.of(hospitalId), pageable)
+            .map(labResultMapper::toResponseDTO);
     }
 
     @Override
@@ -414,6 +443,91 @@ public class LabResultServiceImpl implements LabResultService {
         }
         String notes = request.getNotes();
         return StringUtils.hasText(notes) ? notes.trim() : null;
+    }
+
+    // ── MVP3 helpers ─────────────────────────────────────────────────────────
+
+    private void performAutoVerification(LabResult result) {
+        if (!result.isReleased()
+                && (result.getAbnormalFlag() == null
+                    || result.getAbnormalFlag() == AbnormalFlag.NORMAL)) {
+            result.setReleased(true);
+            result.setReleasedAt(LocalDateTime.now());
+            result.setReleasedByDisplay("Autoverification");
+            labResultRepository.save(result);
+            LOG.debug("Auto-verified result {}", result.getId());
+        }
+    }
+
+    private void triggerReflexOrders(LabResult result) {
+        LabOrder parent = result.getLabOrder();
+        if (parent == null || parent.getLabTestDefinition() == null) return;
+        UUID testDefId = parent.getLabTestDefinition().getId();
+        List<LabReflexRule> rules = labReflexRuleRepository
+            .findByTriggerTestDefinition_IdAndActiveTrue(testDefId);
+        for (LabReflexRule rule : rules) {
+            if (evaluateReflexCondition(rule.getCondition(), result)) {
+                createReflexChildOrder(rule, parent, result);
+            }
+        }
+    }
+
+    private boolean evaluateReflexCondition(String conditionJson, LabResult result) {
+        try {
+            @SuppressWarnings("unchecked")
+            java.util.Map<String, Object> cond =
+                new com.fasterxml.jackson.databind.ObjectMapper()
+                    .readValue(conditionJson, java.util.Map.class);
+            if (cond.containsKey("severityFlag")) {
+                String required = (String) cond.get("severityFlag");
+                String actual = result.getAbnormalFlag() != null
+                    ? result.getAbnormalFlag().name() : "NORMAL";
+                return required.equalsIgnoreCase(actual);
+            }
+            if (cond.containsKey("thresholdValue") && cond.containsKey("thresholdOperator")) {
+                double threshold = ((Number) cond.get("thresholdValue")).doubleValue();
+                String operator = (String) cond.get("thresholdOperator");
+                double value = Double.parseDouble(result.getResultValue().trim());
+                return switch (operator.toUpperCase()) {
+                    case "GT"  -> value > threshold;
+                    case "GTE" -> value >= threshold;
+                    case "LT"  -> value < threshold;
+                    case "LTE" -> value <= threshold;
+                    default    -> false;
+                };
+            }
+        } catch (Exception e) {
+            LOG.warn("Failed to evaluate reflex condition '{}' for result {}: {}",
+                conditionJson, result.getId(), e.getMessage());
+        }
+        return false;
+    }
+
+    private void createReflexChildOrder(LabReflexRule rule, LabOrder parent, LabResult result) {
+        LabTestDefinition reflexDef = labTestDefinitionRepository
+            .findById(rule.getReflexTestDefinition().getId()).orElse(null);
+        if (reflexDef == null) {
+            LOG.warn("Reflex rule {} references unknown test definition {}",
+                rule.getId(), rule.getReflexTestDefinition().getId());
+            return;
+        }
+        LabOrder child = LabOrder.builder()
+            .patient(parent.getPatient())
+            .orderingStaff(parent.getOrderingStaff())
+            .encounter(parent.getEncounter())
+            .labTestDefinition(reflexDef)
+            .hospital(parent.getHospital())
+            .assignment(parent.getAssignment())
+            .orderDatetime(LocalDateTime.now())
+            .status(LabOrderStatus.ORDERED)
+            .priority(parent.getPriority())
+            .clinicalIndication("Reflex from order: " + parent.getId())
+            .medicalNecessityNote("Auto-generated reflex order triggered by result " + result.getId())
+            .orderChannel(parent.getOrderChannel())
+            .build();
+        labOrderRepository.save(child);
+        LOG.info("Created reflex child order {} (test: {}) triggered by result {}",
+            child.getId(), reflexDef.getTestCode(), result.getId());
     }
 
     private void validateLabScientistOrMidwife(UUID userId, UUID hospitalId) {

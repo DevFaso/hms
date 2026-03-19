@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.EncounterStatus;
+import com.example.hms.enums.EncounterUrgency;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Patient;
 import com.example.hms.model.Staff;
@@ -27,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -225,5 +227,106 @@ class PatientFlowServiceImplTest {
         Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
 
         assertEquals(2, result.get("ARRIVED").size());
+    }
+
+    // ========== Branch coverage: explicit urgency, elapsed time derivation ==========
+
+    @Test
+    void getPatientFlow_encounterWithExplicitUrgency_shouldUseIt() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Patient p = mock(Patient.class);
+        when(p.getId()).thenReturn(UUID.randomUUID());
+        when(p.getFirstName()).thenReturn("Explicit");
+        when(p.getLastName()).thenReturn("Urgency");
+
+        Encounter enc = mock(Encounter.class);
+        when(enc.getId()).thenReturn(UUID.randomUUID());
+        when(enc.getPatient()).thenReturn(p);
+        when(enc.getEncounterDate()).thenReturn(LocalDateTime.now().minusMinutes(10));
+        when(enc.getUrgency()).thenReturn(EncounterUrgency.URGENT);
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
+                .thenReturn(List.of(enc));
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.IN_PROGRESS)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.COMPLETED)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.CANCELLED)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
+
+        assertEquals("URGENT", result.get("ARRIVED").get(0).getUrgency());
+    }
+
+    @Test
+    void getPatientFlow_longElapsedTime_shouldDeriveEmergentUrgency() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Patient p = mock(Patient.class);
+        when(p.getId()).thenReturn(UUID.randomUUID());
+        when(p.getFirstName()).thenReturn("Long");
+        when(p.getLastName()).thenReturn("Wait");
+
+        Encounter enc = mock(Encounter.class);
+        when(enc.getId()).thenReturn(UUID.randomUUID());
+        when(enc.getPatient()).thenReturn(p);
+        when(enc.getEncounterDate()).thenReturn(LocalDateTime.now().minusMinutes(90)); // >= 60
+        when(enc.getUrgency()).thenReturn(null); // no explicit urgency
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(List.of(enc));
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.ARRIVED)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.COMPLETED)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.CANCELLED)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
+
+        assertEquals("EMERGENT", result.get("IN_PROGRESS").get(0).getUrgency());
+    }
+
+    @Test
+    void getPatientFlow_mediumElapsedTime_shouldDeriveUrgentUrgency() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+
+        Patient p = mock(Patient.class);
+        when(p.getId()).thenReturn(UUID.randomUUID());
+        when(p.getFirstName()).thenReturn("Med");
+        when(p.getLastName()).thenReturn("Wait");
+
+        Encounter enc = mock(Encounter.class);
+        when(enc.getId()).thenReturn(UUID.randomUUID());
+        when(enc.getPatient()).thenReturn(p);
+        when(enc.getEncounterDate()).thenReturn(LocalDateTime.now().minusMinutes(45)); // >= 30 but < 60
+        when(enc.getUrgency()).thenReturn(null);
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
+                .thenReturn(List.of(enc));
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.IN_PROGRESS)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.COMPLETED)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.CANCELLED)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+                .thenReturn(Collections.emptyList());
+
+        Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
+
+        assertEquals("URGENT", result.get("ARRIVED").get(0).getUrgency());
     }
 }

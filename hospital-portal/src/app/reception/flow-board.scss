@@ -1,0 +1,202 @@
+:host {
+  display: block;
+}
+
+.flow-empty {
+  padding: 2.5rem;
+  text-align: center;
+  color: #6b7280;
+}
+
+.flow-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  min-width: 900px;
+}
+
+.flow-col {
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+.col-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.625rem 0.875rem;
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.col-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.1);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.col-body {
+  flex: 1;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  overflow-y: auto;
+  max-height: 420px;
+}
+
+.col-empty {
+  text-align: center;
+  color: #9ca3af;
+  padding: 1rem 0;
+  font-size: 0.875rem;
+}
+
+/* Column colours */
+.col-scheduled .col-header {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.col-arrived .col-header {
+  background: #d1fae5;
+  color: #065f46;
+}
+.col-in-progress .col-header {
+  background: #fef3c7;
+  color: #92400e;
+}
+.col-completed .col-header {
+  background: #f3f4f6;
+  color: #374151;
+}
+.col-no-show .col-header {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.col-walk-in .col-header {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+/* Patient Cards */
+.patient-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  padding: 0.5rem 0.625rem;
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+  position: relative;
+
+  &:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.card-name {
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.card-meta {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.1rem;
+}
+
+.card-wait {
+  font-size: 0.7rem;
+  color: #d97706;
+  font-weight: 600;
+  margin-top: 0.2rem;
+}
+
+.card-flags {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  display: flex;
+  gap: 0.2rem;
+}
+
+.flag-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+
+  &.ins {
+    background: #f59e0b;
+  }
+  &.bal {
+    background: #dc2626;
+  }
+}
+
+/* Drag-and-drop */
+.col-body.cdk-drop-list-dragging .patient-card:not(.cdk-drag-placeholder) {
+  transition: transform 250ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.patient-card.cdk-drag-preview {
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  border-radius: 0.375rem;
+  background: #fff;
+  padding: 0.5rem 0.625rem;
+  min-width: 160px;
+  opacity: 0.95;
+}
+
+.patient-card.cdk-drag-placeholder {
+  background: #e0f2fe;
+  border: 2px dashed #0ea5e9;
+  opacity: 0.6;
+}
+
+.patient-card.cdk-drag-animating {
+  transition: transform 300ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+.card-drag-handle {
+  position: absolute;
+  top: 0.25rem;
+  left: 0.25rem;
+  cursor: grab;
+  color: #9ca3af;
+  font-size: 0.85rem;
+  line-height: 1;
+  user-select: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.patient-card:hover .card-drag-handle {
+  opacity: 1;
+}
+
+.card-no-drag {
+  position: absolute;
+  bottom: 0.25rem;
+  right: 0.25rem;
+  font-size: 0.65rem;
+  opacity: 0.4;
+}
+
+/* Confirmed column colour */
+.col-confirmed .col-header {
+  background: #dbeafe;
+  color: #1e40af;
+}

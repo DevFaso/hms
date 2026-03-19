@@ -42,6 +42,8 @@ import java.util.Set;
 import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
 import static com.example.hms.config.SecurityConstants.ROLE_HOSPITAL_ADMIN;
 import static com.example.hms.config.SecurityConstants.ROLE_LAB_SCIENTIST;
+import static com.example.hms.config.SecurityConstants.ROLE_LAB_TECHNICIAN;
+import static com.example.hms.config.SecurityConstants.ROLE_LAB_MANAGER;
 import static com.example.hms.config.SecurityConstants.ROLE_MIDWIFE;
 import static com.example.hms.config.SecurityConstants.ROLE_NURSE;
 import static com.example.hms.config.SecurityConstants.ROLE_PATIENT;
@@ -80,6 +82,21 @@ public class SecurityConfig {
 
     private static final String API_LAB_RESULTS = "/lab-results";
     private static final String API_LAB_RESULTS_PATTERN = API_LAB_RESULTS + "/**";
+
+    private static final String API_LAB_SPECIMENS = "/lab-specimens";
+    private static final String API_LAB_SPECIMENS_PATTERN = API_LAB_SPECIMENS + "/**";
+
+    private static final String API_LAB_QC_EVENTS = "/lab-qc-events";
+    private static final String API_LAB_QC_EVENTS_PATTERN = API_LAB_QC_EVENTS + "/**";
+
+    private static final String API_LAB_REFLEX_RULES = "/lab-reflex-rules";
+    private static final String API_LAB_REFLEX_RULES_PATTERN = API_LAB_REFLEX_RULES + "/**";
+
+    private static final String API_LAB_HL7 = "/lab/hl7";
+    private static final String API_LAB_HL7_PATTERN = API_LAB_HL7 + "/**";
+
+    private static final String API_LAB_INSTRUMENT_OUTBOX = "/lab-instrument-outbox";
+    private static final String API_LAB_INSTRUMENT_OUTBOX_PATTERN = API_LAB_INSTRUMENT_OUTBOX + "/**";
 
     private static final String API_NURSE = "/nurse";
     private static final String API_NURSE_PATTERN = API_NURSE + "/**";
@@ -123,7 +140,8 @@ public class SecurityConfig {
     public GrantedAuthoritiesMapper authoritiesMapper() {
         final Set<String> inherited = Set.of(
             ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
-            ROLE_LAB_SCIENTIST, ROLE_STAFF, ROLE_PATIENT, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT
+            ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+            ROLE_STAFF, ROLE_PATIENT, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT
         );
         return (Collection<? extends GrantedAuthority> authorities) -> {
             boolean isSuper = authorities.stream().anyMatch(a -> ROLE_SUPER_ADMIN.equals(a.getAuthority()));
@@ -412,28 +430,66 @@ public class SecurityConfig {
 
                 // -------------------- Lab modules --------------------
                 .requestMatchers(HttpMethod.GET, "/lab-test-definitions/**")
-                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.GET, API_LAB_ORDERS, API_LAB_ORDERS_PATTERN)
-                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
+                // Only providers (doctors, nurses, admins) can place orders
                 .requestMatchers(HttpMethod.POST, API_LAB_ORDERS, API_LAB_ORDERS_PATTERN)
                 .hasAnyAuthority(ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.GET, API_LAB_RESULTS, API_LAB_RESULTS_PATTERN)
-                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
+                // Technicians can enter preliminary results; scientists/managers verify/release
                 .requestMatchers(HttpMethod.POST, API_LAB_RESULTS)
-                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
 
                 .requestMatchers(HttpMethod.POST, API_LAB_RESULTS + "/*/acknowledge")
-                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
 
                 .requestMatchers(HttpMethod.PATCH, API_LAB_ORDERS_PATTERN, API_LAB_RESULTS_PATTERN)
-                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
-                .requestMatchers(HttpMethod.POST, "/lab-results/{id}/attachments")
-                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_HOSPITAL_ADMIN)
+                // ---- Specimen endpoints (POST /lab-orders/{id}/specimens handled via API_LAB_ORDERS_PATTERN) ----
+                .requestMatchers(HttpMethod.GET,  API_LAB_SPECIMENS, API_LAB_SPECIMENS_PATTERN)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.POST, API_LAB_SPECIMENS, API_LAB_SPECIMENS_PATTERN)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+
+                // ---- QC Events ----
+                .requestMatchers(HttpMethod.GET,  API_LAB_QC_EVENTS, API_LAB_QC_EVENTS_PATTERN)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.POST, API_LAB_QC_EVENTS)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+
+                // ---- Reflex Rules ----
+                .requestMatchers(HttpMethod.GET,  API_LAB_REFLEX_RULES, API_LAB_REFLEX_RULES_PATTERN)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.POST, API_LAB_REFLEX_RULES, API_LAB_REFLEX_RULES_PATTERN)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+                .requestMatchers(HttpMethod.PUT, API_LAB_REFLEX_RULES_PATTERN)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+
+                // ---- HL7 inbound (system-to-system; restrict to SUPER_ADMIN / HOSPITAL_ADMIN or a service account) ----
+                .requestMatchers(HttpMethod.POST, API_LAB_HL7, API_LAB_HL7_PATTERN)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
+
+                // ---- Instrument outbox monitoring ----
+                .requestMatchers(HttpMethod.GET, API_LAB_INSTRUMENT_OUTBOX, API_LAB_INSTRUMENT_OUTBOX_PATTERN)
+                .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
 
                 // Public access to uploaded profile images (static assets)
                 .requestMatchers(HttpMethod.GET, "/uploads/**").permitAll()

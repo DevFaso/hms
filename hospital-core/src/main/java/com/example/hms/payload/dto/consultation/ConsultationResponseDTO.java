@@ -79,6 +79,16 @@ public class ConsultationResponseDTO {
 
     private Boolean isCurbside;
 
+    private LocalDateTime assignedAt;
+
+    private UUID assignedById;
+
+    private LocalDateTime startedAt;
+
+    private LocalDateTime declinedAt;
+
+    private String declineReason;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

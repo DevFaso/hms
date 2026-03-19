@@ -1,0 +1,312 @@
+<div class="signatures-page">
+  <!-- Header -->
+  <div class="page-header">
+    <div class="header-left">
+      <span class="material-icons header-icon">verified</span>
+      <div>
+        <h1>Digital Signatures</h1>
+        <p class="subtitle">Manage clinical document signatures and audit trails</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <div class="stat-pills">
+        <span class="pill signed">{{ signedCount() }} Signed</span>
+        <span class="pill revoked">{{ revokedCount() }} Revoked</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filter-bar">
+    <div class="search-bar">
+      <span class="material-icons search-icon">search</span>
+      <input
+        type="text"
+        placeholder="Search by signer, hospital, or report type..."
+        [ngModel]="search()"
+        (ngModelChange)="search.set($event)"
+      />
+    </div>
+    <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+      <option value="ALL">All Statuses</option>
+      @for (s of statuses; track s) {
+        <option [value]="s">{{ s }}</option>
+      }
+    </select>
+    <select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
+      <option value="ALL">All Report Types</option>
+      @for (t of reportTypes; track t) {
+        <option [value]="t">{{ formatReportType(t) }}</option>
+      }
+    </select>
+  </div>
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="loading-state">
+      <span class="material-icons spin">sync</span>
+      <p>Loading signatures...</p>
+    </div>
+  }
+
+  <!-- Table -->
+  @if (!loading()) {
+    <div class="table-container">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Report Type</th>
+            <th>Signed By</th>
+            <th>Hospital</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (sig of filteredSignatures(); track sig.id) {
+            <tr (click)="openDetail(sig)" class="clickable-row">
+              <td>
+                <span class="report-type">{{ formatReportType(sig.reportType) }}</span>
+              </td>
+              <td>{{ sig.signedByName || '—' }}</td>
+              <td>{{ sig.hospitalName || '—' }}</td>
+              <td>{{ formatDate(sig.signatureDateTime) }}</td>
+              <td>
+                <span class="badge" [class]="statusClass(sig.status)">{{ sig.status }}</span>
+              </td>
+              <td class="action-cell" (click)="$event.stopPropagation()">
+                <button
+                  class="btn-icon"
+                  (click)="openVerify(sig)"
+                  title="Verify"
+                  [disabled]="sig.status !== 'SIGNED'"
+                >
+                  <span class="material-icons">verified_user</span>
+                </button>
+                <button
+                  class="btn-icon danger"
+                  (click)="openRevoke(sig)"
+                  title="Revoke"
+                  [disabled]="sig.status !== 'SIGNED'"
+                >
+                  <span class="material-icons">block</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+      @if (filteredSignatures().length === 0) {
+        <div class="empty-state">
+          <span class="material-icons">draw</span>
+          <p>No signatures found</p>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Detail Drawer -->
+  @if (selectedSignature()) {
+    <div
+      class="drawer-backdrop"
+      (click)="closeDetail()"
+      (keydown.enter)="closeDetail()"
+      tabindex="0"
+      role="button"
+    >
+      <div
+        class="drawer"
+        (click)="$event.stopPropagation()"
+        (keydown.enter)="$event.stopPropagation()"
+        tabindex="-1"
+        role="dialog"
+      >
+        <div class="drawer-header">
+          <h2>Signature Details</h2>
+          <button class="btn-icon" (click)="closeDetail()">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+        <div class="drawer-body">
+          <div class="detail-section">
+            <h3>General</h3>
+            <div class="detail-grid">
+              <div class="detail-item">
+                <span class="detail-label">Report Type</span>
+                <span>{{ formatReportType(selectedSignature()!.reportType) }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Status</span>
+                <span class="badge" [class]="statusClass(selectedSignature()!.status)">{{
+                  selectedSignature()!.status
+                }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Signed By</span>
+                <span>{{ selectedSignature()!.signedByName }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Hospital</span>
+                <span>{{ selectedSignature()!.hospitalName }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Signed At</span>
+                <span>{{ formatDate(selectedSignature()!.signatureDateTime) }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Valid</span>
+                <span>{{ selectedSignature()!.isValid ? 'Yes' : 'No' }}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Verifications</span>
+                <span>{{ selectedSignature()!.verificationCount ?? 0 }}</span>
+              </div>
+              @if (selectedSignature()!.signatureNotes) {
+                <div class="detail-item full">
+                  <span class="detail-label">Notes</span>
+                  <span>{{ selectedSignature()!.signatureNotes }}</span>
+                </div>
+              }
+              @if (selectedSignature()!.revocationReason) {
+                <div class="detail-item full">
+                  <span class="detail-label">Revocation Reason</span>
+                  <span class="revocation-text">{{ selectedSignature()!.revocationReason }}</span>
+                </div>
+              }
+            </div>
+          </div>
+
+          <!-- Audit Trail -->
+          <div class="detail-section">
+            <h3><span class="material-icons">history</span> Audit Trail</h3>
+            @if (auditLoading()) {
+              <p class="muted">Loading audit trail...</p>
+            }
+            @if (!auditLoading() && auditTrail().length === 0) {
+              <p class="muted">No audit entries</p>
+            }
+            @for (entry of auditTrail(); track entry.performedAt) {
+              <div class="audit-entry">
+                <div class="audit-action">{{ entry.action }}</div>
+                <div class="audit-meta">
+                  {{ entry.performedByDisplay }} &middot; {{ formatDate(entry.performedAt) }}
+                </div>
+                @if (entry.details) {
+                  <div class="audit-details">{{ entry.details }}</div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Verify Modal -->
+  @if (showVerifyModal()) {
+    <div
+      class="modal-backdrop"
+      (click)="closeVerify()"
+      (keydown.enter)="closeVerify()"
+      tabindex="0"
+      role="button"
+    >
+      <div
+        class="modal-content"
+        (click)="$event.stopPropagation()"
+        (keydown.enter)="$event.stopPropagation()"
+        tabindex="-1"
+        role="dialog"
+      >
+        <div class="modal-header">
+          <h2>Verify Signature</h2>
+          <button class="btn-icon" (click)="closeVerify()">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="verify-value">Signature Value</label>
+            <input
+              id="verify-value"
+              type="text"
+              placeholder="Enter signature value to verify"
+              [ngModel]="verifyValue()"
+              (ngModelChange)="verifyValue.set($event)"
+            />
+          </div>
+          @if (verifyResult()) {
+            <div
+              class="verify-result"
+              [class.valid]="verifyResult()!.valid"
+              [class.invalid]="!verifyResult()!.valid"
+            >
+              <span class="material-icons">{{
+                verifyResult()!.valid ? 'check_circle' : 'cancel'
+              }}</span>
+              <span>{{
+                verifyResult()!.valid ? 'Signature is valid' : 'Signature is invalid'
+              }}</span>
+            </div>
+          }
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeVerify()">Close</button>
+          <button class="btn-primary" (click)="doVerify()" [disabled]="verifying()">
+            {{ verifying() ? 'Verifying...' : 'Verify' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Revoke Modal -->
+  @if (showRevokeModal()) {
+    <div
+      class="modal-backdrop"
+      (click)="closeRevoke()"
+      (keydown.enter)="closeRevoke()"
+      tabindex="0"
+      role="button"
+    >
+      <div
+        class="modal-content"
+        (click)="$event.stopPropagation()"
+        (keydown.enter)="$event.stopPropagation()"
+        tabindex="-1"
+        role="dialog"
+      >
+        <div class="modal-header">
+          <h2>Revoke Signature</h2>
+          <button class="btn-icon" (click)="closeRevoke()">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="warning-text">
+            <span class="material-icons">warning</span>
+            Revoking a signature is irreversible. The signed document will be marked as having a
+            revoked signature.
+          </p>
+          <div class="form-group">
+            <label for="revoke-reason">Reason for Revocation</label>
+            <textarea
+              id="revoke-reason"
+              rows="3"
+              placeholder="Enter reason for revocation (required)"
+              [ngModel]="revokeReason()"
+              (ngModelChange)="revokeReason.set($event)"
+            ></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="closeRevoke()">Cancel</button>
+          <button class="btn-danger" (click)="doRevoke()" [disabled]="revoking()">
+            {{ revoking() ? 'Revoking...' : 'Revoke Signature' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
