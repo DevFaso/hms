@@ -1,6 +1,6 @@
 # 🏥 Patient Portfolio Gap Analysis — HMS vs Epic MyChart
 
-> **Date:** June 2025  
+> **Date:** March 2026  
 > **Scope:** Comprehensive audit of HMS patient-facing features compared to Epic MyChart  
 > **Critical Finding:** The system is heavily staff-centric. Most clinical data *exists* in the backend but patients are **locked out** by `@PreAuthorize` annotations and `SecurityConfig` rules.
 
@@ -14,7 +14,7 @@
 | Permissions actually enforced by endpoints | **~19** (all via `/me/patient/**`) |
 | Permissions with **zero backing endpoints** | **~0** |
 | Epic MyChart feature categories | **20** |
-| HMS covers fully | **16** |
+| HMS covers fully | **19** |
 | HMS covers partially | **3** (Payments no gateway, Records no PDF/FHIR, Telehealth) |
 | HMS has **zero patient access** | **1** (Questionnaires/PRO) |
 
@@ -175,14 +175,13 @@ But **almost none of these permissions are checked by any controller or security
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
 | View own vital signs | ✅ | `GET /me/patient/vitals` — patient-scoped recent vitals. |
-| View vital sign trends | ❌ | No trend/chart endpoint. |
+| View vital sign trends | ✅ | `GET /me/patient/vitals/trends?months=3` — full history N months back (1–24), delegates to `PatientVitalSignService.getVitals()`. Angular: `my-vital-trends` page with configurable range & per-metric sections. |
 | Submit home readings (BP, glucose, weight) | ✅ | `POST /me/patient/vitals` — records vital with `source=PATIENT_REPORTED` flag. |
 | **Priority** | **P1** | Chronic disease management depends on this. |
 
-**What to build:**
-1. `GET /api/me/vitals` → latest vitals
-2. `GET /api/me/vitals/trends?type=BLOOD_PRESSURE&months=6` → trend data
-3. `POST /api/me/vitals/home-reading` → patient submits home reading (flagged as patient-reported)
+**What was built:**
+1. `GET /me/patient/vitals/trends?months=3` → full vital sign history (1–24 months, clamped)
+2. Angular `my-vital-trends` component — configurable month range selector, per-metric sections with reading chips
 
 ---
 
@@ -269,13 +268,13 @@ But **almost none of these permissions are checked by any controller or security
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
 | View immunizations | ✅ | `GET /me/patient/immunizations` — full vaccine history via `ImmunizationService`. |
-| View upcoming vaccinations | ❌ | No vaccination schedule / recommendation engine. |
+| View upcoming vaccinations | ✅ | `GET /me/patient/immunizations/upcoming?months=6` — scheduled immunizations in next N months (1–12), delegates to `ImmunizationService.getUpcomingImmunizations()`. Angular: `my-upcoming-vaccines` page with overdue indicator & dose series info. |
 | Download immunization certificate | ❌ | No certificate generation. |
 | **Priority** | **P2** | |
 
-**What to build:**
-1. `GET /api/me/immunizations` → vaccination history
-2. `GET /api/me/immunizations/upcoming` → recommended vaccinations based on age/history
+**What was built:**
+1. `GET /me/patient/immunizations` → vaccination history (existing)
+2. `GET /me/patient/immunizations/upcoming?months=6` → upcoming vaccinations in configurable window
 
 ---
 
@@ -331,8 +330,8 @@ But **almost none of these permissions are checked by any controller or security
 |------------|-----------|--------|
 | View notifications | ✅ | `NotificationController` — `isAuthenticated()`. |
 | Real-time notifications | ✅ | `NotificationWebSocketController` exists. |
-| Notification preferences | ❌ | No per-patient notification settings. |
-| **Priority** | **P2** (mostly working) | |
+| Notification preferences | ✅ | `GET/PUT/DELETE /me/patient/notifications/preferences` — full upsert via `NotificationPreference` entity (type × channel matrix). Angular: `my-notifications` page with toggle matrix for 8 types × 4 channels. |
+| **Priority** | **P2** (fully working) | |
 
 ---
 
@@ -383,7 +382,7 @@ But **almost none of these permissions are checked by any controller or security
 | View own profile | ✅ | `GET /me/patient/profile` — full demographics and contact info. |
 | Update contact info | ✅ | `PUT /me/patient/profile` — updates phone, email, address, emergency contacts, preferred pharmacy. |
 | Change password | ✅ | `PasswordResetController` exists. |
-| Communication preferences | ❌ | No preference management. |
+| Communication preferences | ✅ | `GET/PUT/DELETE /me/patient/notifications/preferences` — type × channel notification preference matrix. |
 | **Priority** | **P0** | |
 
 ---
@@ -423,11 +422,13 @@ But **almost none of these permissions are checked by any controller or security
 | 17 | Telehealth/Video Visits | Large | Third-party integration (Twilio, Zoom) |
 | 18 | Pre-Visit Questionnaires | Medium | New entity model + form engine |
 | 19 | Patient-Reported Outcomes | Medium | New entity model |
-| 20 | Home Vital Sign Submission | Medium | New workflow (patient-reported flag) |
-| 21 | Notification Preferences | Small | New preference entity |
-| 22 | FHIR Export | Large | FHIR R4 resource mapping |
-| 23 | Cost Estimation | Large | Complex pricing engine |
-| 24 | Payment Plans | Medium | New workflow + entity |
+| ~~20~~ | ~~Home Vital Sign Submission~~ | ~~Medium~~ **DONE** ✅ | `POST /me/patient/vitals` — `source=PATIENT_REPORTED` flag |
+| ~~21~~ | ~~Notification Preferences~~ | ~~Small~~ **DONE** ✅ | `GET/PUT/DELETE /me/patient/notifications/preferences` — `NotificationPreference` entity (type × channel) |
+| ~~22~~ | ~~Vital Sign Trends~~ | ~~Medium~~ **DONE** ✅ | `GET /me/patient/vitals/trends?months=N` — 1–24 months, delegates to `PatientVitalSignService.getVitals()` |
+| ~~23~~ | ~~Upcoming Vaccinations~~ | ~~Small~~ **DONE** ✅ | `GET /me/patient/immunizations/upcoming?months=N` — 1–12 months, delegates to `ImmunizationService.getUpcomingImmunizations()` |
+| 24 | FHIR Export | Large | FHIR R4 resource mapping |
+| 25 | Cost Estimation | Large | Complex pricing engine |
+| 26 | Payment Plans | Medium | New workflow + entity |
 
 ---
 
@@ -463,13 +464,15 @@ All Phase 2 endpoints are implemented:
 ### Phase 3: "Advanced Patient Experience" (1-3 months) ✅ PARTIAL
 
 - ✅ Proxy/family access — `GET/POST/DELETE /me/patient/proxies` + `PatientProxy` entity
+- ✅ Notification preferences — `GET/PUT/DELETE /me/patient/notifications/preferences` (type × channel matrix)
+- ✅ Vital sign trends — `GET /me/patient/vitals/trends?months=N` (1–24 months, configurable)
+- ✅ Upcoming vaccinations — `GET /me/patient/immunizations/upcoming?months=N` (1–12 months)
 - ❌ Payment gateway integration (Stripe/PayStack)
 - ❌ Telehealth / video visits (Twilio/Zoom)
 - ❌ Pre-visit questionnaires
 - ❌ FHIR R4 export
 - ❌ Medical records PDF download
 - ❌ Patient-reported outcomes (structured)
-- ❌ Vital sign trends/chart endpoint
 
 ---
 
@@ -525,7 +528,7 @@ public ResponseEntity<?> getMyLabResults(Authentication auth) {
 | `Questionnaire` / `QuestionnaireResponse` | Pre-visit forms, screeners | MyChart Questionnaires |
 | `PatientReportedOutcome` | Home-submitted health data | Flowsheets (patient-reported) |
 | `PaymentPlan` | Installment payment setup | Payment Plans |
-| `NotificationPreference` | Per-patient channel/category settings | Notification Settings |
+| ~~`NotificationPreference`~~ | ~~Per-patient channel/category settings~~ | **DONE** ✅ — `security.notification_preferences` table, `NotificationPreference` entity |
 | `AfterVisitSummary` | Post-encounter patient instructions | AVS |
 | `RefillRequest` | Medication refill workflow | Rx Refill |
 | `OnlineCheckIn` | Pre-visit digital check-in | E-Check-In |
