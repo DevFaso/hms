@@ -1,5 +1,7 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.enums.NotificationChannel;
+import com.example.hms.enums.NotificationType;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.ProxyStatus;
 import com.example.hms.enums.RefillStatus;
@@ -7,6 +9,7 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Patient;
+import com.example.hms.model.NotificationPreference;
 import com.example.hms.model.PatientProxy;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.RefillRequest;
@@ -28,6 +31,8 @@ import com.example.hms.payload.dto.discharge.DischargeSummaryResponseDTO;
 import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
 import com.example.hms.payload.dto.medication.PatientMedicationResponseDTO;
 import com.example.hms.payload.dto.medicalhistory.ImmunizationResponseDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
 import com.example.hms.payload.dto.portal.AccessLogEntryDTO;
 import com.example.hms.payload.dto.portal.CancelAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.CareTeamDTO;
@@ -41,6 +46,7 @@ import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyResponseDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
+import com.example.hms.repository.NotificationPreferenceRepository;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProxyRepository;
@@ -119,6 +125,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final AuditEventLogService auditEventLogService;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final com.example.hms.repository.UserRepository userRepository;
+    private final NotificationPreferenceRepository notificationPreferenceRepository;
 
     // ── Identity resolution ──────────────────────────────────────────────
 
@@ -710,6 +717,97 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .status(audit.getStatus())
                 .timestamp(audit.getEventTimestamp())
                 .build();
+    }
+
+    /** Map a NotificationPreference entity to its response DTO. */
+    private NotificationPreferenceDTO toNotificationPreferenceDTO(NotificationPreference p) {
+        return NotificationPreferenceDTO.builder()
+                .id(p.getId())
+                .notificationType(p.getNotificationType())
+                .channel(p.getChannel())
+                .enabled(p.isEnabled())
+                .build();
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 1 — Notification Preferences
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<NotificationPreferenceDTO> getMyNotificationPreferences(Authentication auth) {
+        UUID userId = authUtils.resolveUserId(auth)
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
+        return notificationPreferenceRepository.findByUser_Id(userId)
+                .stream()
+                .map(this::toNotificationPreferenceDTO)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public NotificationPreferenceDTO setMyNotificationPreference(Authentication auth,
+                                                                  NotificationPreferenceUpdateDTO dto) {
+        UUID userId = authUtils.resolveUserId(auth)
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+        // Upsert: find existing row for (user, type, channel) or create new
+        NotificationPreference pref = notificationPreferenceRepository.findByUser_Id(userId)
+                .stream()
+                .filter(p -> p.getNotificationType() == dto.getNotificationType()
+                          && p.getChannel() == dto.getChannel())
+                .findFirst()
+                .orElseGet(() -> NotificationPreference.builder()
+                        .user(user)
+                        .notificationType(dto.getNotificationType())
+                        .channel(dto.getChannel())
+                        .build());
+
+        pref.setEnabled(dto.isEnabled());
+        pref = notificationPreferenceRepository.save(pref);
+        log.info("User {} set notification pref {}/{} = {}", userId,
+                dto.getNotificationType(), dto.getChannel(), dto.isEnabled());
+        return toNotificationPreferenceDTO(pref);
+    }
+
+    @Override
+    @Transactional
+    public void resetMyNotificationPreferences(Authentication auth) {
+        UUID userId = authUtils.resolveUserId(auth)
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
+        notificationPreferenceRepository.deleteByUser_Id(userId);
+        log.info("User {} reset all notification preferences", userId);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 2 — Vital Sign Trends
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientVitalSignResponseDTO> getMyVitalTrends(Authentication auth, int months) {
+        UUID patientId = resolvePatientId(auth);
+        int safeMonths = Math.min(Math.max(months, 1), 24); // clamp 1-24
+        java.time.LocalDateTime from = java.time.LocalDateTime.now().minusMonths(safeMonths);
+        java.time.LocalDateTime to   = java.time.LocalDateTime.now();
+        return vitalSignService.getVitals(patientId, null, from, to, 0, 500);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 3 — Upcoming Vaccinations
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.medicalhistory.ImmunizationResponseDTO> getMyUpcomingVaccinations(
+            Authentication auth, int months) {
+        UUID patientId = resolvePatientId(auth);
+        int safeMonths = Math.min(Math.max(months, 1), 12); // clamp 1-12
+        java.time.LocalDate start = java.time.LocalDate.now();
+        java.time.LocalDate end   = start.plusMonths(safeMonths);
+        return immunizationService.getUpcomingImmunizations(patientId, start, end);
     }
 
     // ══════════════════════════════════════════════════════════════════════

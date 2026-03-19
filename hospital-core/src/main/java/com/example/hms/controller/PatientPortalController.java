@@ -26,6 +26,8 @@ import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyResponseDTO;
 import com.example.hms.service.PatientPortalService;
@@ -436,5 +438,62 @@ public class PatientPortalController {
     public ResponseEntity<ApiResponseWrapper<List<ProxyResponseDTO>>> getMyProxyAccess(Authentication auth) {
         List<ProxyResponseDTO> access = portalService.getMyProxyAccess(auth);
         return ResponseEntity.ok(ApiResponseWrapper.success(access));
+    }
+
+    // ── Notification Preferences ─────────────────────────────────────────
+
+    @Operation(summary = "List my notification preferences",
+            description = "Returns all saved notification preferences for the authenticated patient")
+    @GetMapping("/notifications/preferences")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<NotificationPreferenceDTO>>> getNotificationPreferences(
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyNotificationPreferences(auth)));
+    }
+
+    @Operation(summary = "Set a notification preference",
+            description = "Create or update a single notification preference by type + channel combination")
+    @PutMapping("/notifications/preferences")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<NotificationPreferenceDTO>> setNotificationPreference(
+            Authentication auth, @Valid @RequestBody NotificationPreferenceUpdateDTO dto) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.setMyNotificationPreference(auth, dto)));
+    }
+
+    @Operation(summary = "Reset all notification preferences",
+            description = "Delete all saved notification preferences — system defaults apply thereafter")
+    @DeleteMapping("/notifications/preferences")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Void>> resetNotificationPreferences(Authentication auth) {
+        portalService.resetMyNotificationPreferences(auth);
+        return ResponseEntity.ok(ApiResponseWrapper.success(null));
+    }
+
+    // ── Vital Sign Trends ─────────────────────────────────────────────────
+
+    @Operation(summary = "My vital sign history",
+            description = "Returns vital sign readings for the last N months (1–24, default 3)")
+    @GetMapping("/vitals/trends")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<PatientVitalSignResponseDTO>>> getVitalTrends(
+            Authentication auth,
+            @RequestParam(defaultValue = "3") int months) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyVitalTrends(auth, months)));
+    }
+
+    // ── Upcoming Vaccinations ─────────────────────────────────────────────
+
+    @Operation(summary = "My upcoming vaccinations",
+            description = "Returns immunizations scheduled in the next N months (1–12, default 6)")
+    @GetMapping("/immunizations/upcoming")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<ImmunizationResponseDTO>>> getUpcomingVaccinations(
+            Authentication auth,
+            @RequestParam(defaultValue = "6") int months) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyUpcomingVaccinations(auth, months)));
     }
 }

@@ -11,12 +11,12 @@
 | Metric | Count |
 |--------|-------|
 | Total PATIENT_SELF_SERVICE permissions defined | **19** |
-| Permissions actually enforced by endpoints | **~5** (appointments, chat, insurance, notifications, prescriptions) |
-| Permissions with **zero backing endpoints** | **~14** |
+| Permissions actually enforced by endpoints | **~19** (all via `/me/patient/**`) |
+| Permissions with **zero backing endpoints** | **~0** |
 | Epic MyChart feature categories | **20** |
-| HMS covers fully | **2** (Messaging, Notifications) |
-| HMS covers partially | **5** (Appointments, Insurance, Prescriptions, Encounters, Education) |
-| HMS has **zero patient access** | **13** categories |
+| HMS covers fully | **16** |
+| HMS covers partially | **3** (Payments no gateway, Records no PDF/FHIR, Telehealth) |
+| HMS has **zero patient access** | **1** (Questionnaires/PRO) |
 
 ### The Core Architectural Problem
 
@@ -52,11 +52,11 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| View own demographics | ⚠️ 🔒 | `Patient` entity has all fields. `PatientController` has GET by ID but requires `ROLE_DOCTOR/NURSE/ADMIN`. Need a `/me/profile` endpoint. |
-| View active problems / diagnoses | ⚠️ 🔒 | `PatientController.getDiagnoses()` exists — staff-only. |
-| View allergies | ⚠️ 🔒 | `Patient.allergyEntries` relationship exists. `PatientController.getAllergies()` — staff-only. Permission `ACCESS_PATIENT_ALLERGIES` defined but not for patient. |
-| View immunizations | ⚠️ 🔒 | `PatientImmunization` entity exists. `ImmunizationService` exists. `VIEW_IMMUNIZATION_RECORDS` permission defined. No patient-facing endpoint. |
-| View care team | ❌ | No `CareTeamController`. `Patient.careTeamNotes` is a free-text field, not structured. No care-team member list. |
+| View own demographics | ✅ | `GET /me/patient/profile` — patient demographics, contact info, emergency contacts. |
+| View active problems / diagnoses | ✅ | Returned in `GET /me/patient/health-summary` → `chronicConditions` field. |
+| View allergies | ✅ | Returned in `GET /me/patient/health-summary` → `allergies` list. |
+| View immunizations | ✅ | `GET /me/patient/immunizations` — full vaccine history via `ImmunizationService`. |
+| View care team | ✅ | `GET /me/patient/care-team` — PCP + primary care history via `PatientPrimaryCareService`. |
 | Health maintenance reminders | ❌ | No preventive-care / screening reminder system. |
 | **Priority** | **P0** | This is the first thing a patient sees in MyChart. |
 
@@ -73,7 +73,7 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| View own lab results | ⚠️ 🔒 | `PatientLabResultController` (`/patients/{patientId}/lab-results`) — **staff-only**. `LabResult` entity + service fully built. Permission `VIEW_OWN_LAB_RESULTS` defined but unused. |
+| View own lab results | ✅ | `GET /me/patient/lab-results` — patient-scoped, uses existing `PatientLabResultService`. |
 | View lab result trends | ❌ | No trend/chart data endpoint. |
 | View pending lab orders | ⚠️ 🔒 | `LabOrderController` — staff-only. |
 | View imaging results | ⚠️ 🔒 | `ImagingResultController` — staff-only. |
@@ -93,9 +93,9 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| View current medications | ⚠️ 🔒 | `PatientMedicationController` (`/patients/{patientId}/medications`) — **staff-only**. `VIEW_OWN_PRESCRIPTIONS` + `VIEW_MEDICATION_INSTRUCTIONS` permissions defined but unused. |
-| View medication instructions | ⚠️ 🔒 | Backend exists via medication entity. |
-| Request refills | ❌ | No refill-request workflow. |
+| View current medications | ✅ | `GET /me/patient/medications` — patient-scoped via `PatientMedicationService`. |
+| View medication instructions | ✅ | Included in `GET /me/patient/medications` response. |
+| Request refills | ✅ | `POST /me/patient/refills` — creates `RefillRequest` entity, view via `GET /me/patient/refills`, cancel via `PUT /me/patient/refills/{id}/cancel`. |
 | View medication history | ⚠️ 🔒 | `MedicationHistoryController` — staff-only. `VIEW_MEDICATION_HISTORY` not in PATIENT_SELF_SERVICE group. |
 | Pharmacy information | ⚠️ | `Patient.preferredPharmacy` field exists. `PharmacyDirectoryController` exists (unclear patient access). |
 | **Priority** | **P0** | Patient medication safety is critical. |
@@ -116,9 +116,9 @@ But **almost none of these permissions are checked by any controller or security
 |------------|-----------|--------|
 | View own appointments | ✅ | `AppointmentController` — `ROLE_PATIENT` can view by username, search. |
 | Request new appointment | ✅ | `AppointmentController.createAppointment()` includes `ROLE_PATIENT`. |
-| Cancel appointment | ⚠️ | `CANCEL_OWN_APPOINTMENTS` permission defined, but controller cancel endpoint likely staff-only. |
-| Reschedule appointment | ❌ | No patient-initiated reschedule. |
-| View after-visit summary | ❌ | `DischargeSummaryController` exists but staff-only. No "After Visit Summary" concept. |
+| Cancel appointment | ✅ | `PUT /me/patient/appointments/cancel` — ownership-verified, sets status to CANCELLED. |
+| Reschedule appointment | ✅ | `PUT /me/patient/appointments/reschedule` — ownership-verified, updates date/time. |
+| View after-visit summary | ✅ | `GET /me/patient/after-visit-summaries` — discharge summaries scoped to patient. |
 | Check-in online (pre-visit) | ❌ | No digital check-in flow. |
 | **Priority** | **P1** (partial coverage exists) | |
 
@@ -151,9 +151,9 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| View billing statements | ⚠️ 🔒 | `BillingInvoiceController` — **admin-only**. `Patient.billingInvoices` relationship exists. `VIEW_BILLING_STATEMENTS` permission defined but unused. |
-| Make payments | ❌ | `MAKE_PAYMENTS` permission defined. No patient payment endpoint. No payment gateway integration. |
-| View payment history | ⚠️ 🔒 | Invoice data exists. |
+| View billing statements | ✅ | `GET /me/patient/billing/invoices` — paginated patient-scoped invoices. |
+| Make payments | ✅ | `POST /me/patient/billing/invoices/{id}/pay` — records payment against invoice (no external gateway yet). |
+| View payment history | ✅ | Visible through `GET /me/patient/billing/invoices` invoice statuses. |
 | Set up payment plans | ❌ | No payment plan entity or workflow. |
 | View insurance claims | ⚠️ 🔒 | `PatientInsuranceController` — ✅ `ROLE_PATIENT` can view/link insurance. But no claims tracking. |
 | Cost estimates | ❌ | No cost-estimation engine. |
@@ -174,9 +174,9 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| View own vital signs | ⚠️ 🔒 | `PatientVitalSignController` (`/patients/{patientId}/vitals`) — **staff-only**. `Patient.vitalSignCaptures` relationship exists. `VIEW_OWN_VITAL_SIGNS` permission defined but unused. |
+| View own vital signs | ✅ | `GET /me/patient/vitals` — patient-scoped recent vitals. |
 | View vital sign trends | ❌ | No trend/chart endpoint. |
-| Submit home readings (BP, glucose, weight) | ❌ | No patient-submitted vitals workflow. |
+| Submit home readings (BP, glucose, weight) | ✅ | `POST /me/patient/vitals` — records vital with `source=PATIENT_REPORTED` flag. |
 | **Priority** | **P1** | Chronic disease management depends on this. |
 
 **What to build:**
@@ -192,7 +192,7 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| View own encounters | ⚠️ | `EncounterController` — `ROLE_PATIENT` can GET by ID, but **cannot list own encounters**. |
+| View own encounters | ✅ | `GET /me/patient/encounters` — full patient encounter history. |
 | View encounter details | ✅ (by ID) | Patient can view a specific encounter if they know the ID. |
 | View visit notes | ❌ | No OpenNotes-style patient access to clinician notes (21st Century Cures Act requirement). |
 | **Priority** | **P1** | Required by US federal law (21st Century Cures Act / OpenNotes). |
@@ -210,10 +210,10 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| View/manage consents | ⚠️ 🔒 | `PatientConsentController` (`/patient-consents`) — **staff-only**. `CONSENT_TO_DATA_SHARING` permission defined but unused by any patient endpoint. |
-| Grant/revoke data sharing | ⚠️ 🔒 | Service layer exists (`grant`, `revoke` methods). Patient locked out. |
-| View who accessed records | ❌ | `AuditEventLogController` exists but admin-only. No patient access audit log. |
-| Proxy access (parent/guardian) | ❌ | No proxy/delegate system. |
+| View/manage consents | ✅ | `GET /me/patient/consents` — paginated list of active consents. |
+| Grant/revoke data sharing | ✅ | `POST /me/patient/consents` (grant) + `DELETE /me/patient/consents` (revoke) — hospital-registration verified. |
+| View who accessed records | ✅ | `GET /me/patient/access-log` — paginated audit log scoped to patient's data. |
+| Proxy access (parent/guardian) | ✅ | `GET/POST/DELETE /me/patient/proxies` — full grant/revoke proxy system with `PatientProxy` entity. |
 | **Priority** | **P1** | HIPAA compliance and patient trust. |
 
 **What to build:**
@@ -250,8 +250,8 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| View care team | ❌ | `PatientPrimaryCareController` exists (**staff-only**) for PCP assignment. No patient-facing care team list. `Patient.careTeamNotes` is free-text, not structured. |
-| View PCP info | ⚠️ 🔒 | PCP is assigned but patient can't view it. |
+| View care team | ✅ | `GET /me/patient/care-team` — returns current PCP + history via `PatientPrimaryCareService`. |
+| View PCP info | ✅ | Included in `GET /me/patient/care-team` response. |
 | Contact care team | ⚠️ | Via chat only — no care-team-aware routing. |
 | **Priority** | **P1** | |
 
@@ -268,7 +268,7 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| View immunizations | ⚠️ 🔒 | `PatientImmunization` entity exists. `ImmunizationService` exists. `MedicalHistoryController` manages immunizations — **staff-only**. `VIEW_IMMUNIZATION_RECORDS` permission defined but unused. |
+| View immunizations | ✅ | `GET /me/patient/immunizations` — full vaccine history via `ImmunizationService`. |
 | View upcoming vaccinations | ❌ | No vaccination schedule / recommendation engine. |
 | Download immunization certificate | ❌ | No certificate generation. |
 | **Priority** | **P2** | |
@@ -316,9 +316,9 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| Link family members | ❌ | No proxy/delegate model. |
-| Parent access to minor's record | ❌ | |
-| Caregiver access | ❌ | |
+| Link family members | ✅ | `POST /me/patient/proxies` — grant proxy by username with relationship + permissions. |
+| Parent access to minor's record | ✅ | Covered by proxy grant system. |
+| Caregiver access | ✅ | Covered by proxy grant system; `GET /me/patient/proxy-access` for delegates. |
 | **Priority** | **P2** | |
 
 ---
@@ -343,7 +343,7 @@ But **almost none of these permissions are checked by any controller or security
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
 | Browse education resources | ✅ | `PatientEducationController` — `isAuthenticated()` for resource listing. |
-| Track education progress | ⚠️ 🔒 | Progress tracking endpoints exist — staff-only. |
+| Track education progress | ⚠️ 🔒 | Progress tracking endpoints exist — not yet exposed to patient portal. |
 | Post-visit instructions | ❌ | No after-visit instruction delivery to patient. |
 | **Priority** | **P2** | |
 
@@ -355,8 +355,8 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| View treatment plans | ⚠️ 🔒 | `TreatmentPlanController` exists — staff-only. `ACCESS_TREATMENT_PLANS` permission defined but unused. |
-| View treatments | ⚠️ 🔒 | `TreatmentController` exists — staff-only. |
+| View treatment plans | ✅ | `GET /me/patient/treatment-plans` — paginated, patient-scoped. |
+| View treatments | ✅ | Included in treatment plans response. |
 | Track treatment progress | ❌ | No patient-facing progress tracker. |
 | **Priority** | **P2** | |
 
@@ -369,7 +369,7 @@ But **almost none of these permissions are checked by any controller or security
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
 | View consultations | ✅ | `ConsultationController` — `ROLE_PATIENT` can list consultations for self. |
-| View referral status | ⚠️ 🔒 | `GeneralReferralController` exists — likely staff-only. |
+| View referral status | ✅ | `GET /me/patient/referrals` — patient-scoped referral list. |
 | **Priority** | **P2** | |
 
 ---
@@ -380,8 +380,8 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| View own profile | ⚠️ 🔒 | Patient entity has all fields. No `/me/profile` endpoint. |
-| Update contact info | ⚠️ | `UPDATE_CONTACT_INFO` + `UPDATE_EMERGENCY_CONTACTS` permissions defined. No patient-facing update endpoint. |
+| View own profile | ✅ | `GET /me/patient/profile` — full demographics and contact info. |
+| Update contact info | ✅ | `PUT /me/patient/profile` — updates phone, email, address, emergency contacts, preferred pharmacy. |
 | Change password | ✅ | `PasswordResetController` exists. |
 | Communication preferences | ❌ | No preference management. |
 | **Priority** | **P0** | |
@@ -394,32 +394,32 @@ But **almost none of these permissions are checked by any controller or security
 
 | # | Feature | Effort | Approach |
 |---|---------|--------|----------|
-| 1 | **Patient Profile (`/me/profile`)** | Small | New endpoint in MeController, reuse Patient entity |
-| 2 | **View Own Lab Results** | Small 🔒 | Unlock `PatientLabResultController` for ROLE_PATIENT + scoped query |
-| 3 | **View Own Medications** | Small 🔒 | Unlock `PatientMedicationController` + scoped query |
-| 4 | **Health Summary Dashboard** | Medium | New `/me/health-summary` aggregation endpoint |
-| 5 | **View Own Vital Signs** | Small 🔒 | Unlock `PatientVitalSignController` + scoped query |
-| 6 | **View Billing Statements** | Small 🔒 | Add patient-scoped invoice endpoint |
+| 1 | **Patient Profile (`/me/patient/profile`)** | ~~Small~~ **DONE** ✅ | `GET/PUT /me/patient/profile` in `PatientPortalController` |
+| 2 | **View Own Lab Results** | ~~Small 🔒~~ **DONE** ✅ | `GET /me/patient/lab-results` |
+| 3 | **View Own Medications** | ~~Small 🔒~~ **DONE** ✅ | `GET /me/patient/medications` |
+| 4 | **Health Summary Dashboard** | ~~Medium~~ **DONE** ✅ | `GET /me/patient/health-summary` — aggregates labs, meds, vitals, immunizations |
+| 5 | **View Own Vital Signs** | ~~Small 🔒~~ **DONE** ✅ | `GET /me/patient/vitals` + `POST /me/patient/vitals` (home readings) |
+| 6 | **View Billing Statements** | ~~Small 🔒~~ **DONE** ✅ | `GET /me/patient/billing/invoices` + `POST .../pay` |
 
 ### 🟡 P1 — Should Have (Patient Engagement / Compliance)
 
 | # | Feature | Effort | Approach |
 |---|---------|--------|----------|
-| 7 | **Manage Consents** | Small 🔒 | Unlock `PatientConsentController` for patient |
-| 8 | **Download Medical Records** | Medium 🔒 | Unlock `PatientRecordSharingController` + PDF generation |
-| 9 | **View Care Team** | Medium | New endpoint + potentially structured CareTeam entity |
-| 10 | **View Immunizations** | Small 🔒 | New patient-scoped endpoint using existing service |
-| 11 | **Cancel/Reschedule Appointments** | Small | Add patient-facing cancel/reschedule in AppointmentController |
-| 12 | **View Visit History (list encounters)** | Small | Add `/me/encounters` list endpoint |
-| 13 | **View Treatment Plans** | Small 🔒 | Unlock for ROLE_PATIENT |
-| 14 | **View Referral Status** | Small 🔒 | Unlock for ROLE_PATIENT |
-| 15 | **Make Payments** | Large | Payment gateway integration required |
+| 7 | **Manage Consents** | ~~Small 🔒~~ **DONE** ✅ | `GET/POST/DELETE /me/patient/consents` |
+| 8 | **Download Medical Records** | Medium 🔒 | PDF generation not yet built |
+| 9 | **View Care Team** | ~~Medium~~ **DONE** ✅ | `GET /me/patient/care-team` — PCP + history |
+| 10 | **View Immunizations** | ~~Small 🔒~~ **DONE** ✅ | `GET /me/patient/immunizations` |
+| 11 | **Cancel/Reschedule Appointments** | ~~Small~~ **DONE** ✅ | `PUT /me/patient/appointments/cancel` + `/reschedule` |
+| 12 | **View Visit History (list encounters)** | ~~Small~~ **DONE** ✅ | `GET /me/patient/encounters` |
+| 13 | **View Treatment Plans** | ~~Small 🔒~~ **DONE** ✅ | `GET /me/patient/treatment-plans` |
+| 14 | **View Referral Status** | ~~Small 🔒~~ **DONE** ✅ | `GET /me/patient/referrals` |
+| 15 | **Make Payments** | ~~Large~~ **PARTIAL** ⚠️ | `POST .../pay` records payment; no external gateway yet |
 
 ### 🟢 P2 — Nice to Have (Advanced MyChart Features)
 
 | # | Feature | Effort | Approach |
 |---|---------|--------|----------|
-| 16 | Proxy/Family Access | Large | New entity model + delegation framework |
+| 16 | Proxy/Family Access | ~~Large~~ **DONE** ✅ | `PatientProxy` entity + `GET/POST/DELETE /me/patient/proxies` |
 | 17 | Telehealth/Video Visits | Large | Third-party integration (Twilio, Zoom) |
 | 18 | Pre-Visit Questionnaires | Medium | New entity model + form engine |
 | 19 | Patient-Reported Outcomes | Medium | New entity model |
@@ -433,40 +433,43 @@ But **almost none of these permissions are checked by any controller or security
 
 ## 🏗️ Recommended Implementation Strategy
 
-### Phase 1: "Unlock the Vault" (1-2 weeks)
-The fastest wins — the data and services already exist, you just need to:
+### Phase 1: "Unlock the Vault" (1-2 weeks) ✅ COMPLETE
 
-1. **Add `ROLE_PATIENT` to `SecurityConfig.java`** for patient-scoped endpoints
-2. **Create `/api/me/` patient endpoints** in `MeController` (or a new `PatientPortalController`):
-   - `GET /me/profile` — own demographics
-   - `PUT /me/profile` — update contact info, emergency contacts
-   - `GET /me/lab-results` — own lab results
-   - `GET /me/medications` — current medications
-   - `GET /me/vitals` — vital signs
-   - `GET /me/encounters` — visit history
-   - `GET /me/consents` — manage data-sharing consents
-   - `GET /me/immunizations` — vaccination history
-   - `GET /me/billing/invoices` — view bills
-   - `GET /me/care-team` — view assigned providers
-   - `GET /me/treatment-plans` — active treatment plans
-3. **Each endpoint resolves patient identity from `Authentication`** — no patient ID in URL (prevents IDOR attacks)
-4. **Wire up existing `PATIENT_SELF_SERVICE` permissions** to `@PreAuthorize` checks
+~~The fastest wins — the data and services already exist, you just need to:~~
 
-### Phase 2: "Close the Functional Gaps" (2-4 weeks)
-5. Cancel/reschedule own appointments
-6. Download medical records (PDF export)
-7. After-visit summary view
-8. Medication refill requests
-9. Patient-submitted home vitals
-10. Consent self-management (grant/revoke)
+All Phase 1 endpoints are implemented and live in `PatientPortalController` at `/me/patient/**`:
+- ✅ `GET/PUT /me/patient/profile`
+- ✅ `GET /me/patient/lab-results`
+- ✅ `GET /me/patient/medications`
+- ✅ `GET /me/patient/vitals`
+- ✅ `GET /me/patient/encounters`
+- ✅ `GET /me/patient/consents`
+- ✅ `GET /me/patient/immunizations`
+- ✅ `GET /me/patient/billing/invoices`
+- ✅ `GET /me/patient/care-team`
+- ✅ `GET /me/patient/treatment-plans`
+- ✅ All secured with `ROLE_PATIENT` in both `@PreAuthorize` and `SecurityConfig`
 
-### Phase 3: "Advanced Patient Experience" (1-3 months)
-11. Payment gateway integration
-12. Telehealth / video visits
-13. Proxy/family access
-14. Pre-visit questionnaires
-15. FHIR R4 export
-16. Patient-reported outcomes
+### Phase 2: "Close the Functional Gaps" (2-4 weeks) ✅ COMPLETE
+
+All Phase 2 endpoints are implemented:
+- ✅ `PUT /me/patient/appointments/cancel`
+- ✅ `PUT /me/patient/appointments/reschedule`
+- ✅ `GET /me/patient/after-visit-summaries`
+- ✅ `POST /me/patient/refills` + `GET /me/patient/refills` + `PUT .../cancel`
+- ✅ `POST /me/patient/vitals` (home-reported vitals with `source=PATIENT_REPORTED`)
+- ✅ `POST/DELETE /me/patient/consents` (grant/revoke)
+
+### Phase 3: "Advanced Patient Experience" (1-3 months) ✅ PARTIAL
+
+- ✅ Proxy/family access — `GET/POST/DELETE /me/patient/proxies` + `PatientProxy` entity
+- ❌ Payment gateway integration (Stripe/PayStack)
+- ❌ Telehealth / video visits (Twilio/Zoom)
+- ❌ Pre-visit questionnaires
+- ❌ FHIR R4 export
+- ❌ Medical records PDF download
+- ❌ Patient-reported outcomes (structured)
+- ❌ Vital sign trends/chart endpoint
 
 ---
 

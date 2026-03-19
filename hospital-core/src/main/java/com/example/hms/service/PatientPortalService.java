@@ -11,6 +11,8 @@ import com.example.hms.payload.dto.portal.MedicationRefillRequestDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
 import com.example.hms.payload.dto.portal.CareTeamDTO;
 import com.example.hms.payload.dto.portal.AccessLogEntryDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyResponseDTO;
 import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
@@ -120,7 +122,16 @@ public interface PatientPortalService {
 
     // ── Cancel a pending refill request ──────────────────────────────────
     MedicationRefillResponseDTO cancelMyRefill(Authentication auth, UUID refillId);
+    // ── Notification preferences ──────────────────────────────────────────
+    List<NotificationPreferenceDTO> getMyNotificationPreferences(Authentication auth);
+    NotificationPreferenceDTO setMyNotificationPreference(Authentication auth, NotificationPreferenceUpdateDTO dto);
+    void resetMyNotificationPreferences(Authentication auth);
 
+    // ── Vital sign trends ────────────────────────────────────────────────
+    List<PatientVitalSignResponseDTO> getMyVitalTrends(Authentication auth, int months);
+
+    // ── Upcoming vaccinations ────────────────────────────────────────────
+    List<com.example.hms.payload.dto.medicalhistory.ImmunizationResponseDTO> getMyUpcomingVaccinations(Authentication auth, int months);
     // ── After-visit summaries (discharge summaries) ──────────────────────
     List<DischargeSummaryResponseDTO> getMyAfterVisitSummaries(Authentication auth, Locale locale);
 

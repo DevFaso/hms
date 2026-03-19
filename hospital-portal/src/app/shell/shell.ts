@@ -78,13 +78,16 @@ export class ShellComponent implements OnInit, OnDestroy {
         { icon: 'medication', label: 'Medications', route: '/my-medications' },
         { icon: 'science', label: 'Test Results', route: '/my-lab-results' },
         { icon: 'monitor_heart', label: 'Vitals', route: '/my-vitals' },
+        { icon: 'trending_up', label: 'Vital Trends', route: '/my-vital-trends' },
         { icon: 'receipt_long', label: 'Billing', route: '/my-billing' },
         { icon: 'history', label: 'Visit History', route: '/my-visits' },
         { icon: 'folder_shared', label: 'My Records', route: '/my-records' },
         { icon: 'share', label: 'Record Sharing', route: '/my-sharing' },
         { icon: 'summarize', label: 'Visit Summaries', route: '/my-summaries' },
+        { icon: 'vaccines', label: 'Upcoming Vaccines', route: '/my-upcoming-vaccines' },
         { icon: 'chat', label: 'Messages', route: '/chat' },
         { icon: 'notifications', label: 'Notifications', route: '/notifications' },
+        { icon: 'tune', label: 'Notification Settings', route: '/my-notifications' },
       ];
     }
 

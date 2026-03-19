@@ -253,6 +253,56 @@ export interface ProxyGrantRequest {
   notes?: string;
 }
 
+export interface NotificationPreferenceDTO {
+  id: string;
+  notificationType: string;
+  channel: string;
+  enabled: boolean;
+}
+
+export interface NotificationPreferenceUpdateDTO {
+  notificationType: string;
+  channel: string;
+  enabled: boolean;
+}
+
+export interface PatientVitalSignDTO {
+  id: string;
+  patientId: string;
+  hospitalId: string | null;
+  recordedByName: string | null;
+  source: string | null;
+  temperatureCelsius: number | null;
+  heartRateBpm: number | null;
+  respiratoryRateBpm: number | null;
+  systolicBpMmHg: number | null;
+  diastolicBpMmHg: number | null;
+  spo2Percent: number | null;
+  bloodGlucoseMgDl: number | null;
+  weightKg: number | null;
+  bodyPosition: string | null;
+  notes: string | null;
+  clinicallySignificant: boolean;
+  recordedAt: string;
+}
+
+export interface ImmunizationDTO {
+  id: string;
+  patientId: string;
+  vaccineCode: string;
+  vaccineDisplay: string;
+  vaccineType: string;
+  targetDisease: string | null;
+  administrationDate: string;
+  doseNumber: number | null;
+  totalDosesInSeries: number | null;
+  status: string;
+  nextDoseDueDate: string | null;
+  overdue: boolean;
+  notes: string | null;
+  active: boolean;
+}
+
 interface ApiWrapper<T> {
   data: T;
   success: boolean;
@@ -481,5 +531,50 @@ export class PatientPortalService {
       map((r) => r.data ?? []),
       catchError(() => of([])),
     );
+  }
+
+  // ── Notification Preferences ──────────────────────────────────────────
+
+  getNotificationPreferences(): Observable<NotificationPreferenceDTO[]> {
+    return this.http
+      .get<ApiWrapper<NotificationPreferenceDTO[]>>(`${this.base}/notifications/preferences`)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  setNotificationPreference(dto: NotificationPreferenceUpdateDTO): Observable<NotificationPreferenceDTO> {
+    return this.http
+      .put<ApiWrapper<NotificationPreferenceDTO>>(`${this.base}/notifications/preferences`, dto)
+      .pipe(map((r) => r.data));
+  }
+
+  resetNotificationPreferences(): Observable<void> {
+    return this.http
+      .delete<ApiWrapper<void>>(`${this.base}/notifications/preferences`)
+      .pipe(map(() => void 0));
+  }
+
+  // ── Vital Sign Trends ─────────────────────────────────────────────────
+
+  getVitalTrends(months = 3): Observable<PatientVitalSignDTO[]> {
+    return this.http
+      .get<ApiWrapper<PatientVitalSignDTO[]>>(`${this.base}/vitals/trends`, { params: { months } })
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  // ── Upcoming Vaccinations ─────────────────────────────────────────────
+
+  getUpcomingVaccinations(months = 6): Observable<ImmunizationDTO[]> {
+    return this.http
+      .get<ApiWrapper<ImmunizationDTO[]>>(`${this.base}/immunizations/upcoming`, { params: { months } })
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
   }
 }

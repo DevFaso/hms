@@ -119,6 +119,29 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./patient-portal/my-summaries').then((m) => m.MySummariesComponent),
       },
+      {
+        path: 'my-notifications',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-notifications').then((m) => m.MyNotificationsComponent),
+      },
+      {
+        path: 'my-vital-trends',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-vital-trends').then((m) => m.MyVitalTrendsComponent),
+      },
+      {
+        path: 'my-upcoming-vaccines',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-upcoming-vaccines').then(
+            (m) => m.MyUpcomingVaccinesComponent,
+          ),
+      },
 
       // Patients
       {
