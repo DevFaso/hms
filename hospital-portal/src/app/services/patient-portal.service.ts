@@ -209,6 +209,22 @@ export interface HomeVitalReading {
   notes?: string;
 }
 
+export interface PatientProfileUpdateRequest {
+  phoneNumberPrimary?: string;
+  phoneNumberSecondary?: string;
+  email?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  country?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  preferredPharmacy?: string;
+}
+
 export interface CancelAppointmentRequest {
   appointmentId: string;
   reason: string;
@@ -220,6 +236,39 @@ export interface RescheduleAppointmentRequest {
   newStartTime: string;
   newEndTime: string;
   reason: string;
+}
+
+export interface AppointmentBookingRequest {
+  departmentId: string;
+  staffId?: string;
+  appointmentDate: string;
+  startTime: string;
+  endTime: string;
+  reason: string;
+  notes?: string;
+}
+
+export interface AppointmentBookingResponse {
+  id: string;
+  status: string;
+  appointmentDate: string;
+  startTime: string;
+  endTime: string;
+  patientName: string;
+  staffName: string;
+  departmentName: string;
+  hospitalName: string;
+}
+
+export interface DepartmentMinimal {
+  id: string;
+  name: string;
+}
+
+export interface StaffMinimal {
+  id: string;
+  fullName: string;
+  jobTitle: string;
 }
 
 export interface PatientPaymentRequest {
@@ -444,6 +493,221 @@ export interface EducationProgressDTO {
   updatedAt: string;
 }
 
+export interface EducationResourceDTO {
+  id: string;
+  hospitalId: string;
+  title: string;
+  description: string | null;
+  category: string;
+  resourceType: string;
+  contentUrl: string | null;
+  language: string | null;
+  difficulty: string | null;
+  durationMinutes: number | null;
+  viewCount: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LabResultTrendPointDTO {
+  value: string | null;
+  collectedAt: string | null;
+  resultedAt: string | null;
+  status: string;
+  abnormal: boolean;
+}
+
+export interface LabResultTrendDTO {
+  testName: string;
+  testCode: string | null;
+  unit: string | null;
+  category: string | null;
+  dataPoints: LabResultTrendPointDTO[];
+}
+
+export interface PortalTreatmentPlan {
+  id: string;
+  status: string;
+  problemStatement: string;
+  therapeuticGoals: string[];
+  medicationPlan: string[];
+  lifestylePlan: string[];
+  timelineStartDate: string | null;
+  timelineReviewDate: string | null;
+  followUpSummary: string | null;
+  authorStaffName: string;
+  hospitalName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PortalReferral {
+  id: string;
+  referralType: string;
+  targetSpecialty: string;
+  targetDepartmentName: string;
+  referringProviderName: string;
+  receivingProviderName: string | null;
+  referralReason: string;
+  urgency: string;
+  status: string;
+  submittedAt: string | null;
+  slaDueAt: string | null;
+  scheduledAppointmentAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+export interface PortalConsultation {
+  id: string;
+  consultationType: string;
+  specialtyRequested: string;
+  reasonForConsult: string;
+  urgency: string;
+  status: string;
+  requestingProviderName: string;
+  consultantName: string | null;
+  requestedAt: string;
+  scheduledAt: string | null;
+  completedAt: string | null;
+  recommendations: string | null;
+  followUpRequired: boolean;
+  hospitalName: string;
+}
+
+export interface QuestionItem {
+  id: string;
+  question: string;
+  type: 'TEXT' | 'YES_NO' | 'SCALE' | 'CHOICE';
+  required: boolean;
+  options?: string[];
+}
+
+export interface PortalQuestionnaire {
+  id: string;
+  title: string;
+  description: string | null;
+  questions: QuestionItem[];
+  responseId?: string | null;
+  submittedAt?: string | null;
+}
+
+export interface PortalQuestionnaireResponse {
+  id: string;
+  questionnaireId: string;
+  questionnaireTitle: string;
+  status: string;
+  submittedAt: string;
+  answers: Record<string, string>;
+}
+
+export interface QuestionnaireSubmitRequest {
+  questionnaireId: string;
+  appointmentId?: string | null;
+  answers: Record<string, string>;
+}
+
+// ── Feature 16: Visit Notes (OpenNotes) ──────────────────────────────
+export interface PortalEncounterNote {
+  id: string;
+  template: string;
+  chiefComplaint: string;
+  subjective: string;
+  objective: string;
+  assessment: string;
+  plan: string;
+  patientInstructions: string;
+  summary: string;
+  signedAt: string;
+  signedByName: string;
+  signedByCredentials: string;
+  documentedAt: string;
+}
+
+// ── Feature 17: Post-Visit Instructions ─────────────────────────────
+export interface PortalDischargeInstructions {
+  id: string;
+  encounterId: string;
+  dischargeDate: string;
+  disposition: string;
+  dischargeDiagnosis: string;
+  hospitalCourse: string;
+  dischargeCondition: string;
+  activityRestrictions: string;
+  dietInstructions: string;
+  woundCareInstructions: string;
+  followUpInstructions: string;
+  warningSigns: string;
+  patientEducationProvided: string;
+  equipmentAndSupplies: string[];
+  isFinalized: boolean;
+}
+
+// ── Feature 19: Health Maintenance Reminders ─────────────────────────
+export interface PortalHealthReminder {
+  id: string;
+  type: string;
+  typeLabel: string;
+  dueDate: string;
+  status: string;
+  notes: string;
+  completedDate: string;
+  completedBy: string;
+  overdue: boolean;
+  createdAt: string;
+}
+
+// ── Feature 20: Treatment Progress Tracker ───────────────────────────────
+export interface PortalProgressEntry {
+  id: string;
+  treatmentPlanId: string;
+  progressDate: string;
+  progressNote: string | null;
+  selfRating: number | null;
+  onTrack: boolean;
+  createdAt: string;
+}
+
+export interface PortalProgressEntryRequest {
+  progressDate: string;
+  progressNote?: string;
+  selfRating?: number | null;
+  onTrack?: boolean;
+}
+
+// ── Feature 21: Patient-Reported Outcomes (PROs) ─────────────────────────
+export type ProOutcomeType =
+  | 'PAIN_SCORE'
+  | 'MOOD'
+  | 'ENERGY_LEVEL'
+  | 'SLEEP_QUALITY'
+  | 'ANXIETY_LEVEL'
+  | 'FATIGUE'
+  | 'BREATHLESSNESS'
+  | 'NAUSEA'
+  | 'APPETITE'
+  | 'GENERAL_WELLBEING';
+
+export interface PortalOutcome {
+  id: string;
+  outcomeType: ProOutcomeType;
+  typeLabel: string;
+  score: number;
+  notes: string | null;
+  reportDate: string;
+  encounterId: string | null;
+  createdAt: string;
+}
+
+export interface PortalOutcomeRequest {
+  outcomeType: ProOutcomeType;
+  score: number;
+  notes?: string;
+  reportDate: string;
+  encounterId?: string | null;
+}
+
 interface ApiWrapper<T> {
   data: T;
   success: boolean;
@@ -464,6 +728,12 @@ export class PatientPortalService {
   getMyProfile(): Observable<PatientProfileDTO> {
     return this.http
       .get<ApiWrapper<PatientProfileDTO>>(`${this.base}/profile`)
+      .pipe(map((r) => r.data));
+  }
+
+  updateMyProfile(dto: PatientProfileUpdateRequest): Observable<PatientProfileDTO> {
+    return this.http
+      .put<ApiWrapper<PatientProfileDTO>>(`${this.base}/profile`, dto)
       .pipe(map((r) => r.data));
   }
 
@@ -802,5 +1072,230 @@ export class PatientPortalService {
         map((r) => r.data ?? []),
         catchError(() => of([])),
       );
+  }
+
+  // ── Education Resource Library ────────────────────────────────────────
+
+  getMyEducationResources(): Observable<EducationResourceDTO[]> {
+    return this.http
+      .get<ApiWrapper<EducationResourceDTO[]>>(`${this.base}/education/resources`)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  searchMyEducationResources(query: string): Observable<EducationResourceDTO[]> {
+    return this.http
+      .get<ApiWrapper<EducationResourceDTO[]>>(`${this.base}/education/resources/search`, {
+        params: { query },
+      })
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  getMyEducationResourcesByCategory(category: string): Observable<EducationResourceDTO[]> {
+    return this.http
+      .get<
+        ApiWrapper<EducationResourceDTO[]>
+      >(`${this.base}/education/resources/by-category/${category}`)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  // ── Medical Records Self-Download ─────────────────────────────────────
+
+  downloadMyRecord(format: 'pdf' | 'csv' = 'pdf'): void {
+    const link = document.createElement('a');
+    link.href = `${this.base}/records/download?format=${format}`;
+    // Trigger via fetch so we can attach the auth header
+    this.http
+      .get(`${this.base}/records/download`, {
+        params: { format },
+        responseType: 'blob',
+      })
+      .subscribe((blob) => {
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        link.download = format === 'csv' ? 'my-health-record.csv' : 'my-health-record.pdf';
+        link.click();
+        URL.revokeObjectURL(url);
+      });
+  }
+
+  // ── Lab Result Trends ─────────────────────────────────────────────────
+
+  getMyLabResultTrends(): Observable<LabResultTrendDTO[]> {
+    return this.http.get<ApiWrapper<LabResultTrendDTO[]>>(`${this.base}/lab-results/trends`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  // ── Online Check-In ──────────────────────────────────────────────────
+
+  checkInAppointment(appointmentId: string): Observable<unknown> {
+    return this.http
+      .post<ApiWrapper<unknown>>(`${this.base}/appointments/${appointmentId}/check-in`, {})
+      .pipe(map((r) => r.data));
+  }
+
+  // ── Appointment Booking ──────────────────────────────────────────────
+
+  getMyDepartments(): Observable<DepartmentMinimal[]> {
+    return this.http.get<ApiWrapper<DepartmentMinimal[]>>(`${this.base}/departments`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  getDepartmentProviders(departmentId: string): Observable<StaffMinimal[]> {
+    return this.http
+      .get<ApiWrapper<StaffMinimal[]>>(`${this.base}/departments/${departmentId}/providers`)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  bookAppointment(dto: AppointmentBookingRequest): Observable<AppointmentBookingResponse> {
+    return this.http
+      .post<ApiWrapper<AppointmentBookingResponse>>(`${this.base}/appointments`, dto)
+      .pipe(map((r) => r.data!));
+  }
+
+  // ── Treatment Plans ───────────────────────────────────────────────────
+
+  getMyTreatmentPlans(): Observable<PortalTreatmentPlan[]> {
+    return this.http
+      .get<ApiWrapper<PageWrapper<PortalTreatmentPlan>>>(`${this.base}/treatment-plans`, {
+        params: { page: 0, size: 50 },
+      })
+      .pipe(
+        map((r) => r.data?.content ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  // ── Referrals ─────────────────────────────────────────────────────────
+
+  getMyReferrals(): Observable<PortalReferral[]> {
+    return this.http.get<ApiWrapper<PortalReferral[]>>(`${this.base}/referrals`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  // ── Consultations ─────────────────────────────────────────────────────
+
+  getMyConsultations(): Observable<PortalConsultation[]> {
+    return this.http.get<ApiWrapper<PortalConsultation[]>>(`${this.base}/consultations`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  // ── Questionnaires ────────────────────────────────────────────────────
+
+  getMyPendingQuestionnaires(): Observable<PortalQuestionnaire[]> {
+    return this.http.get<ApiWrapper<PortalQuestionnaire[]>>(`${this.base}/questionnaires`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  getMySubmittedQuestionnaires(): Observable<PortalQuestionnaireResponse[]> {
+    return this.http
+      .get<ApiWrapper<PortalQuestionnaireResponse[]>>(`${this.base}/questionnaires/submitted`)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  submitQuestionnaire(dto: QuestionnaireSubmitRequest): Observable<PortalQuestionnaireResponse> {
+    return this.http
+      .post<ApiWrapper<PortalQuestionnaireResponse>>(`${this.base}/questionnaires/response`, dto)
+      .pipe(map((r) => r.data!));
+  }
+
+  // ── Feature 16: Visit Notes (OpenNotes) ──────────────────────────────
+
+  getMyEncounterNote(encounterId: string): Observable<PortalEncounterNote> {
+    return this.http
+      .get<ApiWrapper<PortalEncounterNote>>(`${this.base}/encounters/${encounterId}/note`)
+      .pipe(map((r) => r.data));
+  }
+
+  // ── Feature 17: Post-Visit Instructions ─────────────────────────────
+
+  getMyPostVisitInstructions(encounterId: string): Observable<PortalDischargeInstructions> {
+    return this.http
+      .get<
+        ApiWrapper<PortalDischargeInstructions>
+      >(`${this.base}/encounters/${encounterId}/instructions`)
+      .pipe(map((r) => r.data));
+  }
+
+  // ── Feature 18: Immunization Certificate ─────────────────────────────
+
+  downloadImmunizationCertificate(): Observable<Blob> {
+    return this.http.get(`${this.base}/immunizations/certificate`, { responseType: 'blob' });
+  }
+
+  // ── Feature 19: Health Maintenance Reminders ─────────────────────────
+
+  getMyHealthReminders(): Observable<PortalHealthReminder[]> {
+    return this.http.get<ApiWrapper<PortalHealthReminder[]>>(`${this.base}/health-reminders`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  completeHealthReminder(reminderId: string): Observable<PortalHealthReminder> {
+    return this.http
+      .put<
+        ApiWrapper<PortalHealthReminder>
+      >(`${this.base}/health-reminders/${reminderId}/complete`, {})
+      .pipe(map((r) => r.data));
+  }
+
+  // ── Feature 20: Treatment Progress Tracker ───────────────────────────
+
+  getMyTreatmentPlanProgress(planId: string): Observable<PortalProgressEntry[]> {
+    return this.http
+      .get<ApiWrapper<PortalProgressEntry[]>>(`${this.base}/treatment-plans/${planId}/progress`)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  logMyTreatmentProgress(
+    planId: string,
+    dto: PortalProgressEntryRequest,
+  ): Observable<PortalProgressEntry> {
+    return this.http
+      .post<ApiWrapper<PortalProgressEntry>>(`${this.base}/treatment-plans/${planId}/progress`, dto)
+      .pipe(map((r) => r.data!));
+  }
+
+  // ── Feature 21: Patient-Reported Outcomes (PROs) ─────────────────────
+
+  getMyOutcomes(): Observable<PortalOutcome[]> {
+    return this.http.get<ApiWrapper<PortalOutcome[]>>(`${this.base}/outcomes`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  reportMyOutcome(dto: PortalOutcomeRequest): Observable<PortalOutcome> {
+    return this.http
+      .post<ApiWrapper<PortalOutcome>>(`${this.base}/outcomes`, dto)
+      .pipe(map((r) => r.data!));
   }
 }

@@ -12,15 +12,22 @@ import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.LabResultReferenceRangeDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
+import com.example.hms.payload.dto.lab.LabResultTrendDTO;
+import com.example.hms.payload.dto.lab.LabResultTrendPointDTO;
 import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.PatientLabResultService;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -227,5 +234,80 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             return null;
         }
         return new java.text.DecimalFormat("0.##").format(value);
+    }
+
+    // ── Lab Result Trends ─────────────────────────────────────────────────
+
+    private static final int TREND_MAX_POINTS = 12;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LabResultTrendDTO> getLabResultTrends(UUID patientId) {
+        log.info("Fetching lab result trends for patient {}", patientId);
+
+        List<LabResult> allResults = labResultRepository.findByLabOrder_Patient_Id(patientId);
+
+        // Group by test definition key (id if available, else test code + name)
+        Map<String, List<LabResult>> grouped = new LinkedHashMap<>();
+        for (LabResult r : allResults) {
+            LabOrder order = r.getLabOrder();
+            LabTestDefinition def = order != null ? order.getLabTestDefinition() : null;
+            String key = def != null ? def.getId().toString()
+                    : (order != null && order.getClinicalIndication() != null
+                            ? order.getClinicalIndication() : "unknown");
+            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
+        }
+
+        List<LabResultTrendDTO> trends = new ArrayList<>();
+        for (Map.Entry<String, List<LabResult>> entry : grouped.entrySet()) {
+            List<LabResult> group = entry.getValue();
+            // Latest results first, cap at TREND_MAX_POINTS
+            List<LabResult> sorted = group.stream()
+                    .sorted(Comparator.comparing(LabResult::getResultDate,
+                            Comparator.nullsLast(Comparator.reverseOrder())))
+                    .limit(TREND_MAX_POINTS)
+                    .collect(Collectors.toList());
+
+            if (sorted.isEmpty()) continue;
+
+            LabResult first = sorted.get(0);
+            LabOrder order = first.getLabOrder();
+            LabTestDefinition def = order != null ? order.getLabTestDefinition() : null;
+
+            String testName = def != null && def.getName() != null ? def.getName()
+                    : (order != null && order.getClinicalIndication() != null
+                            ? order.getClinicalIndication() : "Lab Result");
+            String testCode = def != null ? def.getTestCode() : null;
+            String unit = resolveUnit(first, def);
+            String category = def != null ? def.getCategory() : null;
+
+            List<LabResultTrendPointDTO> points = sorted.stream()
+                    .map(r -> {
+                        LabResultResponseDTO mapped = labResultMapper.toResponseDTO(r);
+                        String status = resolveStatus(r, mapped);
+                        boolean abnormal = !STATUS_NORMAL.equals(status) && !STATUS_PENDING.equals(status);
+                        return LabResultTrendPointDTO.builder()
+                                .value(r.getResultValue())
+                                .collectedAt(r.getLabOrder() != null ? r.getLabOrder().getOrderDatetime() : null)
+                                .resultedAt(r.getResultDate())
+                                .status(status)
+                                .abnormal(abnormal)
+                                .build();
+                    })
+                    .collect(Collectors.toList());
+
+            trends.add(LabResultTrendDTO.builder()
+                    .testName(testName)
+                    .testCode(testCode)
+                    .unit(unit)
+                    .category(category)
+                    .dataPoints(points)
+                    .build());
+        }
+
+        // Alphabetical order by test name for stable UI
+        trends.sort(Comparator.comparing(LabResultTrendDTO::getTestName,
+                Comparator.nullsLast(Comparator.naturalOrder())));
+        return trends;
     }
 }

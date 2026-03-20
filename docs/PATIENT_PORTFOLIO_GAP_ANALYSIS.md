@@ -14,8 +14,8 @@
 | Permissions actually enforced by endpoints | **~19** (all via `/me/patient/**`) |
 | Permissions with **zero backing endpoints** | **~0** |
 | Epic MyChart feature categories | **20** |
-| HMS covers fully | **25** |
-| HMS covers partially | **3** (Payments no gateway, Records no PDF/FHIR, Telehealth) |
+| HMS covers fully | **33** |
+| HMS covers partially | **3** (Payments no gateway, Records no FHIR export, Telehealth) |
 | HMS has **zero patient access** | **1** (Questionnaires/PRO) |
 
 ### The Core Architectural Problem
@@ -57,7 +57,7 @@ But **almost none of these permissions are checked by any controller or security
 | View allergies | ✅ | Returned in `GET /me/patient/health-summary` → `allergies` list. |
 | View immunizations | ✅ | `GET /me/patient/immunizations` — full vaccine history via `ImmunizationService`. |
 | View care team | ✅ | `GET /me/patient/care-team` — PCP + primary care history via `PatientPrimaryCareService`. |
-| Health maintenance reminders | ❌ | No preventive-care / screening reminder system. |
+| Health maintenance reminders | ✅ | `GET /me/patient/health-reminders` — list active reminders scoped to patient (`HealthMaintenanceReminder` entity, 16 types: annual physical, mammogram, colonoscopy, flu shot, etc.). `PUT /me/patient/health-reminders/{id}/complete` — mark reminder as completed. Auto-OVERDUE logic via `@PrePersist/@PreUpdate`. Angular: `my-reminders` component with mark-complete, overdue highlighting. Tests: 12. |
 | **Priority** | **P0** | This is the first thing a patient sees in MyChart. |
 
 **What to build:**
@@ -74,7 +74,7 @@ But **almost none of these permissions are checked by any controller or security
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
 | View own lab results | ✅ | `GET /me/patient/lab-results` — patient-scoped, uses existing `PatientLabResultService`. |
-| View lab result trends | ❌ | No trend/chart data endpoint. |
+| View lab result trends | ✅ | `GET /me/patient/lab-results/trends` — groups by testDefinitionId, last 12 data points per test. Angular: `my-lab-trends` page. |
 | View pending lab orders | ✅ | `GET /me/patient/lab-orders` — delegates to `LabOrderService.getLabOrdersByPatientId()`. Angular: `my-lab-orders` page with status/priority chips. |
 | View imaging results | ✅ | `GET /me/patient/imaging/orders` — delegates to `ImagingOrderService.getOrdersByPatient()` (all statuses). Angular: `my-imaging-orders` page with modality, schedule & status details. |
 | **Priority** | **P0** | #1 most-used MyChart feature by patients. |
@@ -119,7 +119,7 @@ But **almost none of these permissions are checked by any controller or security
 | Cancel appointment | ✅ | `PUT /me/patient/appointments/cancel` — ownership-verified, sets status to CANCELLED. |
 | Reschedule appointment | ✅ | `PUT /me/patient/appointments/reschedule` — ownership-verified, updates date/time. |
 | View after-visit summary | ✅ | `GET /me/patient/after-visit-summaries` — discharge summaries scoped to patient. |
-| Check-in online (pre-visit) | ❌ | No digital check-in flow. |
+| Check-in online (pre-visit) | ✅ | `POST /me/patient/appointments/{id}/check-in` — transitions SCHEDULED/CONFIRMED/PENDING → CHECKED_IN. Angular: `my-checkin` page. |
 | **Priority** | **P1** (partial coverage exists) | |
 
 **What to build:**
@@ -139,8 +139,8 @@ But **almost none of these permissions are checked by any controller or security
 | Send messages to providers | ✅ | `ChatController` — `ROLE_PATIENT` included. |
 | Receive messages from providers | ✅ | `ChatController` — `ROLE_PATIENT` included. |
 | View message history | ✅ | `ChatController` — `ROLE_PATIENT` included. |
-| Message attachments | ❌ | `FileUploadController` exists but unclear if tied to chat. |
-| Route message to specific care team member | ❌ | No care-team routing. Messages are 1:1 only. |
+| Message attachments | ✅ | `POST /files/chat-attachments` — reuses `FileUploadService` (20 MB, allowed types). `ChatMessage` entity extended with `attachmentUrl`, `attachmentName`, `attachmentContentType`, `attachmentSizeBytes`. Angular: `chat` component enhanced with paperclip button, file preview chip, attachment display in bubbles. |
+| Route message to specific care team member | ✅ | `GET /me/patient/care-team/messageable` → `CareTeamContactDTO` (userId, displayName, roleLabel). Angular: care-team tab in new-conv panel with "My Care Team" / "All Staff" tabs for `ROLE_PATIENT`. |
 | **Priority** | **P2** (mostly working) | |
 
 ---
@@ -193,7 +193,7 @@ But **almost none of these permissions are checked by any controller or security
 |------------|-----------|--------|
 | View own encounters | ✅ | `GET /me/patient/encounters` — full patient encounter history. |
 | View encounter details | ✅ (by ID) | Patient can view a specific encounter if they know the ID. |
-| View visit notes | ❌ | No OpenNotes-style patient access to clinician notes (21st Century Cures Act requirement). |
+| View visit notes | ✅ | `GET /me/patient/encounters/{encounterId}/note` — returns signed `EncounterNoteResponseDTO` (SOAP fields: chiefComplaint, subjective, objective, assessment, plan, patientInstructions, summary, addenda). Encounter ownership verified. Angular: `my-visits` enhanced with expandable cards showing clinical note on demand (lazy-loaded). |
 | **Priority** | **P1** | Required by US federal law (21st Century Cures Act / OpenNotes). |
 
 **What to build:**
@@ -230,9 +230,9 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| Download medical records | ⚠️ 🔒 | `PatientRecordSharingController` (`/records`) — **staff-only**. `DOWNLOAD_MEDICAL_RECORDS` + `REQUEST_MEDICAL_REPORTS` permissions defined but unused. |
+| Download medical records | ✅ | `GET /me/patient/records/download?format=pdf|csv` — patient self-download implemented via `exportSelfRecord()` with patient-owned scope. |
 | Export in standard formats (C-CDA, FHIR) | ❌ | No C-CDA or FHIR export. |
-| Share with other providers | ⚠️ 🔒 | `PatientRecordSharingController` has share/export methods — staff-only. |
+| Share with other providers | ⚠️ | Staff-mediated sharing exists; patient self-initiated external share flow still missing. |
 | Apple Health / Google Health integration | ❌ | No third-party health app integration. |
 | **Priority** | **P1** | 21st Century Cures Act / ONC interoperability rules. |
 
@@ -269,7 +269,7 @@ But **almost none of these permissions are checked by any controller or security
 |------------|-----------|--------|
 | View immunizations | ✅ | `GET /me/patient/immunizations` — full vaccine history via `ImmunizationService`. |
 | View upcoming vaccinations | ✅ | `GET /me/patient/immunizations/upcoming?months=6` — scheduled immunizations in next N months (1–12), delegates to `ImmunizationService.getUpcomingImmunizations()`. Angular: `my-upcoming-vaccines` page with overdue indicator & dose series info. |
-| Download immunization certificate | ❌ | No certificate generation. |
+| Download immunization certificate | ✅ | `GET /me/patient/immunizations/certificate` — PDFBox-generated PDF (portrait A4) with full vaccine history table (vaccine name, date, dose, lot, manufacturer) via `ImmunizationCertificatePdfService`. Angular: "Download Certificate" button in `my-upcoming-vaccines` header, uses `responseType: 'blob'` download trigger. |
 | **Priority** | **P2** | |
 
 **What was built:**
@@ -284,9 +284,9 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| Pre-visit questionnaire | ❌ | No questionnaire/form system. |
-| Health screeners (PHQ-9, GAD-7, etc.) | ❌ | No standardized screener support. |
-| Patient-reported outcomes | ❌ | No PRO collection mechanism. |
+| Pre-visit questionnaire | ✅ | `GET /me/patient/questionnaires` (pending) + `POST /me/patient/questionnaires/response` (submit) + `GET /me/patient/questionnaires/submitted`. Angular: `my-questionnaires` page — tab view (Pending / Submitted), dynamic question rendering for TEXT / YES_NO / SCALE / CHOICE types, inline form with per-field validation, duplicate-submission guard. |
+| Health screeners (PHQ-9, GAD-7, etc.) | ⚠️ | Backed by same `PreVisitQuestionnaire` / `QuestionType` model — staff can create SCALE / CHOICE screener templates; no hardcoded screener content. |
+| Patient-reported outcomes | ✅ | `GET/POST /me/patient/outcomes` — `PatientReportedOutcome` entity with 10 types (PAIN_SCORE, MOOD, ENERGY_LEVEL, SLEEP_QUALITY, ANXIETY_LEVEL, FATIGUE, BREATHLESSNESS, NAUSEA, APPETITE, GENERAL_WELLBEING). Angular: `my-outcomes` page with score slider, badge, empty state. Tests: 11. |
 | **Priority** | **P2** | |
 
 **What to build:**
@@ -343,7 +343,7 @@ But **almost none of these permissions are checked by any controller or security
 |------------|-----------|--------|
 | Browse education resources | ✅ | `PatientEducationController` — `isAuthenticated()` for resource listing. |
 | Track education progress | ✅ | `GET /me/patient/education/progress` — all progress records; `GET /me/patient/education/in-progress` + `.../completed` for filtered views. Angular: `my-education-progress` page with progress bars, comprehension status, star ratings & tab filter. |
-| Post-visit instructions | ❌ | No after-visit instruction delivery to patient. |
+| Post-visit instructions | ✅ | `GET /me/patient/encounters/{encounterId}/instructions` — maps `DischargeSummary` to `PortalDischargeInstructionsDTO` (activity restrictions, diet, wound care, follow-up instructions, warning signs, disposition, discharge diagnosis, hospital course). Encounter ownership verified. Angular: visible in expanded encounter cards in `my-visits` page with highlighted warning signs section. |
 | **Priority** | **P2** | |
 
 ---
@@ -354,9 +354,9 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| View treatment plans | ✅ | `GET /me/patient/treatment-plans` — paginated, patient-scoped. |
+| View treatment plans | ✅ | `GET /me/patient/treatment-plans` — paginated, patient-scoped. Angular: `my-treatment-plans` expandable cards with status/goals/meds/lifestyle sections. |
 | View treatments | ✅ | Included in treatment plans response. |
-| Track treatment progress | ❌ | No patient-facing progress tracker. |
+| Track treatment progress | ✅ | `GET/POST /me/patient/treatment-plans/{planId}/progress` — `TreatmentProgressEntry` entity (progressDate, selfRating 1–10, onTrack, progressNote). Angular: inline log form + history inside expanded `my-treatment-plans` cards. Tests: 8. |
 | **Priority** | **P2** | |
 
 ---
@@ -367,8 +367,8 @@ But **almost none of these permissions are checked by any controller or security
 
 | Sub-feature | HMS Status | Detail |
 |------------|-----------|--------|
-| View consultations | ✅ | `ConsultationController` — `ROLE_PATIENT` can list consultations for self. |
-| View referral status | ✅ | `GET /me/patient/referrals` — patient-scoped referral list. |
+| View consultations | ✅ | `GET /me/patient/consultations` — `ROLE_PATIENT`. Angular: `my-consultations` cards with status/urgency/type chips, recommendations, follow-up badge. |
+| View referral status | ✅ | `GET /me/patient/referrals` — patient-scoped. Angular: `my-referrals` cards with status/urgency/specialty/provider/date display. |
 | **Priority** | **P2** | |
 
 ---
@@ -405,7 +405,7 @@ But **almost none of these permissions are checked by any controller or security
 | # | Feature | Effort | Approach |
 |---|---------|--------|----------|
 | 7 | **Manage Consents** | ~~Small 🔒~~ **DONE** ✅ | `GET/POST/DELETE /me/patient/consents` |
-| 8 | **Download Medical Records** | Medium 🔒 | PDF generation not yet built |
+| 8 | **Download Medical Records** | ~~Medium~~ **DONE** ✅ | `GET /me/patient/records/download?format=pdf|csv` |
 | 9 | **View Care Team** | ~~Medium~~ **DONE** ✅ | `GET /me/patient/care-team` — PCP + history |
 | 10 | **View Immunizations** | ~~Small 🔒~~ **DONE** ✅ | `GET /me/patient/immunizations` |
 | 11 | **Cancel/Reschedule Appointments** | ~~Small~~ **DONE** ✅ | `PUT /me/patient/appointments/cancel` + `/reschedule` |
@@ -413,6 +413,10 @@ But **almost none of these permissions are checked by any controller or security
 | 13 | **View Treatment Plans** | ~~Small 🔒~~ **DONE** ✅ | `GET /me/patient/treatment-plans` |
 | 14 | **View Referral Status** | ~~Small 🔒~~ **DONE** ✅ | `GET /me/patient/referrals` |
 | 15 | **Make Payments** | ~~Large~~ **PARTIAL** ⚠️ | `POST .../pay` records payment; no external gateway yet |
+| ~~16~~ | **~~OpenNotes~~** | ~~Medium~~ **DONE** ✅ | `GET /me/patient/encounters/{encounterId}/note` — `EncounterNoteResponseDTO` (SOAP fields, assessment, plan, instructions, addenda). Encounter ownership verified. Angular: `my-visits` expandable cards with lazy-loaded clinical note. |
+| ~~17~~ | **~~Post-Visit Instructions~~** | ~~Small~~ **DONE** ✅ | `GET /me/patient/encounters/{encounterId}/instructions` — `DischargeSummary` → `PortalDischargeInstructionsDTO` (activity/diet/wound care/follow-up/warning signs). Angular: discharge instructions in expanded `my-visits` cards. |
+| ~~18~~ | **~~Immunization Certificate~~** | ~~Small~~ **DONE** ✅ | `GET /me/patient/immunizations/certificate` — PDFBox A4 PDF with full vaccine history table (name/date/dose/lot/manufacturer). Angular: Download button in `my-upcoming-vaccines`. |
+| ~~19~~ | **~~Health Maintenance Reminders~~** | ~~Medium~~ **DONE** ✅ | `GET /me/patient/health-reminders` + `PUT .../complete` — `HealthMaintenanceReminder` entity (16 types, auto-OVERDUE). Angular: `my-reminders` component with overdue indicators + mark-complete. Tests: 12. |
 
 ### 🟢 P2 — Nice to Have (Advanced MyChart Features)
 
@@ -420,8 +424,8 @@ But **almost none of these permissions are checked by any controller or security
 |---|---------|--------|----------|
 | 16 | Proxy/Family Access | ~~Large~~ **DONE** ✅ | `PatientProxy` entity + `GET/POST/DELETE /me/patient/proxies` |
 | 17 | Telehealth/Video Visits | Large | Third-party integration (Twilio, Zoom) |
-| 18 | Pre-Visit Questionnaires | Medium | New entity model + form engine |
-| 19 | Patient-Reported Outcomes | Medium | New entity model |
+| ~~18~~ | ~~Pre-Visit Questionnaires~~ | ~~Medium~~ **DONE** ✅ | `GET/POST /me/patient/questionnaires/response` + `GET /me/patient/questionnaires/submitted` — `PreVisitQuestionnaire`/`QuestionnaireResponse` entities (already existed), Feature 15 in service impl + controller, Angular `my-questionnaires` component with Pending/Submitted tabs, dynamic TEXT/YES_NO/SCALE/CHOICE rendering, duplicate-submission guard. Tests: 12 |
+| ~~19~~ | ~~Patient-Reported Outcomes~~ | ~~Medium~~ **DONE** ✅ | `GET/POST /me/patient/outcomes` — `PatientReportedOutcome` entity (10 types). Angular: `my-outcomes` component with score badge, range slider, empty state. Tests: 11. |
 | ~~20~~ | ~~Home Vital Sign Submission~~ | ~~Medium~~ **DONE** ✅ | `POST /me/patient/vitals` — `source=PATIENT_REPORTED` flag |
 | ~~21~~ | ~~Notification Preferences~~ | ~~Small~~ **DONE** ✅ | `GET/PUT/DELETE /me/patient/notifications/preferences` — `NotificationPreference` entity (type × channel) |
 | ~~22~~ | ~~Vital Sign Trends~~ | ~~Medium~~ **DONE** ✅ | `GET /me/patient/vitals/trends?months=N` — 1–24 months, delegates to `PatientVitalSignService.getVitals()` |
@@ -435,6 +439,17 @@ But **almost none of these permissions are checked by any controller or security
 | ~~30~~ | ~~Procedures~~ | ~~Small~~ **DONE** ✅ | `GET /me/patient/procedure-orders` — delegates to `ProcedureOrderService.getProcedureOrdersForPatient()`, urgency/status colouring |
 | ~~31~~ | ~~Admissions~~ | ~~Small~~ **DONE** ✅ | `GET /me/patient/admissions` + `GET /me/patient/admissions/current` — delegates to `AdmissionService`, current-admission banner |
 | ~~32~~ | ~~Education Progress~~ | ~~Small~~ **DONE** ✅ | `GET /me/patient/education/progress`, `.../in-progress`, `.../completed` — tab filter, progress bars, star ratings |
+| ~~33~~ | ~~Treatment Plans Angular~~ | ~~Small~~ **DONE** ✅ | `my-treatment-plans` — expandable cards, status chips (approved/review/draft), goals/meds/lifestyle/follow-up sections; tests: 6 |
+| ~~34~~ | ~~Referrals Angular~~ | ~~Small~~ **DONE** ✅ | `my-referrals` — status/urgency/type chips, specialty, provider names, submitted/SLA/scheduled dates; tests: 6 |
+| ~~35~~ | ~~Consultations Angular~~ | ~~Small~~ **DONE** ✅ | `my-consultations` — status/urgency/type chips, recommendations section, follow-up badge; tests: 6 |
+| ~~36~~ | ~~Care Team nav~~ | ~~Small~~ **DONE** ✅ | `my-care-team` route + nav item wired (component + `/me/patient/care-team` backend already existed) |
+| ~~37~~ | ~~Family Access nav~~ | ~~Small~~ **DONE** ✅ | `my-family-access` route + nav item wired (component + `/me/patient/proxies` backend already existed) |
+| 38 | **Refill Requests Angular** | ~~Small~~ **DONE** ✅ | `my-refills` — list pending/past requests, request new refill form, cancel pending — backend + service fully wired. Tests: 9 |
+| 39 | **Appointments: Cancel + Reschedule** | ~~Small~~ **DONE** ✅ | `my-appointments` enhanced — inline cancel (reason), reschedule modal (date/time/reason), in-place status update |
+| ~~40~~ | **Home Vital Recording** | ~~Small~~ **DONE** ✅ | `my-vitals` enhanced with record-home-vital modal — BP (sys/dia), HR, resp rate, SpO₂, temp, glucose, weight, body position, notes. Tests: 14 |
+| ~~41~~ | **My Profile + Edit** | ~~Small~~ **DONE** ✅ | `my-profile` — view all profile sections (contact, personal, emergency, insurance, allergies) + edit modal for patient-editable fields (phone, email, address, emergency contact, pharmacy). `updateMyProfile()` service method + route + nav item. Tests: 12 |
+| ~~42~~ | **Grant Consent UI** | ~~Small~~ **DONE** ✅ | `my-sharing` enhanced with Grant New Consent modal — hospital selectors (from/to), purpose, expiration date. Uses `grantConsent()` → `POST /me/patient/consents`. Tests: 15 |
+| ~~43~~ | **Appointment Booking** | ~~Medium~~ **DONE** ✅ | `my-appointments` enhanced with Request New Appointment modal — department/provider cascading selectors, date/time, reason/notes. New backend: `POST /me/patient/appointments`, `GET /me/patient/departments`, `GET /me/patient/departments/{id}/providers`. Portal DTO: `PortalAppointmentRequestDTO`. Tests: 11 |
 
 ---
 
@@ -480,11 +495,78 @@ All Phase 2 endpoints are implemented:
 - ✅ Admission history — `GET /me/patient/admissions` + `GET /me/patient/admissions/current`
 - ✅ Education progress — `GET /me/patient/education/progress` + in-progress + completed
 - ❌ Payment gateway integration (Stripe/PayStack)
-- ❌ Telehealth / video visits (Twilio/Zoom)
-- ❌ Pre-visit questionnaires
 - ❌ FHIR R4 export
-- ❌ Medical records PDF download
-- ❌ Patient-reported outcomes (structured)
+- ✅ Pre-visit questionnaires — `GET/POST /me/patient/questionnaires` (see Phase 6)
+- ✅ Patient-reported outcomes — `GET/POST /me/patient/outcomes` — `PatientReportedOutcome` entity (see Phase 6)
+
+### Phase 4: "Complete the Patient Experience" ✅ COMPLETE
+
+- ✅ Education resource library — `GET /me/patient/education/resources` + `/search` + `/by-category/{category}` (hospital-scoped via patient registration)
+- ✅ Medical records self-download — `GET /me/patient/records/download?format=pdf|csv` — `exportSelfRecord()` bypasses bilateral consent using `patient.getHospitalId()`
+- ✅ Lab result trends — `GET /me/patient/lab-results/trends` — groups by testDefinitionId, last 12 data points per test, alphabetically sorted
+- ✅ Online check-in — `POST /me/patient/appointments/{id}/check-in` — transitions SCHEDULED/CONFIRMED/PENDING → `CHECKED_IN`; `CHECKED_IN` value added to `AppointmentStatus` enum (no migration needed — VARCHAR column + `EnumType.STRING`)
+
+### Phase 5: "Frontend Completeness" ✅ COMPLETE
+
+All backend endpoints from Phases 1–4 now have corresponding patient-facing Angular components. 27 components total.
+
+- ✅ `my-treatment-plans` — expandable plan cards with status chips, therapeutic goals, medication plan, lifestyle plan, follow-up summary. Tests: 6.
+- ✅ `my-referrals` — referral cards with status/urgency/type chips, specialty, reason, provider names, submitted/SLA/scheduled dates. Tests: 6.
+- ✅ `my-consultations` — consultation cards with status/urgency/type chips, recommendations section, follow-up badge. Tests: 6.
+- ✅ `my-care-team` — route + nav item wired (component and `/me/patient/care-team` backend already existed).
+- ✅ `my-family-access` — route + nav item wired (component and `/me/patient/proxies` backend already existed).
+- **Angular test suite: 84/84 passing. Build: ✅ Lint: ✅ Format: ✅**
+
+### Phase 6: "Self-Service Actions" ✅ PARTIAL
+
+- ✅ `my-refills` — Medication refill request management. List all requests with status chips, request new refill form (prescription selector, pharmacy, notes), cancel pending requests. `GET/POST /me/patient/refills`, `PUT /me/patient/refills/{id}/cancel`. Tests: 9. Angular test suite: 93/93 passing.
+- ✅ `my-appointments` enhanced — Cancel and Reschedule actions on upcoming appointments. Inline cancel form (reason required), reschedule modal (date, start/end time, reason). Uses `cancelAppointment()`, `rescheduleAppointment()`. Status updates in-place without page reload.
+- ✅ Home vital recording form — `my-vitals` enhanced with record-home-vital modal. BP (sys/dia), HR, respiratory rate, SpO₂, temperature, blood glucose, weight, body position, notes. Uses `recordHomeVital()`. Tests: 14. Angular test suite: 116/116 passing.
+- ✅ `my-profile` — Full profile view + edit modal. Patient-editable fields: phone (primary/secondary), email, address (line1/line2, city, state, zip, country), emergency contact (name, phone, relationship), preferred pharmacy. Backend `PUT /me/patient/profile` fully wired. Tests: 12. Angular test suite: 128/128 passing.
+- ✅ `my-sharing` grant consent — Grant New Consent modal. Hospital dropdowns (from/to), purpose, expiration date. Uses `grantConsent()` → `POST /me/patient/consents`. Tests: 15. Angular test suite: 143/143 passing.
+- ✅ `my-appointments` booking — Request New Appointment modal. Department + provider dropdowns (cascading), date/time, reason. New backend: `POST /me/patient/appointments` (PENDING status), `GET /me/patient/departments`, `GET /me/patient/departments/{id}/providers`. New portal DTO: `PortalAppointmentRequestDTO`. Tests: 11. Angular test suite: 154/154 passing.
+- ✅ Education endpoint wiring optimization — `my-education-progress` now uses dedicated `/education/in-progress` and `/education/completed` tab endpoints; `my-education-browse` category chips now call `/education/resources/by-category/{category}` (server-side filtering). Added/updated unit tests for both components.
+- ✅ Pre-visit questionnaires — `GET/POST /me/patient/questionnaires` + `GET /me/patient/questionnaires/submitted`. Backend: Feature 15 in `PatientPortalService/Impl`, `PatientPortalController`. Angular: `my-questionnaires` component with tab view, dynamic question rendering (TEXT/YES_NO/SCALE/CHOICE), inline form, duplicate-submission guard. Tests: 12. Angular test suite: 176/176 passing.
+- ✅ Health maintenance reminders — `GET /me/patient/health-reminders` + `PUT /me/patient/health-reminders/{id}/complete`. New entities: `HealthMaintenanceReminder`, `HealthMaintenanceReminderType` (16 types), `HealthMaintenanceReminderStatus`. Angular: `my-reminders` component with mark-complete, overdue indicator. Tests: 12. Angular test suite: 190/190 passing.
+- ✅ OpenNotes — `GET /me/patient/encounters/{encounterId}/note` — SOAP note access (21st Century Cures Act compliance). Angular: `my-visits` enhanced with expandable encounter cards + lazy-loaded clinical notes.
+- ✅ Post-visit instructions — `GET /me/patient/encounters/{encounterId}/instructions` — `DischargeSummary` → `PortalDischargeInstructionsDTO`. Angular: discharge instructions visible in expanded `my-visits` cards with warning-sign highlight.
+- ✅ Immunization certificate download — `GET /me/patient/immunizations/certificate` — PDFBox A4 PDF with full vaccine table. Angular: "Download Certificate" button in `my-upcoming-vaccines` header.
+- ✅ Treatment Progress Tracker — `GET/POST /me/patient/treatment-plans/{planId}/progress` — `TreatmentProgressEntry` entity (progressDate, selfRating 1–10, onTrack, progressNote). Angular: inline log form + progress history inside expanded `my-treatment-plans` cards. Tests: 8. Angular test suite: ~198/198.
+- ✅ Patient-Reported Outcomes (PROs) — `GET/POST /me/patient/outcomes` — `PatientReportedOutcome` entity with 10 outcome types (PAIN_SCORE, MOOD, ENERGY_LEVEL, SLEEP_QUALITY, ANXIETY_LEVEL, FATIGUE, BREATHLESSNESS, NAUSEA, APPETITE, GENERAL_WELLBEING). Angular: `my-outcomes` standalone component with score badge, range slider, empty state. Tests: 11. Angular test suite: ~209/209.
+- ✅ Chat message attachments — `POST /files/chat-attachments` — reuses `FileUploadService` (20 MB limit, same allowed types). `ChatMessage` entity extended with `attachmentUrl`, `attachmentName`, `attachmentContentType`, `attachmentSizeBytes`. `ChatMessageRequestDTO`/`ChatMessageResponseDTO` extended with same fields. `ChatMessageMapper` maps them through. Angular: `chat` component enhanced with paperclip button, upload progress indicator, pending attachment preview chip with remove button, attachment display in message bubbles (inline image preview for images, download link for documents). `ChatAttachmentUploadResponse` interface added to `chat.service.ts`. Tests: 12. Angular test suite: 220/220.
+
+### Phase 7: "Database Infrastructure" ✅ COMPLETE
+
+All entities created in Phases 5–6 were missing Flyway migrations. Two compile bugs were also discovered and fixed during this phase. Local profile app now boots clean.
+
+**Migrations added:**
+- ✅ **V30** — `V30__patient_portal_entities_chat_attachments.sql` — Creates `clinical.health_maintenance_reminders` (Feature 19, 11 columns + 4 indexes), `clinical.treatment_progress_entries` (Feature 20, 9 columns + 2 indexes), `clinical.patient_reported_outcomes` (Feature 21, 10 columns + 4 indexes). Alters `support.chat_messages` with `+4 chat attachment columns`: `attachment_url VARCHAR(512)`, `attachment_name VARCHAR(255)`, `attachment_content_type VARCHAR(120)`, `attachment_size_bytes BIGINT`. All DDL is idempotent (`IF NOT EXISTS`). Registered in `changelog.xml`.
+- ✅ **V31** — `V31__pre_visit_questionnaires.sql` — Creates `clinical.pre_visit_questionnaires` (7 columns + 3 indexes: `hospital_id`, `department_id`, `active`) and `clinical.questionnaire_responses` (11 columns + 4 indexes: `patient_id`, `questionnaire_id`, `appointment_id`, `status`). Registered in `changelog.xml`.
+
+**Compile bugs fixed:**
+- ✅ `QuestionnaireMapper.java` — Was using MapStruct annotations (`@Mapper`, `@Mapping`) but MapStruct is not a project dependency. Converted to a plain `@Component` with manual builder-pattern mapping. All fields correctly mapped: `PreVisitQuestionnaire → PreVisitQuestionnaireDTO` (id, title, description, questions via JSON parse) and `QuestionnaireResponse → QuestionnaireResponseDTO` (id, questionnaireId, questionnaireTitle, patientId, appointmentId, status, submittedAt, answers via JSON parse).
+- ✅ `ImmunizationCertificatePdfService.java` — Two `writeText()` calls for centered title lines (line 34 and 37) were missing the `text` argument. Fixed by adding the string values `"IMMUNIZATION CERTIFICATE"` and `"Official Health Record"` as the final argument.
+
+**Result:** `Started HmsApplication in 39.316 seconds` — Tomcat on port 8081, all 32 Liquibase changeSets applied with no schema-validation errors (`ddl-auto: validate`).
+
+---
+
+### Phase 8: "Care Team Message Routing" ✅ COMPLETE
+
+The last buildable feature from the §5 Messaging gap — route messages directly to a patient's care team member.
+
+**Backend changes:**
+- ✅ `CareTeamContactDTO.java` — New DTO (`userId UUID`, `displayName`, `roleLabel`) in `payload/dto/portal/`.
+- ✅ `PatientPortalService.java` — Added `List<CareTeamContactDTO> getMessageableCareTeam(Authentication auth)` to the interface.
+- ✅ `PatientPortalServiceImpl.java` — Implementation fetches current PCP via `primaryCareService.getCurrentPrimaryCare()` + up to 3 historical PCPs via `getPrimaryCareHistory()`, deduplicates by `doctorUserId`, maps to `CareTeamContactDTO` (current → "Primary Care Provider", historical → "Previous Provider").
+- ✅ `PatientPortalController.java` — `GET /me/patient/care-team/messageable` endpoint, `@PreAuthorize("hasAuthority('ROLE_PATIENT')")`.
+
+**Angular changes:**
+- ✅ `chat.service.ts` — Added `CareTeamContact` interface + `getMessageableCareTeam()` (calls `/api/me/patient/care-team/messageable`, extracts `data` array, safe `catchError(() => of([])`).
+- ✅ `chat.ts` — Added signals `careTeamContacts`, `loadingCareTeam`, `newConvTab`; new methods `loadCareTeam()`, `startConversationWithContact()`, `isPatient()`; `openNewConversation()` now loads care team and defaults to `'care-team'` tab for patients.
+- ✅ `chat.html` — New-conversation panel now shows "My Care Team" / "All Staff" tabs for `ROLE_PATIENT`. Care-team tab displays provider list with `roleLabel` chip; All Staff tab is the existing user search.
+- ✅ `chat.scss` — Added `.new-conv-tabs`, `.tab-btn`, `.tab-btn.active`, `.care-team-role` styles.
+- ✅ `chat.spec.ts` — 4 new tests added: `careTeamContacts starts empty`, `newConvTab starts as care-team`, `loadingCareTeam starts false`, `startConversationWithContact adds conversation and selects it`. Total: **16/16 passing**.
 
 ---
 

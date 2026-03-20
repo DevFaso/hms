@@ -1,0 +1,80 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">swap_horiz</span>
+      My Referrals
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>Loading referrals…</p>
+    </div>
+  } @else if (referrals().length === 0) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">swap_horiz</span>
+      <h3>No referrals on file</h3>
+      <p>Your provider will add referrals to specialists when needed.</p>
+    </div>
+  } @else {
+    <div class="referral-list">
+      @for (ref of referrals(); track ref.id) {
+        <div class="referral-card">
+          <div class="referral-icon">
+            <span class="material-symbols-outlined">swap_horiz</span>
+          </div>
+          <div class="referral-body">
+            <div class="referral-top">
+              <span class="status-chip" [ngClass]="statusClass(ref.status)">
+                {{ ref.status | titlecase }}
+              </span>
+              <span class="urgency-chip" [ngClass]="urgencyClass(ref.urgency)">
+                {{ ref.urgency | titlecase }}
+              </span>
+              <span class="type-tag">{{ ref.referralType | titlecase }}</span>
+            </div>
+            <h3 class="referral-specialty">{{ ref.targetSpecialty }}</h3>
+            <p class="referral-reason">{{ ref.referralReason }}</p>
+            <div class="referral-meta">
+              <span class="meta-item">
+                <span class="material-symbols-outlined icon-sm">person</span>
+                From: {{ ref.referringProviderName }}
+              </span>
+              @if (ref.receivingProviderName) {
+                <span class="meta-item">
+                  <span class="material-symbols-outlined icon-sm">person_outline</span>
+                  To: {{ ref.receivingProviderName }}
+                </span>
+              }
+              @if (ref.targetDepartmentName) {
+                <span class="meta-item">
+                  <span class="material-symbols-outlined icon-sm">business</span>
+                  {{ ref.targetDepartmentName }}
+                </span>
+              }
+              @if (ref.submittedAt) {
+                <span class="meta-item">
+                  <span class="material-symbols-outlined icon-sm">send</span>
+                  Submitted {{ ref.submittedAt | date: 'MMM d, yyyy' }}
+                </span>
+              }
+              @if (ref.scheduledAppointmentAt) {
+                <span class="meta-item">
+                  <span class="material-symbols-outlined icon-sm">calendar_month</span>
+                  Appointment {{ ref.scheduledAppointmentAt | date: 'MMM d, yyyy' }}
+                </span>
+              }
+              @if (ref.slaDueAt) {
+                <span class="meta-item">
+                  <span class="material-symbols-outlined icon-sm">schedule</span>
+                  Due {{ ref.slaDueAt | date: 'MMM d, yyyy' }}
+                </span>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

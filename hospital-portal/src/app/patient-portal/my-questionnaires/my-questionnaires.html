@@ -1,0 +1,219 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">assignment</span>
+      My Questionnaires
+    </h1>
+  </div>
+
+  <!-- Tabs -->
+  <div class="q-tabs">
+    <button class="q-tab" [class.active]="activeTab() === 'pending'" (click)="switchTab('pending')">
+      <span class="material-symbols-outlined">pending_actions</span>
+      Pending
+      @if (pending().length > 0) {
+        <span class="q-badge">{{ pending().length }}</span>
+      }
+    </button>
+    <button
+      class="q-tab"
+      [class.active]="activeTab() === 'submitted'"
+      (click)="switchTab('submitted')"
+    >
+      <span class="material-symbols-outlined">task_alt</span>
+      Submitted
+    </button>
+  </div>
+
+  <!-- ── PENDING TAB ── -->
+  @if (activeTab() === 'pending') {
+    @if (loading()) {
+      <div class="portal-loading">
+        <div class="portal-spinner"></div>
+        <p>Loading questionnaires…</p>
+      </div>
+    } @else if (activeForm()) {
+      <!-- INLINE FORM -->
+      <div class="q-form-card">
+        <div class="q-form-header">
+          <div>
+            <h2>{{ activeForm()!.title }}</h2>
+            @if (activeForm()!.description) {
+              <p class="q-form-desc">{{ activeForm()!.description }}</p>
+            }
+          </div>
+          <button class="q-btn-ghost" (click)="closeForm()" [disabled]="submitting()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        @for (question of activeForm()!.questions; track trackById($index, question)) {
+          <div class="q-field" [class.required]="question.required">
+            <p class="q-label">
+              {{ question.question }}
+              @if (question.required) {
+                <span class="q-required-mark">*</span>
+              }
+              <span class="q-type-hint">{{ questionTypeLabel(question.type) }}</span>
+            </p>
+
+            @if (question.type === 'TEXT') {
+              <textarea
+                class="q-textarea"
+                rows="3"
+                [(ngModel)]="answers[question.id]"
+                [placeholder]="'Enter your answer…'"
+              ></textarea>
+            }
+
+            @if (question.type === 'YES_NO') {
+              <div class="q-yesno">
+                <label class="q-radio-label">
+                  <input
+                    type="radio"
+                    [name]="'yn-' + question.id"
+                    value="yes"
+                    [(ngModel)]="answers[question.id]"
+                  />
+                  Yes
+                </label>
+                <label class="q-radio-label">
+                  <input
+                    type="radio"
+                    [name]="'yn-' + question.id"
+                    value="no"
+                    [(ngModel)]="answers[question.id]"
+                  />
+                  No
+                </label>
+              </div>
+            }
+
+            @if (question.type === 'SCALE') {
+              <div class="q-scale">
+                @for (n of scaleRange(); track n) {
+                  <label
+                    class="q-scale-btn"
+                    [class.selected]="answers[question.id] === n.toString()"
+                  >
+                    <input
+                      type="radio"
+                      [name]="'scale-' + question.id"
+                      [value]="n.toString()"
+                      [(ngModel)]="answers[question.id]"
+                    />
+                    {{ n }}
+                  </label>
+                }
+              </div>
+              <div class="q-scale-labels">
+                <span>No pain / None</span>
+                <span>Severe / Always</span>
+              </div>
+            }
+
+            @if (question.type === 'CHOICE') {
+              <div class="q-choices">
+                @for (opt of question.options ?? []; track opt) {
+                  <label class="q-radio-label">
+                    <input
+                      type="radio"
+                      [name]="'choice-' + question.id"
+                      [value]="opt"
+                      [(ngModel)]="answers[question.id]"
+                    />
+                    {{ opt }}
+                  </label>
+                }
+              </div>
+            }
+          </div>
+        }
+
+        <div class="q-form-actions">
+          <button class="q-btn-secondary" (click)="closeForm()" [disabled]="submitting()">
+            Cancel
+          </button>
+          <button
+            class="q-btn-primary"
+            (click)="submitForm()"
+            [disabled]="submitting() || !isFormValid()"
+          >
+            @if (submitting()) {
+              <span class="material-symbols-outlined spin">progress_activity</span>
+              Submitting…
+            } @else {
+              <span class="material-symbols-outlined">send</span>
+              Submit
+            }
+          </button>
+        </div>
+      </div>
+    } @else if (pending().length === 0) {
+      <div class="portal-empty">
+        <span class="material-symbols-outlined">check_circle</span>
+        <h3>All caught up!</h3>
+        <p>You have no pending questionnaires at this time.</p>
+      </div>
+    } @else {
+      <div class="q-list">
+        @for (q of pending(); track q.id) {
+          <div class="q-card">
+            <div class="q-card-icon">
+              <span class="material-symbols-outlined">assignment</span>
+            </div>
+            <div class="q-card-body">
+              <h3 class="q-card-title">{{ q.title }}</h3>
+              @if (q.description) {
+                <p class="q-card-desc">{{ q.description }}</p>
+              }
+              <p class="q-card-meta">
+                {{ q.questions.length }} question{{ q.questions.length !== 1 ? 's' : '' }}
+              </p>
+            </div>
+            <button class="q-btn-primary q-fill-btn" (click)="openForm(q)">
+              <span class="material-symbols-outlined">edit_note</span>
+              Fill Out
+            </button>
+          </div>
+        }
+      </div>
+    }
+  }
+
+  <!-- ── SUBMITTED TAB ── -->
+  @if (activeTab() === 'submitted') {
+    @if (submitted().length === 0) {
+      <div class="portal-empty">
+        <span class="material-symbols-outlined">assignment_late</span>
+        <h3>No submitted questionnaires</h3>
+        <p>Your completed questionnaire responses will appear here.</p>
+      </div>
+    } @else {
+      <div class="q-list">
+        @for (resp of submitted(); track resp.id) {
+          <div class="q-response-card">
+            <div class="q-response-header">
+              <div>
+                <h3 class="q-card-title">{{ resp.questionnaireTitle }}</h3>
+                <span class="q-meta-date">
+                  <span class="material-symbols-outlined icon-sm">calendar_month</span>
+                  Submitted {{ resp.submittedAt | date: 'MMM d, yyyy' }}
+                </span>
+              </div>
+              <span class="status-chip status-completed">Submitted</span>
+            </div>
+            <div class="q-answers-grid">
+              @for (entry of resp.answers | keyvalue; track entry.key) {
+                <div class="q-answer-row">
+                  <span class="q-answer-key">{{ entry.key }}</span>
+                  <span class="q-answer-val">{{ entry.value }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>

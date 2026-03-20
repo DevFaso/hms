@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { Observable } from 'rxjs';
+import { Observable, of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 
 export interface ChatMessage {
   id: string;
@@ -11,6 +12,11 @@ export interface ChatMessage {
   content: string;
   timestamp: string;
   read: boolean;
+  // Optional attachment fields
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentContentType?: string;
+  attachmentSizeBytes?: number;
 }
 
 export interface ChatConversation {
@@ -26,6 +32,24 @@ export interface ChatSendRequest {
   senderId: string;
   recipientId: string;
   content: string;
+  // Optional attachment (obtained from POST /files/chat-attachments)
+  attachmentUrl?: string;
+  attachmentName?: string;
+  attachmentContentType?: string;
+  attachmentSizeBytes?: number;
+}
+
+export interface CareTeamContact {
+  userId: string;
+  displayName: string;
+  roleLabel: string;
+}
+
+export interface ChatAttachmentUploadResponse {
+  url: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -48,5 +72,20 @@ export class ChatService {
 
   markRead(senderId: string, recipientId: string): Observable<void> {
     return this.http.put<void>(`/chat/mark-read/${senderId}/${recipientId}`, {});
+  }
+
+  uploadChatAttachment(file: File): Observable<ChatAttachmentUploadResponse> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.http.post<ChatAttachmentUploadResponse>('/files/chat-attachments', form);
+  }
+
+  getMessageableCareTeam(): Observable<CareTeamContact[]> {
+    return this.http
+      .get<{ data: CareTeamContact[]; success: boolean }>('/api/me/patient/care-team/messageable')
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
   }
 }

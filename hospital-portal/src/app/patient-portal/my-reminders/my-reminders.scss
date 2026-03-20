@@ -1,0 +1,108 @@
+@use '../patient-portal-pages' as *;
+
+.reminder-intro {
+  font-size: 13px;
+  color: #6b7280;
+  margin: 0 0 16px;
+}
+
+.reminder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reminder-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  transition: border-color 0.2s;
+
+  &.done {
+    background: #f9fafb;
+    border-color: #d1d5db;
+    opacity: 0.75;
+  }
+
+  &.overdue {
+    border-color: #fca5a5;
+    background: #fff7f7;
+  }
+}
+
+.reminder-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: #eef2ff;
+  color: #4f46e5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+
+  .material-symbols-outlined {
+    font-size: 22px;
+  }
+
+  &.done-icon {
+    background: #dcfce7;
+    color: #16a34a;
+  }
+
+  &.overdue-icon {
+    background: #fee2e2;
+    color: #dc2626;
+  }
+}
+
+.reminder-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reminder-type {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.reminder-due {
+  margin: 0;
+  font-size: 12px;
+  color: #6b7280;
+
+  &.overdue-text {
+    color: #dc2626;
+    font-weight: 600;
+  }
+}
+
+.reminder-completed {
+  margin: 0;
+  font-size: 12px;
+  color: #16a34a;
+}
+
+.reminder-notes {
+  margin: 0;
+  font-size: 12px;
+  color: #9ca3af;
+  font-style: italic;
+}
+
+.reminder-action {
+  flex-shrink: 0;
+}
+
+.btn-sm {
+  padding: 6px 14px;
+  font-size: 12px;
+}

@@ -365,4 +365,30 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V30: Patient Portal — new clinical tables + chat attachment columns
+         - clinical.health_maintenance_reminders  (Feature 19)
+         - clinical.treatment_progress_entries    (Feature 20)
+         - clinical.patient_reported_outcomes     (Feature 21)
+         - support.chat_messages: +4 attachment columns (Feature 22)
+         ================================================================= -->
+    <changeSet id="V30-patient-portal-entities-chat-attachments" author="hms-team" runOnChange="false">
+        <sqlFile path="V30__patient_portal_entities_chat_attachments.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V31: Patient Portal — pre-visit questionnaire tables
+         - clinical.pre_visit_questionnaires
+         - clinical.questionnaire_responses
+         ================================================================= -->
+    <changeSet id="V31-pre-visit-questionnaires" author="hms-team" runOnChange="false">
+        <sqlFile path="V31__pre_visit_questionnaires.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -32,6 +32,12 @@ public class ChatMessageMapper {
             dto.setHospitalName(message.getAssignment().getHospital().getName());
         }
 
+        // Map optional attachment fields
+        dto.setAttachmentUrl(message.getAttachmentUrl());
+        dto.setAttachmentName(message.getAttachmentName());
+        dto.setAttachmentContentType(message.getAttachmentContentType());
+        dto.setAttachmentSizeBytes(message.getAttachmentSizeBytes());
+
         return dto;
     }
 

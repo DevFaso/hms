@@ -1,0 +1,59 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">biotech</span>
+      My Lab Orders
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>Loading lab orders...</p>
+    </div>
+  } @else if (orders().length === 0) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">biotech</span>
+      <h3>No lab orders found</h3>
+      <p>You have no laboratory orders on record.</p>
+    </div>
+  } @else {
+    <section class="portal-section">
+      <p class="count-label">{{ orders().length }} order(s) on record</p>
+      <div class="orders-list">
+        @for (o of orders(); track o.id) {
+          <div class="order-card">
+            <div class="order-icon" [ngClass]="statusColorClass(o.status)">
+              <span class="material-symbols-outlined">biotech</span>
+            </div>
+            <div class="order-body">
+              <h4 class="order-name">{{ o.labTestName }}</h4>
+              <p class="order-sub">{{ o.labTestCode }} · {{ o.hospitalName }}</p>
+              <div class="meta-row">
+                <span class="status-badge" [ngClass]="statusColorClass(o.status)">
+                  {{ o.status | titlecase }}
+                </span>
+                <span class="priority-chip" [ngClass]="priorityColorClass(o.priority)">
+                  {{ o.priority | titlecase }}
+                </span>
+                <span class="date-chip">
+                  <span class="material-symbols-outlined icon-sm">schedule</span>
+                  {{ o.orderDatetime | date: 'MMM d, yyyy h:mm a' }}
+                </span>
+                @if (o.standingOrder) {
+                  <span class="standing-chip">Standing Order</span>
+                }
+              </div>
+              @if (o.clinicalIndication) {
+                <p class="indication">Indication: {{ o.clinicalIndication }}</p>
+              }
+              @if (o.notes) {
+                <p class="notes-text">{{ o.notes }}</p>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </section>
+  }
+</div>

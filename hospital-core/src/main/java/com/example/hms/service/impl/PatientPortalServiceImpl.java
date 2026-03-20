@@ -4,17 +4,29 @@ import com.example.hms.enums.NotificationChannel;
 import com.example.hms.enums.NotificationType;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.ProxyStatus;
+import com.example.hms.enums.QuestionnaireStatus;
 import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.mapper.QuestionnaireMapper;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Patient;
 import com.example.hms.model.NotificationPreference;
 import com.example.hms.model.PatientProxy;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.RefillRequest;
+import com.example.hms.model.questionnaire.PreVisitQuestionnaire;
+import com.example.hms.model.questionnaire.QuestionnaireResponse;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
+import com.example.hms.payload.dto.AppointmentRequestDTO;
+import com.example.hms.payload.dto.AppointmentSummaryDTO;
+import com.example.hms.payload.dto.DepartmentMinimalDTO;
+import com.example.hms.payload.dto.DepartmentWithStaffDTO;
+import com.example.hms.payload.dto.StaffMinimalDTO;
+import com.example.hms.payload.dto.questionnaire.PreVisitQuestionnaireDTO;
+import com.example.hms.payload.dto.questionnaire.QuestionnaireResponseDTO;
+import com.example.hms.payload.dto.questionnaire.QuestionnaireResponseSubmitDTO;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
 import com.example.hms.payload.dto.BillingInvoiceResponseDTO;
 import com.example.hms.payload.dto.EncounterResponseDTO;
@@ -39,6 +51,7 @@ import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
 import com.example.hms.payload.dto.portal.AccessLogEntryDTO;
 import com.example.hms.payload.dto.portal.CancelAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.CareTeamDTO;
+import com.example.hms.payload.dto.portal.CareTeamContactDTO;
 import com.example.hms.payload.dto.portal.HealthSummaryDTO;
 import com.example.hms.payload.dto.portal.HomeVitalReadingDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillRequestDTO;
@@ -46,6 +59,7 @@ import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
 import com.example.hms.payload.dto.portal.PatientProfileDTO;
 import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
+import com.example.hms.payload.dto.portal.PortalAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyResponseDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
@@ -55,8 +69,12 @@ import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProxyRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PharmacyFillRepository;
+import com.example.hms.repository.PreVisitQuestionnaireRepository;
 import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.repository.QuestionnaireResponseRepository;
 import com.example.hms.repository.RefillRequestRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.example.hms.service.AppointmentService;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.BillingInvoiceService;
@@ -146,6 +164,25 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final ProcedureOrderService procedureOrderService;
     private final AdmissionService admissionService;
     private final PatientEducationService patientEducationService;
+    // Feature 10/11/12/13 additions
+    private final com.example.hms.service.PatientRecordSharingService recordSharingService;
+    // Feature 14 — appointment booking
+    private final com.example.hms.service.DepartmentService departmentService;
+    // Feature 15 — pre-visit questionnaires
+    private final PreVisitQuestionnaireRepository preVisitQuestionnaireRepository;
+    private final QuestionnaireResponseRepository questionnaireResponseRepository;
+    private final QuestionnaireMapper questionnaireMapper;
+    private final ObjectMapper objectMapper;
+    // Features 16/17/18 — OpenNotes, Post-Visit Instructions, Immunization Certificate
+    private final com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
+    private final com.example.hms.mapper.EncounterMapper encounterMapper;
+    private final com.example.hms.service.ImmunizationCertificatePdfService immunizationCertificatePdfService;
+    // Feature 19 — Health Maintenance Reminders
+    private final com.example.hms.repository.HealthMaintenanceReminderRepository healthMaintenanceReminderRepository;
+    // Feature 20 — Treatment Progress Tracker
+    private final com.example.hms.repository.TreatmentProgressEntryRepository treatmentProgressEntryRepository;
+    // Feature 21 — Patient-Reported Outcomes
+    private final com.example.hms.repository.PatientReportedOutcomeRepository patientReportedOutcomeRepository;
 
     // ── Identity resolution ──────────────────────────────────────────────
 
@@ -556,6 +593,24 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .primaryCare(currentPcp)
                 .primaryCareHistory(history)
                 .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<CareTeamContactDTO> getMessageableCareTeam(Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        java.util.ArrayList<PatientPrimaryCareResponseDTO> combined = new java.util.ArrayList<>();
+        primaryCareService.getCurrentPrimaryCare(patientId).ifPresent(combined::add);
+        primaryCareService.getPrimaryCareHistory(patientId).stream().limit(3).forEach(combined::add);
+        java.util.Set<UUID> seen = new java.util.HashSet<>();
+        return combined.stream()
+                .filter(p -> p.getDoctorUserId() != null && seen.add(p.getDoctorUserId()))
+                .map(p -> CareTeamContactDTO.builder()
+                        .userId(p.getDoctorUserId())
+                        .displayName(p.getDoctorDisplay() != null ? p.getDoctorDisplay() : "Your Provider")
+                        .roleLabel(p.isCurrent() ? "Primary Care Provider" : "Previous Provider")
+                        .build())
+                .toList();
     }
 
     // ── Access log (who viewed my records) ───────────────────────────────
@@ -1009,5 +1064,464 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<com.example.hms.payload.dto.education.PatientEducationProgressResponseDTO> getMyCompletedEducation(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
         return patientEducationService.getCompletedResources(patientId);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 10 — Browse Education Resources
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.education.EducationResourceResponseDTO> getMyEducationResources(Authentication auth) {
+        Patient patient = findPatient(auth);
+        UUID hospitalId = resolvePatientHospitalId(patient);
+        if (hospitalId == null) {
+            return Collections.emptyList();
+        }
+        return patientEducationService.getAllResources(hospitalId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.education.EducationResourceResponseDTO> searchMyEducationResources(Authentication auth, String query) {
+        Patient patient = findPatient(auth);
+        UUID hospitalId = resolvePatientHospitalId(patient);
+        if (hospitalId == null) {
+            return Collections.emptyList();
+        }
+        return patientEducationService.searchResources(query, hospitalId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.education.EducationResourceResponseDTO> getMyEducationResourcesByCategory(
+            Authentication auth, com.example.hms.enums.EducationCategory category) {
+        Patient patient = findPatient(auth);
+        UUID hospitalId = resolvePatientHospitalId(patient);
+        if (hospitalId == null) {
+            return Collections.emptyList();
+        }
+        return patientEducationService.getResourcesByCategory(category, hospitalId);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 11 — Medical Records Self-Download
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] downloadMyRecord(Authentication auth, String format) {
+        UUID patientId = resolvePatientId(auth);
+        return recordSharingService.exportSelfRecord(patientId, format);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 12 — Lab Result Trends
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.lab.LabResultTrendDTO> getMyLabResultTrends(Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        return labResultService.getLabResultTrends(patientId);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 13 — Online Check-In
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional
+    public com.example.hms.payload.dto.AppointmentResponseDTO checkInMyAppointment(
+            Authentication auth, UUID appointmentId, Locale locale) {
+        UUID patientId = resolvePatientId(auth);
+
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+
+        requirePatientOwnership(appointment, patientId);
+
+        if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
+            throw new BusinessException("Cannot check in to a cancelled appointment");
+        }
+        if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
+            throw new BusinessException("Cannot check in to a completed appointment");
+        }
+        if (appointment.getStatus() == AppointmentStatus.CHECKED_IN) {
+            throw new BusinessException("You have already checked in to this appointment");
+        }
+
+        appointment.setStatus(AppointmentStatus.CHECKED_IN);
+        appointmentRepository.save(appointment);
+        log.info("Patient {} checked in to appointment {}", patientId, appointmentId);
+        return appointmentMapper.toAppointmentResponseDTO(appointment);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 14 — Appointment Booking
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DepartmentMinimalDTO> getMyDepartments(Authentication auth, Locale locale) {
+        Patient patient = findPatient(auth);
+        UUID hospitalId = resolvePatientHospitalId(patient);
+        if (hospitalId == null) {
+            return Collections.emptyList();
+        }
+        return departmentService.getActiveDepartmentsMinimal(hospitalId, locale);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<StaffMinimalDTO> getDepartmentProviders(Authentication auth, UUID departmentId, Locale locale) {
+        DepartmentWithStaffDTO dept = departmentService.getDepartmentWithStaff(departmentId, locale);
+        return dept.getStaffMembers() != null ? dept.getStaffMembers() : Collections.emptyList();
+    }
+
+    @Override
+    @Transactional
+    public AppointmentSummaryDTO bookMyAppointment(
+            Authentication auth, PortalAppointmentRequestDTO dto, Locale locale) {
+        Patient patient = findPatient(auth);
+        UUID hospitalId = resolvePatientHospitalId(patient);
+
+        AppointmentRequestDTO request = AppointmentRequestDTO.builder()
+                .patientId(patient.getId())
+                .hospitalId(hospitalId)
+                .departmentId(dto.getDepartmentId())
+                .staffId(dto.getStaffId())
+                .appointmentDate(dto.getAppointmentDate())
+                .startTime(dto.getStartTime())
+                .endTime(dto.getEndTime())
+                .reason(dto.getReason())
+                .notes(dto.getNotes())
+                .status(AppointmentStatus.PENDING)
+                .build();
+
+        String username = auth.getName();
+        AppointmentSummaryDTO created = appointmentService.createAppointment(request, locale, username);
+        log.info("Patient {} booked appointment {}", patient.getId(), created.getId());
+        return created;
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // FEATURE 15 — Pre-Visit Questionnaires
+    // ════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PreVisitQuestionnaireDTO> getMyPendingQuestionnaires(Authentication auth) {
+        Patient patient = findPatient(auth);
+        UUID hospitalId = resolvePatientHospitalId(patient);
+        if (hospitalId == null) {
+            return Collections.emptyList();
+        }
+        UUID patientId = patient.getId();
+        return preVisitQuestionnaireRepository.findByHospitalIdAndActiveTrue(hospitalId)
+                .stream()
+                .filter(q -> !questionnaireResponseRepository
+                        .existsByPatientIdAndQuestionnaireId(patientId, q.getId()))
+                .map(questionnaireMapper::toPreVisitQuestionnaireDTO)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<QuestionnaireResponseDTO> getMySubmittedQuestionnaires(Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        return questionnaireResponseRepository.findByPatientId(patientId)
+                .stream()
+                .map(questionnaireMapper::toQuestionnaireResponseDTO)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public QuestionnaireResponseDTO submitMyQuestionnaire(
+            Authentication auth, QuestionnaireResponseSubmitDTO dto) {
+        Patient patient = findPatient(auth);
+        UUID patientId = patient.getId();
+        UUID hospitalId = resolvePatientHospitalId(patient);
+
+        if (questionnaireResponseRepository.existsByPatientIdAndQuestionnaireId(
+                patientId, dto.getQuestionnaireId())) {
+            throw new BusinessException("You have already submitted a response for this questionnaire");
+        }
+
+        PreVisitQuestionnaire questionnaire = preVisitQuestionnaireRepository
+                .findById(dto.getQuestionnaireId())
+                .orElseThrow(() -> new ResourceNotFoundException("Questionnaire not found"));
+
+        if (!questionnaire.getHospitalId().equals(hospitalId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "Questionnaire does not belong to your hospital");
+        }
+
+        String answersJson;
+        try {
+            answersJson = objectMapper.writeValueAsString(dto.getAnswers());
+        } catch (JsonProcessingException e) {
+            throw new BusinessException("Failed to serialize answers");
+        }
+
+        QuestionnaireResponse response = QuestionnaireResponse.builder()
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .questionnaireId(dto.getQuestionnaireId())
+                .appointmentId(dto.getAppointmentId())
+                .answersJson(answersJson)
+                .status(QuestionnaireStatus.SUBMITTED)
+                .submittedAt(java.time.LocalDateTime.now())
+                .questionnaireTitle(questionnaire.getTitle())
+                .build();
+
+        response = questionnaireResponseRepository.save(response);
+        log.info("Patient {} submitted questionnaire {}", patientId, dto.getQuestionnaireId());
+        return questionnaireMapper.toQuestionnaireResponseDTO(response);
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // FEATURE 16 — OpenNotes (Visit Notes)
+    // ════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.EncounterNoteResponseDTO getMyEncounterNote(
+            Authentication auth, UUID encounterId) {
+        UUID patientId = resolvePatientId(auth);
+        com.example.hms.model.encounter.EncounterNote note =
+                encounterNoteRepository.findByEncounter_Id(encounterId)
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "No clinical note found for this visit"));
+        if (!note.getPatient().getId().equals(patientId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "This visit note does not belong to your account");
+        }
+        return encounterMapper.toEncounterNoteResponseDTO(note);
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // FEATURE 17 — Post-Visit Instructions
+    // ════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.portal.PortalDischargeInstructionsDTO getMyPostVisitInstructions(
+            Authentication auth, UUID encounterId, Locale locale) {
+        UUID patientId = resolvePatientId(auth);
+        DischargeSummaryResponseDTO summary;
+        try {
+            summary = dischargeSummaryService.getDischargeSummaryByEncounter(encounterId, locale);
+        } catch (ResourceNotFoundException e) {
+            throw new ResourceNotFoundException("No discharge instructions found for this visit");
+        }
+        if (!patientId.equals(summary.getPatientId())) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "These instructions do not belong to your account");
+        }
+        return com.example.hms.payload.dto.portal.PortalDischargeInstructionsDTO.builder()
+                .id(summary.getId())
+                .encounterId(summary.getEncounterId())
+                .dischargeDate(summary.getDischargeDate())
+                .disposition(summary.getDisposition() != null ? summary.getDisposition().name() : null)
+                .dischargeDiagnosis(summary.getDischargeDiagnosis())
+                .hospitalCourse(summary.getHospitalCourse())
+                .dischargeCondition(summary.getDischargeCondition())
+                .activityRestrictions(summary.getActivityRestrictions())
+                .dietInstructions(summary.getDietInstructions())
+                .woundCareInstructions(summary.getWoundCareInstructions())
+                .followUpInstructions(summary.getFollowUpInstructions())
+                .warningSigns(summary.getWarningSigns())
+                .patientEducationProvided(summary.getPatientEducationProvided())
+                .equipmentAndSupplies(summary.getEquipmentAndSupplies())
+                .isFinalized(summary.getIsFinalized())
+                .finalizedAt(summary.getFinalizedAt())
+                .build();
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // FEATURE 18 — Immunization Certificate
+    // ════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] generateMyImmunizationCertificate(Authentication auth) {
+        Patient patient = findPatient(auth);
+        List<com.example.hms.payload.dto.medicalhistory.ImmunizationResponseDTO> immunizations =
+                immunizationService.getImmunizationsByPatientId(patient.getId());
+        String patientName = patient.getFullName();
+        return immunizationCertificatePdfService.generate(patientName, immunizations);
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // FEATURE 19 — Health Maintenance Reminders
+    // ════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.portal.PortalHealthReminderDTO> getMyHealthReminders(
+            Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        return healthMaintenanceReminderRepository.findByPatientIdAndActiveTrue(patientId)
+                .stream()
+                .map(this::toHealthReminderDTO)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public com.example.hms.payload.dto.portal.PortalHealthReminderDTO completeMyHealthReminder(
+            Authentication auth, UUID reminderId) {
+        UUID patientId = resolvePatientId(auth);
+        com.example.hms.model.HealthMaintenanceReminder reminder =
+                healthMaintenanceReminderRepository.findById(reminderId)
+                        .orElseThrow(() -> new ResourceNotFoundException("Reminder not found"));
+        if (!reminder.getPatientId().equals(patientId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "This reminder does not belong to your account");
+        }
+        reminder.setStatus(com.example.hms.enums.HealthMaintenanceReminderStatus.COMPLETED);
+        reminder.setCompletedDate(java.time.LocalDate.now());
+        reminder = healthMaintenanceReminderRepository.save(reminder);
+        log.info("Patient {} marked reminder {} as completed", patientId, reminderId);
+        return toHealthReminderDTO(reminder);
+    }
+
+    private com.example.hms.payload.dto.portal.PortalHealthReminderDTO toHealthReminderDTO(
+            com.example.hms.model.HealthMaintenanceReminder r) {
+        String typeLabel = r.getType() != null
+                ? r.getType().name().replace("_", " ") : "";
+        boolean overdue = r.getStatus() == com.example.hms.enums.HealthMaintenanceReminderStatus.OVERDUE
+                || (r.getDueDate() != null
+                    && java.time.LocalDate.now().isAfter(r.getDueDate())
+                    && r.getStatus() == com.example.hms.enums.HealthMaintenanceReminderStatus.PENDING);
+        return com.example.hms.payload.dto.portal.PortalHealthReminderDTO.builder()
+                .id(r.getId())
+                .type(r.getType() != null ? r.getType().name() : null)
+                .typeLabel(typeLabel)
+                .dueDate(r.getDueDate())
+                .status(r.getStatus() != null ? r.getStatus().name() : null)
+                .notes(r.getNotes())
+                .completedDate(r.getCompletedDate())
+                .completedBy(r.getCompletedBy())
+                .overdue(overdue)
+                .createdAt(r.getCreatedAt())
+                .build();
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // FEATURE 20 — Treatment Progress Tracker
+    // ════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.portal.PortalProgressEntryDTO> getMyTreatmentPlanProgress(
+            Authentication auth, UUID planId) {
+        UUID patientId = resolvePatientId(auth);
+        // Ownership check: the plan must belong to this patient
+        TreatmentPlanResponseDTO plan = treatmentPlanService.getById(planId);
+        if (!plan.getPatientId().equals(patientId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "This treatment plan does not belong to your account");
+        }
+        return treatmentProgressEntryRepository
+                .findByTreatmentPlanIdOrderByProgressDateDesc(planId)
+                .stream()
+                .map(this::toProgressEntryDTO)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public com.example.hms.payload.dto.portal.PortalProgressEntryDTO logMyTreatmentProgress(
+            Authentication auth, UUID planId,
+            com.example.hms.payload.dto.portal.PortalProgressEntryRequestDTO request) {
+        UUID patientId = resolvePatientId(auth);
+        TreatmentPlanResponseDTO plan = treatmentPlanService.getById(planId);
+        if (!plan.getPatientId().equals(patientId)) {
+            throw new org.springframework.security.access.AccessDeniedException(
+                    "This treatment plan does not belong to your account");
+        }
+        com.example.hms.model.TreatmentProgressEntry entry =
+                com.example.hms.model.TreatmentProgressEntry.builder()
+                        .treatmentPlanId(planId)
+                        .patientId(patientId)
+                        .progressDate(request.getProgressDate() != null
+                                ? request.getProgressDate() : java.time.LocalDate.now())
+                        .progressNote(request.getProgressNote())
+                        .selfRating(request.getSelfRating())
+                        .onTrack(request.getOnTrack() != null ? request.getOnTrack() : true)
+                        .build();
+        entry = treatmentProgressEntryRepository.save(entry);
+        log.info("Patient {} logged progress entry {} for plan {}", patientId, entry.getId(), planId);
+        return toProgressEntryDTO(entry);
+    }
+
+    private com.example.hms.payload.dto.portal.PortalProgressEntryDTO toProgressEntryDTO(
+            com.example.hms.model.TreatmentProgressEntry e) {
+        return com.example.hms.payload.dto.portal.PortalProgressEntryDTO.builder()
+                .id(e.getId())
+                .treatmentPlanId(e.getTreatmentPlanId())
+                .progressDate(e.getProgressDate())
+                .progressNote(e.getProgressNote())
+                .selfRating(e.getSelfRating())
+                .onTrack(e.getOnTrack())
+                .createdAt(e.getCreatedAt())
+                .build();
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // FEATURE 21 — Patient-Reported Outcomes (PROs)
+    // ════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.portal.PortalOutcomeDTO> getMyOutcomes(
+            Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        return patientReportedOutcomeRepository
+                .findByPatientIdOrderByReportDateDesc(patientId)
+                .stream()
+                .map(this::toOutcomeDTO)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public com.example.hms.payload.dto.portal.PortalOutcomeDTO reportMyOutcome(
+            Authentication auth,
+            com.example.hms.payload.dto.portal.PortalOutcomeRequestDTO request) {
+        Patient patient = findPatient(auth);
+        com.example.hms.model.PatientReportedOutcome outcome =
+                com.example.hms.model.PatientReportedOutcome.builder()
+                        .patientId(patient.getId())
+                        .hospitalId(patient.getHospitalId())
+                        .outcomeType(request.getOutcomeType())
+                        .score(request.getScore())
+                        .notes(request.getNotes())
+                        .reportDate(request.getReportDate() != null
+                                ? request.getReportDate() : java.time.LocalDate.now())
+                        .encounterId(request.getEncounterId())
+                        .build();
+        outcome = patientReportedOutcomeRepository.save(outcome);
+        log.info("Patient {} reported outcome {} (score={})",
+                patient.getId(), outcome.getOutcomeType(), outcome.getScore());
+        return toOutcomeDTO(outcome);
+    }
+
+    private com.example.hms.payload.dto.portal.PortalOutcomeDTO toOutcomeDTO(
+            com.example.hms.model.PatientReportedOutcome o) {
+        String typeLabel = o.getOutcomeType() != null ? o.getOutcomeType().getLabel() : "";
+        return com.example.hms.payload.dto.portal.PortalOutcomeDTO.builder()
+                .id(o.getId())
+                .outcomeType(o.getOutcomeType())
+                .typeLabel(typeLabel)
+                .score(o.getScore())
+                .notes(o.getNotes())
+                .reportDate(o.getReportDate())
+                .encounterId(o.getEncounterId())
+                .createdAt(o.getCreatedAt())
+                .build();
     }
 }

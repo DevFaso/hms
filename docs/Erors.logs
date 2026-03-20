@@ -1,0 +1,166 @@
+Run ./gradlew :hospital-core:build :hospital-core:jacocoTestReport
+
+Welcome to Gradle 8.13!
+
+Here are the highlights of this release:
+ - Daemon JVM auto-provisioning
+ - Enhancements for Scala plugin and JUnit testing
+ - Improvements for build authors and plugin developers
+
+For more details see https://docs.gradle.org/8.13/release-notes.html
+
+Starting a Gradle Daemon (subsequent builds will be faster)
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/payload/dto/LabReflexRuleRequestDTO.java:27: warning: @Builder will ignore the initializing expression entirely. If you want the initializing expression to serve as default, add @Builder.Default. If it is not supposed to be settable during building, make the field final.
+
+    private boolean active = true;
+> Task :hospital-core:compileJava
+                    ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/model/Patient.java:175: warning: The @Exclude annotation is not needed; 'onlyExplicitlyIncluded' is set, so this member would be excluded anyway
+    private Set<PatientHospitalRegistration> hospitalRegistrations = new HashSet<>();
+                                             ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/model/Patient.java:180: warning: The @Exclude annotation is not needed; 'onlyExplicitlyIncluded' is set, so this member would be excluded anyway
+    private Set<Appointment> appointments = new HashSet<>();
+                             ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/model/Patient.java:185: warning: The @Exclude annotation is not needed; 'onlyExplicitlyIncluded' is set, so this member would be excluded anyway
+    private Set<Encounter> encounters = new HashSet<>();
+                           ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/model/Patient.java:190: warning: The @Exclude annotation is not needed; 'onlyExplicitlyIncluded' is set, so this member would be excluded anyway
+    private Set<BillingInvoice> billingInvoices = new HashSet<>();
+                                ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/model/Patient.java:195: warning: The @Exclude annotation is not needed; 'onlyExplicitlyIncluded' is set, so this member would be excluded anyway
+    private Set<PatientInsurance> patientInsurances = new HashSet<>();
+                                  ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/model/Patient.java:200: warning: The @Exclude annotation is not needed; 'onlyExplicitlyIncluded' is set, so this member would be excluded anyway
+    private Set<LabOrder> labOrders = new HashSet<>();
+                          ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/model/Patient.java:205: warning: The @Exclude annotation is not needed; 'onlyExplicitlyIncluded' is set, so this member would be excluded anyway
+    private Set<PatientAllergy> allergyEntries = new HashSet<>();
+                                ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/model/Patient.java:210: warning: The @Exclude annotation is not needed; 'onlyExplicitlyIncluded' is set, so this member would be excluded anyway
+    private Set<PatientVitalSign> vitalSignCaptures = new HashSet<>();
+                                  ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/model/PatientHospitalRegistration.java:60: warning: The @Exclude annotation is not needed; 'onlyExplicitlyIncluded' is set, so this member would be excluded anyway
+    private Patient patient;
+                    ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/model/PatientHospitalRegistration.java:73: warning: The @Exclude annotation is not needed; 'onlyExplicitlyIncluded' is set, so this member would be excluded anyway
+    private Hospital hospital;
+                     ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/service/PatientHospitalRegistrationServiceImpl.java:225: warning: [removal] deregisterPatient(String) in PatientHospitalRegistrationService has been deprecated and marked for removal
+    public void deregisterPatient(String mrn) {
+                ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/service/PatientHospitalRegistrationServiceImpl.java:196: warning: [removal] updateRegistration(String,PatientHospitalRegistrationRequestDTO) in PatientHospitalRegistrationService has been deprecated and marked for removal
+    public PatientHospitalRegistrationResponseDTO updateRegistration(String mrn, PatientHospitalRegistrationRequestDTO dto) {
+                                                  ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/service/PatientHospitalRegistrationServiceImpl.java:112: warning: [removal] getRegistrationsByPatient(String) in PatientHospitalRegistrationService has been deprecated and marked for removal
+    public List<PatientHospitalRegistrationResponseDTO> getRegistrationsByPatient(String patientUsername) {
+                                                        ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/service/PatientHospitalRegistrationServiceImpl.java:258: warning: [removal] patchRegistration(UUID,PatientHospitalRegistrationRequestDTO) in PatientHospitalRegistrationService has been deprecated and marked for removal
+    public PatientHospitalRegistrationResponseDTO patchRegistration(UUID id, PatientHospitalRegistrationRequestDTO dto) {
+                                                  ^
+/home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/service/PatientHospitalRegistrationServiceImpl.java:160: warning: [removal] getRegistrationsByPatient(UUID) in PatientHospitalRegistrationService has been deprecated and marked for removal
+    public List<PatientHospitalRegistrationResponseDTO> getRegistrationsByPatient(UUID patientId) {
+                                                        ^
+Note: /home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/service/UserRoleHospitalAssignmentServiceImpl.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+Note: /home/runner/work/hms/hms/hospital-core/src/main/java/com/example/hms/utility/JsonMapConverter.java uses unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+16 warnings
+
+> Task :hospital-core:processResources
+> Task :hospital-core:classes
+> Task :hospital-core:resolveMainClassName
+> Task :hospital-core:bootJar
+> Task :hospital-core:jar
+> Task :hospital-core:assemble
+
+/home/runner/work/hms/hms/hospital-core/src/test/java/com/example/hms/service/InstrumentOutboxServiceImplTest.java:44: error: cannot find symbol
+> Task :hospital-core:compileTestJava
+        labOrder   = LabOrder.builder().id(labOrderId).build();
+                                       ^
+  symbol:   method id(UUID)
+  location: class LabOrderBuilder
+/home/runner/work/hms/hms/hospital-core/src/test/java/com/example/hms/service/impl/PlatformAnalyticsServiceImplTest.java:75: error: cannot find symbol
+        lenient().when(h.getId()).thenReturn(id);
+        ^
+  symbol:   method lenient()
+  location: class PlatformAnalyticsServiceImplTest
+/home/runner/work/hms/hms/hospital-core/src/test/java/com/example/hms/service/impl/PlatformAnalyticsServiceImplTest.java:76: error: cannot find symbol
+        lenient().when(h.getName()).thenReturn(name);
+        ^
+  symbol:   method lenient()
+  location: class PlatformAnalyticsServiceImplTest
+/home/runner/work/hms/hms/hospital-core/src/test/java/com/example/hms/service/impl/PlatformAnalyticsServiceImplTest.java:77: error: cannot find symbol
+        lenient().when(h.isActive()).thenReturn(active);
+        ^
+  symbol:   method lenient()
+  location: class PlatformAnalyticsServiceImplTest
+/home/runner/work/hms/hms/hospital-core/src/test/java/com/example/hms/service/LabSpecimenServiceImplTest.java:57: error: cannot find symbol
+        hospital    = Hospital.builder().id(hospitalId).build();
+                                        ^
+  symbol:   method id(UUID)
+  location: class HospitalBuilder
+/home/runner/work/hms/hms/hospital-core/src/test/java/com/example/hms/service/LabSpecimenServiceImplTest.java:58: error: cannot find symbol
+        labOrder    = LabOrder.builder().id(labOrderId).hospital(hospital).build();
+                                        ^
+  symbol:   method id(UUID)
+  location: class LabOrderBuilder
+Note: Some input files use unchecked or unsafe operations.
+Note: Recompile with -Xlint:unchecked for details.
+6 errors
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':hospital-core:compileTestJava'.
+> Compilation failed; see the compiler output below.
+  /home/runner/work/hms/hms/hospital-core/src/test/java/com/example/hms/service/InstrumentOutboxServiceImplTest.java:44: error: cannot find symbol
+          labOrder   = LabOrder.builder().id(labOrderId).build();
+                                         ^
+    symbol:   method id(UUID)
+    location: class LabOrderBuilder
+  /home/runner/work/hms/hms/hospital-core/src/test/java/com/example/hms/service/impl/PlatformAnalyticsServiceImplTest.java:75: error: cannot find symbol
+          lenient().when(h.getId()).thenReturn(id);
+          ^
+    symbol:   method lenient()
+
+    location: class PlatformAnalyticsServiceImplTest
+  /home/runner/work/hms/hms/hospital-core/src/test/java/com/example/hms/service/impl/PlatformAnalyticsServiceImplTest.java:76: error: cannot find symbol
+          lenient().when(h.getName()).thenReturn(name);
+          ^
+    symbol:   method lenient()
+    location: class PlatformAnalyticsServiceImplTest
+  /home/runner/work/hms/hms/hospital-core/src/test/java/com/example/hms/service/impl/PlatformAnalyticsServiceImplTest.java:77: error: cannot find symbol
+          lenient().when(h.isActive()).thenReturn(active);
+          ^
+    symbol:   method lenient()
+    location: class PlatformAnalyticsServiceImplTest
+  /home/runner/work/hms/hms/hospital-core/src/test/java/com/example/hms/service/LabSpecimenServiceImplTest.java:57: error: cannot find symbol
+          hospital    = Hospital.builder().id(hospitalId).build();
+                                          ^
+    symbol:   method id(UUID)
+    location: class HospitalBuilder
+  /home/runner/work/hms/hms/hospital-core/src/test/java/com/example/hms/service/LabSpecimenServiceImplTest.java:58: error: cannot find symbol
+          labOrder    = LabOrder.builder().id(labOrderId).hospital(hospital).build();
+                                          ^
+    symbol:   method id(UUID)
+    location: class LabOrderBuilder
+  Note: Some input files use unchecked or unsafe operations.
+  Note: Recompile with -Xlint:unchecked for details.
+  6 errors
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights.
+
+BUILD FAILED in 59s
+> Task :hospital-core:compileTestJava FAILED
+
+[Incubating] Problems report is available at: file:///home/runner/work/hms/hms/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.13/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+6 actionable tasks: 6 executed
+Error: Process completed with exit code 1.
