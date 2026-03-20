@@ -715,7 +715,7 @@ class PatientPortalServiceImplTest {
         when(healthMaintenanceReminderRepository.findById(reminderId)).thenReturn(Optional.of(r));
         when(healthMaintenanceReminderRepository.save(r)).thenReturn(r);
 
-        var result = service.completeMyHealthReminder(auth, reminderId);
+        service.completeMyHealthReminder(auth, reminderId);
         assertThat(r.getStatus()).isEqualTo(HealthMaintenanceReminderStatus.COMPLETED);
         assertThat(r.getCompletedDate()).isEqualTo(LocalDate.now());
     }
@@ -936,7 +936,7 @@ class PatientPortalServiceImplTest {
         AppointmentResponseDTO responseDTO = new AppointmentResponseDTO();
         when(appointmentMapper.toAppointmentResponseDTO(appt)).thenReturn(responseDTO);
 
-        var result = service.cancelMyAppointment(auth, dto, Locale.US);
+        service.cancelMyAppointment(auth, dto, Locale.US);
         assertThat(appt.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
         assertThat(appt.getNotes()).contains("Patient cancelled: Schedule conflict");
     }
@@ -1073,7 +1073,7 @@ class PatientPortalServiceImplTest {
             p.setId(UUID.randomUUID());
             return p;
         });
-        var result = service.setMyNotificationPreference(auth, dto);
+        NotificationPreferenceDTO result = service.setMyNotificationPreference(auth, dto);
         assertThat(result).isNotNull();
     }
 
@@ -1095,7 +1095,7 @@ class PatientPortalServiceImplTest {
                 .enabled(true)
                 .build();
         when(notificationPreferenceRepository.save(existing)).thenReturn(existing);
-        var result = service.setMyNotificationPreference(auth, dto);
+        service.setMyNotificationPreference(auth, dto);
         assertThat(existing.isEnabled()).isTrue();
     }
 

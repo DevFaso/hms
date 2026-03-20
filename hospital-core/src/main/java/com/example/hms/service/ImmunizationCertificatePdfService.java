@@ -69,9 +69,7 @@ public class ImmunizationCertificatePdfService {
                     String dateStr = imm.getAdministrationDate() != null
                             ? imm.getAdministrationDate().format(DateTimeFormatter.ofPattern("MM/dd/yyyy"))
                             : EM_DASH;
-                    String dose = (imm.getDoseNumber() != null && imm.getTotalDosesInSeries() != null)
-                            ? imm.getDoseNumber() + " of " + imm.getTotalDosesInSeries()
-                            : (imm.getDoseNumber() != null ? String.valueOf(imm.getDoseNumber()) : EM_DASH);
+                    String dose = formatDose(imm);
 
                     writeText(cs, PDType1Font.HELVETICA, 9, MARGIN, y, truncate(vaccineName, 28));
                     writeText(cs, PDType1Font.HELVETICA, 9, 200, y, dateStr);
@@ -118,6 +116,16 @@ public class ImmunizationCertificatePdfService {
 
     private static float centered(float pageWidth, String text, int fontSize) {
         return (pageWidth / 2f) - (text.length() * fontSize * 0.28f);
+    }
+
+    private static String formatDose(ImmunizationResponseDTO imm) {
+        if (imm.getDoseNumber() != null && imm.getTotalDosesInSeries() != null) {
+            return imm.getDoseNumber() + " of " + imm.getTotalDosesInSeries();
+        }
+        if (imm.getDoseNumber() != null) {
+            return String.valueOf(imm.getDoseNumber());
+        }
+        return EM_DASH;
     }
 
     private static String safe(String s) {

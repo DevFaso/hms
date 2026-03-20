@@ -250,6 +250,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
 
         Map<String, List<LabResult>> grouped = allResults.stream()
                 .collect(Collectors.groupingBy(this::groupingKey, LinkedHashMap::new, Collectors.toList()));
+        // Note: Collectors.toList() is required here by Collectors.groupingBy downstream collector
 
         List<LabResultTrendDTO> trends = grouped.values().stream()
                 .map(this::buildTrend)
