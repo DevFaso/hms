@@ -1451,7 +1451,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                 ? request.getProgressDate() : java.time.LocalDate.now())
                         .progressNote(request.getProgressNote())
                         .selfRating(request.getSelfRating())
-                        .onTrack(request.getOnTrack() != null ? request.getOnTrack() : true)
+                        .onTrack(!Boolean.FALSE.equals(request.getOnTrack()))
                         .build();
         entry = treatmentProgressEntryRepository.save(entry);
         log.info("Patient {} logged progress entry {} for plan {}", patientId, entry.getId(), planId);
