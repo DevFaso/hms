@@ -239,6 +239,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     // ── Lab Result Trends ─────────────────────────────────────────────────
 
     private static final int TREND_MAX_POINTS = 12;
+    private static final String UNKNOWN_KEY = "unknown";
 
     @Override
     @Transactional(readOnly = true)
@@ -247,78 +248,80 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
 
         List<LabResult> allResults = labResultRepository.findByLabOrder_Patient_Id(patientId);
 
-        // Group by test definition key (id if available, else test code + name)
-        Map<String, List<LabResult>> grouped = new LinkedHashMap<>();
-        for (LabResult r : allResults) {
-            LabOrder order = r.getLabOrder();
-            LabTestDefinition def = order != null ? order.getLabTestDefinition() : null;
-            String key;
-            if (def != null) {
-                key = def.getId().toString();
-            } else if (order != null) {
-                String testCode = def != null ? def.getTestCode() : null;
-                String testName = def != null ? def.getName() : null;
-                if (testCode != null || testName != null) {
-                    key = (testCode != null ? testCode : "") + "|" + (testName != null ? testName : "");
-                } else {
-                    key = "unknown";
-                }
-            } else {
-                key = "unknown";
-            }
-            grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
-        }
+        Map<String, List<LabResult>> grouped = allResults.stream()
+                .collect(Collectors.groupingBy(this::groupingKey, LinkedHashMap::new, Collectors.toList()));
+        // Note: Collectors.toList() is required here by Collectors.groupingBy downstream collector
 
-        List<LabResultTrendDTO> trends = new ArrayList<>();
-        for (Map.Entry<String, List<LabResult>> entry : grouped.entrySet()) {
-            List<LabResult> group = entry.getValue();
-            // Latest results first, cap at TREND_MAX_POINTS
-            List<LabResult> sorted = group.stream()
-                    .sorted(Comparator.comparing(LabResult::getResultDate,
-                            Comparator.nullsLast(Comparator.reverseOrder())))
-                    .limit(TREND_MAX_POINTS)
-                    .collect(Collectors.toList());
+        List<LabResultTrendDTO> trends = grouped.values().stream()
+                .map(this::buildTrend)
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toList());
 
-            if (sorted.isEmpty()) continue;
-
-            LabResult first = sorted.get(0);
-            LabOrder order = first.getLabOrder();
-            LabTestDefinition def = order != null ? order.getLabTestDefinition() : null;
-
-            String testName = def != null && def.getName() != null ? def.getName()
-                    : (order != null && order.getClinicalIndication() != null
-                            ? order.getClinicalIndication() : "Lab Result");
-            String testCode = def != null ? def.getTestCode() : null;
-            String unit = resolveUnit(first, def);
-            String category = def != null ? def.getCategory() : null;
-
-            List<LabResultTrendPointDTO> points = sorted.stream()
-                    .map(r -> {
-                        LabResultResponseDTO mapped = labResultMapper.toResponseDTO(r);
-                        String status = resolveStatus(r, mapped);
-                        boolean abnormal = !STATUS_NORMAL.equals(status) && !STATUS_PENDING.equals(status);
-                        return LabResultTrendPointDTO.builder()
-                                .value(r.getResultValue())
-                                .collectedAt(r.getLabOrder() != null ? r.getLabOrder().getOrderDatetime() : null)
-                                .resultedAt(r.getResultDate())
-                                .status(status)
-                                .abnormal(abnormal)
-                                .build();
-                    })
-                    .collect(Collectors.toList());
-
-            trends.add(LabResultTrendDTO.builder()
-                    .testName(testName)
-                    .testCode(testCode)
-                    .unit(unit)
-                    .category(category)
-                    .dataPoints(points)
-                    .build());
-        }
-
-        // Alphabetical order by test name for stable UI
         trends.sort(Comparator.comparing(LabResultTrendDTO::getTestName,
                 Comparator.nullsLast(Comparator.naturalOrder())));
         return trends;
+    }
+
+    private String groupingKey(LabResult r) {
+        LabOrder order = r.getLabOrder();
+        if (order == null) {
+            return UNKNOWN_KEY;
+        }
+        LabTestDefinition def = order.getLabTestDefinition();
+        if (def != null) {
+            return def.getId().toString();
+        }
+        return UNKNOWN_KEY;
+    }
+
+    private LabResultTrendDTO buildTrend(List<LabResult> group) {
+        List<LabResult> sorted = group.stream()
+                .sorted(Comparator.comparing(LabResult::getResultDate,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .limit(TREND_MAX_POINTS)
+                .toList();
+
+        if (sorted.isEmpty()) {
+            return null;
+        }
+
+        LabResult first = sorted.get(0);
+        LabOrder order = first.getLabOrder();
+        LabTestDefinition def = order != null ? order.getLabTestDefinition() : null;
+
+        List<LabResultTrendPointDTO> points = sorted.stream()
+                .map(this::buildTrendPoint)
+                .toList();
+
+        return LabResultTrendDTO.builder()
+                .testName(resolveTestName(order, def))
+                .testCode(def != null ? def.getTestCode() : null)
+                .unit(resolveUnit(first, def))
+                .category(def != null ? def.getCategory() : null)
+                .dataPoints(points)
+                .build();
+    }
+
+    private LabResultTrendPointDTO buildTrendPoint(LabResult r) {
+        LabResultResponseDTO mapped = labResultMapper.toResponseDTO(r);
+        String status = resolveStatus(r, mapped);
+        boolean abnormal = !STATUS_NORMAL.equals(status) && !STATUS_PENDING.equals(status);
+        return LabResultTrendPointDTO.builder()
+                .value(r.getResultValue())
+                .collectedAt(r.getLabOrder() != null ? r.getLabOrder().getOrderDatetime() : null)
+                .resultedAt(r.getResultDate())
+                .status(status)
+                .abnormal(abnormal)
+                .build();
+    }
+
+    private static String resolveTestName(LabOrder order, LabTestDefinition def) {
+        if (def != null && def.getName() != null) {
+            return def.getName();
+        }
+        if (order != null && order.getClinicalIndication() != null) {
+            return order.getClinicalIndication();
+        }
+        return "Lab Result";
     }
 }

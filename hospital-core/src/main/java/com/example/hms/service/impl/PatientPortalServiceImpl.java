@@ -124,6 +124,7 @@ import java.util.UUID;
 public class PatientPortalServiceImpl implements PatientPortalService {
 
     private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
+    private static final String MSG_APPOINTMENT_NOT_FOUND = "Appointment not found";
 
     private final PatientRepository patientRepository;
     private final PatientProxyRepository patientProxyRepository;
@@ -384,7 +385,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                       Locale locale) {
         UUID patientId = resolvePatientId(auth);
         Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_APPOINTMENT_NOT_FOUND));
 
         requirePatientOwnership(appointment, patientId);
 
@@ -415,7 +416,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                           Locale locale) {
         UUID patientId = resolvePatientId(auth);
         Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_APPOINTMENT_NOT_FOUND));
 
         requirePatientOwnership(appointment, patientId);
 
@@ -828,7 +829,6 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        // Upsert: find existing row for (user, type, channel) or create new
         NotificationPreference pref = notificationPreferenceRepository.findByUser_Id(userId)
                 .stream()
                 .filter(p -> p.getNotificationType() == dto.getNotificationType()
@@ -864,7 +864,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PatientVitalSignResponseDTO> getMyVitalTrends(Authentication auth, int months) {
         UUID patientId = resolvePatientId(auth);
-        int safeMonths = Math.min(Math.max(months, 1), 24); // clamp 1-24
+        int safeMonths = Math.clamp(months, 1, 24);
         java.time.LocalDateTime from = java.time.LocalDateTime.now().minusMonths(safeMonths);
         java.time.LocalDateTime to   = java.time.LocalDateTime.now();
         return vitalSignService.getVitals(patientId, null, from, to, 0, 500);
@@ -879,7 +879,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     public List<com.example.hms.payload.dto.medicalhistory.ImmunizationResponseDTO> getMyUpcomingVaccinations(
             Authentication auth, int months) {
         UUID patientId = resolvePatientId(auth);
-        int safeMonths = Math.min(Math.max(months, 1), 12); // clamp 1-12
+        int safeMonths = Math.clamp(months, 1, 12);
         java.time.LocalDate start = java.time.LocalDate.now();
         java.time.LocalDate end   = start.plusMonths(safeMonths);
         return immunizationService.getUpcomingImmunizations(patientId, start, end);
@@ -1137,7 +1137,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         UUID patientId = resolvePatientId(auth);
 
         Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_APPOINTMENT_NOT_FOUND));
 
         requirePatientOwnership(appointment, patientId);
 
@@ -1223,7 +1223,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .filter(q -> !questionnaireResponseRepository
                         .existsByPatientIdAndQuestionnaireId(patientId, q.getId()))
                 .map(questionnaireMapper::toPreVisitQuestionnaireDTO)
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -1233,7 +1233,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return questionnaireResponseRepository.findByPatientId(patientId)
                 .stream()
                 .map(questionnaireMapper::toQuestionnaireResponseDTO)
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -1366,7 +1366,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return healthMaintenanceReminderRepository.findByPatientIdAndActiveTrue(patientId)
                 .stream()
                 .map(this::toHealthReminderDTO)
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -1429,7 +1429,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .findByTreatmentPlanIdOrderByProgressDateDesc(planId)
                 .stream()
                 .map(this::toProgressEntryDTO)
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
     }
 
     @Override
@@ -1451,7 +1451,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                 ? request.getProgressDate() : java.time.LocalDate.now())
                         .progressNote(request.getProgressNote())
                         .selfRating(request.getSelfRating())
-                        .onTrack(request.getOnTrack() != null ? request.getOnTrack() : true)
+                        .onTrack(!Boolean.FALSE.equals(request.getOnTrack()))
                         .build();
         entry = treatmentProgressEntryRepository.save(entry);
         log.info("Patient {} logged progress entry {} for plan {}", patientId, entry.getId(), planId);
@@ -1484,7 +1484,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .findByPatientIdOrderByReportDateDesc(patientId)
                 .stream()
                 .map(this::toOutcomeDTO)
-                .collect(java.util.stream.Collectors.toList());
+                .toList();
     }
 
     @Override

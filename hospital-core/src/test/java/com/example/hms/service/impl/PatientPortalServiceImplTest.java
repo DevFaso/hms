@@ -10,8 +10,6 @@ import com.example.hms.enums.NotificationType;
 import com.example.hms.enums.PatientReportedOutcomeType;
 import com.example.hms.enums.ProxyRelationship;
 import com.example.hms.enums.ProxyStatus;
-import com.example.hms.enums.QuestionnaireStatus;
-import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AppointmentMapper;
@@ -24,8 +22,6 @@ import com.example.hms.model.NotificationPreference;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientProxy;
 import com.example.hms.model.PatientReportedOutcome;
-import com.example.hms.model.Prescription;
-import com.example.hms.model.RefillRequest;
 import com.example.hms.model.TreatmentProgressEntry;
 import com.example.hms.model.User;
 import com.example.hms.model.medication.PharmacyFill;
@@ -56,10 +52,8 @@ import com.example.hms.payload.dto.portal.PortalAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PortalOutcomeRequestDTO;
 import com.example.hms.payload.dto.portal.PortalProgressEntryRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
-import com.example.hms.payload.dto.portal.ProxyResponseDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.procedure.ProcedureOrderResponseDTO;
-import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
 import com.example.hms.payload.dto.questionnaire.PreVisitQuestionnaireDTO;
 import com.example.hms.payload.dto.questionnaire.QuestionnaireResponseDTO;
 import com.example.hms.payload.dto.questionnaire.QuestionnaireResponseSubmitDTO;
@@ -91,7 +85,6 @@ import com.example.hms.service.ImagingOrderService;
 import com.example.hms.service.ImmunizationCertificatePdfService;
 import com.example.hms.service.ImmunizationService;
 import com.example.hms.service.LabOrderService;
-import com.example.hms.service.MedicationHistoryService;
 import com.example.hms.service.PatientConsentService;
 import com.example.hms.service.PatientEducationService;
 import com.example.hms.service.PatientLabResultService;
@@ -113,7 +106,6 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Collections;
 import java.util.List;
@@ -715,7 +707,7 @@ class PatientPortalServiceImplTest {
         when(healthMaintenanceReminderRepository.findById(reminderId)).thenReturn(Optional.of(r));
         when(healthMaintenanceReminderRepository.save(r)).thenReturn(r);
 
-        var result = service.completeMyHealthReminder(auth, reminderId);
+        service.completeMyHealthReminder(auth, reminderId);
         assertThat(r.getStatus()).isEqualTo(HealthMaintenanceReminderStatus.COMPLETED);
         assertThat(r.getCompletedDate()).isEqualTo(LocalDate.now());
     }
@@ -936,7 +928,7 @@ class PatientPortalServiceImplTest {
         AppointmentResponseDTO responseDTO = new AppointmentResponseDTO();
         when(appointmentMapper.toAppointmentResponseDTO(appt)).thenReturn(responseDTO);
 
-        var result = service.cancelMyAppointment(auth, dto, Locale.US);
+        service.cancelMyAppointment(auth, dto, Locale.US);
         assertThat(appt.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
         assertThat(appt.getNotes()).contains("Patient cancelled: Schedule conflict");
     }
@@ -1073,7 +1065,7 @@ class PatientPortalServiceImplTest {
             p.setId(UUID.randomUUID());
             return p;
         });
-        var result = service.setMyNotificationPreference(auth, dto);
+        NotificationPreferenceDTO result = service.setMyNotificationPreference(auth, dto);
         assertThat(result).isNotNull();
     }
 
@@ -1095,7 +1087,7 @@ class PatientPortalServiceImplTest {
                 .enabled(true)
                 .build();
         when(notificationPreferenceRepository.save(existing)).thenReturn(existing);
-        var result = service.setMyNotificationPreference(auth, dto);
+        service.setMyNotificationPreference(auth, dto);
         assertThat(existing.isEnabled()).isTrue();
     }
 
