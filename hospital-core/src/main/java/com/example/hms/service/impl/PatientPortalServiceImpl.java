@@ -124,6 +124,7 @@ import java.util.UUID;
 public class PatientPortalServiceImpl implements PatientPortalService {
 
     private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
+    private static final String MSG_APPOINTMENT_NOT_FOUND = "Appointment not found";
 
     private final PatientRepository patientRepository;
     private final PatientProxyRepository patientProxyRepository;
@@ -384,7 +385,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                       Locale locale) {
         UUID patientId = resolvePatientId(auth);
         Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_APPOINTMENT_NOT_FOUND));
 
         requirePatientOwnership(appointment, patientId);
 
@@ -415,7 +416,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                           Locale locale) {
         UUID patientId = resolvePatientId(auth);
         Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_APPOINTMENT_NOT_FOUND));
 
         requirePatientOwnership(appointment, patientId);
 
@@ -1137,7 +1138,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         UUID patientId = resolvePatientId(auth);
 
         Appointment appointment = appointmentRepository.findById(appointmentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+                .orElseThrow(() -> new ResourceNotFoundException(MSG_APPOINTMENT_NOT_FOUND));
 
         requirePatientOwnership(appointment, patientId);
 
