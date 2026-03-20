@@ -1,4 +1,4 @@
-﻿import { Routes } from '@angular/router';
+import { Routes } from '@angular/router';
 import { AuthGuard } from './auth/auth.guard';
 import { AccountSetupGuard } from './auth/account-setup.guard';
 import { LoginRedirectGuard } from './auth/login-redirect.guard';

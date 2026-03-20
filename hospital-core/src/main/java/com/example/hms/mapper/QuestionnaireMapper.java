@@ -7,6 +7,7 @@ import com.example.hms.payload.dto.questionnaire.QuestionItemDTO;
 import com.example.hms.payload.dto.questionnaire.QuestionnaireResponseDTO;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -15,6 +16,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Component
 public class QuestionnaireMapper {
 
@@ -50,6 +52,7 @@ public class QuestionnaireMapper {
         try {
             return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (IOException e) {
+            log.error("Failed to parse questions JSON: {}", e.getMessage(), e);
             return Collections.emptyList();
         }
     }
@@ -61,6 +64,7 @@ public class QuestionnaireMapper {
         try {
             return objectMapper.readValue(json, new TypeReference<>() {});
         } catch (IOException e) {
+            log.error("Failed to parse answers JSON: {}", e.getMessage(), e);
             return Collections.emptyMap();
         }
     }

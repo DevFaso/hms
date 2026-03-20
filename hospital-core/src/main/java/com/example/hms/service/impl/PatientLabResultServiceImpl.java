@@ -252,9 +252,20 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         for (LabResult r : allResults) {
             LabOrder order = r.getLabOrder();
             LabTestDefinition def = order != null ? order.getLabTestDefinition() : null;
-            String key = def != null ? def.getId().toString()
-                    : (order != null && order.getClinicalIndication() != null
-                            ? order.getClinicalIndication() : "unknown");
+            String key;
+            if (def != null) {
+                key = def.getId().toString();
+            } else if (order != null) {
+                String testCode = def != null ? def.getTestCode() : null;
+                String testName = def != null ? def.getName() : null;
+                if (testCode != null || testName != null) {
+                    key = (testCode != null ? testCode : "") + "|" + (testName != null ? testName : "");
+                } else {
+                    key = "unknown";
+                }
+            } else {
+                key = "unknown";
+            }
             grouped.computeIfAbsent(key, k -> new ArrayList<>()).add(r);
         }
 

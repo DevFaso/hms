@@ -1109,22 +1109,22 @@ export class PatientPortalService {
 
   // ── Medical Records Self-Download ─────────────────────────────────────
 
-  downloadMyRecord(format: 'pdf' | 'csv' = 'pdf'): void {
-    const link = document.createElement('a');
-    link.href = `${this.base}/records/download?format=${format}`;
-    // Trigger via fetch so we can attach the auth header
-    this.http
+  downloadMyRecord(format: 'pdf' | 'csv' = 'pdf'): Observable<void> {
+    return this.http
       .get(`${this.base}/records/download`, {
         params: { format },
         responseType: 'blob',
       })
-      .subscribe((blob) => {
-        const url = URL.createObjectURL(blob);
-        link.href = url;
-        link.download = format === 'csv' ? 'my-health-record.csv' : 'my-health-record.pdf';
-        link.click();
-        URL.revokeObjectURL(url);
-      });
+      .pipe(
+        map((blob) => {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = format === 'csv' ? 'my-health-record.csv' : 'my-health-record.pdf';
+          link.click();
+          URL.revokeObjectURL(url);
+        }),
+      );
   }
 
   // ── Lab Result Trends ─────────────────────────────────────────────────

@@ -1,6 +1,7 @@
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Subject, Subscription, debounceTime } from 'rxjs';
 import { PatientPortalService, EducationResourceDTO } from '../../services/patient-portal.service';
 
 const CATEGORIES = [
@@ -25,8 +26,10 @@ const CATEGORIES = [
   templateUrl: './my-education-browse.html',
   styleUrl: './my-education-browse.scss',
 })
-export class MyEducationBrowseComponent implements OnInit {
+export class MyEducationBrowseComponent implements OnInit, OnDestroy {
   private readonly svc = inject(PatientPortalService);
+  private readonly searchSubject = new Subject<void>();
+  private searchSub?: Subscription;
 
   readonly categories = CATEGORIES;
   readonly loading = signal(true);
@@ -38,7 +41,14 @@ export class MyEducationBrowseComponent implements OnInit {
   readonly visible = computed(() => this.resources());
 
   ngOnInit(): void {
+    this.searchSub = this.searchSubject
+      .pipe(debounceTime(350))
+      .subscribe(() => this.executeSearch());
     this.loadAll();
+  }
+
+  ngOnDestroy(): void {
+    this.searchSub?.unsubscribe();
   }
 
   private loadAll(): void {
@@ -61,6 +71,10 @@ export class MyEducationBrowseComponent implements OnInit {
   }
 
   onSearch(): void {
+    this.searchSubject.next();
+  }
+
+  private executeSearch(): void {
     const q = this.searchQuery.trim();
     if (!q) {
       const cat = this.selectedCategory();

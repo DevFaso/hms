@@ -20,18 +20,16 @@ export class MyRecordsDownloadComponent {
     this.successMsg.set(null);
     this.errorMsg.set(null);
 
-    // downloadMyRecord uses HttpClient with blob responseType; subscribe completes after saving
-    try {
-      this.svc.downloadMyRecord(format);
-      // Give the browser a moment then reset state
-      setTimeout(() => {
+    this.svc.downloadMyRecord(format).subscribe({
+      next: () => {
         this.downloading.set(null);
         this.successMsg.set(`Your ${format.toUpperCase()} download has started.`);
         setTimeout(() => this.successMsg.set(null), 5000);
-      }, 1500);
-    } catch {
-      this.downloading.set(null);
-      this.errorMsg.set('Download failed. Please try again.');
-    }
+      },
+      error: () => {
+        this.downloading.set(null);
+        this.errorMsg.set('Download failed. Please try again.');
+      },
+    });
   }
 }

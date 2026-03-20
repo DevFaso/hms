@@ -12,6 +12,7 @@ import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.LabResultReferenceRangeDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
+import com.example.hms.payload.dto.lab.LabResultTrendDTO;
 import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabResultRepository;
@@ -25,6 +26,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -288,5 +290,119 @@ class PatientLabResultServiceImplTest {
 
         List<PatientLabResultResponseDTO> results = service.getLabResultsForPatient(patientId, hospitalId, 10);
         assertThat(results.get(0).getPerformedBy()).isEqualTo("Jane Doe");
+    }
+
+    // ── Lab Result Trends ──────────────────────────────────────────────────
+
+    @Test void getLabResultTrends_emptyResults() {
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
+        List<LabResultTrendDTO> trends = service.getLabResultTrends(patientId);
+        assertThat(trends).isEmpty();
+    }
+
+    @Test void getLabResultTrends_groupsByTestDefinition() {
+        LabTestDefinition defA = new LabTestDefinition();
+        defA.setId(UUID.randomUUID()); defA.setName("Glucose"); defA.setTestCode("GLU"); defA.setCategory("Chemistry");
+        LabTestDefinition defB = new LabTestDefinition();
+        defB.setId(UUID.randomUUID()); defB.setName("Hemoglobin"); defB.setTestCode("HGB"); defB.setCategory("Hematology");
+
+        LabResult r1 = buildLabResult("5.0", "mg/dL", true, false);
+        LabOrder o1 = new LabOrder(); o1.setLabTestDefinition(defA); o1.setOrderDatetime(LocalDateTime.now().minusDays(2));
+        r1.setLabOrder(o1); r1.setResultDate(LocalDateTime.now().minusDays(1));
+
+        LabResult r2 = buildLabResult("14.0", "g/dL", true, false);
+        LabOrder o2 = new LabOrder(); o2.setLabTestDefinition(defB); o2.setOrderDatetime(LocalDateTime.now().minusDays(3));
+        r2.setLabOrder(o2); r2.setResultDate(LocalDateTime.now().minusDays(2));
+
+        LabResult r3 = buildLabResult("5.5", "mg/dL", true, false);
+        LabOrder o3 = new LabOrder(); o3.setLabTestDefinition(defA); o3.setOrderDatetime(LocalDateTime.now().minusDays(5));
+        r3.setLabOrder(o3); r3.setResultDate(LocalDateTime.now().minusDays(4));
+
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(r1, r2, r3));
+        when(labResultMapper.toResponseDTO(any())).thenReturn(new LabResultResponseDTO());
+
+        List<LabResultTrendDTO> trends = service.getLabResultTrends(patientId);
+        assertThat(trends).hasSize(2);
+        // Alphabetical: Glucose before Hemoglobin
+        assertThat(trends.get(0).getTestName()).isEqualTo("Glucose");
+        assertThat(trends.get(0).getDataPoints()).hasSize(2);
+        assertThat(trends.get(1).getTestName()).isEqualTo("Hemoglobin");
+        assertThat(trends.get(1).getDataPoints()).hasSize(1);
+    }
+
+    @Test void getLabResultTrends_cappedAt12Points() {
+        LabTestDefinition def = new LabTestDefinition();
+        def.setId(UUID.randomUUID()); def.setName("WBC"); def.setTestCode("WBC");
+
+        List<LabResult> results = new java.util.ArrayList<>();
+        for (int i = 0; i < 15; i++) {
+            LabResult lr = buildLabResult(String.valueOf(4.0 + i * 0.1), "K/uL", true, false);
+            LabOrder order = new LabOrder(); order.setLabTestDefinition(def); order.setOrderDatetime(LocalDateTime.now().minusDays(i));
+            lr.setLabOrder(order); lr.setResultDate(LocalDateTime.now().minusDays(i));
+            results.add(lr);
+        }
+
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(results);
+        when(labResultMapper.toResponseDTO(any())).thenReturn(new LabResultResponseDTO());
+
+        List<LabResultTrendDTO> trends = service.getLabResultTrends(patientId);
+        assertThat(trends).hasSize(1);
+        assertThat(trends.get(0).getDataPoints()).hasSize(12);
+    }
+
+    @Test void getLabResultTrends_sortedByDateDescending() {
+        LabTestDefinition def = new LabTestDefinition();
+        def.setId(UUID.randomUUID()); def.setName("Creatinine"); def.setTestCode("CRE");
+
+        LabResult older = buildLabResult("1.0", "mg/dL", true, false);
+        LabOrder o1 = new LabOrder(); o1.setLabTestDefinition(def); o1.setOrderDatetime(LocalDateTime.now().minusDays(10));
+        older.setLabOrder(o1); older.setResultDate(LocalDateTime.now().minusDays(10));
+
+        LabResult newer = buildLabResult("1.2", "mg/dL", true, false);
+        LabOrder o2 = new LabOrder(); o2.setLabTestDefinition(def); o2.setOrderDatetime(LocalDateTime.now().minusDays(1));
+        newer.setLabOrder(o2); newer.setResultDate(LocalDateTime.now().minusDays(1));
+
+        // Pass in non-chronological order
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(older, newer));
+        when(labResultMapper.toResponseDTO(any())).thenReturn(new LabResultResponseDTO());
+
+        List<LabResultTrendDTO> trends = service.getLabResultTrends(patientId);
+        assertThat(trends.get(0).getDataPoints().get(0).getValue()).isEqualTo("1.2");
+        assertThat(trends.get(0).getDataPoints().get(1).getValue()).isEqualTo("1.0");
+    }
+
+    @Test void getLabResultTrends_abnormalFlagSet() {
+        LabTestDefinition def = new LabTestDefinition();
+        def.setId(UUID.randomUUID()); def.setName("Potassium"); def.setTestCode("K");
+
+        LabResult lr = buildLabResult("6.0", "mEq/L", true, false);
+        LabOrder order = new LabOrder(); order.setLabTestDefinition(def); order.setOrderDatetime(LocalDateTime.now());
+        lr.setLabOrder(order); lr.setResultDate(LocalDateTime.now());
+
+        LabResultResponseDTO mapped = new LabResultResponseDTO();
+        mapped.setSeverityFlag("HIGH");
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(lr));
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+
+        List<LabResultTrendDTO> trends = service.getLabResultTrends(patientId);
+        assertThat(trends.get(0).getDataPoints().get(0).isAbnormal()).isTrue();
+    }
+
+    @Test void getLabResultTrends_normalNotAbnormal() {
+        LabTestDefinition def = new LabTestDefinition();
+        def.setId(UUID.randomUUID()); def.setName("Sodium"); def.setTestCode("NA");
+
+        LabResult lr = buildLabResult("140", "mEq/L", true, false);
+        LabOrder order = new LabOrder(); order.setLabTestDefinition(def); order.setOrderDatetime(LocalDateTime.now());
+        lr.setLabOrder(order); lr.setResultDate(LocalDateTime.now());
+
+        LabResultResponseDTO mapped = new LabResultResponseDTO();
+        mapped.setSeverityFlag(null);
+        when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(lr));
+        when(labResultMapper.toResponseDTO(lr)).thenReturn(mapped);
+
+        List<LabResultTrendDTO> trends = service.getLabResultTrends(patientId);
+        assertThat(trends.get(0).getDataPoints().get(0).isAbnormal()).isFalse();
+        assertThat(trends.get(0).getDataPoints().get(0).getStatus()).isEqualTo("NORMAL");
     }
 }
