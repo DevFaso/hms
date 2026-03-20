@@ -5,6 +5,8 @@ import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.EducationCategory;
 import com.example.hms.enums.HealthMaintenanceReminderStatus;
 import com.example.hms.enums.HealthMaintenanceReminderType;
+import com.example.hms.enums.NotificationChannel;
+import com.example.hms.enums.NotificationType;
 import com.example.hms.enums.PatientReportedOutcomeType;
 import com.example.hms.enums.ProxyRelationship;
 import com.example.hms.enums.ProxyStatus;
@@ -48,12 +50,16 @@ import com.example.hms.payload.dto.lab.LabResultTrendDTO;
 import com.example.hms.payload.dto.medication.PharmacyFillResponseDTO;
 import com.example.hms.payload.dto.medicalhistory.ImmunizationResponseDTO;
 import com.example.hms.payload.dto.portal.CancelAppointmentRequestDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
 import com.example.hms.payload.dto.portal.PortalAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PortalOutcomeRequestDTO;
 import com.example.hms.payload.dto.portal.PortalProgressEntryRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
+import com.example.hms.payload.dto.portal.ProxyResponseDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.procedure.ProcedureOrderResponseDTO;
+import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
 import com.example.hms.payload.dto.questionnaire.PreVisitQuestionnaireDTO;
 import com.example.hms.payload.dto.questionnaire.QuestionnaireResponseDTO;
 import com.example.hms.payload.dto.questionnaire.QuestionnaireResponseSubmitDTO;
@@ -908,5 +914,340 @@ class PatientPortalServiceImplTest {
 
         var result = service.reportMyOutcome(auth, request);
         assertThat(result.getReportDate()).isEqualTo(LocalDate.now());
+    }
+
+    // ── Cancel Appointment ──────────────────────────────────────────────
+
+    @Test void cancelMyAppointment_success() {
+        stubAuth();
+        UUID appointmentId = UUID.randomUUID();
+        Appointment appt = new Appointment();
+        appt.setId(appointmentId);
+        appt.setStatus(AppointmentStatus.PENDING);
+        Patient apptPatient = new Patient(); apptPatient.setId(patientId);
+        appt.setPatient(apptPatient);
+
+        CancelAppointmentRequestDTO dto = new CancelAppointmentRequestDTO();
+        dto.setAppointmentId(appointmentId);
+        dto.setReason("Schedule conflict");
+
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
+        when(appointmentRepository.save(appt)).thenReturn(appt);
+        AppointmentResponseDTO responseDTO = new AppointmentResponseDTO();
+        when(appointmentMapper.toAppointmentResponseDTO(appt)).thenReturn(responseDTO);
+
+        var result = service.cancelMyAppointment(auth, dto, Locale.US);
+        assertThat(appt.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+        assertThat(appt.getNotes()).contains("Patient cancelled: Schedule conflict");
+    }
+
+    @Test void cancelMyAppointment_alreadyCancelled_throws() {
+        stubAuth();
+        UUID appointmentId = UUID.randomUUID();
+        Appointment appt = new Appointment();
+        appt.setStatus(AppointmentStatus.CANCELLED);
+        Patient apptPatient = new Patient(); apptPatient.setId(patientId);
+        appt.setPatient(apptPatient);
+        CancelAppointmentRequestDTO dto = new CancelAppointmentRequestDTO();
+        dto.setAppointmentId(appointmentId);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
+        assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.US))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test void cancelMyAppointment_completed_throws() {
+        stubAuth();
+        UUID appointmentId = UUID.randomUUID();
+        Appointment appt = new Appointment();
+        appt.setStatus(AppointmentStatus.COMPLETED);
+        Patient apptPatient = new Patient(); apptPatient.setId(patientId);
+        appt.setPatient(apptPatient);
+        CancelAppointmentRequestDTO dto = new CancelAppointmentRequestDTO();
+        dto.setAppointmentId(appointmentId);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
+        assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.US))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test void cancelMyAppointment_withNullReason_noNotes() {
+        stubAuth();
+        UUID appointmentId = UUID.randomUUID();
+        Appointment appt = new Appointment();
+        appt.setId(appointmentId);
+        appt.setStatus(AppointmentStatus.PENDING);
+        Patient apptPatient = new Patient(); apptPatient.setId(patientId);
+        appt.setPatient(apptPatient);
+        CancelAppointmentRequestDTO dto = new CancelAppointmentRequestDTO();
+        dto.setAppointmentId(appointmentId);
+        dto.setReason(null);
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
+        when(appointmentRepository.save(appt)).thenReturn(appt);
+        when(appointmentMapper.toAppointmentResponseDTO(appt)).thenReturn(new AppointmentResponseDTO());
+        service.cancelMyAppointment(auth, dto, Locale.US);
+        assertThat(appt.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+    }
+
+    // ── Reschedule Appointment ──────────────────────────────────────────
+
+    @Test void rescheduleMyAppointment_success() {
+        stubAuth();
+        UUID appointmentId = UUID.randomUUID();
+        Appointment appt = new Appointment();
+        appt.setId(appointmentId);
+        appt.setStatus(AppointmentStatus.PENDING);
+        Patient apptPatient = new Patient(); apptPatient.setId(patientId);
+        appt.setPatient(apptPatient);
+
+        RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
+                .appointmentId(appointmentId)
+                .newDate(LocalDate.now().plusDays(3))
+                .newStartTime(java.time.LocalTime.of(10, 0))
+                .newEndTime(java.time.LocalTime.of(10, 30))
+                .reason("Better time")
+                .build();
+
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
+        when(appointmentRepository.save(appt)).thenReturn(appt);
+        when(appointmentMapper.toAppointmentResponseDTO(appt)).thenReturn(new AppointmentResponseDTO());
+
+        service.rescheduleMyAppointment(auth, dto, Locale.US);
+        assertThat(appt.getStatus()).isEqualTo(AppointmentStatus.RESCHEDULED);
+        assertThat(appt.getNotes()).contains("Patient rescheduled: Better time");
+    }
+
+    @Test void rescheduleMyAppointment_completed_throws() {
+        stubAuth();
+        UUID appointmentId = UUID.randomUUID();
+        Appointment appt = new Appointment();
+        appt.setStatus(AppointmentStatus.COMPLETED);
+        Patient apptPatient = new Patient(); apptPatient.setId(patientId);
+        appt.setPatient(apptPatient);
+        RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
+                .appointmentId(appointmentId).build();
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
+        assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.US))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test void rescheduleMyAppointment_cancelled_throws() {
+        stubAuth();
+        UUID appointmentId = UUID.randomUUID();
+        Appointment appt = new Appointment();
+        appt.setStatus(AppointmentStatus.CANCELLED);
+        Patient apptPatient = new Patient(); apptPatient.setId(patientId);
+        appt.setPatient(apptPatient);
+        RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
+                .appointmentId(appointmentId).build();
+        when(appointmentRepository.findById(appointmentId)).thenReturn(Optional.of(appt));
+        assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.US))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    // ── Notification Preferences ────────────────────────────────────────
+
+    @Test void getMyNotificationPreferences_returnsList() {
+        when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(userId));
+        NotificationPreference pref = NotificationPreference.builder()
+                .notificationType(NotificationType.APPOINTMENT_REMINDER)
+                .channel(NotificationChannel.EMAIL)
+                .enabled(true)
+                .build();
+        pref.setId(UUID.randomUUID());
+        when(notificationPreferenceRepository.findByUser_Id(userId)).thenReturn(List.of(pref));
+        var result = service.getMyNotificationPreferences(auth);
+        assertThat(result).hasSize(1);
+    }
+
+    @Test void setMyNotificationPreference_createsNew() {
+        when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(userId));
+        User user = new User(); user.setId(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(notificationPreferenceRepository.findByUser_Id(userId)).thenReturn(Collections.emptyList());
+        NotificationPreferenceUpdateDTO dto = NotificationPreferenceUpdateDTO.builder()
+                .notificationType(NotificationType.APPOINTMENT_REMINDER)
+                .channel(NotificationChannel.EMAIL)
+                .enabled(true)
+                .build();
+        when(notificationPreferenceRepository.save(any())).thenAnswer(i -> {
+            NotificationPreference p = i.getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        var result = service.setMyNotificationPreference(auth, dto);
+        assertThat(result).isNotNull();
+    }
+
+    @Test void setMyNotificationPreference_updatesExisting() {
+        when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(userId));
+        User user = new User(); user.setId(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        NotificationPreference existing = NotificationPreference.builder()
+                .user(user)
+                .notificationType(NotificationType.APPOINTMENT_REMINDER)
+                .channel(NotificationChannel.EMAIL)
+                .enabled(false)
+                .build();
+        existing.setId(UUID.randomUUID());
+        when(notificationPreferenceRepository.findByUser_Id(userId)).thenReturn(List.of(existing));
+        NotificationPreferenceUpdateDTO dto = NotificationPreferenceUpdateDTO.builder()
+                .notificationType(NotificationType.APPOINTMENT_REMINDER)
+                .channel(NotificationChannel.EMAIL)
+                .enabled(true)
+                .build();
+        when(notificationPreferenceRepository.save(existing)).thenReturn(existing);
+        var result = service.setMyNotificationPreference(auth, dto);
+        assertThat(existing.isEnabled()).isTrue();
+    }
+
+    @Test void resetMyNotificationPreferences_delegates() {
+        when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(userId));
+        service.resetMyNotificationPreferences(auth);
+        verify(notificationPreferenceRepository).deleteByUser_Id(userId);
+    }
+
+    // ── Vital Trends ────────────────────────────────────────────────────
+
+    @Test void getMyVitalTrends_delegates() {
+        stubAuth();
+        when(vitalSignService.getVitals(eq(patientId), any(), any(), any(), eq(0), eq(500)))
+                .thenReturn(Collections.emptyList());
+        var result = service.getMyVitalTrends(auth, 6);
+        assertThat(result).isEmpty();
+    }
+
+    @Test void getMyVitalTrends_clampsMinMonths() {
+        stubAuth();
+        when(vitalSignService.getVitals(eq(patientId), any(), any(), any(), eq(0), eq(500)))
+                .thenReturn(Collections.emptyList());
+        service.getMyVitalTrends(auth, 0);
+        verify(vitalSignService).getVitals(eq(patientId), any(), any(), any(), eq(0), eq(500));
+    }
+
+    @Test void getMyVitalTrends_clampsMaxMonths() {
+        stubAuth();
+        when(vitalSignService.getVitals(eq(patientId), any(), any(), any(), eq(0), eq(500)))
+                .thenReturn(Collections.emptyList());
+        service.getMyVitalTrends(auth, 100);
+        verify(vitalSignService).getVitals(eq(patientId), any(), any(), any(), eq(0), eq(500));
+    }
+
+    // ── Upcoming Vaccinations ───────────────────────────────────────────
+
+    @Test void getMyUpcomingVaccinations_delegates() {
+        stubAuth();
+        when(immunizationService.getUpcomingImmunizations(eq(patientId), any(), any()))
+                .thenReturn(List.of(new ImmunizationResponseDTO()));
+        var result = service.getMyUpcomingVaccinations(auth, 6);
+        assertThat(result).hasSize(1);
+    }
+
+    @Test void getMyUpcomingVaccinations_clampsMonths() {
+        stubAuth();
+        when(immunizationService.getUpcomingImmunizations(eq(patientId), any(), any()))
+                .thenReturn(Collections.emptyList());
+        service.getMyUpcomingVaccinations(auth, 0);
+        service.getMyUpcomingVaccinations(auth, 50);
+        verify(immunizationService, org.mockito.Mockito.times(2))
+                .getUpcomingImmunizations(eq(patientId), any(), any());
+    }
+
+    // ── Proxy Management ────────────────────────────────────────────────
+
+    @Test void grantProxy_success() {
+        stubAuth();
+        UUID proxyUserId = UUID.randomUUID();
+        User proxyUser = new User(); proxyUser.setId(proxyUserId);
+        proxyUser.setFirstName("Proxy"); proxyUser.setLastName("User");
+        proxyUser.setUsername("proxyuser");
+        when(userRepository.findByUsername("proxyuser")).thenReturn(Optional.of(proxyUser));
+        when(patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
+                patientId, proxyUserId, ProxyStatus.ACTIVE)).thenReturn(Optional.empty());
+        when(patientProxyRepository.save(any())).thenAnswer(i -> {
+            PatientProxy p = i.getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        ProxyGrantRequestDTO dto = ProxyGrantRequestDTO.builder()
+                .proxyUsername("proxyuser")
+                .relationship(ProxyRelationship.SPOUSE)
+                .permissions("VIEW_RECORDS")
+                .build();
+        var result = service.grantProxy(auth, dto);
+        assertThat(result).isNotNull();
+    }
+
+    @Test void grantProxy_selfProxy_throws() {
+        stubAuth();
+        User self = new User(); self.setId(userId);
+        when(userRepository.findByUsername("self")).thenReturn(Optional.of(self));
+        ProxyGrantRequestDTO dto = ProxyGrantRequestDTO.builder()
+                .proxyUsername("self")
+                .relationship(ProxyRelationship.PARENT)
+                .build();
+        assertThatThrownBy(() -> service.grantProxy(auth, dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("yourself");
+    }
+
+    @Test void grantProxy_duplicateActive_throws() {
+        stubAuth();
+        UUID proxyUserId = UUID.randomUUID();
+        User proxyUser = new User(); proxyUser.setId(proxyUserId);
+        when(userRepository.findByUsername("proxyuser")).thenReturn(Optional.of(proxyUser));
+        PatientProxy existing = PatientProxy.builder().build();
+        when(patientProxyRepository.findByGrantorPatient_IdAndProxyUser_IdAndStatus(
+                patientId, proxyUserId, ProxyStatus.ACTIVE)).thenReturn(Optional.of(existing));
+        ProxyGrantRequestDTO dto = ProxyGrantRequestDTO.builder()
+                .proxyUsername("proxyuser")
+                .relationship(ProxyRelationship.PARENT)
+                .build();
+        assertThatThrownBy(() -> service.grantProxy(auth, dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("already exists");
+    }
+
+    @Test void revokeProxy_success() {
+        stubAuth();
+        UUID proxyId = UUID.randomUUID();
+        Patient grantor = new Patient(); grantor.setId(patientId);
+        PatientProxy proxy = PatientProxy.builder()
+                .grantorPatient(grantor)
+                .status(ProxyStatus.ACTIVE)
+                .build();
+        proxy.setId(proxyId);
+        when(patientProxyRepository.findById(proxyId)).thenReturn(Optional.of(proxy));
+        when(patientProxyRepository.save(proxy)).thenReturn(proxy);
+        service.revokeProxy(auth, proxyId);
+        assertThat(proxy.getStatus()).isEqualTo(ProxyStatus.REVOKED);
+    }
+
+    @Test void revokeProxy_notOwned_throws() {
+        stubAuth();
+        UUID proxyId = UUID.randomUUID();
+        Patient other = new Patient(); other.setId(UUID.randomUUID());
+        PatientProxy proxy = PatientProxy.builder()
+                .grantorPatient(other)
+                .build();
+        proxy.setId(proxyId);
+        when(patientProxyRepository.findById(proxyId)).thenReturn(Optional.of(proxy));
+        assertThatThrownBy(() -> service.revokeProxy(auth, proxyId))
+                .isInstanceOf(AccessDeniedException.class);
+    }
+
+    // ── resolvePatientHospitalId via education resources ────────────────
+
+    @Test void getMyEducationResources_fallbackToRegistration() {
+        patient.setHospitalId(null);
+        stubAuth();
+        var registration = org.mockito.Mockito.mock(
+                com.example.hms.model.PatientHospitalRegistration.class);
+        var hospital = new com.example.hms.model.Hospital();
+        hospital.setId(hospitalId);
+        when(registration.isActive()).thenReturn(true);
+        when(registration.getHospital()).thenReturn(hospital);
+        when(registrationRepository.findByPatientId(patientId)).thenReturn(List.of(registration));
+        List<EducationResourceResponseDTO> expected = List.of(new EducationResourceResponseDTO());
+        when(patientEducationService.getAllResources(hospitalId)).thenReturn(expected);
+        assertThat(service.getMyEducationResources(auth)).isEqualTo(expected);
     }
 }
