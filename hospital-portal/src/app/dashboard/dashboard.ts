@@ -1387,7 +1387,9 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.isNurse.set(this.auth.hasAnyRole(['ROLE_NURSE']));
     this.isMidwife.set(this.auth.hasAnyRole(['ROLE_MIDWIFE']));
     this.isReceptionist.set(this.auth.hasAnyRole(['ROLE_RECEPTIONIST']));
-    this.isLabScientist.set(this.auth.hasAnyRole(['ROLE_LAB_SCIENTIST', 'ROLE_LAB_TECHNICIAN', 'ROLE_LAB_MANAGER']));
+    this.isLabScientist.set(
+      this.auth.hasAnyRole(['ROLE_LAB_SCIENTIST', 'ROLE_LAB_TECHNICIAN', 'ROLE_LAB_MANAGER']),
+    );
     this.isPharmacist.set(this.auth.hasAnyRole(['ROLE_PHARMACIST']));
     this.isRadiologist.set(this.auth.hasAnyRole(['ROLE_RADIOLOGIST']));
     this.isPatient.set(this.auth.hasAnyRole(['ROLE_PATIENT']));

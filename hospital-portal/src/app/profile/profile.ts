@@ -127,7 +127,13 @@ export class ProfileComponent implements OnInit {
 
   /** Show license number only for clinical staff roles in this session. */
   showLicenseNumber = computed(() => {
-    const clinicalRoles = ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_LAB_SCIENTIST', 'ROLE_LAB_MANAGER'];
+    const clinicalRoles = [
+      'ROLE_DOCTOR',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_LAB_SCIENTIST',
+      'ROLE_LAB_MANAGER',
+    ];
     return this.auth.hasAnyRole(clinicalRoles) && !!this.user()?.licenseNumber;
   });
 
