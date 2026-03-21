@@ -309,13 +309,13 @@ public class SecurityConfig {
                 // -------------------- Hospitals (tenant-safe) --------------------
                 // /me/hospital and /me/hospitals return only the caller's assigned hospital(s).
                 .requestMatchers(HttpMethod.GET, "/me/hospital", "/me/hospitals")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER)
 
                 // Global hospital directory (read): open to clinical staff so they can
                 // pick destination hospitals in referral / consultation workflows.
                 // The controller's @PreAuthorize further narrows allowed roles.
                 .requestMatchers(HttpMethod.GET, API_HOSPITALS, API_HOSPITALS + "/", API_HOSPITALS_PATTERN)
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER)
 
                 // Hospital mutations: super-admin only
                 .requestMatchers(HttpMethod.POST, API_HOSPITALS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)
