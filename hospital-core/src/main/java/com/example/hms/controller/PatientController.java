@@ -98,7 +98,7 @@ public class PatientController {
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = PatientResponseDTO.class)))
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER')")
     public ResponseEntity<List<PatientResponseDTO>> getAllPatients(
         @RequestParam(required = false) UUID hospitalId,
         @RequestParam(name = "assignedTo", required = false) String assignedTo,
