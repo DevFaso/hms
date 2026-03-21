@@ -406,7 +406,7 @@ public class SecurityConfig {
 
                 // -------------------- Chat / Notifications --------------------
                 .requestMatchers("/chat/**")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST, ROLE_STAFF, ROLE_PATIENT)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST, ROLE_STAFF, ROLE_PATIENT, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER)
 
                 // WebSocket endpoints should NOT be public in an HMS; require authentication.
                 .requestMatchers("/ws-chat/**").authenticated()
