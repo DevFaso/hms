@@ -139,6 +139,17 @@
             <span class="badge-count">{{ inboxUnreadCount() }}</span>
           }
         </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeSection() === 'patients'"
+          (click)="setSection('patients')"
+          title="Assigned patients"
+        >
+          Patients
+          @if (patients().length > 0) {
+            <span class="badge-count">{{ patients().length }}</span>
+          }
+        </button>
       </div>
 
       @if (loading()) {
@@ -809,6 +820,78 @@
           </div>
         }
       }
+
+      <!-- ═══════════ PATIENTS TAB ═══════════ -->
+      @if (!loading() && activeSection() === 'patients') {
+        @if (patients().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">group</span>
+            <h3>No assigned patients</h3>
+            <p>Patients assigned to your care will appear here.</p>
+          </div>
+        }
+        @if (patients().length > 0) {
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Patient</th>
+                  <th>MRN</th>
+                  <th>Room / Bed</th>
+                  <th>HR</th>
+                  <th>BP</th>
+                  <th>SpO₂</th>
+                  <th>Flags</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (p of patients(); track p.id) {
+                  <tr>
+                    <td class="patient-name-cell">{{ p.displayName || (p.firstName + ' ' + p.lastName) }}</td>
+                    <td>{{ p.mrn || '—' }}</td>
+                    <td>{{ (p.room ? p.room : '') + (p.bed ? ' / ' + p.bed : '') || '—' }}</td>
+                    <td>{{ p.hr ?? '—' }}</td>
+                    <td>{{ p.bp ?? '—' }}</td>
+                    <td>{{ p.spo2 != null ? p.spo2 + '%' : '—' }}</td>
+                    <td>
+                      @for (flag of (p.flags || []); track flag) {
+                        <span class="patient-flag">{{ flag }}</span>
+                      }
+                      @for (risk of (p.risks || []); track risk) {
+                        <span class="patient-risk">{{ risk }}</span>
+                      }
+                    </td>
+                    <td class="action-cell">
+                      <button
+                        class="btn-small btn-outline"
+                        title="Record vitals"
+                        (click)="recordVitals(p.patientId || p.id, p.displayName || (p.firstName + ' ' + p.lastName))"
+                      >
+                        <span class="material-symbols-outlined">monitor_heart</span>
+                      </button>
+                      <button
+                        class="btn-small btn-outline"
+                        title="View nursing notes"
+                        (click)="viewNursingNotes(p)"
+                      >
+                        <span class="material-symbols-outlined">clinical_notes</span>
+                      </button>
+                      <button
+                        class="btn-small btn-outline"
+                        title="Write care note"
+                        (click)="openCareNote(p.patientId || p.id, p.displayName || (p.firstName + ' ' + p.lastName))"
+                      >
+                        <span class="material-symbols-outlined">edit_note</span>
+                      </button>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
     </div>
 
     <!-- ── Announcements Sidebar ──────────────────────────── -->
@@ -1338,6 +1421,68 @@
           } @else {
             <span class="material-symbols-outlined">save</span> Save Note
           }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ── Nursing Notes Viewer Modal ────────────────────────── -->
+@if (selectedPatientForNotes()) {
+  <div
+    class="modal-backdrop"
+    role="button"
+    tabindex="0"
+    (click)="closeNursingNotes()"
+    (keydown.enter)="closeNursingNotes()"
+    (keydown.escape)="closeNursingNotes()"
+  >
+    <div
+      class="modal-content modal-lg"
+      role="dialog"
+      aria-modal="true"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="closeNursingNotes()"
+    >
+      <h3>
+        <span class="material-symbols-outlined">clinical_notes</span>
+        Nursing Notes — {{ selectedPatientForNotes()?.patientName }}
+      </h3>
+      @if (nursingNotes().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined empty-icon">note</span>
+          <p>No nursing notes found for this patient.</p>
+        </div>
+      }
+      @if (nursingNotes().length > 0) {
+        <div class="notes-list">
+          @for (note of nursingNotes(); track note.id) {
+            <div class="note-card">
+              <div class="note-header">
+                <span class="note-template">{{ note.template }}</span>
+                <span class="note-author">{{ note.authorName }}</span>
+                <span class="note-time">{{ note.documentedAt | date: 'short' }}</span>
+              </div>
+              @if (note.narrative) {
+                <p class="note-narrative">{{ note.narrative }}</p>
+              }
+              @if (note.actionSummary) {
+                <p class="note-action"><strong>Action:</strong> {{ note.actionSummary }}</p>
+              }
+              @if (note.responseSummary) {
+                <p class="note-response"><strong>Response:</strong> {{ note.responseSummary }}</p>
+              }
+            </div>
+          }
+        </div>
+      }
+      <div class="modal-actions">
+        <button class="modal-btn modal-cancel" (click)="closeNursingNotes()">Close</button>
+        <button
+          class="modal-btn modal-confirm"
+          (click)="closeNursingNotes(); openCareNote(selectedPatientForNotes()!.patientId, selectedPatientForNotes()!.patientName)"
+        >
+          <span class="material-symbols-outlined">edit_note</span> New Note
         </button>
       </div>
     </div>

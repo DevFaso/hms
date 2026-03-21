@@ -184,6 +184,48 @@ export interface NurseCareNoteResponse {
   documentedAt: string;
 }
 
+// ── MVP 14 interfaces ─────────────────────────────────────────────
+
+export interface NursePatient {
+  id: string;
+  patientId: string;
+  firstName: string;
+  lastName: string;
+  displayName: string;
+  mrn: string;
+  room: string | null;
+  bed: string | null;
+  gender: string;
+  dateOfBirth: string;
+  bloodType: string | null;
+  allergies: string | null;
+  flags: string[];
+  risks: string[];
+  chronicConditions: string[];
+  hr: number | null;
+  bp: string | null;
+  spo2: number | null;
+  hospitalId: string;
+  hospitalName: string;
+  departmentName: string | null;
+  active: boolean;
+}
+
+export interface NursingNoteResponse {
+  id: string;
+  patientId: string;
+  patientName: string;
+  patientMrn: string;
+  authorName: string;
+  authorCredentials: string | null;
+  template: string;
+  narrative: string | null;
+  actionSummary: string | null;
+  responseSummary: string | null;
+  documentedAt: string;
+  createdAt: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class NurseTaskService {
   private readonly http = inject(HttpClient);
@@ -368,5 +410,28 @@ export class NurseTaskService {
       data,
       { params: httpParams },
     );
+  }
+
+  // ── MVP 14 methods ────────────────────────────────────────────────
+
+  getPatients(params?: {
+    hospitalId?: string;
+    assignee?: string;
+  }): Observable<NursePatient[]> {
+    let httpParams = new HttpParams();
+    if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    if (params?.assignee) httpParams = httpParams.set('assignee', params.assignee);
+    return this.http.get<NursePatient[]>(`${this.baseUrl}/patients`, { params: httpParams });
+  }
+
+  getNursingNotes(params: {
+    patientId: string;
+    hospitalId?: string;
+    limit?: number;
+  }): Observable<NursingNoteResponse[]> {
+    let httpParams = new HttpParams().set('patientId', params.patientId);
+    if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    if (params.limit != null) httpParams = httpParams.set('limit', params.limit);
+    return this.http.get<NursingNoteResponse[]>(`${this.baseUrl}/notes`, { params: httpParams });
   }
 }

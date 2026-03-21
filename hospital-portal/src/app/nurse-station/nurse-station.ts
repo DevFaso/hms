@@ -31,6 +31,8 @@ import {
   NurseInboxItem,
   NurseCareNoteRequest,
   NurseCareNoteResponse,
+  NursePatient,
+  NursingNoteResponse,
 } from '../services/nurse-task.service';
 import { ToastService } from '../core/toast.service';
 
@@ -44,7 +46,8 @@ type SectionType =
   | 'flowboard'
   | 'admissions'
   | 'tasks'
-  | 'inbox';
+  | 'inbox'
+  | 'patients';
 
 @Component({
   selector: 'app-nurse-station',
@@ -88,6 +91,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   nursingTasks = signal<NurseTaskItem[]>([]);
   inboxItems = signal<NurseInboxItem[]>([]);
   inboxUnreadCount = signal(0);
+
+  /* MVP 14 signals */
+  patients = signal<NursePatient[]>([]);
+  nursingNotes = signal<NursingNoteResponse[]>([]);
+  selectedPatientForNotes = signal<{ patientId: string; patientName: string } | null>(null);
 
   /* Task create dialog */
   taskCreateOpen = signal(false);
@@ -192,6 +200,9 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       inboxItems: this.nurseService
         .getNurseInbox({ limit: 20 })
         .pipe(catchError(() => of([] as NurseInboxItem[]))),
+      patients: this.nurseService
+        .getPatients(params)
+        .pipe(catchError(() => of([] as NursePatient[]))),
     }).pipe(
       tap(
         (results: {
@@ -206,6 +217,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           pendingAdmissions: NurseAdmissionSummary[];
           nursingTasks: NurseTaskItem[];
           inboxItems: NurseInboxItem[];
+          patients: NursePatient[];
         }) => {
           this.vitals.set(results.vitals ?? []);
           this.medications.set(results.medications ?? []);
@@ -219,6 +231,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.nursingTasks.set(results.nursingTasks ?? []);
           this.inboxItems.set(results.inboxItems ?? []);
           this.inboxUnreadCount.set((results.inboxItems ?? []).filter((i) => !i.read).length);
+          this.patients.set(results.patients ?? []);
           this.lastRefreshed.set(new Date());
         },
       ),
@@ -537,5 +550,23 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         this.careNoteCreating.set(false);
       },
     });
+  }
+
+  /* ── Nursing Notes (MVP 14) ────────────────────────────── */
+
+  viewNursingNotes(patient: NursePatient): void {
+    this.selectedPatientForNotes.set({ patientId: patient.patientId ?? patient.id, patientName: patient.displayName });
+    this.nurseService.getNursingNotes({ patientId: patient.patientId ?? patient.id }).subscribe({
+      next: (notes) => this.nursingNotes.set(notes),
+      error: () => {
+        this.toast.error('Failed to load nursing notes');
+        this.nursingNotes.set([]);
+      },
+    });
+  }
+
+  closeNursingNotes(): void {
+    this.selectedPatientForNotes.set(null);
+    this.nursingNotes.set([]);
   }
 }

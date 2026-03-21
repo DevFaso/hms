@@ -185,11 +185,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             }
         }
 
-        // If no real tasks generated, produce a single synthetic placeholder
-        if (tasks.isEmpty()) {
-            tasks.add(createSyntheticVitalTask(patients, hospitalId, now));
-        }
-
         tasks.sort(Comparator.comparing(NurseVitalTaskResponseDTO::getDueTime));
         return tasks.stream().limit(MAX_LIMIT).toList();
     }
@@ -206,11 +201,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         List<NurseMedicationTaskResponseDTO> tasks = new ArrayList<>();
         for (PatientContext ctx : patients) {
             tasks.addAll(buildMedicationTasksForPatient(ctx, hospitalId, statusFilter, now));
-        }
-
-        // Fall back to synthetic data if no real prescriptions exist
-        if (tasks.isEmpty()) {
-            tasks.addAll(createSyntheticMedicationTasks(patients, hospitalId, now, statusFilter));
         }
 
         return tasks.stream().limit(MAX_LIMIT).toList();
