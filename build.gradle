@@ -167,6 +167,7 @@ subprojects {
 
     tasks.named('test') {
         useJUnitPlatform()
+        maxHeapSize = '1536m'
         systemProperty 'spring.profiles.active', 'test'
         testLogging {
             events 'failed', 'skipped', 'passed'
