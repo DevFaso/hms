@@ -88,6 +88,8 @@ export class ProfileComponent implements OnInit {
       'ROLE_MIDWIFE',
       'ROLE_RECEPTIONIST',
       'ROLE_LAB_SCIENTIST',
+      'ROLE_LAB_MANAGER',
+      'ROLE_LAB_TECHNICIAN',
       'ROLE_STAFF',
     ];
     return this.auth.hasAnyRole(staffRoles);
@@ -112,6 +114,8 @@ export class ProfileComponent implements OnInit {
       ['ROLE_MIDWIFE', 'Midwife'],
       ['ROLE_RECEPTIONIST', 'Receptionist'],
       ['ROLE_LAB_SCIENTIST', 'Lab Scientist'],
+      ['ROLE_LAB_MANAGER', 'Lab Manager'],
+      ['ROLE_LAB_TECHNICIAN', 'Lab Technician'],
       ['ROLE_STAFF', 'Staff Member'],
       ['ROLE_PATIENT', 'Patient'],
     ];
@@ -123,7 +127,7 @@ export class ProfileComponent implements OnInit {
 
   /** Show license number only for clinical staff roles in this session. */
   showLicenseNumber = computed(() => {
-    const clinicalRoles = ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_LAB_SCIENTIST'];
+    const clinicalRoles = ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_LAB_SCIENTIST', 'ROLE_LAB_MANAGER'];
     return this.auth.hasAnyRole(clinicalRoles) && !!this.user()?.licenseNumber;
   });
 
