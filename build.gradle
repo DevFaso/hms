@@ -168,6 +168,7 @@ subprojects {
     tasks.named('test') {
         useJUnitPlatform()
         systemProperty 'spring.profiles.active', 'test'
+        jvmArgs '-XX:+EnableDynamicAgentLoading'
         testLogging {
             events 'failed', 'skipped', 'passed'
             exceptionFormat 'full'
