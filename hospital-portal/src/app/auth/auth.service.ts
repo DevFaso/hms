@@ -56,6 +56,8 @@ export class AuthService {
     'ROLE_MIDWIFE',
     'ROLE_RECEPTIONIST',
     'ROLE_LAB_SCIENTIST',
+    'ROLE_LAB_TECHNICIAN',
+    'ROLE_LAB_MANAGER',
     'ROLE_STAFF',
     'ROLE_PATIENT',
   ];
