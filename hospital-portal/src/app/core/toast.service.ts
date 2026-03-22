@@ -29,6 +29,10 @@ export class ToastService {
     this.push('error', msg);
   }
 
+  warning(msg: string): void {
+    this.push('warning', msg);
+  }
+
   info(msg: string): void {
     this.push('info', msg);
   }

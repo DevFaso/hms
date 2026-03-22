@@ -1,0 +1,39 @@
+<div class="export-container">
+  <div class="page-header">
+    <h1><span class="material-icons">cloud_download</span> Data Export</h1>
+    <p class="subtitle">Export platform data as CSV for reporting and compliance</p>
+  </div>
+
+  <div class="export-grid">
+    @for (opt of exportOptions; track opt.key) {
+      <div class="export-card">
+        <div class="card-icon" [style.background]="opt.color + '18'" [style.color]="opt.color">
+          <span class="material-icons">{{ opt.icon }}</span>
+        </div>
+        <div class="card-content">
+          <h3>{{ opt.label }}</h3>
+          <p>{{ opt.description }}</p>
+        </div>
+        <button
+          class="btn-export"
+          [disabled]="exporting() === opt.key"
+          (click)="startExport(opt.key)"
+        >
+          @if (exporting() === opt.key) {
+            <span class="material-icons spin">autorenew</span> Exporting...
+          } @else {
+            <span class="material-icons">download</span> Export CSV
+          }
+        </button>
+      </div>
+    }
+  </div>
+
+  <div class="info-box">
+    <span class="material-icons">info</span>
+    <p>
+      Exports are generated as CSV files. Audit log exports are available on the
+      <strong>Audit Logs</strong> page with date range filtering.
+    </p>
+  </div>
+</div>

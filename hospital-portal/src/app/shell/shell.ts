@@ -201,6 +201,13 @@ export class ShellComponent implements OnInit, OnDestroy {
         { icon: 'shield', label: 'Roles', route: '/roles' },
         { icon: 'hub', label: 'Platform', route: '/platform' },
         { icon: 'admin_panel_settings', label: 'Administration', route: '/admin' },
+        { icon: 'toggle_on', label: 'Feature Flags', route: '/feature-flags' },
+        { icon: 'security', label: 'Security Policies', route: '/security-policies' },
+        { icon: 'settings', label: 'Global Settings', route: '/global-settings' },
+        { icon: 'health_and_safety', label: 'Credential Health', route: '/credential-health' },
+        { icon: 'analytics', label: 'Analytics', route: '/analytics' },
+        { icon: 'monitor_heart', label: 'System Monitoring', route: '/system-monitoring' },
+        { icon: 'cloud_download', label: 'Data Export', route: '/data-export' },
       );
     }
     if (this.permissions.hasPermission('View Audit Logs')) {

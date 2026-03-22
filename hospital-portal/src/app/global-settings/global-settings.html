@@ -1,0 +1,218 @@
+<div class="settings-page">
+  <div class="page-header">
+    <div class="header-left">
+      <span class="material-symbols-outlined header-icon">settings</span>
+      <div>
+        <h1>Global Settings</h1>
+        <p class="subtitle">Manage platform-wide configuration</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <span class="pill">{{ settings().length }} settings</span>
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span> New Setting
+      </button>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    <div class="search-bar">
+      <span class="material-symbols-outlined search-icon">search</span>
+      <input
+        type="text"
+        placeholder="Search settings..."
+        [ngModel]="search()"
+        (ngModelChange)="search.set($event)"
+      />
+    </div>
+    @if (categories().length > 0) {
+      <select [ngModel]="categoryFilter()" (ngModelChange)="categoryFilter.set($event)">
+        <option value="">All Categories</option>
+        @for (cat of categories(); track cat) {
+          <option [value]="cat">{{ cat }}</option>
+        }
+      </select>
+    }
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <span class="material-symbols-outlined spin">sync</span>
+      <p>Loading settings...</p>
+    </div>
+  }
+
+  @if (!loading()) {
+    <div class="settings-table">
+      <div class="table-header">
+        <span class="col-key">Key</span>
+        <span class="col-value">Value</span>
+        <span class="col-category">Category</span>
+        <span class="col-actions">Actions</span>
+      </div>
+
+      @for (setting of filteredSettings(); track setting.id) {
+        <div class="setting-row">
+          <div class="col-key">
+            <span class="setting-key">{{ setting.settingKey }}</span>
+            @if (setting.description) {
+              <span class="setting-desc">{{ setting.description }}</span>
+            }
+          </div>
+          <div class="col-value">
+            <span class="setting-value">{{ setting.settingValue || '—' }}</span>
+          </div>
+          <div class="col-category">
+            @if (setting.category) {
+              <span class="category-badge">{{ setting.category }}</span>
+            }
+          </div>
+          <div class="col-actions">
+            <button class="btn-icon" (click)="openEdit(setting)" title="Edit">
+              <span class="material-symbols-outlined">edit</span>
+            </button>
+            <button class="btn-icon danger" (click)="confirmDelete(setting)" title="Delete">
+              <span class="material-symbols-outlined">delete</span>
+            </button>
+          </div>
+        </div>
+      }
+
+      @if (filteredSettings().length === 0) {
+        <div class="empty-state">
+          <span class="material-symbols-outlined">search_off</span>
+          <p>
+            {{
+              search() || categoryFilter()
+                ? 'No matching settings found.'
+                : 'No settings configured yet.'
+            }}
+          </p>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Create/Edit Modal -->
+  @if (showModal()) {
+    <div
+      class="modal-backdrop"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+      tabindex="-1"
+    >
+      <div
+        class="modal-content"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+        tabindex="-1"
+        role="dialog"
+      >
+        <div class="modal-header">
+          <h2>{{ editing() ? 'Edit Setting' : 'Create Setting' }}</h2>
+          <button class="btn-icon" (click)="closeModal()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <form (ngSubmit)="submitSetting()">
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="settingKey">Setting Key *</label>
+              <input
+                id="settingKey"
+                type="text"
+                [(ngModel)]="form.settingKey"
+                name="settingKey"
+                placeholder="e.g. session.timeout.minutes"
+                [disabled]="!!editing()"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="settingValue">Value</label>
+              <textarea
+                id="settingValue"
+                rows="3"
+                [(ngModel)]="form.settingValue"
+                name="settingValue"
+                placeholder="Setting value..."
+              ></textarea>
+            </div>
+            <div class="form-group">
+              <label for="settingCategory">Category</label>
+              <input
+                id="settingCategory"
+                type="text"
+                [(ngModel)]="form.category"
+                name="category"
+                placeholder="e.g. security, notifications"
+              />
+            </div>
+            <div class="form-group">
+              <label for="settingDescription">Description</label>
+              <input
+                id="settingDescription"
+                type="text"
+                [(ngModel)]="form.description"
+                name="description"
+                placeholder="What this setting controls..."
+              />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn-secondary" (click)="closeModal()">Cancel</button>
+            <button type="submit" class="btn-primary" [disabled]="saving()">
+              {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Create' }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Delete Confirmation -->
+  @if (showDeleteConfirm()) {
+    <div
+      class="modal-backdrop"
+      (click)="cancelDelete()"
+      (keydown.escape)="cancelDelete()"
+      tabindex="-1"
+    >
+      <div
+        class="modal-content"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+        tabindex="-1"
+        role="dialog"
+      >
+        <div class="modal-header">
+          <h2>Delete Setting</h2>
+          <button class="btn-icon" (click)="cancelDelete()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="delete-warning">
+            <span class="material-symbols-outlined warning-icon">warning</span>
+            <p>
+              Are you sure you want to delete <strong>{{ deletingSetting()?.settingKey }}</strong
+              >?
+            </p>
+            <p class="delete-detail">This may affect platform behavior.</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+          <button
+            type="button"
+            class="btn-danger"
+            [disabled]="deleting()"
+            (click)="executeDelete()"
+          >
+            {{ deleting() ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
