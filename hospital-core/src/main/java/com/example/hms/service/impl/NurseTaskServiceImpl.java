@@ -6,6 +6,10 @@ import com.example.hms.enums.ImagingOrderStatus;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.MedicationAdministrationStatus;
 import com.example.hms.enums.NurseHandoffStatus;
+import com.example.hms.enums.NursingTaskCategory;
+import com.example.hms.enums.NursingTaskPriority;
+import com.example.hms.enums.NursingTaskSource;
+import com.example.hms.enums.NursingTaskStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.ProcedureOrderStatus;
 import com.example.hms.exception.BusinessException;
@@ -49,8 +53,14 @@ import com.example.hms.payload.dto.nurse.NurseTaskItemDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalCaptureRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseWorkboardPatientDTO;
+import com.example.hms.payload.dto.nurse.FlowsheetEntryCreateRequestDTO;
+import com.example.hms.payload.dto.nurse.FlowsheetEntryResponseDTO;
+import com.example.hms.payload.dto.nurse.BcmaComplianceDTO;
+import com.example.hms.model.FlowsheetEntry;
+import com.example.hms.enums.FlowsheetType;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.AnnouncementRepository;
+import com.example.hms.repository.FlowsheetEntryRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.PatientRepository;
@@ -155,6 +165,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private final LabOrderRepository labOrderRepository;
     private final ImagingOrderRepository imagingOrderRepository;
     private final ProcedureOrderRepository procedureOrderRepository;
+    private final FlowsheetEntryRepository flowsheetEntryRepository;
 
     /* ── Inner record ─────────────────────────────────────────────────── */
 
@@ -1208,10 +1219,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         List<NursingTask> tasks;
         if (statusFilter != null && !statusFilter.isBlank() && !"ALL".equalsIgnoreCase(statusFilter)) {
-            tasks = nursingTaskRepository.findByHospital_IdAndStatusOrderByDueAtAsc(hospitalId, statusFilter.toUpperCase(Locale.ROOT));
+            NursingTaskStatus filterStatus = NursingTaskStatus.valueOf(statusFilter.trim().toUpperCase(Locale.ROOT));
+            tasks = nursingTaskRepository.findByHospital_IdAndStatusOrderByDueAtAsc(hospitalId, filterStatus);
         } else {
             // Default: show PENDING and IN_PROGRESS only (exclude COMPLETED/CANCELLED)
-            tasks = nursingTaskRepository.findByHospital_IdAndStatusNotOrderByDueAtAsc(hospitalId, STATUS_COMPLETED);
+            tasks = nursingTaskRepository.findByHospital_IdAndStatusNotOrderByDueAtAsc(hospitalId, NursingTaskStatus.COMPLETED);
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -1230,13 +1242,19 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         String createdByName = resolveNurseName(nurseUserId);
 
+        NursingTaskCategory cat = NursingTaskCategory.valueOf(request.getCategory().trim().toUpperCase(Locale.ROOT));
+        NursingTaskPriority prio = request.getPriority() != null
+            ? NursingTaskPriority.valueOf(request.getPriority().trim().toUpperCase(Locale.ROOT))
+            : NursingTaskPriority.ROUTINE;
+
         NursingTask task = NursingTask.builder()
             .hospital(hospital)
             .patient(patient)
-            .category(request.getCategory().toUpperCase(Locale.ROOT))
+            .category(cat)
             .description(request.getDescription())
-            .priority(request.getPriority() != null ? request.getPriority().toUpperCase(Locale.ROOT) : "ROUTINE")
-            .status("PENDING")
+            .priority(prio)
+            .status(NursingTaskStatus.PENDING)
+            .source(NursingTaskSource.MANUAL)
             .dueAt(request.getDueAt())
             .createdByName(createdByName)
             .build();
@@ -1252,7 +1270,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .orElseThrow(() -> new ResourceNotFoundException("Nursing task not found: " + taskId));
 
         String nurseName = resolveNurseName(nurseUserId);
-        task.setStatus(STATUS_COMPLETED);
+        task.setStatus(NursingTaskStatus.COMPLETED);
         task.setCompletedAt(LocalDateTime.now());
         task.setCompletedByName(nurseName);
         if (request != null && request.getCompletionNote() != null) {
@@ -1361,7 +1379,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     private NurseTaskItemDTO toTaskItemDTO(NursingTask t, LocalDateTime now) {
         boolean overdue = t.getDueAt() != null
-            && "PENDING".equals(t.getStatus())
+            && t.getStatus() == NursingTaskStatus.PENDING
             && t.getDueAt().isBefore(now);
 
         String mrn = null;
@@ -1374,10 +1392,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .patientId(t.getPatient().getId())
             .patientName(t.getPatient().getFullName())
             .mrn(mrn)
-            .category(t.getCategory())
+            .category(t.getCategory().name())
             .description(t.getDescription())
-            .priority(t.getPriority())
-            .status(t.getStatus())
+            .priority(t.getPriority().name())
+            .status(t.getStatus().name())
             .dueAt(t.getDueAt())
             .overdue(overdue)
             .completedAt(t.getCompletedAt())
@@ -1413,5 +1431,122 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             return d.length() > 120 ? d.substring(0, 117) + "..." : d;
         }
         return "";
+    }
+
+    /* ═══════════════════════════════════════════════════════════════════
+       MVP-3 — Task Engine (SLA/Escalation), Flowsheets, BCMA
+       ═══════════════════════════════════════════════════════════════════ */
+
+    @Override
+    @Transactional
+    public NurseTaskItemDTO reassignTask(UUID taskId, UUID targetStaffId, UUID nurseUserId, UUID hospitalId) {
+        NursingTask task = nursingTaskRepository.findByIdAndHospital_Id(taskId, hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("Nursing task not found: " + taskId));
+        Staff targetStaff = staffRepository.findById(targetStaffId)
+            .orElseThrow(() -> new ResourceNotFoundException("Staff not found: " + targetStaffId));
+
+        task.setAssignedToStaff(targetStaff);
+        NursingTask saved = nursingTaskRepository.save(task);
+        return toTaskItemDTO(saved, LocalDateTime.now());
+    }
+
+    @Override
+    @Transactional
+    public int escalateOverdueTasks(UUID hospitalId) {
+        if (hospitalId == null) return 0;
+        LocalDateTime now = LocalDateTime.now();
+        List<NursingTask> overdue = nursingTaskRepository
+            .findByHospital_IdAndStatusAndSlaDeadlineBefore(hospitalId, NursingTaskStatus.PENDING, now);
+
+        int escalated = 0;
+        for (NursingTask task : overdue) {
+            task.setStatus(NursingTaskStatus.ESCALATED);
+            task.setEscalatedAt(now);
+            task.setEscalationLevel(task.getEscalationLevel() + 1);
+            nursingTaskRepository.save(task);
+            escalated++;
+        }
+        return escalated;
+    }
+
+    @Override
+    public List<FlowsheetEntryResponseDTO> getFlowsheetEntries(UUID patientId, UUID hospitalId, String type) {
+        List<FlowsheetEntry> entries;
+        if (type != null && !type.isBlank()) {
+            FlowsheetType flowType = FlowsheetType.valueOf(type.trim().toUpperCase(Locale.ROOT));
+            entries = flowsheetEntryRepository
+                .findByPatient_IdAndHospital_IdAndTypeOrderByRecordedAtDesc(patientId, hospitalId, flowType);
+        } else {
+            entries = flowsheetEntryRepository
+                .findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId);
+        }
+        return entries.stream().map(this::toFlowsheetDTO).toList();
+    }
+
+    @Override
+    @Transactional
+    public FlowsheetEntryResponseDTO recordFlowsheetEntry(UUID nurseUserId, UUID hospitalId, FlowsheetEntryCreateRequestDTO request) {
+        Hospital hospital = hospitalRepository.findById(hospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
+        Patient patient = patientRepository.findById(request.getPatientId())
+            .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + request.getPatientId()));
+
+        FlowsheetType flowType = FlowsheetType.valueOf(request.getType().trim().toUpperCase(Locale.ROOT));
+        String nurseName = resolveNurseName(nurseUserId);
+
+        FlowsheetEntry entry = FlowsheetEntry.builder()
+            .patient(patient)
+            .hospital(hospital)
+            .type(flowType)
+            .numericValue(request.getNumericValue())
+            .unit(request.getUnit())
+            .textValue(request.getTextValue())
+            .subType(request.getSubType())
+            .recordedAt(request.getRecordedAt() != null ? request.getRecordedAt() : LocalDateTime.now())
+            .recordedByName(nurseName)
+            .notes(request.getNotes())
+            .build();
+
+        FlowsheetEntry saved = flowsheetEntryRepository.save(entry);
+        return toFlowsheetDTO(saved);
+    }
+
+    @Override
+    public BcmaComplianceDTO getBcmaCompliance(UUID hospitalId, int hours) {
+        if (hospitalId == null) {
+            return BcmaComplianceDTO.builder().build();
+        }
+        LocalDateTime since = LocalDateTime.now().minusHours(hours);
+        List<MedicationAdministrationRecord> records = marRepository
+            .findByHospital_IdAndAdministeredAtAfter(hospitalId, since);
+
+        long total = records.size();
+        long scanned = records.stream().filter(MedicationAdministrationRecord::isScanVerified).count();
+        long overridden = records.stream().filter(MedicationAdministrationRecord::isScanOverride).count();
+        double pct = total > 0 ? (scanned * 100.0 / total) : 0.0;
+
+        return BcmaComplianceDTO.builder()
+            .totalAdministrations(total)
+            .scannedAdministrations(scanned)
+            .compliancePercent(Math.round(pct * 100.0) / 100.0)
+            .missedScans(total - scanned - overridden)
+            .overriddenScans(overridden)
+            .build();
+    }
+
+    private FlowsheetEntryResponseDTO toFlowsheetDTO(FlowsheetEntry e) {
+        return FlowsheetEntryResponseDTO.builder()
+            .id(e.getId())
+            .patientId(e.getPatient().getId())
+            .patientName(e.getPatient().getFullName())
+            .type(e.getType().name())
+            .numericValue(e.getNumericValue())
+            .unit(e.getUnit())
+            .textValue(e.getTextValue())
+            .subType(e.getSubType())
+            .recordedAt(e.getRecordedAt())
+            .recordedByName(e.getRecordedByName())
+            .notes(e.getNotes())
+            .build();
     }
 }

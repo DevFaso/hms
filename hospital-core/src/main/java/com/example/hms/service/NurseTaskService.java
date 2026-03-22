@@ -19,6 +19,9 @@ import com.example.hms.payload.dto.nurse.NurseTaskItemDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalCaptureRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseWorkboardPatientDTO;
+import com.example.hms.payload.dto.nurse.FlowsheetEntryCreateRequestDTO;
+import com.example.hms.payload.dto.nurse.FlowsheetEntryResponseDTO;
+import com.example.hms.payload.dto.nurse.BcmaComplianceDTO;
 
 import java.time.Duration;
 import java.util.List;
@@ -80,4 +83,16 @@ public interface NurseTaskService {
     void markNurseInboxRead(UUID itemId, String nurseUsername);
 
     NurseCareNoteResponseDTO createCareNote(UUID patientId, UUID nurseUserId, UUID hospitalId, NurseCareNoteRequestDTO request);
+
+    // ── MVP3: Task Engine + SLA + Flowsheets + BCMA ────────────────────
+
+    NurseTaskItemDTO reassignTask(UUID taskId, UUID targetStaffId, UUID nurseUserId, UUID hospitalId);
+
+    int escalateOverdueTasks(UUID hospitalId);
+
+    List<FlowsheetEntryResponseDTO> getFlowsheetEntries(UUID patientId, UUID hospitalId, String type);
+
+    FlowsheetEntryResponseDTO recordFlowsheetEntry(UUID nurseUserId, UUID hospitalId, FlowsheetEntryCreateRequestDTO request);
+
+    BcmaComplianceDTO getBcmaCompliance(UUID hospitalId, int hours);
 }

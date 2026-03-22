@@ -150,6 +150,22 @@
             <span class="badge-count">{{ patients().length }}</span>
           }
         </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeSection() === 'flowsheets'"
+          (click)="setSection('flowsheets')"
+          title="Flowsheet entries"
+        >
+          Flowsheets
+        </button>
+        <button
+          class="tab-btn"
+          [class.active]="activeSection() === 'bcma'"
+          (click)="setSection('bcma')"
+          title="BCMA compliance"
+        >
+          BCMA
+        </button>
       </div>
 
       @if (loading()) {
@@ -909,6 +925,153 @@
           </div>
         }
       }
+
+      <!-- ── Flowsheets Panel ──────────────────────────────── -->
+      @if (!loading() && activeSection() === 'flowsheets') {
+        <div class="section-header-row">
+          <h2>Flowsheet Entries</h2>
+          <button class="btn-primary btn-small" (click)="openFlowsheetRecord()">
+            <span class="material-symbols-outlined">add</span> Record Entry
+          </button>
+        </div>
+
+        <div class="filter-row" style="margin-bottom:1rem;display:flex;gap:0.5rem;align-items:center">
+          <label>Patient:</label>
+          <select
+            class="form-select"
+            [ngModel]="flowsheetPatientId()"
+            (ngModelChange)="loadFlowsheets($event)"
+          >
+            <option value="">— Select Patient —</option>
+            @for (p of patients(); track p.id) {
+              <option [value]="p.patientId || p.id">
+                {{ p.displayName || p.firstName + ' ' + p.lastName }}
+              </option>
+            }
+          </select>
+          <label>Type:</label>
+          <select
+            class="form-select"
+            [ngModel]="flowsheetTypeFilter()"
+            (ngModelChange)="onFlowsheetTypeChange($event)"
+          >
+            <option value="">All Types</option>
+            @for (ft of flowsheetTypes; track ft.value) {
+              <option [value]="ft.value">{{ ft.label }}</option>
+            }
+          </select>
+        </div>
+
+        @if (!flowsheetPatientId()) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">table_chart</span>
+            <h3>Select a patient</h3>
+            <p>Choose a patient above to view their flowsheet entries.</p>
+          </div>
+        }
+
+        @if (flowsheetPatientId() && flowsheetEntries().length === 0) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">table_chart</span>
+            <h3>No flowsheet entries</h3>
+            <p>No entries recorded for this patient yet.</p>
+          </div>
+        }
+
+        @if (flowsheetEntries().length > 0) {
+          <div class="table-container">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Value</th>
+                  <th>Sub-Type</th>
+                  <th>Recorded At</th>
+                  <th>Recorded By</th>
+                  <th>Notes</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (entry of flowsheetEntries(); track entry.id) {
+                  <tr>
+                    <td>
+                      <span class="badge">{{ flowsheetTypeLabel(entry.type) }}</span>
+                    </td>
+                    <td>
+                      @if (entry.numericValue !== null) {
+                        {{ entry.numericValue }}{{ entry.unit ? ' ' + entry.unit : '' }}
+                      } @else {
+                        {{ entry.textValue || '—' }}
+                      }
+                    </td>
+                    <td>{{ entry.subType || '—' }}</td>
+                    <td>{{ entry.recordedAt | date: 'short' }}</td>
+                    <td>{{ entry.recordedByName }}</td>
+                    <td>{{ entry.notes || '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      }
+
+      <!-- ── BCMA Compliance Panel ─────────────────────────── -->
+      @if (!loading() && activeSection() === 'bcma') {
+        <div class="section-header-row">
+          <h2>BCMA Compliance</h2>
+          <button class="btn-primary btn-small" (click)="refreshBcma()" [disabled]="bcmaLoading()">
+            <span class="material-symbols-outlined">refresh</span> Refresh
+          </button>
+        </div>
+
+        @if (!bcmaCompliance()) {
+          <div class="empty-state">
+            <span class="material-symbols-outlined empty-icon">qr_code_scanner</span>
+            <h3>No BCMA data</h3>
+            <p>Barcode scanning compliance data will appear once medications are administered.</p>
+          </div>
+        }
+
+        @if (bcmaCompliance(); as bcma) {
+          <div class="summary-cards" style="margin-top:1rem">
+            <div class="summary-card">
+              <span class="material-symbols-outlined card-icon vitals">vaccines</span>
+              <div class="card-info">
+                <span class="card-value">{{ bcma.totalAdministrations }}</span>
+                <span class="card-label">Total Administrations</span>
+              </div>
+            </div>
+            <div class="summary-card">
+              <span class="material-symbols-outlined card-icon meds">qr_code_scanner</span>
+              <div class="card-info">
+                <span class="card-value">{{ bcma.scannedCount }}</span>
+                <span class="card-label">Scanned</span>
+              </div>
+            </div>
+            <div class="summary-card">
+              <span class="material-symbols-outlined card-icon"
+                [style.color]="bcma.complianceRate >= 90 ? '#16a34a' : bcma.complianceRate >= 70 ? '#d97706' : '#dc2626'">
+                verified
+              </span>
+              <div class="card-info">
+                <span class="card-value"
+                  [style.color]="bcma.complianceRate >= 90 ? '#16a34a' : bcma.complianceRate >= 70 ? '#d97706' : '#dc2626'">
+                  {{ bcma.complianceRate | number: '1.1-1' }}%
+                </span>
+                <span class="card-label">Compliance Rate</span>
+              </div>
+            </div>
+            <div class="summary-card">
+              <span class="material-symbols-outlined card-icon" style="color:#d97706">warning</span>
+              <div class="card-info">
+                <span class="card-value">{{ bcma.overrideCount }}</span>
+                <span class="card-label">Overrides ({{ bcma.overrideRate | number: '1.1-1' }}%)</span>
+              </div>
+            </div>
+          </div>
+        }
+      }
     </div>
 
     <!-- ── Announcements Sidebar ──────────────────────────── -->
@@ -1619,6 +1782,134 @@
             Creating...
           } @else {
             Create Handoff
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══════════ RECORD FLOWSHEET ENTRY DIALOG ═══════════ -->
+@if (flowsheetRecordOpen()) {
+  <div
+    class="modal-overlay"
+    role="dialog"
+    aria-modal="true"
+    (click)="closeFlowsheetRecord()"
+    (keydown.escape)="closeFlowsheetRecord()"
+  >
+    <div
+      class="modal-content"
+      role="document"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+    >
+      <h2 class="modal-title">Record Flowsheet Entry</h2>
+
+      <div class="form-group">
+        <label for="fs-patient">Patient</label>
+        <select
+          id="fs-patient"
+          class="form-input"
+          [ngModel]="flowsheetForm().patientId || ''"
+          (ngModelChange)="updateFlowsheetField('patientId', $event)"
+        >
+          <option value="">— Select Patient —</option>
+          @for (p of patients(); track p.id) {
+            <option [value]="p.patientId || p.id">
+              {{ p.displayName || p.firstName + ' ' + p.lastName }}
+            </option>
+          }
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="fs-type">Type</label>
+        <select
+          id="fs-type"
+          class="form-input"
+          [ngModel]="flowsheetForm().type || ''"
+          (ngModelChange)="updateFlowsheetField('type', $event)"
+        >
+          <option value="">— Select Type —</option>
+          @for (ft of flowsheetTypes; track ft.value) {
+            <option [value]="ft.value">{{ ft.label }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="fs-numeric">Numeric Value</label>
+        <input
+          id="fs-numeric"
+          type="number"
+          class="form-input"
+          placeholder="e.g., 120"
+          [ngModel]="flowsheetForm().numericValue ?? ''"
+          (ngModelChange)="updateFlowsheetField('numericValue', $event)"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="fs-unit">Unit</label>
+        <input
+          id="fs-unit"
+          type="text"
+          class="form-input"
+          placeholder="e.g., mL, mg/dL"
+          [ngModel]="flowsheetForm().unit || ''"
+          (ngModelChange)="updateFlowsheetField('unit', $event)"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="fs-text">Text Value</label>
+        <textarea
+          id="fs-text"
+          class="form-input"
+          rows="2"
+          placeholder="Assessment text (optional)"
+          [ngModel]="flowsheetForm().textValue || ''"
+          (ngModelChange)="updateFlowsheetField('textValue', $event)"
+        ></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="fs-subtype">Sub-Type</label>
+        <input
+          id="fs-subtype"
+          type="text"
+          class="form-input"
+          placeholder="e.g., oral, IV"
+          [ngModel]="flowsheetForm().subType || ''"
+          (ngModelChange)="updateFlowsheetField('subType', $event)"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="fs-notes">Notes</label>
+        <textarea
+          id="fs-notes"
+          class="form-input"
+          rows="2"
+          placeholder="Additional notes"
+          [ngModel]="flowsheetForm().notes || ''"
+          (ngModelChange)="updateFlowsheetField('notes', $event)"
+        ></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button class="modal-btn modal-cancel" (click)="closeFlowsheetRecord()">Cancel</button>
+        <button
+          class="modal-btn modal-confirm"
+          (click)="submitFlowsheet()"
+          [disabled]="flowsheetRecording()"
+        >
+          @if (flowsheetRecording()) {
+            Recording...
+          } @else {
+            Record Entry
           }
         </button>
       </div>

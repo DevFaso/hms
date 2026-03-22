@@ -34,6 +34,9 @@ import {
   NursePatient,
   NursingNoteResponse,
   NurseHandoffCreateRequest,
+  FlowsheetEntry,
+  FlowsheetEntryCreateRequest,
+  BcmaCompliance,
 } from '../services/nurse-task.service';
 import { ToastService } from '../core/toast.service';
 
@@ -48,7 +51,9 @@ type SectionType =
   | 'admissions'
   | 'tasks'
   | 'inbox'
-  | 'patients';
+  | 'patients'
+  | 'flowsheets'
+  | 'bcma';
 
 @Component({
   selector: 'app-nurse-station',
@@ -97,6 +102,16 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   patients = signal<NursePatient[]>([]);
   nursingNotes = signal<NursingNoteResponse[]>([]);
   selectedPatientForNotes = signal<{ patientId: string; patientName: string } | null>(null);
+
+  /* MVP 15 signals (Flowsheets + BCMA) */
+  flowsheetEntries = signal<FlowsheetEntry[]>([]);
+  flowsheetPatientId = signal<string | null>(null);
+  flowsheetTypeFilter = signal<string>('');
+  flowsheetRecordOpen = signal(false);
+  flowsheetForm = signal<Partial<FlowsheetEntryCreateRequest>>({});
+  flowsheetRecording = signal(false);
+  bcmaCompliance = signal<BcmaCompliance | null>(null);
+  bcmaLoading = signal(false);
 
   /* Task create dialog */
   taskCreateOpen = signal(false);
@@ -213,6 +228,9 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       patients: this.nurseService
         .getPatients(params)
         .pipe(catchError(() => of([] as NursePatient[]))),
+      bcmaCompliance: this.nurseService
+        .getBcmaCompliance()
+        .pipe(catchError(() => of(null as BcmaCompliance | null))),
     }).pipe(
       tap(
         (results: {
@@ -228,6 +246,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           nursingTasks: NurseTaskItem[];
           inboxItems: NurseInboxItem[];
           patients: NursePatient[];
+          bcmaCompliance: BcmaCompliance | null;
         }) => {
           this.vitals.set(results.vitals ?? []);
           this.medications.set(results.medications ?? []);
@@ -242,6 +261,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.inboxItems.set(results.inboxItems ?? []);
           this.inboxUnreadCount.set((results.inboxItems ?? []).filter((i) => !i.read).length);
           this.patients.set(results.patients ?? []);
+          this.bcmaCompliance.set(results.bcmaCompliance);
           this.lastRefreshed.set(new Date());
         },
       ),
@@ -562,6 +582,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       MOBILITY_ASSIST: 'Mobility Assist',
       INTAKE_OUTPUT: 'I&O Recording',
       WOUND_CARE: 'Wound Care',
+      VITALS_CHECK: 'Vitals Check',
+      MED_ADMIN: 'Med Admin',
+      ORDER_FOLLOWUP: 'Order Follow-up',
+      NEURO_CHECK: 'Neuro Check',
+      BLOOD_GLUCOSE: 'Blood Glucose',
       OTHER: 'Other',
     };
     return map[category] ?? category;
@@ -639,5 +664,98 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   closeNursingNotes(): void {
     this.selectedPatientForNotes.set(null);
     this.nursingNotes.set([]);
+  }
+
+  /* ── MVP 15: Flowsheets ────────────────────────────────── */
+
+  flowsheetTypes = [
+    { value: 'INTAKE', label: 'Intake' },
+    { value: 'OUTPUT', label: 'Output' },
+    { value: 'PAIN_ASSESSMENT', label: 'Pain Assessment' },
+    { value: 'NEURO_CHECK', label: 'Neuro Check' },
+    { value: 'WOUND_ASSESSMENT', label: 'Wound Assessment' },
+    { value: 'BLOOD_GLUCOSE', label: 'Blood Glucose' },
+    { value: 'FALL_RISK', label: 'Fall Risk' },
+    { value: 'SKIN_ASSESSMENT', label: 'Skin Assessment' },
+    { value: 'RESTRAINT_CHECK', label: 'Restraint Check' },
+  ];
+
+  loadFlowsheets(patientId: string): void {
+    this.flowsheetPatientId.set(patientId);
+    const typeFilter = this.flowsheetTypeFilter();
+    this.nurseService
+      .getFlowsheetEntries(patientId, typeFilter ? { type: typeFilter } : undefined)
+      .subscribe({
+        next: (entries) => this.flowsheetEntries.set(entries),
+        error: () => {
+          this.toast.error('Failed to load flowsheet entries');
+          this.flowsheetEntries.set([]);
+        },
+      });
+  }
+
+  onFlowsheetTypeChange(type: string): void {
+    this.flowsheetTypeFilter.set(type);
+    const pid = this.flowsheetPatientId();
+    if (pid) this.loadFlowsheets(pid);
+  }
+
+  openFlowsheetRecord(): void {
+    this.flowsheetForm.set({});
+    this.flowsheetRecordOpen.set(true);
+  }
+
+  closeFlowsheetRecord(): void {
+    this.flowsheetRecordOpen.set(false);
+    this.flowsheetForm.set({});
+  }
+
+  updateFlowsheetField(field: keyof FlowsheetEntryCreateRequest, value: string): void {
+    if (field === 'numericValue') {
+      this.flowsheetForm.update((f) => ({ ...f, [field]: value === '' ? undefined : Number(value) }));
+    } else {
+      this.flowsheetForm.update((f) => ({ ...f, [field]: value || undefined }));
+    }
+  }
+
+  submitFlowsheet(): void {
+    const form = this.flowsheetForm();
+    if (!form.patientId || !form.type) {
+      this.toast.error('Patient and type are required.');
+      return;
+    }
+    this.flowsheetRecording.set(true);
+    this.nurseService.recordFlowsheetEntry(form as FlowsheetEntryCreateRequest).subscribe({
+      next: () => {
+        this.toast.success('Flowsheet entry recorded');
+        this.flowsheetRecording.set(false);
+        this.closeFlowsheetRecord();
+        if (this.flowsheetPatientId()) this.loadFlowsheets(this.flowsheetPatientId()!);
+      },
+      error: () => {
+        this.toast.error('Failed to record flowsheet entry');
+        this.flowsheetRecording.set(false);
+      },
+    });
+  }
+
+  flowsheetTypeLabel(type: string): string {
+    return this.flowsheetTypes.find((t) => t.value === type)?.label ?? type;
+  }
+
+  /* ── MVP 15: BCMA Compliance ───────────────────────────── */
+
+  refreshBcma(): void {
+    this.bcmaLoading.set(true);
+    this.nurseService.getBcmaCompliance().subscribe({
+      next: (data) => {
+        this.bcmaCompliance.set(data);
+        this.bcmaLoading.set(false);
+      },
+      error: () => {
+        this.toast.error('Failed to load BCMA compliance');
+        this.bcmaLoading.set(false);
+      },
+    });
   }
 }

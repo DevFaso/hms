@@ -71,6 +71,10 @@ import com.example.hms.repository.NurseHandoffChecklistItemRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.ProcedureOrderRepository;
+import com.example.hms.repository.FlowsheetEntryRepository;
+import com.example.hms.enums.NursingTaskCategory;
+import com.example.hms.enums.NursingTaskPriority;
+import com.example.hms.enums.NursingTaskStatus;
 import com.example.hms.service.NurseDashboardService;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -110,6 +114,7 @@ class NurseTaskServiceImplTest {
     @Mock private LabOrderRepository labOrderRepository;
     @Mock private ImagingOrderRepository imagingOrderRepository;
     @Mock private ProcedureOrderRepository procedureOrderRepository;
+    @Mock private FlowsheetEntryRepository flowsheetEntryRepository;
 
     private NurseTaskServiceImpl service;
 
@@ -121,7 +126,8 @@ class NurseTaskServiceImplTest {
             admissionRepository, patientRepository, nursingTaskRepository,
             nursingNoteRepository, notificationRepository, userRepository,
             nurseHandoffRepository, nurseHandoffChecklistItemRepository,
-            labOrderRepository, imagingOrderRepository, procedureOrderRepository));
+            labOrderRepository, imagingOrderRepository, procedureOrderRepository,
+            flowsheetEntryRepository));
 
         // Default stubs so synthetic/fallback paths activate in existing tests
         lenient().when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(any(), any()))
@@ -1779,20 +1785,20 @@ class NurseTaskServiceImplTest {
         NursingTask task = NursingTask.builder()
             .patient(taskPat1)
             .hospital(taskHosp1)
-            .category("ASSESSMENT").description("Check vitals").priority("ROUTINE")
-            .status("PENDING").dueAt(LocalDateTime.now().plusHours(1))
+            .category(NursingTaskCategory.VITALS_CHECK).description("Check vitals").priority(NursingTaskPriority.ROUTINE)
+            .status(NursingTaskStatus.PENDING).dueAt(LocalDateTime.now().plusHours(1))
             .createdByName("Nurse Jane")
             .build();
         task.setId(UUID.randomUUID());
 
-        when(nursingTaskRepository.findByHospital_IdAndStatusOrderByDueAtAsc(hospitalId, "PENDING"))
+        when(nursingTaskRepository.findByHospital_IdAndStatusOrderByDueAtAsc(hospitalId, NursingTaskStatus.PENDING))
             .thenReturn(List.of(task));
 
         List<NurseTaskItemDTO> result = service.getNursingTaskBoard(hospitalId, "PENDING");
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getStatus()).isEqualTo("PENDING");
-        assertThat(result.get(0).getCategory()).isEqualTo("ASSESSMENT");
+        assertThat(result.get(0).getCategory()).isEqualTo("VITALS_CHECK");
     }
 
     @Test
@@ -1806,13 +1812,13 @@ class NurseTaskServiceImplTest {
         NursingTask task = NursingTask.builder()
             .patient(taskPat2)
             .hospital(taskHosp2)
-            .category("WOUND_CARE").description("Dressing change").priority("URGENT")
-            .status("IN_PROGRESS").dueAt(LocalDateTime.now().minusMinutes(10))
+            .category(NursingTaskCategory.WOUND_CARE).description("Dressing change").priority(NursingTaskPriority.URGENT)
+            .status(NursingTaskStatus.IN_PROGRESS).dueAt(LocalDateTime.now().minusMinutes(10))
             .createdByName("Nurse Bob")
             .build();
         task.setId(UUID.randomUUID());
 
-        when(nursingTaskRepository.findByHospital_IdAndStatusNotOrderByDueAtAsc(hospitalId, "COMPLETED"))
+        when(nursingTaskRepository.findByHospital_IdAndStatusNotOrderByDueAtAsc(hospitalId, NursingTaskStatus.COMPLETED))
             .thenReturn(List.of(task));
 
         List<NurseTaskItemDTO> result = service.getNursingTaskBoard(hospitalId, null);
@@ -1844,7 +1850,7 @@ class NurseTaskServiceImplTest {
 
         NurseTaskCreateRequestDTO req = new NurseTaskCreateRequestDTO();
         req.setPatientId(patientId);
-        req.setCategory("assessment");
+        req.setCategory("vitals_check");
         req.setDescription("Neuro check q2h");
         req.setPriority("routine");
         req.setDueAt(LocalDateTime.now().plusHours(2));
@@ -1857,7 +1863,7 @@ class NurseTaskServiceImplTest {
 
         NurseTaskItemDTO result = service.createNursingTask(nurseId, hospitalId, req);
 
-        assertThat(result.getCategory()).isEqualTo("ASSESSMENT");
+        assertThat(result.getCategory()).isEqualTo("VITALS_CHECK");
         assertThat(result.getStatus()).isEqualTo("PENDING");
         assertThat(result.getPatientName()).isEqualTo("Task Pat");
         assertThat(result.getCreatedByName()).isEqualTo("Jane Nurse");
@@ -1870,7 +1876,7 @@ class NurseTaskServiceImplTest {
 
         NurseTaskCreateRequestDTO req = new NurseTaskCreateRequestDTO();
         req.setPatientId(UUID.randomUUID());
-        req.setCategory("ASSESSMENT");
+        req.setCategory("VITALS_CHECK");
         req.setDescription("Test");
 
         UUID nurseUserId = UUID.randomUUID();
@@ -1895,8 +1901,8 @@ class NurseTaskServiceImplTest {
         NursingTask task = NursingTask.builder()
             .patient(pat)
             .hospital(taskHosp)
-            .category("WOUND_CARE").description("Dressing change")
-            .priority("ROUTINE").status("PENDING")
+            .category(NursingTaskCategory.WOUND_CARE).description("Dressing change")
+            .priority(NursingTaskPriority.ROUTINE).status(NursingTaskStatus.PENDING)
             .createdByName("Creator")
             .build();
         task.setId(taskId);

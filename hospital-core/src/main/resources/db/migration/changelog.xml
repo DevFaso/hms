@@ -403,4 +403,17 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V33: MVP3 — Task engine (SLA/escalation), flowsheets, BCMA
+         - Extends clinical.nursing_tasks with SLA/assignment/focus columns
+         - Creates clinical.flowsheet_entries table
+         - Adds BCMA scan fields to clinical.medication_administration_records
+         ================================================================= -->
+    <changeSet id="V33-mvp3-task-engine-flowsheets-bcma" author="hms-team" runOnChange="false">
+        <sqlFile path="V33__mvp3_task_engine_flowsheets_bcma.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

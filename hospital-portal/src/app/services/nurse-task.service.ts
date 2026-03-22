@@ -233,6 +233,40 @@ export interface NursingNoteResponse {
   createdAt: string;
 }
 
+// ── MVP 15 interfaces (Flowsheets + BCMA) ─────────────────────────
+
+export interface FlowsheetEntry {
+  id: string;
+  patientId: string;
+  patientName: string;
+  type: string;
+  numericValue: number | null;
+  unit: string | null;
+  textValue: string | null;
+  subType: string | null;
+  recordedAt: string;
+  recordedByName: string;
+  notes: string | null;
+}
+
+export interface FlowsheetEntryCreateRequest {
+  patientId: string;
+  type: string;
+  numericValue?: number;
+  unit?: string;
+  textValue?: string;
+  subType?: string;
+  notes?: string;
+}
+
+export interface BcmaCompliance {
+  totalAdministrations: number;
+  scannedCount: number;
+  overrideCount: number;
+  complianceRate: number;
+  overrideRate: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class NurseTaskService {
   private readonly http = inject(HttpClient);
@@ -445,5 +479,55 @@ export class NurseTaskService {
     if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
     if (params.limit != null) httpParams = httpParams.set('limit', params.limit);
     return this.http.get<NursingNoteResponse[]>(`${this.baseUrl}/notes`, { params: httpParams });
+  }
+
+  // ── MVP 15 methods (Flowsheets + BCMA) ────────────────────────────
+
+  getFlowsheetEntries(
+    patientId: string,
+    params?: { hospitalId?: string; type?: string },
+  ): Observable<FlowsheetEntry[]> {
+    let httpParams = new HttpParams();
+    if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    if (params?.type) httpParams = httpParams.set('type', params.type);
+    return this.http.get<FlowsheetEntry[]>(
+      `${this.baseUrl}/patients/${patientId}/flowsheets`,
+      { params: httpParams },
+    );
+  }
+
+  recordFlowsheetEntry(
+    data: FlowsheetEntryCreateRequest,
+    hospitalId?: string,
+  ): Observable<FlowsheetEntry> {
+    let httpParams = new HttpParams();
+    if (hospitalId) httpParams = httpParams.set('hospitalId', hospitalId);
+    return this.http.post<FlowsheetEntry>(
+      `${this.baseUrl}/flowsheets`,
+      data,
+      { params: httpParams },
+    );
+  }
+
+  reassignTask(taskId: string, targetStaffId: string, hospitalId?: string): Observable<NurseTaskItem> {
+    let httpParams = new HttpParams().set('targetStaffId', targetStaffId);
+    if (hospitalId) httpParams = httpParams.set('hospitalId', hospitalId);
+    return this.http.put<NurseTaskItem>(
+      `${this.baseUrl}/tasks/${taskId}/reassign`,
+      null,
+      { params: httpParams },
+    );
+  }
+
+  getBcmaCompliance(params?: {
+    hospitalId?: string;
+    hours?: number;
+  }): Observable<BcmaCompliance> {
+    let httpParams = new HttpParams();
+    if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    if (params?.hours != null) httpParams = httpParams.set('hours', params.hours);
+    return this.http.get<BcmaCompliance>(`${this.baseUrl}/bcma/compliance`, {
+      params: httpParams,
+    });
   }
 }
