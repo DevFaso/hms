@@ -577,11 +577,9 @@
             <div class="import-results">
               <h3>Import Results</h3>
               <div class="import-summary">
-                <span class="import-stat success"
-                  >{{ importResult()!.successCount }} succeeded</span
-                >
-                <span class="import-stat failure">{{ importResult()!.failureCount }} failed</span>
-                <span class="import-stat total">{{ importResult()!.totalProcessed }} total</span>
+                <span class="import-stat success">{{ importResult()!.imported }} succeeded</span>
+                <span class="import-stat failure">{{ importResult()!.failed }} failed</span>
+                <span class="import-stat total">{{ importResult()!.processed }} total</span>
               </div>
               @if (importResult()!.results?.length) {
                 <div class="import-detail-table">
@@ -595,17 +593,17 @@
                       </tr>
                     </thead>
                     <tbody>
-                      @for (r of importResult()!.results; track r.row) {
-                        <tr [class.row-failure]="r.status === 'FAILURE'">
-                          <td>{{ r.row }}</td>
-                          <td>{{ r.username || '—' }}</td>
+                      @for (r of importResult()!.results; track r.rowNumber) {
+                        <tr [class.row-failure]="!r.success">
+                          <td>{{ r.rowNumber }}</td>
+                          <td>{{ r.identifier || '—' }}</td>
                           <td>
                             <span
                               class="status-badge"
-                              [class.status-success]="r.status === 'SUCCESS'"
-                              [class.status-failure]="r.status !== 'SUCCESS'"
+                              [class.status-success]="r.success"
+                              [class.status-failure]="!r.success"
                             >
-                              {{ r.status }}
+                              {{ r.success ? 'SUCCESS' : 'FAILURE' }}
                             </span>
                           </td>
                           <td>{{ r.message || '—' }}</td>

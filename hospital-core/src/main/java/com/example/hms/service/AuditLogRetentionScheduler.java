@@ -1,6 +1,5 @@
 package com.example.hms.service;
 
-import com.example.hms.model.AuditEventLog;
 import com.example.hms.repository.AuditEventLogRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * Scheduled job that enforces audit log retention policy.
@@ -31,16 +29,13 @@ public class AuditLogRetentionScheduler {
     @Transactional
     public void purgeExpiredAuditLogs() {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(retentionDays);
-        List<AuditEventLog> expired = auditRepository.findByEventTimestampBefore(cutoff);
+        int deleted = auditRepository.deleteByEventTimestampBefore(cutoff);
 
-        if (expired.isEmpty()) {
+        if (deleted == 0) {
             log.debug("[AUDIT RETENTION] No audit logs older than {} days found.", retentionDays);
-            return;
+        } else {
+            log.info("[AUDIT RETENTION] Purged {} audit log entries older than {} (retention={} days).",
+                    deleted, cutoff, retentionDays);
         }
-
-        int count = expired.size();
-        auditRepository.deleteAll(expired);
-        log.info("[AUDIT RETENTION] Purged {} audit log entries older than {} (retention={} days).",
-                count, cutoff, retentionDays);
     }
 }

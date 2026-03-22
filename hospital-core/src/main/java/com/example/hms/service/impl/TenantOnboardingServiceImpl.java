@@ -3,9 +3,9 @@ package com.example.hms.service.impl;
 import com.example.hms.model.Organization;
 import com.example.hms.payload.dto.superadmin.TenantOnboardingStatusDTO;
 import com.example.hms.payload.dto.superadmin.TenantOnboardingStatusDTO.OnboardingStep;
-import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.OrganizationSecurityPolicyRepository;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.service.TenantOnboardingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,13 +21,12 @@ import java.util.UUID;
 public class TenantOnboardingServiceImpl implements TenantOnboardingService {
 
     private final OrganizationRepository organizationRepository;
-    private final HospitalRepository hospitalRepository;
     private final OrganizationSecurityPolicyRepository securityPolicyRepository;
 
     @Override
     public TenantOnboardingStatusDTO getOnboardingStatus(UUID organizationId) {
         Organization org = organizationRepository.findByIdWithHospitals(organizationId)
-            .orElseThrow(() -> new IllegalArgumentException("Organization not found: " + organizationId));
+            .orElseThrow(() -> new ResourceNotFoundException("Organization", "id", organizationId));
 
         List<OnboardingStep> steps = new ArrayList<>();
 
@@ -41,14 +40,14 @@ public class TenantOnboardingServiceImpl implements TenantOnboardingService {
             .detail(hasProfile ? "Name, contact, and timezone configured" : "Missing required profile fields")
             .build());
 
-        // Step 2: At least one hospital assigned
-        List<?> hospitals = hospitalRepository.findByOrganizationIdOrderByNameAsc(organizationId);
-        boolean hasHospital = !hospitals.isEmpty();
+        // Step 2: At least one hospital assigned (reuse eagerly-fetched association)
+        boolean hasHospital = org.getHospitals() != null && !org.getHospitals().isEmpty();
+        int hospitalCount = hasHospital ? org.getHospitals().size() : 0;
         steps.add(OnboardingStep.builder()
             .key("hospital")
             .label("Hospital assigned")
             .completed(hasHospital)
-            .detail(hasHospital ? hospitals.size() + " hospital(s) linked" : "No hospitals assigned yet")
+            .detail(hasHospital ? hospitalCount + " hospital(s) linked" : "No hospitals assigned yet")
             .build());
 
         // Step 3: Security policies configured

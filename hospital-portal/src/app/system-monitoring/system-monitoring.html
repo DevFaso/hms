@@ -21,7 +21,11 @@
 
   <!-- Filter Bar -->
   <div class="filter-bar">
-    <select [(ngModel)]="severityFilter" (ngModelChange)="onFilterChange()" class="filter-select">
+    <select
+      [ngModel]="severityFilter()"
+      (ngModelChange)="severityFilter.set($event); onFilterChange()"
+      class="filter-select"
+    >
       <option value="">All Severities</option>
       <option value="CRITICAL">Critical</option>
       <option value="HIGH">High</option>
