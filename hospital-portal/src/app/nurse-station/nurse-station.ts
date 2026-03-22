@@ -712,7 +712,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   updateFlowsheetField(field: keyof FlowsheetEntryCreateRequest, value: string): void {
     if (field === 'numericValue') {
-      this.flowsheetForm.update((f) => ({ ...f, [field]: value === '' ? undefined : Number(value) }));
+      this.flowsheetForm.update((f) => ({
+        ...f,
+        [field]: value === '' ? undefined : Number(value),
+      }));
     } else {
       this.flowsheetForm.update((f) => ({ ...f, [field]: value || undefined }));
     }

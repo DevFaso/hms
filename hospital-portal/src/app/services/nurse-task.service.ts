@@ -490,10 +490,9 @@ export class NurseTaskService {
     let httpParams = new HttpParams();
     if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
     if (params?.type) httpParams = httpParams.set('type', params.type);
-    return this.http.get<FlowsheetEntry[]>(
-      `${this.baseUrl}/patients/${patientId}/flowsheets`,
-      { params: httpParams },
-    );
+    return this.http.get<FlowsheetEntry[]>(`${this.baseUrl}/patients/${patientId}/flowsheets`, {
+      params: httpParams,
+    });
   }
 
   recordFlowsheetEntry(
@@ -502,27 +501,24 @@ export class NurseTaskService {
   ): Observable<FlowsheetEntry> {
     let httpParams = new HttpParams();
     if (hospitalId) httpParams = httpParams.set('hospitalId', hospitalId);
-    return this.http.post<FlowsheetEntry>(
-      `${this.baseUrl}/flowsheets`,
-      data,
-      { params: httpParams },
-    );
+    return this.http.post<FlowsheetEntry>(`${this.baseUrl}/flowsheets`, data, {
+      params: httpParams,
+    });
   }
 
-  reassignTask(taskId: string, targetStaffId: string, hospitalId?: string): Observable<NurseTaskItem> {
+  reassignTask(
+    taskId: string,
+    targetStaffId: string,
+    hospitalId?: string,
+  ): Observable<NurseTaskItem> {
     let httpParams = new HttpParams().set('targetStaffId', targetStaffId);
     if (hospitalId) httpParams = httpParams.set('hospitalId', hospitalId);
-    return this.http.put<NurseTaskItem>(
-      `${this.baseUrl}/tasks/${taskId}/reassign`,
-      null,
-      { params: httpParams },
-    );
+    return this.http.put<NurseTaskItem>(`${this.baseUrl}/tasks/${taskId}/reassign`, null, {
+      params: httpParams,
+    });
   }
 
-  getBcmaCompliance(params?: {
-    hospitalId?: string;
-    hours?: number;
-  }): Observable<BcmaCompliance> {
+  getBcmaCompliance(params?: { hospitalId?: string; hours?: number }): Observable<BcmaCompliance> {
     let httpParams = new HttpParams();
     if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
     if (params?.hours != null) httpParams = httpParams.set('hours', params.hours);

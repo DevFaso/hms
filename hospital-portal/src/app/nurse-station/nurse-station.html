@@ -935,9 +935,13 @@
           </button>
         </div>
 
-        <div class="filter-row" style="margin-bottom:1rem;display:flex;gap:0.5rem;align-items:center">
-          <label>Patient:</label>
+        <div
+          class="filter-row"
+          style="margin-bottom: 1rem; display: flex; gap: 0.5rem; align-items: center"
+        >
+          <label for="fs-filter-patient">Patient:</label>
           <select
+            id="fs-filter-patient"
             class="form-select"
             [ngModel]="flowsheetPatientId()"
             (ngModelChange)="loadFlowsheets($event)"
@@ -949,8 +953,9 @@
               </option>
             }
           </select>
-          <label>Type:</label>
+          <label for="fs-filter-type">Type:</label>
           <select
+            id="fs-filter-type"
             class="form-select"
             [ngModel]="flowsheetTypeFilter()"
             (ngModelChange)="onFlowsheetTypeChange($event)"
@@ -1034,7 +1039,7 @@
         }
 
         @if (bcmaCompliance(); as bcma) {
-          <div class="summary-cards" style="margin-top:1rem">
+          <div class="summary-cards" style="margin-top: 1rem">
             <div class="summary-card">
               <span class="material-symbols-outlined card-icon vitals">vaccines</span>
               <div class="card-info">
@@ -1050,23 +1055,43 @@
               </div>
             </div>
             <div class="summary-card">
-              <span class="material-symbols-outlined card-icon"
-                [style.color]="bcma.complianceRate >= 90 ? '#16a34a' : bcma.complianceRate >= 70 ? '#d97706' : '#dc2626'">
+              <span
+                class="material-symbols-outlined card-icon"
+                [style.color]="
+                  bcma.complianceRate >= 90
+                    ? '#16a34a'
+                    : bcma.complianceRate >= 70
+                      ? '#d97706'
+                      : '#dc2626'
+                "
+              >
                 verified
               </span>
               <div class="card-info">
-                <span class="card-value"
-                  [style.color]="bcma.complianceRate >= 90 ? '#16a34a' : bcma.complianceRate >= 70 ? '#d97706' : '#dc2626'">
+                <span
+                  class="card-value"
+                  [style.color]="
+                    bcma.complianceRate >= 90
+                      ? '#16a34a'
+                      : bcma.complianceRate >= 70
+                        ? '#d97706'
+                        : '#dc2626'
+                  "
+                >
                   {{ bcma.complianceRate | number: '1.1-1' }}%
                 </span>
                 <span class="card-label">Compliance Rate</span>
               </div>
             </div>
             <div class="summary-card">
-              <span class="material-symbols-outlined card-icon" style="color:#d97706">warning</span>
+              <span class="material-symbols-outlined card-icon" style="color: #d97706"
+                >warning</span
+              >
               <div class="card-info">
                 <span class="card-value">{{ bcma.overrideCount }}</span>
-                <span class="card-label">Overrides ({{ bcma.overrideRate | number: '1.1-1' }}%)</span>
+                <span class="card-label"
+                  >Overrides ({{ bcma.overrideRate | number: '1.1-1' }}%)</span
+                >
               </div>
             </div>
           </div>
