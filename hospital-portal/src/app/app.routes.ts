@@ -485,8 +485,6 @@ export const routes: Routes = [
         loadComponent: () => import('./profile/profile').then((m) => m.ProfileComponent),
       },
 
-      // Settings â†’ redirect to profile (edit tab)
-      { path: 'settings', redirectTo: 'profile', pathMatch: 'full' },
 
       // Notifications
       {
