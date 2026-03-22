@@ -485,7 +485,6 @@ export const routes: Routes = [
         loadComponent: () => import('./profile/profile').then((m) => m.ProfileComponent),
       },
 
-
       // Notifications
       {
         path: 'notifications',
