@@ -22,11 +22,19 @@ import ConsentFormPage from '@/pages/ConsentFormPage'
 import VitalsPage from '@/pages/VitalsPage'
 import HealthRecordsPage from '@/pages/HealthRecordsPage'
 import SharingPrivacyPage from '@/pages/SharingPrivacyPage'
+import MorePage from '@/pages/MorePage'
+import CheckInPage from '@/pages/CheckInPage'
+import CareProgramsPage from '@/pages/CareProgramsPage'
+import ResourcesPage from '@/pages/ResourcesPage'
+import FamilyAccessPage from '@/pages/FamilyAccessPage'
+import QuestionnairesPage from '@/pages/QuestionnairesPage'
+import MobileAppGuard from '@/components/MobileAppGuard'
 import './App.css'
 
 function App() {
   return (
-    <Routes>
+    <MobileAppGuard>
+      <Routes>
       {/* Public */}
       <Route path="/login" element={<LoginPage />} />
 
@@ -58,6 +66,14 @@ function App() {
           {/* Billing */}
           <Route path="/billing" element={<BillingPage />} />
           <Route path="/billing/pay" element={<PaymentOptionsPage />} />
+          <Route path="/more" element={<MorePage />} />
+
+          {/* Mobile-first portal modules */}
+          <Route path="/check-in" element={<CheckInPage />} />
+          <Route path="/care-programs" element={<CareProgramsPage />} />
+          <Route path="/resources" element={<ResourcesPage />} />
+          <Route path="/family-access" element={<FamilyAccessPage />} />
+          <Route path="/questionnaires" element={<QuestionnairesPage />} />
 
           {/* Documents & Forms */}
           <Route path="/documents" element={<DocumentsPage />} />
@@ -72,7 +88,8 @@ function App() {
 
       {/* Catch-all redirect */}
       <Route path="*" element={<Navigate to="/login" replace />} />
-    </Routes>
+      </Routes>
+    </MobileAppGuard>
   )
 }
 

@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Fingerprint, HelpCircle, UserPlus, AlertCircle, ChevronRight
+  Fingerprint, HelpCircle, UserPlus, AlertCircle, ChevronRight, BellRing, ShieldCheck, Smartphone
 } from 'lucide-react'
 
 export default function LoginPage() {
@@ -90,13 +90,21 @@ export default function LoginPage() {
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-4">
         {/* Header */}
         <div className="flex items-center justify-between w-full max-w-md mb-8">
-          <div className="flex items-center space-x-2">
-            <span className="text-white font-bold text-lg">PatientChart</span>
-            <span className="text-red-500 font-bold text-lg italic">Epic</span>
+          <div className="flex items-center space-x-3">
+            <div className="rounded-2xl bg-white/15 p-2">
+              <Smartphone className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <span className="block text-xs uppercase tracking-[0.25em] text-blue-100">Patient mobile</span>
+              <div className="flex items-center space-x-2">
+                <span className="text-white font-bold text-lg">PatientChart</span>
+                <span className="text-red-300 font-bold text-lg italic">Epic</span>
+              </div>
+            </div>
           </div>
-          <Button variant="ghost" className="text-blue-300 hover:text-white">
-            Edit organizations
-          </Button>
+          <div className="hidden rounded-full border border-white/20 px-3 py-1 text-xs text-blue-100 sm:block">
+            Native-ready with Capacitor
+          </div>
         </div>
 
         {/* Main login card */}
@@ -109,6 +117,12 @@ export default function LoginPage() {
                 HEALTH<span className="text-blue-500">+</span><br />
                 HOSPITALS
               </h2>
+            </div>
+
+            <div className="mb-6 grid grid-cols-3 gap-2 text-[11px]">
+              <div className="rounded-2xl bg-blue-50 p-3 text-center text-blue-800"><Fingerprint className="mx-auto mb-1 h-4 w-4" />Biometric</div>
+              <div className="rounded-2xl bg-emerald-50 p-3 text-center text-emerald-800"><BellRing className="mx-auto mb-1 h-4 w-4" />Push alerts</div>
+              <div className="rounded-2xl bg-orange-50 p-3 text-center text-orange-800"><ShieldCheck className="mx-auto mb-1 h-4 w-4" />Secure access</div>
             </div>
 
             {!showUsernameLogin ? (

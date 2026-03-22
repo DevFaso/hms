@@ -75,6 +75,10 @@ export default function CareTeamPage() {
     () => portalService.getCareTeam(),
     null,
   )
+  const { data: messageableContacts } = useApiData(
+    () => portalService.getMessageableCareTeam(),
+    [],
+  )
 
   let allMembers = []
   if (Array.isArray(raw?.members)) {
@@ -84,7 +88,10 @@ export default function CareTeamPage() {
   }
   const pcp = allMembers.find((m) => m.isPrimary) || null
   const members = allMembers.filter((m) => !m.isPrimary)
-  const handleMessage = (id) => navigate(`/messages/${id}`)
+  const handleMessage = (id) => {
+    const match = (Array.isArray(messageableContacts) ? messageableContacts : []).find((item) => item.staffId === id || item.id === id)
+    navigate(`/messages/${match?.staffId || match?.id || id}`)
+  }
 
   return (
     <div className="space-y-5">

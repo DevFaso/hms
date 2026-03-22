@@ -329,11 +329,13 @@ function InfoRow({ label, value }) {
   )
 }
 
-function EmptyState({ icon: Icon, message }) {
+function EmptyState({ icon, message }) {
+  const Glyph = icon
+
   return (
     <div className="text-center py-12">
-      <Icon className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-      <p className="text-gray-500 text-sm">{message}</p>
+      <Glyph className="mx-auto mb-3 h-12 w-12 text-gray-300" />
+      <p className="text-sm text-gray-500">{message}</p>
     </div>
   )
 }
