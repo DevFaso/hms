@@ -1,8 +1,9 @@
 package com.example.hms.service;
 
 import com.example.hms.repository.AuditEventLogRepository;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -20,30 +21,11 @@ class AuditLogRetentionSchedulerTest {
 
     @InjectMocks private AuditLogRetentionScheduler scheduler;
 
-    @Test
-    void purgeExpiredAuditLogs_deletesExpiredRecords() {
-        ReflectionTestUtils.setField(scheduler, "retentionDays", 2190);
-        when(auditRepository.deleteByEventTimestampBefore(any(LocalDateTime.class))).thenReturn(42);
-
-        scheduler.purgeExpiredAuditLogs();
-
-        verify(auditRepository).deleteByEventTimestampBefore(any(LocalDateTime.class));
-    }
-
-    @Test
-    void purgeExpiredAuditLogs_noExpiredRecords() {
-        ReflectionTestUtils.setField(scheduler, "retentionDays", 2190);
-        when(auditRepository.deleteByEventTimestampBefore(any(LocalDateTime.class))).thenReturn(0);
-
-        scheduler.purgeExpiredAuditLogs();
-
-        verify(auditRepository).deleteByEventTimestampBefore(any(LocalDateTime.class));
-    }
-
-    @Test
-    void purgeExpiredAuditLogs_customRetentionDays() {
-        ReflectionTestUtils.setField(scheduler, "retentionDays", 365);
-        when(auditRepository.deleteByEventTimestampBefore(any(LocalDateTime.class))).thenReturn(10);
+    @ParameterizedTest(name = "retentionDays={0}, deletedCount={1}")
+    @CsvSource({"2190, 42", "2190, 0", "365, 10"})
+    void purgeExpiredAuditLogs_deletesBasedOnRetention(int retentionDays, int deletedCount) {
+        ReflectionTestUtils.setField(scheduler, "retentionDays", retentionDays);
+        when(auditRepository.deleteByEventTimestampBefore(any(LocalDateTime.class))).thenReturn(deletedCount);
 
         scheduler.purgeExpiredAuditLogs();
 

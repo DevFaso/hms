@@ -178,14 +178,15 @@ class SystemAlertServiceImplTest {
 
         Map<String, Long> summary = service.getAlertSummary();
 
-        assertThat(summary).containsEntry("total", 50L);
-        assertThat(summary).containsEntry("unacknowledged", 10L);
-        assertThat(summary).containsEntry("critical", 5L);
-        assertThat(summary).containsEntry("high", 15L);
-        assertThat(summary).containsEntry("medium", 20L);
-        assertThat(summary).containsEntry("low", 10L);
-        assertThat(summary).containsEntry("last24h", 8L);
-        assertThat(summary).hasSize(7);
+        assertThat(summary)
+                .hasSize(7)
+                .containsEntry("total", 50L)
+                .containsEntry("unacknowledged", 10L)
+                .containsEntry("critical", 5L)
+                .containsEntry("high", 15L)
+                .containsEntry("medium", 20L)
+                .containsEntry("low", 10L)
+                .containsEntry("last24h", 8L);
     }
 
     // ── DTO mapping ───────────────────────────────────────────────

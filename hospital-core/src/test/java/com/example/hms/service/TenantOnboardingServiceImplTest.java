@@ -28,7 +28,7 @@ class TenantOnboardingServiceImplTest {
 
     @InjectMocks private TenantOnboardingServiceImpl service;
 
-    private final UUID ORG_ID = UUID.randomUUID();
+    private final UUID orgId = UUID.randomUUID();
 
     private Organization buildOrg(boolean hasProfile, boolean hasHospitals, boolean active) {
         Organization org = Organization.builder()
@@ -38,7 +38,7 @@ class TenantOnboardingServiceImplTest {
                 .defaultTimezone(hasProfile ? "UTC" : null)
                 .active(active)
                 .build();
-        org.setId(ORG_ID);
+        org.setId(orgId);
 
         if (hasHospitals) {
             Set<Hospital> hospitals = new HashSet<>();
@@ -56,15 +56,15 @@ class TenantOnboardingServiceImplTest {
     @Test
     void getOnboardingStatus_allStepsCompleted() {
         Organization org = buildOrg(true, true, true);
-        when(organizationRepository.findByIdWithHospitals(ORG_ID)).thenReturn(Optional.of(org));
+        when(organizationRepository.findByIdWithHospitals(orgId)).thenReturn(Optional.of(org));
 
         OrganizationSecurityPolicy policy = new OrganizationSecurityPolicy();
-        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(ORG_ID))
+        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(orgId))
                 .thenReturn(List.of(policy));
 
-        TenantOnboardingStatusDTO result = service.getOnboardingStatus(ORG_ID);
+        TenantOnboardingStatusDTO result = service.getOnboardingStatus(orgId);
 
-        assertThat(result.getOrganizationId()).isEqualTo(ORG_ID);
+        assertThat(result.getOrganizationId()).isEqualTo(orgId);
         assertThat(result.getOrganizationName()).isEqualTo("Test Org");
         assertThat(result.getOrganizationCode()).isEqualTo("ORG-001");
         assertThat(result.getTotalSteps()).isEqualTo(4);
@@ -76,11 +76,11 @@ class TenantOnboardingServiceImplTest {
     @Test
     void getOnboardingStatus_noStepsCompleted() {
         Organization org = buildOrg(false, false, false);
-        when(organizationRepository.findByIdWithHospitals(ORG_ID)).thenReturn(Optional.of(org));
-        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(ORG_ID))
+        when(organizationRepository.findByIdWithHospitals(orgId)).thenReturn(Optional.of(org));
+        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(orgId))
                 .thenReturn(Collections.emptyList());
 
-        TenantOnboardingStatusDTO result = service.getOnboardingStatus(ORG_ID);
+        TenantOnboardingStatusDTO result = service.getOnboardingStatus(orgId);
 
         assertThat(result.getCompletedSteps()).isZero();
         assertThat(result.getTotalSteps()).isEqualTo(4);
@@ -90,11 +90,11 @@ class TenantOnboardingServiceImplTest {
     @Test
     void getOnboardingStatus_profileOnly() {
         Organization org = buildOrg(true, false, false);
-        when(organizationRepository.findByIdWithHospitals(ORG_ID)).thenReturn(Optional.of(org));
-        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(ORG_ID))
+        when(organizationRepository.findByIdWithHospitals(orgId)).thenReturn(Optional.of(org));
+        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(orgId))
                 .thenReturn(Collections.emptyList());
 
-        TenantOnboardingStatusDTO result = service.getOnboardingStatus(ORG_ID);
+        TenantOnboardingStatusDTO result = service.getOnboardingStatus(orgId);
 
         assertThat(result.getCompletedSteps()).isEqualTo(1);
         // Profile step is completed
@@ -109,11 +109,11 @@ class TenantOnboardingServiceImplTest {
     @Test
     void getOnboardingStatus_hospitalStep_detail() {
         Organization org = buildOrg(false, true, false);
-        when(organizationRepository.findByIdWithHospitals(ORG_ID)).thenReturn(Optional.of(org));
-        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(ORG_ID))
+        when(organizationRepository.findByIdWithHospitals(orgId)).thenReturn(Optional.of(org));
+        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(orgId))
                 .thenReturn(Collections.emptyList());
 
-        TenantOnboardingStatusDTO result = service.getOnboardingStatus(ORG_ID);
+        TenantOnboardingStatusDTO result = service.getOnboardingStatus(orgId);
 
         assertThat(result.getSteps().get(1).isCompleted()).isTrue();
         assertThat(result.getSteps().get(1).getDetail()).contains("1 hospital(s) linked");
@@ -122,14 +122,14 @@ class TenantOnboardingServiceImplTest {
     @Test
     void getOnboardingStatus_securityPoliciesCompleted() {
         Organization org = buildOrg(false, false, false);
-        when(organizationRepository.findByIdWithHospitals(ORG_ID)).thenReturn(Optional.of(org));
+        when(organizationRepository.findByIdWithHospitals(orgId)).thenReturn(Optional.of(org));
 
         OrganizationSecurityPolicy p1 = new OrganizationSecurityPolicy();
         OrganizationSecurityPolicy p2 = new OrganizationSecurityPolicy();
-        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(ORG_ID))
+        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(orgId))
                 .thenReturn(List.of(p1, p2));
 
-        TenantOnboardingStatusDTO result = service.getOnboardingStatus(ORG_ID);
+        TenantOnboardingStatusDTO result = service.getOnboardingStatus(orgId);
 
         assertThat(result.getSteps().get(2).isCompleted()).isTrue();
         assertThat(result.getSteps().get(2).getKey()).isEqualTo("security");
@@ -139,11 +139,11 @@ class TenantOnboardingServiceImplTest {
     @Test
     void getOnboardingStatus_activatedStep() {
         Organization org = buildOrg(false, false, true);
-        when(organizationRepository.findByIdWithHospitals(ORG_ID)).thenReturn(Optional.of(org));
-        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(ORG_ID))
+        when(organizationRepository.findByIdWithHospitals(orgId)).thenReturn(Optional.of(org));
+        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(orgId))
                 .thenReturn(Collections.emptyList());
 
-        TenantOnboardingStatusDTO result = service.getOnboardingStatus(ORG_ID);
+        TenantOnboardingStatusDTO result = service.getOnboardingStatus(orgId);
 
         assertThat(result.getSteps().get(3).isCompleted()).isTrue();
         assertThat(result.getSteps().get(3).getKey()).isEqualTo("activated");
@@ -153,11 +153,11 @@ class TenantOnboardingServiceImplTest {
     @Test
     void getOnboardingStatus_inactiveStep_detail() {
         Organization org = buildOrg(false, false, false);
-        when(organizationRepository.findByIdWithHospitals(ORG_ID)).thenReturn(Optional.of(org));
-        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(ORG_ID))
+        when(organizationRepository.findByIdWithHospitals(orgId)).thenReturn(Optional.of(org));
+        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(orgId))
                 .thenReturn(Collections.emptyList());
 
-        TenantOnboardingStatusDTO result = service.getOnboardingStatus(ORG_ID);
+        TenantOnboardingStatusDTO result = service.getOnboardingStatus(orgId);
 
         assertThat(result.getSteps().get(3).isCompleted()).isFalse();
         assertThat(result.getSteps().get(3).getDetail()).isEqualTo("Organization is inactive");
@@ -165,9 +165,9 @@ class TenantOnboardingServiceImplTest {
 
     @Test
     void getOnboardingStatus_orgNotFound_throwsResourceNotFoundException() {
-        when(organizationRepository.findByIdWithHospitals(ORG_ID)).thenReturn(Optional.empty());
+        when(organizationRepository.findByIdWithHospitals(orgId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.getOnboardingStatus(ORG_ID))
+        assertThatThrownBy(() -> service.getOnboardingStatus(orgId))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -175,11 +175,11 @@ class TenantOnboardingServiceImplTest {
     void getOnboardingStatus_nullHospitals_treatedAsEmpty() {
         Organization org = buildOrg(true, false, true);
         org.setHospitals(null);
-        when(organizationRepository.findByIdWithHospitals(ORG_ID)).thenReturn(Optional.of(org));
-        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(ORG_ID))
+        when(organizationRepository.findByIdWithHospitals(orgId)).thenReturn(Optional.of(org));
+        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(orgId))
                 .thenReturn(Collections.emptyList());
 
-        TenantOnboardingStatusDTO result = service.getOnboardingStatus(ORG_ID);
+        TenantOnboardingStatusDTO result = service.getOnboardingStatus(orgId);
 
         assertThat(result.getSteps().get(1).isCompleted()).isFalse();
         assertThat(result.getSteps().get(1).getDetail()).isEqualTo("No hospitals assigned yet");
@@ -191,11 +191,11 @@ class TenantOnboardingServiceImplTest {
         org.setName("Org Name");
         org.setPrimaryContactEmail("email@test.com");
         // defaultTimezone is null -> profile not complete
-        when(organizationRepository.findByIdWithHospitals(ORG_ID)).thenReturn(Optional.of(org));
-        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(ORG_ID))
+        when(organizationRepository.findByIdWithHospitals(orgId)).thenReturn(Optional.of(org));
+        when(securityPolicyRepository.findByOrganizationIdAndActiveTrue(orgId))
                 .thenReturn(Collections.emptyList());
 
-        TenantOnboardingStatusDTO result = service.getOnboardingStatus(ORG_ID);
+        TenantOnboardingStatusDTO result = service.getOnboardingStatus(orgId);
 
         assertThat(result.getSteps().get(0).isCompleted()).isFalse();
         assertThat(result.getSteps().get(0).getDetail()).contains("Missing");
