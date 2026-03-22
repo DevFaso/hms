@@ -63,6 +63,7 @@ public class AuditEventLogController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN','ROLE_HOSPITAL_ADMIN')")
     @Operation(summary = "Get All Audit Logs", description = "Retrieve all audit logs with pagination and optional date range filtering.")
     @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getAllAuditLogs(

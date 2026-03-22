@@ -5,6 +5,7 @@ import com.example.hms.model.AuditEventLog;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
@@ -89,6 +90,11 @@ public interface AuditEventLogRepository extends JpaRepository<AuditEventLog, UU
 
     /** All audit logs before a given timestamp (for retention cleanup). */
     List<AuditEventLog> findByEventTimestampBefore(LocalDateTime cutoff);
+
+    /** Bulk-delete audit logs older than the given timestamp (efficient retention purge). */
+    @Modifying
+    @Query("DELETE FROM AuditEventLog a WHERE a.eventTimestamp < :cutoff")
+    int deleteByEventTimestampBefore(@Param("cutoff") LocalDateTime cutoff);
 
     /** Date range filtered list (non-paginated, for exports). */
     @Query("SELECT DISTINCT a FROM AuditEventLog a " +

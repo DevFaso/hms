@@ -518,11 +518,11 @@ export class UserListComponent implements OnInit, OnDestroy {
         next: (result) => {
           this.importResult.set(result);
           this.importing.set(false);
-          if (result.failureCount === 0) {
-            this.toast.success(`Successfully imported ${result.successCount} users`);
+          if (result.failed === 0) {
+            this.toast.success(`Successfully imported ${result.imported} users`);
           } else {
             this.toast.warning(
-              `Imported ${result.successCount} of ${result.totalProcessed} users. ${result.failureCount} failed.`,
+              `Imported ${result.imported} of ${result.processed} users. ${result.failed} failed.`,
             );
           }
           this.loadUsers();

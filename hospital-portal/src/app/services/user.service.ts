@@ -62,10 +62,10 @@ export interface BulkImportRequest {
 }
 
 export interface BulkImportResult {
-  totalProcessed: number;
-  successCount: number;
-  failureCount: number;
-  results: { row: number; username: string; status: string; message: string }[];
+  processed: number;
+  imported: number;
+  failed: number;
+  results: { rowNumber: number; identifier: string; success: boolean; message: string }[];
 }
 
 @Injectable({ providedIn: 'root' })

@@ -3,6 +3,7 @@ package com.example.hms.service.impl;
 import com.example.hms.model.platform.SystemAlert;
 import com.example.hms.payload.dto.monitoring.SystemAlertDTO;
 import com.example.hms.repository.platform.SystemAlertRepository;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.service.SystemAlertService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,7 +53,7 @@ public class SystemAlertServiceImpl implements SystemAlertService {
     @Transactional
     public SystemAlertDTO acknowledgeAlert(UUID alertId, String acknowledgedBy) {
         SystemAlert alert = repository.findById(alertId)
-            .orElseThrow(() -> new IllegalArgumentException("Alert not found: " + alertId));
+            .orElseThrow(() -> new ResourceNotFoundException("SystemAlert", "id", alertId));
         alert.setAcknowledged(true);
         alert.setAcknowledgedBy(acknowledgedBy);
         alert.setAcknowledgedAt(LocalDateTime.now());
@@ -65,7 +66,7 @@ public class SystemAlertServiceImpl implements SystemAlertService {
     @Transactional
     public SystemAlertDTO resolveAlert(UUID alertId) {
         SystemAlert alert = repository.findById(alertId)
-            .orElseThrow(() -> new IllegalArgumentException("Alert not found: " + alertId));
+            .orElseThrow(() -> new ResourceNotFoundException("SystemAlert", "id", alertId));
         alert.setResolved(true);
         alert.setResolvedAt(LocalDateTime.now());
         repository.save(alert);

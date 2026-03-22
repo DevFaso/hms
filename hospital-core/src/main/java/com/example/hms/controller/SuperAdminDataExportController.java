@@ -86,10 +86,17 @@ public class SuperAdminDataExportController {
 
     private String escapeCsv(String value) {
         if (value == null) return "";
-        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
+        String safe = value;
+        if (!safe.isEmpty()) {
+            char first = safe.charAt(0);
+            if (first == '=' || first == '+' || first == '-' || first == '@') {
+                safe = "'" + safe;
+            }
         }
-        return value;
+        if (safe.contains(",") || safe.contains("\"") || safe.contains("\n")) {
+            return "\"" + safe.replace("\"", "\"\"") + "\"";
+        }
+        return safe;
     }
 
     private String str(Object obj) {

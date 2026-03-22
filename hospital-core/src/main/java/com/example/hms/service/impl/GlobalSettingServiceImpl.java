@@ -3,6 +3,7 @@ package com.example.hms.service.impl;
 import com.example.hms.model.platform.GlobalSetting;
 import com.example.hms.payload.dto.globalsetting.GlobalSettingResponseDTO;
 import com.example.hms.repository.platform.GlobalSettingRepository;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.service.GlobalSettingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,7 +40,7 @@ public class GlobalSettingServiceImpl implements GlobalSettingService {
     @Override
     public GlobalSettingResponseDTO getByKey(String settingKey) {
         GlobalSetting entity = repository.findBySettingKeyIgnoreCase(settingKey.trim())
-            .orElseThrow(() -> new IllegalArgumentException("Setting not found: " + settingKey));
+            .orElseThrow(() -> new ResourceNotFoundException("GlobalSetting", "key", settingKey));
         return toDto(entity);
     }
 
