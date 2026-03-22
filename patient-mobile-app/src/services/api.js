@@ -137,7 +137,7 @@ export const api = {
   post: (path, body) => request(path, { method: 'POST', body }).then(parseResponse),
   put: (path, body) => request(path, { method: 'PUT', body }).then(parseResponse),
   patch: (path, body) => request(path, { method: 'PATCH', body }).then(parseResponse),
-  delete: (path, body, options = {}) => request(path, { method: 'DELETE', body, ...options }).then(parseResponse),
+  delete: (path, body) => request(path, { method: 'DELETE', body }).then(parseResponse),
   /** Raw fetch — caller handles response (e.g. PDF blob) */
   raw: (path, options) => request(path, options),
 }

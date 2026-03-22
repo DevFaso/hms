@@ -1,14 +1,16 @@
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Menu, User, Bell, Smartphone } from 'lucide-react'
+import { ArrowLeft, Menu, User, Bell } from 'lucide-react'
 
 export default function Header({ onMenuToggle }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const { user } = useAuth()
   const isDashboard = location.pathname === '/' || location.pathname === '/dashboard'
 
   return (
-    <div className="sticky top-0 z-50 border-b border-blue-800/40 bg-blue-700 px-4 pb-4 pt-3 text-white shadow-lg shadow-blue-950/10 safe-area-top">
+    <div className="bg-blue-700 text-white p-4 sticky top-0 z-50 safe-area-top">
       <div className="flex items-center justify-between max-w-lg mx-auto">
         <div className="flex items-center space-x-3">
           {!isDashboard ? (
@@ -31,13 +33,7 @@ export default function Header({ onMenuToggle }) {
             </Button>
           )}
           <div className="flex items-center space-x-2">
-            <div>
-              <span className="block text-[11px] uppercase tracking-[0.25em] text-blue-100">Patient app</span>
-              <span className="text-sm font-semibold">BF Health+Hospitals</span>
-            </div>
-            <div className="rounded-full bg-white/15 p-1.5">
-              <Smartphone className="h-3.5 w-3.5" />
-            </div>
+            <span className="text-sm font-medium">BF HEALTH+HOSPITALS</span>
           </div>
         </div>
         <div className="flex items-center space-x-2">
