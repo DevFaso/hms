@@ -40,6 +40,13 @@ export interface NurseHandoff {
   note: string;
 }
 
+export interface NurseHandoffCreateRequest {
+  patientId: string;
+  direction: string;
+  note?: string;
+  checklistItems?: string[];
+}
+
 export interface NurseAnnouncement {
   id: string;
   text: string;
@@ -301,6 +308,14 @@ export class NurseTaskService {
     return this.http.patch(`${this.baseUrl}/handoffs/${handoffId}/tasks/${taskId}`, { completed });
   }
 
+  createHandoff(request: NurseHandoffCreateRequest, hospitalId?: string): Observable<NurseHandoff> {
+    let httpParams = new HttpParams();
+    if (hospitalId) httpParams = httpParams.set('hospitalId', hospitalId);
+    return this.http.post<NurseHandoff>(`${this.baseUrl}/handoffs`, request, {
+      params: httpParams,
+    });
+  }
+
   getAnnouncements(params?: { hospitalId?: string }): Observable<NurseAnnouncement[]> {
     let httpParams = new HttpParams();
     if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
@@ -414,10 +429,7 @@ export class NurseTaskService {
 
   // ── MVP 14 methods ────────────────────────────────────────────────
 
-  getPatients(params?: {
-    hospitalId?: string;
-    assignee?: string;
-  }): Observable<NursePatient[]> {
+  getPatients(params?: { hospitalId?: string; assignee?: string }): Observable<NursePatient[]> {
     let httpParams = new HttpParams();
     if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
     if (params?.assignee) httpParams = httpParams.set('assignee', params.assignee);

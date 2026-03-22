@@ -356,6 +356,11 @@
 
       <!-- ═══════════ HANDOFFS TAB ═══════════ -->
       @if (!loading() && activeSection() === 'handoffs') {
+        <div class="section-toolbar">
+          <button class="action-btn action-complete" (click)="openHandoffCreate()">
+            <span class="material-symbols-outlined">add_circle</span> Create Handoff
+          </button>
+        </div>
         @if (handoffs().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">swap_horiz</span>
@@ -848,17 +853,19 @@
               <tbody>
                 @for (p of patients(); track p.id) {
                   <tr>
-                    <td class="patient-name-cell">{{ p.displayName || (p.firstName + ' ' + p.lastName) }}</td>
+                    <td class="patient-name-cell">
+                      {{ p.displayName || p.firstName + ' ' + p.lastName }}
+                    </td>
                     <td>{{ p.mrn || '—' }}</td>
                     <td>{{ (p.room ? p.room : '') + (p.bed ? ' / ' + p.bed : '') || '—' }}</td>
                     <td>{{ p.hr ?? '—' }}</td>
                     <td>{{ p.bp ?? '—' }}</td>
-                    <td>{{ p.spo2 != null ? p.spo2 + '%' : '—' }}</td>
+                    <td>{{ p.spo2 !== null ? p.spo2 + '%' : '—' }}</td>
                     <td>
-                      @for (flag of (p.flags || []); track flag) {
+                      @for (flag of p.flags || []; track flag) {
                         <span class="patient-flag">{{ flag }}</span>
                       }
-                      @for (risk of (p.risks || []); track risk) {
+                      @for (risk of p.risks || []; track risk) {
                         <span class="patient-risk">{{ risk }}</span>
                       }
                     </td>
@@ -866,7 +873,12 @@
                       <button
                         class="btn-small btn-outline"
                         title="Record vitals"
-                        (click)="recordVitals(p.patientId || p.id, p.displayName || (p.firstName + ' ' + p.lastName))"
+                        (click)="
+                          recordVitals(
+                            p.patientId || p.id,
+                            p.displayName || p.firstName + ' ' + p.lastName
+                          )
+                        "
                       >
                         <span class="material-symbols-outlined">monitor_heart</span>
                       </button>
@@ -880,7 +892,12 @@
                       <button
                         class="btn-small btn-outline"
                         title="Write care note"
-                        (click)="openCareNote(p.patientId || p.id, p.displayName || (p.firstName + ' ' + p.lastName))"
+                        (click)="
+                          openCareNote(
+                            p.patientId || p.id,
+                            p.displayName || p.firstName + ' ' + p.lastName
+                          )
+                        "
                       >
                         <span class="material-symbols-outlined">edit_note</span>
                       </button>
@@ -1480,9 +1497,129 @@
         <button class="modal-btn modal-cancel" (click)="closeNursingNotes()">Close</button>
         <button
           class="modal-btn modal-confirm"
-          (click)="closeNursingNotes(); openCareNote(selectedPatientForNotes()!.patientId, selectedPatientForNotes()!.patientName)"
+          (click)="
+            closeNursingNotes();
+            openCareNote(
+              selectedPatientForNotes()!.patientId,
+              selectedPatientForNotes()!.patientName
+            )
+          "
         >
           <span class="material-symbols-outlined">edit_note</span> New Note
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══════════ CREATE HANDOFF DIALOG ═══════════ -->
+@if (handoffCreateOpen()) {
+  <div
+    class="modal-overlay"
+    role="dialog"
+    aria-modal="true"
+    (click)="closeHandoffCreate()"
+    (keydown.escape)="closeHandoffCreate()"
+  >
+    <div
+      class="modal-content"
+      role="document"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+    >
+      <h2 class="modal-title">Create Handoff</h2>
+
+      <div class="form-group">
+        <label for="handoff-patient">Patient</label>
+        <select
+          id="handoff-patient"
+          class="form-input"
+          (change)="updateHandoffField('patientId', $any($event.target).value)"
+        >
+          <option value="">-- Select Patient --</option>
+          @for (p of patients(); track p.id) {
+            <option [value]="p.patientId ?? p.id">{{ p.displayName }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="handoff-direction">Direction</label>
+        <select
+          id="handoff-direction"
+          class="form-input"
+          (change)="updateHandoffField('direction', $any($event.target).value)"
+        >
+          <option value="">-- Select Direction --</option>
+          <option value="DAY_TO_NIGHT">Day → Night</option>
+          <option value="NIGHT_TO_DAY">Night → Day</option>
+          <option value="SHIFT_CHANGE">Shift Change</option>
+          <option value="TRANSFER">Transfer</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="handoff-note">Note</label>
+        <textarea
+          id="handoff-note"
+          class="form-input"
+          rows="3"
+          placeholder="Handoff notes..."
+          (input)="updateHandoffField('note', $any($event.target).value)"
+        ></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="handoff-checklist-input">Checklist Items</label>
+        <div class="checklist-input-row">
+          <input
+            id="handoff-checklist-input"
+            type="text"
+            class="form-input"
+            placeholder="Add checklist item..."
+            [value]="handoffChecklistInput()"
+            (input)="handoffChecklistInput.set($any($event.target).value)"
+            (keydown.enter)="addHandoffChecklistItem(); $event.preventDefault()"
+          />
+          <button
+            class="action-btn action-complete"
+            type="button"
+            (click)="addHandoffChecklistItem()"
+          >
+            <span class="material-symbols-outlined">add</span>
+          </button>
+        </div>
+        @if (handoffChecklist().length > 0) {
+          <ul class="checklist-preview">
+            @for (item of handoffChecklist(); track $index) {
+              <li>
+                {{ item }}
+                <button
+                  class="remove-btn"
+                  (click)="removeHandoffChecklistItem($index)"
+                  title="Remove"
+                >
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+
+      <div class="modal-actions">
+        <button class="modal-btn modal-cancel" (click)="closeHandoffCreate()">Cancel</button>
+        <button
+          class="modal-btn modal-confirm"
+          (click)="submitHandoff()"
+          [disabled]="handoffCreating()"
+        >
+          @if (handoffCreating()) {
+            Creating...
+          } @else {
+            Create Handoff
+          }
         </button>
       </div>
     </div>

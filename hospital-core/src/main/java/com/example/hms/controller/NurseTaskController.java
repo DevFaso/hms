@@ -12,6 +12,7 @@ import com.example.hms.payload.dto.nurse.NurseDashboardSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseFlowBoardDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateResponseDTO;
+import com.example.hms.payload.dto.nurse.NurseHandoffCreateRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseInboxItemDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO;
@@ -157,6 +158,21 @@ public class NurseTaskController {
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         int effectiveLimit = safeLimit(limit, 6, 20);
         return ResponseEntity.ok(nurseTaskService.getHandoffSummaries(nurseId, scopedHospital, effectiveLimit));
+    }
+
+    @PostMapping("/handoffs")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Create a new nurse-to-nurse handoff report for a patient")
+    public ResponseEntity<NurseHandoffSummaryDTO> createHandoff(
+        @Valid @RequestBody NurseHandoffCreateRequestDTO request,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID nurseId = resolveAssignee(auth, null);
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        NurseHandoffSummaryDTO created = nurseTaskService.createHandoff(nurseId, scopedHospital, request);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(created);
     }
 
     @PutMapping("/handoffs/{handoffId}/complete")

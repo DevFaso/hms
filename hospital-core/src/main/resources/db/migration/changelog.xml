@@ -391,4 +391,16 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V32: MVP2 — Nurse Handoff persistence tables
+         - clinical.nurse_handoffs
+         - clinical.nurse_handoff_checklist_items
+         ================================================================= -->
+    <changeSet id="V32-mvp2-nurse-handoffs" author="hms-team" runOnChange="false">
+        <sqlFile path="V32__mvp2_nurse_handoffs.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

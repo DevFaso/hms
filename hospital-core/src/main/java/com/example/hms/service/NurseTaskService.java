@@ -7,6 +7,7 @@ import com.example.hms.payload.dto.nurse.NurseCareNoteResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseDashboardSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseFlowBoardDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateResponseDTO;
+import com.example.hms.payload.dto.nurse.NurseHandoffCreateRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseInboxItemDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO;
@@ -34,6 +35,8 @@ public interface NurseTaskService {
     List<NurseHandoffSummaryDTO> getHandoffSummaries(UUID nurseUserId, UUID hospitalId, int limit);
 
     void completeHandoff(UUID handoffId, UUID nurseUserId, UUID hospitalId);
+
+    NurseHandoffSummaryDTO createHandoff(UUID nurseUserId, UUID hospitalId, NurseHandoffCreateRequestDTO request);
 
     List<NurseAnnouncementDTO> getAnnouncements(UUID hospitalId, int limit);
 

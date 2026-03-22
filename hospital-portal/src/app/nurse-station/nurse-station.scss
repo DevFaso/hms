@@ -1253,3 +1253,49 @@
     margin: 0.25rem 0;
   }
 }
+
+/* ── Section toolbar ─────────────────────────── */
+.section-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+/* ── Checklist input & preview ───────────────── */
+.checklist-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+
+  .form-input {
+    flex: 1;
+  }
+}
+
+.checklist-preview {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+
+  li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 0.85rem;
+  }
+
+  .remove-btn {
+    background: none;
+    border: none;
+    color: #ef4444;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+
+    .material-symbols-outlined {
+      font-size: 1rem;
+    }
+  }
+}

@@ -33,6 +33,7 @@ import {
   NurseCareNoteResponse,
   NursePatient,
   NursingNoteResponse,
+  NurseHandoffCreateRequest,
 } from '../services/nurse-task.service';
 import { ToastService } from '../core/toast.service';
 
@@ -107,6 +108,13 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   careNoteForm = signal<NurseCareNoteRequest>({ template: 'DAR' });
   careNoteCreating = signal(false);
 
+  /* Handoff create dialog */
+  handoffCreateOpen = signal(false);
+  handoffForm = signal<Partial<NurseHandoffCreateRequest>>({});
+  handoffCreating = signal(false);
+  handoffChecklistInput = signal('');
+  handoffChecklist = signal<string[]>([]);
+
   /* MAR action state */
   actionInProgress = signal<string | null>(null);
   reasonPrompt = signal<{ taskId: string; action: string } | null>(null);
@@ -120,6 +128,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       this.cancelHoldRefuse();
     } else if (this.vitalsCaptureFor()) {
       this.closeVitalsDialog();
+    } else if (this.handoffCreateOpen()) {
+      this.closeHandoffCreate();
     }
   }
 
@@ -422,6 +432,64 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       },
     });
   }
+  /* ── Handoff create ─────────────────────────────────────── */
+
+  openHandoffCreate(): void {
+    this.handoffForm.set({});
+    this.handoffChecklist.set([]);
+    this.handoffChecklistInput.set('');
+    this.handoffCreateOpen.set(true);
+  }
+
+  closeHandoffCreate(): void {
+    this.handoffCreateOpen.set(false);
+    this.handoffForm.set({});
+    this.handoffChecklist.set([]);
+  }
+
+  updateHandoffField(field: keyof NurseHandoffCreateRequest, value: string): void {
+    this.handoffForm.update((f) => ({ ...f, [field]: value }));
+  }
+
+  addHandoffChecklistItem(): void {
+    const item = this.handoffChecklistInput().trim();
+    if (item) {
+      this.handoffChecklist.update((list) => [...list, item]);
+      this.handoffChecklistInput.set('');
+    }
+  }
+
+  removeHandoffChecklistItem(index: number): void {
+    this.handoffChecklist.update((list) => list.filter((_, i) => i !== index));
+  }
+
+  submitHandoff(): void {
+    const form = this.handoffForm();
+    if (!form.patientId || !form.direction) {
+      this.toast.error('Patient and direction are required.');
+      return;
+    }
+    const request: NurseHandoffCreateRequest = {
+      patientId: form.patientId,
+      direction: form.direction,
+      note: form.note,
+      checklistItems: this.handoffChecklist().length > 0 ? this.handoffChecklist() : undefined,
+    };
+    this.handoffCreating.set(true);
+    this.nurseService.createHandoff(request).subscribe({
+      next: () => {
+        this.toast.success('Handoff created');
+        this.handoffCreating.set(false);
+        this.closeHandoffCreate();
+        this.loadAll();
+      },
+      error: () => {
+        this.toast.error('Failed to create handoff');
+        this.handoffCreating.set(false);
+      },
+    });
+  }
+
   /* ── MVP 13: Task Board ─────────────────────────────────────── */
 
   openTaskCreate(): void {
@@ -555,7 +623,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /* ── Nursing Notes (MVP 14) ────────────────────────────── */
 
   viewNursingNotes(patient: NursePatient): void {
-    this.selectedPatientForNotes.set({ patientId: patient.patientId ?? patient.id, patientName: patient.displayName });
+    this.selectedPatientForNotes.set({
+      patientId: patient.patientId ?? patient.id,
+      patientName: patient.displayName,
+    });
     this.nurseService.getNursingNotes({ patientId: patient.patientId ?? patient.id }).subscribe({
       next: (notes) => this.nursingNotes.set(notes),
       error: () => {
