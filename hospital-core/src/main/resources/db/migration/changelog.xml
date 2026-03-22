@@ -365,4 +365,55 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V30: Patient Portal — new clinical tables + chat attachment columns
+         - clinical.health_maintenance_reminders  (Feature 19)
+         - clinical.treatment_progress_entries    (Feature 20)
+         - clinical.patient_reported_outcomes     (Feature 21)
+         - support.chat_messages: +4 attachment columns (Feature 22)
+         ================================================================= -->
+    <changeSet id="V30-patient-portal-entities-chat-attachments" author="hms-team" runOnChange="false">
+        <sqlFile path="V30__patient_portal_entities_chat_attachments.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V31: Patient Portal — pre-visit questionnaire tables
+         - clinical.pre_visit_questionnaires
+         - clinical.questionnaire_responses
+         ================================================================= -->
+    <changeSet id="V31-pre-visit-questionnaires" author="hms-team" runOnChange="false">
+        <sqlFile path="V31__pre_visit_questionnaires.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V32: MVP2 — Nurse Handoff persistence tables
+         - clinical.nurse_handoffs
+         - clinical.nurse_handoff_checklist_items
+         ================================================================= -->
+    <changeSet id="V32-mvp2-nurse-handoffs" author="hms-team" runOnChange="false">
+        <sqlFile path="V32__mvp2_nurse_handoffs.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V33: MVP3 — Task engine (SLA/escalation), flowsheets, BCMA
+         - Extends clinical.nursing_tasks with SLA/assignment/focus columns
+         - Creates clinical.flowsheet_entries table
+         - Adds BCMA scan fields to clinical.medication_administration_records
+         ================================================================= -->
+    <changeSet id="V33-mvp3-task-engine-flowsheets-bcma" author="hms-team" runOnChange="false">
+        <sqlFile path="V33__mvp3_task_engine_flowsheets_bcma.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

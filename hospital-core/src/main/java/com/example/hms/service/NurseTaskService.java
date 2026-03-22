@@ -7,6 +7,7 @@ import com.example.hms.payload.dto.nurse.NurseCareNoteResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseDashboardSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseFlowBoardDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateResponseDTO;
+import com.example.hms.payload.dto.nurse.NurseHandoffCreateRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseInboxItemDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO;
@@ -18,6 +19,9 @@ import com.example.hms.payload.dto.nurse.NurseTaskItemDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalCaptureRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseWorkboardPatientDTO;
+import com.example.hms.payload.dto.nurse.FlowsheetEntryCreateRequestDTO;
+import com.example.hms.payload.dto.nurse.FlowsheetEntryResponseDTO;
+import com.example.hms.payload.dto.nurse.BcmaComplianceDTO;
 
 import java.time.Duration;
 import java.util.List;
@@ -34,6 +38,8 @@ public interface NurseTaskService {
     List<NurseHandoffSummaryDTO> getHandoffSummaries(UUID nurseUserId, UUID hospitalId, int limit);
 
     void completeHandoff(UUID handoffId, UUID nurseUserId, UUID hospitalId);
+
+    NurseHandoffSummaryDTO createHandoff(UUID nurseUserId, UUID hospitalId, NurseHandoffCreateRequestDTO request);
 
     List<NurseAnnouncementDTO> getAnnouncements(UUID hospitalId, int limit);
 
@@ -77,4 +83,16 @@ public interface NurseTaskService {
     void markNurseInboxRead(UUID itemId, String nurseUsername);
 
     NurseCareNoteResponseDTO createCareNote(UUID patientId, UUID nurseUserId, UUID hospitalId, NurseCareNoteRequestDTO request);
+
+    // ── MVP3: Task Engine + SLA + Flowsheets + BCMA ────────────────────
+
+    NurseTaskItemDTO reassignTask(UUID taskId, UUID targetStaffId, UUID nurseUserId, UUID hospitalId);
+
+    int escalateOverdueTasks(UUID hospitalId);
+
+    List<FlowsheetEntryResponseDTO> getFlowsheetEntries(UUID patientId, UUID hospitalId, String type);
+
+    FlowsheetEntryResponseDTO recordFlowsheetEntry(UUID nurseUserId, UUID hospitalId, FlowsheetEntryCreateRequestDTO request);
+
+    BcmaComplianceDTO getBcmaCompliance(UUID hospitalId, int hours);
 }

@@ -31,6 +31,12 @@ import {
   NurseInboxItem,
   NurseCareNoteRequest,
   NurseCareNoteResponse,
+  NursePatient,
+  NursingNoteResponse,
+  NurseHandoffCreateRequest,
+  FlowsheetEntry,
+  FlowsheetEntryCreateRequest,
+  BcmaCompliance,
 } from '../services/nurse-task.service';
 import { ToastService } from '../core/toast.service';
 
@@ -44,7 +50,10 @@ type SectionType =
   | 'flowboard'
   | 'admissions'
   | 'tasks'
-  | 'inbox';
+  | 'inbox'
+  | 'patients'
+  | 'flowsheets'
+  | 'bcma';
 
 @Component({
   selector: 'app-nurse-station',
@@ -89,6 +98,21 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   inboxItems = signal<NurseInboxItem[]>([]);
   inboxUnreadCount = signal(0);
 
+  /* MVP 14 signals */
+  patients = signal<NursePatient[]>([]);
+  nursingNotes = signal<NursingNoteResponse[]>([]);
+  selectedPatientForNotes = signal<{ patientId: string; patientName: string } | null>(null);
+
+  /* MVP 15 signals (Flowsheets + BCMA) */
+  flowsheetEntries = signal<FlowsheetEntry[]>([]);
+  flowsheetPatientId = signal<string | null>(null);
+  flowsheetTypeFilter = signal<string>('');
+  flowsheetRecordOpen = signal(false);
+  flowsheetForm = signal<Partial<FlowsheetEntryCreateRequest>>({});
+  flowsheetRecording = signal(false);
+  bcmaCompliance = signal<BcmaCompliance | null>(null);
+  bcmaLoading = signal(false);
+
   /* Task create dialog */
   taskCreateOpen = signal(false);
   taskForm = signal<Partial<NurseTaskCreateRequest>>({});
@@ -98,6 +122,13 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   careNoteFor = signal<{ patientId: string; patientName: string } | null>(null);
   careNoteForm = signal<NurseCareNoteRequest>({ template: 'DAR' });
   careNoteCreating = signal(false);
+
+  /* Handoff create dialog */
+  handoffCreateOpen = signal(false);
+  handoffForm = signal<Partial<NurseHandoffCreateRequest>>({});
+  handoffCreating = signal(false);
+  handoffChecklistInput = signal('');
+  handoffChecklist = signal<string[]>([]);
 
   /* MAR action state */
   actionInProgress = signal<string | null>(null);
@@ -112,6 +143,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       this.cancelHoldRefuse();
     } else if (this.vitalsCaptureFor()) {
       this.closeVitalsDialog();
+    } else if (this.handoffCreateOpen()) {
+      this.closeHandoffCreate();
     }
   }
 
@@ -192,6 +225,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       inboxItems: this.nurseService
         .getNurseInbox({ limit: 20 })
         .pipe(catchError(() => of([] as NurseInboxItem[]))),
+      patients: this.nurseService
+        .getPatients(params)
+        .pipe(catchError(() => of([] as NursePatient[]))),
+      bcmaCompliance: this.nurseService
+        .getBcmaCompliance()
+        .pipe(catchError(() => of(null as BcmaCompliance | null))),
     }).pipe(
       tap(
         (results: {
@@ -206,6 +245,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           pendingAdmissions: NurseAdmissionSummary[];
           nursingTasks: NurseTaskItem[];
           inboxItems: NurseInboxItem[];
+          patients: NursePatient[];
+          bcmaCompliance: BcmaCompliance | null;
         }) => {
           this.vitals.set(results.vitals ?? []);
           this.medications.set(results.medications ?? []);
@@ -219,6 +260,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.nursingTasks.set(results.nursingTasks ?? []);
           this.inboxItems.set(results.inboxItems ?? []);
           this.inboxUnreadCount.set((results.inboxItems ?? []).filter((i) => !i.read).length);
+          this.patients.set(results.patients ?? []);
+          this.bcmaCompliance.set(results.bcmaCompliance);
           this.lastRefreshed.set(new Date());
         },
       ),
@@ -409,6 +452,64 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       },
     });
   }
+  /* ── Handoff create ─────────────────────────────────────── */
+
+  openHandoffCreate(): void {
+    this.handoffForm.set({});
+    this.handoffChecklist.set([]);
+    this.handoffChecklistInput.set('');
+    this.handoffCreateOpen.set(true);
+  }
+
+  closeHandoffCreate(): void {
+    this.handoffCreateOpen.set(false);
+    this.handoffForm.set({});
+    this.handoffChecklist.set([]);
+  }
+
+  updateHandoffField(field: keyof NurseHandoffCreateRequest, value: string): void {
+    this.handoffForm.update((f) => ({ ...f, [field]: value }));
+  }
+
+  addHandoffChecklistItem(): void {
+    const item = this.handoffChecklistInput().trim();
+    if (item) {
+      this.handoffChecklist.update((list) => [...list, item]);
+      this.handoffChecklistInput.set('');
+    }
+  }
+
+  removeHandoffChecklistItem(index: number): void {
+    this.handoffChecklist.update((list) => list.filter((_, i) => i !== index));
+  }
+
+  submitHandoff(): void {
+    const form = this.handoffForm();
+    if (!form.patientId || !form.direction) {
+      this.toast.error('Patient and direction are required.');
+      return;
+    }
+    const request: NurseHandoffCreateRequest = {
+      patientId: form.patientId,
+      direction: form.direction,
+      note: form.note,
+      checklistItems: this.handoffChecklist().length > 0 ? this.handoffChecklist() : undefined,
+    };
+    this.handoffCreating.set(true);
+    this.nurseService.createHandoff(request).subscribe({
+      next: () => {
+        this.toast.success('Handoff created');
+        this.handoffCreating.set(false);
+        this.closeHandoffCreate();
+        this.loadAll();
+      },
+      error: () => {
+        this.toast.error('Failed to create handoff');
+        this.handoffCreating.set(false);
+      },
+    });
+  }
+
   /* ── MVP 13: Task Board ─────────────────────────────────────── */
 
   openTaskCreate(): void {
@@ -481,6 +582,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       MOBILITY_ASSIST: 'Mobility Assist',
       INTAKE_OUTPUT: 'I&O Recording',
       WOUND_CARE: 'Wound Care',
+      VITALS_CHECK: 'Vitals Check',
+      MED_ADMIN: 'Med Admin',
+      ORDER_FOLLOWUP: 'Order Follow-up',
+      NEURO_CHECK: 'Neuro Check',
+      BLOOD_GLUCOSE: 'Blood Glucose',
       OTHER: 'Other',
     };
     return map[category] ?? category;
@@ -535,6 +641,123 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       error: () => {
         this.toast.error('Failed to save care note');
         this.careNoteCreating.set(false);
+      },
+    });
+  }
+
+  /* ── Nursing Notes (MVP 14) ────────────────────────────── */
+
+  viewNursingNotes(patient: NursePatient): void {
+    this.selectedPatientForNotes.set({
+      patientId: patient.patientId ?? patient.id,
+      patientName: patient.displayName,
+    });
+    this.nurseService.getNursingNotes({ patientId: patient.patientId ?? patient.id }).subscribe({
+      next: (notes) => this.nursingNotes.set(notes),
+      error: () => {
+        this.toast.error('Failed to load nursing notes');
+        this.nursingNotes.set([]);
+      },
+    });
+  }
+
+  closeNursingNotes(): void {
+    this.selectedPatientForNotes.set(null);
+    this.nursingNotes.set([]);
+  }
+
+  /* ── MVP 15: Flowsheets ────────────────────────────────── */
+
+  flowsheetTypes = [
+    { value: 'INTAKE', label: 'Intake' },
+    { value: 'OUTPUT', label: 'Output' },
+    { value: 'PAIN_ASSESSMENT', label: 'Pain Assessment' },
+    { value: 'NEURO_CHECK', label: 'Neuro Check' },
+    { value: 'WOUND_ASSESSMENT', label: 'Wound Assessment' },
+    { value: 'BLOOD_GLUCOSE', label: 'Blood Glucose' },
+    { value: 'FALL_RISK', label: 'Fall Risk' },
+    { value: 'SKIN_ASSESSMENT', label: 'Skin Assessment' },
+    { value: 'RESTRAINT_CHECK', label: 'Restraint Check' },
+  ];
+
+  loadFlowsheets(patientId: string): void {
+    this.flowsheetPatientId.set(patientId);
+    const typeFilter = this.flowsheetTypeFilter();
+    this.nurseService
+      .getFlowsheetEntries(patientId, typeFilter ? { type: typeFilter } : undefined)
+      .subscribe({
+        next: (entries) => this.flowsheetEntries.set(entries),
+        error: () => {
+          this.toast.error('Failed to load flowsheet entries');
+          this.flowsheetEntries.set([]);
+        },
+      });
+  }
+
+  onFlowsheetTypeChange(type: string): void {
+    this.flowsheetTypeFilter.set(type);
+    const pid = this.flowsheetPatientId();
+    if (pid) this.loadFlowsheets(pid);
+  }
+
+  openFlowsheetRecord(): void {
+    this.flowsheetForm.set({});
+    this.flowsheetRecordOpen.set(true);
+  }
+
+  closeFlowsheetRecord(): void {
+    this.flowsheetRecordOpen.set(false);
+    this.flowsheetForm.set({});
+  }
+
+  updateFlowsheetField(field: keyof FlowsheetEntryCreateRequest, value: string): void {
+    if (field === 'numericValue') {
+      this.flowsheetForm.update((f) => ({
+        ...f,
+        [field]: value === '' ? undefined : Number(value),
+      }));
+    } else {
+      this.flowsheetForm.update((f) => ({ ...f, [field]: value || undefined }));
+    }
+  }
+
+  submitFlowsheet(): void {
+    const form = this.flowsheetForm();
+    if (!form.patientId || !form.type) {
+      this.toast.error('Patient and type are required.');
+      return;
+    }
+    this.flowsheetRecording.set(true);
+    this.nurseService.recordFlowsheetEntry(form as FlowsheetEntryCreateRequest).subscribe({
+      next: () => {
+        this.toast.success('Flowsheet entry recorded');
+        this.flowsheetRecording.set(false);
+        this.closeFlowsheetRecord();
+        if (this.flowsheetPatientId()) this.loadFlowsheets(this.flowsheetPatientId()!);
+      },
+      error: () => {
+        this.toast.error('Failed to record flowsheet entry');
+        this.flowsheetRecording.set(false);
+      },
+    });
+  }
+
+  flowsheetTypeLabel(type: string): string {
+    return this.flowsheetTypes.find((t) => t.value === type)?.label ?? type;
+  }
+
+  /* ── MVP 15: BCMA Compliance ───────────────────────────── */
+
+  refreshBcma(): void {
+    this.bcmaLoading.set(true);
+    this.nurseService.getBcmaCompliance().subscribe({
+      next: (data) => {
+        this.bcmaCompliance.set(data);
+        this.bcmaLoading.set(false);
+      },
+      error: () => {
+        this.toast.error('Failed to load BCMA compliance');
+        this.bcmaLoading.set(false);
       },
     });
   }

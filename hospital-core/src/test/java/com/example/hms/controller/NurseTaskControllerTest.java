@@ -22,6 +22,7 @@ import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO
 import com.example.hms.payload.dto.nurse.NurseMedicationTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseOrderTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
+import com.example.hms.service.NurseDashboardService;
 import com.example.hms.service.NurseTaskService;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -46,6 +47,7 @@ import org.springframework.security.core.Authentication;
 class NurseTaskControllerTest {
 
     @Mock private NurseTaskService nurseTaskService;
+    @Mock private NurseDashboardService nurseDashboardService;
     @Mock private ControllerAuthUtils authUtils;
     @Mock private Authentication auth;
 
@@ -56,7 +58,7 @@ class NurseTaskControllerTest {
 
     @BeforeEach
     void setUp() {
-        controller = new NurseTaskController(nurseTaskService, authUtils);
+        controller = new NurseTaskController(nurseTaskService, nurseDashboardService, authUtils);
         // Default authUtils stubs matching the most common call path
         lenient().doNothing().when(authUtils).requireAuth(auth);
         lenient().when(authUtils.resolveHospitalScope(auth, null, false)).thenReturn(HOSPITAL_ID);

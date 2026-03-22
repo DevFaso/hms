@@ -92,41 +92,97 @@
                 <span class="material-symbols-outlined">close</span>
               </button>
             </div>
-            <div class="new-conv-search">
-              <span class="material-symbols-outlined search-icon">person_search</span>
-              <input
-                type="text"
-                placeholder="Search users by name or email..."
-                [ngModel]="userSearchTerm()"
-                (ngModelChange)="userSearchTerm.set($event)"
-              />
-            </div>
 
-            @if (loadingUsers()) {
-              <div class="new-conv-loading">
-                <div class="spinner-sm"></div>
-                <p>Loading users...</p>
+            <!-- Tabs — only shown for patients -->
+            @if (isPatient()) {
+              <div class="new-conv-tabs">
+                <button
+                  class="tab-btn"
+                  [class.active]="newConvTab() === 'care-team'"
+                  (click)="newConvTab.set('care-team')"
+                >
+                  <span class="material-symbols-outlined">medical_services</span>
+                  My Care Team
+                </button>
+                <button
+                  class="tab-btn"
+                  [class.active]="newConvTab() === 'all'"
+                  (click)="newConvTab.set('all')"
+                >
+                  <span class="material-symbols-outlined">group</span>
+                  All Staff
+                </button>
               </div>
-            } @else if (filteredUsers().length > 0) {
-              <div class="new-conv-users">
-                @for (user of filteredUsers(); track user.id) {
-                  <button class="user-item" (click)="startConversationWith(user)">
-                    <div class="conv-avatar">
-                      {{ getInitials(user.firstName + ' ' + user.lastName) }}
-                    </div>
-                    <div class="user-item-info">
-                      <span class="user-item-name">{{ user.firstName }} {{ user.lastName }}</span>
-                      <span class="user-item-role">{{ user.roleName || user.profileType }}</span>
-                    </div>
-                    <span class="material-symbols-outlined user-item-action">chat</span>
-                  </button>
+            }
+
+            <!-- Care Team tab -->
+            @if (!isPatient() || newConvTab() === 'care-team') {
+              @if (isPatient()) {
+                @if (loadingCareTeam()) {
+                  <div class="new-conv-loading">
+                    <div class="spinner-sm"></div>
+                    <p>Loading care team...</p>
+                  </div>
+                } @else if (careTeamContacts().length > 0) {
+                  <div class="new-conv-users">
+                    @for (contact of careTeamContacts(); track contact.userId) {
+                      <button class="user-item" (click)="startConversationWithContact(contact)">
+                        <div class="conv-avatar">{{ getInitials(contact.displayName) }}</div>
+                        <div class="user-item-info">
+                          <span class="user-item-name">{{ contact.displayName }}</span>
+                          <span class="user-item-role care-team-role">{{ contact.roleLabel }}</span>
+                        </div>
+                        <span class="material-symbols-outlined user-item-action">chat</span>
+                      </button>
+                    }
+                  </div>
+                } @else {
+                  <div class="new-conv-empty">
+                    <span class="material-symbols-outlined">medical_services</span>
+                    <p>No care team assigned yet</p>
+                  </div>
                 }
+              }
+            }
+
+            <!-- All Staff tab (non-patients always see this; patients see it in "all" tab) -->
+            @if (!isPatient() || newConvTab() === 'all') {
+              <div class="new-conv-search">
+                <span class="material-symbols-outlined search-icon">person_search</span>
+                <input
+                  type="text"
+                  placeholder="Search users by name or email..."
+                  [ngModel]="userSearchTerm()"
+                  (ngModelChange)="userSearchTerm.set($event)"
+                />
               </div>
-            } @else {
-              <div class="new-conv-empty">
-                <span class="material-symbols-outlined">group_off</span>
-                <p>No users found</p>
-              </div>
+
+              @if (loadingUsers()) {
+                <div class="new-conv-loading">
+                  <div class="spinner-sm"></div>
+                  <p>Loading users...</p>
+                </div>
+              } @else if (filteredUsers().length > 0) {
+                <div class="new-conv-users">
+                  @for (user of filteredUsers(); track user.id) {
+                    <button class="user-item" (click)="startConversationWith(user)">
+                      <div class="conv-avatar">
+                        {{ getInitials(user.firstName + ' ' + user.lastName) }}
+                      </div>
+                      <div class="user-item-info">
+                        <span class="user-item-name">{{ user.firstName }} {{ user.lastName }}</span>
+                        <span class="user-item-role">{{ user.roleName || user.profileType }}</span>
+                      </div>
+                      <span class="material-symbols-outlined user-item-action">chat</span>
+                    </button>
+                  }
+                </div>
+              } @else {
+                <div class="new-conv-empty">
+                  <span class="material-symbols-outlined">group_off</span>
+                  <p>No users found</p>
+                </div>
+              }
             }
           </div>
         }
@@ -152,7 +208,30 @@
                 [class.own]="isOwnMessage(msg)"
                 [class.other]="!isOwnMessage(msg)"
               >
-                <p>{{ msg.content }}</p>
+                @if (msg.content) {
+                  <p>{{ msg.content }}</p>
+                }
+                @if (msg.attachmentUrl) {
+                  <div class="msg-attachment">
+                    @if (isImageAttachment(msg.attachmentContentType)) {
+                      <img
+                        [src]="msg.attachmentUrl"
+                        [alt]="msg.attachmentName"
+                        class="attachment-img"
+                      />
+                    } @else {
+                      <a
+                        [href]="msg.attachmentUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="attachment-link"
+                      >
+                        <span class="material-symbols-outlined">attach_file</span>
+                        <span>{{ msg.attachmentName }}</span>
+                      </a>
+                    }
+                  </div>
+                }
                 <span class="msg-time">{{ formatTime(msg.timestamp) }}</span>
               </div>
             }
@@ -165,19 +244,49 @@
           </div>
 
           <div class="msg-input-area">
-            <input
-              type="text"
-              placeholder="Type a message..."
-              [(ngModel)]="messageText"
-              (keydown.enter)="sendMessage()"
-            />
-            <button
-              class="send-btn"
-              [disabled]="sendingMessage() || !messageText.trim()"
-              (click)="sendMessage()"
-            >
-              <span class="material-symbols-outlined">send</span>
-            </button>
+            @if (pendingAttachment(); as att) {
+              <div class="attachment-preview">
+                <span class="material-symbols-outlined">attach_file</span>
+                <span class="attachment-preview-name">{{ att.fileName }}</span>
+                <button
+                  class="btn-remove-attachment"
+                  (click)="removeAttachment()"
+                  title="Remove attachment"
+                >
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            }
+            <div class="msg-input-row">
+              <label
+                class="btn-attach"
+                title="Attach file"
+                [class.uploading]="uploadingAttachment()"
+              >
+                <input
+                  type="file"
+                  class="file-input-hidden"
+                  (change)="onFileSelected($event)"
+                  [disabled]="uploadingAttachment()"
+                />
+                <span class="material-symbols-outlined">
+                  {{ uploadingAttachment() ? 'hourglass_top' : 'attach_file' }}
+                </span>
+              </label>
+              <input
+                type="text"
+                placeholder="Type a message..."
+                [(ngModel)]="messageText"
+                (keydown.enter)="sendMessage()"
+              />
+              <button
+                class="send-btn"
+                [disabled]="sendingMessage() || (!messageText.trim() && !pendingAttachment())"
+                (click)="sendMessage()"
+              >
+                <span class="material-symbols-outlined">send</span>
+              </button>
+            </div>
           </div>
         }
 

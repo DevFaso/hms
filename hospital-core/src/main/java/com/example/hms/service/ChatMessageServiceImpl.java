@@ -169,6 +169,10 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             .sentAt(LocalDateTime.now())
             .assignment(assignment)
             .read(false)
+            .attachmentUrl(dto.getAttachmentUrl())
+            .attachmentName(dto.getAttachmentName())
+            .attachmentContentType(dto.getAttachmentContentType())
+            .attachmentSizeBytes(dto.getAttachmentSizeBytes())
             .build();
 
         ChatMessage saved = chatMessageRepository.save(message);

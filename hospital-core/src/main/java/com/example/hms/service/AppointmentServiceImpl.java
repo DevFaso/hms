@@ -353,7 +353,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private Patient resolvePatient(AppointmentRequestDTO request, Locale locale) {
         if (request.getPatientId() != null) {
-            return patientRepository.findById(request.getPatientId())
+            return patientRepository.findByIdUnscoped(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException(
                     messageSource.getMessage("patient.notfound", new Object[]{request.getPatientId()}, locale)));
         } else if (request.getPatientUsername() != null) {
@@ -470,7 +470,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         requireHospitalScope(currentUser, existing.getHospital().getId(), locale);
 
-        Patient patient = patientRepository.findById(request.getPatientId())
+        Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
 
         Staff staff = staffRepository.findById(request.getStaffId())
@@ -731,7 +731,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 .toList();
         }
 
-        Patient patient = patientRepository.findById(patientId)
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
 
         if (user.getId().equals(patient.getUser().getId())) {

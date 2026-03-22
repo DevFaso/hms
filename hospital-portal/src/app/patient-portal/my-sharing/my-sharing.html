@@ -1,0 +1,220 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">share</span>
+      Record Sharing & Privacy
+    </h1>
+    <button class="grant-consent-btn" (click)="openGrantForm()">
+      <span class="material-symbols-outlined">add_circle</span>
+      Grant New Consent
+    </button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="rec-tabs">
+    <button
+      class="rec-tab"
+      [class.active]="activeTab() === 'consents'"
+      (click)="activeTab.set('consents')"
+    >
+      <span class="material-symbols-outlined">handshake</span> Sharing Consents
+    </button>
+    <button
+      class="rec-tab"
+      [class.active]="activeTab() === 'access-log'"
+      (click)="switchToAccessLog()"
+    >
+      <span class="material-symbols-outlined">visibility</span> Who Viewed My Records
+    </button>
+  </div>
+
+  <!-- CONSENTS TAB -->
+  @if (activeTab() === 'consents') {
+    @if (loadingConsents()) {
+      <div class="portal-loading">
+        <div class="portal-spinner"></div>
+        <span>Loading consents…</span>
+      </div>
+    } @else if (!consents().length) {
+      <div class="portal-empty">
+        <span class="material-symbols-outlined">verified_user</span>
+        <h3>No Active Consents</h3>
+        <p>You haven't shared your records with any other hospital yet.</p>
+        <p class="rec-muted" style="margin-top: 8px">
+          When a referral requires sharing your records between hospitals, you can manage those
+          consents here.
+        </p>
+        <button class="grant-consent-btn" style="margin-top: 16px" (click)="openGrantForm()">
+          <span class="material-symbols-outlined">add_circle</span>
+          Grant New Consent
+        </button>
+      </div>
+    } @else {
+      <div class="portal-list" style="margin-top: 16px">
+        @for (c of consents(); track c.id) {
+          <div class="portal-list-item sharing-consent-item">
+            <div class="pli-icon" style="background: #d1fae5">
+              <span class="material-symbols-outlined" style="color: #059669">verified_user</span>
+            </div>
+            <div class="pli-body">
+              <span class="pli-title">{{ c.fromHospitalName }} → {{ c.toHospitalName }}</span>
+              <span class="pli-sub">Purpose: {{ c.purpose || 'Treatment' }}</span>
+              <span class="pli-meta">
+                Granted {{ c.grantedAt | date: 'mediumDate' }}
+                @if (c.expiresAt) {
+                  · Expires {{ c.expiresAt | date: 'mediumDate' }}
+                }
+              </span>
+            </div>
+            <div class="consent-actions">
+              <span class="portal-status-chip" [attr.data-status]="c.status">{{ c.status }}</span>
+              @if (c.status === 'ACTIVE') {
+                <button class="revoke-btn" (click)="revokeConsent(c)" [disabled]="revoking()">
+                  Revoke
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+
+  <!-- ACCESS LOG TAB -->
+  @if (activeTab() === 'access-log') {
+    @if (loadingLog()) {
+      <div class="portal-loading">
+        <div class="portal-spinner"></div>
+        <span>Loading access log…</span>
+      </div>
+    } @else if (!accessLog().length) {
+      <div class="portal-empty">
+        <span class="material-symbols-outlined">shield</span>
+        <h3>No Access Records</h3>
+        <p>Nobody has accessed your records yet, or access logging has just started.</p>
+      </div>
+    } @else {
+      <div class="portal-list" style="margin-top: 16px">
+        @for (entry of accessLog(); track entry.id) {
+          <div class="portal-list-item">
+            <div class="pli-icon" style="background: #f1f5f9">
+              <span class="material-symbols-outlined" style="color: #64748b">visibility</span>
+            </div>
+            <div class="pli-body">
+              <span class="pli-title">{{ entry.accessedBy }}</span>
+              <span class="pli-sub">{{ entry.accessedByRole }} · {{ entry.accessType }}</span>
+              <span class="pli-meta">
+                {{ entry.resourceAccessed }} · {{ entry.accessedAt | date: 'medium' }}
+              </span>
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>
+
+<!-- ── Grant Consent Modal ────────────────────────────────────────────── -->
+@if (showGrantForm()) {
+  <div
+    class="consent-modal-backdrop"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="grant-consent-title"
+    (click)="closeGrantForm()"
+    (keydown.escape)="closeGrantForm()"
+    tabindex="0"
+  >
+    <div
+      class="consent-modal"
+      (click)="$event.stopPropagation()"
+      (keydown.enter)="$event.stopPropagation()"
+      tabindex="-1"
+    >
+      <h2 id="grant-consent-title" class="modal-title">
+        <span class="material-symbols-outlined">verified_user</span>
+        Grant New Consent
+      </h2>
+      <p class="modal-subtitle">
+        Allow another hospital to access your medical records for a specific purpose.
+      </p>
+
+      @if (loadingHospitals()) {
+        <div class="portal-loading" style="padding: 24px 0">
+          <div class="portal-spinner"></div>
+          <span>Loading hospitals…</span>
+        </div>
+      } @else {
+        <div class="modal-form-grid">
+          <div class="modal-form-group">
+            <label for="from-hospital">From Hospital</label>
+            <select
+              id="from-hospital"
+              [ngModel]="grantForm().fromHospitalId"
+              (ngModelChange)="updateGrantField('fromHospitalId', $event)"
+            >
+              <option value="">Select source hospital</option>
+              @for (h of hospitals(); track h.id) {
+                <option [value]="h.id">{{ h.name }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="modal-form-group">
+            <label for="to-hospital">To Hospital</label>
+            <select
+              id="to-hospital"
+              [ngModel]="grantForm().toHospitalId"
+              (ngModelChange)="updateGrantField('toHospitalId', $event)"
+            >
+              <option value="">Select destination hospital</option>
+              @for (h of hospitals(); track h.id) {
+                <option [value]="h.id">{{ h.name }}</option>
+              }
+            </select>
+          </div>
+
+          <div class="modal-form-group full-width">
+            <label for="consent-purpose">Purpose</label>
+            <input
+              id="consent-purpose"
+              type="text"
+              placeholder="e.g. Referral follow-up, Second opinion"
+              [ngModel]="grantForm().purpose"
+              (ngModelChange)="updateGrantField('purpose', $event)"
+            />
+          </div>
+
+          <div class="modal-form-group">
+            <label for="consent-expiry">Consent Expiration</label>
+            <input
+              id="consent-expiry"
+              type="date"
+              [ngModel]="grantForm().consentExpiration"
+              (ngModelChange)="updateGrantField('consentExpiration', $event)"
+            />
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button class="modal-btn-secondary" (click)="closeGrantForm()" [disabled]="granting()">
+            Cancel
+          </button>
+          <button
+            class="modal-btn-primary"
+            (click)="confirmGrant()"
+            [disabled]="granting() || !isGrantValid()"
+          >
+            @if (granting()) {
+              <span class="material-symbols-outlined spin">progress_activity</span>
+              Granting…
+            } @else {
+              <span class="material-symbols-outlined">check</span>
+              Grant Consent
+            }
+          </button>
+        </div>
+      }
+    </div>
+  </div>
+}

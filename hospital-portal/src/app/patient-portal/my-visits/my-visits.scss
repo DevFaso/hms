@@ -1,0 +1,108 @@
+@use '../patient-portal-pages' as *;
+
+.visit-item {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+}
+
+.visit-header {
+  padding: 14px 16px;
+}
+
+.expand-icon {
+  font-size: 20px;
+  color: #6b7280;
+  flex-shrink: 0;
+}
+
+.visit-details {
+  border-top: 1px solid #e5e7eb;
+  padding: 16px;
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.visit-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  margin: 0;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+    color: #6b7280;
+  }
+}
+
+.note-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.note-field {
+  padding: 10px 14px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+
+  strong {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #9ca3af;
+    margin-bottom: 4px;
+  }
+
+  p {
+    margin: 0;
+    font-size: 13px;
+    color: #374151;
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+
+  &.highlight {
+    border-color: #a5b4fc;
+    background: #f5f3ff;
+  }
+
+  &.warning {
+    border-color: #fca5a5;
+    background: #fef2f2;
+  }
+}
+
+.note-signed {
+  font-size: 11px;
+  color: #6b7280;
+  margin: 0;
+  font-style: italic;
+}
+
+.loading-inline {
+  font-size: 13px;
+  color: #9ca3af;
+  margin: 0;
+}
+
+.no-data {
+  font-size: 13px;
+  color: #9ca3af;
+  font-style: italic;
+  margin: 0;
+}

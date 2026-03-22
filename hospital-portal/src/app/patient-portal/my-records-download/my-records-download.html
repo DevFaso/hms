@@ -1,0 +1,78 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">download</span>
+      My Health Records
+    </h1>
+    <p class="page-subtitle">
+      Download a complete export of your clinical record including encounters, medications, lab
+      results, vitals, immunizations, and more.
+    </p>
+  </div>
+
+  @if (successMsg()) {
+    <div class="alert-success">
+      <span class="material-symbols-outlined">check_circle</span>
+      {{ successMsg() }}
+    </div>
+  }
+  @if (errorMsg()) {
+    <div class="alert-error">
+      <span class="material-symbols-outlined">error_outline</span>
+      {{ errorMsg() }}
+    </div>
+  }
+
+  <div class="download-grid">
+    <!-- PDF download -->
+    <div class="download-card">
+      <div class="download-icon pdf">
+        <span class="material-symbols-outlined">picture_as_pdf</span>
+      </div>
+      <h2>PDF Report</h2>
+      <p>
+        A formatted, printable document containing your full health record. Ideal for sharing with
+        providers.
+      </p>
+      <button class="btn-download pdf" [disabled]="downloading()" (click)="download('pdf')">
+        @if (downloading() === 'pdf') {
+          <span class="material-symbols-outlined spin">refresh</span>
+          Preparing download…
+        } @else {
+          <span class="material-symbols-outlined">download</span>
+          Download PDF
+        }
+      </button>
+    </div>
+
+    <!-- CSV download -->
+    <div class="download-card">
+      <div class="download-icon csv">
+        <span class="material-symbols-outlined">table_chart</span>
+      </div>
+      <h2>CSV Export</h2>
+      <p>
+        A structured data file of your health record. Useful for importing into personal health apps
+        or spreadsheets.
+      </p>
+      <button class="btn-download csv" [disabled]="downloading()" (click)="download('csv')">
+        @if (downloading() === 'csv') {
+          <span class="material-symbols-outlined spin">refresh</span>
+          Preparing download…
+        } @else {
+          <span class="material-symbols-outlined">download</span>
+          Download CSV
+        }
+      </button>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <span class="material-symbols-outlined">lock</span>
+    <div>
+      <strong>Your data is secure.</strong>
+      This export is limited to your own records. No other patient data is included. The download is
+      encrypted in transit via HTTPS.
+    </div>
+  </div>
+</div>

@@ -98,7 +98,7 @@ public class PatientController {
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = PatientResponseDTO.class)))
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER')")
     public ResponseEntity<List<PatientResponseDTO>> getAllPatients(
         @RequestParam(required = false) UUID hospitalId,
         @RequestParam(name = "assignedTo", required = false) String assignedTo,
@@ -168,7 +168,7 @@ public class PatientController {
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = MessageResponse.class)))
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER')")
     public ResponseEntity<PatientResponseDTO> getPatientById(
         @PathVariable UUID id,
         @RequestParam(required = false) UUID hospitalId,
@@ -257,7 +257,7 @@ public class PatientController {
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = PatientResponseDTO.class)))
     @GetMapping("/search")
-    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER')")
     public ResponseEntity<List<PatientResponseDTO>> searchPatients(
         @RequestParam(required = false) String mrn,
         @RequestParam(required = false) String name,
@@ -297,7 +297,7 @@ public class PatientController {
         content = @Content(mediaType = "application/json",
             schema = @Schema(implementation = PatientResponseDTO.class)))
     @GetMapping("/lookup")
-    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_RECEPTIONIST','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER')")
     public ResponseEntity<List<PatientResponseDTO>> lookupPatients(
         @RequestParam(required = false) String identifier,
         @RequestParam(required = false) String email,
