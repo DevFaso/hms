@@ -68,7 +68,7 @@ public class InventoryIntegrationAdapter extends AbstractToggleableIntegrationAd
 
     @Override
     protected String defaultDocumentationUrl(Locale locale) {
-        return "https://docs.internal/platform/inventory";
+        return "https://hms.dev.bitnesttechs.com/docs/platform/inventory";
     }
 
     @Override

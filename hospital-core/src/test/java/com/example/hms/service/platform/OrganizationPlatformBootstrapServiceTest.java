@@ -52,7 +52,7 @@ class OrganizationPlatformBootstrapServiceTest {
             .autoProvision(true)
             .managedByPlatform(true)
             .provider("FHIR Reference Sandbox")
-            .baseUrl("https://ehr-sandbox.local/api")
+            .baseUrl("https://hms.dev.bitnesttechs.com/api/platform/ehr")
             .defaultMetadata(PlatformServiceMetadataDTO.builder().ehrSystem("Stub").build())
             .defaultOwnership(PlatformOwnershipDTO.builder().ownerTeam("Platform").build())
             .build();

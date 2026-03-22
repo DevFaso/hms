@@ -7,6 +7,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.example.hms.repository.platform.FeatureFlagOverrideRepository;
 import com.example.hms.service.FeatureFlagService;
 import com.example.hms.security.JwtAuthenticationFilter;
 import java.util.Locale;
@@ -33,6 +34,9 @@ class FeatureFlagControllerTest {
 
     @MockitoBean
     private FeatureFlagService featureFlagService;
+
+    @MockitoBean
+    private FeatureFlagOverrideRepository overrideRepository;
 
     @MockitoBean
     private JwtAuthenticationFilter jwtAuthenticationFilter;

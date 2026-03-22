@@ -1,10 +1,13 @@
 package com.example.hms.controller;
 
+import com.example.hms.model.platform.FeatureFlagOverride;
 import com.example.hms.payload.dto.featureflag.FeatureFlagOverrideRequestDTO;
+import com.example.hms.repository.platform.FeatureFlagOverrideRepository;
 import com.example.hms.service.FeatureFlagService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +32,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class FeatureFlagController {
 
     private final FeatureFlagService featureFlagService;
+    private final FeatureFlagOverrideRepository overrideRepository;
+
+    @GetMapping("/overrides")
+    @PreAuthorize("hasAuthority('ROLE_SUPER_ADMIN')")
+    @Operation(summary = "List all feature flag overrides")
+    public ResponseEntity<List<FeatureFlagOverride>> listOverrides() {
+        return ResponseEntity.ok(overrideRepository.findAllByOrderByFlagKeyAsc());
+    }
 
     @GetMapping
     @Operation(summary = "List effective feature flags")
