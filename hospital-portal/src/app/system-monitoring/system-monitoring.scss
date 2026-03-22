@@ -1,0 +1,271 @@
+.monitoring-container {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.page-header {
+  margin-bottom: 24px;
+  h1 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1e293b;
+    .material-icons {
+      color: #3b82f6;
+    }
+  }
+  .subtitle {
+    color: #64748b;
+    margin-top: 4px;
+    font-size: 0.875rem;
+  }
+}
+
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 18px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e2e8f0;
+}
+
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  .material-icons {
+    font-size: 22px;
+  }
+}
+
+.stat-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.stat-label {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.filter-select {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  background: #fff;
+  color: #334155;
+  &:focus {
+    outline: 2px solid #3b82f6;
+    border-color: transparent;
+  }
+}
+
+.result-count {
+  font-size: 0.875rem;
+  color: #64748b;
+}
+
+.loading-state,
+.empty-state {
+  text-align: center;
+  padding: 48px;
+  color: #94a3b8;
+  .material-icons {
+    font-size: 48px;
+    display: block;
+    margin-bottom: 8px;
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.table-wrapper {
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  overflow-x: auto;
+}
+
+.alerts-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 0.875rem;
+    border-bottom: 1px solid #f1f5f9;
+  }
+
+  th {
+    background: #f8fafc;
+    color: #64748b;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  tr:hover {
+    background: #f8fafc;
+  }
+  tr.resolved {
+    opacity: 0.6;
+  }
+
+  .title-cell {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.severity-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.severity-critical {
+  background: #fef2f2;
+  color: #dc2626;
+}
+.severity-high {
+  background: #fff7ed;
+  color: #ea580c;
+}
+.severity-medium {
+  background: #eff6ff;
+  color: #2563eb;
+}
+.severity-low {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  &.pending {
+    background: #fef3c7;
+    color: #d97706;
+  }
+  &.acknowledged {
+    background: #dbeafe;
+    color: #2563eb;
+  }
+  &.resolved {
+    background: #dcfce7;
+    color: #16a34a;
+  }
+}
+
+.actions-cell {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-action {
+  background: none;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  &:hover {
+    background: #f1f5f9;
+    color: #3b82f6;
+  }
+  &.resolve:hover {
+    color: #16a34a;
+  }
+  .material-icons {
+    font-size: 18px;
+  }
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 16px;
+}
+
+.btn-page {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #334155;
+  &:hover:not(:disabled) {
+    background: #f1f5f9;
+  }
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .material-icons {
+    font-size: 18px;
+  }
+}
+
+.page-info {
+  font-size: 0.875rem;
+  color: #64748b;
+}

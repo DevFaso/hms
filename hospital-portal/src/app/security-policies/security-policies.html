@@ -1,0 +1,181 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Security Policies</h1>
+      <p class="page-subtitle">Manage cross-tenant security policy baselines and approvals</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-outline" (click)="exportBaseline()" [disabled]="exporting()">
+        <span class="material-symbols-outlined">download</span>
+        {{ exporting() ? 'Exporting...' : 'Export Latest Baseline' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Tab navigation -->
+  <div class="tab-bar">
+    <button
+      class="tab-btn"
+      [class.active]="activeTab() === 'approvals'"
+      (click)="switchTab('approvals')"
+    >
+      <span class="material-symbols-outlined">pending_actions</span>
+      Pending Approvals
+    </button>
+    <button class="tab-btn" [class.active]="activeTab() === 'create'" (click)="switchTab('create')">
+      <span class="material-symbols-outlined">add_circle</span>
+      Create Baseline
+    </button>
+  </div>
+
+  <!-- Pending Approvals Tab -->
+  @if (activeTab() === 'approvals') {
+    @if (loading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>Loading pending approvals...</p>
+      </div>
+    }
+    @if (!loading() && pendingApprovals().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">verified</span>
+        <h3>No pending approvals</h3>
+        <p>All security policy changes have been reviewed.</p>
+      </div>
+    }
+    @if (!loading() && pendingApprovals().length > 0) {
+      <div class="data-table">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Policy Name</th>
+              <th scope="col">Change Type</th>
+              <th scope="col">Severity</th>
+              <th scope="col">Requested By</th>
+              <th scope="col">Submitted</th>
+              <th scope="col">Status</th>
+              <th scope="col">Baseline</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (a of pendingApprovals(); track a.id) {
+              <tr class="data-row">
+                <td>
+                  <div class="cell-primary">{{ a.policyName }}</div>
+                  <div class="cell-secondary">{{ a.summary || '' }}</div>
+                </td>
+                <td>
+                  <span class="badge">{{ a.changeType }}</span>
+                </td>
+                <td>
+                  <span class="severity-badge {{ getSeverityClass(a.severity) }}">{{
+                    a.severity
+                  }}</span>
+                </td>
+                <td>{{ a.requestedBy || '—' }}</td>
+                <td class="time-cell">
+                  {{ a.submittedAt ? (a.submittedAt | date: 'medium') : '—' }}
+                </td>
+                <td>
+                  <span class="status-badge {{ getStatusClass(a.status) }}">{{ a.status }}</span>
+                </td>
+                <td>{{ a.baselineVersion || '—' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- Create Baseline Tab -->
+  @if (activeTab() === 'create') {
+    <div class="form-card">
+      <h2 class="form-title">New Security Policy Baseline</h2>
+      <form (ngSubmit)="createBaseline()" class="baseline-form">
+        <div class="field">
+          <label for="baselineTitle">Title *</label>
+          <input
+            id="baselineTitle"
+            type="text"
+            [(ngModel)]="baselineForm.title"
+            name="title"
+            placeholder="e.g. Q2 2026 Security Baseline"
+            required
+            maxlength="160"
+          />
+        </div>
+
+        <div class="field">
+          <label for="baselineSummary">Summary</label>
+          <textarea
+            id="baselineSummary"
+            [(ngModel)]="baselineForm.summary"
+            name="summary"
+            rows="3"
+            placeholder="Brief description of the policy baseline..."
+            maxlength="1000"
+          ></textarea>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="enforcementLevel">Enforcement Level *</label>
+            <select
+              id="enforcementLevel"
+              [(ngModel)]="baselineForm.enforcementLevel"
+              name="enforcementLevel"
+              required
+            >
+              @for (level of enforcementLevels; track level) {
+                <option [value]="level">{{ level }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="policyCount">Policy Count</label>
+            <input
+              id="policyCount"
+              type="number"
+              [(ngModel)]="baselineForm.policyCount"
+              name="policyCount"
+              min="0"
+            />
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="controlObjectives">Control Objectives (JSON)</label>
+          <textarea
+            id="controlObjectives"
+            [(ngModel)]="baselineForm.controlObjectivesJson"
+            name="controlObjectivesJson"
+            rows="5"
+            placeholder='[{"objective": "Access Control", "controls": ["AC-1", "AC-2"]}]'
+          ></textarea>
+        </div>
+
+        <div class="field">
+          <label for="createdBy">Created By</label>
+          <input
+            id="createdBy"
+            type="text"
+            [(ngModel)]="baselineForm.createdBy"
+            name="createdBy"
+            placeholder="e.g. Security Officer"
+            maxlength="120"
+          />
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="switchTab('approvals')">
+            Cancel
+          </button>
+          <button type="submit" class="btn-primary" [disabled]="saving()">
+            {{ saving() ? 'Creating...' : 'Create Baseline' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  }
+</div>

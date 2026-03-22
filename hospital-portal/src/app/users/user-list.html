@@ -11,10 +11,16 @@
         }
       </p>
     </div>
-    <button class="btn-primary" (click)="openCreate()">
-      <span class="material-symbols-outlined">person_add</span>
-      Register User
-    </button>
+    <div class="header-actions">
+      <button class="btn-outline" (click)="openImport()">
+        <span class="material-symbols-outlined">upload_file</span>
+        Import CSV
+      </button>
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">person_add</span>
+        Register User
+      </button>
+    </div>
   </div>
 
   <!-- Filter toolbar -->
@@ -506,6 +512,121 @@
             (click)="executeDelete()"
           >
             {{ deleting() ? 'Deleting...' : 'Delete' }}
+          </button>
+        </div>
+      </dialog>
+    </div>
+  }
+
+  <!-- Bulk Import Modal -->
+  @if (showImport()) {
+    <div
+      class="modal-backdrop"
+      (click)="closeImport()"
+      (keydown.escape)="closeImport()"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal modal-lg"
+        [open]="showImport()"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeImport()"
+        tabindex="-1"
+      >
+        <div class="modal-header">
+          <h2>Bulk Import Users</h2>
+          <button class="modal-close" (click)="closeImport()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="import-help">
+            Upload a CSV file or paste CSV content below. Expected columns:
+            <code>username, email, firstName, lastName, password, roleName, hospitalName</code>
+          </p>
+          <div class="field">
+            <label for="csvFile">Upload CSV File</label>
+            <input
+              type="file"
+              id="csvFile"
+              accept=".csv,text/csv"
+              (change)="onCsvFileSelect($event)"
+              class="file-input"
+            />
+          </div>
+          <div class="field">
+            <label for="csvDelimiter">Delimiter</label>
+            <select id="csvDelimiter" [(ngModel)]="csvDelimiter">
+              <option value=",">Comma (,)</option>
+              <option value=";">Semicolon (;)</option>
+              <option value="\t">Tab</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="csvContent">CSV Content</label>
+            <textarea
+              id="csvContent"
+              [(ngModel)]="csvContent"
+              rows="8"
+              placeholder="username,email,firstName,lastName,password,roleName,hospitalName&#10;jdoe,jdoe&#64;example.com,John,Doe,Pass123!,ROLE_NURSE,General Hospital"
+              class="csv-textarea"
+            ></textarea>
+          </div>
+
+          @if (importResult()) {
+            <div class="import-results">
+              <h3>Import Results</h3>
+              <div class="import-summary">
+                <span class="import-stat success"
+                  >{{ importResult()!.successCount }} succeeded</span
+                >
+                <span class="import-stat failure">{{ importResult()!.failureCount }} failed</span>
+                <span class="import-stat total">{{ importResult()!.totalProcessed }} total</span>
+              </div>
+              @if (importResult()!.results?.length) {
+                <div class="import-detail-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Row</th>
+                        <th>Username</th>
+                        <th>Status</th>
+                        <th>Message</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (r of importResult()!.results; track r.row) {
+                        <tr [class.row-failure]="r.status === 'FAILURE'">
+                          <td>{{ r.row }}</td>
+                          <td>{{ r.username || '—' }}</td>
+                          <td>
+                            <span
+                              class="status-badge"
+                              [class.status-success]="r.status === 'SUCCESS'"
+                              [class.status-failure]="r.status !== 'SUCCESS'"
+                            >
+                              {{ r.status }}
+                            </span>
+                          </td>
+                          <td>{{ r.message || '—' }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+          }
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closeImport()">Close</button>
+          <button
+            type="button"
+            class="btn-primary"
+            [disabled]="importing() || !csvContent.trim()"
+            (click)="submitImport()"
+          >
+            {{ importing() ? 'Importing...' : 'Import Users' }}
           </button>
         </div>
       </dialog>

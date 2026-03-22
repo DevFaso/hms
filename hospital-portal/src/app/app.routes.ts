@@ -734,12 +734,56 @@ export const routes: Routes = [
           import('./feature-flags/feature-flags').then((m) => m.FeatureFlagsComponent),
       },
 
+      // Security Policies
+      {
+        path: 'security-policies',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./security-policies/security-policies').then((m) => m.SecurityPoliciesComponent),
+      },
+
+      // Global Settings
+      {
+        path: 'global-settings',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./global-settings/global-settings').then((m) => m.GlobalSettingsComponent),
+      },
+
+      // Credential Health
+      {
+        path: 'credential-health',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./credential-health/credential-health').then((m) => m.CredentialHealthComponent),
+      },
+
       // Platform Analytics
       {
         path: 'analytics',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./analytics/analytics').then((m) => m.AnalyticsComponent),
+      },
+
+      // System Monitoring
+      {
+        path: 'system-monitoring',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () =>
+          import('./system-monitoring/system-monitoring').then((m) => m.SystemMonitoringComponent),
+      },
+
+      // Data Export
+      {
+        path: 'data-export',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_SUPER_ADMIN'] },
+        loadComponent: () => import('./data-export/data-export').then((m) => m.DataExportComponent),
       },
 
       // Digital Signatures

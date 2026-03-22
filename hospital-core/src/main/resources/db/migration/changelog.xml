@@ -416,4 +416,28 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V34: Super Admin MVP2 — Global Settings
+         Creates platform.platform_global_settings key-value store for
+         platform-wide configuration managed by Super Admin.
+         ================================================================= -->
+    <changeSet id="V34-super-admin-global-settings" author="hms-team" runOnChange="false">
+        <sqlFile path="V34__super_admin_global_settings.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V35: Super Admin MVP3 — System Alerts
+         Creates platform.platform_system_alerts table for platform-wide
+         monitoring and alert management by Super Admin.
+         ================================================================= -->
+    <changeSet id="V35-super-admin-system-alerts" author="hms-team" runOnChange="false">
+        <sqlFile path="V35__super_admin_system_alerts.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

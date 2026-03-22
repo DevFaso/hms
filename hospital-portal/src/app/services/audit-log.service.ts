@@ -66,4 +66,12 @@ export class AuditLogService {
   }): Observable<AuditEventLog> {
     return this.http.post<AuditEventLog>(this.baseUrl, event);
   }
+
+  exportCsv(fromDate: string, toDate: string): Observable<Blob> {
+    const params = new HttpParams().set('fromDate', fromDate).set('toDate', toDate);
+    return this.http.get(`${this.baseUrl}/export`, {
+      params,
+      responseType: 'blob',
+    });
+  }
 }
