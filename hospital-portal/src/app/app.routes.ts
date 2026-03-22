@@ -43,81 +43,274 @@ export const routes: Routes = [
         loadComponent: () => import('./dashboard/dashboard').then((m) => m.DashboardComponent),
       },
 
-      // ─── Patient Portal (ROLE_PATIENT only) ───────────────────
+      // â”€â”€â”€ Patient Portal (ROLE_PATIENT only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      {
+        path: 'my-profile',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-profile/my-profile').then((m) => m.MyProfileComponent),
+      },
       {
         path: 'my-appointments',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
         loadComponent: () =>
-          import('./patient-portal/my-appointments').then((m) => m.MyAppointmentsComponent),
+          import('./patient-portal/my-appointments/my-appointments').then(
+            (m) => m.MyAppointmentsComponent,
+          ),
       },
       {
         path: 'my-medications',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
         loadComponent: () =>
-          import('./patient-portal/my-medications').then((m) => m.MyMedicationsComponent),
+          import('./patient-portal/my-medications/my-medications').then(
+            (m) => m.MyMedicationsComponent,
+          ),
+      },
+      {
+        path: 'my-refills',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-refills/my-refills').then((m) => m.MyRefillsComponent),
       },
       {
         path: 'my-lab-results',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
         loadComponent: () =>
-          import('./patient-portal/my-lab-results').then((m) => m.MyLabResultsComponent),
+          import('./patient-portal/my-lab-results/my-lab-results').then(
+            (m) => m.MyLabResultsComponent,
+          ),
       },
       {
         path: 'my-vitals',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
-        loadComponent: () => import('./patient-portal/my-vitals').then((m) => m.MyVitalsComponent),
+        loadComponent: () =>
+          import('./patient-portal/my-vitals/my-vitals').then((m) => m.MyVitalsComponent),
       },
       {
         path: 'my-billing',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
         loadComponent: () =>
-          import('./patient-portal/my-billing').then((m) => m.MyBillingComponent),
+          import('./patient-portal/my-billing/my-billing').then((m) => m.MyBillingComponent),
       },
       {
         path: 'my-visits',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
-        loadComponent: () => import('./patient-portal/my-visits').then((m) => m.MyVisitsComponent),
+        loadComponent: () =>
+          import('./patient-portal/my-visits/my-visits').then((m) => m.MyVisitsComponent),
       },
       {
         path: 'my-care-team',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
         loadComponent: () =>
-          import('./patient-portal/my-care-team').then((m) => m.MyCareTeamComponent),
+          import('./patient-portal/my-care-team/my-care-team').then((m) => m.MyCareTeamComponent),
       },
       {
         path: 'my-records',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
         loadComponent: () =>
-          import('./patient-portal/my-records').then((m) => m.MyRecordsComponent),
+          import('./patient-portal/my-records/my-records').then((m) => m.MyRecordsComponent),
       },
       {
         path: 'my-sharing',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
         loadComponent: () =>
-          import('./patient-portal/my-sharing').then((m) => m.MySharingComponent),
+          import('./patient-portal/my-sharing/my-sharing').then((m) => m.MySharingComponent),
       },
       {
         path: 'my-family-access',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
         loadComponent: () =>
-          import('./patient-portal/my-family-access').then((m) => m.MyFamilyAccessComponent),
+          import('./patient-portal/my-family-access/my-family-access').then(
+            (m) => m.MyFamilyAccessComponent,
+          ),
       },
       {
         path: 'my-summaries',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
         loadComponent: () =>
-          import('./patient-portal/my-summaries').then((m) => m.MySummariesComponent),
+          import('./patient-portal/my-summaries/my-summaries').then((m) => m.MySummariesComponent),
+      },
+      {
+        path: 'my-notifications',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-notifications/my-notifications').then(
+            (m) => m.MyNotificationsComponent,
+          ),
+      },
+      {
+        path: 'my-vital-trends',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-vital-trends/my-vital-trends').then(
+            (m) => m.MyVitalTrendsComponent,
+          ),
+      },
+      {
+        path: 'my-upcoming-vaccines',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-upcoming-vaccines/my-upcoming-vaccines').then(
+            (m) => m.MyUpcomingVaccinesComponent,
+          ),
+      },
+      {
+        path: 'my-lab-orders',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-lab-orders/my-lab-orders').then(
+            (m) => m.MyLabOrdersComponent,
+          ),
+      },
+      {
+        path: 'my-imaging-orders',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-imaging-orders/my-imaging-orders').then(
+            (m) => m.MyImagingOrdersComponent,
+          ),
+      },
+      {
+        path: 'my-pharmacy-fills',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-pharmacy-fills/my-pharmacy-fills').then(
+            (m) => m.MyPharmacyFillsComponent,
+          ),
+      },
+      {
+        path: 'my-procedures',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-procedures/my-procedures').then(
+            (m) => m.MyProceduresComponent,
+          ),
+      },
+      {
+        path: 'my-admissions',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-admissions/my-admissions').then(
+            (m) => m.MyAdmissionsComponent,
+          ),
+      },
+      {
+        path: 'my-education-progress',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-education-progress/my-education-progress').then(
+            (m) => m.MyEducationProgressComponent,
+          ),
+      },
+      {
+        path: 'my-education-browse',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-education-browse/my-education-browse').then(
+            (m) => m.MyEducationBrowseComponent,
+          ),
+      },
+      {
+        path: 'my-records-download',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-records-download/my-records-download').then(
+            (m) => m.MyRecordsDownloadComponent,
+          ),
+      },
+      {
+        path: 'my-lab-trends',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-lab-trends/my-lab-trends').then(
+            (m) => m.MyLabTrendsComponent,
+          ),
+      },
+      {
+        path: 'my-checkin',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-checkin/my-checkin').then((m) => m.MyCheckinComponent),
+      },
+      {
+        path: 'my-treatment-plans',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-treatment-plans/my-treatment-plans').then(
+            (m) => m.MyTreatmentPlansComponent,
+          ),
+      },
+      {
+        path: 'my-referrals',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-referrals/my-referrals').then((m) => m.MyReferralsComponent),
+      },
+      {
+        path: 'my-consultations',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-consultations/my-consultations').then(
+            (m) => m.MyConsultationsComponent,
+          ),
+      },
+
+      // My Questionnaires (ROLE_PATIENT)
+      {
+        path: 'my-questionnaires',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-questionnaires/my-questionnaires').then(
+            (m) => m.MyQuestionnairesComponent,
+          ),
+      },
+
+      // Health Maintenance Reminders (ROLE_PATIENT)
+      {
+        path: 'my-reminders',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-reminders/my-reminders').then((m) => m.MyRemindersComponent),
+      },
+
+      // Patient-Reported Outcomes (ROLE_PATIENT)
+      {
+        path: 'my-outcomes',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-outcomes/my-outcomes').then((m) => m.MyOutcomesComponent),
       },
 
       // Patients
@@ -133,6 +326,9 @@ export const routes: Routes = [
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_LAB_MANAGER',
           ],
         },
         children: [
@@ -274,6 +470,7 @@ export const routes: Routes = [
             'ROLE_MIDWIFE',
             'ROLE_LAB_TECHNICIAN',
             'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_MANAGER',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
@@ -287,9 +484,6 @@ export const routes: Routes = [
         path: 'profile',
         loadComponent: () => import('./profile/profile').then((m) => m.ProfileComponent),
       },
-
-      // Settings → redirect to profile (edit tab)
-      { path: 'settings', redirectTo: 'profile', pathMatch: 'full' },
 
       // Notifications
       {

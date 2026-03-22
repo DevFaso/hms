@@ -1,0 +1,114 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">local_hospital</span>
+      My Admissions
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>Loading admission records...</p>
+    </div>
+  } @else {
+    <!-- Current admission banner -->
+    @if (current()) {
+      <div class="current-banner">
+        <div class="banner-icon">
+          <span class="material-symbols-outlined">emergency_home</span>
+        </div>
+        <div class="banner-body">
+          <h3>Currently Admitted</h3>
+          <p>
+            {{ current()!.departmentName || current()!.hospitalName }}
+            {{ current()!.roomBed ? '· Room/Bed: ' + current()!.roomBed : '' }}
+          </p>
+          <p class="banner-since">
+            Since {{ current()!.admissionDateTime | date: 'MMMM d, yyyy h:mm a' }}
+          </p>
+          @if (current()!.attendingPhysicianName) {
+            <p class="banner-provider">Attending: {{ current()!.attendingPhysicianName }}</p>
+          }
+        </div>
+        <div class="status-pill active">{{ current()!.status | titlecase }}</div>
+      </div>
+    }
+
+    @if (admissions().length === 0) {
+      <div class="portal-empty">
+        <span class="material-symbols-outlined">local_hospital</span>
+        <h3>No admission history</h3>
+        <p>You have no inpatient admission records on file.</p>
+      </div>
+    } @else {
+      <section class="portal-section">
+        <p class="count-label">{{ admissions().length }} admission(s) on record</p>
+        <div class="admissions-list">
+          @for (a of admissions(); track a.id) {
+            <div class="admission-card" [class.active-card]="isActive(a.status)">
+              <div class="admission-header">
+                <div class="header-left">
+                  <h4 class="adm-title">
+                    {{ a.admissionType | titlecase }} Admission
+                    <span class="hosp-name">· {{ a.hospitalName }}</span>
+                  </h4>
+                  @if (a.departmentName) {
+                    <p class="dept-name">
+                      {{ a.departmentName }}{{ a.roomBed ? ' · ' + a.roomBed : '' }}
+                    </p>
+                  }
+                </div>
+                <div class="status-pill" [ngClass]="statusClass(a.status)">
+                  {{ a.status | titlecase }}
+                </div>
+              </div>
+              <div class="adm-meta">
+                <span class="meta-chip">
+                  <span class="material-symbols-outlined icon-sm">login</span>
+                  Admitted {{ a.admissionDateTime | date: 'MMM d, yyyy h:mm a' }}
+                </span>
+                @if (a.actualDischargeDateTime) {
+                  <span class="meta-chip discharged">
+                    <span class="material-symbols-outlined icon-sm">logout</span>
+                    Discharged {{ a.actualDischargeDateTime | date: 'MMM d, yyyy' }}
+                  </span>
+                } @else if (a.expectedDischargeDateTime) {
+                  <span class="meta-chip expected">
+                    <span class="material-symbols-outlined icon-sm">hourglass_bottom</span>
+                    Expected discharge {{ a.expectedDischargeDateTime | date: 'MMM d, yyyy' }}
+                  </span>
+                }
+                @if (a.lengthOfStayDays !== null) {
+                  <span class="meta-chip los">{{ a.lengthOfStayDays }} day(s)</span>
+                }
+                @if (a.acuityLevel) {
+                  <span class="meta-chip acuity">{{ a.acuityLevel | titlecase }}</span>
+                }
+              </div>
+              @if (a.chiefComplaint) {
+                <p class="complaint">Chief complaint: {{ a.chiefComplaint }}</p>
+              }
+              @if (a.primaryDiagnosisDescription) {
+                <p class="diagnosis">
+                  <span class="material-symbols-outlined icon-sm">diagnosis</span>
+                  {{ a.primaryDiagnosisDescription }}
+                  {{ a.primaryDiagnosisCode ? '(' + a.primaryDiagnosisCode + ')' : '' }}
+                </p>
+              }
+              @if (a.attendingPhysicianName) {
+                <p class="provider-info">Attending: {{ a.attendingPhysicianName }}</p>
+              }
+              @if (a.dischargeInstructions) {
+                <div class="discharge-box">
+                  <p class="discharge-label">Discharge Instructions</p>
+                  <p class="discharge-text">{{ a.dischargeInstructions }}</p>
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </section>
+    }
+  }
+</div>

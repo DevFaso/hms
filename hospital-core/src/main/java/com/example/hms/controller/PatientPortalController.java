@@ -17,6 +17,7 @@ import com.example.hms.payload.dto.medicalhistory.ImmunizationResponseDTO;
 import com.example.hms.payload.dto.portal.AccessLogEntryDTO;
 import com.example.hms.payload.dto.portal.CancelAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.CareTeamDTO;
+import com.example.hms.payload.dto.portal.CareTeamContactDTO;
 import com.example.hms.payload.dto.portal.HealthSummaryDTO;
 import com.example.hms.payload.dto.portal.HomeVitalReadingDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillRequestDTO;
@@ -26,8 +27,33 @@ import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
+import com.example.hms.payload.dto.AdmissionResponseDTO;
+import com.example.hms.payload.dto.LabOrderResponseDTO;
+import com.example.hms.payload.dto.education.EducationResourceResponseDTO;
+import com.example.hms.payload.dto.education.PatientEducationProgressResponseDTO;
+import com.example.hms.payload.dto.imaging.ImagingOrderResponseDTO;
+import com.example.hms.payload.dto.lab.LabResultTrendDTO;
+import com.example.hms.payload.dto.medication.PharmacyFillResponseDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
+import com.example.hms.payload.dto.procedure.ProcedureOrderResponseDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyResponseDTO;
+import com.example.hms.payload.dto.portal.PortalAppointmentRequestDTO;
+import com.example.hms.payload.dto.AppointmentSummaryDTO;
+import com.example.hms.payload.dto.DepartmentMinimalDTO;
+import com.example.hms.payload.dto.StaffMinimalDTO;
+import com.example.hms.payload.dto.questionnaire.PreVisitQuestionnaireDTO;
+import com.example.hms.payload.dto.questionnaire.QuestionnaireResponseDTO;
+import com.example.hms.payload.dto.questionnaire.QuestionnaireResponseSubmitDTO;
+import com.example.hms.payload.dto.EncounterNoteResponseDTO;
+import com.example.hms.payload.dto.portal.PortalDischargeInstructionsDTO;
+import com.example.hms.payload.dto.portal.PortalHealthReminderDTO;
+import com.example.hms.payload.dto.portal.PortalProgressEntryDTO;
+import com.example.hms.payload.dto.portal.PortalProgressEntryRequestDTO;
+import com.example.hms.payload.dto.portal.PortalOutcomeDTO;
+import com.example.hms.payload.dto.portal.PortalOutcomeRequestDTO;
+import com.example.hms.enums.EducationCategory;
 import com.example.hms.service.PatientPortalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -37,7 +63,9 @@ import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -386,6 +414,16 @@ public class PatientPortalController {
         return ResponseEntity.ok(ApiResponseWrapper.success(careTeam));
     }
 
+    @Operation(summary = "Get messageable care team contacts",
+            description = "Returns current and recent PCPs the patient can message directly")
+    @GetMapping("/care-team/messageable")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<CareTeamContactDTO>>> getMessageableCareTeam(
+            Authentication auth) {
+        List<CareTeamContactDTO> contacts = portalService.getMessageableCareTeam(auth);
+        return ResponseEntity.ok(ApiResponseWrapper.success(contacts));
+    }
+
     // ── Access log ───────────────────────────────────────────────────────
 
     @Operation(summary = "View who accessed my records",
@@ -436,5 +474,423 @@ public class PatientPortalController {
     public ResponseEntity<ApiResponseWrapper<List<ProxyResponseDTO>>> getMyProxyAccess(Authentication auth) {
         List<ProxyResponseDTO> access = portalService.getMyProxyAccess(auth);
         return ResponseEntity.ok(ApiResponseWrapper.success(access));
+    }
+
+    // ── Notification Preferences ─────────────────────────────────────────
+
+    @Operation(summary = "List my notification preferences",
+            description = "Returns all saved notification preferences for the authenticated patient")
+    @GetMapping("/notifications/preferences")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<NotificationPreferenceDTO>>> getNotificationPreferences(
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyNotificationPreferences(auth)));
+    }
+
+    @Operation(summary = "Set a notification preference",
+            description = "Create or update a single notification preference by type + channel combination")
+    @PutMapping("/notifications/preferences")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<NotificationPreferenceDTO>> setNotificationPreference(
+            Authentication auth, @Valid @RequestBody NotificationPreferenceUpdateDTO dto) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.setMyNotificationPreference(auth, dto)));
+    }
+
+    @Operation(summary = "Reset all notification preferences",
+            description = "Delete all saved notification preferences — system defaults apply thereafter")
+    @DeleteMapping("/notifications/preferences")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Void>> resetNotificationPreferences(Authentication auth) {
+        portalService.resetMyNotificationPreferences(auth);
+        return ResponseEntity.ok(ApiResponseWrapper.success(null));
+    }
+
+    // ── Vital Sign Trends ─────────────────────────────────────────────────
+
+    @Operation(summary = "My vital sign history",
+            description = "Returns vital sign readings for the last N months (1–24, default 3)")
+    @GetMapping("/vitals/trends")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<PatientVitalSignResponseDTO>>> getVitalTrends(
+            Authentication auth,
+            @RequestParam(defaultValue = "3") int months) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyVitalTrends(auth, months)));
+    }
+
+    // ── Upcoming Vaccinations ─────────────────────────────────────────────
+
+    @Operation(summary = "My upcoming vaccinations",
+            description = "Returns immunizations scheduled in the next N months (1–12, default 6)")
+    @GetMapping("/immunizations/upcoming")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<ImmunizationResponseDTO>>> getUpcomingVaccinations(
+            Authentication auth,
+            @RequestParam(defaultValue = "6") int months) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyUpcomingVaccinations(auth, months)));
+    }
+    // \u2500\u2500 Lab Orders \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+    @Operation(summary = "My lab orders",
+            description = "Returns all lab orders for the authenticated patient, with status tracking (PENDING, IN_PROGRESS, COMPLETED, etc.)")
+    @GetMapping("/lab-orders")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<LabOrderResponseDTO>>> getMyLabOrders(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyLabOrders(auth, LocaleContextHolder.getLocale())));
+    }
+
+    // \u2500\u2500 Imaging Orders \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+    @Operation(summary = "My imaging orders",
+            description = "Returns all imaging orders (X-ray, MRI, CT, ultrasound, etc.) for the authenticated patient")
+    @GetMapping("/imaging/orders")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<ImagingOrderResponseDTO>>> getMyImagingOrders(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyImagingOrders(auth)));
+    }
+
+    // \u2500\u2500 Pharmacy Fill History \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+    @Operation(summary = "My pharmacy fill history",
+            description = "Returns medication dispense/fill records for the authenticated patient, most recent first")
+    @GetMapping("/medications/fills")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<PharmacyFillResponseDTO>>> getMyPharmacyFills(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyPharmacyFills(auth, LocaleContextHolder.getLocale())));
+    }
+
+    // ── Procedure Orders ───────────────────────────────────────────────
+
+    @Operation(summary = "My procedure orders",
+            description = "Returns all surgical and procedural orders for the authenticated patient")
+    @GetMapping("/procedure-orders")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<ProcedureOrderResponseDTO>>> getMyProcedureOrders(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyProcedureOrders(auth)));
+    }
+
+    // ── Admissions ─────────────────────────────────────────────────────
+
+    @Operation(summary = "My admission history",
+            description = "Returns all inpatient admission records for the authenticated patient, most recent first")
+    @GetMapping("/admissions")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<AdmissionResponseDTO>>> getMyAdmissions(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyAdmissions(auth)));
+    }
+
+    @Operation(summary = "My current admission",
+            description = "Returns the patient’s active admission (PENDING/ACTIVE/ON_LEAVE), or null if not currently admitted")
+    @GetMapping("/admissions/current")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<AdmissionResponseDTO>> getMyCurrentAdmission(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyCurrentAdmission(auth)));
+    }
+
+    // ── Patient Education Progress ───────────────────────────────────────
+
+    @Operation(summary = "My education progress",
+            description = "Returns all education resource progress records for the authenticated patient")
+    @GetMapping("/education/progress")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<PatientEducationProgressResponseDTO>>> getMyEducationProgress(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyEducationProgress(auth)));
+    }
+
+    @Operation(summary = "My in-progress education",
+            description = "Returns education resources the patient has started but not yet completed")
+    @GetMapping("/education/in-progress")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<PatientEducationProgressResponseDTO>>> getMyInProgressEducation(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyInProgressEducation(auth)));
+    }
+
+    @Operation(summary = "My completed education",
+            description = "Returns education resources the patient has fully completed")
+    @GetMapping("/education/completed")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<PatientEducationProgressResponseDTO>>> getMyCompletedEducation(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyCompletedEducation(auth)));
+    }
+
+    // ── Education Resource Library ────────────────────────────────────────
+
+    @Operation(summary = "Browse education resource library",
+            description = "Returns all education resources available at the patient's hospital")
+    @GetMapping("/education/resources")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<EducationResourceResponseDTO>>> getMyEducationResources(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyEducationResources(auth)));
+    }
+
+    @Operation(summary = "Search education resources",
+            description = "Search the education library by keyword")
+    @GetMapping("/education/resources/search")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<EducationResourceResponseDTO>>> searchMyEducationResources(
+            @RequestParam String query,
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.searchMyEducationResources(auth, query)));
+    }
+
+    @Operation(summary = "Education resources by category",
+            description = "Filter the education library by a specific category")
+    @GetMapping("/education/resources/by-category/{category}")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<EducationResourceResponseDTO>>> getMyEducationResourcesByCategory(
+            @PathVariable EducationCategory category,
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyEducationResourcesByCategory(auth, category)));
+    }
+
+    // ── Medical Records Self-Download ─────────────────────────────────────
+
+    @Operation(summary = "Download my medical record",
+            description = "Exports the authenticated patient's full health record as PDF (default) or CSV. "
+                        + "No bilateral hospital consent is required — patient is downloading their own data.")
+    @GetMapping("/records/download")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<byte[]> downloadMyRecord(
+            @RequestParam(defaultValue = "pdf") String format,
+            Authentication auth) {
+        byte[] data = portalService.downloadMyRecord(auth, format);
+        boolean isPdf = !"csv".equalsIgnoreCase(format);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(isPdf ? MediaType.APPLICATION_PDF
+                : MediaType.parseMediaType("text/csv"));
+        headers.setContentDispositionFormData("attachment",
+                isPdf ? "my-health-record.pdf" : "my-health-record.csv");
+        return ResponseEntity.ok().headers(headers).body(data);
+    }
+
+    // ── Lab Result Trends ─────────────────────────────────────────────────
+
+    @Operation(summary = "Lab result trends",
+            description = "Returns up to 12 data points per test type, most-recent-first, for trend charting")
+    @GetMapping("/lab-results/trends")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<LabResultTrendDTO>>> getMyLabResultTrends(Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyLabResultTrends(auth)));
+    }
+
+    // ── Online Check-In ────────────────────────────────────────────────────
+
+    @Operation(summary = "Check in to an appointment",
+            description = "Transitions a SCHEDULED/CONFIRMED/PENDING appointment to CHECKED_IN status")
+    @PostMapping("/appointments/{id}/check-in")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<AppointmentResponseDTO>> checkInMyAppointment(
+            @PathVariable UUID id,
+            Authentication auth) {
+        Locale locale = LocaleContextHolder.getLocale();
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.checkInMyAppointment(auth, id, locale)));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 14 — Appointment Booking
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Operation(summary = "List departments at my hospital",
+            description = "Returns active departments for the patient's hospital — used in booking form")
+    @GetMapping("/departments")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<DepartmentMinimalDTO>>> getMyDepartments(
+            Authentication auth) {
+        Locale locale = LocaleContextHolder.getLocale();
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyDepartments(auth, locale)));
+    }
+
+    @Operation(summary = "List providers in a department",
+            description = "Returns staff members in a department — used in booking form")
+    @GetMapping("/departments/{departmentId}/providers")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<StaffMinimalDTO>>> getDepartmentProviders(
+            @PathVariable UUID departmentId, Authentication auth) {
+        Locale locale = LocaleContextHolder.getLocale();
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getDepartmentProviders(auth, departmentId, locale)));
+    }
+
+    @Operation(summary = "Request a new appointment",
+            description = "Creates a PENDING appointment for the patient — staff confirms later")
+    @PostMapping("/appointments")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<AppointmentSummaryDTO>> bookMyAppointment(
+            @Valid @RequestBody PortalAppointmentRequestDTO dto, Authentication auth) {
+        Locale locale = LocaleContextHolder.getLocale();
+        AppointmentSummaryDTO created = portalService.bookMyAppointment(auth, dto, locale);
+        return new ResponseEntity<>(ApiResponseWrapper.success(created), HttpStatus.CREATED);
+    }
+
+    // ════════════════════════════════════════════════════════════════════
+    // FEATURE 15 — Pre-Visit Questionnaires
+    // ════════════════════════════════════════════════════════════════════
+
+    @Operation(summary = "List my pending questionnaires",
+            description = "Returns active questionnaires for the patient's hospital that have not yet been filled out")
+    @GetMapping("/questionnaires")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<PreVisitQuestionnaireDTO>>> getMyPendingQuestionnaires(
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyPendingQuestionnaires(auth)));
+    }
+
+    @Operation(summary = "List my submitted questionnaire responses",
+            description = "Returns all questionnaire responses previously submitted by the patient")
+    @GetMapping("/questionnaires/submitted")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<QuestionnaireResponseDTO>>> getMySubmittedQuestionnaires(
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMySubmittedQuestionnaires(auth)));
+    }
+
+    @Operation(summary = "Submit a questionnaire response",
+            description = "Records the patient's answers. Each questionnaire can only be submitted once.")
+    @PostMapping("/questionnaires/response")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<QuestionnaireResponseDTO>> submitMyQuestionnaire(
+            @Valid @RequestBody QuestionnaireResponseSubmitDTO dto, Authentication auth) {
+        QuestionnaireResponseDTO created = portalService.submitMyQuestionnaire(auth, dto);
+        return new ResponseEntity<>(ApiResponseWrapper.success(created), HttpStatus.CREATED);
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // FEATURE 16 — OpenNotes (Visit Notes)
+    // ──────────────────────────────────────────────────────────────────
+
+    @Operation(summary = "Get clinical note for a visit",
+            description = "Returns the signed clinical note for a specific encounter belonging to the patient")
+    @GetMapping("/encounters/{encounterId}/note")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<EncounterNoteResponseDTO>> getMyEncounterNote(
+            Authentication auth, @PathVariable UUID encounterId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyEncounterNote(auth, encounterId)));
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // FEATURE 17 — Post-Visit Instructions
+    // ──────────────────────────────────────────────────────────────────
+
+    @Operation(summary = "Get post-visit / discharge instructions",
+            description = "Returns discharge instructions for a specific encounter belonging to the patient")
+    @GetMapping("/encounters/{encounterId}/instructions")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<PortalDischargeInstructionsDTO>> getMyPostVisitInstructions(
+            Authentication auth, @PathVariable UUID encounterId) {
+        Locale locale = LocaleContextHolder.getLocale();
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyPostVisitInstructions(auth, encounterId, locale)));
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // FEATURE 18 — Immunization Certificate
+    // ──────────────────────────────────────────────────────────────────
+
+    @Operation(summary = "Download immunization certificate",
+            description = "Generates and returns a PDF certificate of all recorded immunizations")
+    @GetMapping("/immunizations/certificate")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<byte[]> getMyImmunizationCertificate(Authentication auth) {
+        byte[] pdf = portalService.generateMyImmunizationCertificate(auth);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDispositionFormData("attachment", "immunization-certificate.pdf");
+        headers.setContentLength(pdf.length);
+        return new ResponseEntity<>(pdf, headers, HttpStatus.OK);
+    }
+
+    // ──────────────────────────────────────────────────────────────────
+    // FEATURE 19 — Health Maintenance Reminders
+    // ──────────────────────────────────────────────────────────────────
+
+    @Operation(summary = "Get my health maintenance reminders",
+            description = "Returns all active preventive care and health maintenance reminders for the patient")
+    @GetMapping("/health-reminders")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<PortalHealthReminderDTO>>> getMyHealthReminders(
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyHealthReminders(auth)));
+    }
+
+    @Operation(summary = "Mark a health reminder as completed",
+            description = "Records that the patient has completed a health maintenance reminder")
+    @PutMapping("/health-reminders/{reminderId}/complete")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<PortalHealthReminderDTO>> completeMyHealthReminder(
+            Authentication auth, @PathVariable UUID reminderId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.completeMyHealthReminder(auth, reminderId)));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 20 — Treatment Progress Tracker
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Operation(summary = "Get treatment plan progress entries",
+            description = "Returns all patient-logged progress entries for a treatment plan")
+    @GetMapping("/treatment-plans/{planId}/progress")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<PortalProgressEntryDTO>>> getMyTreatmentPlanProgress(
+            Authentication auth, @PathVariable UUID planId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyTreatmentPlanProgress(auth, planId)));
+    }
+
+    @Operation(summary = "Log treatment progress",
+            description = "Records a new patient-reported progress entry against a treatment plan")
+    @PostMapping("/treatment-plans/{planId}/progress")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<PortalProgressEntryDTO>> logMyTreatmentProgress(
+            Authentication auth, @PathVariable UUID planId,
+            @RequestBody @Valid PortalProgressEntryRequestDTO request) {
+        return ResponseEntity.status(201).body(ApiResponseWrapper.success(
+                portalService.logMyTreatmentProgress(auth, planId, request)));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // FEATURE 21 — Patient-Reported Outcomes (PROs)
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Operation(summary = "Get my patient-reported outcomes",
+            description = "Returns all PRO entries submitted by the patient, newest first")
+    @GetMapping("/outcomes")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<PortalOutcomeDTO>>> getMyOutcomes(
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getMyOutcomes(auth)));
+    }
+
+    @Operation(summary = "Report a patient-reported outcome",
+            description = "Submits a new PRO entry (pain score, mood, energy, etc.)")
+    @PostMapping("/outcomes")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<PortalOutcomeDTO>> reportMyOutcome(
+            Authentication auth,
+            @RequestBody @Valid PortalOutcomeRequestDTO request) {
+        return ResponseEntity.status(201).body(ApiResponseWrapper.success(
+                portalService.reportMyOutcome(auth, request)));
     }
 }

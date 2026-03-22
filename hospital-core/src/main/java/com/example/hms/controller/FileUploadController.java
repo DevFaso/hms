@@ -201,4 +201,36 @@ public class FileUploadController {
                 .body(new MessageResponse("Failed to upload chart attachment"));
         }
     }
+
+    @Operation(
+        summary = "Upload chat attachment",
+        description = "Upload a file attachment for a chat message (max 20 MB). Accessible to all authenticated users."
+    )
+    @PostMapping(value = "/chat-attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Object> uploadChatAttachment(
+        @RequestParam("file") MultipartFile file,
+        Authentication authentication
+    ) {
+        try {
+            UUID userId = userService.getUserIdByUsername(authentication.getName());
+            if (userId == null) {
+                return ResponseEntity.badRequest().body(new MessageResponse(USER_NOT_FOUND_MESSAGE));
+            }
+            FileUploadService.StoredFileDescriptor desc = fileUploadService.uploadChatAttachment(file, userId);
+            return ResponseEntity.ok(Map.of(
+                "url", desc.publicUrl(),
+                "fileName", desc.displayName(),
+                "contentType", desc.contentType() != null ? desc.contentType() : "",
+                "sizeBytes", desc.sizeBytes()
+            ));
+        } catch (IllegalArgumentException ex) {
+            log.warn("Invalid chat attachment upload: {}", ex.getMessage());
+            return ResponseEntity.badRequest().body(new MessageResponse(ex.getMessage()));
+        } catch (IOException | RuntimeException ex) {
+            log.error("Failed to upload chat attachment", ex);
+            return ResponseEntity.internalServerError()
+                .body(new MessageResponse("Failed to upload chat attachment"));
+        }
+    }
 }

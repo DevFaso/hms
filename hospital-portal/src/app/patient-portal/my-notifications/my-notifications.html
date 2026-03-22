@@ -1,0 +1,63 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">tune</span>
+      Notification Settings
+    </h1>
+    <p class="portal-subtitle">Choose how and when you want to hear from us.</p>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>Loading preferences...</p>
+    </div>
+  } @else {
+    <section class="portal-section">
+      <div class="pref-table-wrap">
+        <table class="pref-table">
+          <thead>
+            <tr>
+              <th class="pref-type-col">Notification Type</th>
+              @for (ch of channels; track ch.value) {
+                <th class="pref-ch-col">
+                  <span class="material-symbols-outlined">{{ ch.icon }}</span>
+                  {{ ch.label }}
+                </th>
+              }
+            </tr>
+          </thead>
+          <tbody>
+            @for (nt of notifTypes; track nt.value) {
+              <tr>
+                <td class="pref-type-label">{{ nt.label }}</td>
+                @for (ch of channels; track ch.value) {
+                  <td class="pref-toggle-cell">
+                    <label class="toggle">
+                      <input
+                        type="checkbox"
+                        [checked]="isEnabled(nt.value, ch.value)"
+                        (change)="toggle(nt.value, ch.value, $event)"
+                      />
+                      <span class="slider"></span>
+                    </label>
+                  </td>
+                }
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pref-footer">
+        <button class="btn-reset" (click)="resetAll()" [disabled]="saving()">
+          <span class="material-symbols-outlined">restart_alt</span>
+          Reset to Defaults
+        </button>
+        @if (saveMsg()) {
+          <span class="save-msg">{{ saveMsg() }}</span>
+        }
+      </div>
+    </section>
+  }
+</div>

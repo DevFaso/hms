@@ -1,0 +1,88 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">groups</span>
+      My Consultations
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>Loading consultations…</p>
+    </div>
+  } @else if (consultations().length === 0) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">groups</span>
+      <h3>No consultations on file</h3>
+      <p>Specialist consultations arranged by your care team will appear here.</p>
+    </div>
+  } @else {
+    <div class="consult-list">
+      @for (consult of consultations(); track consult.id) {
+        <div class="consult-card">
+          <div class="consult-icon">
+            <span class="material-symbols-outlined">stethoscope</span>
+          </div>
+          <div class="consult-body">
+            <div class="consult-top">
+              <span class="status-chip" [ngClass]="statusClass(consult.status)">
+                {{ consult.status | titlecase }}
+              </span>
+              <span class="urgency-chip" [ngClass]="urgencyClass(consult.urgency)">
+                {{ consult.urgency | titlecase }}
+              </span>
+              <span class="type-tag">{{ consult.consultationType | titlecase }}</span>
+            </div>
+            <h3 class="consult-specialty">{{ consult.specialtyRequested }}</h3>
+            <p class="consult-reason">{{ consult.reasonForConsult }}</p>
+            <div class="consult-meta">
+              <span class="meta-item">
+                <span class="material-symbols-outlined icon-sm">person</span>
+                Requested by: {{ consult.requestingProviderName }}
+              </span>
+              @if (consult.consultantName) {
+                <span class="meta-item">
+                  <span class="material-symbols-outlined icon-sm">stethoscope</span>
+                  Consultant: {{ consult.consultantName }}
+                </span>
+              }
+              <span class="meta-item">
+                <span class="material-symbols-outlined icon-sm">business</span>
+                {{ consult.hospitalName }}
+              </span>
+              <span class="meta-item">
+                <span class="material-symbols-outlined icon-sm">send</span>
+                Requested {{ consult.requestedAt | date: 'MMM d, yyyy' }}
+              </span>
+              @if (consult.scheduledAt) {
+                <span class="meta-item">
+                  <span class="material-symbols-outlined icon-sm">calendar_month</span>
+                  Scheduled {{ consult.scheduledAt | date: 'MMM d, yyyy' }}
+                </span>
+              }
+              @if (consult.completedAt) {
+                <span class="meta-item">
+                  <span class="material-symbols-outlined icon-sm">check_circle</span>
+                  Completed {{ consult.completedAt | date: 'MMM d, yyyy' }}
+                </span>
+              }
+            </div>
+            @if (consult.recommendations) {
+              <div class="consult-recommendations">
+                <h4>Consultant Recommendations</h4>
+                <p>{{ consult.recommendations }}</p>
+              </div>
+            }
+            @if (consult.followUpRequired) {
+              <div class="follow-up-badge">
+                <span class="material-symbols-outlined">event_repeat</span>
+                Follow-up required
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

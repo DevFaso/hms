@@ -1,0 +1,91 @@
+<div class="portal-page">
+  <div class="page-header">
+    <div class="page-title-row">
+      <span class="material-symbols-outlined page-icon">monitor_heart</span>
+      <h1 class="page-title">My Health Outcomes</h1>
+    </div>
+    <button class="btn-record" (click)="openForm()" [disabled]="showForm()">
+      <span class="material-symbols-outlined">add</span>
+      Record Outcome
+    </button>
+  </div>
+
+  @if (showForm()) {
+    <div class="outcome-form-card">
+      <h3 class="form-title">New Outcome Report</h3>
+      <div class="form-grid">
+        <div class="form-field">
+          <label for="outcomeType">Outcome Type</label>
+          <select id="outcomeType" name="outcomeType" [(ngModel)]="form.outcomeType">
+            @for (t of outcomeTypes; track t.value) {
+              <option [value]="t.value">{{ t.label }}</option>
+            }
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="reportDate">Date</label>
+          <input id="reportDate" name="reportDate" type="date" [(ngModel)]="form.reportDate" />
+        </div>
+        <div class="form-field score-field">
+          <label for="score"
+            >Score (0 – 10): <strong>{{ form.score }}</strong></label
+          >
+          <input
+            id="score"
+            name="score"
+            type="range"
+            min="0"
+            max="10"
+            [(ngModel)]="form.score"
+            class="score-slider"
+          />
+          <div class="score-range-labels">
+            <span>0 – Poor</span>
+            <span>10 – Excellent</span>
+          </div>
+        </div>
+        <div class="form-field full-width">
+          <label for="notes">Notes (optional)</label>
+          <textarea
+            id="notes"
+            name="notes"
+            rows="3"
+            [(ngModel)]="form.notes"
+            placeholder="Describe how you're feeling..."
+          ></textarea>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-submit" (click)="submit()" [disabled]="submitting()">
+          {{ submitting() ? 'Saving…' : 'Save' }}
+        </button>
+        <button class="btn-cancel" (click)="cancelForm()">Cancel</button>
+      </div>
+    </div>
+  }
+
+  @if (loading()) {
+    <p class="loading-state">Loading outcomes…</p>
+  } @else if (outcomes().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">monitor_heart</span>
+      <p>No outcomes recorded yet.</p>
+      <p class="empty-sub">Use the button above to record how you're feeling today.</p>
+    </div>
+  } @else {
+    <div class="outcomes-list">
+      @for (o of outcomes(); track o.id) {
+        <div class="outcome-card">
+          <div class="outcome-header">
+            <div class="outcome-type">{{ o.typeLabel }}</div>
+            <span class="score-badge {{ scoreClass(o.score) }}">{{ o.score }}/10</span>
+            <span class="outcome-date">{{ o.reportDate | date: 'mediumDate' }}</span>
+          </div>
+          @if (o.notes) {
+            <p class="outcome-notes">{{ o.notes }}</p>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

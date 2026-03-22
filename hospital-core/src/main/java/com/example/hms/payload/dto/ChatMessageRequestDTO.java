@@ -38,4 +38,10 @@ public class ChatMessageRequestDTO {
 
     /** Recipient UUID – alternative to recipientEmail. */
     private UUID recipientId;
+
+    // ── Optional file attachment (pre-uploaded via POST /files/chat-attachments) ──
+    private String attachmentUrl;
+    private String attachmentName;
+    private String attachmentContentType;
+    private Long attachmentSizeBytes;
 }

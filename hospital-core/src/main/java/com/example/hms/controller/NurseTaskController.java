@@ -3,6 +3,7 @@ package com.example.hms.controller;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.payload.dto.PatientResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseAdmissionSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseAnnouncementDTO;
 import com.example.hms.payload.dto.nurse.NurseCareNoteRequestDTO;
@@ -11,6 +12,7 @@ import com.example.hms.payload.dto.nurse.NurseDashboardSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseFlowBoardDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffChecklistUpdateResponseDTO;
+import com.example.hms.payload.dto.nurse.NurseHandoffCreateRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseInboxItemDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO;
@@ -22,10 +24,15 @@ import com.example.hms.payload.dto.nurse.NurseTaskItemDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalCaptureRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseWorkboardPatientDTO;
+import com.example.hms.payload.dto.nurse.FlowsheetEntryCreateRequestDTO;
+import com.example.hms.payload.dto.nurse.FlowsheetEntryResponseDTO;
+import com.example.hms.payload.dto.nurse.BcmaComplianceDTO;
+import com.example.hms.service.NurseDashboardService;
 import com.example.hms.service.NurseTaskService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -44,6 +51,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -55,7 +63,22 @@ public class NurseTaskController {
     private static final String NURSE_IDENTITY_ERROR = "Unable to resolve nurse identity.";
 
     private final NurseTaskService nurseTaskService;
+    private final NurseDashboardService nurseDashboardService;
     private final ControllerAuthUtils authUtils;
+
+    @GetMapping("/patients")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Assigned patient list — active in-house patients for the nurse")
+    public ResponseEntity<List<PatientResponseDTO>> getAssignedPatients(
+        @RequestParam(name = "assignee", required = false) String assignee,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID nurseId = resolveAssignee(auth, assignee);
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        return ResponseEntity.ok(nurseDashboardService.getPatientsForNurse(nurseId, scopedHospital, null));
+    }
 
     @GetMapping("/vitals/due")
     @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
@@ -140,6 +163,21 @@ public class NurseTaskController {
         UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
         int effectiveLimit = safeLimit(limit, 6, 20);
         return ResponseEntity.ok(nurseTaskService.getHandoffSummaries(nurseId, scopedHospital, effectiveLimit));
+    }
+
+    @PostMapping("/handoffs")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Create a new nurse-to-nurse handoff report for a patient")
+    public ResponseEntity<NurseHandoffSummaryDTO> createHandoff(
+        @Valid @RequestBody NurseHandoffCreateRequestDTO request,
+        @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+        Authentication auth
+    ) {
+        authUtils.requireAuth(auth);
+        UUID nurseId = resolveAssignee(auth, null);
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        NurseHandoffSummaryDTO created = nurseTaskService.createHandoff(nurseId, scopedHospital, request);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(created);
     }
 
     @PutMapping("/handoffs/{handoffId}/complete")
@@ -372,6 +410,72 @@ public class NurseTaskController {
         }
         return resolved;
     }
+
+    // ── MVP3: Task Engine + Flowsheets + BCMA ──────────────────────────
+
+    @PutMapping("/tasks/{taskId}/reassign")
+    @Operation(summary = "Reassign a nursing task to another staff member")
+    public ResponseEntity<NurseTaskItemDTO> reassignTask(
+            @PathVariable UUID taskId,
+            @RequestParam UUID targetStaffId,
+            @RequestParam(required = false) UUID hospitalId,
+            Authentication auth) {
+
+        UUID nurseId = authUtils.resolveUserId(auth)
+            .orElseThrow(() -> new BusinessException("Unable to resolve nurse identity."));
+        UUID hospId = ensureHospitalScope(auth, hospitalId);
+        return ResponseEntity.ok(nurseTaskService.reassignTask(taskId, targetStaffId, nurseId, hospId));
+    }
+
+    @PostMapping("/tasks/escalate")
+    @Operation(summary = "Escalate all overdue tasks for a hospital")
+    public ResponseEntity<Map<String, Integer>> escalateOverdueTasks(
+            @RequestParam(required = false) UUID hospitalId,
+            Authentication auth) {
+
+        UUID hospId = ensureHospitalScope(auth, hospitalId);
+        int count = nurseTaskService.escalateOverdueTasks(hospId);
+        return ResponseEntity.ok(Map.of("escalatedCount", count));
+    }
+
+    @GetMapping("/patients/{patientId}/flowsheets")
+    @Operation(summary = "Get flowsheet entries for a patient")
+    public ResponseEntity<List<FlowsheetEntryResponseDTO>> getFlowsheetEntries(
+            @PathVariable UUID patientId,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) UUID hospitalId,
+            Authentication auth) {
+
+        UUID hospId = ensureHospitalScope(auth, hospitalId);
+        return ResponseEntity.ok(nurseTaskService.getFlowsheetEntries(patientId, hospId, type));
+    }
+
+    @PostMapping("/flowsheets")
+    @Operation(summary = "Record a flowsheet entry")
+    public ResponseEntity<FlowsheetEntryResponseDTO> recordFlowsheetEntry(
+            @Valid @RequestBody FlowsheetEntryCreateRequestDTO request,
+            @RequestParam(required = false) UUID hospitalId,
+            Authentication auth) {
+
+        UUID nurseId = authUtils.resolveUserId(auth)
+            .orElseThrow(() -> new BusinessException("Unable to resolve nurse identity."));
+        UUID hospId = ensureHospitalScope(auth, hospitalId);
+        return ResponseEntity.status(HttpStatus.CREATED)
+            .body(nurseTaskService.recordFlowsheetEntry(nurseId, hospId, request));
+    }
+
+    @GetMapping("/bcma/compliance")
+    @Operation(summary = "Get BCMA compliance statistics")
+    public ResponseEntity<BcmaComplianceDTO> getBcmaCompliance(
+            @RequestParam(defaultValue = "24") int hours,
+            @RequestParam(required = false) UUID hospitalId,
+            Authentication auth) {
+
+        UUID hospId = ensureHospitalScope(auth, hospitalId);
+        return ResponseEntity.ok(nurseTaskService.getBcmaCompliance(hospId, hours));
+    }
+
+    /* ── Helpers ──────────────────────────────────────────────────────── */
 
     private UUID resolveAssignee(Authentication auth, String assignee) {
         if (assignee == null || assignee.isBlank() || "all".equalsIgnoreCase(assignee)) {

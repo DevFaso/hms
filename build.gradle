@@ -17,10 +17,11 @@ allprojects {
 
     // Redirect build output outside OneDrive on Windows to prevent Files On-Demand
     // from offloading .class files between compile and test phases.
+    // Uses a stable directory but Gradle clean/test tasks handle stale file locks.
     def oneDriveRoot = System.getenv('OneDrive') ?: System.getenv('OneDriveConsumer') ?: ''
     if (!oneDriveRoot.isEmpty() && projectDir.absolutePath.replace('\\', '/').startsWith(oneDriveRoot.replace('\\', '/'))) {
         def tempBase = System.getenv('TEMP') ?: System.getenv('TMP') ?: 'C:/Temp'
-        layout.buildDirectory.set(file("${tempBase}/gradle-hms-build/${name}"))
+        layout.buildDirectory.set(file("${tempBase}/gradle-hms-out/${name}"))
     }
 }
 
@@ -166,7 +167,9 @@ subprojects {
 
     tasks.named('test') {
         useJUnitPlatform()
+        maxHeapSize = '1536m'
         systemProperty 'spring.profiles.active', 'test'
+        jvmArgs '-XX:+EnableDynamicAgentLoading'
         testLogging {
             events 'failed', 'skipped', 'passed'
             exceptionFormat 'full'
@@ -182,15 +185,26 @@ subprojects {
                 def maxAttempts = 5
                 for (int i = 1; i <= maxAttempts; i++) {
                     try {
-                        project.delete(binDir)
+                        // Try cmd /c rmdir first on Windows (bypasses some Java file-lock issues)
+                        if (org.gradle.internal.os.OperatingSystem.current().isWindows()) {
+                            def proc = ["cmd", "/c", "rmdir", "/s", "/q", binDir.absolutePath].execute()
+                            proc.waitFor()
+                        }
+                        if (binDir.exists()) {
+                            project.delete(binDir)
+                        }
                         logger.lifecycle("Cleaned stale test-results binary dir (attempt ${i})")
                         break
                     } catch (Exception e) {
                         if (i < maxAttempts) {
-                            logger.warn("Could not delete ${binDir} (attempt ${i}/${maxAttempts}), retrying in 2 s…")
-                            Thread.sleep(2000)
+                            logger.warn("Could not delete ${binDir} (attempt ${i}/${maxAttempts}), retrying in 3 s…")
+                            Thread.sleep(3000)
                         } else {
-                            logger.warn("Could not delete ${binDir} after ${maxAttempts} attempts – proceeding anyway")
+                            // Last resort: delete individual files that aren't locked
+                            logger.warn("Could not delete ${binDir} after ${maxAttempts} attempts – cleaning individual files")
+                            binDir.listFiles()?.each { f ->
+                                try { f.delete() } catch (Exception ignored) {}
+                            }
                         }
                     }
                 }

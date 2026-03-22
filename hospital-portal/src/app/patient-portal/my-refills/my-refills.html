@@ -1,0 +1,134 @@
+<div class="portal-page">
+  <div class="portal-page-header refills-header">
+    <h1>
+      <span class="material-symbols-outlined">autorenew</span>
+      Refill Requests
+    </h1>
+    <button class="refill-btn-primary" (click)="openForm()" [disabled]="showForm()">
+      <span class="material-symbols-outlined">add</span>
+      Request Refill
+    </button>
+  </div>
+
+  @if (showForm()) {
+    <div class="refill-form-card">
+      <h2 class="form-title">New Refill Request</h2>
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="prescriptionId">Prescription</label>
+          <select id="prescriptionId" [(ngModel)]="form.prescriptionId" required>
+            <option value="">— Select a prescription —</option>
+            @for (rx of prescriptions(); track rx.id) {
+              <option [value]="rx.id">
+                {{ rx.medicationName }} {{ rx.dosage }} ({{ rx.refillsRemaining }} refill{{
+                  rx.refillsRemaining !== 1 ? 's' : ''
+                }}
+                remaining)
+              </option>
+            }
+          </select>
+          @if (!prescriptions().length) {
+            <span class="field-hint">No prescriptions with remaining refills found.</span>
+          }
+        </div>
+        <div class="form-group">
+          <label for="preferredPharmacy">Preferred Pharmacy</label>
+          <input
+            id="preferredPharmacy"
+            type="text"
+            [(ngModel)]="form.preferredPharmacy"
+            placeholder="e.g. CVS Pharmacy, Main St"
+            required
+          />
+        </div>
+        <div class="form-group full-width">
+          <label for="notes">Notes (optional)</label>
+          <textarea
+            id="notes"
+            [(ngModel)]="form.notes"
+            rows="2"
+            placeholder="Any special instructions for the pharmacy..."
+          ></textarea>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="refill-btn-secondary" (click)="cancelForm()" [disabled]="submitting()">
+          Cancel
+        </button>
+        <button
+          class="refill-btn-primary"
+          (click)="submitRefill()"
+          [disabled]="submitting() || !form.prescriptionId || !form.preferredPharmacy"
+        >
+          @if (submitting()) {
+            <span class="material-symbols-outlined spin">progress_activity</span>
+            Submitting…
+          } @else {
+            <span class="material-symbols-outlined">send</span>
+            Submit Request
+          }
+        </button>
+      </div>
+    </div>
+  }
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>Loading refill requests…</p>
+    </div>
+  } @else if (!refills().length) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">autorenew</span>
+      <h3>No Refill Requests</h3>
+      <p>Click <strong>Request Refill</strong> above to submit a new refill request.</p>
+    </div>
+  } @else {
+    <div class="refill-list">
+      @for (r of refills(); track r.id) {
+        <div class="refill-card">
+          <div class="refill-header">
+            <div class="refill-title-row">
+              <span class="material-symbols-outlined refill-icon">autorenew</span>
+              <span class="medication-name">{{ r.medicationName }}</span>
+              <span class="dosage-badge">{{ r.dosage }}</span>
+            </div>
+            <span class="status-chip" [ngClass]="statusClass(r.status)">
+              {{ r.status | titlecase }}
+            </span>
+          </div>
+
+          <div class="refill-meta">
+            <span class="meta-item">
+              <span class="material-symbols-outlined icon-sm">local_pharmacy</span>
+              {{ r.preferredPharmacy }}
+            </span>
+            <span class="meta-item">
+              <span class="material-symbols-outlined icon-sm">schedule</span>
+              Requested {{ r.requestedAt | date: 'mediumDate' }}
+            </span>
+            @if (r.completedAt) {
+              <span class="meta-item">
+                <span class="material-symbols-outlined icon-sm">check_circle</span>
+                Completed {{ r.completedAt | date: 'mediumDate' }}
+              </span>
+            }
+          </div>
+
+          @if (r.notes) {
+            <p class="refill-notes">{{ r.notes }}</p>
+          }
+
+          @if (r.status?.toUpperCase() === 'PENDING') {
+            <div class="refill-actions">
+              <button class="btn-cancel-sm" (click)="cancelRefill(r.id)">
+                <span class="material-symbols-outlined icon-sm">cancel</span>
+                Cancel Request
+              </button>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

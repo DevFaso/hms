@@ -1,0 +1,82 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">show_chart</span>
+      Lab Result Trends
+    </h1>
+    <p class="page-subtitle">Up to the last 12 readings per test, most recent first.</p>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>Loading lab trends…</p>
+    </div>
+  } @else if (error()) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">error_outline</span>
+      <h3>Could not load trends</h3>
+      <button class="btn-primary" (click)="load()">Try Again</button>
+    </div>
+  } @else if (trends().length === 0) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">show_chart</span>
+      <h3>No lab trends yet</h3>
+      <p>Lab result history will appear here once results are available.</p>
+    </div>
+  } @else {
+    <div class="trends-grid">
+      @for (t of trends(); track t.testName) {
+        <div class="trend-card">
+          <div class="trend-card-header">
+            <div>
+              <h3 class="test-name">{{ t.testName }}</h3>
+              @if (t.testCode) {
+                <span class="test-code">{{ t.testCode }}</span>
+              }
+            </div>
+            @if (t.dataPoints.length > 0) {
+              <span
+                class="status-badge"
+                [ngClass]="statusClass(t.dataPoints[0].status, t.dataPoints[0].abnormal)"
+              >
+                {{ t.dataPoints[0].status }}
+              </span>
+            }
+          </div>
+
+          @if (t.dataPoints.length > 0 && t.dataPoints[0].value !== null) {
+            <div class="current-value">
+              <span class="value-num">{{ t.dataPoints[0].value }}</span>
+              @if (t.unit) {
+                <span class="value-unit">{{ t.unit }}</span>
+              }
+            </div>
+          }
+
+          <div class="history-list">
+            @for (pt of t.dataPoints; track $index) {
+              <div class="history-row" [class.abnormal]="pt.abnormal">
+                <div class="history-left">
+                  <span class="history-value">{{ pt.value ?? '—' }}</span>
+                  <span class="history-status" [ngClass]="statusClass(pt.status, pt.abnormal)">
+                    {{ pt.status }}
+                  </span>
+                </div>
+                <span class="history-date">
+                  {{ pt.resultedAt ?? pt.collectedAt | date: 'MMM d, yyyy' }}
+                </span>
+              </div>
+            }
+          </div>
+
+          @if (t.category) {
+            <div class="card-footer">
+              <span class="category-tag">{{ t.category }}</span>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>
