@@ -50,6 +50,10 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     Page<Staff> findByHospitalIdAndActiveTrueExcludingDeletedUsers(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
+    @Query("SELECT s FROM Staff s LEFT JOIN s.user u WHERE u IS NULL OR u.isDeleted = false")
+    List<Staff> findAllExcludingDeletedUsers();
+
+    @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
     @Query("SELECT s FROM Staff s WHERE s.hospital.id IN :hospitalIds AND s.user.isDeleted = false")
     List<Staff> findByHospitalIdInExcludingDeletedUsers(@Param("hospitalIds") Collection<UUID> hospitalIds);
 
