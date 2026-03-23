@@ -729,9 +729,8 @@ public class PatientController {
         UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
 
         if (authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            return authUtils.preferHospital(requestedHospitalId, jwtHospitalId)
-                .or(() -> authUtils.fallbackHospitalFromAssignments(auth))
-                .orElse(null);
+            // Super admin sees all patients unless they explicitly request a hospital filter
+            return requestedHospitalId;
         }
 
         if (authUtils.hasAuthority(auth, ROLE_RECEPTIONIST)) {
