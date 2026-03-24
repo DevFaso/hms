@@ -23,11 +23,8 @@ export class AuditLogsComponent implements OnInit {
   filtered = signal<AuditEventLog[]>([]);
   eventTypes = signal<AuditEventTypeStatus[]>([]);
   loading = signal(true);
-  exporting = signal(false);
   searchTerm = '';
   selectedEventType = '';
-  fromDate = '';
-  toDate = '';
 
   ngOnInit(): void {
     this.load();
@@ -35,12 +32,7 @@ export class AuditLogsComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
-    const params: Record<string, unknown> = { size: 200 };
-    if (this.fromDate) params['fromDate'] = this.fromDate;
-    if (this.toDate) params['toDate'] = this.toDate;
-    if (this.selectedEventType) params['eventType'] = this.selectedEventType;
-
-    this.auditService.list(params as Parameters<typeof this.auditService.list>[0]).subscribe({
+    this.auditService.list({ size: 200 }).subscribe({
       next: (res) => {
         const list = res?.content ?? [];
         this.logs.set(list);
@@ -79,42 +71,7 @@ export class AuditLogsComponent implements OnInit {
   }
 
   onEventTypeChange(): void {
-    this.load();
-  }
-
-  onDateChange(): void {
-    if (this.fromDate && this.toDate) {
-      this.load();
-    }
-  }
-
-  clearDateFilters(): void {
-    this.fromDate = '';
-    this.toDate = '';
-    this.load();
-  }
-
-  exportCsv(): void {
-    const from = this.fromDate || new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-    const to = this.toDate || new Date().toISOString().slice(0, 10);
-
-    this.exporting.set(true);
-    this.auditService.exportCsv(from, to).subscribe({
-      next: (blob) => {
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `audit-logs-${from}-to-${to}.csv`;
-        a.click();
-        window.URL.revokeObjectURL(url);
-        this.exporting.set(false);
-        this.toast.success('Audit logs exported successfully');
-      },
-      error: () => {
-        this.exporting.set(false);
-        this.toast.error('Failed to export audit logs');
-      },
-    });
+    this.applyFilter();
   }
 
   getStatusClass(status: string): string {

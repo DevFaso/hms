@@ -58,7 +58,7 @@ public class NotificationController {
         return ResponseEntity.ok(notification);
     }
 
-    @PutMapping("/{id}/read")
+    @PostMapping("/{id}/read")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> markAsRead(@PathVariable UUID id) {
         notificationService.markAsRead(id);

@@ -5,7 +5,6 @@ import com.example.hms.model.AuditEventLog;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
@@ -66,41 +65,4 @@ public interface AuditEventLogRepository extends JpaRepository<AuditEventLog, UU
            "ORDER BY function('date', a.eventTimestamp)")
     List<Object[]> countDailyByHospital(@Param("hospitalId") UUID hospitalId,
                                         @Param("from") LocalDateTime from);
-
-    /** Date range filtered audit logs (ordered by timestamp desc). */
-    @Query("SELECT DISTINCT a FROM AuditEventLog a " +
-           "WHERE a.eventTimestamp >= :from AND a.eventTimestamp <= :to " +
-           "ORDER BY a.eventTimestamp DESC")
-    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
-    Page<AuditEventLog> findByEventTimestampBetween(@Param("from") LocalDateTime from,
-                                                    @Param("to") LocalDateTime to,
-                                                    Pageable pageable);
-
-    /** Date range + event type filtered audit logs. */
-    @Query("SELECT DISTINCT a FROM AuditEventLog a " +
-           "WHERE a.eventType = :eventType " +
-           "AND a.eventTimestamp >= :from AND a.eventTimestamp <= :to " +
-           "ORDER BY a.eventTimestamp DESC")
-    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
-    Page<AuditEventLog> findByEventTypeAndEventTimestampBetween(
-            @Param("eventType") AuditEventType eventType,
-            @Param("from") LocalDateTime from,
-            @Param("to") LocalDateTime to,
-            Pageable pageable);
-
-    /** All audit logs before a given timestamp (for retention cleanup). */
-    List<AuditEventLog> findByEventTimestampBefore(LocalDateTime cutoff);
-
-    /** Bulk-delete audit logs older than the given timestamp (efficient retention purge). */
-    @Modifying
-    @Query("DELETE FROM AuditEventLog a WHERE a.eventTimestamp < :cutoff")
-    int deleteByEventTimestampBefore(@Param("cutoff") LocalDateTime cutoff);
-
-    /** Date range filtered list (non-paginated, for exports). */
-    @Query("SELECT DISTINCT a FROM AuditEventLog a " +
-           "WHERE a.eventTimestamp >= :from AND a.eventTimestamp <= :to " +
-           "ORDER BY a.eventTimestamp DESC")
-    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
-    List<AuditEventLog> findAllByEventTimestampBetween(@Param("from") LocalDateTime from,
-                                                       @Param("to") LocalDateTime to);
 }

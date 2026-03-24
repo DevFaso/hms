@@ -51,8 +51,4 @@ public interface MedicationAdministrationRecordRepository extends JpaRepository<
 
     long countByHospital_IdAndStatusAndScheduledTimeBefore(
         UUID hospitalId, MedicationAdministrationStatus status, LocalDateTime before);
-
-    /** BCMA compliance — all administrations in a hospital after a given time. */
-    List<MedicationAdministrationRecord> findByHospital_IdAndAdministeredAtAfter(
-        UUID hospitalId, LocalDateTime since);
 }

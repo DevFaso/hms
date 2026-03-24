@@ -76,13 +76,6 @@
               </td>
               <td>
                 <div class="action-group">
-                  <button
-                    class="action-link onboard"
-                    title="Onboarding Checklist"
-                    (click)="openOnboarding(org)"
-                  >
-                    <span class="material-symbols-outlined">checklist</span>
-                  </button>
                   <button class="action-link edit" title="Edit" (click)="openEdit(org)">
                     <span class="material-symbols-outlined">edit</span>
                   </button>
@@ -275,74 +268,6 @@
           >
             {{ deleting() ? 'Deleting...' : 'Delete' }}
           </button>
-        </div>
-      </dialog>
-    </div>
-  }
-
-  <!-- Onboarding Checklist Modal -->
-  @if (showOnboarding()) {
-    <div
-      class="modal-backdrop"
-      (click)="closeOnboarding()"
-      (keydown.escape)="closeOnboarding()"
-      tabindex="-1"
-    >
-      <dialog
-        class="modal onboarding-modal"
-        [open]="showOnboarding()"
-        (click)="$event.stopPropagation()"
-        (keydown.escape)="closeOnboarding()"
-        tabindex="-1"
-      >
-        <div class="modal-header">
-          <h2>Onboarding Checklist</h2>
-          <button class="modal-close" (click)="closeOnboarding()">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </div>
-        <div class="modal-body">
-          @if (onboardingLoading()) {
-            <div class="loading-state">
-              <div class="spinner"></div>
-              <p>Loading checklist...</p>
-            </div>
-          } @else if (onboardingStatus()) {
-            <div class="onboarding-header">
-              <h3>{{ onboardingStatus()!.organizationName }}</h3>
-              <span class="code-badge">{{ onboardingStatus()!.organizationCode }}</span>
-              <div class="progress-bar-wrap">
-                <div class="progress-bar">
-                  <div
-                    class="progress-fill"
-                    [style.width.%]="
-                      (onboardingStatus()!.completedSteps / onboardingStatus()!.totalSteps) * 100
-                    "
-                  ></div>
-                </div>
-                <span class="progress-text"
-                  >{{ onboardingStatus()!.completedSteps }} /
-                  {{ onboardingStatus()!.totalSteps }} complete</span
-                >
-              </div>
-            </div>
-            <div class="checklist">
-              @for (step of onboardingStatus()!.steps; track step.key) {
-                <div class="checklist-item" [class.completed]="step.completed">
-                  <span class="material-symbols-outlined step-icon">
-                    {{ step.completed ? 'check_circle' : 'radio_button_unchecked' }}
-                  </span>
-                  <div class="step-info">
-                    <span class="step-label">{{ step.label }}</span>
-                    <span class="step-detail">{{ step.detail }}</span>
-                  </div>
-                </div>
-              }
-            </div>
-          }
-        </div>
-        <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="closeOnboarding()">Close</button>
         </div>
       </dialog>
     </div>

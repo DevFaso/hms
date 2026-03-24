@@ -13,9 +13,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.hms.enums.AcuityLevel;
 import com.example.hms.enums.AdmissionStatus;
-import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.MedicationAdministrationStatus;
-import com.example.hms.enums.NurseHandoffStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
@@ -23,11 +21,8 @@ import com.example.hms.model.Admission;
 import com.example.hms.model.Announcement;
 import com.example.hms.model.Department;
 import com.example.hms.model.Hospital;
-import com.example.hms.model.LabOrder;
 import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Notification;
-import com.example.hms.model.NurseHandoff;
-import com.example.hms.model.NurseHandoffChecklistItem;
 import com.example.hms.model.NursingNote;
 import com.example.hms.model.NursingTask;
 import com.example.hms.model.Patient;
@@ -66,15 +61,6 @@ import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
-import com.example.hms.repository.NurseHandoffRepository;
-import com.example.hms.repository.NurseHandoffChecklistItemRepository;
-import com.example.hms.repository.LabOrderRepository;
-import com.example.hms.repository.ImagingOrderRepository;
-import com.example.hms.repository.ProcedureOrderRepository;
-import com.example.hms.repository.FlowsheetEntryRepository;
-import com.example.hms.enums.NursingTaskCategory;
-import com.example.hms.enums.NursingTaskPriority;
-import com.example.hms.enums.NursingTaskStatus;
 import com.example.hms.service.NurseDashboardService;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -109,12 +95,6 @@ class NurseTaskServiceImplTest {
     @Mock private NursingNoteRepository nursingNoteRepository;
     @Mock private NotificationRepository notificationRepository;
     @Mock private UserRepository userRepository;
-    @Mock private NurseHandoffRepository nurseHandoffRepository;
-    @Mock private NurseHandoffChecklistItemRepository nurseHandoffChecklistItemRepository;
-    @Mock private LabOrderRepository labOrderRepository;
-    @Mock private ImagingOrderRepository imagingOrderRepository;
-    @Mock private ProcedureOrderRepository procedureOrderRepository;
-    @Mock private FlowsheetEntryRepository flowsheetEntryRepository;
 
     private NurseTaskServiceImpl service;
 
@@ -124,10 +104,7 @@ class NurseTaskServiceImplTest {
             nurseDashboardService, prescriptionRepository, marRepository,
             vitalSignRepository, announcementRepository, staffRepository, hospitalRepository,
             admissionRepository, patientRepository, nursingTaskRepository,
-            nursingNoteRepository, notificationRepository, userRepository,
-            nurseHandoffRepository, nurseHandoffChecklistItemRepository,
-            labOrderRepository, imagingOrderRepository, procedureOrderRepository,
-            flowsheetEntryRepository));
+            nursingNoteRepository, notificationRepository, userRepository));
 
         // Default stubs so synthetic/fallback paths activate in existing tests
         lenient().when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(any(), any()))
@@ -192,43 +169,19 @@ class NurseTaskServiceImplTest {
     void getMedicationTasksUsesStatusFilterWhenProvided() {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
-        UUID patientId = UUID.randomUUID();
-        LocalDateTime fixedNow = LocalDateTime.of(2025, 10, 30, 10, 0);
 
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(
-            List.of(patient(patientId, "One", "First", "Last"))
+            List.of(
+                patient(UUID.randomUUID(), "One", "First", "Last"),
+                patient(UUID.randomUUID(), "Two", "First", "Last")
+            )
         );
 
-        Patient mockPatient = Mockito.mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
-        Hospital mockHospital = Mockito.mock(Hospital.class);
-        when(mockHospital.getId()).thenReturn(hospitalId);
+        List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, " held ");
 
-        Prescription rx = Mockito.mock(Prescription.class);
-        when(rx.getId()).thenReturn(UUID.randomUUID());
-        when(rx.getPatient()).thenReturn(mockPatient);
-        when(rx.getHospital()).thenReturn(mockHospital);
-        when(rx.getStatus()).thenReturn(PrescriptionStatus.SIGNED);
-        when(rx.getMedicationName()).thenReturn("Lisinopril");
-        when(rx.getDosage()).thenReturn("10");
-        when(rx.getDoseUnit()).thenReturn("mg");
-        when(rx.getRoute()).thenReturn("PO");
-        when(rx.getCreatedAt()).thenReturn(fixedNow.minusHours(1));
-
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
-            .thenReturn(List.of(rx));
-        when(marRepository.findByPatient_IdAndHospital_IdAndStatus(eq(patientId), eq(hospitalId), any()))
-            .thenReturn(List.of());
-
-        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
-            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
-
-            List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, " due ");
-
-            assertThat(tasks)
-                .isNotEmpty()
-                .allMatch(task -> "DUE".equals(task.getStatus()));
-        }
+        assertThat(tasks)
+            .isNotEmpty()
+            .allMatch(task -> "HELD".equals(task.getStatus()));
     }
 
     @Test
@@ -236,41 +189,15 @@ class NurseTaskServiceImplTest {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();
-        LocalDateTime fixedNow = LocalDateTime.of(2025, 10, 30, 10, 0);
 
         when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(List.of());
         when(nurseDashboardService.getPatientsForNurse(null, hospitalId, null))
             .thenReturn(List.of(patient(patientId, "Display", "First", "Last")));
 
-        Patient mockPatient = Mockito.mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
-        Hospital mockHospital = Mockito.mock(Hospital.class);
-        when(mockHospital.getId()).thenReturn(hospitalId);
+        List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
 
-        Prescription rx = Mockito.mock(Prescription.class);
-        when(rx.getId()).thenReturn(UUID.randomUUID());
-        when(rx.getPatient()).thenReturn(mockPatient);
-        when(rx.getHospital()).thenReturn(mockHospital);
-        when(rx.getStatus()).thenReturn(PrescriptionStatus.SIGNED);
-        when(rx.getMedicationName()).thenReturn("Fallback Med");
-        when(rx.getDosage()).thenReturn("10");
-        when(rx.getDoseUnit()).thenReturn("mg");
-        when(rx.getRoute()).thenReturn("PO");
-        when(rx.getCreatedAt()).thenReturn(fixedNow.minusHours(1));
-
-        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
-            .thenReturn(List.of(rx));
-        when(marRepository.findByPatient_IdAndHospital_IdAndStatus(eq(patientId), eq(hospitalId), any()))
-            .thenReturn(List.of());
-
-        try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
-            mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
-
-            List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
-
-            assertThat(tasks).isNotEmpty();
-            verify(nurseDashboardService).getPatientsForNurse(null, hospitalId, null);
-        }
+        assertThat(tasks).isNotEmpty();
+        verify(nurseDashboardService).getPatientsForNurse(null, hospitalId, null);
     }
 
     @Test
@@ -278,27 +205,15 @@ class NurseTaskServiceImplTest {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
 
-        Patient mockPatient = Mockito.mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(UUID.randomUUID());
-        when(mockPatient.getFullName()).thenReturn("Order Patient");
-
-        LabOrder statOrder = Mockito.mock(LabOrder.class);
-        when(statOrder.getId()).thenReturn(UUID.randomUUID());
-        when(statOrder.getPatient()).thenReturn(mockPatient);
-        when(statOrder.getStatus()).thenReturn(LabOrderStatus.ORDERED);
-        when(statOrder.getPriority()).thenReturn("STAT");
-        when(statOrder.getCreatedAt()).thenReturn(LocalDateTime.now());
-
-        LabOrder routineOrder = Mockito.mock(LabOrder.class);
-        when(routineOrder.getId()).thenReturn(UUID.randomUUID());
-        when(routineOrder.getPatient()).thenReturn(mockPatient);
-        when(routineOrder.getStatus()).thenReturn(LabOrderStatus.ORDERED);
-        when(routineOrder.getPriority()).thenReturn("ROUTINE");
-        when(routineOrder.getCreatedAt()).thenReturn(LocalDateTime.now());
-
-        when(labOrderRepository.findByHospital_Id(hospitalId)).thenReturn(List.of(statOrder, routineOrder));
-        when(imagingOrderRepository.findByHospital_IdOrderByOrderedAtDesc(hospitalId)).thenReturn(List.of());
-        when(procedureOrderRepository.findByHospital_IdOrderByOrderedAtDesc(hospitalId)).thenReturn(List.of());
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(
+            List.of(
+                patient(UUID.randomUUID(), "One", "First", "Last"),
+                patient(UUID.randomUUID(), "Two", "First", "Last"),
+                patient(UUID.randomUUID(), "Three", "First", "Last"),
+                patient(UUID.randomUUID(), "Four", "First", "Last"),
+                patient(UUID.randomUUID(), "Five", "First", "Last")
+            )
+        );
 
         List<NurseOrderTaskResponseDTO> tasks = service.getOrderTasks(nurseId, hospitalId, " stat ", 50);
 
@@ -312,24 +227,10 @@ class NurseTaskServiceImplTest {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
 
-        Patient p1 = Mockito.mock(Patient.class);
-        when(p1.getId()).thenReturn(UUID.randomUUID());
-        when(p1.getFullName()).thenReturn("One");
-        Patient p2 = Mockito.mock(Patient.class);
-        lenient().when(p2.getId()).thenReturn(UUID.randomUUID());
-        lenient().when(p2.getFullName()).thenReturn("Two");
-
-        NurseHandoff h1 = Mockito.mock(NurseHandoff.class);
-        when(h1.getId()).thenReturn(UUID.randomUUID());
-        when(h1.getPatient()).thenReturn(p1);
-        when(h1.getCreatedAt()).thenReturn(LocalDateTime.now());
-        NurseHandoff h2 = Mockito.mock(NurseHandoff.class);
-        lenient().when(h2.getId()).thenReturn(UUID.randomUUID());
-        lenient().when(h2.getPatient()).thenReturn(p2);
-        lenient().when(h2.getCreatedAt()).thenReturn(LocalDateTime.now());
-
-        when(nurseHandoffRepository.findByHospitalAndStatus(hospitalId, NurseHandoffStatus.PENDING))
-            .thenReturn(List.of(h1, h2));
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null)).thenReturn(
+            List.of(patient(UUID.randomUUID(), "One", "First", "Last"),
+                patient(UUID.randomUUID(), "Two", "First", "Last"))
+        );
 
         List<NurseHandoffSummaryDTO> handoffs = service.getHandoffSummaries(nurseId, hospitalId, 0);
 
@@ -373,14 +274,17 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
-    void completeHandoffThrowsWhenNotFound() {
+    void completeHandoffReturnsSilentlyWhenNotFound() {
         UUID handoffId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.completeHandoff(handoffId, nurseId, hospitalId))
-            .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("Handoff not found");
+        doReturn(List.of(NurseHandoffSummaryDTO.builder().id(UUID.randomUUID()).build()))
+            .when(service).getHandoffSummaries(nurseId, hospitalId, 6);
+
+        service.completeHandoff(handoffId, nurseId, hospitalId);
+
+        verify(service).getHandoffSummaries(nurseId, hospitalId, 6);
     }
 
     @Test
@@ -388,36 +292,20 @@ class NurseTaskServiceImplTest {
         UUID taskId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
-        UUID patientId = UUID.randomUUID();
 
-        Patient mockPatient = Mockito.mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
-        when(mockPatient.getFullName()).thenReturn("Demo");
-        Hospital mockHospital = Mockito.mock(Hospital.class);
-        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
-
-        Prescription rx = Mockito.mock(Prescription.class);
-        when(rx.getId()).thenReturn(taskId);
-        when(rx.getPatient()).thenReturn(mockPatient);
-        when(rx.getHospital()).thenReturn(mockHospital);
-        when(rx.getMedicationName()).thenReturn("Lisinopril");
-        when(rx.getDosage()).thenReturn("10");
-        when(rx.getDoseUnit()).thenReturn("mg");
-        when(rx.getRoute()).thenReturn("IV");
-        when(rx.getCreatedAt()).thenReturn(LocalDateTime.now());
-
-        when(prescriptionRepository.findById(taskId)).thenReturn(Optional.of(rx));
-
-        MedicationAdministrationRecord givenRecord = MedicationAdministrationRecord.builder()
-            .prescription(rx).patient(mockPatient).hospital(mockHospital)
-            .medicationName("Lisinopril").dose("10 mg").route("IV")
-            .scheduledTime(LocalDateTime.now()).status(MedicationAdministrationStatus.GIVEN).build();
-        MedicationAdministrationRecord heldRecord = MedicationAdministrationRecord.builder()
-            .prescription(rx).patient(mockPatient).hospital(mockHospital)
-            .medicationName("Lisinopril").dose("10 mg").route("IV")
-            .scheduledTime(LocalDateTime.now()).status(MedicationAdministrationStatus.HELD).build();
-        when(marRepository.save(any(MedicationAdministrationRecord.class)))
-            .thenReturn(givenRecord).thenReturn(heldRecord);
+        List<NurseMedicationTaskResponseDTO> tasks = List.of(
+            NurseMedicationTaskResponseDTO.builder()
+                .id(taskId)
+                .patientId(UUID.randomUUID())
+                .patientName("Demo")
+                .medication("Lisinopril")
+                .dose("10 mg")
+                .route("IV")
+                .dueTime(LocalDateTime.now())
+                .status("DUE")
+                .build()
+        );
+        doReturn(tasks).when(service).getMedicationTasks(nurseId, hospitalId, null);
 
         NurseMedicationTaskResponseDTO defaulted = service.recordMedicationAdministration(
             taskId,
@@ -457,6 +345,9 @@ class NurseTaskServiceImplTest {
     void recordMedicationAdministrationThrowsWhenTaskMissing() {
         UUID taskId = UUID.randomUUID();
 
+        doReturn(List.of(NurseMedicationTaskResponseDTO.builder().id(UUID.randomUUID()).build()))
+            .when(service).getMedicationTasks(any(), any(), any());
+
         UUID randomId = UUID.randomUUID();
         UUID id2 = UUID.randomUUID();
         assertThatThrownBy(() -> service.recordMedicationAdministration(taskId, randomId, id2, null))
@@ -484,15 +375,8 @@ class NurseTaskServiceImplTest {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
 
-        Hospital mockHospital = Mockito.mock(Hospital.class);
-        when(mockHospital.getId()).thenReturn(hospitalId);
-        NurseHandoff handoff = Mockito.mock(NurseHandoff.class);
-        when(handoff.getHospital()).thenReturn(mockHospital);
-        when(nurseHandoffRepository.findById(handoffId)).thenReturn(Optional.of(handoff));
-
-        NurseHandoffChecklistItem item = new NurseHandoffChecklistItem();
-        item.setId(taskId);
-        when(nurseHandoffChecklistItemRepository.findById(taskId)).thenReturn(Optional.of(item));
+        doReturn(List.of(NurseHandoffSummaryDTO.builder().id(handoffId).updatedAt(LocalDateTime.now()).build()))
+            .when(service).getHandoffSummaries(nurseId, hospitalId, 6);
 
         NurseHandoffChecklistUpdateResponseDTO response = service.updateHandoffChecklistItem(
             handoffId,
@@ -514,6 +398,8 @@ class NurseTaskServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         UUID handoffId = UUID.randomUUID();
 
+        doReturn(List.of()).when(service).getHandoffSummaries(nurseId, hospitalId, 6);
+
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.updateHandoffChecklistItem(handoffId, randomId, nurseId, hospitalId, false))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -525,18 +411,18 @@ class NurseTaskServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         UUID handoffId = UUID.randomUUID();
 
-        when(nurseHandoffRepository.findById(handoffId)).thenThrow(new RuntimeException("boom"));
+        doThrow(new RuntimeException("boom")).when(service).getHandoffSummaries(nurseId, hospitalId, 6);
 
         UUID randomId = UUID.randomUUID();
         assertThatThrownBy(() -> service.updateHandoffChecklistItem(handoffId, randomId, nurseId, hospitalId, false))
-            .isInstanceOf(RuntimeException.class);
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
-    void getMedicationTasksReturnsEmptyWhenHospitalMissing() {
+    void getMedicationTasksGeneratesDefaultPatientsWhenHospitalMissing() {
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(UUID.randomUUID(), null, null);
 
-        assertThat(tasks).isEmpty();
+        assertThat(tasks).isNotEmpty();
     }
 
     @Test
@@ -701,9 +587,9 @@ class NurseTaskServiceImplTest {
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(rx));
 
-        // DRAFT is not in ACTIVE_RX_STATUSES, so it is excluded — no synthetic fallback
+        // Should fall back to synthetic tasks since DRAFT is filtered out
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
-        assertThat(tasks).isEmpty();
+        assertThat(tasks).isNotEmpty();
     }
 
     @Test
@@ -1053,31 +939,14 @@ class NurseTaskServiceImplTest {
         UUID taskId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
-        UUID patientId = UUID.randomUUID();
 
-        Patient mockPatient = Mockito.mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
-        when(mockPatient.getFullName()).thenReturn("Demo");
-        Hospital mockHospital = Mockito.mock(Hospital.class);
-        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
-
-        Prescription rx = Mockito.mock(Prescription.class);
-        when(rx.getId()).thenReturn(taskId);
-        when(rx.getPatient()).thenReturn(mockPatient);
-        when(rx.getHospital()).thenReturn(mockHospital);
-        when(rx.getMedicationName()).thenReturn("TestMed");
-        when(rx.getDosage()).thenReturn("10");
-        when(rx.getDoseUnit()).thenReturn("mg");
-        when(rx.getRoute()).thenReturn("IV");
-        when(rx.getCreatedAt()).thenReturn(LocalDateTime.now());
-
-        when(prescriptionRepository.findById(taskId)).thenReturn(Optional.of(rx));
-
-        MedicationAdministrationRecord saved = MedicationAdministrationRecord.builder()
-            .prescription(rx).patient(mockPatient).hospital(mockHospital)
-            .medicationName("TestMed").dose("10 mg").route("IV")
-            .scheduledTime(LocalDateTime.now()).status(MedicationAdministrationStatus.GIVEN).build();
-        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenReturn(saved);
+        List<NurseMedicationTaskResponseDTO> tasks = List.of(
+            NurseMedicationTaskResponseDTO.builder()
+                .id(taskId).patientId(UUID.randomUUID()).patientName("Demo")
+                .medication("TestMed").dose("10 mg").route("IV")
+                .dueTime(LocalDateTime.now()).status("DUE").build()
+        );
+        doReturn(tasks).when(service).getMedicationTasks(nurseId, hospitalId, null);
 
         NurseMedicationTaskResponseDTO result = service.recordMedicationAdministration(taskId, nurseId, hospitalId, null);
 
@@ -1128,31 +997,14 @@ class NurseTaskServiceImplTest {
         UUID taskId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
-        UUID patientId = UUID.randomUUID();
 
-        Patient mockPatient = Mockito.mock(Patient.class);
-        when(mockPatient.getId()).thenReturn(patientId);
-        when(mockPatient.getFullName()).thenReturn("Demo");
-        Hospital mockHospital = Mockito.mock(Hospital.class);
-        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
-
-        Prescription rx = Mockito.mock(Prescription.class);
-        when(rx.getId()).thenReturn(taskId);
-        when(rx.getPatient()).thenReturn(mockPatient);
-        when(rx.getHospital()).thenReturn(mockHospital);
-        when(rx.getMedicationName()).thenReturn("TestMed");
-        when(rx.getDosage()).thenReturn("10");
-        when(rx.getDoseUnit()).thenReturn("mg");
-        when(rx.getRoute()).thenReturn("IV");
-        when(rx.getCreatedAt()).thenReturn(LocalDateTime.now());
-
-        when(prescriptionRepository.findById(taskId)).thenReturn(Optional.of(rx));
-
-        MedicationAdministrationRecord saved = MedicationAdministrationRecord.builder()
-            .prescription(rx).patient(mockPatient).hospital(mockHospital)
-            .medicationName("TestMed").dose("10 mg").route("IV")
-            .scheduledTime(LocalDateTime.now()).status(MedicationAdministrationStatus.GIVEN).build();
-        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenReturn(saved);
+        List<NurseMedicationTaskResponseDTO> tasks = List.of(
+            NurseMedicationTaskResponseDTO.builder()
+                .id(taskId).patientId(UUID.randomUUID()).patientName("Demo")
+                .medication("TestMed").dose("10 mg").route("IV")
+                .dueTime(LocalDateTime.now()).status("DUE").build()
+        );
+        doReturn(tasks).when(service).getMedicationTasks(nurseId, hospitalId, null);
 
         NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
         request.setStatus("  "); // blank → defaults to GIVEN
@@ -1223,9 +1075,8 @@ class NurseTaskServiceImplTest {
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
 
-            // Stub handoff repo and order queries for dashboard
-            when(nurseHandoffRepository.findByHospitalAndStatus(hospitalId, NurseHandoffStatus.PENDING))
-                .thenReturn(List.of());
+            // Stub handoff/order synthetic generators to avoid LocalDate.atStartOfDay() NPE under MockedStatic
+            doReturn(List.of()).when(service).getHandoffSummaries(nurseId, hospitalId, 20);
             doReturn(List.of()).when(service).getOrderTasks(nurseId, hospitalId, null, 20);
 
             NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
@@ -1274,9 +1125,8 @@ class NurseTaskServiceImplTest {
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
             mockedNow.when(LocalDateTime::now).thenReturn(fixedNow);
 
-            // Stub handoff repo and order queries for dashboard
-            when(nurseHandoffRepository.findByHospitalAndStatus(hospitalId, NurseHandoffStatus.PENDING))
-                .thenReturn(List.of());
+            // Stub handoff/order synthetic generators to avoid LocalDate.atStartOfDay() NPE under MockedStatic
+            doReturn(List.of()).when(service).getHandoffSummaries(nurseId, hospitalId, 20);
             doReturn(List.of()).when(service).getOrderTasks(nurseId, hospitalId, null, 20);
 
             NurseDashboardSummaryDTO summary = service.getDashboardSummary(nurseId, hospitalId);
@@ -1341,17 +1191,8 @@ class NurseTaskServiceImplTest {
         UUID nurseId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
 
-        Hospital mockHospital = Mockito.mock(Hospital.class);
-        when(mockHospital.getId()).thenReturn(hospitalId);
-        NurseHandoff handoff = Mockito.mock(NurseHandoff.class);
-        when(handoff.getHospital()).thenReturn(mockHospital);
-        when(nurseHandoffRepository.findById(handoffId)).thenReturn(Optional.of(handoff));
-
-        NurseHandoffChecklistItem item = new NurseHandoffChecklistItem();
-        item.setId(taskId);
-        item.setCompleted(true);
-        item.setCompletedAt(LocalDateTime.now());
-        when(nurseHandoffChecklistItemRepository.findById(taskId)).thenReturn(Optional.of(item));
+        doReturn(List.of(NurseHandoffSummaryDTO.builder().id(handoffId).updatedAt(LocalDateTime.now()).build()))
+            .when(service).getHandoffSummaries(nurseId, hospitalId, 6);
 
         NurseHandoffChecklistUpdateResponseDTO response = service.updateHandoffChecklistItem(
             handoffId, taskId, nurseId, hospitalId, false
@@ -1785,20 +1626,20 @@ class NurseTaskServiceImplTest {
         NursingTask task = NursingTask.builder()
             .patient(taskPat1)
             .hospital(taskHosp1)
-            .category(NursingTaskCategory.VITALS_CHECK).description("Check vitals").priority(NursingTaskPriority.ROUTINE)
-            .status(NursingTaskStatus.PENDING).dueAt(LocalDateTime.now().plusHours(1))
+            .category("ASSESSMENT").description("Check vitals").priority("ROUTINE")
+            .status("PENDING").dueAt(LocalDateTime.now().plusHours(1))
             .createdByName("Nurse Jane")
             .build();
         task.setId(UUID.randomUUID());
 
-        when(nursingTaskRepository.findByHospital_IdAndStatusOrderByDueAtAsc(hospitalId, NursingTaskStatus.PENDING))
+        when(nursingTaskRepository.findByHospital_IdAndStatusOrderByDueAtAsc(hospitalId, "PENDING"))
             .thenReturn(List.of(task));
 
         List<NurseTaskItemDTO> result = service.getNursingTaskBoard(hospitalId, "PENDING");
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getStatus()).isEqualTo("PENDING");
-        assertThat(result.get(0).getCategory()).isEqualTo("VITALS_CHECK");
+        assertThat(result.get(0).getCategory()).isEqualTo("ASSESSMENT");
     }
 
     @Test
@@ -1812,13 +1653,13 @@ class NurseTaskServiceImplTest {
         NursingTask task = NursingTask.builder()
             .patient(taskPat2)
             .hospital(taskHosp2)
-            .category(NursingTaskCategory.WOUND_CARE).description("Dressing change").priority(NursingTaskPriority.URGENT)
-            .status(NursingTaskStatus.IN_PROGRESS).dueAt(LocalDateTime.now().minusMinutes(10))
+            .category("WOUND_CARE").description("Dressing change").priority("URGENT")
+            .status("IN_PROGRESS").dueAt(LocalDateTime.now().minusMinutes(10))
             .createdByName("Nurse Bob")
             .build();
         task.setId(UUID.randomUUID());
 
-        when(nursingTaskRepository.findByHospital_IdAndStatusNotOrderByDueAtAsc(hospitalId, NursingTaskStatus.COMPLETED))
+        when(nursingTaskRepository.findByHospital_IdAndStatusNotOrderByDueAtAsc(hospitalId, "COMPLETED"))
             .thenReturn(List.of(task));
 
         List<NurseTaskItemDTO> result = service.getNursingTaskBoard(hospitalId, null);
@@ -1850,7 +1691,7 @@ class NurseTaskServiceImplTest {
 
         NurseTaskCreateRequestDTO req = new NurseTaskCreateRequestDTO();
         req.setPatientId(patientId);
-        req.setCategory("vitals_check");
+        req.setCategory("assessment");
         req.setDescription("Neuro check q2h");
         req.setPriority("routine");
         req.setDueAt(LocalDateTime.now().plusHours(2));
@@ -1863,7 +1704,7 @@ class NurseTaskServiceImplTest {
 
         NurseTaskItemDTO result = service.createNursingTask(nurseId, hospitalId, req);
 
-        assertThat(result.getCategory()).isEqualTo("VITALS_CHECK");
+        assertThat(result.getCategory()).isEqualTo("ASSESSMENT");
         assertThat(result.getStatus()).isEqualTo("PENDING");
         assertThat(result.getPatientName()).isEqualTo("Task Pat");
         assertThat(result.getCreatedByName()).isEqualTo("Jane Nurse");
@@ -1876,7 +1717,7 @@ class NurseTaskServiceImplTest {
 
         NurseTaskCreateRequestDTO req = new NurseTaskCreateRequestDTO();
         req.setPatientId(UUID.randomUUID());
-        req.setCategory("VITALS_CHECK");
+        req.setCategory("ASSESSMENT");
         req.setDescription("Test");
 
         UUID nurseUserId = UUID.randomUUID();
@@ -1901,8 +1742,8 @@ class NurseTaskServiceImplTest {
         NursingTask task = NursingTask.builder()
             .patient(pat)
             .hospital(taskHosp)
-            .category(NursingTaskCategory.WOUND_CARE).description("Dressing change")
-            .priority(NursingTaskPriority.ROUTINE).status(NursingTaskStatus.PENDING)
+            .category("WOUND_CARE").description("Dressing change")
+            .priority("ROUTINE").status("PENDING")
             .createdByName("Creator")
             .build();
         task.setId(taskId);

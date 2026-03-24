@@ -56,18 +56,6 @@ export interface AdminRegisterRequest {
   forcePasswordChange?: boolean;
 }
 
-export interface BulkImportRequest {
-  csvContent: string;
-  delimiter?: string;
-}
-
-export interface BulkImportResult {
-  processed: number;
-  imported: number;
-  failed: number;
-  results: { rowNumber: number; identifier: string; success: boolean; message: string }[];
-}
-
 @Injectable({ providedIn: 'root' })
 export class UserService {
   private readonly http = inject(HttpClient);
@@ -111,16 +99,5 @@ export class UserService {
 
   restore(id: string): Observable<void> {
     return this.http.patch<void>(`/users/${id}/restore`, {});
-  }
-
-  bulkImport(request: BulkImportRequest): Observable<BulkImportResult> {
-    return this.http.post<BulkImportResult>('/super-admin/users/import', request);
-  }
-
-  forcePasswordReset(userIds: string[]): Observable<{ resetCount: number; results: unknown[] }> {
-    return this.http.post<{ resetCount: number; results: unknown[] }>(
-      '/super-admin/users/force-password-reset',
-      { userIds },
-    );
   }
 }

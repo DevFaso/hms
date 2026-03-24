@@ -76,7 +76,7 @@ class AuditEventLogControllerTest {
         when(auditRepository.findAll(pageable)).thenReturn(page);
         when(auditMapper.toDto(entity)).thenReturn(responseDTO);
 
-        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(pageable, null, null, null);
+        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(pageable);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody()).isNotNull();
@@ -89,7 +89,7 @@ class AuditEventLogControllerTest {
         Page<AuditEventLog> page = Page.empty(pageable);
         when(auditRepository.findAll(pageable)).thenReturn(page);
 
-        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(pageable, null, null, null);
+        ResponseEntity<Page<AuditEventLogResponseDTO>> result = controller.getAllAuditLogs(pageable);
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(result.getBody().getContent()).isEmpty();

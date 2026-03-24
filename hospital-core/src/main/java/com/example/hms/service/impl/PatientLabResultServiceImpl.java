@@ -12,22 +12,15 @@ import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.LabResultReferenceRangeDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
-import com.example.hms.payload.dto.lab.LabResultTrendDTO;
-import com.example.hms.payload.dto.lab.LabResultTrendPointDTO;
 import com.example.hms.payload.dto.lab.PatientLabResultResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.service.PatientLabResultService;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -234,94 +227,5 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             return null;
         }
         return new java.text.DecimalFormat("0.##").format(value);
-    }
-
-    // ── Lab Result Trends ─────────────────────────────────────────────────
-
-    private static final int TREND_MAX_POINTS = 12;
-    private static final String UNKNOWN_KEY = "unknown";
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<LabResultTrendDTO> getLabResultTrends(UUID patientId) {
-        log.info("Fetching lab result trends for patient {}", patientId);
-
-        List<LabResult> allResults = labResultRepository.findByLabOrder_Patient_Id(patientId);
-
-        Map<String, List<LabResult>> grouped = allResults.stream()
-                .collect(Collectors.groupingBy(this::groupingKey, LinkedHashMap::new, Collectors.toList()));
-        // Note: Collectors.toList() is required here by Collectors.groupingBy downstream collector
-
-        List<LabResultTrendDTO> trends = grouped.values().stream()
-                .map(this::buildTrend)
-                .filter(java.util.Objects::nonNull)
-                .collect(Collectors.toList());
-
-        trends.sort(Comparator.comparing(LabResultTrendDTO::getTestName,
-                Comparator.nullsLast(Comparator.naturalOrder())));
-        return trends;
-    }
-
-    private String groupingKey(LabResult r) {
-        LabOrder order = r.getLabOrder();
-        if (order == null) {
-            return UNKNOWN_KEY;
-        }
-        LabTestDefinition def = order.getLabTestDefinition();
-        if (def != null) {
-            return def.getId().toString();
-        }
-        return UNKNOWN_KEY;
-    }
-
-    private LabResultTrendDTO buildTrend(List<LabResult> group) {
-        List<LabResult> sorted = group.stream()
-                .sorted(Comparator.comparing(LabResult::getResultDate,
-                        Comparator.nullsLast(Comparator.reverseOrder())))
-                .limit(TREND_MAX_POINTS)
-                .toList();
-
-        if (sorted.isEmpty()) {
-            return null;
-        }
-
-        LabResult first = sorted.get(0);
-        LabOrder order = first.getLabOrder();
-        LabTestDefinition def = order != null ? order.getLabTestDefinition() : null;
-
-        List<LabResultTrendPointDTO> points = sorted.stream()
-                .map(this::buildTrendPoint)
-                .toList();
-
-        return LabResultTrendDTO.builder()
-                .testName(resolveTestName(order, def))
-                .testCode(def != null ? def.getTestCode() : null)
-                .unit(resolveUnit(first, def))
-                .category(def != null ? def.getCategory() : null)
-                .dataPoints(points)
-                .build();
-    }
-
-    private LabResultTrendPointDTO buildTrendPoint(LabResult r) {
-        LabResultResponseDTO mapped = labResultMapper.toResponseDTO(r);
-        String status = resolveStatus(r, mapped);
-        boolean abnormal = !STATUS_NORMAL.equals(status) && !STATUS_PENDING.equals(status);
-        return LabResultTrendPointDTO.builder()
-                .value(r.getResultValue())
-                .collectedAt(r.getLabOrder() != null ? r.getLabOrder().getOrderDatetime() : null)
-                .resultedAt(r.getResultDate())
-                .status(status)
-                .abnormal(abnormal)
-                .build();
-    }
-
-    private static String resolveTestName(LabOrder order, LabTestDefinition def) {
-        if (def != null && def.getName() != null) {
-            return def.getName();
-        }
-        if (order != null && order.getClinicalIndication() != null) {
-            return order.getClinicalIndication();
-        }
-        return "Lab Result";
     }
 }

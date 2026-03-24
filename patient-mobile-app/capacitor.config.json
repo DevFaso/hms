@@ -1,0 +1,16 @@
+{
+  "appId": "com.bitnesttechs.hms.patient",
+  "appName": "MediHub Patient",
+  "webDir": "dist",
+  "plugins": {
+    "PushNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  },
+  "ios": {
+    "scheme": "MediHub Patient"
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}

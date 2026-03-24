@@ -90,8 +90,7 @@ class ChatMessageTest {
             LocalDateTime ts = LocalDateTime.of(2026, 2, 11, 10, 1);
             UserRoleHospitalAssignment assignment = buildAssignment(sender);
 
-            ChatMessage msg = new ChatMessage(sender, recipient, "Hello", sentAt, true, ts, assignment,
-                    null, null, null, null);
+            ChatMessage msg = new ChatMessage(sender, recipient, "Hello", sentAt, true, ts, assignment);
 
             assertAll(
                 () -> assertSame(sender, msg.getSender()),

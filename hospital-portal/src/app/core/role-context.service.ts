@@ -3,7 +3,7 @@ import { Injectable, signal, computed } from '@angular/core';
 @Injectable({ providedIn: 'root' })
 export class RoleContextService {
   isReceptionist(): boolean {
-    return this.hasRole('ROLE_RECEPTIONIST');
+    return this.hasRole('RECEPTIONIST');
   }
   private readonly _activeHospitalId = signal<string | null>(null);
   private readonly _activeRoles = signal<string[]>([]);

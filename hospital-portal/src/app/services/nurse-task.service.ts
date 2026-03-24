@@ -40,13 +40,6 @@ export interface NurseHandoff {
   note: string;
 }
 
-export interface NurseHandoffCreateRequest {
-  patientId: string;
-  direction: string;
-  note?: string;
-  checklistItems?: string[];
-}
-
 export interface NurseAnnouncement {
   id: string;
   text: string;
@@ -191,82 +184,6 @@ export interface NurseCareNoteResponse {
   documentedAt: string;
 }
 
-// ── MVP 14 interfaces ─────────────────────────────────────────────
-
-export interface NursePatient {
-  id: string;
-  patientId: string;
-  firstName: string;
-  lastName: string;
-  displayName: string;
-  mrn: string;
-  room: string | null;
-  bed: string | null;
-  gender: string;
-  dateOfBirth: string;
-  bloodType: string | null;
-  allergies: string | null;
-  flags: string[];
-  risks: string[];
-  chronicConditions: string[];
-  hr: number | null;
-  bp: string | null;
-  spo2: number | null;
-  hospitalId: string;
-  hospitalName: string;
-  departmentName: string | null;
-  active: boolean;
-}
-
-export interface NursingNoteResponse {
-  id: string;
-  patientId: string;
-  patientName: string;
-  patientMrn: string;
-  authorName: string;
-  authorCredentials: string | null;
-  template: string;
-  narrative: string | null;
-  actionSummary: string | null;
-  responseSummary: string | null;
-  documentedAt: string;
-  createdAt: string;
-}
-
-// ── MVP 15 interfaces (Flowsheets + BCMA) ─────────────────────────
-
-export interface FlowsheetEntry {
-  id: string;
-  patientId: string;
-  patientName: string;
-  type: string;
-  numericValue: number | null;
-  unit: string | null;
-  textValue: string | null;
-  subType: string | null;
-  recordedAt: string;
-  recordedByName: string;
-  notes: string | null;
-}
-
-export interface FlowsheetEntryCreateRequest {
-  patientId: string;
-  type: string;
-  numericValue?: number;
-  unit?: string;
-  textValue?: string;
-  subType?: string;
-  notes?: string;
-}
-
-export interface BcmaCompliance {
-  totalAdministrations: number;
-  scannedCount: number;
-  overrideCount: number;
-  complianceRate: number;
-  overrideRate: number;
-}
-
 @Injectable({ providedIn: 'root' })
 export class NurseTaskService {
   private readonly http = inject(HttpClient);
@@ -340,14 +257,6 @@ export class NurseTaskService {
 
   updateHandoffTask(handoffId: string, taskId: string, completed: boolean): Observable<unknown> {
     return this.http.patch(`${this.baseUrl}/handoffs/${handoffId}/tasks/${taskId}`, { completed });
-  }
-
-  createHandoff(request: NurseHandoffCreateRequest, hospitalId?: string): Observable<NurseHandoff> {
-    let httpParams = new HttpParams();
-    if (hospitalId) httpParams = httpParams.set('hospitalId', hospitalId);
-    return this.http.post<NurseHandoff>(`${this.baseUrl}/handoffs`, request, {
-      params: httpParams,
-    });
   }
 
   getAnnouncements(params?: { hospitalId?: string }): Observable<NurseAnnouncement[]> {
@@ -459,71 +368,5 @@ export class NurseTaskService {
       data,
       { params: httpParams },
     );
-  }
-
-  // ── MVP 14 methods ────────────────────────────────────────────────
-
-  getPatients(params?: { hospitalId?: string; assignee?: string }): Observable<NursePatient[]> {
-    let httpParams = new HttpParams();
-    if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
-    if (params?.assignee) httpParams = httpParams.set('assignee', params.assignee);
-    return this.http.get<NursePatient[]>(`${this.baseUrl}/patients`, { params: httpParams });
-  }
-
-  getNursingNotes(params: {
-    patientId: string;
-    hospitalId?: string;
-    limit?: number;
-  }): Observable<NursingNoteResponse[]> {
-    let httpParams = new HttpParams().set('patientId', params.patientId);
-    if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
-    if (params.limit != null) httpParams = httpParams.set('limit', params.limit);
-    return this.http.get<NursingNoteResponse[]>(`${this.baseUrl}/notes`, { params: httpParams });
-  }
-
-  // ── MVP 15 methods (Flowsheets + BCMA) ────────────────────────────
-
-  getFlowsheetEntries(
-    patientId: string,
-    params?: { hospitalId?: string; type?: string },
-  ): Observable<FlowsheetEntry[]> {
-    let httpParams = new HttpParams();
-    if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
-    if (params?.type) httpParams = httpParams.set('type', params.type);
-    return this.http.get<FlowsheetEntry[]>(`${this.baseUrl}/patients/${patientId}/flowsheets`, {
-      params: httpParams,
-    });
-  }
-
-  recordFlowsheetEntry(
-    data: FlowsheetEntryCreateRequest,
-    hospitalId?: string,
-  ): Observable<FlowsheetEntry> {
-    let httpParams = new HttpParams();
-    if (hospitalId) httpParams = httpParams.set('hospitalId', hospitalId);
-    return this.http.post<FlowsheetEntry>(`${this.baseUrl}/flowsheets`, data, {
-      params: httpParams,
-    });
-  }
-
-  reassignTask(
-    taskId: string,
-    targetStaffId: string,
-    hospitalId?: string,
-  ): Observable<NurseTaskItem> {
-    let httpParams = new HttpParams().set('targetStaffId', targetStaffId);
-    if (hospitalId) httpParams = httpParams.set('hospitalId', hospitalId);
-    return this.http.put<NurseTaskItem>(`${this.baseUrl}/tasks/${taskId}/reassign`, null, {
-      params: httpParams,
-    });
-  }
-
-  getBcmaCompliance(params?: { hospitalId?: string; hours?: number }): Observable<BcmaCompliance> {
-    let httpParams = new HttpParams();
-    if (params?.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
-    if (params?.hours != null) httpParams = httpParams.set('hours', params.hours);
-    return this.http.get<BcmaCompliance>(`${this.baseUrl}/bcma/compliance`, {
-      params: httpParams,
-    });
   }
 }

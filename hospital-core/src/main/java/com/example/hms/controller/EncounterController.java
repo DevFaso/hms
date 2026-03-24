@@ -100,7 +100,7 @@ public class EncounterController {
     // Read by ID
     // ----------------------------------------------------------
     @GetMapping(value = "/{id}", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_PATIENT','ROLE_SUPER_ADMIN','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_PATIENT','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get an encounter by ID")
     public ResponseEntity<EncounterResponseDTO> getById(
         @PathVariable UUID id,
@@ -114,7 +114,7 @@ public class EncounterController {
     // Paged & filtered list
     // ----------------------------------------------------------
     @GetMapping(consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Search/List encounters")
     public ResponseEntity<Page<EncounterResponseDTO>> list(
         @RequestParam(required = false) UUID patientId,
@@ -238,7 +238,7 @@ public class EncounterController {
     }
 
     @GetMapping(value = "/{encounterId}/notes/history", consumes = MediaType.ALL_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_LAB_MANAGER')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get encounter note history",
                description = "Returns the audit trail of all changes to the encounter note, " +
                            "including original creation, updates, and addendums.")

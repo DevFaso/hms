@@ -7,11 +7,9 @@ import com.example.hms.payload.dto.superadmin.SuperAdminCreateOrganizationReques
 import com.example.hms.payload.dto.superadmin.SuperAdminCreateOrganizationResponseDTO;
 import com.example.hms.payload.dto.superadmin.SuperAdminOrganizationHierarchyResponseDTO;
 import com.example.hms.payload.dto.superadmin.SuperAdminOrganizationsSummaryDTO;
-import com.example.hms.payload.dto.superadmin.TenantOnboardingStatusDTO;
 import com.example.hms.service.SuperAdminOrganizationOverviewService;
 import com.example.hms.service.SuperAdminOrganizationProvisioningService;
 import com.example.hms.service.HospitalService;
-import com.example.hms.service.TenantOnboardingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -42,22 +40,12 @@ public class SuperAdminOrganizationController {
     private final SuperAdminOrganizationOverviewService overviewService;
     private final SuperAdminOrganizationProvisioningService provisioningService;
     private final HospitalService hospitalService;
-    private final TenantOnboardingService tenantOnboardingService;
 
     @GetMapping("/summary")
     @PreAuthorize("hasRole('SUPER_ADMIN')")
     @Operation(summary = "Organization overview for super admins", security = @SecurityRequirement(name = "bearerAuth"))
     public ResponseEntity<SuperAdminOrganizationsSummaryDTO> getOrganizationsSummary() {
         return ResponseEntity.ok(overviewService.getOrganizationsSummary());
-    }
-
-    @GetMapping("/{organizationId}/onboarding")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
-    @Operation(summary = "Tenant onboarding checklist status", security = @SecurityRequirement(name = "bearerAuth"))
-    public ResponseEntity<TenantOnboardingStatusDTO> getOnboardingStatus(
-        @PathVariable UUID organizationId
-    ) {
-        return ResponseEntity.ok(tenantOnboardingService.getOnboardingStatus(organizationId));
     }
 
     @GetMapping("/hierarchy")

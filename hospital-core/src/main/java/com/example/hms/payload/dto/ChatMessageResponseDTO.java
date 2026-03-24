@@ -29,10 +29,4 @@ public class ChatMessageResponseDTO {
     private String content;
     private boolean read;
     private String translation;
-
-    // ── Attachment (null when message has no file) ──
-    private String attachmentUrl;
-    private String attachmentName;
-    private String attachmentContentType;
-    private Long attachmentSizeBytes;
 }

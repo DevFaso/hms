@@ -69,17 +69,17 @@ public class EhrIntegrationAdapter extends AbstractToggleableIntegrationAdapter 
 
     @Override
     protected String defaultBaseUrl(Locale locale) {
-        return "https://hms.dev.bitnesttechs.com/api/platform/ehr";
+        return "https://ehr-sandbox.local/api";
     }
 
     @Override
     protected String defaultDocumentationUrl(Locale locale) {
-        return "https://hms.dev.bitnesttechs.com/docs/platform/ehr";
+        return "https://docs.internal/platform/ehr";
     }
 
     @Override
     protected String defaultSandboxUrl(Locale locale) {
-        return "https://hms.dev.bitnesttechs.com/sandbox/ehr";
+        return "https://ehr-sandbox.local/portal";
     }
 
     @Override

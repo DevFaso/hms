@@ -108,30 +108,4 @@ public class MedicationAdministrationRecord extends BaseEntity {
     @Size(max = 2000)
     @Column(name = "notes", length = 2000)
     private String notes;
-
-    /* ── MVP3: BCMA (Barcode Medication Administration) ── */
-
-    @Size(max = 255)
-    @Column(name = "patient_barcode", length = 255)
-    private String patientBarcode;
-
-    @Size(max = 255)
-    @Column(name = "med_barcode", length = 255)
-    private String medBarcode;
-
-    @Size(max = 100)
-    @Column(name = "scan_device_id", length = 100)
-    private String scanDeviceId;
-
-    @Column(name = "scan_verified")
-    @Builder.Default
-    private boolean scanVerified = false;
-
-    @Column(name = "scan_override")
-    @Builder.Default
-    private boolean scanOverride = false;
-
-    @Size(max = 500)
-    @Column(name = "scan_override_reason", length = 500)
-    private String scanOverrideReason;
 }

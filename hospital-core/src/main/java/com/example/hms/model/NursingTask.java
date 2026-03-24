@@ -1,19 +1,14 @@
 package com.example.hms.model;
 
-import com.example.hms.enums.NursingTaskCategory;
-import com.example.hms.enums.NursingTaskPriority;
-import com.example.hms.enums.NursingTaskSource;
-import com.example.hms.enums.NursingTaskStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -25,7 +20,6 @@ import lombok.Setter;
 import lombok.ToString;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 /**
  * Bedside nursing task (MVP 13: Task Board).
@@ -67,12 +61,12 @@ public class NursingTask extends BaseEntity {
 
     /**
      * Task category — one of: DRESSING_CHANGE, IV_CHECK, CATHETER_CARE,
-     * PAIN_REASSESSMENT, MOBILITY_ASSIST, INTAKE_OUTPUT, WOUND_CARE, OTHER, etc.
+     * PAIN_REASSESSMENT, MOBILITY_ASSIST, INTAKE_OUTPUT, WOUND_CARE, OTHER.
      */
-    @NotNull
-    @Enumerated(EnumType.STRING)
+    @NotBlank
+    @Size(max = 40)
     @Column(name = "category", nullable = false, length = 40)
-    private NursingTaskCategory category;
+    private String category;
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
@@ -80,20 +74,20 @@ public class NursingTask extends BaseEntity {
     /**
      * ROUTINE / URGENT / STAT
      */
-    @NotNull
-    @Enumerated(EnumType.STRING)
+    @NotBlank
+    @Size(max = 20)
     @Column(name = "priority", nullable = false, length = 20)
     @Builder.Default
-    private NursingTaskPriority priority = NursingTaskPriority.ROUTINE;
+    private String priority = "ROUTINE";
 
     /**
-     * PENDING / IN_PROGRESS / COMPLETED / CANCELLED / ESCALATED
+     * PENDING / IN_PROGRESS / COMPLETED / CANCELLED
      */
-    @NotNull
-    @Enumerated(EnumType.STRING)
+    @NotBlank
+    @Size(max = 20)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
-    private NursingTaskStatus status = NursingTaskStatus.PENDING;
+    private String status = "PENDING";
 
     @Column(name = "due_at")
     private LocalDateTime dueAt;
@@ -111,40 +105,4 @@ public class NursingTask extends BaseEntity {
     @Size(max = 200)
     @Column(name = "created_by_name", length = 200)
     private String createdByName;
-
-    /* ── MVP3: SLA / escalation ──────────────────────── */
-
-    /** How this task was created. */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "source", length = 20)
-    @Builder.Default
-    private NursingTaskSource source = NursingTaskSource.MANUAL;
-
-    /** Staff member this task is assigned to. */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "assigned_to_staff_id",
-        foreignKey = @ForeignKey(name = "fk_nursing_tasks_assigned_staff"))
-    private Staff assignedToStaff;
-
-    /** SLA deadline — distinct from dueAt (clinical due) this is the escalation trigger. */
-    @Column(name = "sla_deadline")
-    private LocalDateTime slaDeadline;
-
-    /** When the task was escalated (null = not escalated). */
-    @Column(name = "escalated_at")
-    private LocalDateTime escalatedAt;
-
-    /** 0 = not escalated, 1 = first escalation, 2 = second, etc. */
-    @Column(name = "escalation_level")
-    @Builder.Default
-    private int escalationLevel = 0;
-
-    /** Type of clinical object this task references (e.g. PRESCRIPTION, LAB_ORDER). */
-    @Size(max = 40)
-    @Column(name = "focus_type", length = 40)
-    private String focusType;
-
-    /** ID of the clinical object this task references. */
-    @Column(name = "focus_id")
-    private UUID focusId;
 }

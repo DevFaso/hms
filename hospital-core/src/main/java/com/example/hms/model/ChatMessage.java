@@ -77,19 +77,6 @@ public class ChatMessage extends BaseEntity {
         foreignKey = @ForeignKey(name = "fk_chat_assignment"))
     private UserRoleHospitalAssignment assignment;
 
-    // ── Optional file attachment ────────────────────────────────────────
-    @Column(name = "attachment_url", length = 512)
-    private String attachmentUrl;
-
-    @Column(name = "attachment_name", length = 255)
-    private String attachmentName;
-
-    @Column(name = "attachment_content_type", length = 120)
-    private String attachmentContentType;
-
-    @Column(name = "attachment_size_bytes")
-    private Long attachmentSizeBytes;
-
     @PrePersist
     @PreUpdate
     private void validate() {

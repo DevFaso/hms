@@ -6,8 +6,6 @@ import {
   ChatConversation,
   ChatMessage,
   ChatSendRequest,
-  ChatAttachmentUploadResponse,
-  CareTeamContact,
 } from '../services/chat.service';
 import { UserService, UserSummary } from '../services/user.service';
 import { AuthService } from '../auth/auth.service';
@@ -24,7 +22,6 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
     'ROLE_MIDWIFE',
     'ROLE_RECEPTIONIST',
     'ROLE_LAB_SCIENTIST',
-    'ROLE_LAB_MANAGER',
     'ROLE_STAFF',
     'ROLE_PATIENT',
   ]),
@@ -36,7 +33,6 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
     'ROLE_MIDWIFE',
     'ROLE_RECEPTIONIST',
     'ROLE_LAB_SCIENTIST',
-    'ROLE_LAB_MANAGER',
     'ROLE_STAFF',
     'ROLE_PATIENT',
   ]),
@@ -47,7 +43,6 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
     'ROLE_MIDWIFE',
     'ROLE_RECEPTIONIST',
     'ROLE_LAB_SCIENTIST',
-    'ROLE_LAB_MANAGER',
     'ROLE_STAFF',
     'ROLE_PATIENT',
   ]),
@@ -58,7 +53,6 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
     'ROLE_MIDWIFE',
     'ROLE_RECEPTIONIST',
     'ROLE_LAB_SCIENTIST',
-    'ROLE_LAB_MANAGER',
     'ROLE_STAFF',
     'ROLE_PATIENT',
   ]),
@@ -69,7 +63,6 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
     'ROLE_MIDWIFE',
     'ROLE_RECEPTIONIST',
     'ROLE_LAB_SCIENTIST',
-    'ROLE_LAB_MANAGER',
     'ROLE_STAFF',
     'ROLE_PATIENT',
   ]),
@@ -80,7 +73,6 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
     'ROLE_MIDWIFE',
     'ROLE_RECEPTIONIST',
     'ROLE_LAB_SCIENTIST',
-    'ROLE_LAB_MANAGER',
     'ROLE_STAFF',
   ]),
   ROLE_LAB_SCIENTIST: new Set([
@@ -90,17 +82,6 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
     'ROLE_MIDWIFE',
     'ROLE_RECEPTIONIST',
     'ROLE_LAB_SCIENTIST',
-    'ROLE_LAB_MANAGER',
-    'ROLE_STAFF',
-  ]),
-  ROLE_LAB_MANAGER: new Set([
-    'ROLE_HOSPITAL_ADMIN',
-    'ROLE_DOCTOR',
-    'ROLE_NURSE',
-    'ROLE_MIDWIFE',
-    'ROLE_RECEPTIONIST',
-    'ROLE_LAB_SCIENTIST',
-    'ROLE_LAB_MANAGER',
     'ROLE_STAFF',
   ]),
   ROLE_STAFF: new Set([
@@ -110,7 +91,6 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
     'ROLE_MIDWIFE',
     'ROLE_RECEPTIONIST',
     'ROLE_LAB_SCIENTIST',
-    'ROLE_LAB_MANAGER',
     'ROLE_STAFF',
   ]),
   ROLE_PATIENT: new Set(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']),
@@ -146,17 +126,8 @@ export class ChatComponent implements OnInit {
   availableUsers = signal<UserSummary[]>([]);
   loadingUsers = signal(false);
 
-  /* ── Care team contacts ── */
-  careTeamContacts = signal<CareTeamContact[]>([]);
-  loadingCareTeam = signal(false);
-  newConvTab = signal<'care-team' | 'all'>('care-team');
-
   /* ── Sidebar search ── */
   convSearchTerm = signal('');
-
-  /* ── File attachment ── */
-  pendingAttachment = signal<ChatAttachmentUploadResponse | null>(null);
-  uploadingAttachment = signal(false);
 
   filteredConversations = computed(() => {
     const term = this.convSearchTerm().toLowerCase().trim();
@@ -222,27 +193,19 @@ export class ChatComponent implements OnInit {
 
   sendMessage(): void {
     const conv = this.activeConversation();
-    const attachment = this.pendingAttachment();
-    if (!conv || (!this.messageText.trim() && !attachment)) return;
+    if (!conv || !this.messageText.trim()) return;
 
     this.sendingMessage.set(true);
     const req: ChatSendRequest = {
       senderId: this.currentUserId,
       recipientId: conv.conversationUserId,
-      content: this.messageText.trim() || (attachment ? attachment.fileName : ''),
-      ...(attachment && {
-        attachmentUrl: attachment.url,
-        attachmentName: attachment.fileName,
-        attachmentContentType: attachment.contentType,
-        attachmentSizeBytes: attachment.sizeBytes,
-      }),
+      content: this.messageText.trim(),
     };
 
     this.chatService.sendMessage(req).subscribe({
       next: (msg) => {
         this.messages.update((list) => [...list, msg]);
         this.messageText = '';
-        this.pendingAttachment.set(null);
         this.sendingMessage.set(false);
         // Update the conversation preview in sidebar
         this.conversations.update((list) =>
@@ -260,45 +223,12 @@ export class ChatComponent implements OnInit {
     });
   }
 
-  onFileSelected(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    input.value = '';
-
-    this.uploadingAttachment.set(true);
-    this.chatService.uploadChatAttachment(file).subscribe({
-      next: (result) => {
-        this.pendingAttachment.set(result);
-        this.uploadingAttachment.set(false);
-      },
-      error: () => {
-        this.toast.error('Failed to upload attachment');
-        this.uploadingAttachment.set(false);
-      },
-    });
-  }
-
-  removeAttachment(): void {
-    this.pendingAttachment.set(null);
-  }
-
-  isImageAttachment(contentType: string | undefined): boolean {
-    return !!contentType && contentType.startsWith('image/');
-  }
-
   /* ── New Conversation actions ── */
   openNewConversation(): void {
     this.showNewConversation.set(true);
     this.userSearchTerm.set('');
     this.availableUsers.set([]);
     this.loadUsers();
-    if (this.isPatient()) {
-      this.newConvTab.set('care-team');
-      this.loadCareTeam();
-    } else {
-      this.newConvTab.set('all');
-    }
   }
 
   closeNewConversation(): void {
@@ -367,39 +297,6 @@ export class ChatComponent implements OnInit {
       this.conversations.update((list) => [conv, ...list]);
     }
     this.selectConversation(conv);
-  }
-
-  startConversationWithContact(contact: CareTeamContact): void {
-    const conv: ChatConversation = {
-      conversationUserId: contact.userId,
-      conversationUserName: contact.displayName,
-      lastMessageContent: '',
-      lastMessageTimestamp: '',
-      lastMessageRead: true,
-      unreadCount: 0,
-    };
-    const exists = this.conversations().find((c) => c.conversationUserId === contact.userId);
-    if (!exists) {
-      this.conversations.update((list) => [conv, ...list]);
-    }
-    this.selectConversation(conv);
-  }
-
-  loadCareTeam(): void {
-    this.loadingCareTeam.set(true);
-    this.chatService.getMessageableCareTeam().subscribe({
-      next: (contacts) => {
-        this.careTeamContacts.set(contacts);
-        this.loadingCareTeam.set(false);
-      },
-      error: () => {
-        this.loadingCareTeam.set(false);
-      },
-    });
-  }
-
-  isPatient(): boolean {
-    return this.auth.getRoles().includes('ROLE_PATIENT');
   }
 
   /* ── Message header actions ── */

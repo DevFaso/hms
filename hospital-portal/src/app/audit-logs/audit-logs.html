@@ -4,12 +4,6 @@
       <h1 class="page-title">Audit Logs</h1>
       <p class="page-subtitle">System activity trail and security events</p>
     </div>
-    <div class="header-actions">
-      <button class="btn btn-outline" (click)="exportCsv()" [disabled]="exporting()">
-        <span class="material-symbols-outlined">download</span>
-        {{ exporting() ? 'Exporting...' : 'Export CSV' }}
-      </button>
-    </div>
   </div>
   <div class="summary-cards">
     <div class="summary-card">
@@ -40,25 +34,6 @@
           <option [value]="et.eventType">{{ et.eventType }} ({{ et.count }})</option>
         }
       </select>
-      <input
-        type="date"
-        [(ngModel)]="fromDate"
-        (change)="onDateChange()"
-        class="filter-input"
-        placeholder="From date"
-        aria-label="From date"
-      />
-      <input
-        type="date"
-        [(ngModel)]="toDate"
-        (change)="onDateChange()"
-        class="filter-input"
-        placeholder="To date"
-        aria-label="To date"
-      />
-      @if (fromDate || toDate) {
-        <button class="btn btn-sm btn-text" (click)="clearDateFilters()">Clear dates</button>
-      }
     </div>
     <div class="search-box">
       <span class="material-symbols-outlined">search</span

@@ -152,33 +152,6 @@ public class FileUploadService {
         );
     }
 
-    public StoredFileDescriptor uploadChatAttachment(MultipartFile file, UUID uploaderId) throws IOException {
-        validateAttachmentFile(file);
-
-        Path uploadPath = Paths.get(uploadDir, "chat-attachments");
-        Files.createDirectories(uploadPath);
-
-        String sanitizedBaseName = sanitizeBaseFilename(file.getOriginalFilename());
-        String extension = getFileExtension(file.getOriginalFilename());
-        String filename = buildAttachmentFilename(sanitizedBaseName, extension, uploaderId, "chat_attachment");
-
-        Path filePath = uploadPath.resolve(filename).normalize();
-        if (!filePath.startsWith(uploadPath)) {
-            throw new IllegalArgumentException("Invalid file path — path traversal attempt detected");
-        }
-        Files.copy(file.getInputStream(), filePath, StandardCopyOption.REPLACE_EXISTING);
-
-        String relativePath = "/uploads/chat-attachments/" + filename;
-        return new StoredFileDescriptor(
-            relativePath,
-            buildPublicUrl(relativePath),
-            determineDisplayName(file, filename),
-            file.getContentType(),
-            file.getSize(),
-            null
-        );
-    }
-
     public StoredFileDescriptor uploadChartAttachment(MultipartFile file, UUID uploaderId) throws IOException {
         validateAttachmentFile(file);
 

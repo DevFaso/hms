@@ -68,7 +68,7 @@ public class BillingIntegrationAdapter extends AbstractToggleableIntegrationAdap
 
     @Override
     protected String defaultDocumentationUrl(Locale locale) {
-        return "https://hms.dev.bitnesttechs.com/docs/platform/billing";
+        return "https://docs.internal/platform/billing";
     }
 
     @Override

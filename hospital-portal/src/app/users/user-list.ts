@@ -3,12 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil } from 'rxjs';
 import { debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import {
-  UserService,
-  UserSummary,
-  AdminRegisterRequest,
-  BulkImportResult,
-} from '../services/user.service';
+import { UserService, UserSummary, AdminRegisterRequest } from '../services/user.service';
 import { RoleService, RoleResponse } from '../services/role.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
@@ -18,7 +13,6 @@ const MEDICAL_ROLE_CODES = new Set([
   'ROLE_DOCTOR',
   'ROLE_NURSE',
   'ROLE_LAB_SCIENTIST',
-  'ROLE_LAB_MANAGER',
   'ROLE_PHARMACIST',
 ]);
 
@@ -113,13 +107,6 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   // Restore
   restoring = signal(false);
-
-  // Bulk Import
-  showImport = signal(false);
-  importing = signal(false);
-  csvContent = '';
-  csvDelimiter = ',';
-  importResult = signal<BulkImportResult | null>(null);
 
   /** Per-field validation error messages (from 400/409 backend responses). */
   fieldErrors = signal<Record<string, string>>({});
@@ -481,57 +468,6 @@ export class UserListComponent implements OnInit, OnDestroy {
       .replaceAll('_', ' ')
       .toLowerCase()
       .replaceAll(/\b\w/g, (c) => c.toUpperCase());
-  }
-
-  openImport(): void {
-    this.csvContent = '';
-    this.csvDelimiter = ',';
-    this.importResult.set(null);
-    this.showImport.set(true);
-  }
-
-  closeImport(): void {
-    this.showImport.set(false);
-    this.importResult.set(null);
-  }
-
-  onCsvFileSelect(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const file = input.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      this.csvContent = reader.result as string;
-    };
-    reader.readAsText(file);
-  }
-
-  submitImport(): void {
-    if (!this.csvContent.trim()) {
-      this.toast.error('Please provide CSV content or upload a file');
-      return;
-    }
-    this.importing.set(true);
-    this.userService
-      .bulkImport({ csvContent: this.csvContent, delimiter: this.csvDelimiter })
-      .subscribe({
-        next: (result) => {
-          this.importResult.set(result);
-          this.importing.set(false);
-          if (result.failed === 0) {
-            this.toast.success(`Successfully imported ${result.imported} users`);
-          } else {
-            this.toast.warning(
-              `Imported ${result.imported} of ${result.processed} users. ${result.failed} failed.`,
-            );
-          }
-          this.loadUsers();
-        },
-        error: (err) => {
-          this.importing.set(false);
-          this.toast.error(err?.error?.message ?? 'Bulk import failed');
-        },
-      });
   }
 
   private freshForm(): AdminRegisterRequest {

@@ -17,12 +17,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
-import org.springframework.format.annotation.DateTimeFormat;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,9 +29,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -63,79 +56,13 @@ public class AuditEventLogController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN','ROLE_HOSPITAL_ADMIN')")
-    @Operation(summary = "Get All Audit Logs", description = "Retrieve all audit logs with pagination and optional date range filtering.")
+    @Operation(summary = "Get All Audit Logs", description = "Retrieve all audit logs with pagination.")
     @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getAllAuditLogs(
-        @PageableDefault(size = 20) Pageable pageable,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
-        @RequestParam(required = false) String eventType
+        @PageableDefault(size = 20) Pageable pageable
     ) {
-        LocalDateTime from = fromDate != null ? fromDate.atStartOfDay() : null;
-        LocalDateTime to = toDate != null ? toDate.atTime(LocalTime.MAX) : null;
-
-        Page<AuditEventLog> page;
-        if (from != null && to != null && eventType != null && !eventType.isBlank()) {
-            try {
-                AuditEventType parsedType = AuditEventType.valueOf(eventType.trim().toUpperCase());
-                page = auditRepository.findByEventTypeAndEventTimestampBetween(parsedType, from, to, pageable);
-            } catch (IllegalArgumentException e) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid eventType provided.");
-            }
-        } else if (from != null && to != null) {
-            page = auditRepository.findByEventTimestampBetween(from, to, pageable);
-        } else {
-            page = auditRepository.findAll(pageable);
-        }
+        Page<AuditEventLog> page = auditRepository.findAll(pageable);
         return ResponseEntity.ok(page.map(auditMapper::toDto));
-    }
-
-    @GetMapping("/export")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_ADMIN')")
-    @Operation(summary = "Export Audit Logs as CSV", description = "Export audit logs for a date range as a CSV file.")
-    @ApiResponse(responseCode = "200", description = "CSV export generated successfully")
-    public ResponseEntity<byte[]> exportAuditLogs(
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
-        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate
-    ) {
-        LocalDateTime from = fromDate.atStartOfDay();
-        LocalDateTime to = toDate.atTime(LocalTime.MAX);
-
-        List<AuditEventLog> logs = auditRepository.findAllByEventTimestampBetween(from, to);
-        List<AuditEventLogResponseDTO> dtos = logs.stream().map(auditMapper::toDto).toList();
-
-        StringBuilder csv = new StringBuilder();
-        csv.append("Timestamp,User,Hospital,Role,Event Type,Description,Entity Type,Resource,Status,IP Address\n");
-        for (AuditEventLogResponseDTO dto : dtos) {
-            csv.append(escapeCsv(dto.getEventTimestamp() != null ? dto.getEventTimestamp().toString() : "")).append(',');
-            csv.append(escapeCsv(dto.getUserName())).append(',');
-            csv.append(escapeCsv(dto.getHospitalName())).append(',');
-            csv.append(escapeCsv(dto.getRoleName())).append(',');
-            csv.append(escapeCsv(dto.getEventType())).append(',');
-            csv.append(escapeCsv(dto.getEventDescription())).append(',');
-            csv.append(escapeCsv(dto.getEntityType())).append(',');
-            csv.append(escapeCsv(dto.getResourceName())).append(',');
-            csv.append(escapeCsv(dto.getStatus())).append(',');
-            csv.append(escapeCsv(dto.getIpAddress())).append('\n');
-        }
-
-        byte[] content = csv.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        String filename = "audit-logs-" + fromDate + "-to-" + toDate + ".csv";
-
-        return ResponseEntity.ok()
-            .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-            .contentType(MediaType.parseMediaType("text/csv"))
-            .contentLength(content.length)
-            .body(content);
-    }
-
-    private String escapeCsv(String value) {
-        if (value == null) return "";
-        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
-        }
-        return value;
     }
 
     @GetMapping("/user/{userId}")

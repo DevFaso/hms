@@ -1308,27 +1308,4 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         return buildPatientRecordFromEntities(patientId, fromHospitalId, toHospitalId, patient, fromHospital, toHospital);
     }
 
-    // ── Patient self-download (no bilateral consent required) ───────────
-
-    @Override
-    @Transactional(readOnly = true)
-    public byte[] exportSelfRecord(UUID patientId, String format) {
-        com.example.hms.model.Patient patient = patientRepository.findById(patientId)
-                .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("Patient not found."));
-
-        UUID hospitalId = patient.getHospitalId();
-        if (hospitalId == null) {
-            throw new BusinessException(
-                    "No primary hospital is associated with this patient record. "
-                    + "Please contact your care team.");
-        }
-
-        PatientRecordDTO dto = buildPatientRecordNoConsent(patientId, hospitalId, hospitalId, patient);
-
-        if ("csv".equalsIgnoreCase(format)) {
-            return generateCsv(dto);
-        }
-        return generatePdf(dto);
-    }
-
 }

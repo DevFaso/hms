@@ -60,9 +60,7 @@ describe('Dashboard navigation & RBAC', () => {
     c.isMidwife.set(roles.includes('ROLE_MIDWIFE'));
     c.isReceptionist.set(roles.includes('ROLE_RECEPTIONIST'));
     c.isLabScientist.set(
-      roles.includes('ROLE_LAB_SCIENTIST') ||
-        roles.includes('ROLE_LAB_TECHNICIAN') ||
-        roles.includes('ROLE_LAB_MANAGER'),
+      roles.includes('ROLE_LAB_SCIENTIST') || roles.includes('ROLE_LAB_TECHNICIAN'),
     );
     c.isPharmacist.set(roles.includes('ROLE_PHARMACIST'));
     c.isRadiologist.set(roles.includes('ROLE_RADIOLOGIST'));

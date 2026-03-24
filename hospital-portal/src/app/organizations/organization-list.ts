@@ -6,10 +6,6 @@ import {
   OrganizationResponse,
   OrganizationCreateRequest,
 } from '../services/organization.service';
-import {
-  TenantOnboardingService,
-  TenantOnboardingStatus,
-} from '../services/tenant-onboarding.service';
 import { ToastService } from '../core/toast.service';
 
 @Component({
@@ -21,7 +17,6 @@ import { ToastService } from '../core/toast.service';
 })
 export class OrganizationListComponent implements OnInit {
   private readonly orgService = inject(OrganizationService);
-  private readonly onboardingService = inject(TenantOnboardingService);
   private readonly toast = inject(ToastService);
 
   organizations = signal<OrganizationResponse[]>([]);
@@ -41,11 +36,6 @@ export class OrganizationListComponent implements OnInit {
 
   /** Valid organization type enum values loaded from backend */
   orgTypes = signal<string[]>([]);
-
-  // Onboarding state
-  showOnboarding = signal(false);
-  onboardingStatus = signal<TenantOnboardingStatus | null>(null);
-  onboardingLoading = signal(false);
 
   /** Common IANA timezones for the dropdown */
   readonly timezones: string[] = [
@@ -234,25 +224,5 @@ export class OrganizationListComponent implements OnInit {
       .split('_')
       .map((w) => w.charAt(0) + w.slice(1).toLowerCase())
       .join(' ');
-  }
-
-  openOnboarding(org: OrganizationResponse): void {
-    this.onboardingLoading.set(true);
-    this.showOnboarding.set(true);
-    this.onboardingService.getOnboardingStatus(org.id).subscribe({
-      next: (status) => {
-        this.onboardingStatus.set(status);
-        this.onboardingLoading.set(false);
-      },
-      error: () => {
-        this.toast.error('Failed to load onboarding status');
-        this.onboardingLoading.set(false);
-      },
-    });
-  }
-
-  closeOnboarding(): void {
-    this.showOnboarding.set(false);
-    this.onboardingStatus.set(null);
   }
 }

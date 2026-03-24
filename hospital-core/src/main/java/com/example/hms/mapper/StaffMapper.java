@@ -13,7 +13,6 @@ import com.example.hms.payload.dto.StaffResponseDTO;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.stereotype.Component;
 
 import java.util.Objects;
@@ -29,21 +28,9 @@ public class StaffMapper {
         StaffResponseDTO dto = new StaffResponseDTO();
         dto.setId(staff.getId() != null ? staff.getId().toString() : null);
 
-        try {
-            populateUserInfo(dto, staff.getUser());
-        } catch (EntityNotFoundException | JpaObjectRetrievalFailureException e) {
-            log.warn("Staff {} has a dangling user FK. User info will be empty.", staff.getId());
-        }
-        try {
-            populateHospitalInfo(dto, staff.getHospital());
-        } catch (EntityNotFoundException | JpaObjectRetrievalFailureException e) {
-            log.warn("Staff {} has a dangling hospital FK. Hospital info will be empty.", staff.getId());
-        }
-        try {
-            populateDepartmentInfo(dto, staff.getDepartment(), staff.getId());
-        } catch (EntityNotFoundException | JpaObjectRetrievalFailureException e) {
-            log.warn("Staff {} has a dangling department FK. Department info will be empty.", staff.getId());
-        }
+        populateUserInfo(dto, staff.getUser());
+        populateHospitalInfo(dto, staff.getHospital());
+        populateDepartmentInfo(dto, staff.getDepartment(), staff.getId());
 
         try {
             UserRoleHospitalAssignment assignment = staff.getAssignment();
@@ -51,10 +38,11 @@ public class StaffMapper {
                 dto.setRoleCode(assignment.getRole().getCode());
                 dto.setRoleName(assignment.getRole().getName());
             }
-        } catch (EntityNotFoundException | JpaObjectRetrievalFailureException e) {
+        } catch (EntityNotFoundException e) {
             // The assignment row was hard-deleted while the staff row still references it.
             // Log a warning but continue — the rest of the DTO is still valid.
-            log.warn("Staff {} has a dangling assignment FK. Role info will be empty.", staff.getId());
+            log.warn("⚠️ Staff {} has a dangling assignment FK (deleted assignment). " +
+                     "Role info will be empty. DB cleanup required.", staff.getId());
         }
         dto.setJobTitle(staff.getJobTitle());
         dto.setEmploymentType(staff.getEmploymentType());
