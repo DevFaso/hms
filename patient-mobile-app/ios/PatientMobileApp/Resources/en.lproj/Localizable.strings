@@ -1,0 +1,66 @@
+/* English — Base localization */
+
+/* Common */
+"common.loading" = "Loading...";
+"common.error" = "Error";
+"common.retry" = "Retry";
+"common.cancel" = "Cancel";
+"common.save" = "Save";
+"common.delete" = "Delete";
+"common.confirm" = "Confirm";
+"common.done" = "Done";
+"common.close" = "Close";
+"common.search" = "Search";
+"common.noResults" = "No results found";
+"common.signOut" = "Sign Out";
+
+/* Tabs */
+"tab.home" = "Home";
+"tab.appointments" = "Appointments";
+"tab.records" = "Records";
+"tab.billing" = "Billing";
+"tab.more" = "More";
+
+/* Auth */
+"auth.login" = "Sign In";
+"auth.email" = "Email";
+"auth.password" = "Password";
+"auth.forgotPassword" = "Forgot Password?";
+"auth.biometricUnlock" = "Unlock with Biometrics";
+
+/* Home */
+"home.welcome" = "Welcome back";
+"home.healthSummary" = "Health Summary";
+"home.upcomingAppointments" = "Upcoming Appointments";
+"home.recentMedications" = "Recent Medications";
+
+/* More Menu */
+"more.medications" = "Medications";
+"more.labResults" = "Lab Results";
+"more.vitals" = "Vitals";
+"more.careTeam" = "Care Team";
+"more.immunizations" = "Immunizations";
+"more.messages" = "Messages";
+"more.notifications" = "Notifications";
+"more.profile" = "Profile";
+"more.settings" = "Settings";
+"more.privacy" = "Privacy & Sharing";
+"more.documents" = "Documents";
+"more.treatmentPlans" = "Treatment Plans";
+"more.referrals" = "Referrals";
+"more.consultations" = "Consultations";
+"more.accessLog" = "Access Log";
+"more.help" = "Help & Support";
+
+/* Settings */
+"settings.title" = "Settings";
+"settings.account" = "Account";
+"settings.editProfile" = "Edit Profile";
+"settings.changePassword" = "Change Password";
+"settings.biometricLogin" = "Biometric Login";
+"settings.preferences" = "Preferences";
+"settings.notifications" = "Notifications";
+"settings.language" = "Language";
+"settings.about" = "About";
+"settings.termsOfService" = "Terms of Service";
+"settings.privacyPolicy" = "Privacy Policy";

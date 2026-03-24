@@ -1,0 +1,66 @@
+/* French */
+
+/* Common */
+"common.loading" = "Chargement...";
+"common.error" = "Erreur";
+"common.retry" = "Réessayer";
+"common.cancel" = "Annuler";
+"common.save" = "Enregistrer";
+"common.delete" = "Supprimer";
+"common.confirm" = "Confirmer";
+"common.done" = "Terminé";
+"common.close" = "Fermer";
+"common.search" = "Rechercher";
+"common.noResults" = "Aucun résultat trouvé";
+"common.signOut" = "Déconnexion";
+
+/* Tabs */
+"tab.home" = "Accueil";
+"tab.appointments" = "Rendez-vous";
+"tab.records" = "Dossiers";
+"tab.billing" = "Facturation";
+"tab.more" = "Plus";
+
+/* Auth */
+"auth.login" = "Connexion";
+"auth.email" = "E-mail";
+"auth.password" = "Mot de passe";
+"auth.forgotPassword" = "Mot de passe oublié ?";
+"auth.biometricUnlock" = "Déverrouiller avec la biométrie";
+
+/* Home */
+"home.welcome" = "Bienvenue";
+"home.healthSummary" = "Bilan de santé";
+"home.upcomingAppointments" = "Rendez-vous à venir";
+"home.recentMedications" = "Médicaments récents";
+
+/* More Menu */
+"more.medications" = "Médicaments";
+"more.labResults" = "Résultats de laboratoire";
+"more.vitals" = "Signes vitaux";
+"more.careTeam" = "Équipe soignante";
+"more.immunizations" = "Vaccinations";
+"more.messages" = "Messages";
+"more.notifications" = "Notifications";
+"more.profile" = "Profil";
+"more.settings" = "Paramètres";
+"more.privacy" = "Confidentialité et partage";
+"more.documents" = "Documents";
+"more.treatmentPlans" = "Plans de traitement";
+"more.referrals" = "Orientations";
+"more.consultations" = "Consultations";
+"more.accessLog" = "Journal d'accès";
+"more.help" = "Aide et support";
+
+/* Settings */
+"settings.title" = "Paramètres";
+"settings.account" = "Compte";
+"settings.editProfile" = "Modifier le profil";
+"settings.changePassword" = "Changer le mot de passe";
+"settings.biometricLogin" = "Connexion biométrique";
+"settings.preferences" = "Préférences";
+"settings.notifications" = "Notifications";
+"settings.language" = "Langue";
+"settings.about" = "À propos";
+"settings.termsOfService" = "Conditions d'utilisation";
+"settings.privacyPolicy" = "Politique de confidentialité";
