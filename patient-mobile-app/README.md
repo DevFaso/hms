@@ -1,22 +1,76 @@
-# MyChart Patient Mobile App
+# Patient Mobile App
 
-A comprehensive patient portal mobile application built with React, designed to replicate the functionality and user experience of the MyChart Epic system used by NYC Health + Hospitals.
+Native iOS + Android apps for the HMS Patient Portal.
 
-## 🏥 Overview
+## Architecture
 
-This mobile application provides patients with secure access to their medical information, appointment scheduling, messaging with healthcare providers, test results, medication management, and billing information with integrated mobile money payment options. The app is designed with a mobile-first approach and follows the visual design patterns of the original MyChart Epic system.
+```
+patient-mobile-app/
+├── ios/                    # Swift + SwiftUI (iOS 17+)
+├── android/                # Kotlin + Jetpack Compose (API 26+)
+├── shared-spec/            # Shared API specs, DTO mappings
+├── docs/                   # Architecture docs, MVP breakdown
+└── legacy-web/             # Archived React/Capacitor hybrid app
+```
 
-## 🚀 Quick Start
+## iOS (Swift + SwiftUI)
 
-### Prerequisites
+| Layer | Technology |
+|-------|-----------|
+| UI | SwiftUI |
+| Architecture | MVVM |
+| Networking | URLSession |
+| Token Storage | Keychain |
+| Biometrics | LocalAuthentication |
+| Min Deployment | iOS 17 |
 
-Before running this application, ensure you have the following installed:
+### Run iOS
+1. Open `ios/` in Xcode 16+
+2. Select a simulator or device
+3. Build & Run (Cmd+R)
 
-- **Node.js** (version 18.0 or higher)
-- **npm** (version 8.0 or higher) or **pnpm** (recommended)
-- **Git** (for version control)
+## Android (Kotlin + Jetpack Compose)
 
-### Installation
+| Layer | Technology |
+|-------|-----------|
+| UI | Jetpack Compose + Material 3 |
+| Architecture | MVVM + Clean Architecture |
+| Networking | Retrofit + OkHttp |
+| DI | Hilt |
+| Token Storage | EncryptedSharedPreferences |
+| Biometrics | BiometricPrompt |
+| Min SDK | 26 (Android 8.0) |
+
+### Run Android
+1. Open `android/` in Android Studio
+2. Sync Gradle
+3. Select device/emulator
+4. Run (Shift+F10)
+
+## Environments
+
+| Environment | Base URL |
+|------------|---------|
+| Dev | `https://hms.dev.bitnesttechs.com/api` |
+| UAT | `https://hms.uat.bitnesttechs.com/api` |
+| Prod | `https://hms.bitnesttechs.com/api` |
+
+## MVP Roadmap
+
+See [docs/MVP_BREAKDOWN.md](docs/MVP_BREAKDOWN.md) for the full feature matrix.
+
+- **MVP 1** — Foundation + Core (Auth, Home, Profile, Appointments, Medications, Billing, Notifications)
+- **MVP 2** — Advanced (Lab Results, Care Team, Messages, Consents, Biometrics, Offline)
+- **MVP 3** — Premium (Telehealth, Push Notifications, Document Upload, Multilingual)
+
+## Security
+
+- TLS-only (cleartext traffic disabled)
+- Tokens stored in Keychain (iOS) / EncryptedSharedPreferences (Android)
+- Token refresh with 401 retry
+- 5-minute inactivity timeout
+- No PHI in logs (release mode logs disabled)
+- Network security config enforced
 
 1. **Extract the project files** (if you received a zip file):
    ```bash

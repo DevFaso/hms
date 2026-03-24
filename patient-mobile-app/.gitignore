@@ -1,3 +1,28 @@
+# ── Legacy (web) ─────────────────────────────────────────
+legacy-web/node_modules/
+legacy-web/dist/
+
+# ── iOS ──────────────────────────────────────────────────
+ios/.build/
+ios/DerivedData/
+ios/*.xcodeproj/xcuserdata/
+ios/*.xcworkspace/xcuserdata/
+ios/*.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+ios/Pods/
+ios/.swiftpm/
+
+# ── Android ──────────────────────────────────────────────
+android/.gradle/
+android/build/
+android/*/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/captures/
+android/.externalNativeBuild/
+android/.cxx/
+
+# ── Shared ───────────────────────────────────────────────
 # Logs
 logs
 *.log
@@ -210,6 +235,6 @@ $RECYCLE.BIN/
 .Trash-*
 .nfs*
 
-# Capacitor native platforms (generated — rebuild from web assets)
-ios/
-android/
+# Capacitor native platforms (web-to-native generated files only)
+# Note: ios/ and android/ are now native platforms and are source-controlled.
+# Build artifacts are excluded by the platform-specific rules above.
