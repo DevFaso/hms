@@ -39,10 +39,12 @@
     "npm": ">=8.0.0"
   },
   "dependencies": {
-    "@capacitor/camera": "^7",
-    "@capacitor/core": "^7",
-    "@capacitor/preferences": "^7",
-    "@capacitor/push-notifications": "^7",
+    "@capacitor/android": "^8.2.0",
+    "@capacitor/camera": "^8.0.2",
+    "@capacitor/core": "^8.2.0",
+    "@capacitor/ios": "^8.2.0",
+    "@capacitor/preferences": "^8.0.1",
+    "@capacitor/push-notifications": "^8.0.2",
     "@hookform/resolvers": "^5.0.1",
     "@radix-ui/react-accordion": "^1.2.10",
     "@radix-ui/react-alert-dialog": "^1.1.13",
@@ -95,7 +97,7 @@
     "zod": "^3.24.4"
   },
   "devDependencies": {
-    "@capacitor/cli": "^7",
+    "@capacitor/cli": "^8.2.0",
     "@eslint/js": "^9.25.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",

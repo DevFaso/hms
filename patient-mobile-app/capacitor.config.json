@@ -8,9 +8,14 @@
     }
   },
   "ios": {
-    "scheme": "MediHub Patient"
+    "scheme": "MediHub Patient",
+    "allowsLinkPreview": false
   },
   "android": {
     "allowMixedContent": true
+  },
+  "server": {
+    "androidScheme": "https",
+    "allowNavigation": ["localhost:8081", "*.bitnesttechs.com"]
   }
 }
