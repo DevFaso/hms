@@ -32,28 +32,28 @@ Token refresh: `POST /auth/token/refresh`
 
 | # | Screen | Route (hybrid ref) | API Endpoint | iOS | Android |
 |---|---|---|---|---|---|
-| 1 | **Login** | `/login` | `POST /auth/login` | ⬜ Not started | ⬜ Not started |
-| 2 | **Dashboard** | `/dashboard` | `GET /me/patient/health-summary` | ⬜ Not started | ⬜ Not started |
-| 3 | **Appointments** | `/appointments` | `GET /me/patient/appointments` | ⬜ Not started | ⬜ Not started |
+| 1 | **Login** | `/login` | `POST /auth/login` | ✅ Done | ⬜ Not started |
+| 2 | **Dashboard** | `/dashboard` | `GET /me/patient/health-summary` | ✅ Done | ⬜ Not started |
+| 3 | **Appointments** | `/appointments` | `GET /me/patient/appointments` | ✅ Done | ⬜ Not started |
 | 4 | **Schedule Appointment** | `/appointments/schedule` | `POST /me/patient/appointments` | ⬜ Not started | ⬜ Not started |
-| 5 | **Lab Results** | `/lab-results` | `GET /me/patient/lab-results` | ⬜ Not started | ⬜ Not started |
-| 6 | **Medications** | `/medications` | `GET /me/patient/medications` | ⬜ Not started | ⬜ Not started |
-| 7 | **Prescriptions** | `/medications` (tab) | `GET /me/patient/prescriptions` | ⬜ Not started | ⬜ Not started |
-| 8 | **Billing / Invoices** | `/billing` | `GET /me/patient/billing/invoices` | ⬜ Not started | ⬜ Not started |
+| 5 | **Lab Results** | `/lab-results` | `GET /me/patient/lab-results` | ✅ Done | ⬜ Not started |
+| 6 | **Medications** | `/medications` | `GET /me/patient/medications` | ✅ Done | ⬜ Not started |
+| 7 | **Prescriptions** | `/medications` (tab) | `GET /me/patient/prescriptions` | ✅ Done | ⬜ Not started |
+| 8 | **Billing / Invoices** | `/billing` | `GET /me/patient/billing/invoices` | ✅ Done | ⬜ Not started |
 | 9 | **Payment Options** | `/billing/payment` | billing endpoints | ⬜ Not started | ⬜ Not started |
-| 10 | **Messages** | `/messages` | chat service | ⬜ Not started | ⬜ Not started |
-| 11 | **Message Thread** | `/messages/:recipientId` | chat service | ⬜ Not started | ⬜ Not started |
-| 12 | **Compose Message** | `/messages/new` | chat service | ⬜ Not started | ⬜ Not started |
-| 13 | **Profile** | `/profile` | `GET /me/patient/profile` | ⬜ Not started | ⬜ Not started |
-| 14 | **Notifications** | `/notifications` | notification service | ⬜ Not started | ⬜ Not started |
-| 15 | **Care Team** | `/care-team` | `GET /me/patient/care-team` | ⬜ Not started | ⬜ Not started |
-| 16 | **Visit History** | `/visits` | `GET /me/patient/encounters` | ⬜ Not started | ⬜ Not started |
-| 17 | **After Visit Summary** | `/visits/:id/summary` | `GET /me/patient/after-visit-summaries` | ⬜ Not started | ⬜ Not started |
-| 18 | **Documents** | `/documents` | `GET /me/patient/documents` | ⬜ Not started | ⬜ Not started |
-| 19 | **Consent Forms** | `/consents` | `GET /me/patient/consents` | ⬜ Not started | ⬜ Not started |
-| 20 | **Vitals** | `/vitals` | `GET /me/patient/vitals` | ⬜ Not started | ⬜ Not started |
-| 21 | **Health Records** | `/health-records` | `GET /me/patient/health-summary` | ⬜ Not started | ⬜ Not started |
-| 22 | **Sharing & Privacy** | `/sharing-privacy` | `GET /me/patient/access-log` | ⬜ Not started | ⬜ Not started |
+| 10 | **Messages** | `/messages` | chat service | ✅ Done | ⬜ Not started |
+| 11 | **Message Thread** | `/messages/:recipientId` | chat service | ✅ Done | ⬜ Not started |
+| 12 | **Compose Message** | `/messages/new` | chat service | ✅ Done | ⬜ Not started |
+| 13 | **Profile** | `/profile` | `GET /me/patient/profile` | ✅ Done | ⬜ Not started |
+| 14 | **Notifications** | `/notifications` | notification service | ✅ Done | ⬜ Not started |
+| 15 | **Care Team** | `/care-team` | `GET /me/patient/care-team` | ✅ Done | ⬜ Not started |
+| 16 | **Visit History** | `/visits` | `GET /me/patient/encounters` | ✅ Done | ⬜ Not started |
+| 17 | **After Visit Summary** | `/visits/:id/summary` | `GET /me/patient/after-visit-summaries` | ✅ Done | ⬜ Not started |
+| 18 | **Documents** | `/documents` | `GET /me/patient/documents` | ✅ Done | ⬜ Not started |
+| 19 | **Consent Forms** | `/consents` | `GET /me/patient/consents` | ✅ Done | ⬜ Not started |
+| 20 | **Vitals** | `/vitals` | `GET /me/patient/vitals` | ✅ Done | ⬜ Not started |
+| 21 | **Health Records** | `/health-records` | `GET /me/patient/health-summary` | ✅ Done | ⬜ Not started |
+| 22 | **Sharing & Privacy** | `/sharing-privacy` | `GET /me/patient/access-log` | ✅ Done | ⬜ Not started |
 
 **Status legend**: ⬜ Not started · 🔄 In progress · ✅ Done · ❌ Blocked
 
@@ -63,10 +63,10 @@ Token refresh: `POST /auth/token/refresh`
 
 | Feature | iOS | Android |
 |---|---|---|
-| JWT auth + auto token refresh | ⬜ | ⬜ |
-| Secure token storage (Keychain / EncryptedSharedPrefs) | ⬜ | ⬜ |
-| Biometric login (FaceID/TouchID / Fingerprint) | ⬜ | ⬜ |
-| Bottom tab navigation | ⬜ | ⬜ |
+| JWT auth + auto token refresh | ✅ | ⬜ |
+| Secure token storage (Keychain / EncryptedSharedPrefs) | ✅ | ⬜ |
+| Biometric login (FaceID/TouchID / Fingerprint) | ✅ | ⬜ |
+| Bottom tab navigation | ✅ | ⬜ |
 | Push notifications | ⬜ | ⬜ |
 | Offline / error states | ⬜ | ⬜ |
 | Deep links | ⬜ | ⬜ |
