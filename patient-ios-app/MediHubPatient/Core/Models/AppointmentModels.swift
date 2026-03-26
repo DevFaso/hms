@@ -66,3 +66,21 @@ struct RescheduleAppointmentRequest: Encodable {
     let newEndTime: String
     let reason: String?
 }
+
+// MARK: - Book Appointment request (POST /appointments)
+
+struct BookAppointmentRequest: Encodable {
+    let patientUsername: String?
+    let hospitalName: String?
+    let hospitalId: String?
+    let staffId: String?
+    let staffUsername: String?
+    let departmentId: String?
+    let departmentName: String?
+    let appointmentDate: String       // yyyy-MM-dd
+    let startTime: String             // HH:mm:ss
+    let endTime: String               // HH:mm:ss
+    let status: String                // "SCHEDULED"
+    let reason: String?
+    let notes: String?
+}

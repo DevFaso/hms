@@ -17,6 +17,7 @@ enum APIEndpoints {
 
     // MARK: Patient Portal — /me/patient/*
     static let profile              = "/me/patient/profile"
+    static let updateProfile        = "/me/patient/profile"  // PUT
     static let healthSummary        = "/me/patient/health-summary"
     static let appointments         = "/me/patient/appointments"
     static let cancelAppointment    = "/me/patient/appointments/cancel"
@@ -62,4 +63,11 @@ enum APIEndpoints {
 
     // MARK: Refills helpers
     static func cancelRefill(id: String) -> String { "/me/patient/refills/\(id)/cancel" }
+
+    // MARK: Appointment booking (general appointments API, accepts PATIENT role)
+    static let bookAppointment      = "/appointments"
+
+    // MARK: File upload
+    static let uploadProfileImage   = "/files/profile-image"
+    static let deleteProfileImage   = "/files/profile-image"
 }

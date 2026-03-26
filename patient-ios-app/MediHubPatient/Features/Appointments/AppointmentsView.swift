@@ -7,6 +7,7 @@ struct AppointmentsView: View {
     @State private var cancelTarget: AppointmentDTO?
     @State private var cancelReason = ""
     @State private var rescheduleTarget: AppointmentDTO?
+    @State private var showBooking = false
 
     var body: some View {
         if embeddedInNav {
@@ -69,6 +70,11 @@ struct AppointmentsView: View {
         }
         .navigationTitle("Appointments")
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                Button(action: { showBooking = true }) {
+                    Image(systemName: "plus")
+                }
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: { Task { await vm.load() } }) {
                     Image(systemName: "arrow.clockwise")
@@ -99,6 +105,9 @@ struct AppointmentsView: View {
         }
         .sheet(item: $rescheduleTarget) { appt in
             RescheduleSheet(appointment: appt, vm: vm, isPresented: $rescheduleTarget)
+        }
+        .sheet(isPresented: $showBooking) {
+            BookAppointmentSheet(vm: vm, isPresented: $showBooking)
         }
     }
 }
@@ -230,5 +239,139 @@ final class AppointmentsViewModel: ObservableObject {
         } catch {
             return error.localizedDescription
         }
+    }
+
+    func bookAppointment(_ request: BookAppointmentRequest) async -> String? {
+        do {
+            let _: AppointmentDTO = try await APIClient.shared.post(APIEndpoints.bookAppointment, body: request)
+            await load()
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Book Appointment Sheet
+
+struct BookAppointmentSheet: View {
+    @ObservedObject var vm: AppointmentsViewModel
+    @Binding var isPresented: Bool
+    @State private var appointmentDate = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+    @State private var startTime = {
+        var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        comps.hour = 9; comps.minute = 0
+        return Calendar.current.date(from: comps) ?? Date()
+    }()
+    @State private var endTime = {
+        var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        comps.hour = 9; comps.minute = 30
+        return Calendar.current.date(from: comps) ?? Date()
+    }()
+    @State private var hospitalName = ""
+    @State private var departmentName = ""
+    @State private var reason = ""
+    @State private var notes = ""
+    @State private var isSubmitting = false
+    @State private var errorMsg: String?
+
+    // Known hospitals from existing appointments
+    private var knownHospitals: [String] {
+        let names = Set(vm.appointments.compactMap { $0.hospitalName })
+        return names.sorted()
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Hospital") {
+                    if knownHospitals.isEmpty {
+                        TextField("Hospital name", text: $hospitalName)
+                    } else {
+                        Picker("Select Hospital", selection: $hospitalName) {
+                            Text("Select…").tag("")
+                            ForEach(knownHospitals, id: \.self) { name in
+                                Text(name).tag(name)
+                            }
+                        }
+                    }
+                }
+
+                Section("Department (optional)") {
+                    TextField("Department name", text: $departmentName)
+                }
+
+                Section("Date & Time") {
+                    DatePicker("Date", selection: $appointmentDate, in: Date()..., displayedComponents: .date)
+                    DatePicker("Start Time", selection: $startTime, displayedComponents: .hourAndMinute)
+                    DatePicker("End Time", selection: $endTime, displayedComponents: .hourAndMinute)
+                }
+
+                Section("Details") {
+                    TextField("Reason for visit", text: $reason, axis: .vertical)
+                        .lineLimit(2...4)
+                    TextField("Additional notes (optional)", text: $notes, axis: .vertical)
+                        .lineLimit(2...4)
+                }
+
+                if let err = errorMsg {
+                    Section {
+                        Text(err)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                    }
+                }
+            }
+            .navigationTitle("Book Appointment")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isPresented = false }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Book") { Task { await submit() } }
+                        .disabled(isSubmitting || hospitalName.isEmpty)
+                        .bold()
+                }
+            }
+            .interactiveDismissDisabled(isSubmitting)
+        }
+    }
+
+    private func submit() async {
+        isSubmitting = true
+        errorMsg = nil
+
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyy-MM-dd"
+        let timeFmt = DateFormatter()
+        timeFmt.dateFormat = "HH:mm:ss"
+
+        // Use username from stored session
+        let username = KeychainHelper.shared.savedUsername ?? ""
+
+        let req = BookAppointmentRequest(
+            patientUsername: username.isEmpty ? nil : username,
+            hospitalName: hospitalName.isEmpty ? nil : hospitalName,
+            hospitalId: nil,
+            staffId: nil,
+            staffUsername: nil,
+            departmentId: nil,
+            departmentName: departmentName.isEmpty ? nil : departmentName,
+            appointmentDate: dateFmt.string(from: appointmentDate),
+            startTime: timeFmt.string(from: startTime),
+            endTime: timeFmt.string(from: endTime),
+            status: "SCHEDULED",
+            reason: reason.isEmpty ? nil : reason,
+            notes: notes.isEmpty ? nil : notes
+        )
+
+        let result = await vm.bookAppointment(req)
+        if let err = result {
+            errorMsg = err
+        } else {
+            isPresented = false
+        }
+        isSubmitting = false
     }
 }

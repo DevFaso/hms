@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DashboardView: View {
+    @Binding var showMenu: Bool
     @StateObject private var vm = DashboardViewModel()
     @EnvironmentObject var authManager: AuthManager
     @State private var navigateTo: DashboardDestination?
@@ -145,6 +146,14 @@ struct DashboardView: View {
             .navigationTitle("Dashboard")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        withAnimation { showMenu.toggle() }
+                    } label: {
+                        Image(systemName: "line.3.horizontal")
+                            .font(.title3)
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { Task { await vm.loadAll() } }) {
                         Image(systemName: "arrow.clockwise")
@@ -289,6 +298,6 @@ struct StatusBadge: View {
 }
 
 #Preview {
-    DashboardView()
+    DashboardView(showMenu: .constant(false))
         .environmentObject(AuthManager.shared)
 }

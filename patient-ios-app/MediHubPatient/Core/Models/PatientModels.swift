@@ -148,3 +148,28 @@ struct HealthSummaryDTO: Codable {
     /// Unified vitals — prefer recentVitals, fall back to latestVitals
     var allVitals: [VitalSignDTO] { recentVitals ?? latestVitals ?? [] }
 }
+
+// MARK: - Profile Update Request (matches PatientProfileUpdateDTO)
+
+struct PatientProfileUpdateDTO: Encodable {
+    var phoneNumberPrimary: String?
+    var phoneNumberSecondary: String?
+    var email: String?
+    var addressLine1: String?
+    var addressLine2: String?
+    var city: String?
+    var state: String?
+    var zipCode: String?
+    var country: String?
+    var emergencyContactName: String?
+    var emergencyContactPhone: String?
+    var emergencyContactRelationship: String?
+    var preferredPharmacy: String?
+}
+
+// MARK: - Profile image upload response
+
+struct ProfileImageResponse: Codable {
+    let message: String?
+    let imageUrl: String?
+}

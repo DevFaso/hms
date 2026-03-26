@@ -198,6 +198,41 @@ final class APIClient {
     func delete<T: Decodable>(_ path: String, queryItems: [URLQueryItem]? = nil) async throws -> T {
         try await request(.DELETE, path: path, queryItems: queryItems)
     }
+
+    // MARK: - Multipart upload
+
+    func uploadMultipart<T: Decodable>(
+        _ path: String,
+        fileData: Data,
+        fileName: String,
+        mimeType: String,
+        fieldName: String = "file"
+    ) async throws -> T {
+        var components = URLComponents(string: AppEnvironment.baseURL + path)
+        guard let url = components?.url else { throw APIError.invalidURL }
+
+        let boundary = "Boundary-\(UUID().uuidString)"
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        if let token = KeychainHelper.shared.accessToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+
+        var body = Data()
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"\(fieldName)\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
+        body.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+        body.append(fileData)
+        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+        request.httpBody = body
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse else { throw APIError.unknown }
+        return try decodeResponse(data, statusCode: http.statusCode)
+    }
 }
 
 // MARK: - Empty placeholder for decode errors

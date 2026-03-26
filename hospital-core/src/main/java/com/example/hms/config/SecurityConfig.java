@@ -224,7 +224,16 @@ public class SecurityConfig {
                     // that bypass Angular's HttpClient and therefore carry no XSRF token)
                     new AntPathRequestMatcher("/ws-chat/**"),
                     // REST chat endpoints
-                    new AntPathRequestMatcher("/chat/**")
+                    new AntPathRequestMatcher("/chat/**"),
+                    // Patient portal self-service (native mobile apps use Bearer JWT,
+                    // not browser cookies, so CSRF protection is unnecessary)
+                    new AntPathRequestMatcher("/me/patient/**"),
+                    new AntPathRequestMatcher("/me/notifications/**"),
+                    new AntPathRequestMatcher("/me/chat/**"),
+                    // File uploads from mobile apps (multipart — no XSRF token)
+                    new AntPathRequestMatcher("/files/**"),
+                    // Appointment booking from mobile apps (Bearer JWT, no cookies)
+                    new AntPathRequestMatcher("/appointments/**")
                 )
             )
             .exceptionHandling(ex -> ex
