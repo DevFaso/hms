@@ -3,14 +3,23 @@ import Foundation
 // MARK: - Environment
 
 enum AppEnvironment {
+    // Available environments
+    enum Environment: String, CaseIterable {
+        case dev  = "https://api.hms.dev.bitnesttechs.com/api"
+        case uat  = "https://api.hms.uat.bitnesttechs.com/api"
+        case prod = "https://api.hms.bitnesttechs.com/api"
+        case local = "http://localhost:8081/api"
+    }
+
+    /// Current active environment — change here for quick switching
+    static let current: Environment = .dev
+
     static var baseURL: String {
-        // Override in scheme environment variables for local dev:
-        //   MEDIHUB_API_BASE_URL = http://localhost:8081/api
+        // Override via Xcode scheme environment variable
         if let url = ProcessInfo.processInfo.environment["MEDIHUB_API_BASE_URL"] {
             return url
         }
-        // Production Railway URL — update when deploying
-        return "https://hms-production.up.railway.app/api"
+        return current.rawValue
     }
 }
 

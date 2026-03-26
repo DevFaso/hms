@@ -3,22 +3,25 @@ import Foundation
 // MARK: - Lab Result Models
 
 struct LabResultDTO: Codable, Identifiable {
-    let id: Int?
+    let id: String?
     let testName: String?
-    let testCode: String?
     let result: String?
-    let unit: String?
     let referenceRange: String?
     let status: String?
+    let collectedDate: String?
+    let isAbnormal: Bool?
+
+    // Legacy compat
+    let testCode: String?
+    let unit: String?
     let orderedDate: String?
     let resultDate: String?
     let orderedBy: String?
     let labName: String?
-    let abnormal: Bool?
     let critical: Bool?
     let notes: String?
 
-    var isAbnormal: Bool { abnormal ?? false }
+    var abnormal: Bool { isAbnormal ?? false }
     var isCritical: Bool { critical ?? false }
 
     var statusDisplay: String {

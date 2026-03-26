@@ -9,6 +9,7 @@ struct DashboardView: View {
         case appointments, labResults, medications, billing
         case careTeam, vitals, visits, documents
         case notifications, healthRecords
+        case familyAccess, sharingPrivacy
     }
 
     private let quickLinks: [(title: String, icon: String, color: Color, dest: DashboardDestination)] = [
@@ -20,6 +21,8 @@ struct DashboardView: View {
         ("Vitals",       "heart.fill",      .red,    .vitals),
         ("Visits",       "building.2.fill", .indigo, .visits),
         ("Documents",    "doc.fill",        .blue,   .documents),
+        ("Family",       "person.2.circle", .cyan,   .familyAccess),
+        ("Sharing",      "lock.shield",     .mint,   .sharingPrivacy),
     ]
 
     var body: some View {
@@ -151,16 +154,18 @@ struct DashboardView: View {
             .refreshable { await vm.loadAll() }
             .navigationDestination(for: DashboardDestination.self) { dest in
                 switch dest {
-                case .appointments:  AppointmentsView()
-                case .labResults:    LabResultsView()
-                case .medications:   MedicationsView()
-                case .billing:       BillingView()
-                case .careTeam:      CareTeamView()
-                case .vitals:        VitalsView()
-                case .visits:        VisitHistoryView()
-                case .documents:     DocumentsView()
-                case .notifications: NotificationsView()
-                case .healthRecords: HealthRecordsView()
+                case .appointments:  AppointmentsView(embeddedInNav: false)
+                case .labResults:    LabResultsView(embeddedInNav: false)
+                case .medications:   MedicationsView(embeddedInNav: false)
+                case .billing:       BillingView(embeddedInNav: false)
+                case .careTeam:      CareTeamView(embeddedInNav: false)
+                case .vitals:        VitalsView(embeddedInNav: false)
+                case .visits:        VisitHistoryView(embeddedInNav: false)
+                case .documents:     DocumentsView(embeddedInNav: false)
+                case .notifications: NotificationsView(embeddedInNav: false)
+                case .healthRecords: HealthRecordsView(embeddedInNav: false)
+                case .familyAccess:  FamilyAccessView(embeddedInNav: false)
+                case .sharingPrivacy: SharingPrivacyView(embeddedInNav: false)
                 }
             }
             .overlay {
@@ -204,13 +209,23 @@ struct AppointmentRowView: View {
             RoundedRectangle(cornerRadius: 6)
                 .fill(appointment.statusColor == "green" ? Color.green : Color.blue)
                 .frame(width: 4)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(appointment.doctorName ?? "Doctor")
+            VStack(alignment: .leading, spacing: 4) {
+                Text(appointment.staffName ?? "Doctor")
                     .font(.subheadline).bold()
-                Text(appointment.departmentName ?? appointment.type ?? "")
+                Text(appointment.hospitalName ?? "")
                     .font(.caption).foregroundColor(.secondary)
                 if let date = appointment.appointmentDate {
-                    Text(date).font(.caption2).foregroundColor(.secondary)
+                    HStack(spacing: 4) {
+                        Image(systemName: "calendar")
+                            .font(.caption2).foregroundColor(.secondary)
+                        Text(date).font(.caption2).foregroundColor(.secondary)
+                        if let time = appointment.timeRange {
+                            Text("·").foregroundColor(.secondary)
+                            Image(systemName: "clock")
+                                .font(.caption2).foregroundColor(.secondary)
+                            Text(time).font(.caption2).foregroundColor(.secondary)
+                        }
+                    }
                 }
             }
             Spacer()
@@ -225,9 +240,12 @@ struct LabResultRowView: View {
     let result: LabResultDTO
     var body: some View {
         HStack {
+            Image(systemName: result.abnormal ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .foregroundColor(result.abnormal ? .red : .green)
+                .font(.caption)
             VStack(alignment: .leading, spacing: 2) {
                 Text(result.testName ?? "Test").font(.subheadline).bold()
-                Text(result.resultDate ?? result.orderedDate ?? "")
+                Text(result.collectedDate ?? result.resultDate ?? result.orderedDate ?? "")
                     .font(.caption).foregroundColor(.secondary)
             }
             Spacer()
@@ -235,7 +253,7 @@ struct LabResultRowView: View {
                 Text(result.result ?? "—").font(.subheadline)
                 if result.isCritical {
                     Text("CRITICAL").font(.caption2).bold().foregroundColor(.red)
-                } else if result.isAbnormal {
+                } else if result.abnormal {
                     Text("ABNORMAL").font(.caption2).bold().foregroundColor(.orange)
                 }
             }

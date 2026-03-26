@@ -1,33 +1,41 @@
 import SwiftUI
 
 struct MedicationsView: View {
+    var embeddedInNav: Bool = true
     @StateObject private var vm = MedicationsViewModel()
     @State private var selectedTab = 0
 
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 0) {
-                Picker("", selection: $selectedTab) {
-                    Text("Medications").tag(0)
-                    Text("Prescriptions").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .padding()
+        if embeddedInNav {
+            NavigationStack { content }
+                .task { await vm.load() }
+        } else {
+            content
+                .task { await vm.load() }
+        }
+    }
 
-                if vm.isLoading {
-                    ProgressView().padding()
+    private var content: some View {
+        VStack(spacing: 0) {
+            Picker("", selection: $selectedTab) {
+                Text("Medications").tag(0)
+                Text("Prescriptions").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .padding()
+
+            if vm.isLoading {
+                ProgressView().padding()
+            } else {
+                if selectedTab == 0 {
+                    medicationsList
                 } else {
-                    if selectedTab == 0 {
-                        medicationsList
-                    } else {
-                        prescriptionsList
-                    }
+                    prescriptionsList
                 }
             }
-            .navigationTitle("Medications")
-            .refreshable { await vm.load() }
         }
-        .task { await vm.load() }
+        .navigationTitle("Medications")
+        .refreshable { await vm.load() }
     }
 
     private var medicationsList: some View {
@@ -40,7 +48,7 @@ struct MedicationsView: View {
                 List(vm.medications) { med in
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
-                            Text(med.medicationName ?? "Medication").font(.headline)
+                            Text(med.displayName).font(.headline)
                             Spacer()
                             StatusBadge(text: med.status?.capitalized ?? "Active",
                                         color: med.status?.uppercased() == "ACTIVE" ? "green" : "gray")
@@ -51,8 +59,8 @@ struct MedicationsView: View {
                         if let dr = med.prescribedBy {
                             Text("Prescribed by \(dr)").font(.caption).foregroundColor(.secondary)
                         }
-                        if let refills = med.refillsRemaining {
-                            Text("\(refills) refill(s) remaining").font(.caption2).foregroundColor(.secondary)
+                        if let start = med.startDate {
+                            Text("Since \(start)").font(.caption2).foregroundColor(.secondary)
                         }
                     }
                     .padding(.vertical, 4)
@@ -83,8 +91,8 @@ struct MedicationsView: View {
                         if let dr = rx.prescribedBy {
                             Text("By \(dr)").font(.caption).foregroundColor(.secondary)
                         }
-                        if let refills = rx.refills {
-                            Text("\(refills) refill(s)").font(.caption2).foregroundColor(.secondary)
+                        if let refills = rx.refillsRemaining {
+                            Text("\(refills) refill(s) remaining").font(.caption2).foregroundColor(.secondary)
                         }
                     }
                     .padding(.vertical, 4)

@@ -3,46 +3,54 @@ import Foundation
 // MARK: - User / Auth Models
 
 struct UserDTO: Codable, Identifiable {
-    let id: Int?
+    let id: String?
     let username: String?
     let email: String?
     let firstName: String?
     let lastName: String?
     let role: String?
-    let organizationId: Int?
-    let hospitalId: Int?
+    let organizationId: String?
+    let hospitalId: String?
 
     var fullName: String {
         [firstName, lastName].compactMap { $0 }.joined(separator: " ")
     }
 }
 
-// MARK: - Patient Profile
+// MARK: - Patient Profile (matches PatientProfileDTO)
 
 struct PatientProfileDTO: Codable, Identifiable {
-    let id: Int?
+    var id: String? { patientId }
+    let patientId: String?
     let firstName: String?
     let lastName: String?
     let dateOfBirth: String?
     let gender: String?
-    let bloodType: String?
-    let preferredLanguage: String?
-    let phoneNumberPrimary: String?
-    let phone: String?
     let email: String?
-    let memberSince: String?
+    let phone: String?
+    let address: String?
+    let emergencyContactName: String?
+    let emergencyContactPhone: String?
+    let emergencyContactRelationship: String?
+    let insuranceProvider: String?
+    let insuranceMemberId: String?
+    let insurancePlan: String?
+    let bloodType: String?
+    let allergies: [String]?
+    let preferredLanguage: String?
     let primaryCareProvider: String?
     let facility: String?
+    let memberSince: String?
+    let profileImageUrl: String?
+
+    // Legacy compat
+    let phoneNumberPrimary: String?
     let lastVisit: String?
     let addressLine1: String?
     let addressLine2: String?
     let city: String?
     let state: String?
     let zipCode: String?
-    let allergies: String?          // comma-separated or JSON array
-    let emergencyContactName: String?
-    let emergencyContactPhone: String?
-    let insuranceProvider: String?
     let insurancePolicyNumber: String?
     let insuranceGroupNumber: String?
     let insurancePlanType: String?
@@ -52,17 +60,24 @@ struct PatientProfileDTO: Codable, Identifiable {
     }
 
     var allergiesList: [String] {
-        guard let raw = allergies, !raw.isEmpty else { return [] }
-        return raw.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        allergies ?? []
     }
+
+    var displayPhone: String? { phone ?? phoneNumberPrimary }
 }
 
-// MARK: - Health Summary
+// MARK: - Health Summary (matches HealthSummaryDTO)
 
 struct HealthSummaryDTO: Codable {
+    let profile: PatientProfileDTO?
+    let recentLabResults: [LabResultDTO]?
+    let currentMedications: [MedicationDTO]?
+    let latestVitals: [VitalSignDTO]?
+    let immunizations: [ImmunizationDTO]?
     let allergies: [String]?
     let activeDiagnoses: [String]?
-    let currentMedications: [String]?
+
+    // Legacy compat
     let recentVitals: VitalSignDTO?
     let upcomingAppointments: [AppointmentDTO]?
     let pendingLabResults: Int?

@@ -20,7 +20,7 @@ struct ProfileView: View {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text(profile.fullName).font(.title3).bold()
                                     if let email = profile.email { Text(email).font(.caption).foregroundColor(.secondary) }
-                                    if let phone = profile.phone ?? profile.phoneNumberPrimary {
+                                    if let phone = profile.displayPhone {
                                         Text(phone).font(.caption).foregroundColor(.secondary)
                                     }
                                 }
@@ -50,6 +50,12 @@ struct ProfileView: View {
                             ProfileRow(label: "Policy #", value: profile.insurancePolicyNumber)
                             ProfileRow(label: "Group #", value: profile.insuranceGroupNumber)
                             ProfileRow(label: "Plan Type", value: profile.insurancePlanType)
+                            if let memberId = profile.insuranceMemberId {
+                                ProfileRow(label: "Member ID", value: memberId)
+                            }
+                            if let plan = profile.insurancePlan {
+                                ProfileRow(label: "Plan", value: plan)
+                            }
                         }
 
                         // Allergies
@@ -66,6 +72,9 @@ struct ProfileView: View {
                         Section("Emergency Contact") {
                             ProfileRow(label: "Name", value: profile.emergencyContactName)
                             ProfileRow(label: "Phone", value: profile.emergencyContactPhone)
+                            if let rel = profile.emergencyContactRelationship {
+                                ProfileRow(label: "Relationship", value: rel)
+                            }
                         }
 
                         // Actions
@@ -73,6 +82,7 @@ struct ProfileView: View {
                             NavigationLink("Health Records") { HealthRecordsView() }
                             NavigationLink("Documents") { DocumentsView() }
                             NavigationLink("Sharing & Privacy") { SharingPrivacyView() }
+                            NavigationLink("Family Access") { FamilyAccessView() }
                         }
 
                         // Logout

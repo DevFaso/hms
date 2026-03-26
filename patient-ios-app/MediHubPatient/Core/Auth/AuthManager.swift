@@ -108,10 +108,30 @@ struct RefreshTokenRequest: Encodable {
 }
 
 struct LoginResponse: Decodable {
+    // Token fields
     let accessToken: String?
     let token: String?          // fallback field name some backends use
     let refreshToken: String?
-    let user: UserDTO?
+
+    // User fields (flat — not nested under "user")
+    let id: String?
+    let username: String?
+    let email: String?
+    let firstName: String?
+    let lastName: String?
+    let roles: [String]?
+    let roleName: String?
+    let patientId: String?
+    let active: Bool?
+    let forcePasswordChange: Bool?
+
+    /// Build a UserDTO from the flat response fields
+    var user: UserDTO {
+        UserDTO(id: id, username: username, email: email,
+                firstName: firstName, lastName: lastName,
+                role: roleName ?? roles?.first,
+                organizationId: nil, hospitalId: nil)
+    }
 }
 
 struct EmptyBody: Encodable {}

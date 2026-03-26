@@ -47,6 +47,19 @@ enum APIEndpoints {
         "/me/chat/threads/\(threadId)/messages"
     }
 
+    // MARK: Billing actions
+    static func payInvoice(id: String) -> String { "/me/patient/billing/invoices/\(id)/pay" }
+
+    // MARK: Proxy / Family Access
+    static let proxies              = "/me/patient/proxies"
+    static let proxyAccess          = "/me/patient/proxy-access"
+    static func revokeProxy(id: String) -> String { "/me/patient/proxies/\(id)" }
+
+    // MARK: Consent actions
+    static func revokeConsent(fromHospitalId: String, toHospitalId: String) -> String {
+        "/me/patient/consents?fromHospitalId=\(fromHospitalId)&toHospitalId=\(toHospitalId)"
+    }
+
     // MARK: Refills helpers
     static func cancelRefill(id: String) -> String { "/me/patient/refills/\(id)/cancel" }
 }

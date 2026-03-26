@@ -1,26 +1,34 @@
 import SwiftUI
 
 struct NotificationsView: View {
+    var embeddedInNav: Bool = true
     @StateObject private var vm = NotificationsViewModel()
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if vm.isLoading && vm.notifications.isEmpty { ProgressView("Loading notifications…") }
-                else if vm.notifications.isEmpty {
-                    ContentUnavailableView("No Notifications", systemImage: "bell.slash.fill",
-                        description: Text("You're all caught up."))
-                } else {
-                    List(vm.notifications) { notif in
-                        NotificationRow(notification: notif)
-                    }
-                    .listStyle(.insetGrouped)
-                }
-            }
-            .navigationTitle("Notifications")
-            .refreshable { await vm.load() }
+        if embeddedInNav {
+            NavigationStack { content }
+                .task { await vm.load() }
+        } else {
+            content
+                .task { await vm.load() }
         }
-        .task { await vm.load() }
+    }
+
+    private var content: some View {
+        Group {
+            if vm.isLoading && vm.notifications.isEmpty { ProgressView("Loading notifications…") }
+            else if vm.notifications.isEmpty {
+                ContentUnavailableView("No Notifications", systemImage: "bell.slash.fill",
+                    description: Text("You're all caught up."))
+            } else {
+                List(vm.notifications) { notif in
+                    NotificationRow(notification: notif)
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
+        .navigationTitle("Notifications")
+        .refreshable { await vm.load() }
     }
 }
 
@@ -60,31 +68,39 @@ final class NotificationsViewModel: ObservableObject {
 // MARK: - Documents
 
 struct DocumentsView: View {
+    var embeddedInNav: Bool = true
     @StateObject private var vm = DocumentsViewModel()
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if vm.isLoading && vm.documents.isEmpty { ProgressView("Loading documents…") }
-                else if vm.documents.isEmpty {
-                    ContentUnavailableView("No Documents", systemImage: "doc.fill",
-                        description: Text("No documents on file."))
-                } else {
-                    List(vm.documents) { doc in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(doc.fileName ?? "Document").font(.headline)
-                            if let cat = doc.category { Text(cat).font(.caption).foregroundColor(.secondary) }
-                            if let date = doc.uploadedAt { Text(date).font(.caption2).foregroundColor(.secondary) }
-                        }
-                        .padding(.vertical, 4)
-                    }
-                    .listStyle(.insetGrouped)
-                }
-            }
-            .navigationTitle("Documents")
-            .refreshable { await vm.load() }
+        if embeddedInNav {
+            NavigationStack { content }
+                .task { await vm.load() }
+        } else {
+            content
+                .task { await vm.load() }
         }
-        .task { await vm.load() }
+    }
+
+    private var content: some View {
+        Group {
+            if vm.isLoading && vm.documents.isEmpty { ProgressView("Loading documents…") }
+            else if vm.documents.isEmpty {
+                ContentUnavailableView("No Documents", systemImage: "doc.fill",
+                    description: Text("No documents on file."))
+            } else {
+                List(vm.documents) { doc in
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(doc.fileName ?? "Document").font(.headline)
+                        if let cat = doc.category { Text(cat).font(.caption).foregroundColor(.secondary) }
+                        if let date = doc.uploadedAt { Text(date).font(.caption2).foregroundColor(.secondary) }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
+        .navigationTitle("Documents")
+        .refreshable { await vm.load() }
     }
 }
 
@@ -109,106 +125,338 @@ final class DocumentsViewModel: ObservableObject {
     }
 }
 
-// MARK: - Health Records
+// MARK: - Health Records (Tabbed — matches Angular my-records.ts)
 
 struct HealthRecordsView: View {
+    var embeddedInNav: Bool = true
     @StateObject private var vm = HealthRecordsViewModel()
+    @State private var selectedTab = 0
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if vm.isLoading { ProgressView("Loading health records…") }
-                else if let summary = vm.summary {
-                    List {
-                        Section("Active Diagnoses") {
-                            ForEach(summary.activeDiagnoses ?? [], id: \.self) { Text($0) }
-                        }
-                        Section("Current Medications") {
-                            ForEach(summary.currentMedications ?? [], id: \.self) { Text($0) }
-                        }
-                        Section("Allergies") {
-                            ForEach(summary.allergies ?? [], id: \.self) {
-                                Label($0, systemImage: "exclamationmark.triangle.fill").foregroundColor(.red)
-                            }
-                        }
-                    }
-                    .listStyle(.insetGrouped)
-                } else {
-                    ContentUnavailableView("No Health Records", systemImage: "heart.text.square",
-                        description: Text("No health records available."))
+        if embeddedInNav {
+            NavigationStack { content }
+                .task { await vm.loadAll() }
+        } else {
+            content
+                .task { await vm.loadAll() }
+        }
+    }
+
+    private var content: some View {
+        VStack(spacing: 0) {
+            // Tab picker
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    TabChip(title: "Overview", isSelected: selectedTab == 0) { selectedTab = 0 }
+                    TabChip(title: "Encounters", isSelected: selectedTab == 1) { selectedTab = 1 }
+                    TabChip(title: "Labs", isSelected: selectedTab == 2) { selectedTab = 2 }
+                    TabChip(title: "Medications", isSelected: selectedTab == 3) { selectedTab = 3 }
+                    TabChip(title: "Immunizations", isSelected: selectedTab == 4) { selectedTab = 4 }
+                }
+                .padding(.horizontal)
+            }
+            .padding(.vertical, 8)
+
+            if vm.isLoading {
+                ProgressView("Loading…").padding()
+            } else {
+                switch selectedTab {
+                case 0: overviewTab
+                case 1: encountersTab
+                case 2: labsTab
+                case 3: medicationsTab
+                case 4: immunizationsTab
+                default: overviewTab
                 }
             }
-            .navigationTitle("Health Records")
-            .refreshable { await vm.load() }
         }
-        .task { await vm.load() }
+        .navigationTitle("Health Records")
+        .refreshable { await vm.loadAll() }
+    }
+
+    // MARK: Overview
+    private var overviewTab: some View {
+        List {
+            if let profile = vm.summary?.profile {
+                Section("Personal Information") {
+                    if let dob = profile.dateOfBirth { HStack { Text("Date of Birth").foregroundColor(.secondary); Spacer(); Text(dob) } }
+                    if let gender = profile.gender { HStack { Text("Gender").foregroundColor(.secondary); Spacer(); Text(gender) } }
+                    if let blood = profile.bloodType { HStack { Text("Blood Type").foregroundColor(.secondary); Spacer(); Text(blood) } }
+                }
+            }
+            Section("Allergies") {
+                let allergies = vm.summary?.allergies ?? []
+                if allergies.isEmpty {
+                    Text("No known allergies").foregroundColor(.secondary)
+                } else {
+                    ForEach(allergies, id: \.self) {
+                        Label($0, systemImage: "exclamationmark.triangle.fill").foregroundColor(.red)
+                    }
+                }
+            }
+            Section("Active Conditions") {
+                let conditions = vm.summary?.activeDiagnoses ?? []
+                if conditions.isEmpty {
+                    Text("No active conditions").foregroundColor(.secondary)
+                } else {
+                    ForEach(conditions, id: \.self) { Text($0) }
+                }
+            }
+        }
+        .listStyle(.insetGrouped)
+    }
+
+    // MARK: Encounters
+    private var encountersTab: some View {
+        Group {
+            if vm.encounters.isEmpty {
+                ContentUnavailableView("No Encounters", systemImage: "building.2.fill",
+                    description: Text("No encounters found."))
+            } else {
+                List(vm.encounters) { enc in
+                    EncounterRowView(encounter: enc)
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
+    }
+
+    // MARK: Labs
+    private var labsTab: some View {
+        Group {
+            if vm.labs.isEmpty {
+                ContentUnavailableView("No Lab Results", systemImage: "testtube.2",
+                    description: Text("No lab results on file."))
+            } else {
+                List(vm.labs) { lab in
+                    LabResultDetailRow(result: lab)
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
+    }
+
+    // MARK: Medications
+    private var medicationsTab: some View {
+        Group {
+            if vm.medications.isEmpty {
+                ContentUnavailableView("No Medications", systemImage: "pill.fill",
+                    description: Text("No medications on record."))
+            } else {
+                List(vm.medications) { med in
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(med.displayName).font(.headline)
+                            if let dosage = med.dosage { Text(dosage).font(.subheadline).foregroundColor(.secondary) }
+                        }
+                        Spacer()
+                        StatusBadge(text: med.status?.capitalized ?? "Active",
+                                    color: med.status?.uppercased() == "ACTIVE" ? "green" : "gray")
+                    }
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
+    }
+
+    // MARK: Immunizations
+    private var immunizationsTab: some View {
+        Group {
+            if vm.immunizations.isEmpty {
+                ContentUnavailableView("No Immunizations", systemImage: "syringe.fill",
+                    description: Text("No immunization records."))
+            } else {
+                List(vm.immunizations) { imm in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(imm.vaccineName ?? "Vaccine").font(.headline)
+                            Spacer()
+                            StatusBadge(text: imm.status?.capitalized ?? "—", color: "green")
+                        }
+                        if let provider = imm.provider {
+                            Text("By \(provider)").font(.caption).foregroundColor(.secondary)
+                        }
+                        if let date = imm.dateAdministered {
+                            Text(date).font(.caption2).foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
+    }
+}
+
+struct TabChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.subheadline).bold()
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(isSelected ? Color.accentColor : Color(.secondarySystemBackground))
+                .foregroundColor(isSelected ? .white : .primary)
+                .cornerRadius(20)
+        }
     }
 }
 
 @MainActor
 final class HealthRecordsViewModel: ObservableObject {
     @Published var summary: HealthSummaryDTO?
+    @Published var encounters: [EncounterDTO] = []
+    @Published var labs: [LabResultDTO] = []
+    @Published var medications: [MedicationDTO] = []
+    @Published var immunizations: [ImmunizationDTO] = []
     @Published var isLoading = false
 
-    func load() async {
+    func loadAll() async {
         isLoading = true
-        summary = try? await APIClient.shared.get(APIEndpoints.healthSummary)
+        await withTaskGroup(of: Void.self) { group in
+            group.addTask { @MainActor in
+                self.summary = try? await APIClient.shared.get(APIEndpoints.healthSummary)
+            }
+            group.addTask { @MainActor in
+                self.encounters = (try? await APIClient.shared.get(APIEndpoints.encounters)) ?? []
+            }
+            group.addTask { @MainActor in
+                self.labs = (try? await APIClient.shared.get(
+                    APIEndpoints.labResults,
+                    queryItems: [URLQueryItem(name: "limit", value: "50")]
+                )) ?? []
+            }
+            group.addTask { @MainActor in
+                self.medications = (try? await APIClient.shared.get(
+                    APIEndpoints.medications,
+                    queryItems: [URLQueryItem(name: "limit", value: "50")]
+                )) ?? []
+            }
+            group.addTask { @MainActor in
+                self.immunizations = (try? await APIClient.shared.get(APIEndpoints.immunizations)) ?? []
+            }
+        }
         isLoading = false
     }
 }
 
-// MARK: - Sharing & Privacy
+// MARK: - Sharing & Privacy (matches Angular my-sharing.ts)
 
 struct SharingPrivacyView: View {
+    var embeddedInNav: Bool = true
     @StateObject private var vm = SharingPrivacyViewModel()
+    @State private var selectedTab = 0
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if vm.isLoading { ProgressView("Loading…") }
-                else {
-                    List {
-                        Section("Consents Granted") {
-                            if vm.consents.isEmpty {
-                                Text("No active consents.").foregroundColor(.secondary)
-                            } else {
-                                ForEach(vm.consents) { consent in
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(consent.toHospitalName ?? "Hospital").font(.headline)
-                                        if let granted = consent.grantedAt {
-                                            Text("Granted: \(granted)").font(.caption).foregroundColor(.secondary)
-                                        }
-                                        if let expires = consent.expiresAt {
-                                            Text("Expires: \(expires)").font(.caption2).foregroundColor(.secondary)
-                                        }
+        if embeddedInNav {
+            NavigationStack { content }
+                .task { await vm.load() }
+        } else {
+            content
+                .task { await vm.load() }
+        }
+    }
+
+    private var content: some View {
+        VStack(spacing: 0) {
+            Picker("", selection: $selectedTab) {
+                Text("Consents").tag(0)
+                Text("Access Log").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .padding()
+
+            if vm.isLoading {
+                ProgressView("Loading…").padding()
+            } else if selectedTab == 0 {
+                consentsList
+            } else {
+                accessLogList
+            }
+        }
+        .navigationTitle("Sharing & Privacy")
+        .refreshable { await vm.load() }
+    }
+
+    private var consentsList: some View {
+        Group {
+            if vm.consents.isEmpty {
+                ContentUnavailableView("No Consents", systemImage: "lock.shield",
+                    description: Text("No active sharing consents."))
+            } else {
+                List {
+                    ForEach(vm.consents) { consent in
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(consent.toHospitalName ?? "Hospital").font(.headline)
+                                    if let purpose = consent.purpose {
+                                        Text(purpose).font(.caption).foregroundColor(.secondary)
                                     }
-                                    .padding(.vertical, 4)
                                 }
+                                Spacer()
+                                StatusBadge(text: consent.status?.capitalized ?? "Active",
+                                            color: consent.status?.uppercased() == "ACTIVE" ? "green" : "gray")
+                            }
+                            if let granted = consent.grantedAt {
+                                Text("Granted: \(granted)").font(.caption2).foregroundColor(.secondary)
+                            }
+                            if let expires = consent.expiresAt {
+                                Text("Expires: \(expires)").font(.caption2).foregroundColor(.secondary)
                             }
                         }
-                        Section("Access Log") {
-                            if vm.accessLog.isEmpty {
-                                Text("No access records.").foregroundColor(.secondary)
-                            } else {
-                                ForEach(vm.accessLog) { log in
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        Text(log.accessedBy ?? "Unknown").font(.subheadline)
-                                        Text("\(log.action ?? "") · \(log.hospitalName ?? "")")
-                                            .font(.caption).foregroundColor(.secondary)
-                                        Text(log.accessedAt ?? "").font(.caption2).foregroundColor(.secondary)
-                                    }
-                                    .padding(.vertical, 2)
+                        .padding(.vertical, 4)
+                        .swipeActions(edge: .trailing) {
+                            Button(role: .destructive) {
+                                Task {
+                                    await vm.revokeConsent(
+                                        fromHospitalId: consent.fromHospitalId ?? "",
+                                        toHospitalId: consent.toHospitalId ?? ""
+                                    )
                                 }
+                            } label: {
+                                Label("Revoke", systemImage: "xmark.circle")
                             }
                         }
                     }
-                    .listStyle(.insetGrouped)
                 }
+                .listStyle(.insetGrouped)
             }
-            .navigationTitle("Sharing & Privacy")
-            .refreshable { await vm.load() }
         }
-        .task { await vm.load() }
+    }
+
+    private var accessLogList: some View {
+        Group {
+            if vm.accessLog.isEmpty {
+                ContentUnavailableView("No Access Records", systemImage: "eye.slash",
+                    description: Text("No one has viewed your records."))
+            } else {
+                List(vm.accessLog) { log in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(log.accessedBy ?? "Unknown").font(.subheadline).bold()
+                            Spacer()
+                            if let role = log.accessedByRole {
+                                Text(role).font(.caption).foregroundColor(.secondary)
+                            }
+                        }
+                        if let resource = log.resourceAccessed {
+                            Text(resource).font(.caption).foregroundColor(.secondary)
+                        }
+                        if let type = log.accessType {
+                            Text(type.capitalized).font(.caption2).foregroundColor(.accentColor)
+                        }
+                        if let date = log.accessedAt {
+                            Text(date).font(.caption2).foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
     }
 }
 
@@ -224,18 +472,36 @@ final class SharingPrivacyViewModel: ObservableObject {
             group.addTask { @MainActor in
                 let page: PageDTO<ConsentDTO>? = try? await APIClient.shared.get(
                     APIEndpoints.consents,
-                    queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "20")]
+                    queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "50")]
                 )
                 self.consents = page?.content ?? []
+                // Fallback: try direct array
+                if self.consents.isEmpty {
+                    self.consents = (try? await APIClient.shared.get(APIEndpoints.consents)) ?? []
+                }
             }
             group.addTask { @MainActor in
                 let page: PageDTO<AccessLogDTO>? = try? await APIClient.shared.get(
                     APIEndpoints.accessLog,
-                    queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "20")]
+                    queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "50")]
                 )
                 self.accessLog = page?.content ?? []
+                if self.accessLog.isEmpty {
+                    self.accessLog = (try? await APIClient.shared.get(APIEndpoints.accessLog)) ?? []
+                }
             }
         }
         isLoading = false
+    }
+
+    func revokeConsent(fromHospitalId: String, toHospitalId: String) async {
+        let _: String? = try? await APIClient.shared.delete(
+            APIEndpoints.consents,
+            queryItems: [
+                URLQueryItem(name: "fromHospitalId", value: fromHospitalId),
+                URLQueryItem(name: "toHospitalId", value: toHospitalId)
+            ]
+        )
+        await load()
     }
 }

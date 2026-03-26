@@ -146,7 +146,7 @@ final class MessageThreadViewModel: ObservableObject {
     @Published var draft: String = ""
     @Published var isLoading = false
     let threadId: String
-    let currentUserId: Int? = nil // set from AuthManager if needed
+    let currentUserId: String? = nil // set from AuthManager if needed
 
     init(threadId: String) { self.threadId = threadId }
 

@@ -3,31 +3,37 @@ import Foundation
 // MARK: - Encounter / Visit Models
 
 struct EncounterDTO: Codable, Identifiable, Hashable {
-    let id: Int?
-    let encounterDate: String?
-    let status: String?
+    let id: String?
+    let date: String?
     let type: String?
-    let reason: String?
-    let diagnosis: String?
-    let doctorName: String?
-    let departmentName: String?
-    let hospitalName: String?
-    let notes: String?
+    let providerName: String?
+    let department: String?
+    let chiefComplaint: String?
+    let diagnosisSummary: String?
+    let status: String?
+
+    // Legacy compat aliases
+    var encounterDate: String? { date }
+    var doctorName: String? { providerName }
+    var departmentName: String? { department }
+    var reason: String? { chiefComplaint }
+    var diagnosis: String? { diagnosisSummary }
 }
 
-// MARK: - After Visit Summary / Discharge Summary
+// MARK: - After Visit Summary
 
-struct DischargeSummaryDTO: Codable, Identifiable {
-    let id: Int?
-    let encounterId: Int?
-    let dischargeDate: String?
-    let diagnosis: String?
-    let procedures: String?
-    let followUpInstructions: String?
+struct AfterVisitSummaryDTO: Codable, Identifiable {
+    let id: String?
+    let encounterDate: String?
+    let providerName: String?
+    let department: String?
+    let chiefComplaint: String?
+    let diagnoses: [String]?
+    let treatmentSummary: String?
+    let instructions: String?
+    let followUpDate: String?
     let medications: [String]?
-    let restrictions: String?
-    let doctorName: String?
-    let hospitalName: String?
+    let status: String?
 }
 
 // MARK: - Care Team
@@ -37,20 +43,19 @@ struct CareTeamDTO: Codable {
 }
 
 struct CareTeamMemberDTO: Codable, Identifiable {
-    let id: Int?
+    var id: String? { name }   // use name as stable id
     let name: String?
     let role: String?
     let specialty: String?
     let phone: String?
     let email: String?
-    let hospitalName: String?
     let isPrimary: Bool?
 }
 
 // MARK: - Document Models
 
 struct DocumentDTO: Codable, Identifiable {
-    let id: Int?
+    let id: String?
     let fileName: String?
     let fileType: String?
     let fileSize: Int?
@@ -64,7 +69,7 @@ struct DocumentDTO: Codable, Identifiable {
 // MARK: - Notification Models
 
 struct NotificationDTO: Codable, Identifiable {
-    let id: Int?
+    let id: String?
     let title: String?
     let message: String?
     let type: String?
@@ -88,7 +93,7 @@ struct ChatThreadDTO: Codable, Identifiable, Hashable {
 
 struct ChatMessageDTO: Codable, Identifiable {
     let id: String?
-    let senderId: Int?
+    let senderId: String?
     let senderName: String?
     let content: String?
     let sentAt: String?
@@ -104,7 +109,7 @@ struct SendMessageRequest: Encodable {
 // MARK: - Referral Models
 
 struct ReferralDTO: Codable, Identifiable {
-    let id: Int?
+    let id: String?
     let referralDate: String?
     let status: String?
     let reason: String?
@@ -119,7 +124,7 @@ struct ReferralDTO: Codable, Identifiable {
 // MARK: - Treatment Plan Models
 
 struct TreatmentPlanDTO: Codable, Identifiable {
-    let id: Int?
+    let id: String?
     let title: String?
     let startDate: String?
     let endDate: String?
@@ -133,44 +138,78 @@ struct TreatmentPlanDTO: Codable, Identifiable {
 // MARK: - Consent Models
 
 struct ConsentDTO: Codable, Identifiable {
-    let id: Int?
-    let fromHospitalId: Int?
+    let id: String?
+    let fromHospitalId: String?
     let fromHospitalName: String?
-    let toHospitalId: Int?
+    let toHospitalId: String?
     let toHospitalName: String?
+    let consentType: String?
+    let purpose: String?
     let grantedAt: String?
     let expiresAt: String?
     let status: String?
 }
 
 struct GrantConsentRequest: Encodable {
-    let fromHospitalId: Int
-    let toHospitalId: Int
-    let expiresAt: String?
+    let fromHospitalId: String
+    let toHospitalId: String
+    let purpose: String?
+    let consentExpiration: String?
 }
 
 // MARK: - Access Log Models
 
 struct AccessLogDTO: Codable, Identifiable {
-    let id: Int?
-    let accessedAt: String?
+    let id: String?
     let accessedBy: String?
     let accessedByRole: String?
-    let hospitalName: String?
-    let action: String?
+    let accessType: String?
+    let resourceAccessed: String?
+    let accessedAt: String?
     let ipAddress: String?
 }
 
 // MARK: - Immunization Models
 
 struct ImmunizationDTO: Codable, Identifiable {
-    let id: Int?
+    let id: String?
     let vaccineName: String?
-    let administeredDate: String?
-    let doseNumber: Int?
-    let nextDueDate: String?
-    let administeredBy: String?
-    let lotNumber: String?
-    let site: String?
+    let dateAdministered: String?
+    let provider: String?
     let status: String?
+}
+
+// MARK: - Proxy / Family Access Models
+
+struct ProxyResponse: Codable, Identifiable {
+    let id: String?
+    let grantorPatientId: String?
+    let grantorName: String?
+    let proxyUserId: String?
+    let proxyUsername: String?
+    let proxyDisplayName: String?
+    let relationship: String?
+    let status: String?
+    let permissions: [String]?
+    let expiresAt: String?
+    let revokedAt: String?
+    let notes: String?
+    let createdAt: String?
+}
+
+struct ProxyGrantRequest: Encodable {
+    let proxyUsername: String
+    let relationship: String
+    let permissions: [String]
+    let expiresAt: String?
+    let notes: String?
+}
+
+// MARK: - Patient Payment
+
+struct PatientPaymentRequest: Encodable {
+    let amount: Double
+    let paymentMethod: String
+    let transactionReference: String?
+    let notes: String?
 }

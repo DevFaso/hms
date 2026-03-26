@@ -1,16 +1,20 @@
 import Foundation
 
-// MARK: - Billing / Invoice Models
+// MARK: - Billing / Invoice Models (matches PortalInvoice)
 
 struct InvoiceDTO: Codable, Identifiable {
-    let id: Int?
+    let id: String?
     let invoiceNumber: String?
-    let invoiceDate: String?
+    let date: String?
     let dueDate: String?
     let amount: Double?
     let balance: Double?
     let status: String?
+    let facility: String?
     let description: String?
+
+    // Legacy compat
+    let invoiceDate: String?
     let hospitalName: String?
     let items: [InvoiceItemDTO]?
 
@@ -20,6 +24,9 @@ struct InvoiceDTO: Codable, Identifiable {
     var displayBalance: Double {
         balance ?? amount ?? 0
     }
+
+    var displayDate: String? { date ?? invoiceDate }
+    var displayFacility: String? { facility ?? hospitalName }
 
     var statusColor: String {
         switch status?.uppercased() {
@@ -33,7 +40,7 @@ struct InvoiceDTO: Codable, Identifiable {
 }
 
 struct InvoiceItemDTO: Codable, Identifiable {
-    let id: Int?
+    let id: String?
     let description: String?
     let quantity: Int?
     let unitPrice: Double?
