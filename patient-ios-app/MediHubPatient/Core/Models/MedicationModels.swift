@@ -25,7 +25,7 @@ struct MedicationDTO: Codable, Identifiable {
 
 // MARK: - Prescription Models (matches PortalPrescription)
 
-struct PrescriptionDTO: Codable, Identifiable {
+struct PrescriptionDTO: Codable, Identifiable, Hashable {
     let id: String?
     let medicationName: String?
     let dosage: String?

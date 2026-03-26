@@ -62,6 +62,7 @@ struct CancelAppointmentRequest: Encodable {
 struct RescheduleAppointmentRequest: Encodable {
     let appointmentId: String
     let newDate: String
-    let newTime: String
+    let newStartTime: String
+    let newEndTime: String
     let reason: String?
 }

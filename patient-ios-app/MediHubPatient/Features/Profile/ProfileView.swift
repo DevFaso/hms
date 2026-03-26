@@ -34,14 +34,16 @@ struct ProfileView: View {
                             ProfileRow(label: "Gender", value: profile.gender)
                             ProfileRow(label: "Blood Type", value: profile.bloodType)
                             ProfileRow(label: "Language", value: profile.preferredLanguage)
+                            ProfileRow(label: "Username", value: profile.username)
                         }
 
                         // Address
                         Section("Address") {
-                            ProfileRow(label: "Street", value: profile.addressLine1)
-                            ProfileRow(label: "City", value: profile.city)
-                            ProfileRow(label: "State", value: profile.state)
-                            ProfileRow(label: "ZIP", value: profile.zipCode)
+                            if let addr = profile.displayAddress {
+                                Text(addr).font(.subheadline)
+                            } else {
+                                Text("No address on file").foregroundColor(.secondary)
+                            }
                         }
 
                         // Insurance
@@ -59,8 +61,10 @@ struct ProfileView: View {
                         }
 
                         // Allergies
-                        if !profile.allergiesList.isEmpty {
-                            Section("Allergies") {
+                        Section("Allergies") {
+                            if profile.allergiesList.isEmpty {
+                                Text("No known allergies").foregroundColor(.secondary)
+                            } else {
                                 ForEach(profile.allergiesList, id: \.self) { allergy in
                                     Label(allergy, systemImage: "exclamationmark.triangle.fill")
                                         .foregroundColor(.red)

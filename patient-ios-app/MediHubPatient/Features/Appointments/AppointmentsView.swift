@@ -6,6 +6,7 @@ struct AppointmentsView: View {
     @State private var showError = false
     @State private var cancelTarget: AppointmentDTO?
     @State private var cancelReason = ""
+    @State private var rescheduleTarget: AppointmentDTO?
 
     var body: some View {
         if embeddedInNav {
@@ -39,6 +40,14 @@ struct AppointmentsView: View {
                                         } label: {
                                             Label("Cancel", systemImage: "xmark.circle")
                                         }
+                                    }
+                                    .swipeActions(edge: .leading) {
+                                        Button {
+                                            rescheduleTarget = appt
+                                        } label: {
+                                            Label("Reschedule", systemImage: "calendar.badge.clock")
+                                        }
+                                        .tint(.orange)
                                     }
                             }
                         }
@@ -88,6 +97,87 @@ struct AppointmentsView: View {
         } message: {
             Text("Are you sure you want to cancel this appointment?")
         }
+        .sheet(item: $rescheduleTarget) { appt in
+            RescheduleSheet(appointment: appt, vm: vm, isPresented: $rescheduleTarget)
+        }
+    }
+}
+
+// MARK: - Reschedule Sheet
+
+struct RescheduleSheet: View {
+    let appointment: AppointmentDTO
+    @ObservedObject var vm: AppointmentsViewModel
+    @Binding var isPresented: AppointmentDTO?
+    @State private var newDate = Date()
+    @State private var newStartTime = Date()
+    @State private var newEndTime = Date().addingTimeInterval(1800) // 30 min
+    @State private var reason = ""
+    @State private var isSubmitting = false
+    @State private var errorMsg: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Current Appointment") {
+                    HStack { Text("Provider").foregroundColor(.secondary); Spacer(); Text(appointment.staffName ?? "—") }
+                    HStack { Text("Date").foregroundColor(.secondary); Spacer(); Text(appointment.appointmentDate ?? "—") }
+                    HStack { Text("Time").foregroundColor(.secondary); Spacer(); Text(appointment.timeRange ?? "—") }
+                }
+
+                Section("New Date & Time") {
+                    DatePicker("Date", selection: $newDate, in: Date()..., displayedComponents: .date)
+                    DatePicker("Start Time", selection: $newStartTime, displayedComponents: .hourAndMinute)
+                    DatePicker("End Time", selection: $newEndTime, displayedComponents: .hourAndMinute)
+                }
+
+                Section("Reason") {
+                    TextField("Why are you rescheduling?", text: $reason, axis: .vertical)
+                        .lineLimit(3)
+                }
+
+                if let err = errorMsg {
+                    Section { Text(err).foregroundColor(.red).font(.caption) }
+                }
+            }
+            .navigationTitle("Reschedule")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { isPresented = nil }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Reschedule") { Task { await submit() } }
+                        .disabled(isSubmitting)
+                        .bold()
+                }
+            }
+            .interactiveDismissDisabled(isSubmitting)
+        }
+    }
+
+    private func submit() async {
+        isSubmitting = true
+        errorMsg = nil
+
+        let dateFmt = DateFormatter()
+        dateFmt.dateFormat = "yyyy-MM-dd"
+        let timeFmt = DateFormatter()
+        timeFmt.dateFormat = "HH:mm:ss"
+
+        let result = await vm.reschedule(
+            appointmentId: appointment.id ?? "",
+            newDate: dateFmt.string(from: newDate),
+            newStartTime: timeFmt.string(from: newStartTime),
+            newEndTime: timeFmt.string(from: newEndTime),
+            reason: reason
+        )
+        if let err = result {
+            errorMsg = err
+        } else {
+            isPresented = nil
+        }
+        isSubmitting = false
     }
 }
 
@@ -123,5 +213,22 @@ final class AppointmentsViewModel: ObservableObject {
         let req = CancelAppointmentRequest(appointmentId: appointmentId, reason: reason.isEmpty ? nil : reason)
         let _: AppointmentDTO? = try? await APIClient.shared.put(APIEndpoints.cancelAppointment, body: req)
         await load()
+    }
+
+    func reschedule(appointmentId: String, newDate: String, newStartTime: String, newEndTime: String, reason: String) async -> String? {
+        let req = RescheduleAppointmentRequest(
+            appointmentId: appointmentId,
+            newDate: newDate,
+            newStartTime: newStartTime,
+            newEndTime: newEndTime,
+            reason: reason.isEmpty ? nil : reason
+        )
+        do {
+            let _: AppointmentDTO = try await APIClient.shared.put(APIEndpoints.rescheduleAppointment, body: req)
+            await load()
+            return nil
+        } catch {
+            return error.localizedDescription
+        }
     }
 }
