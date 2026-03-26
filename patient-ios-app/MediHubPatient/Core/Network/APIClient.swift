@@ -161,7 +161,7 @@ final class APIClient {
             let wrapped = try decoder.decode(APIResponse<T>.self, from: data)
             if let result = wrapped.data { return result }
             // Some endpoints return the object directly (not wrapped)
-            return try decoder.decode(T, from: data)
+            return try decoder.decode(T.self, from: data)
         } catch {
             // Fallback: decode directly
             do {

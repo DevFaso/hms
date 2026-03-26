@@ -100,7 +100,11 @@ final class DocumentsViewModel: ObservableObject {
             queryItems: [URLQueryItem(name: "page", value: "0"),
                          URLQueryItem(name: "size", value: "50")]
         )
-        documents = page?.content ?? (try? await APIClient.shared.get(APIEndpoints.documents)) ?? []
+        if let content = page?.content {
+            documents = content
+        } else {
+            documents = (try? await APIClient.shared.get(APIEndpoints.documents)) ?? []
+        }
         isLoading = false
     }
 }
@@ -217,14 +221,14 @@ final class SharingPrivacyViewModel: ObservableObject {
     func load() async {
         isLoading = true
         await withTaskGroup(of: Void.self) { group in
-            group.addTask {
+            group.addTask { @MainActor in
                 let page: PageDTO<ConsentDTO>? = try? await APIClient.shared.get(
                     APIEndpoints.consents,
                     queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "20")]
                 )
                 self.consents = page?.content ?? []
             }
-            group.addTask {
+            group.addTask { @MainActor in
                 let page: PageDTO<AccessLogDTO>? = try? await APIClient.shared.get(
                     APIEndpoints.accessLog,
                     queryItems: [URLQueryItem(name: "page", value: "0"), URLQueryItem(name: "size", value: "20")]

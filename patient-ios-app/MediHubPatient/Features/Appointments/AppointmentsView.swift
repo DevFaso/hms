@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AppointmentsView: View {
     @StateObject private var vm = AppointmentsViewModel()
+    @State private var showError = false
 
     var body: some View {
         NavigationStack {
@@ -15,10 +16,8 @@ struct AppointmentsView: View {
                 } else {
                     List {
                         ForEach(vm.appointments) { appt in
-                            NavigationLink(value: appt) {
-                                AppointmentRowView(appointment: appt)
-                                    .padding(.vertical, 4)
-                            }
+                            AppointmentRowView(appointment: appt)
+                                .padding(.vertical, 4)
                         }
                     }
                     .listStyle(.insetGrouped)
@@ -33,9 +32,12 @@ struct AppointmentsView: View {
                 }
             }
             .refreshable { await vm.load() }
-            .alert("Error", isPresented: .constant(vm.errorMessage != nil)) {
+            .onChange(of: vm.errorMessage) { _, newVal in showError = (newVal != nil) }
+            .alert("Error", isPresented: $showError) {
                 Button("OK") { vm.errorMessage = nil }
-            } message: { Text(vm.errorMessage ?? "") }
+            } message: {
+                Text(vm.errorMessage ?? "")
+            }
         }
         .task { await vm.load() }
     }

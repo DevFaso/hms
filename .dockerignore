@@ -20,9 +20,10 @@ build/
 docs/
 http/
 
-# Ignore mobile app native code (Android/iOS) - not needed for backend build
-patient-mobile-app/android/
-patient-mobile-app/ios/
+# Ignore decommissioned hybrid app and native mobile apps - not needed for backend build
+platform/
+patient-ios-app/
+patient-android-app/
 
 # Ignore git internals
 .git/

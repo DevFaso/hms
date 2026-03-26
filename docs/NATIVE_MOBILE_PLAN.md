@@ -1,7 +1,7 @@
 # Native Mobile Apps — Implementation Plan
 > **Goal**: Build two pure native patient apps (iOS SwiftUI + Android Kotlin/Compose)  
 > connecting to the existing Spring Boot backend (`/me/patient/*` endpoints).  
-> The Capacitor hybrid (`patient-mobile-app/`) is being decommissioned.
+> The Capacitor hybrid has been decommissioned to `platform/decommissioned/patient-mobile-app/`.
 
 ---
 
@@ -9,9 +9,9 @@
 
 ```
 hms/
-├── patient-ios-app/        ← NEW — pure SwiftUI (Xcode project)
-├── patient-android-app/    ← NEW — pure Kotlin/Compose (Android Studio project)
-└── patient-mobile-app/     ← OLD — Capacitor hybrid (to be decommissioned)
+├── patient-ios-app/                                ← Native SwiftUI (Xcode project)
+├── patient-android-app/                            ← Native Kotlin/Compose (Android Studio project)
+└── platform/decommissioned/patient-mobile-app/     ← DECOMMISSIONED — Capacitor hybrid
 ```
 
 ---
@@ -242,16 +242,18 @@ patient-android-app/
 ## Current Status
 
 ### iOS (`patient-ios-app/`)
-> **Nothing built yet.** Xcode project does not exist.
+> ✅ **Builds and runs** on iOS Simulator (iPhone 16 Pro, iOS 18.6). 28 SwiftUI source files, pure system frameworks.
 
 ### Android (`patient-android-app/`)
-> **Nothing built yet.** Android Studio project does not exist.
+> ✅ **Scaffolded.** Kotlin/Compose project with 61 files committed.
 
-### Hybrid (`patient-mobile-app/`) — TO BE DECOMMISSIONED
-> All 21 screens exist as React/JSX. Being replaced by the native apps above.  
-> Keep as reference for UI logic, API calls, and data shapes until native apps are complete.
+### Hybrid (`patient-mobile-app/`) — ✅ DECOMMISSIONED
+> Moved to `platform/decommissioned/patient-mobile-app/` (June 2025).  
+> All 21 screens preserved as reference for UI logic, API calls, and data shapes.
 
 ---
 
-## Next Step
-→ Start with **iOS**: scaffold `patient-ios-app/` Xcode project + `APIClient.swift` + `AuthManager.swift`
+## Status
+- ✅ iOS app builds & runs on Simulator
+- ✅ Android app scaffolded
+- ✅ Hybrid app decommissioned

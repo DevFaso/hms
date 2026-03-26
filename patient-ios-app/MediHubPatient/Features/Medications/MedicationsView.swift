@@ -105,13 +105,13 @@ final class MedicationsViewModel: ObservableObject {
     func load() async {
         isLoading = true
         await withTaskGroup(of: Void.self) { group in
-            group.addTask {
+            group.addTask { @MainActor in
                 self.medications = (try? await APIClient.shared.get(
                     APIEndpoints.medications,
                     queryItems: [URLQueryItem(name: "limit", value: "50")]
                 )) ?? []
             }
-            group.addTask {
+            group.addTask { @MainActor in
                 self.prescriptions = (try? await APIClient.shared.get(APIEndpoints.prescriptions)) ?? []
             }
         }

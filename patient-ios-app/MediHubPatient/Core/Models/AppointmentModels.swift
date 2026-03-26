@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Appointment Models
 
-struct AppointmentDTO: Codable, Identifiable {
+struct AppointmentDTO: Codable, Identifiable, Hashable {
     let id: Int?
     let appointmentDate: String?
     let appointmentTime: String?

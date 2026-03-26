@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Encounter / Visit Models
 
-struct EncounterDTO: Codable, Identifiable {
+struct EncounterDTO: Codable, Identifiable, Hashable {
     let id: Int?
     let encounterDate: String?
     let status: String?
@@ -77,7 +77,7 @@ struct NotificationDTO: Codable, Identifiable {
 
 // MARK: - Chat / Message Models
 
-struct ChatThreadDTO: Codable, Identifiable {
+struct ChatThreadDTO: Codable, Identifiable, Hashable {
     let id: String?
     let recipientName: String?
     let recipientRole: String?

@@ -177,7 +177,7 @@ struct ComposeMessageView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var recipient = ""
     @State private var subject = ""
-    @State private var body = ""
+    @State private var messageBody = ""
 
     var body: some View {
         NavigationStack {
@@ -185,7 +185,7 @@ struct ComposeMessageView: View {
                 Section("To") { TextField("Recipient", text: $recipient) }
                 Section("Subject") { TextField("Subject", text: $subject) }
                 Section("Message") {
-                    TextEditor(text: $body).frame(minHeight: 120)
+                    TextEditor(text: $messageBody).frame(minHeight: 120)
                 }
             }
             .navigationTitle("New Message")
