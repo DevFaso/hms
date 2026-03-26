@@ -190,17 +190,22 @@ struct ProxyResponse: Codable, Identifiable {
     let proxyDisplayName: String?
     let relationship: String?
     let status: String?
-    let permissions: [String]?
+    let permissions: String?
     let expiresAt: String?
     let revokedAt: String?
     let notes: String?
     let createdAt: String?
+
+    /// Convenience: split comma-separated permissions into an array for UI display
+    var permissionsList: [String] {
+        permissions?.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) } ?? []
+    }
 }
 
 struct ProxyGrantRequest: Encodable {
     let proxyUsername: String
     let relationship: String
-    let permissions: [String]
+    let permissions: String          // comma-separated: "VIEW_RECORDS,VIEW_APPOINTMENTS"
     let expiresAt: String?
     let notes: String?
 }

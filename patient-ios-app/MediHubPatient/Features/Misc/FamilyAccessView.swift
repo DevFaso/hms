@@ -110,10 +110,10 @@ struct ProxyCard: View {
             }
 
             // Permissions
-            if let perms = proxy.permissions, !perms.isEmpty {
+            if !proxy.permissionsList.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
-                        ForEach(perms, id: \.self) { perm in
+                        ForEach(proxy.permissionsList, id: \.self) { perm in
                             Text(perm.replacingOccurrences(of: "_", with: " ").capitalized)
                                 .font(.caption2).bold()
                                 .padding(.horizontal, 8).padding(.vertical, 4)
@@ -127,11 +127,11 @@ struct ProxyCard: View {
 
             HStack {
                 if let created = proxy.createdAt {
-                    Text("Since \(created)").font(.caption2).foregroundColor(.secondary)
+                    Text("Since \(ProxyCard.formatDate(created))").font(.caption2).foregroundColor(.secondary)
                 }
                 Spacer()
                 if let expires = proxy.expiresAt {
-                    Text("Expires \(expires)").font(.caption2).foregroundColor(.orange)
+                    Text("Expires \(ProxyCard.formatDate(expires))").font(.caption2).foregroundColor(.orange)
                 }
             }
         }
@@ -143,6 +143,19 @@ struct ProxyCard: View {
                 }
             }
         }
+    }
+
+    /// Format ISO timestamp to readable date like "Mar 26, 2026"
+    static func formatDate(_ isoString: String) -> String {
+        let prefix = String(isoString.prefix(10)) // "2026-03-26"
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        if let date = formatter.date(from: prefix) {
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .none
+            return formatter.string(from: date)
+        }
+        return prefix
     }
 }
 
@@ -242,7 +255,7 @@ struct GrantProxySheet: View {
         let request = ProxyGrantRequest(
             proxyUsername: username,
             relationship: relationship.uppercased(),
-            permissions: perms,
+            permissions: perms.joined(separator: ","),
             expiresAt: hasExpiry ? iso.string(from: expiresAt) : nil,
             notes: notes.isEmpty ? nil : notes
         )
@@ -251,6 +264,19 @@ struct GrantProxySheet: View {
             let _: ProxyResponse = try await APIClient.shared.post(APIEndpoints.proxies, body: request)
             await vm.loadAll()
             isPresented = false
+        } catch let apiError as APIError {
+            switch apiError {
+            case .httpError(let code, let msg):
+                if code == 404 {
+                    errorMsg = "User '\(username)' not found. Please check the username and try again."
+                } else if code == 400 {
+                    errorMsg = msg ?? "Invalid request. Please check the form."
+                } else {
+                    errorMsg = msg ?? "Server error (\(code)). Please try again."
+                }
+            default:
+                errorMsg = "Failed to grant access: \(apiError.localizedDescription)"
+            }
         } catch {
             errorMsg = "Failed to grant access: \(error.localizedDescription)"
         }

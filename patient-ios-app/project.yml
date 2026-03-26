@@ -35,3 +35,6 @@ targets:
         IPHONEOS_DEPLOYMENT_TARGET: "17.0"
     info:
       path: MediHubPatient/Resources/Info.plist
+    scheme:
+      testTargets: []
+      gatherCoverageData: false
