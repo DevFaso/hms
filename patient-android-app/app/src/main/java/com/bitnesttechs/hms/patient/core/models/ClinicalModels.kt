@@ -5,7 +5,7 @@ import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
 data class EncounterDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "encounterDate") val encounterDate: String = "",
     @Json(name = "type") val type: String? = null,
     @Json(name = "status") val status: String = "",
@@ -19,7 +19,7 @@ data class EncounterDto(
 
 @JsonClass(generateAdapter = true)
 data class DischargeSummaryDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "admissionDate") val admissionDate: String? = null,
     @Json(name = "dischargeDate") val dischargeDate: String? = null,
     @Json(name = "primaryDiagnosis") val primaryDiagnosis: String? = null,
@@ -37,7 +37,7 @@ data class CareTeamDto(
 
 @JsonClass(generateAdapter = true)
 data class CareTeamMemberDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "name") val name: String = "",
     @Json(name = "role") val role: String? = null,
     @Json(name = "specialty") val specialty: String? = null,
@@ -48,7 +48,7 @@ data class CareTeamMemberDto(
 
 @JsonClass(generateAdapter = true)
 data class DocumentDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "name") val name: String = "",
     @Json(name = "type") val type: String? = null,
     @Json(name = "uploadedAt") val uploadedAt: String? = null,
@@ -59,7 +59,7 @@ data class DocumentDto(
 
 @JsonClass(generateAdapter = true)
 data class NotificationDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "title") val title: String = "",
     @Json(name = "message") val message: String = "",
     @Json(name = "type") val type: String? = null,
@@ -70,7 +70,7 @@ data class NotificationDto(
 
 @JsonClass(generateAdapter = true)
 data class ChatThreadDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "subject") val subject: String = "",
     @Json(name = "participantName") val participantName: String? = null,
     @Json(name = "lastMessage") val lastMessage: String? = null,
@@ -80,8 +80,8 @@ data class ChatThreadDto(
 
 @JsonClass(generateAdapter = true)
 data class ChatMessageDto(
-    @Json(name = "id") val id: Long = 0,
-    @Json(name = "threadId") val threadId: Long = 0,
+    @Json(name = "id") val id: String = "",
+    @Json(name = "threadId") val threadId: String = "",
     @Json(name = "content") val content: String = "",
     @Json(name = "senderName") val senderName: String? = null,
     @Json(name = "sentAt") val sentAt: String = "",
@@ -97,7 +97,7 @@ data class SendMessageRequest(
 
 @JsonClass(generateAdapter = true)
 data class ReferralDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "referralDate") val referralDate: String? = null,
     @Json(name = "referredTo") val referredTo: String? = null,
     @Json(name = "specialty") val specialty: String? = null,
@@ -108,7 +108,7 @@ data class ReferralDto(
 
 @JsonClass(generateAdapter = true)
 data class TreatmentPlanDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "title") val title: String = "",
     @Json(name = "description") val description: String? = null,
     @Json(name = "startDate") val startDate: String? = null,
@@ -120,7 +120,7 @@ data class TreatmentPlanDto(
 
 @JsonClass(generateAdapter = true)
 data class ConsentDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "type") val type: String = "",
     @Json(name = "title") val title: String = "",
     @Json(name = "description") val description: String? = null,
@@ -137,7 +137,7 @@ data class GrantConsentRequest(
 
 @JsonClass(generateAdapter = true)
 data class AccessLogDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "accessedBy") val accessedBy: String = "",
     @Json(name = "accessedAt") val accessedAt: String = "",
     @Json(name = "action") val action: String = "",
@@ -147,7 +147,7 @@ data class AccessLogDto(
 
 @JsonClass(generateAdapter = true)
 data class ImmunizationDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "vaccineName") val vaccineName: String = "",
     @Json(name = "administeredDate") val administeredDate: String? = null,
     @Json(name = "administeredBy") val administeredBy: String? = null,

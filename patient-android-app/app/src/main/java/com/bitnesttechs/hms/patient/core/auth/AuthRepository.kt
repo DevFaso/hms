@@ -27,18 +27,18 @@ class AuthRepository @Inject constructor(
         return try {
             val response = api.login(LoginRequest(username, password))
             val body = response.body()
-            if (response.isSuccessful && body?.success == true && body.data != null) {
-                val data = body.data
-                tokenStorage.accessToken = data.accessToken
-                tokenStorage.refreshToken = data.refreshToken
+            if (response.isSuccessful && body != null) {
+                // Login response is FLAT — token + user fields at top level
+                tokenStorage.accessToken = body.accessToken
+                tokenStorage.refreshToken = body.refreshToken
                 if (saveCredentials) {
                     tokenStorage.savedUsername = username
                     tokenStorage.savedPassword = password
                 }
-                _currentUser.value = data.user
+                _currentUser.value = body.user // computed property builds UserDto from flat fields
                 AuthResult.Success
             } else {
-                AuthResult.Error(body?.message ?: "Login failed")
+                AuthResult.Error("Login failed")
             }
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Network error")
@@ -64,7 +64,18 @@ class AuthRepository @Inject constructor(
     suspend fun loadCurrentUser(): UserDto? {
         return try {
             val resp = api.getProfile()
-            resp.body()?.data?.also { _currentUser.value = it }
+            val profile = resp.body()?.data
+            if (profile != null) {
+                val user = UserDto(
+                    id = profile.id,
+                    username = profile.username ?: "",
+                    email = profile.email ?: "",
+                    firstName = profile.firstName,
+                    lastName = profile.lastName
+                )
+                _currentUser.value = user
+                user
+            } else null
         } catch (_: Exception) { null }
     }
 }

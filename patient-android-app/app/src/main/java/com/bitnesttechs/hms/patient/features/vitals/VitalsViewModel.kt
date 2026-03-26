@@ -18,7 +18,7 @@ class VitalsViewModel @Inject constructor(private val api: ApiService) : ViewMod
     fun load() {
         viewModelScope.launch {
             isLoading.value = true
-            try { vitals.value = api.getVitals(size = 20).body()?.data?.content ?: emptyList() }
+            try { vitals.value = api.getVitals(size = 20).body()?.data ?: emptyList() }
             catch (_: Exception) {}
             finally { isLoading.value = false }
         }

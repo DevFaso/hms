@@ -29,7 +29,7 @@ class DocumentsViewModel @Inject constructor(
             try {
                 val resp = api.getDocuments()
                 if (resp.isSuccessful) {
-                    _documents.value = resp.body()?.data?.content ?: emptyList()
+                    _documents.value = resp.body()?.data ?: emptyList()
                 }
             } catch (_: Exception) {
             } finally {

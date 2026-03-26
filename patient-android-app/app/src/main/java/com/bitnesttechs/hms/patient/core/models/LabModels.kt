@@ -5,7 +5,7 @@ import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
 data class LabResultDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "testName") val testName: String = "",
     @Json(name = "result") val result: String? = null,
     @Json(name = "unit") val unit: String? = null,

@@ -21,7 +21,7 @@ class LabResultsViewModel @Inject constructor(private val api: ApiService) : Vie
     fun load() {
         viewModelScope.launch {
             _isLoading.value = true
-            try { _results.value = api.getLabResults(size = 50).body()?.data?.content ?: emptyList() }
+            try { _results.value = api.getLabResults(size = 50).body()?.data ?: emptyList() }
             catch (_: Exception) {}
             finally { _isLoading.value = false }
         }

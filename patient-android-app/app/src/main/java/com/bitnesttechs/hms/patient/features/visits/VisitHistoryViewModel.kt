@@ -34,7 +34,7 @@ class VisitHistoryViewModel @Inject constructor(
             try {
                 val encDef = async { api.getEncounters() }
                 val sumDef = async { api.getAfterVisitSummaries() }
-                encDef.await().body()?.data?.content?.let { _encounters.value = it }
+                encDef.await().body()?.data?.let { _encounters.value = it }
                 sumDef.await().body()?.data?.let { _summaries.value = it }
             } catch (_: Exception) {
             } finally {
@@ -43,6 +43,6 @@ class VisitHistoryViewModel @Inject constructor(
         }
     }
 
-    fun summaryForEncounter(encounterId: Long): DischargeSummaryDto? =
+    fun summaryForEncounter(encounterId: String): DischargeSummaryDto? =
         _summaries.value.firstOrNull { it.encounterId == encounterId }
 }

@@ -41,16 +41,17 @@ class DashboardViewModel @Inject constructor(
                 val notificationsDeferred = async { api.getNotifications(size = 1) }
 
                 val health = healthDeferred.await().body()?.data
-                val appointments = appointmentsDeferred.await().body()?.data?.content ?: emptyList()
-                val labs = labsDeferred.await().body()?.data?.content ?: emptyList()
-                val notifTotal = notificationsDeferred.await().body()?.data?.totalElements?.toInt() ?: 0
+                val appointments = appointmentsDeferred.await().body()?.data ?: emptyList()
+                val labs = labsDeferred.await().body()?.data ?: emptyList()
+                val notifications = notificationsDeferred.await().body()?.data ?: emptyList()
+                val unreadCount = notifications.count { !it.isRead }
 
                 _uiState.value = DashboardUiState(
                     isLoading = false,
                     healthSummary = health,
                     upcomingAppointments = appointments,
                     recentLabResults = labs,
-                    unreadNotificationCount = notifTotal
+                    unreadNotificationCount = unreadCount
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)

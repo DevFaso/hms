@@ -28,6 +28,7 @@ import com.bitnesttechs.hms.patient.ui.theme.*
 @Composable
 fun DashboardScreen(
     navController: NavController,
+    onMenuClick: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -35,6 +36,11 @@ fun DashboardScreen(
     Scaffold(
         topBar = {
             TopAppBar(
+                navigationIcon = {
+                    IconButton(onClick = onMenuClick) {
+                        Icon(Icons.Default.Menu, contentDescription = "Menu", tint = Color.White)
+                    }
+                },
                 title = {
                     Column {
                         Text("MediHub", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -89,9 +95,8 @@ fun DashboardScreen(
                             modifier = Modifier.padding(16.dp),
                             horizontalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            StatChip("Medications", summary.currentMedications.toString(), Icons.Default.Medication)
-                            StatChip("Appointments", summary.upcomingAppointments.toString(), Icons.Default.CalendarMonth)
-                            StatChip("Lab Results", summary.pendingLabResults.toString(), Icons.Default.Science)
+                            StatChip("Medications", summary.medicationCount.toString(), Icons.Default.Medication)
+                            StatChip("Lab Results", summary.labResultCount.toString(), Icons.Default.Science)
                         }
                     }
                 }
@@ -116,10 +121,10 @@ fun DashboardScreen(
                 }
 
                 // Active conditions
-                if (summary.activeConditions.isNotEmpty()) {
+                if (summary.activeDiagnoses.isNotEmpty()) {
                     item {
                         SectionCard(title = "Active Conditions") {
-                            summary.activeConditions.forEach { condition ->
+                            summary.activeDiagnoses.forEach { condition ->
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(
                                         Modifier.size(8.dp).clip(CircleShape)
@@ -134,27 +139,20 @@ fun DashboardScreen(
                     }
                 }
 
-                // Balance due
-                if (summary.outstandingBalance > 0) {
+                // Chronic conditions
+                if (summary.chronicConditions.isNotEmpty()) {
                     item {
-                        Card(
-                            modifier = Modifier.fillMaxWidth().clickable { navController.navigate("billing") },
-                            colors = CardDefaults.cardColors(containerColor = WarningAmber.copy(alpha = 0.15f)),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Row(
-                                Modifier.padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(Icons.Default.AttachMoney, null, tint = WarningAmber)
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    "Outstanding balance: ${"%.2f".format(summary.outstandingBalance)}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium
-                                )
-                                Spacer(Modifier.weight(1f))
-                                Icon(Icons.Default.ChevronRight, null)
+                        SectionCard(title = "Chronic Conditions") {
+                            summary.chronicConditions.forEach { condition ->
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        Modifier.size(8.dp).clip(CircleShape)
+                                            .background(WarningAmber)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(condition, style = MaterialTheme.typography.bodyMedium)
+                                }
+                                Spacer(Modifier.height(4.dp))
                             }
                         }
                     }
@@ -309,9 +307,9 @@ fun AppointmentRow(appt: AppointmentDto) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(appt.doctorName ?: "Unknown Doctor", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            Text(appt.staffName ?: "Unknown Doctor", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
             Text(appt.departmentName ?: "", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(appt.appointmentDate, style = MaterialTheme.typography.bodySmall)
+            Text("${appt.appointmentDate} ${appt.timeDisplay ?: ""}".trim(), style = MaterialTheme.typography.bodySmall)
         }
         StatusBadge(appt.statusDisplay)
     }

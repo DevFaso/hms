@@ -60,7 +60,7 @@ fun SharingPrivacyScreen(viewModel: SharingPrivacyViewModel = hiltViewModel()) {
 }
 
 @Composable
-private fun ConsentsTab(consents: List<ConsentDto>, onRevoke: (Long) -> Unit) {
+private fun ConsentsTab(consents: List<ConsentDto>, onRevoke: (String) -> Unit) {
     if (consents.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text("No consent records", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -77,7 +77,7 @@ private fun ConsentsTab(consents: List<ConsentDto>, onRevoke: (Long) -> Unit) {
 }
 
 @Composable
-private fun ConsentCard(consent: ConsentDto, onRevoke: (Long) -> Unit) {
+private fun ConsentCard(consent: ConsentDto, onRevoke: (String) -> Unit) {
     var showConfirm by remember { mutableStateOf(false) }
     val isActive = consent.status.uppercase() == "ACTIVE" || consent.status.uppercase() == "GRANTED"
 

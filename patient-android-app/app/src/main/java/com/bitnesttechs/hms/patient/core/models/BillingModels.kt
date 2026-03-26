@@ -5,7 +5,7 @@ import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
 data class InvoiceDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "invoiceNumber") val invoiceNumber: String = "",
     @Json(name = "invoiceDate") val invoiceDate: String? = null,
     @Json(name = "dueDate") val dueDate: String? = null,
@@ -24,7 +24,7 @@ data class InvoiceDto(
 
 @JsonClass(generateAdapter = true)
 data class InvoiceItemDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "description") val description: String = "",
     @Json(name = "quantity") val quantity: Int = 1,
     @Json(name = "unitPrice") val unitPrice: Double = 0.0,

@@ -1,17 +1,19 @@
 package com.bitnesttechs.hms.patient.core.network
 
 import com.bitnesttechs.hms.patient.core.models.*
+import okhttp3.MultipartBody
 import retrofit2.Response
 import retrofit2.http.*
 
 interface ApiService {
 
     // ── Auth ──────────────────────────────────────────────────────────────────
+    /** Login returns flat LoginResponse — NOT wrapped in ApiResponse. */
     @POST("auth/login")
-    suspend fun login(@Body request: LoginRequest): Response<ApiResponse<LoginResponse>>
+    suspend fun login(@Body request: LoginRequest): Response<LoginResponse>
 
     @POST("auth/token/refresh")
-    suspend fun refreshToken(@Body request: RefreshTokenRequest): Response<ApiResponse<LoginResponse>>
+    suspend fun refreshToken(@Body request: RefreshTokenRequest): Response<LoginResponse>
 
     @POST("auth/logout")
     suspend fun logout(): Response<ApiResponse<Unit>>
@@ -20,28 +22,41 @@ interface ApiService {
     @GET("me/patient/profile")
     suspend fun getProfile(): Response<ApiResponse<PatientProfileDto>>
 
+    @PUT("me/patient/profile")
+    suspend fun updateProfile(@Body update: PatientProfileUpdateDto): Response<ApiResponse<PatientProfileDto>>
+
+    @Multipart
+    @POST("files/upload")
+    suspend fun uploadProfileImage(
+        @Part file: MultipartBody.Part,
+        @Part("entityType") entityType: okhttp3.RequestBody,
+        @Part("entityId") entityId: okhttp3.RequestBody
+    ): Response<ApiResponse<Any>>
+
     @GET("me/patient/health-summary")
     suspend fun getHealthSummary(): Response<ApiResponse<HealthSummaryDto>>
 
     // ── Appointments ──────────────────────────────────────────────────────────
+    /** Patient appointments — API returns list, not paginated */
     @GET("me/patient/appointments")
     suspend fun getAppointments(
         @Query("page") page: Int = 0,
-        @Query("size") size: Int = 20
-    ): Response<ApiResponse<PageDto<AppointmentDto>>>
+        @Query("size") size: Int = 50
+    ): Response<ApiResponse<List<AppointmentDto>>>
 
-    @POST("me/patient/appointments")
-    suspend fun scheduleAppointment(@Body request: ScheduleAppointmentRequest): Response<ApiResponse<AppointmentDto>>
+    /** Book appointment — POST /appointments returns flat AppointmentDto (201) */
+    @POST("appointments")
+    suspend fun bookAppointment(@Body request: BookAppointmentRequest): Response<AppointmentDto>
 
     @PUT("me/patient/appointments/{id}/cancel")
     suspend fun cancelAppointment(
-        @Path("id") id: Long,
+        @Path("id") id: String,
         @Body request: CancelAppointmentRequest
     ): Response<ApiResponse<AppointmentDto>>
 
     @PUT("me/patient/appointments/{id}/reschedule")
     suspend fun rescheduleAppointment(
-        @Path("id") id: Long,
+        @Path("id") id: String,
         @Body request: RescheduleAppointmentRequest
     ): Response<ApiResponse<AppointmentDto>>
 
@@ -50,10 +65,10 @@ interface ApiService {
     suspend fun getLabResults(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
-    ): Response<ApiResponse<PageDto<LabResultDto>>>
+    ): Response<ApiResponse<List<LabResultDto>>>
 
     @GET("me/patient/lab-results/{id}")
-    suspend fun getLabResult(@Path("id") id: Long): Response<ApiResponse<LabResultDto>>
+    suspend fun getLabResult(@Path("id") id: String): Response<ApiResponse<LabResultDto>>
 
     // ── Medications ───────────────────────────────────────────────────────────
     @GET("me/patient/medications")
@@ -63,11 +78,10 @@ interface ApiService {
     suspend fun getPrescriptions(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
-    ): Response<ApiResponse<PageDto<PrescriptionDto>>>
+    ): Response<ApiResponse<List<PrescriptionDto>>>
 
-    @POST("me/patient/prescriptions/{id}/refill")
+    @POST("me/patient/refills")
     suspend fun requestRefill(
-        @Path("id") id: Long,
         @Body request: RefillRequest
     ): Response<ApiResponse<RefillDto>>
 
@@ -76,17 +90,17 @@ interface ApiService {
     suspend fun getInvoices(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
-    ): Response<ApiResponse<PageDto<InvoiceDto>>>
+    ): Response<ApiResponse<List<InvoiceDto>>>
 
     @GET("me/patient/billing/invoices/{id}")
-    suspend fun getInvoice(@Path("id") id: Long): Response<ApiResponse<InvoiceDto>>
+    suspend fun getInvoice(@Path("id") id: String): Response<ApiResponse<InvoiceDto>>
 
     // ── Vitals ────────────────────────────────────────────────────────────────
     @GET("me/patient/vitals")
     suspend fun getVitals(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
-    ): Response<ApiResponse<PageDto<VitalSignDto>>>
+    ): Response<ApiResponse<List<VitalSignDto>>>
 
     @POST("me/patient/vitals")
     suspend fun recordVital(@Body request: RecordVitalRequest): Response<ApiResponse<VitalSignDto>>
@@ -100,20 +114,20 @@ interface ApiService {
     suspend fun getEncounters(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
-    ): Response<ApiResponse<PageDto<EncounterDto>>>
+    ): Response<ApiResponse<List<EncounterDto>>>
 
     @GET("me/patient/after-visit-summaries")
     suspend fun getAfterVisitSummaries(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
-    ): Response<ApiResponse<PageDto<DischargeSummaryDto>>>
+    ): Response<ApiResponse<List<DischargeSummaryDto>>>
 
     // ── Documents ─────────────────────────────────────────────────────────────
     @GET("me/patient/documents")
     suspend fun getDocuments(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
-    ): Response<ApiResponse<PageDto<DocumentDto>>>
+    ): Response<ApiResponse<List<DocumentDto>>>
 
     // ── Health Records ────────────────────────────────────────────────────────
     @GET("me/patient/immunizations")
@@ -123,7 +137,7 @@ interface ApiService {
     suspend fun getReferrals(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
-    ): Response<ApiResponse<PageDto<ReferralDto>>>
+    ): Response<ApiResponse<List<ReferralDto>>>
 
     @GET("me/patient/treatment-plans")
     suspend fun getTreatmentPlans(): Response<ApiResponse<List<TreatmentPlanDto>>>
@@ -133,10 +147,10 @@ interface ApiService {
     suspend fun getNotifications(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
-    ): Response<ApiResponse<PageDto<NotificationDto>>>
+    ): Response<ApiResponse<List<NotificationDto>>>
 
     @PUT("me/notifications/{id}/read")
-    suspend fun markNotificationRead(@Path("id") id: Long): Response<ApiResponse<Unit>>
+    suspend fun markNotificationRead(@Path("id") id: String): Response<ApiResponse<Unit>>
 
     @PUT("me/notifications/read-all")
     suspend fun markAllNotificationsRead(): Response<ApiResponse<Unit>>
@@ -147,14 +161,14 @@ interface ApiService {
 
     @GET("me/chat/threads/{threadId}/messages")
     suspend fun getMessages(
-        @Path("threadId") threadId: Long,
+        @Path("threadId") threadId: String,
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 50
-    ): Response<ApiResponse<PageDto<ChatMessageDto>>>
+    ): Response<ApiResponse<List<ChatMessageDto>>>
 
     @POST("me/chat/threads/{threadId}/messages")
     suspend fun sendMessage(
-        @Path("threadId") threadId: Long,
+        @Path("threadId") threadId: String,
         @Body request: SendMessageRequest
     ): Response<ApiResponse<ChatMessageDto>>
 
@@ -164,7 +178,7 @@ interface ApiService {
 
     @POST("me/patient/consents/{id}/grant")
     suspend fun grantConsent(
-        @Path("id") id: Long,
+        @Path("id") id: String,
         @Body request: GrantConsentRequest
     ): Response<ApiResponse<ConsentDto>>
 
@@ -172,5 +186,5 @@ interface ApiService {
     suspend fun getAccessLog(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
-    ): Response<ApiResponse<PageDto<AccessLogDto>>>
+    ): Response<ApiResponse<List<AccessLogDto>>>
 }

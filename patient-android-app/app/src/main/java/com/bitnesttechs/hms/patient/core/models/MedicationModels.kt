@@ -5,8 +5,8 @@ import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
 data class MedicationDto(
-    @Json(name = "id") val id: Long = 0,
-    @Json(name = "name") val name: String = "",
+    @Json(name = "id") val id: String = "",
+    @Json(name = "medicationName") val medicationName: String = "",
     @Json(name = "dosage") val dosage: String? = null,
     @Json(name = "frequency") val frequency: String? = null,
     @Json(name = "route") val route: String? = null,
@@ -15,11 +15,14 @@ data class MedicationDto(
     @Json(name = "prescribedBy") val prescribedBy: String? = null,
     @Json(name = "instructions") val instructions: String? = null,
     @Json(name = "isActive") val isActive: Boolean = true
-)
+) {
+    /** Backward compat alias */
+    val name: String get() = medicationName
+}
 
 @JsonClass(generateAdapter = true)
 data class PrescriptionDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "medicationName") val medicationName: String = "",
     @Json(name = "dosage") val dosage: String? = null,
     @Json(name = "frequency") val frequency: String? = null,
@@ -34,8 +37,8 @@ data class PrescriptionDto(
 
 @JsonClass(generateAdapter = true)
 data class RefillDto(
-    @Json(name = "id") val id: Long = 0,
-    @Json(name = "prescriptionId") val prescriptionId: Long = 0,
+    @Json(name = "id") val id: String = "",
+    @Json(name = "prescriptionId") val prescriptionId: String = "",
     @Json(name = "requestedDate") val requestedDate: String? = null,
     @Json(name = "status") val status: String = "",
     @Json(name = "notes") val notes: String? = null
@@ -43,6 +46,6 @@ data class RefillDto(
 
 @JsonClass(generateAdapter = true)
 data class RefillRequest(
-    @Json(name = "pharmacyId") val pharmacyId: Long? = null,
+    @Json(name = "pharmacyId") val pharmacyId: String? = null,
     @Json(name = "notes") val notes: String? = null
 )

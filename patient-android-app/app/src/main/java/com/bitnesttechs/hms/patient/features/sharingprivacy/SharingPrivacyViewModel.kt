@@ -36,7 +36,7 @@ class SharingPrivacyViewModel @Inject constructor(
                 val consentDef = async { api.getConsents() }
                 val logDef = async { api.getAccessLog() }
                 consentDef.await().body()?.data?.let { _consents.value = it }
-                logDef.await().body()?.data?.content?.let { _accessLog.value = it }
+                logDef.await().body()?.data?.let { _accessLog.value = it }
             } catch (_: Exception) {
             } finally {
                 _isLoading.value = false
@@ -59,7 +59,7 @@ class SharingPrivacyViewModel @Inject constructor(
         }
     }
 
-    fun revokeConsent(consentId: Long) {
+    fun revokeConsent(consentId: String) {
         viewModelScope.launch {
             try {
                 val resp = api.revokeConsent(consentId)

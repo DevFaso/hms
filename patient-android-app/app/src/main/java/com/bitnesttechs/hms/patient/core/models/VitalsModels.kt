@@ -5,7 +5,7 @@ import com.squareup.moshi.JsonClass
 
 @JsonClass(generateAdapter = true)
 data class VitalSignDto(
-    @Json(name = "id") val id: Long = 0,
+    @Json(name = "id") val id: String = "",
     @Json(name = "recordedAt") val recordedAt: String = "",
     @Json(name = "systolicBP") val systolicBP: Int? = null,
     @Json(name = "diastolicBP") val diastolicBP: Int? = null,

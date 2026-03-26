@@ -29,13 +29,13 @@ class MessageThreadViewModel @Inject constructor(private val api: ApiService) : 
     val messages = MutableStateFlow<List<ChatMessageDto>>(emptyList())
     val isLoading = MutableStateFlow(true)
     val isSending = MutableStateFlow(false)
-    private var currentThreadId: Long = 0L
+    private var currentThreadId: String = ""
 
-    fun loadThread(threadId: Long) {
+    fun loadThread(threadId: String) {
         currentThreadId = threadId
         viewModelScope.launch {
             isLoading.value = true
-            try { messages.value = api.getMessages(threadId, size = 100).body()?.data?.content ?: emptyList() }
+            try { messages.value = api.getMessages(threadId, size = 100).body()?.data ?: emptyList() }
             catch (_: Exception) {}
             finally { isLoading.value = false }
         }

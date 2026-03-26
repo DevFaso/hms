@@ -23,7 +23,7 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
             isLoading.value = true
             try {
                 val m = async { api.getMedications().body()?.data ?: emptyList() }
-                val p = async { api.getPrescriptions(size = 50).body()?.data?.content ?: emptyList() }
+                val p = async { api.getPrescriptions(size = 50).body()?.data ?: emptyList() }
                 medications.value = m.await()
                 prescriptions.value = p.await()
             } catch (_: Exception) {}

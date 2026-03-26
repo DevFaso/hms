@@ -268,37 +268,71 @@ struct BookAppointmentSheet: View {
         comps.hour = 9; comps.minute = 30
         return Calendar.current.date(from: comps) ?? Date()
     }()
-    @State private var hospitalName = ""
-    @State private var departmentName = ""
+    @State private var selectedDoctorKey = ""
     @State private var reason = ""
     @State private var notes = ""
     @State private var isSubmitting = false
     @State private var errorMsg: String?
 
-    // Known hospitals from existing appointments
-    private var knownHospitals: [String] {
-        let names = Set(vm.appointments.compactMap { $0.hospitalName })
-        return names.sorted()
+    // Build unique doctor entries from past appointments
+    private struct DoctorOption: Hashable {
+        let key: String          // unique composite key
+        let staffId: String
+        let staffName: String
+        let staffEmail: String?
+        let hospitalName: String
+        let hospitalId: String?
+        let departmentId: String?
+    }
+
+    private var doctorOptions: [DoctorOption] {
+        var seen = Set<String>()
+        var result: [DoctorOption] = []
+        for appt in vm.appointments {
+            guard let sid = appt.staffId, !sid.isEmpty,
+                  let sname = appt.staffName, !sname.isEmpty,
+                  let hname = appt.hospitalName, !hname.isEmpty else { continue }
+            let key = "\(sid)|\(hname)"
+            if seen.insert(key).inserted {
+                result.append(DoctorOption(
+                    key: key, staffId: sid, staffName: sname,
+                    staffEmail: appt.staffEmail,
+                    hospitalName: hname, hospitalId: appt.hospitalId,
+                    departmentId: appt.departmentId))
+            }
+        }
+        return result.sorted { $0.staffName < $1.staffName }
+    }
+
+    private var selectedDoctor: DoctorOption? {
+        doctorOptions.first { $0.key == selectedDoctorKey }
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Hospital") {
-                    if knownHospitals.isEmpty {
-                        TextField("Hospital name", text: $hospitalName)
+                Section("Doctor & Hospital") {
+                    if doctorOptions.isEmpty {
+                        Text("No previous doctors found.\nAsk the front desk to book your first appointment.")
+                            .foregroundColor(.secondary)
+                            .font(.callout)
                     } else {
-                        Picker("Select Hospital", selection: $hospitalName) {
-                            Text("Select…").tag("")
-                            ForEach(knownHospitals, id: \.self) { name in
-                                Text(name).tag(name)
+                        Picker("Select Doctor", selection: $selectedDoctorKey) {
+                            Text("Select a doctor…").tag("")
+                            ForEach(doctorOptions, id: \.key) { doc in
+                                Text("\(doc.staffName) — \(doc.hospitalName)")
+                                    .tag(doc.key)
                             }
                         }
                     }
-                }
 
-                Section("Department (optional)") {
-                    TextField("Department name", text: $departmentName)
+                    if let doc = selectedDoctor {
+                        HStack {
+                            Text("Hospital").foregroundColor(.secondary)
+                            Spacer()
+                            Text(doc.hospitalName)
+                        }
+                    }
                 }
 
                 Section("Date & Time") {
@@ -330,7 +364,7 @@ struct BookAppointmentSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Book") { Task { await submit() } }
-                        .disabled(isSubmitting || hospitalName.isEmpty)
+                        .disabled(isSubmitting || selectedDoctor == nil)
                         .bold()
                 }
             }
@@ -339,6 +373,7 @@ struct BookAppointmentSheet: View {
     }
 
     private func submit() async {
+        guard let doc = selectedDoctor else { return }
         isSubmitting = true
         errorMsg = nil
 
@@ -347,17 +382,17 @@ struct BookAppointmentSheet: View {
         let timeFmt = DateFormatter()
         timeFmt.dateFormat = "HH:mm:ss"
 
-        // Use username from stored session
         let username = KeychainHelper.shared.savedUsername ?? ""
 
         let req = BookAppointmentRequest(
             patientUsername: username.isEmpty ? nil : username,
-            hospitalName: hospitalName.isEmpty ? nil : hospitalName,
-            hospitalId: nil,
-            staffId: nil,
+            hospitalName: doc.hospitalName,
+            hospitalId: doc.hospitalId,
+            staffId: doc.staffId,
+            staffEmail: doc.staffEmail,
             staffUsername: nil,
-            departmentId: nil,
-            departmentName: departmentName.isEmpty ? nil : departmentName,
+            departmentId: doc.departmentId,
+            departmentName: nil,
             appointmentDate: dateFmt.string(from: appointmentDate),
             startTime: timeFmt.string(from: startTime),
             endTime: timeFmt.string(from: endTime),

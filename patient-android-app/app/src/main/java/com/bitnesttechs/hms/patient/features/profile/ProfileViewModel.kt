@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bitnesttechs.hms.patient.core.auth.AuthRepository
 import com.bitnesttechs.hms.patient.core.models.PatientProfileDto
+import com.bitnesttechs.hms.patient.core.models.PatientProfileUpdateDto
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +27,9 @@ class ProfileViewModel @Inject constructor(
     private val _loggedOut = MutableStateFlow(false)
     val loggedOut: StateFlow<Boolean> = _loggedOut
 
+    private val _saveResult = MutableStateFlow<String?>(null)
+    val saveResult: StateFlow<String?> = _saveResult
+
     init { load() }
 
     fun load() {
@@ -40,6 +44,24 @@ class ProfileViewModel @Inject constructor(
             }
         }
     }
+
+    fun updateProfile(update: PatientProfileUpdateDto) {
+        viewModelScope.launch {
+            try {
+                val resp = api.updateProfile(update)
+                if (resp.isSuccessful) {
+                    _profile.value = resp.body()?.data
+                    _saveResult.value = "Profile updated successfully"
+                } else {
+                    _saveResult.value = "Update failed: ${resp.code()}"
+                }
+            } catch (e: Exception) {
+                _saveResult.value = "Error: ${e.message}"
+            }
+        }
+    }
+
+    fun clearSaveResult() { _saveResult.value = null }
 
     fun logout() {
         viewModelScope.launch {

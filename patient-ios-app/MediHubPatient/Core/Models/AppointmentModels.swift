@@ -74,6 +74,7 @@ struct BookAppointmentRequest: Encodable {
     let hospitalName: String?
     let hospitalId: String?
     let staffId: String?
+    let staffEmail: String?
     let staffUsername: String?
     let departmentId: String?
     let departmentName: String?

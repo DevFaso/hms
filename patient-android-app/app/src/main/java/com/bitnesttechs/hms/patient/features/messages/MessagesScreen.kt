@@ -25,7 +25,7 @@ import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MessagesScreen(
-    onThreadClick: (Long) -> Unit,
+    onThreadClick: (String) -> Unit,
     viewModel: MessagesViewModel = hiltViewModel()
 ) {
     val threads by viewModel.threads.collectAsState()
@@ -94,7 +94,7 @@ fun MessagesScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MessageThreadScreen(
-    threadId: Long,
+    threadId: String,
     onBack: () -> Unit,
     viewModel: MessageThreadViewModel = hiltViewModel()
 ) {

@@ -29,7 +29,7 @@ class NotificationsViewModel @Inject constructor(
             try {
                 val resp = api.getNotifications()
                 if (resp.isSuccessful) {
-                    _notifications.value = resp.body()?.data?.content ?: emptyList()
+                    _notifications.value = resp.body()?.data ?: emptyList()
                 }
             } catch (_: Exception) {
             } finally {
@@ -38,7 +38,7 @@ class NotificationsViewModel @Inject constructor(
         }
     }
 
-    fun markRead(id: Long) {
+    fun markRead(id: String) {
         viewModelScope.launch {
             try {
                 api.markNotificationRead(id)

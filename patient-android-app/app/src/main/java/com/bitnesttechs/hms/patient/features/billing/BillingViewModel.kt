@@ -23,7 +23,7 @@ class BillingViewModel @Inject constructor(private val api: ApiService) : ViewMo
     fun load() {
         viewModelScope.launch {
             isLoading.value = true
-            try { invoices.value = api.getInvoices(size = 50).body()?.data?.content ?: emptyList() }
+            try { invoices.value = api.getInvoices(size = 50).body()?.data ?: emptyList() }
             catch (_: Exception) {}
             finally { isLoading.value = false }
         }

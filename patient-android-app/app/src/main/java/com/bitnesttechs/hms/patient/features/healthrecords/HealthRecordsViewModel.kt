@@ -40,7 +40,7 @@ class HealthRecordsViewModel @Inject constructor(
                 val tpDef = async { api.getTreatmentPlans() }
                 val refDef = async { api.getReferrals() }
                 immDef.await().body()?.data?.let { _immunizations.value = it }
-                tpDef.await().body()?.data?.content?.let { _treatmentPlans.value = it }
+                tpDef.await().body()?.data?.let { _treatmentPlans.value = it }
                 refDef.await().body()?.data?.let { _referrals.value = it }
             } catch (_: Exception) {
             } finally {
