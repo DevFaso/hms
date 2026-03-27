@@ -157,8 +157,25 @@ final class APIClient {
 
     private func decodeResponse<T: Decodable>(_ data: Data, statusCode: Int) throws -> T {
         guard (200..<300).contains(statusCode) else {
-            // Try to extract error message from backend ApiResponseWrapper
-            let msg = try? decoder.decode(APIResponse<EmptyData>.self, from: data).message
+            // Try to extract error message from response body
+            var msg: String?
+
+            // Try ApiResponseWrapper format: {"success":false,"message":"..."}
+            msg = try? decoder.decode(APIResponse<EmptyData>.self, from: data).message
+
+            // Try Spring validation/error format: {"message":"...","fieldErrors":{...}}
+            if msg == nil, let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                if let fieldErrors = json["fieldErrors"] as? [String: String] {
+                    // Combine field errors into readable message
+                    let details = fieldErrors.map { "\($0.key): \($0.value)" }.joined(separator: ", ")
+                    msg = details
+                } else if let message = json["message"] as? String {
+                    msg = message
+                } else if let error = json["error"] as? String {
+                    msg = error
+                }
+            }
+
             throw APIError.httpError(statusCode: statusCode, message: msg)
         }
 

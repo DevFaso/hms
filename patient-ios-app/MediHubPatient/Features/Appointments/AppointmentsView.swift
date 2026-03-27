@@ -124,7 +124,13 @@ struct RescheduleSheet: View {
     let appointment: AppointmentDTO
     @ObservedObject var vm: AppointmentsViewModel
     @Binding var isPresented: AppointmentDTO?
-    @State private var newDate = Date()
+
+    // Tomorrow is the earliest allowed date (@Future validation on backend)
+    private static var tomorrow: Date {
+        Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+    }
+
+    @State private var newDate = RescheduleSheet.tomorrow
     @State private var newStartTime = Date()
     @State private var newEndTime = Date().addingTimeInterval(1800) // 30 min
     @State private var reason = ""
@@ -141,7 +147,7 @@ struct RescheduleSheet: View {
                 }
 
                 Section("New Date & Time") {
-                    DatePicker("Date", selection: $newDate, in: Date()..., displayedComponents: .date)
+                    DatePicker("Date", selection: $newDate, in: RescheduleSheet.tomorrow..., displayedComponents: .date)
                     DatePicker("Start Time", selection: $newStartTime, displayedComponents: .hourAndMinute)
                     DatePicker("End Time", selection: $newEndTime, displayedComponents: .hourAndMinute)
                 }
