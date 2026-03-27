@@ -175,13 +175,17 @@ fun DashboardScreen(
                         Triple("Sharing", Icons.Default.Security, "sharing_privacy")
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        quickLinks.chunked(5).forEach { rowItems ->
+                        quickLinks.chunked(4).forEach { rowItems ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
                                 rowItems.forEach { (label, icon, route) ->
                                     QuickLinkItem(label, icon) { navController.navigate(route) }
+                                }
+                                // Pad empty slots to keep alignment
+                                repeat(4 - rowItems.size) {
+                                    Spacer(modifier = Modifier.width(72.dp))
                                 }
                             }
                         }
@@ -284,9 +288,10 @@ private fun RowScope.StatChip(label: String, value: String, icon: ImageVector) {
 private fun QuickLinkItem(label: String, icon: ImageVector, onClick: () -> Unit) {
     Column(
         modifier = Modifier
+            .width(72.dp)
             .clip(RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
-            .padding(8.dp),
+            .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Box(
@@ -297,7 +302,13 @@ private fun QuickLinkItem(label: String, icon: ImageVector, onClick: () -> Unit)
             Icon(icon, null, tint = BrandBlue, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.height(4.dp))
-        Text(label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Medium)
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+        )
     }
 }
 
