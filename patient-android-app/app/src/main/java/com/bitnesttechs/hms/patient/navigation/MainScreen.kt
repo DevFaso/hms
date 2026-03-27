@@ -75,9 +75,9 @@ fun MainScreen(onLogout: () -> Unit) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    // Hide bottom bar on detail screens
-    val topLevelRoutes = bottomTabs.map { it.route }.toSet()
-    val showBottomBar = currentDestination?.route in topLevelRoutes
+    // Show bottom bar on tab routes AND drawer sub-screens
+    val hideBottomBarRoutes = setOf("thread/{threadId}", "appointment_detail")
+    val showBottomBar = currentDestination?.route !in hideBottomBarRoutes
 
     ModalNavigationDrawer(
         drawerState = drawerState,
@@ -123,11 +123,26 @@ fun MainScreen(onLogout: () -> Unit) {
             bottomBar = {
                 if (showBottomBar) {
                     NavigationBar {
+                        val currentRoute = currentDestination?.route
+                        // Map sub-screens to their parent tab
+                        val dashboardSubRoutes = setOf(
+                            "lab_results", "medications", "billing", "vitals",
+                            "care_team", "visits", "documents", "health_records",
+                            "notifications", "sharing_privacy", "family_access"
+                        )
+                        val activeTab = when (currentRoute) {
+                            in dashboardSubRoutes -> Tab.Dashboard.route
+                            "appointment_detail" -> Tab.Appointments.route
+                            "thread/{threadId}" -> Tab.Messages.route
+                            else -> currentRoute
+                        }
+
                         bottomTabs.forEach { tab ->
+                            val selected = activeTab == tab.route
                             NavigationBarItem(
                                 icon = { Icon(tab.icon, contentDescription = tab.label) },
                                 label = { Text(tab.label) },
-                                selected = currentDestination?.hierarchy?.any { it.route == tab.route } == true,
+                                selected = selected,
                                 onClick = {
                                     navController.navigate(tab.route) {
                                         popUpTo(navController.graph.findStartDestination().id) {
