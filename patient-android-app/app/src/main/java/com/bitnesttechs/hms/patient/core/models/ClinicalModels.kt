@@ -37,7 +37,7 @@ data class DischargeSummaryDto(
 @JsonClass(generateAdapter = true)
 data class CareTeamDto(
     @Json(name = "primaryPhysician") val primaryPhysician: CareTeamMemberDto? = null,
-    @Json(name = "members") val members: List<CareTeamMemberDto> = emptyList()
+    @Json(name = "members") val members: List<CareTeamMemberDto>? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -123,7 +123,7 @@ data class TreatmentPlanDto(
     @Json(name = "startDate") val startDate: String? = null,
     @Json(name = "endDate") val endDate: String? = null,
     @Json(name = "status") val status: String = "",
-    @Json(name = "goals") val goals: List<String> = emptyList(),
+    @Json(name = "goals") val goals: List<String>? = null,
     @Json(name = "createdBy") val createdBy: String? = null
 )
 

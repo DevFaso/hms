@@ -128,16 +128,16 @@ data class PatientProfileUpdateDto(
 @JsonClass(generateAdapter = true)
 data class HealthSummaryDto(
     @Json(name = "profile") val profile: PatientProfileDto? = null,
-    @Json(name = "recentLabResults") val recentLabResults: List<LabResultDto> = emptyList(),
-    @Json(name = "currentMedications") val currentMedications: List<CurrentMedicationDto> = emptyList(),
-    @Json(name = "recentVitals") val recentVitals: List<VitalSignDto> = emptyList(),
-    @Json(name = "immunizations") val immunizations: List<ImmunizationDto> = emptyList(),
-    @Json(name = "activeDiagnoses") val activeDiagnoses: List<String> = emptyList(),
-    @Json(name = "allergies") val allergies: List<String> = emptyList(),
-    @Json(name = "chronicConditions") val chronicConditions: List<String> = emptyList()
+    @Json(name = "recentLabResults") val recentLabResults: List<LabResultDto>? = null,
+    @Json(name = "currentMedications") val currentMedications: List<CurrentMedicationDto>? = null,
+    @Json(name = "recentVitals") val recentVitals: List<VitalSignDto>? = null,
+    @Json(name = "immunizations") val immunizations: List<ImmunizationDto>? = null,
+    @Json(name = "activeDiagnoses") val activeDiagnoses: List<String>? = null,
+    @Json(name = "allergies") val allergies: List<String>? = null,
+    @Json(name = "chronicConditions") val chronicConditions: List<String>? = null
 ) {
-    val medicationCount: Int get() = currentMedications.size
-    val labResultCount: Int get() = recentLabResults.size
+    val medicationCount: Int get() = currentMedications?.size ?: 0
+    val labResultCount: Int get() = recentLabResults?.size ?: 0
 }
 
 @JsonClass(generateAdapter = true)

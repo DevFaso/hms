@@ -102,7 +102,7 @@ fun DashboardScreen(
                 }
 
                 // Allergies
-                if (summary.allergies.isNotEmpty()) {
+                if (!summary.allergies.isNullOrEmpty()) {
                     item {
                         SectionCard(title = "Allergies") {
                             summary.allergies.forEach { allergy ->
@@ -121,7 +121,7 @@ fun DashboardScreen(
                 }
 
                 // Active conditions
-                if (summary.activeDiagnoses.isNotEmpty()) {
+                if (!summary.activeDiagnoses.isNullOrEmpty()) {
                     item {
                         SectionCard(title = "Active Conditions") {
                             summary.activeDiagnoses.forEach { condition ->
@@ -140,7 +140,7 @@ fun DashboardScreen(
                 }
 
                 // Chronic conditions
-                if (summary.chronicConditions.isNotEmpty()) {
+                if (!summary.chronicConditions.isNullOrEmpty()) {
                     item {
                         SectionCard(title = "Chronic Conditions") {
                             summary.chronicConditions.forEach { condition ->

@@ -14,7 +14,7 @@ data class InvoiceDto(
     @Json(name = "balanceDue") val balanceDue: Double = 0.0,
     @Json(name = "status") val status: String = "",
     @Json(name = "description") val description: String? = null,
-    @Json(name = "items") val items: List<InvoiceItemDto> = emptyList()
+    @Json(name = "items") val items: List<InvoiceItemDto>? = null
 ) {
     val isPaid: Boolean get() = status.uppercase() == "PAID"
     val isCancelled: Boolean get() = status.uppercase() == "CANCELLED"
