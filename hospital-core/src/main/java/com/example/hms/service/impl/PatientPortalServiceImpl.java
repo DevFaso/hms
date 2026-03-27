@@ -611,6 +611,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .chronicConditions(p.getChronicConditions())
                 .preferredPharmacy(p.getPreferredPharmacy())
                 .username(p.getUser() != null ? p.getUser().getUsername() : null)
+                .profileImageUrl(p.getUser() != null ? p.getUser().getProfileImageUrl() : null)
                 .build();
     }
 

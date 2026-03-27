@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainTabView: View {
     @EnvironmentObject var authManager: AuthManager
+    @ObservedObject private var profileImageManager = ProfileImageManager.shared
     @State private var selectedTab: Tab = .dashboard
     @State private var showMenu = false
 
@@ -11,33 +12,35 @@ struct MainTabView: View {
 
     var body: some View {
         ZStack(alignment: .leading) {
-            TabView(selection: $selectedTab) {
-
-                DashboardView(showMenu: $showMenu)
-                    .tabItem {
-                        Label("Dashboard", systemImage: "house.fill")
+            VStack(spacing: 0) {
+                // Content area
+                Group {
+                    switch selectedTab {
+                    case .dashboard:
+                        DashboardView(showMenu: $showMenu)
+                    case .appointments:
+                        AppointmentsView()
+                    case .messages:
+                        MessagesView()
+                    case .profile:
+                        ProfileView()
                     }
-                    .tag(Tab.dashboard)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                AppointmentsView()
-                    .tabItem {
-                        Label("Appointments", systemImage: "calendar")
-                    }
-                    .tag(Tab.appointments)
+                Divider()
 
-                MessagesView()
-                    .tabItem {
-                        Label("Messages", systemImage: "message.fill")
-                    }
-                    .tag(Tab.messages)
-
-                ProfileView()
-                    .tabItem {
-                        Label("Profile", systemImage: "person.crop.circle.fill")
-                    }
-                    .tag(Tab.profile)
+                // Custom tab bar
+                HStack {
+                    tabButton(icon: "house.fill", title: "Dashboard", tab: .dashboard)
+                    tabButton(icon: "calendar", title: "Appointments", tab: .appointments)
+                    tabButton(icon: "message.fill", title: "Messages", tab: .messages)
+                    profileTabButton
+                }
+                .padding(.top, 6)
+                .padding(.bottom, 2)
+                .background(Color(.systemBackground))
             }
-            .accentColor(Color("BrandBlue"))
             .disabled(showMenu)
 
             // Slide-out side menu
@@ -52,12 +55,63 @@ struct MainTabView: View {
         }
         .animation(.easeInOut(duration: 0.25), value: showMenu)
     }
+
+    // MARK: - Standard tab button
+
+    private func tabButton(icon: String, title: String, tab: Tab) -> some View {
+        Button {
+            selectedTab = tab
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 20))
+                Text(title)
+                    .font(.caption2)
+            }
+            .foregroundColor(selectedTab == tab ? Color("BrandBlue") : .gray)
+            .frame(maxWidth: .infinity)
+        }
+    }
+
+    // MARK: - Profile tab button with photo
+
+    private var profileTabButton: some View {
+        Button {
+            selectedTab = .profile
+        } label: {
+            VStack(spacing: 4) {
+                if let url = profileImageManager.resolvedURL {
+                    AsyncImage(url: url) { phase in
+                        if let img = phase.image {
+                            img.resizable().scaledToFill()
+                        } else {
+                            Image(systemName: "person.crop.circle.fill")
+                                .font(.system(size: 20))
+                        }
+                    }
+                    .frame(width: 24, height: 24)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle().stroke(selectedTab == .profile ? Color("BrandBlue") : .clear, lineWidth: 2)
+                    )
+                } else {
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.system(size: 20))
+                }
+                Text("Profile")
+                    .font(.caption2)
+            }
+            .foregroundColor(selectedTab == .profile ? Color("BrandBlue") : .gray)
+            .frame(maxWidth: .infinity)
+        }
+    }
 }
 
 // MARK: - Side Menu
 
 struct SideMenuView: View {
     @EnvironmentObject var authManager: AuthManager
+    @ObservedObject private var profileImageManager = ProfileImageManager.shared
     @Binding var selectedTab: MainTabView.Tab
     @Binding var isShowing: Bool
 
@@ -72,9 +126,24 @@ struct SideMenuView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             VStack(alignment: .leading, spacing: 8) {
-                Image(systemName: "person.crop.circle.fill")
-                    .font(.system(size: 48))
-                    .foregroundColor(.white)
+                if let url = profileImageManager.resolvedURL {
+                    AsyncImage(url: url) { phase in
+                        if let img = phase.image {
+                            img.resizable().scaledToFill()
+                        } else {
+                            Image(systemName: "person.crop.circle.fill")
+                                .font(.system(size: 48))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .frame(width: 56, height: 56)
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.white.opacity(0.5), lineWidth: 2))
+                } else {
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.system(size: 48))
+                        .foregroundColor(.white)
+                }
                 Text(authManager.currentUser?.fullName ?? "Patient")
                     .font(.title3).bold().foregroundColor(.white)
                 if let email = authManager.currentUser?.email {

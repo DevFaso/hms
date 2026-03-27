@@ -28,7 +28,7 @@ struct ProfileView: View {
                                             .frame(width: 72, height: 72)
                                             .clipShape(Circle())
                                     } else if let url = profile.profileImageUrl, !url.isEmpty {
-                                        AsyncImage(url: URL(string: AppEnvironment.baseURL.replacingOccurrences(of: "/api", with: "") + url)) { phase in
+                                        AsyncImage(url: URL(string: url.hasPrefix("http") ? url : AppEnvironment.baseURL.replacingOccurrences(of: "/api", with: "") + url)) { phase in
                                             if let img = phase.image {
                                                 img.resizable().scaledToFill()
                                             } else {
@@ -292,6 +292,7 @@ final class ProfileViewModel: ObservableObject {
     func load() async {
         isLoading = true
         profile = try? await APIClient.shared.get(APIEndpoints.profile)
+        ProfileImageManager.shared.update(url: profile?.profileImageUrl)
         isLoading = false
     }
 
@@ -355,6 +356,8 @@ final class ProfileViewModel: ObservableObject {
             )
             // Reload profile to get updated URL
             await load()
+            // Immediately broadcast so tab bar updates
+            ProfileImageManager.shared.update(url: profile?.profileImageUrl)
         } catch {
             errorMessage = error.localizedDescription
         }

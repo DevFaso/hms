@@ -58,8 +58,14 @@ struct FamilyAccessView: View {
             } else {
                 List {
                     ForEach(vm.grantedByMe) { proxy in
-                        ProxyCard(proxy: proxy, showRevoke: true) {
-                            Task { await vm.revoke(proxyId: proxy.id ?? "") }
+                        NavigationLink(destination: ProxyDetailView(
+                            proxy: proxy,
+                            isGrantor: true,
+                            revokeAction: { Task { await vm.revoke(proxyId: proxy.id ?? "") } }
+                        )) {
+                            ProxyCard(proxy: proxy, showRevoke: true) {
+                                Task { await vm.revoke(proxyId: proxy.id ?? "") }
+                            }
                         }
                     }
                 }
@@ -76,7 +82,12 @@ struct FamilyAccessView: View {
                     description: Text("No one has granted you proxy access."))
             } else {
                 List(vm.accessIHave) { proxy in
-                    ProxyCard(proxy: proxy, showRevoke: false, revokeAction: {})
+                    NavigationLink(destination: ProxyDetailView(
+                        proxy: proxy,
+                        isGrantor: false
+                    )) {
+                        ProxyCard(proxy: proxy, showRevoke: false, revokeAction: {})
+                    }
                 }
                 .listStyle(.insetGrouped)
             }
