@@ -5,6 +5,7 @@ struct AppointmentsView: View {
     @StateObject private var vm = AppointmentsViewModel()
     @State private var showError = false
     @State private var cancelTarget: AppointmentDTO?
+    @State private var showCancelAlert = false
     @State private var cancelReason = ""
     @State private var rescheduleTarget: AppointmentDTO?
     @State private var showBooking = false
@@ -38,6 +39,7 @@ struct AppointmentsView: View {
                                     .swipeActions(edge: .trailing) {
                                         Button(role: .destructive) {
                                             cancelTarget = appt
+                                            showCancelAlert = true
                                         } label: {
                                             Label("Cancel", systemImage: "xmark.circle")
                                         }
@@ -88,7 +90,7 @@ struct AppointmentsView: View {
         } message: {
             Text(vm.errorMessage ?? "")
         }
-        .alert("Cancel Appointment", isPresented: .constant(cancelTarget != nil)) {
+        .alert("Cancel Appointment", isPresented: $showCancelAlert) {
             TextField("Reason (optional)", text: $cancelReason)
             Button("Cancel Appointment", role: .destructive) {
                 if let appt = cancelTarget {
@@ -101,7 +103,11 @@ struct AppointmentsView: View {
             }
             Button("Keep", role: .cancel) { cancelTarget = nil; cancelReason = "" }
         } message: {
-            Text("Are you sure you want to cancel this appointment?")
+            if let appt = cancelTarget {
+                Text("Cancel appointment with \(appt.staffName ?? "provider") on \(appt.appointmentDate ?? "")?" )
+            } else {
+                Text("Are you sure you want to cancel this appointment?")
+            }
         }
         .sheet(item: $rescheduleTarget) { appt in
             RescheduleSheet(appointment: appt, vm: vm, isPresented: $rescheduleTarget)
@@ -219,9 +225,14 @@ final class AppointmentsViewModel: ObservableObject {
     }
 
     func cancel(appointmentId: String, reason: String) async {
-        let req = CancelAppointmentRequest(appointmentId: appointmentId, reason: reason.isEmpty ? nil : reason)
-        let _: AppointmentDTO? = try? await APIClient.shared.put(APIEndpoints.cancelAppointment, body: req)
-        await load()
+        do {
+            let req = CancelAppointmentRequest(appointmentId: appointmentId, reason: reason.isEmpty ? nil : reason)
+            let _: AppointmentDTO = try await APIClient.shared.put(APIEndpoints.cancelAppointment, body: req)
+            await load()
+        } catch {
+            errorMessage = "Cancel failed: \(error.localizedDescription)"
+            await load()
+        }
     }
 
     func reschedule(appointmentId: String, newDate: String, newStartTime: String, newEndTime: String, reason: String) async -> String? {
