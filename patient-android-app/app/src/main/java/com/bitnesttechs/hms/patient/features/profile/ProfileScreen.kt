@@ -3,6 +3,7 @@ package com.bitnesttechs.hms.patient.features.profile
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -71,6 +72,7 @@ fun ProfileScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
+        containerColor = Color(0xFFF5F7FA),
         topBar = {
             TopAppBar(
                 title = { Text("Profile") },
@@ -119,67 +121,92 @@ fun ProfileScreen(
         ) {
             // Avatar + name header
             item {
-                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Spacer(Modifier.height(8.dp))
-                    Box(
-                        modifier = Modifier.size(80.dp),
-                        contentAlignment = Alignment.BottomEnd
+                Card(
+                    shape = RoundedCornerShape(20.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        val imageUrl = profileImageUrl
-                        if (!imageUrl.isNullOrBlank()) {
-                            val fullUrl = if (imageUrl.startsWith("http")) imageUrl
-                                else "https://api.hms.dev.bitnesttechs.com$imageUrl"
-                            AsyncImage(
-                                model = ImageRequest.Builder(context)
-                                    .data(fullUrl)
-                                    .crossfade(true)
-                                    .build(),
-                                contentDescription = "Profile photo",
-                                modifier = Modifier
-                                    .size(80.dp)
-                                    .clip(CircleShape)
-                                    .clickable { photoPickerLauncher.launch("image/*") },
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
+                        Box(
+                            modifier = Modifier.size(96.dp),
+                            contentAlignment = Alignment.BottomEnd
+                        ) {
+                            val imageUrl = profileImageUrl
+                            if (!imageUrl.isNullOrBlank()) {
+                                val fullUrl = if (imageUrl.startsWith("http")) imageUrl
+                                    else "https://api.hms.dev.bitnesttechs.com$imageUrl"
+                                AsyncImage(
+                                    model = ImageRequest.Builder(context)
+                                        .data(fullUrl)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = "Profile photo",
+                                    modifier = Modifier
+                                        .size(96.dp)
+                                        .clip(CircleShape)
+                                        .clickable { photoPickerLauncher.launch("image/*") },
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = BrandBlue,
+                                    modifier = Modifier
+                                        .size(96.dp)
+                                        .clickable { photoPickerLauncher.launch("image/*") }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Text(
+                                            profile?.fullName?.take(1)?.uppercase() ?: "P",
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.headlineLarge,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                            // Camera badge
                             Surface(
-                                shape = CircleShape, color = BrandBlue,
-                                modifier = Modifier
-                                    .size(80.dp)
-                                    .clickable { photoPickerLauncher.launch("image/*") }
+                                shape = CircleShape,
+                                color = BrandBlue,
+                                shadowElevation = 4.dp,
+                                modifier = Modifier.size(32.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        profile?.fullName?.take(1)?.uppercase() ?: "P",
-                                        color = Color.White,
-                                        style = MaterialTheme.typography.headlineMedium,
-                                        fontWeight = FontWeight.Bold
+                                    Icon(
+                                        Icons.Default.CameraAlt, "Change photo",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
                             }
                         }
-                        // Camera badge
-                        Surface(
-                            shape = CircleShape,
-                            color = BrandBlue,
-                            modifier = Modifier.size(28.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Icon(
-                                    Icons.Default.CameraAlt, "Change photo",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
-                                )
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            profile?.fullName ?: "—",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        profile?.let { p ->
+                            (p.mrn ?: p.medicalRecordNumber)?.let {
+                                Spacer(Modifier.height(4.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = BrandLightBlue
+                                ) {
+                                    Text(
+                                        "MRN: $it",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = BrandBlue,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                    )
+                                }
                             }
-                        }
-                    }
-                    Spacer(Modifier.height(12.dp))
-                    Text(profile?.fullName ?: "—", style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold)
-                    profile?.let { p ->
-                        (p.mrn ?: p.medicalRecordNumber)?.let {
-                            Text("MRN: $it", style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -271,14 +298,17 @@ fun ProfileScreen(
                 OutlinedButton(
                     onClick = { showLogoutDialog = true },
                     modifier = Modifier.fillMaxWidth().height(52.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                    border = ButtonDefaults.outlinedButtonBorder(enabled = true).copy(
+                        width = 1.5.dp
+                    )
                 ) {
                     Icon(Icons.Default.Logout, null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Sign Out")
+                    Text("Sign Out", fontWeight = FontWeight.SemiBold)
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(24.dp))
             }
         }
     }
@@ -303,14 +333,27 @@ fun ProfileScreen(
 
 @Composable
 private fun ProfileSection(title: String) {
-    Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
-        color = BrandBlue)
+    Text(
+        title,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.SemiBold,
+        color = BrandBlue,
+        modifier = Modifier.padding(start = 4.dp)
+    )
 }
 
 @Composable
 private fun ProfileCard(content: @Composable ColumnScope.() -> Unit) {
-    Card(shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(1.dp)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
             content()
         }
     }
@@ -318,27 +361,59 @@ private fun ProfileCard(content: @Composable ColumnScope.() -> Unit) {
 
 @Composable
 private fun ProfileRow(icon: ImageVector, label: String, value: String) {
-    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Icon(icon, null, tint = BrandBlue, modifier = Modifier.size(18.dp).padding(top = 2.dp))
-        Column {
-            Text(label, style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.bodyMedium)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = BrandLightBlue,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = BrandBlue, modifier = Modifier.size(18.dp))
+            }
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                value,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }
 
 @Composable
 private fun EditableProfileRow(icon: ImageVector, label: String, value: String, onValueChange: (String) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Icon(icon, null, tint = BrandBlue, modifier = Modifier.size(18.dp))
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Surface(
+            shape = RoundedCornerShape(10.dp),
+            color = BrandLightBlue,
+            modifier = Modifier.size(36.dp)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                Icon(icon, null, tint = BrandBlue, modifier = Modifier.size(18.dp))
+            }
+        }
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
             label = { Text(label) },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.weight(1f),
             singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium
+            textStyle = MaterialTheme.typography.bodyMedium,
+            shape = RoundedCornerShape(12.dp)
         )
     }
 }
