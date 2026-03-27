@@ -104,7 +104,10 @@ struct DashboardView: View {
                     if !vm.upcomingAppointments.isEmpty {
                         SectionCard(title: "Upcoming Appointments", icon: "calendar") {
                             ForEach(vm.upcomingAppointments) { appt in
-                                AppointmentRowView(appointment: appt)
+                                NavigationLink(destination: AppointmentDetailView(appointment: appt)) {
+                                    AppointmentRowView(appointment: appt)
+                                }
+                                    .buttonStyle(.plain)
                                     .padding(.vertical, 4)
                                 if appt.id != vm.upcomingAppointments.last?.id {
                                     Divider()

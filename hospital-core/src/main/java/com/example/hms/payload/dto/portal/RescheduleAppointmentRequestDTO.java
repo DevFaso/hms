@@ -1,7 +1,7 @@
 package com.example.hms.payload.dto.portal;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Future;
+import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -25,7 +25,7 @@ public class RescheduleAppointmentRequestDTO {
     private UUID appointmentId;
 
     @NotNull
-    @Future
+    @FutureOrPresent
     @Schema(description = "Requested new date", example = "2025-03-15", requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalDate newDate;
 

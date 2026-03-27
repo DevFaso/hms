@@ -34,7 +34,9 @@ struct AppointmentsView: View {
                     if !vm.upcoming.isEmpty {
                         Section("Upcoming") {
                             ForEach(vm.upcoming) { appt in
-                                AppointmentRowView(appointment: appt)
+                                NavigationLink(destination: AppointmentDetailView(appointment: appt)) {
+                                    AppointmentRowView(appointment: appt)
+                                }
                                     .padding(.vertical, 4)
                                     .swipeActions(edge: .trailing) {
                                         Button(role: .destructive) {
@@ -60,7 +62,9 @@ struct AppointmentsView: View {
                     if !vm.past.isEmpty {
                         Section("Past") {
                             ForEach(vm.past) { appt in
-                                AppointmentRowView(appointment: appt)
+                                NavigationLink(destination: AppointmentDetailView(appointment: appt)) {
+                                    AppointmentRowView(appointment: appt)
+                                }
                                     .padding(.vertical, 4)
                                     .opacity(0.7)
                             }
@@ -125,12 +129,7 @@ struct RescheduleSheet: View {
     @ObservedObject var vm: AppointmentsViewModel
     @Binding var isPresented: AppointmentDTO?
 
-    // Tomorrow is the earliest allowed date (@Future validation on backend)
-    private static var tomorrow: Date {
-        Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
-    }
-
-    @State private var newDate = RescheduleSheet.tomorrow
+    @State private var newDate = Date()
     @State private var newStartTime = Date()
     @State private var newEndTime = Date().addingTimeInterval(1800) // 30 min
     @State private var reason = ""
@@ -147,7 +146,7 @@ struct RescheduleSheet: View {
                 }
 
                 Section("New Date & Time") {
-                    DatePicker("Date", selection: $newDate, in: RescheduleSheet.tomorrow..., displayedComponents: .date)
+                    DatePicker("Date", selection: $newDate, in: Date()..., displayedComponents: .date)
                     DatePicker("Start Time", selection: $newStartTime, displayedComponents: .hourAndMinute)
                     DatePicker("End Time", selection: $newEndTime, displayedComponents: .hourAndMinute)
                 }
