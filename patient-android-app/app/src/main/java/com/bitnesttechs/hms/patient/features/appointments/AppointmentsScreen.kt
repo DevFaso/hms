@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.appointments
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
 import com.bitnesttechs.hms.patient.core.models.BookAppointmentRequest
 import com.bitnesttechs.hms.patient.features.dashboard.StatusBadge
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
@@ -22,7 +24,10 @@ import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppointmentsScreen(viewModel: AppointmentsViewModel = hiltViewModel()) {
+fun AppointmentsScreen(
+    navController: NavController? = null,
+    viewModel: AppointmentsViewModel = hiltViewModel()
+) {
     val appointments by viewModel.appointments.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val bookingResult by viewModel.bookingResult.collectAsState()
@@ -93,7 +98,13 @@ fun AppointmentsScreen(viewModel: AppointmentsViewModel = hiltViewModel()) {
         ) {
             items(appointments) { appt ->
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            // Store the appointment in savedStateHandle and navigate
+                            navController?.currentBackStackEntry?.savedStateHandle?.set("appointment", appt)
+                            navController?.navigate("appointment_detail")
+                        },
                     shape = RoundedCornerShape(12.dp),
                     elevation = CardDefaults.cardElevation(2.dp)
                 ) {

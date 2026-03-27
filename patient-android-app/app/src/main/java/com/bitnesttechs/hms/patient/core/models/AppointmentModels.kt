@@ -20,7 +20,7 @@ data class AppointmentDto(
     @Json(name = "patientId") val patientId: String? = null,
     @Json(name = "notes") val notes: String? = null,
     @Json(name = "reason") val reason: String? = null
-) {
+) : java.io.Serializable {
     val statusDisplay: String get() = status.replace("_", " ").lowercase()
         .replaceFirstChar { it.uppercase() }
     /** Display time range like "10:00 - 10:30" */

@@ -111,6 +111,6 @@ private fun DocumentRow(doc: DocumentDto, onOpen: () -> Unit) {
 private fun docIcon(fileType: String?) = when (fileType?.uppercase()) {
     "PDF" -> Icons.Default.PictureAsPdf
     "IMAGE", "JPG", "JPEG", "PNG" -> Icons.Default.Image
-    "DICOM" -> Icons.Default.BioTech
+    "DICOM" -> Icons.Default.Biotech
     else -> Icons.Default.Description
 }

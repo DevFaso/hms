@@ -19,10 +19,12 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.bitnesttechs.hms.patient.features.appointments.AppointmentsScreen
+import com.bitnesttechs.hms.patient.features.appointments.AppointmentDetailScreen
 import com.bitnesttechs.hms.patient.features.billing.BillingScreen
 import com.bitnesttechs.hms.patient.features.careteam.CareTeamScreen
 import com.bitnesttechs.hms.patient.features.dashboard.DashboardScreen
 import com.bitnesttechs.hms.patient.features.documents.DocumentsScreen
+import com.bitnesttechs.hms.patient.features.familyaccess.FamilyAccessScreen
 import com.bitnesttechs.hms.patient.features.healthrecords.HealthRecordsScreen
 import com.bitnesttechs.hms.patient.features.labresults.LabResultsScreen
 import com.bitnesttechs.hms.patient.features.medications.MedicationsScreen
@@ -61,6 +63,7 @@ val drawerItems = listOf(
     DrawerItem("Notifications", Icons.Default.Notifications, "notifications"),
     DrawerItem("Messages", Icons.Default.Message, "tab_messages"),
     DrawerItem("Privacy", Icons.Default.Security, "sharing_privacy"),
+    DrawerItem("Family Access", Icons.Default.People, "family_access"),
     DrawerItem("Profile", Icons.Default.AccountCircle, "tab_profile")
 )
 
@@ -153,7 +156,7 @@ fun MainScreen(onLogout: () -> Unit) {
                     )
                 }
                 composable(Tab.Appointments.route) {
-                    AppointmentsScreen()
+                    AppointmentsScreen(navController = navController)
                 }
                 composable(Tab.Messages.route) {
                     MessagesScreen(
@@ -181,6 +184,25 @@ fun MainScreen(onLogout: () -> Unit) {
                 composable("health_records") { HealthRecordsScreen() }
                 composable("sharing_privacy") {
                     SharingPrivacyScreen()
+                }
+                composable("family_access") {
+                    FamilyAccessScreen()
+                }
+
+                // ── Appointment detail ────────────────────────────────────────────
+                composable("appointment_detail") {
+                    val appointment = navController.previousBackStackEntry
+                        ?.savedStateHandle
+                        ?.get<com.bitnesttechs.hms.patient.core.models.AppointmentDto>("appointment")
+                    if (appointment != null) {
+                        AppointmentDetailScreen(
+                            appointment = appointment,
+                            onBack = { navController.popBackStack() },
+                            onCancel = { reason ->
+                                navController.popBackStack()
+                            }
+                        )
+                    }
                 }
 
                 // ── Message thread ────────────────────────────────────────────────

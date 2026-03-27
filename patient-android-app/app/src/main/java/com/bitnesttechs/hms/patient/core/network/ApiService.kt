@@ -26,12 +26,10 @@ interface ApiService {
     suspend fun updateProfile(@Body update: PatientProfileUpdateDto): Response<ApiResponse<PatientProfileDto>>
 
     @Multipart
-    @POST("files/upload")
+    @POST("files/profile-image")
     suspend fun uploadProfileImage(
-        @Part file: MultipartBody.Part,
-        @Part("entityType") entityType: okhttp3.RequestBody,
-        @Part("entityId") entityId: okhttp3.RequestBody
-    ): Response<ApiResponse<Any>>
+        @Part file: MultipartBody.Part
+    ): Response<ProfileImageResponse>
 
     @GET("me/patient/health-summary")
     suspend fun getHealthSummary(): Response<ApiResponse<HealthSummaryDto>>
@@ -182,9 +180,25 @@ interface ApiService {
         @Body request: GrantConsentRequest
     ): Response<ApiResponse<ConsentDto>>
 
+    @POST("me/patient/consents/{id}/revoke")
+    suspend fun revokeConsent(@Path("id") id: String): Response<ApiResponse<ConsentDto>>
+
     @GET("me/patient/access-log")
     suspend fun getAccessLog(
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
     ): Response<ApiResponse<List<AccessLogDto>>>
+
+    // ── Proxy / Family Access ─────────────────────────────────────────────────
+    @GET("me/patient/proxies")
+    suspend fun getProxiesGrantedByMe(): Response<ApiResponse<List<ProxyResponse>>>
+
+    @GET("me/patient/proxy-access")
+    suspend fun getProxyAccessIHave(): Response<ApiResponse<List<ProxyResponse>>>
+
+    @POST("me/patient/proxies")
+    suspend fun grantProxy(@Body request: GrantProxyRequest): Response<ApiResponse<ProxyResponse>>
+
+    @DELETE("me/patient/proxies/{id}")
+    suspend fun revokeProxy(@Path("id") id: String): Response<ApiResponse<Unit>>
 }

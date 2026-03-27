@@ -10,6 +10,7 @@ val BrandLightBlue = Color(0xFFE3F4FC)
 // Semantic
 val SuccessGreen = Color(0xFF34A853)
 val WarningAmber = Color(0xFFFBBC05)
+val WarningOrange = Color(0xFFFF9800)
 val ErrorRed = Color(0xFFEA4335)
 val CriticalRed = Color(0xFFD32F2F)
 val NeutralGrey = Color(0xFF757575)

@@ -1,5 +1,9 @@
 package com.bitnesttechs.hms.patient.features.profile
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -10,12 +14,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.bitnesttechs.hms.patient.core.models.PatientProfileDto
 import com.bitnesttechs.hms.patient.core.models.PatientProfileUpdateDto
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
@@ -31,8 +40,17 @@ fun ProfileScreen(
     val profile by viewModel.profile.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val loggedOut by viewModel.loggedOut.collectAsState()
+    val profileImageUrl by viewModel.profileImageUrl.collectAsState()
     var showLogoutDialog by remember { mutableStateOf(false) }
     var isEditing by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
+    // Photo picker launcher
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.uploadPhoto(context, it) }
+    }
 
     // Editable fields
     var editPhone by remember(profile) { mutableStateOf(profile?.phoneNumberPrimary ?: "") }
@@ -103,17 +121,56 @@ fun ProfileScreen(
             item {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                     Spacer(Modifier.height(8.dp))
-                    Surface(
-                        shape = CircleShape, color = BrandBlue,
-                        modifier = Modifier.size(80.dp)
+                    Box(
+                        modifier = Modifier.size(80.dp),
+                        contentAlignment = Alignment.BottomEnd
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                profile?.fullName?.take(1)?.uppercase() ?: "P",
-                                color = Color.White,
-                                style = MaterialTheme.typography.headlineMedium,
-                                fontWeight = FontWeight.Bold
+                        val imageUrl = profileImageUrl
+                        if (!imageUrl.isNullOrBlank()) {
+                            val fullUrl = if (imageUrl.startsWith("http")) imageUrl
+                                else "https://api.hms.dev.bitnesttechs.com$imageUrl"
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(fullUrl)
+                                    .crossfade(true)
+                                    .build(),
+                                contentDescription = "Profile photo",
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .clip(CircleShape)
+                                    .clickable { photoPickerLauncher.launch("image/*") },
+                                contentScale = ContentScale.Crop
                             )
+                        } else {
+                            Surface(
+                                shape = CircleShape, color = BrandBlue,
+                                modifier = Modifier
+                                    .size(80.dp)
+                                    .clickable { photoPickerLauncher.launch("image/*") }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        profile?.fullName?.take(1)?.uppercase() ?: "P",
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.headlineMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                        // Camera badge
+                        Surface(
+                            shape = CircleShape,
+                            color = BrandBlue,
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.CameraAlt, "Change photo",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
                         }
                     }
                     Spacer(Modifier.height(12.dp))

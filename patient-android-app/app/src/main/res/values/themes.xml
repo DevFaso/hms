@@ -9,7 +9,7 @@
         <item name="android:windowLightStatusBar">false</item>
     </style>
 
-    <!-- Splash screen theme -->
+    <!-- Splash screen theme using AndroidX SplashScreen API -->
     <style name="Theme.MediHubPatient.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/brand_blue</item>
         <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>

@@ -16,6 +16,8 @@ biometric = "1.2.0-alpha05"
 securityCrypto = "1.1.0-alpha06"
 coil = "2.7.0"
 kotlinSerialization = "1.7.3"
+splashscreen = "1.0.1"
+material3Xml = "1.12.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -45,6 +47,8 @@ biometric = { group = "androidx.biometric", name = "biometric", version.ref = "b
 security-crypto = { group = "androidx.security", name = "security-crypto", version.ref = "securityCrypto" }
 coil-compose = { group = "io.coil-kt", name = "coil-compose", version.ref = "coil" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinSerialization" }
+splashscreen = { group = "androidx.core", name = "core-splashscreen", version.ref = "splashscreen" }
+material3-xml = { group = "com.google.android.material", name = "material", version.ref = "material3Xml" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

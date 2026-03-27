@@ -27,7 +27,7 @@ android {
     buildTypes {
         debug {
             isDebuggable = true
-            buildConfigField("String", "API_BASE_URL", "\"http://10.0.2.2:8081/api\"")
+            buildConfigField("String", "API_BASE_URL", "\"https://api.hms.dev.bitnesttechs.com/api\"")
         }
         release {
             isMinifyEnabled = true
@@ -91,6 +91,12 @@ dependencies {
 
     // Image loading
     implementation(libs.coil.compose)
+
+    // Splash screen
+    implementation(libs.splashscreen)
+
+    // Material3 XML themes (for Theme.Material3.DayNight.NoActionBar)
+    implementation(libs.material3.xml)
 
     // Serialization
     implementation(libs.kotlinx.serialization.json)

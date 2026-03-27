@@ -150,3 +150,41 @@ data class CurrentMedicationDto(
     @Json(name = "startDate") val startDate: String? = null,
     @Json(name = "endDate") val endDate: String? = null
 )
+
+// ── Profile Image Upload ──────────────────────────────────────────────────────
+
+@JsonClass(generateAdapter = true)
+data class ProfileImageResponse(
+    @Json(name = "imageUrl") val imageUrl: String? = null,
+    @Json(name = "message") val message: String? = null
+)
+
+// ── Proxy / Family Access ─────────────────────────────────────────────────────
+
+@JsonClass(generateAdapter = true)
+data class ProxyResponse(
+    @Json(name = "id") val id: String = "",
+    @Json(name = "grantorPatientId") val grantorPatientId: String? = null,
+    @Json(name = "grantorName") val grantorName: String? = null,
+    @Json(name = "granteePatientId") val granteePatientId: String? = null,
+    @Json(name = "granteeName") val granteeName: String? = null,
+    @Json(name = "relationship") val relationship: String? = null,
+    @Json(name = "permissions") val permissions: String? = null,
+    @Json(name = "status") val status: String? = null,
+    @Json(name = "grantedAt") val grantedAt: String? = null,
+    @Json(name = "expiresAt") val expiresAt: String? = null,
+    @Json(name = "revokedAt") val revokedAt: String? = null,
+    @Json(name = "notes") val notes: String? = null
+) {
+    val permissionsList: List<String>
+        get() = permissions?.split(",")?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
+}
+
+@JsonClass(generateAdapter = true)
+data class GrantProxyRequest(
+    @Json(name = "granteeUsername") val granteeUsername: String,
+    @Json(name = "relationship") val relationship: String,
+    @Json(name = "permissions") val permissions: String,
+    @Json(name = "expiresAt") val expiresAt: String? = null,
+    @Json(name = "notes") val notes: String? = null
+)

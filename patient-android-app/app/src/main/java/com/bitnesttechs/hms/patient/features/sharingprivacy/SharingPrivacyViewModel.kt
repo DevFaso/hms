@@ -44,10 +44,10 @@ class SharingPrivacyViewModel @Inject constructor(
         }
     }
 
-    fun grantConsent(request: GrantConsentRequest) {
+    fun grantConsent(consentId: String, request: GrantConsentRequest) {
         viewModelScope.launch {
             try {
-                val resp = api.grantConsent(request)
+                val resp = api.grantConsent(consentId, request)
                 if (resp.isSuccessful) resp.body()?.data?.let { newConsent ->
                     _consents.value = _consents.value.map {
                         if (it.id == newConsent.id) newConsent else it

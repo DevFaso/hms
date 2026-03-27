@@ -66,9 +66,9 @@ class AuthInterceptor @Inject constructor(
         return try {
             val resp = refreshService.refreshToken(RefreshTokenRequest(refreshToken))
             val body = resp.body()
-            if (resp.isSuccessful && body?.success == true && body.data != null) {
-                tokenStorage.accessToken = body.data.accessToken
-                body.data.refreshToken?.let { tokenStorage.refreshToken = it }
+            if (resp.isSuccessful && body != null) {
+                tokenStorage.accessToken = body.accessToken
+                body.refreshToken?.let { tokenStorage.refreshToken = it }
                 true
             } else {
                 tokenStorage.clearAll()

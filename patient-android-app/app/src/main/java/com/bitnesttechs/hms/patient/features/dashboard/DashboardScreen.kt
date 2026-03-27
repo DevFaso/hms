@@ -270,7 +270,7 @@ fun SectionCard(
 }
 
 @Composable
-private fun StatChip(label: String, value: String, icon: ImageVector) {
+private fun RowScope.StatChip(label: String, value: String, icon: ImageVector) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f)) {
         Icon(icon, null, tint = Color.White, modifier = Modifier.size(24.dp))
         Text(value, color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)

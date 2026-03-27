@@ -105,8 +105,10 @@ fun HealthRecordsScreen(viewModel: HealthRecordsViewModel = hiltViewModel()) {
                                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        Text("Start: ${tp.startDate.take(10)}", style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        tp.startDate?.let { sd ->
+                                            Text("Start: ${sd.take(10)}", style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
                                         tp.endDate?.let {
                                             Text("End: ${it.take(10)}", style = MaterialTheme.typography.labelSmall,
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant)
