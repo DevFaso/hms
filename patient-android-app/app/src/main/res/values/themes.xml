@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.MediHubPatient" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/brand_blue</item>
+        <item name="colorPrimaryDark">@color/brand_dark_blue</item>
+        <item name="colorAccent">@color/brand_blue</item>
+        <item name="android:statusBarColor">@color/brand_blue</item>
+        <item name="android:navigationBarColor">@color/white</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- Splash screen theme using AndroidX SplashScreen API -->
+    <style name="Theme.MediHubPatient.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/brand_blue</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.MediHubPatient</item>
+    </style>
+</resources>

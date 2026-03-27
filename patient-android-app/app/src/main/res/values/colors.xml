@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand_blue">#1E40AF</color>
+    <color name="brand_dark_blue">#1E3A8A</color>
+    <color name="brand_light_blue">#DBEAFE</color>
+    <color name="success_green">#16A34A</color>
+    <color name="warning_amber">#D97706</color>
+    <color name="error_red">#DC2626</color>
+    <color name="critical_red">#B91C1C</color>
+    <color name="neutral_grey">#6B7280</color>
+    <color name="surface_grey">#F3F4F6</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+</resources>

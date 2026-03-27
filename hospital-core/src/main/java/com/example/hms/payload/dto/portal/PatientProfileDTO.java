@@ -56,4 +56,5 @@ public class PatientProfileDTO {
     // Display
     private String mrn;
     private String username;
+    private String profileImageUrl;
 }

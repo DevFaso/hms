@@ -6,10 +6,12 @@ import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Appointment;
+import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientProxy;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.RefillRequest;
+import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
@@ -63,6 +65,7 @@ import com.example.hms.service.PatientPrimaryCareService;
 import com.example.hms.service.PatientVitalSignService;
 import com.example.hms.service.PrescriptionService;
 import com.example.hms.service.TreatmentPlanService;
+import com.example.hms.service.EmailService;
 import com.example.hms.controller.support.ControllerAuthUtils;
 import com.example.hms.mapper.AppointmentMapper;
 import lombok.RequiredArgsConstructor;
@@ -119,6 +122,13 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final AuditEventLogService auditEventLogService;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final com.example.hms.repository.UserRepository userRepository;
+    private final EmailService emailService;
+
+    @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
+    private String frontendBaseUrl;
+
+    private static final String RESCHEDULE_PATH = "/appointments/reschedule/";
+    private static final String CANCEL_PATH = "/appointments/cancel/";
 
     // ── Identity resolution ──────────────────────────────────────────────
 
@@ -339,6 +349,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
         appointmentRepository.save(appointment);
         log.info("Patient {} cancelled appointment {}", patientId, appointment.getId());
+
+        // ── Send cancellation email to patient ──
+        sendCancellationEmail(appointment);
+
         return appointmentMapper.toAppointmentResponseDTO(appointment);
     }
 
@@ -373,6 +387,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
         appointmentRepository.save(appointment);
         log.info("Patient {} rescheduled appointment {} to {}", patientId, appointment.getId(), dto.getNewDate());
+
+        // ── Send reschedule confirmation email to patient ──
+        sendRescheduleEmail(appointment);
+
         return appointmentMapper.toAppointmentResponseDTO(appointment);
     }
 
@@ -593,6 +611,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .chronicConditions(p.getChronicConditions())
                 .preferredPharmacy(p.getPreferredPharmacy())
                 .username(p.getUser() != null ? p.getUser().getUsername() : null)
+                .profileImageUrl(p.getUser() != null ? p.getUser().getProfileImageUrl() : null)
                 .build();
     }
 
@@ -800,5 +819,52 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .notes(p.getNotes())
                 .createdAt(p.getCreatedAt())
                 .build();
+    }
+
+    // ── Email notification helpers ───────────────────────────────────────
+
+    private void sendCancellationEmail(Appointment appointment) {
+        try {
+            Patient patient = appointment.getPatient();
+            Staff staff = appointment.getStaff();
+            Hospital hospital = appointment.getHospital();
+            String patientName = patient.getFirstName() + " " + patient.getLastName();
+            String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
+            String appointmentDate = appointment.getAppointmentDate().toString();
+            String appointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
+
+            emailService.sendAppointmentCancelledEmail(
+                    patient.getEmail(), patientName, hospital.getName(), staffName,
+                    appointmentDate, appointmentTime,
+                    hospital.getEmail(), hospital.getPhoneNumber());
+
+            log.info("Cancellation email sent to {} for appointment {}", patient.getEmail(), appointment.getId());
+        } catch (Exception e) {
+            log.warn("Failed to send cancellation email for appointment {}: {}", appointment.getId(), e.getMessage());
+        }
+    }
+
+    private void sendRescheduleEmail(Appointment appointment) {
+        try {
+            Patient patient = appointment.getPatient();
+            Staff staff = appointment.getStaff();
+            Hospital hospital = appointment.getHospital();
+            String patientName = patient.getFirstName() + " " + patient.getLastName();
+            String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
+            String newAppointmentDate = appointment.getAppointmentDate().toString();
+            String newAppointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
+            String rescheduleLink = frontendBaseUrl + RESCHEDULE_PATH + appointment.getId();
+            String cancelLink = frontendBaseUrl + CANCEL_PATH + appointment.getId();
+
+            emailService.sendAppointmentRescheduledEmail(
+                    patient.getEmail(), patientName, hospital.getName(), staffName,
+                    newAppointmentDate, newAppointmentTime,
+                    hospital.getEmail(), hospital.getPhoneNumber(),
+                    rescheduleLink, cancelLink);
+
+            log.info("Reschedule email sent to {} for appointment {}", patient.getEmail(), appointment.getId());
+        } catch (Exception e) {
+            log.warn("Failed to send reschedule email for appointment {}: {}", appointment.getId(), e.getMessage());
+        }
     }
 }

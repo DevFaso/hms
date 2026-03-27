@@ -1,0 +1,40 @@
+name: MediHubPatient
+options:
+  bundleIdPrefix: com.bitnesttechs.hms.patient
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.4"
+  generateEmptyDirectories: true
+  groupSortPosition: top
+
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.9"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_IDENTITY: "-"
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  MediHubPatient:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: MediHubPatient
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        INFOPLIST_FILE: MediHubPatient/Resources/Info.plist
+        PRODUCT_BUNDLE_IDENTIFIER: com.bitnesttechs.hms.patient.native
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: false
+        SWIFT_EMIT_LOC_STRINGS: "YES"
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+    info:
+      path: MediHubPatient/Resources/Info.plist
+    scheme:
+      testTargets: []
+      gatherCoverageData: false

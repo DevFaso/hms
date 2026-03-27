@@ -159,9 +159,11 @@ class AppointmentStatusTransitionTest {
     @Test
     void completeAllowedWhenAppointmentStartTimeHasPassed() {
         appointment.setStatus(AppointmentStatus.CONFIRMED);
-        appointment.setAppointmentDate(LocalDate.now());
-        appointment.setStartTime(LocalTime.now().minusMinutes(30));
-        appointment.setEndTime(LocalTime.now().plusMinutes(30));
+        // Use yesterday's date to avoid midnight-boundary flakiness
+        // (when LocalTime.now().minusMinutes(30) wraps past midnight)
+        appointment.setAppointmentDate(LocalDate.now().minusDays(1));
+        appointment.setStartTime(LocalTime.of(9, 0));
+        appointment.setEndTime(LocalTime.of(10, 0));
 
         AppointmentResponseDTO dto = AppointmentResponseDTO.builder().id(appointmentId).build();
         when(appointmentRepository.save(any())).thenReturn(appointment);

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MediHub Patient</string>
+    <string name="login_title">Welcome to MediHub</string>
+    <string name="login_subtitle">Your health, in your hands</string>
+    <string name="username_label">Username or Email</string>
+    <string name="password_label">Password</string>
+    <string name="sign_in">Sign In</string>
+    <string name="biometric_sign_in">Sign in with Biometrics</string>
+    <string name="biometric_prompt_title">Verify your identity</string>
+    <string name="biometric_prompt_subtitle">Use your fingerprint or face to sign in</string>
+    <string name="biometric_prompt_cancel">Cancel</string>
+    <string name="dashboard">Dashboard</string>
+    <string name="appointments">Appointments</string>
+    <string name="messages">Messages</string>
+    <string name="profile">Profile</string>
+    <string name="lab_results">Lab Results</string>
+    <string name="medications">Medications</string>
+    <string name="billing">Billing</string>
+    <string name="vitals">Vitals</string>
+    <string name="care_team">Care Team</string>
+    <string name="visit_history">Visit History</string>
+    <string name="documents">Documents</string>
+    <string name="health_records">Health Records</string>
+    <string name="notifications">Notifications</string>
+    <string name="sharing_privacy">Sharing &amp; Privacy</string>
+    <string name="sign_out">Sign Out</string>
+    <string name="loading">Loading…</string>
+    <string name="error_generic">Something went wrong. Please try again.</string>
+    <string name="no_data">No data available</string>
+</resources>
