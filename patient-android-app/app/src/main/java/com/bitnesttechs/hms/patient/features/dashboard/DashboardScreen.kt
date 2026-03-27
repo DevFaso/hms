@@ -170,10 +170,12 @@ fun DashboardScreen(
                         Triple("Vitals", Icons.Default.Favorite, "vitals"),
                         Triple("Care Team", Icons.Default.Group, "care_team"),
                         Triple("Visits", Icons.Default.History, "visits"),
-                        Triple("Documents", Icons.Default.Description, "documents")
+                        Triple("Documents", Icons.Default.Description, "documents"),
+                        Triple("Family", Icons.Default.People, "family_access"),
+                        Triple("Sharing", Icons.Default.Security, "sharing_privacy")
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        quickLinks.chunked(4).forEach { rowItems ->
+                        quickLinks.chunked(5).forEach { rowItems ->
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceEvenly
