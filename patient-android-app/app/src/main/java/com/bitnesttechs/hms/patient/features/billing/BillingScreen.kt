@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,7 +18,7 @@ import com.bitnesttechs.hms.patient.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BillingScreen(viewModel: BillingViewModel = hiltViewModel()) {
+fun BillingScreen(onBack: () -> Unit = {}, viewModel: BillingViewModel = hiltViewModel()) {
     val invoices by viewModel.invoices.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
@@ -24,6 +26,11 @@ fun BillingScreen(viewModel: BillingViewModel = hiltViewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text("Billing & Invoices") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = androidx.compose.ui.graphics.Color.White)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
                     titleContentColor = androidx.compose.ui.graphics.Color.White)
             )

@@ -20,7 +20,7 @@ import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SharingPrivacyScreen(viewModel: SharingPrivacyViewModel = hiltViewModel()) {
+fun SharingPrivacyScreen(onBack: () -> Unit = {}, viewModel: SharingPrivacyViewModel = hiltViewModel()) {
     val consents by viewModel.consents.collectAsState()
     val accessLog by viewModel.accessLog.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -30,6 +30,11 @@ fun SharingPrivacyScreen(viewModel: SharingPrivacyViewModel = hiltViewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text("Sharing & Privacy") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BrandBlue, titleContentColor = Color.White
                 )

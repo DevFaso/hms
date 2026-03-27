@@ -24,7 +24,7 @@ import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun CareTeamScreen(viewModel: CareTeamViewModel = hiltViewModel()) {
+fun CareTeamScreen(onBack: () -> Unit = {}, viewModel: CareTeamViewModel = hiltViewModel()) {
     val careTeam by viewModel.careTeam.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val context = LocalContext.current
@@ -33,6 +33,11 @@ fun CareTeamScreen(viewModel: CareTeamViewModel = hiltViewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text("Care Team") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BrandBlue, titleContentColor = Color.White
                 )

@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.LocalHospital
 import androidx.compose.material3.*
@@ -23,7 +24,7 @@ import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VisitHistoryScreen(viewModel: VisitHistoryViewModel = hiltViewModel()) {
+fun VisitHistoryScreen(onBack: () -> Unit = {}, viewModel: VisitHistoryViewModel = hiltViewModel()) {
     val encounters by viewModel.encounters.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     var selectedEncounter by remember { mutableStateOf<EncounterDto?>(null) }
@@ -32,6 +33,11 @@ fun VisitHistoryScreen(viewModel: VisitHistoryViewModel = hiltViewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text("Visit History") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BrandBlue, titleContentColor = Color.White
                 )

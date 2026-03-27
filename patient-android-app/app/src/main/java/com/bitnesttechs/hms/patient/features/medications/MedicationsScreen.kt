@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -17,7 +18,7 @@ import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MedicationsScreen(viewModel: MedicationsViewModel = hiltViewModel()) {
+fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel = hiltViewModel()) {
     val medications by viewModel.medications.collectAsState()
     val prescriptions by viewModel.prescriptions.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
@@ -29,6 +30,11 @@ fun MedicationsScreen(viewModel: MedicationsViewModel = hiltViewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text("Medications") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = androidx.compose.ui.graphics.Color.White)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
                     titleContentColor = androidx.compose.ui.graphics.Color.White)
             )

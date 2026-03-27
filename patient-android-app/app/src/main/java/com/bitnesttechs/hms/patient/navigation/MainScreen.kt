@@ -188,20 +188,20 @@ fun MainScreen(onLogout: () -> Unit) {
                 }
 
                 // ── Dashboard destinations ────────────────────────────────────────
-                composable("lab_results") { LabResultsScreen() }
-                composable("medications") { MedicationsScreen() }
-                composable("billing") { BillingScreen() }
-                composable("vitals") { VitalsScreen() }
-                composable("care_team") { CareTeamScreen() }
-                composable("visits") { VisitHistoryScreen() }
-                composable("notifications") { NotificationsScreen() }
-                composable("documents") { DocumentsScreen() }
-                composable("health_records") { HealthRecordsScreen() }
+                composable("lab_results") { LabResultsScreen(onBack = { navController.popBackStack() }) }
+                composable("medications") { MedicationsScreen(onBack = { navController.popBackStack() }) }
+                composable("billing") { BillingScreen(onBack = { navController.popBackStack() }) }
+                composable("vitals") { VitalsScreen(onBack = { navController.popBackStack() }) }
+                composable("care_team") { CareTeamScreen(onBack = { navController.popBackStack() }) }
+                composable("visits") { VisitHistoryScreen(onBack = { navController.popBackStack() }) }
+                composable("notifications") { NotificationsScreen(onBack = { navController.popBackStack() }) }
+                composable("documents") { DocumentsScreen(onBack = { navController.popBackStack() }) }
+                composable("health_records") { HealthRecordsScreen(onBack = { navController.popBackStack() }) }
                 composable("sharing_privacy") {
-                    SharingPrivacyScreen()
+                    SharingPrivacyScreen(onBack = { navController.popBackStack() })
                 }
                 composable("family_access") {
-                    FamilyAccessScreen()
+                    FamilyAccessScreen(onBack = { navController.popBackStack() })
                 }
 
                 // ── Appointment detail ────────────────────────────────────────────

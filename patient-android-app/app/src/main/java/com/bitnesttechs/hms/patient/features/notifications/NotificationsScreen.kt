@@ -21,7 +21,7 @@ import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NotificationsScreen(viewModel: NotificationsViewModel = hiltViewModel()) {
+fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewModel = hiltViewModel()) {
     val notifications by viewModel.notifications.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val unreadCount = notifications.count { !it.isRead }
@@ -30,6 +30,11 @@ fun NotificationsScreen(viewModel: NotificationsViewModel = hiltViewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text("Notifications") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BrandBlue, titleContentColor = Color.White
                 ),

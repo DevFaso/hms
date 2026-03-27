@@ -24,7 +24,7 @@ import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun DocumentsScreen(viewModel: DocumentsViewModel = hiltViewModel()) {
+fun DocumentsScreen(onBack: () -> Unit = {}, viewModel: DocumentsViewModel = hiltViewModel()) {
     val documents by viewModel.documents.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val context = LocalContext.current
@@ -33,6 +33,11 @@ fun DocumentsScreen(viewModel: DocumentsViewModel = hiltViewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text("Documents") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BrandBlue, titleContentColor = Color.White
                 )

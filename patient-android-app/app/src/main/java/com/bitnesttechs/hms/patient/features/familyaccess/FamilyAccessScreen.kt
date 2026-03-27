@@ -24,6 +24,7 @@ import com.bitnesttechs.hms.patient.ui.theme.WarningOrange
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FamilyAccessScreen(
+    onBack: () -> Unit = {},
     viewModel: FamilyAccessViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -45,6 +46,11 @@ fun FamilyAccessScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Family Access") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BrandBlue,
                     titleContentColor = Color.White

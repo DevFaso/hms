@@ -22,7 +22,7 @@ import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VitalsScreen(viewModel: VitalsViewModel = hiltViewModel()) {
+fun VitalsScreen(onBack: () -> Unit = {}, viewModel: VitalsViewModel = hiltViewModel()) {
     val vitals by viewModel.vitals.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     var showRecordSheet by remember { mutableStateOf(false) }
@@ -31,6 +31,11 @@ fun VitalsScreen(viewModel: VitalsViewModel = hiltViewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text("Vitals") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
                     titleContentColor = Color.White),
                 actions = {

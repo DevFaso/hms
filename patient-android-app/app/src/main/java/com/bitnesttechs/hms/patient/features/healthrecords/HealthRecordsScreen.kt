@@ -19,7 +19,7 @@ import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HealthRecordsScreen(viewModel: HealthRecordsViewModel = hiltViewModel()) {
+fun HealthRecordsScreen(onBack: () -> Unit = {}, viewModel: HealthRecordsViewModel = hiltViewModel()) {
     val immunizations by viewModel.immunizations.collectAsState()
     val treatmentPlans by viewModel.treatmentPlans.collectAsState()
     val referrals by viewModel.referrals.collectAsState()
@@ -31,6 +31,11 @@ fun HealthRecordsScreen(viewModel: HealthRecordsViewModel = hiltViewModel()) {
         topBar = {
             TopAppBar(
                 title = { Text("Health Records") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = BrandBlue, titleContentColor = Color.White
                 )
