@@ -33,6 +33,16 @@ fun DashboardScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
+    // Refresh notification badge every time the dashboard is (re-)displayed
+    val currentBackStackEntry by navController.currentBackStackEntryFlow.collectAsState(
+        initial = navController.currentBackStackEntry
+    )
+    LaunchedEffect(currentBackStackEntry) {
+        if (currentBackStackEntry?.destination?.route == "tab_dashboard") {
+            viewModel.refreshNotificationCount()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(

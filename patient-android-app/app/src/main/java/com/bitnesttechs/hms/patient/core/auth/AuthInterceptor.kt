@@ -1,7 +1,10 @@
 package com.bitnesttechs.hms.patient.core.auth
 
 import com.bitnesttechs.hms.patient.core.models.RefreshTokenRequest
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.Interceptor
 import okhttp3.Response
 import retrofit2.Retrofit
@@ -23,6 +26,8 @@ class AuthInterceptor @Inject constructor(
     private val tokenStorage: TokenStorage,
     private val moshi: Moshi
 ) : Interceptor {
+
+    private val refreshMutex = Mutex()
 
     // Lazy to break circular Hilt dependency (ApiService → OkHttp → AuthInterceptor → ApiService)
     private val refreshService: ApiService by lazy {
@@ -49,7 +54,17 @@ class AuthInterceptor @Inject constructor(
         // Auto-refresh on 401
         if (response.code == 401 && tokenStorage.refreshToken != null) {
             response.close()
-            val refreshed = runBlocking { tryRefresh() }
+            val tokenBefore = accessToken
+            val refreshed = runBlocking(Dispatchers.IO) {
+                refreshMutex.withLock {
+                    // If another thread already refreshed while we waited, skip
+                    if (tokenStorage.accessToken != tokenBefore && tokenStorage.accessToken != null) {
+                        true
+                    } else {
+                        tryRefresh()
+                    }
+                }
+            }
             if (refreshed) {
                 val retryRequest = chain.request().newBuilder()
                     .header("Authorization", "Bearer ${tokenStorage.accessToken}")

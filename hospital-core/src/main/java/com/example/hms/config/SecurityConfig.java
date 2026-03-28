@@ -229,6 +229,7 @@ public class SecurityConfig {
                     // not browser cookies, so CSRF protection is unnecessary)
                     new AntPathRequestMatcher("/me/patient/**"),
                     new AntPathRequestMatcher("/me/notifications/**"),
+                    new AntPathRequestMatcher("/notifications/**"),
                     new AntPathRequestMatcher("/me/chat/**"),
                     // File uploads from mobile apps (multipart — no XSRF token)
                     new AntPathRequestMatcher("/files/**"),

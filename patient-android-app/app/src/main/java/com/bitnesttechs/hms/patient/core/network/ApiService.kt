@@ -141,34 +141,36 @@ interface ApiService {
     suspend fun getTreatmentPlans(): Response<ApiResponse<List<TreatmentPlanDto>>>
 
     // ── Notifications ─────────────────────────────────────────────────────────
-    @GET("me/notifications")
+    @GET("notifications")
     suspend fun getNotifications(
+        @Query("read") read: Boolean? = null,
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
-    ): Response<ApiResponse<List<NotificationDto>>>
+    ): Response<PageDto<NotificationDto>>
 
-    @PUT("me/notifications/{id}/read")
-    suspend fun markNotificationRead(@Path("id") id: String): Response<ApiResponse<Unit>>
-
-    @PUT("me/notifications/read-all")
-    suspend fun markAllNotificationsRead(): Response<ApiResponse<Unit>>
+    @POST("notifications/{id}/read")
+    suspend fun markNotificationRead(@Path("id") id: String): Response<Unit>
 
     // ── Chat / Messages ───────────────────────────────────────────────────────
-    @GET("me/chat/threads")
-    suspend fun getChatThreads(): Response<ApiResponse<List<ChatThreadDto>>>
+    @GET("chat/conversations/{userId}")
+    suspend fun getChatConversations(
+        @Path("userId") userId: String,
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 20
+    ): Response<List<ChatConversationDto>>
 
-    @GET("me/chat/threads/{threadId}/messages")
-    suspend fun getMessages(
-        @Path("threadId") threadId: String,
+    @GET("chat/history/{user1Id}/{user2Id}")
+    suspend fun getChatHistory(
+        @Path("user1Id") user1Id: String,
+        @Path("user2Id") user2Id: String,
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 50
-    ): Response<ApiResponse<List<ChatMessageDto>>>
+    ): Response<List<ChatMessageDto>>
 
-    @POST("me/chat/threads/{threadId}/messages")
-    suspend fun sendMessage(
-        @Path("threadId") threadId: String,
-        @Body request: SendMessageRequest
-    ): Response<ApiResponse<ChatMessageDto>>
+    @POST("chat/send")
+    suspend fun sendChatMessage(
+        @Body request: SendChatMessageRequest
+    ): Response<ChatMessageDto>
 
     // ── Consents / Privacy ────────────────────────────────────────────────────
     @GET("me/patient/consents")
@@ -201,4 +203,20 @@ interface ApiService {
 
     @DELETE("me/patient/proxies/{id}")
     suspend fun revokeProxy(@Path("id") id: String): Response<ApiResponse<Unit>>
+
+    // ── Proxy data-viewing ────────────────────────────────────────────────────
+    @GET("me/patient/proxy-access/{patientId}/appointments")
+    suspend fun getProxyAppointments(@Path("patientId") patientId: String): Response<ApiResponse<List<AppointmentDto>>>
+
+    @GET("me/patient/proxy-access/{patientId}/medications")
+    suspend fun getProxyMedications(@Path("patientId") patientId: String, @Query("limit") limit: Int = 50): Response<ApiResponse<List<MedicationDto>>>
+
+    @GET("me/patient/proxy-access/{patientId}/lab-results")
+    suspend fun getProxyLabResults(@Path("patientId") patientId: String, @Query("limit") limit: Int = 50): Response<ApiResponse<List<LabResultDto>>>
+
+    @GET("me/patient/proxy-access/{patientId}/billing")
+    suspend fun getProxyBilling(@Path("patientId") patientId: String): Response<ApiResponse<PageDto<InvoiceDto>>>
+
+    @GET("me/patient/proxy-access/{patientId}/records")
+    suspend fun getProxyRecords(@Path("patientId") patientId: String): Response<ApiResponse<HealthSummaryDto>>
 }

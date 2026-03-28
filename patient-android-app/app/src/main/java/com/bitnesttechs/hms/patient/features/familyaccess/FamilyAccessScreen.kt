@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.features.familyaccess
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -14,6 +15,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
 import com.bitnesttechs.hms.patient.core.models.GrantProxyRequest
 import com.bitnesttechs.hms.patient.core.models.ProxyResponse
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
@@ -25,6 +27,7 @@ import com.bitnesttechs.hms.patient.ui.theme.WarningOrange
 @Composable
 fun FamilyAccessScreen(
     onBack: () -> Unit = {},
+    navController: NavController? = null,
     viewModel: FamilyAccessViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -152,6 +155,12 @@ fun FamilyAccessScreen(
             onDismiss = { showDetailProxy = null },
             onRevoke = if (selectedTab == 0) {
                 { revokeDialogProxy = proxy; showDetailProxy = null }
+            } else null,
+            onPermissionClick = if (selectedTab == 1 && navController != null && proxy.grantorPatientId != null) {
+                { permission ->
+                    showDetailProxy = null
+                    navController.navigate("proxy_data/${proxy.grantorPatientId}/$permission/${proxy.grantorName ?: "Patient"}")
+                }
             } else null
         )
     }
@@ -278,6 +287,7 @@ fun permissionIcon(permission: String): androidx.compose.ui.graphics.vector.Imag
         "VIEW_APPOINTMENTS" -> Icons.Default.CalendarMonth
         "VIEW_MEDICATIONS" -> Icons.Default.Medication
         "VIEW_LAB_RESULTS" -> Icons.Default.Science
+        "VIEW_BILLING" -> Icons.Default.Receipt
         "BOOK_APPOINTMENTS" -> Icons.Default.EventAvailable
         "MANAGE_MEDICATIONS" -> Icons.Default.MedicalServices
         else -> Icons.Default.Key
@@ -387,7 +397,8 @@ fun ProxyDetailSheet(
     proxy: ProxyResponse,
     isGrantor: Boolean,
     onDismiss: () -> Unit,
-    onRevoke: (() -> Unit)?
+    onRevoke: (() -> Unit)?,
+    onPermissionClick: ((String) -> Unit)? = null
 ) {
     val statusColor = when (proxy.status?.uppercase()) {
         "ACTIVE" -> SuccessGreen
@@ -431,13 +442,27 @@ fun ProxyDetailSheet(
             // Permissions
             Text("Permissions", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             proxy.permissionsList.forEach { perm ->
+                val isClickable = onPermissionClick != null
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(vertical = 4.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (isClickable) Modifier.clickable { onPermissionClick?.invoke(perm) }
+                            else Modifier
+                        )
+                        .padding(vertical = 8.dp)
                 ) {
                     Icon(permissionIcon(perm), null, Modifier.size(20.dp), tint = BrandBlue)
                     Spacer(Modifier.width(12.dp))
-                    Text(perm.lowercase().replace("_", " ").replaceFirstChar { it.uppercase() })
+                    Text(
+                        perm.lowercase().replace("_", " ").replaceFirstChar { it.uppercase() },
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (isClickable) {
+                        Icon(Icons.Default.ChevronRight, null, Modifier.size(20.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
 

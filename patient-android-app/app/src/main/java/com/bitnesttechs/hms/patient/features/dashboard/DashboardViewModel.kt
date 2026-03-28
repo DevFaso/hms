@@ -38,24 +38,35 @@ class DashboardViewModel @Inject constructor(
                 val healthDeferred = async { api.getHealthSummary() }
                 val appointmentsDeferred = async { api.getAppointments(size = 3) }
                 val labsDeferred = async { api.getLabResults(size = 5) }
-                val notificationsDeferred = async { api.getNotifications(size = 1) }
+                val notificationsDeferred = async { api.getNotifications(read = false, size = 1) }
 
                 val health = healthDeferred.await().body()?.data
                 val appointments = appointmentsDeferred.await().body()?.data ?: emptyList()
                 val labs = labsDeferred.await().body()?.data ?: emptyList()
-                val notifications = notificationsDeferred.await().body()?.data ?: emptyList()
-                val unreadCount = notifications.count { !it.isRead }
+                val notificationsPage = notificationsDeferred.await().body()
+                val unreadCount = (notificationsPage?.totalElements ?: 0).toInt()
 
                 _uiState.value = DashboardUiState(
                     isLoading = false,
                     healthSummary = health,
                     upcomingAppointments = appointments,
                     recentLabResults = labs,
-                    unreadNotificationCount = unreadCount
+                    unreadNotificationCount = unreadCount.coerceAtLeast(0)
                 )
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = e.message)
             }
+        }
+    }
+
+    /** Lightweight refresh of just the badge count (called when screen resumes). */
+    fun refreshNotificationCount() {
+        viewModelScope.launch {
+            try {
+                val resp = api.getNotifications(read = false, size = 1)
+                val count = (resp.body()?.totalElements ?: 0).toInt()
+                _uiState.value = _uiState.value.copy(unreadNotificationCount = count.coerceAtLeast(0))
+            } catch (_: Exception) {}
         }
     }
 }

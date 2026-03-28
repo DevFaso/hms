@@ -9,6 +9,7 @@ import com.example.hms.payload.dto.ChatConversationSummaryDTO;
 import com.example.hms.payload.dto.ChatMessageRequestDTO;
 import com.example.hms.payload.dto.ChatMessageResponseDTO;
 import com.example.hms.repository.ChatMessageRepository;
+import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.CustomUserDetails;
@@ -96,6 +97,7 @@ public class ChatMessageServiceImpl implements ChatMessageService {
 
     private final ChatMessageRepository chatMessageRepository;
     private final UserRepository userRepository;
+    private final StaffRepository staffRepository;
     private final ChatMessageMapper chatMessageMapper;
     private final MessageSource messageSource;
     private final UserRoleHospitalAssignmentRepository userRoleHospitalAssignmentRepository;
@@ -114,7 +116,9 @@ public class ChatMessageServiceImpl implements ChatMessageService {
         User recipient;
         if (dto.getRecipientId() != null) {
             recipient = userRepository.findById(dto.getRecipientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Recipient not found"));
+                .orElseGet(() -> staffRepository.findById(dto.getRecipientId())
+                    .map(staff -> staff.getUser())
+                    .orElseThrow(() -> new ResourceNotFoundException("Recipient not found")));
         } else if (dto.getRecipientEmail() != null && !dto.getRecipientEmail().isBlank()) {
             recipient = userRepository.findByEmail(dto.getRecipientEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("Recipient not found"));

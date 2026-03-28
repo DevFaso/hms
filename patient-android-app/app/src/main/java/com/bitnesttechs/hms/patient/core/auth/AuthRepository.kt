@@ -31,6 +31,7 @@ class AuthRepository @Inject constructor(
                 // Login response is FLAT — token + user fields at top level
                 tokenStorage.accessToken = body.accessToken
                 tokenStorage.refreshToken = body.refreshToken
+                tokenStorage.userId = body.id
                 if (saveCredentials) {
                     tokenStorage.savedUsername = username
                     tokenStorage.savedPassword = password

@@ -25,6 +25,7 @@ fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewMod
     val notifications by viewModel.notifications.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val unreadCount = notifications.count { !it.isRead }
+    var selectedNotification by remember { mutableStateOf<NotificationDto?>(null) }
 
     Scaffold(
         topBar = {
@@ -70,21 +71,56 @@ fun NotificationsScreen(onBack: () -> Unit = {}, viewModel: NotificationsViewMod
 
         LazyColumn(Modifier.fillMaxSize().padding(padding)) {
             items(notifications) { notif ->
-                NotificationRow(notif) { viewModel.markRead(notif.id) }
+                NotificationRow(notif, onTap = {
+                    selectedNotification = notif
+                    if (!notif.isRead) viewModel.markRead(notif.id)
+                })
                 HorizontalDivider()
             }
         }
     }
+
+    // ── Notification detail dialog ────────────────────────────────────────────
+    selectedNotification?.let { notif ->
+        AlertDialog(
+            onDismissRequest = { selectedNotification = null },
+            icon = {
+                Icon(
+                    imageVector = notificationIcon(notif.type),
+                    contentDescription = null,
+                    tint = BrandBlue,
+                    modifier = Modifier.size(28.dp)
+                )
+            },
+            title = { Text(notif.title, fontWeight = FontWeight.SemiBold) },
+            text = {
+                Column {
+                    Text(notif.message, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        notif.createdAt.take(16).replace("T", " at "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { selectedNotification = null }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun NotificationRow(notif: NotificationDto, onMarkRead: () -> Unit) {
+private fun NotificationRow(notif: NotificationDto, onTap: () -> Unit) {
     val bgColor = if (notif.isRead) Color.Transparent else BrandLightBlue
 
     Surface(color = bgColor) {
         Row(
             Modifier
-                .clickable { if (!notif.isRead) onMarkRead() }
+                .clickable { onTap() }
                 .padding(16.dp)
                 .fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),

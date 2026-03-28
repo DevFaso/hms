@@ -42,12 +42,17 @@ class TokenStorage @Inject constructor(
         get() = prefs.getString(KEY_SAVED_PASSWORD, null)
         set(value) = prefs.edit().putString(KEY_SAVED_PASSWORD, value).apply()
 
+    var userId: String?
+        get() = prefs.getString(KEY_USER_ID, null)
+        set(value) = prefs.edit().putString(KEY_USER_ID, value).apply()
+
     val isLoggedIn: Boolean get() = accessToken != null
 
     fun clearAll() {
         prefs.edit()
             .remove(KEY_ACCESS_TOKEN)
             .remove(KEY_REFRESH_TOKEN)
+            .remove(KEY_USER_ID)
             .apply()
     }
 
@@ -63,5 +68,6 @@ class TokenStorage @Inject constructor(
         private const val KEY_REFRESH_TOKEN = "refresh_token"
         private const val KEY_SAVED_USERNAME = "saved_username"
         private const val KEY_SAVED_PASSWORD = "saved_password"
+        private const val KEY_USER_ID = "user_id"
     }
 }

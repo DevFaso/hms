@@ -107,10 +107,9 @@ fun MainScreen(onLogout: () -> Unit) {
                             scope.launch { drawerState.close() }
                             navController.navigate(item.route) {
                                 popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+                                    inclusive = false
                                 }
                                 launchSingleTop = true
-                                restoreState = true
                             }
                         },
                         modifier = Modifier.padding(horizontal = 12.dp)
@@ -146,10 +145,9 @@ fun MainScreen(onLogout: () -> Unit) {
                                 onClick = {
                                     navController.navigate(tab.route) {
                                         popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
+                                            inclusive = false
                                         }
                                         launchSingleTop = true
-                                        restoreState = true
                                     }
                                 }
                             )
@@ -201,7 +199,21 @@ fun MainScreen(onLogout: () -> Unit) {
                     SharingPrivacyScreen(onBack = { navController.popBackStack() })
                 }
                 composable("family_access") {
-                    FamilyAccessScreen(onBack = { navController.popBackStack() })
+                    FamilyAccessScreen(
+                        onBack = { navController.popBackStack() },
+                        navController = navController
+                    )
+                }
+                composable("proxy_data/{patientId}/{permission}/{patientName}") { backStackEntry ->
+                    val patientId = backStackEntry.arguments?.getString("patientId") ?: ""
+                    val permission = backStackEntry.arguments?.getString("permission") ?: ""
+                    val patientName = backStackEntry.arguments?.getString("patientName") ?: "Patient"
+                    com.bitnesttechs.hms.patient.features.familyaccess.ProxyDataScreen(
+                        patientId = patientId,
+                        permission = permission,
+                        patientName = patientName,
+                        onBack = { navController.popBackStack() }
+                    )
                 }
 
                 // ── Appointment detail ────────────────────────────────────────────

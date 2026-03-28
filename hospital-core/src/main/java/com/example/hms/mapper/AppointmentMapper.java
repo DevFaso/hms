@@ -52,6 +52,7 @@ public class AppointmentMapper {
         if (staff != null) {
             dto.setStaffId(staff.getId());
             if (staff.getUser() != null) {
+                dto.setStaffUserId(staff.getUser().getId());
                 dto.setStaffName(getFullName(staff.getUser().getFirstName(), staff.getUser().getLastName()));
                 dto.setStaffEmail(staff.getUser().getEmail());
             }

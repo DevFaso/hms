@@ -27,6 +27,7 @@ public class AppointmentResponseDTO {
     private String patientPhone;
 
     private UUID staffId;
+    private UUID staffUserId;
     private String staffName;
     private String staffEmail;
 

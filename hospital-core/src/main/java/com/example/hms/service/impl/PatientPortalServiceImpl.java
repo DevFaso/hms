@@ -821,6 +821,76 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .build();
     }
 
+    // ── Proxy data-viewing implementations ───────────────────────────────
+
+    /**
+     * Validate that the authenticated user has an active proxy grant for the
+     * given patient with the required permission scope.
+     */
+    private Patient verifyProxyAccess(Authentication auth, UUID patientId, String requiredPermission) {
+        UUID userId = authUtils.resolveUserId(auth)
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
+
+        PatientProxy proxy = patientProxyRepository
+                .findByGrantorPatient_IdAndProxyUser_IdAndStatus(patientId, userId, ProxyStatus.ACTIVE)
+                .orElseThrow(() -> new AccessDeniedException("You do not have proxy access to this patient's data"));
+
+        // Check permission scope
+        String perms = proxy.getPermissions() != null ? proxy.getPermissions().toUpperCase() : "";
+        if (!perms.contains("ALL") && !perms.contains(requiredPermission.toUpperCase())) {
+            throw new AccessDeniedException("Your proxy access does not include " + requiredPermission);
+        }
+
+        return patientRepository.findById(patientId)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<AppointmentResponseDTO> getProxyAppointments(Authentication auth, UUID patientId, Locale locale) {
+        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_APPOINTMENTS");
+        return appointmentService.getAppointmentsByPatientId(patient.getId(), locale, null);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientMedicationResponseDTO> getProxyMedications(Authentication auth, UUID patientId, int limit) {
+        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_MEDICATIONS");
+        UUID hospitalId = resolvePatientHospitalId(patient);
+        return medicationService.getMedicationsForPatient(patient.getId(), hospitalId, limit);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId, int limit) {
+        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_LAB_RESULTS");
+        UUID hospitalId = resolvePatientHospitalId(patient);
+        return labResultService.getLabResultsForPatient(patient.getId(), hospitalId, limit);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<BillingInvoiceResponseDTO> getProxyBilling(Authentication auth, UUID patientId, Pageable pageable, Locale locale) {
+        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_BILLING");
+        return billingInvoiceService.getInvoicesByPatientId(patient.getId(), pageable, locale);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public HealthSummaryDTO getProxyRecords(Authentication auth, UUID patientId, Locale locale) {
+        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_RECORDS");
+        UUID hospitalId = resolvePatientHospitalId(patient);
+        return HealthSummaryDTO.builder()
+                .profile(toProfileDTO(patient))
+                .recentLabResults(safeLabResults(patient.getId(), hospitalId))
+                .currentMedications(safeMedications(patient.getId(), hospitalId))
+                .recentVitals(safeVitals(patient.getId()))
+                .immunizations(safeImmunizations(patient.getId()))
+                .allergies(splitToList(patient.getAllergies()))
+                .chronicConditions(splitToList(patient.getChronicConditions()))
+                .build();
+    }
+
     // ── Email notification helpers ───────────────────────────────────────
 
     private void sendCancellationEmail(Appointment appointment) {
