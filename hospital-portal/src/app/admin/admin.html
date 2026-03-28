@@ -1,8 +1,8 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Administration</h1>
-      <p class="page-subtitle">System management and configuration</p>
+      <h1 class="page-title">{{ 'ADMIN.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'ADMIN.SUBTITLE' | translate }}</p>
     </div>
   </div>
 
@@ -22,7 +22,7 @@
   </div>
 
   <!-- Admin Sections Grid -->
-  <h2 class="section-heading">Quick Access</h2>
+  <h2 class="section-heading">{{ 'ADMIN.QUICK_ACCESS' | translate }}</h2>
   <div class="admin-grid">
     @for (section of sections; track section.title) {
       <a class="admin-card" [routerLink]="section.route">

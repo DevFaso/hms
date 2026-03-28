@@ -16,13 +16,14 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 type TabKey = 'overview' | 'medical' | 'vitals' | 'encounters' | 'appointments' | 'sharing';
 
 @Component({
   selector: 'app-patient-detail',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
   templateUrl: './patient-detail.html',
   styleUrl: './patient-detail.scss',
 })

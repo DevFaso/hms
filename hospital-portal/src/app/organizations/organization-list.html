@@ -1,8 +1,8 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Organizations</h1>
-      <p class="page-subtitle">Manage healthcare organizations and entities</p>
+      <h1 class="page-title">{{ 'ORGANIZATIONS.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'ORGANIZATIONS.SUBTITLE' | translate }}</p>
     </div>
     <button class="btn-primary" (click)="openCreate()">
       <span class="material-symbols-outlined">add</span>
@@ -14,7 +14,7 @@
     <span class="material-symbols-outlined search-icon">search</span>
     <input
       type="text"
-      placeholder="Search organizations..."
+      [placeholder]="'ORGANIZATIONS.SEARCH_PLACEHOLDER' | translate"
       [(ngModel)]="searchTerm"
       (ngModelChange)="applyFilter()"
     />
@@ -23,7 +23,7 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading organizations...</p>
+      <p>{{ 'ORGANIZATIONS.LOADING' | translate }}</p>
     </div>
   }
 
@@ -32,13 +32,13 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Code</th>
-            <th>Type</th>
-            <th>Contact</th>
-            <th>Hospitals</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th>{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+            <th>{{ 'HOSPITALS.CODE' | translate }}</th>
+            <th>{{ 'ORGANIZATIONS.TYPE' | translate }}</th>
+            <th>{{ 'ORGANIZATIONS.CONTACT' | translate }}</th>
+            <th>{{ 'COMMON.ALL_HOSPITALS' | translate }}</th>
+            <th>{{ 'COMMON.STATUS' | translate }}</th>
+            <th>{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -71,15 +71,23 @@
                   [class.active]="org.active"
                   [class.inactive]="!org.active"
                 >
-                  {{ org.active ? 'Active' : 'Inactive' }}
+                  {{ org.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
                 </span>
               </td>
               <td>
                 <div class="action-group">
-                  <button class="action-link edit" title="Edit" (click)="openEdit(org)">
+                  <button
+                    class="action-link edit"
+                    [title]="'COMMON.EDIT' | translate"
+                    (click)="openEdit(org)"
+                  >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="action-link delete" title="Delete" (click)="confirmDelete(org)">
+                  <button
+                    class="action-link delete"
+                    [title]="'COMMON.DELETE' | translate"
+                    (click)="confirmDelete(org)"
+                  >
                     <span class="material-symbols-outlined">delete</span>
                   </button>
                 </div>
@@ -99,7 +107,10 @@
         >
           <span class="material-symbols-outlined">chevron_left</span>
         </button>
-        <span class="page-info">Page {{ currentPage() + 1 }} of {{ totalPages() }}</span>
+        <span class="page-info"
+          >{{ 'ORGANIZATIONS.PAGE_INFO' | translate }} {{ currentPage() + 1 }}
+          {{ 'ORGANIZATIONS.PAGE_OF' | translate }} {{ totalPages() }}</span
+        >
         <button
           class="page-btn"
           [disabled]="currentPage() >= totalPages() - 1"
@@ -114,8 +125,14 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">corporate_fare</span>
-      <h3>No organizations found</h3>
-      <p>{{ searchTerm ? 'Try adjusting your search.' : 'Create your first organization.' }}</p>
+      <h3>{{ 'ORGANIZATIONS.NO_ORGANIZATIONS_FOUND' | translate }}</h3>
+      <p>
+        {{
+          searchTerm
+            ? ('COMMON.TRY_ADJUSTING' | translate)
+            : ('ORGANIZATIONS.CREATE_FIRST' | translate)
+        }}
+      </p>
     </div>
   }
 
@@ -135,7 +152,11 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ editing() ? 'Edit Organization' : 'Create Organization' }}</h2>
+          <h2>
+            {{
+              editing() ? ('ORGANIZATIONS.EDIT' | translate) : ('ORGANIZATIONS.CREATE' | translate)
+            }}
+          </h2>
           <button class="modal-close" (click)="closeCreate()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -143,18 +164,18 @@
         <form (ngSubmit)="submitCreate()">
           <div class="modal-body">
             <div class="field">
-              <label for="orgName">Name *</label>
+              <label for="orgName">{{ 'DEPARTMENTS.NAME' | translate }} *</label>
               <input
                 id="orgName"
                 type="text"
                 [(ngModel)]="createForm.name"
                 name="name"
-                placeholder="Organization name"
+                [placeholder]="'ORGANIZATIONS.NAME_PLACEHOLDER' | translate"
                 required
               />
             </div>
             <div class="field">
-              <label for="orgCode">Code *</label>
+              <label for="orgCode">{{ 'HOSPITALS.CODE' | translate }} *</label>
               <input
                 id="orgCode"
                 type="text"
@@ -165,7 +186,7 @@
               />
             </div>
             <div class="field">
-              <label for="orgEmail">Contact Email *</label>
+              <label for="orgEmail">{{ 'ORGANIZATIONS.CONTACT_EMAIL' | translate }} *</label>
               <input
                 id="orgEmail"
                 type="email"
@@ -176,25 +197,29 @@
               />
             </div>
             <div class="field">
-              <label for="orgTimezone">Timezone *</label>
+              <label for="orgTimezone">{{ 'ORGANIZATIONS.TIMEZONE' | translate }} *</label>
               <select id="orgTimezone" [(ngModel)]="createForm.timezone" name="timezone" required>
-                <option value="" disabled selected>Select timezone…</option>
+                <option value="" disabled selected>
+                  {{ 'ORGANIZATIONS.SELECT_TIMEZONE' | translate }}
+                </option>
                 @for (tz of timezones; track tz) {
                   <option [value]="tz">{{ tz }}</option>
                 }
               </select>
             </div>
             <div class="field">
-              <label for="orgType">Type</label>
+              <label for="orgType">{{ 'ORGANIZATIONS.TYPE' | translate }}</label>
               <select id="orgType" [(ngModel)]="createForm.type" name="type">
-                <option value="" disabled selected>Select type…</option>
+                <option value="" disabled selected>
+                  {{ 'ORGANIZATIONS.SELECT_TYPE' | translate }}
+                </option>
                 @for (t of orgTypes(); track t) {
                   <option [value]="t">{{ formatType(t) }}</option>
                 }
               </select>
             </div>
             <div class="field">
-              <label for="orgPhone">Contact Phone</label>
+              <label for="orgPhone">{{ 'ORGANIZATIONS.CONTACT_PHONE' | translate }}</label>
               <input
                 id="orgPhone"
                 type="tel"
@@ -204,20 +229,28 @@
               />
             </div>
             <div class="field">
-              <label for="orgNotes">Notes</label>
+              <label for="orgNotes">{{ 'ORGANIZATIONS.NOTES' | translate }}</label>
               <textarea
                 id="orgNotes"
                 rows="3"
                 [(ngModel)]="createForm.notes"
                 name="notes"
-                placeholder="Onboarding notes..."
+                [placeholder]="'ORGANIZATIONS.NOTES_PLACEHOLDER' | translate"
               ></textarea>
             </div>
           </div>
           <div class="modal-actions">
-            <button type="button" class="btn-secondary" (click)="closeCreate()">Cancel</button>
+            <button type="button" class="btn-secondary" (click)="closeCreate()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
             <button type="submit" class="btn-primary" [disabled]="saving()">
-              {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Create' }}
+              {{
+                saving()
+                  ? ('COMMON.SAVING' | translate)
+                  : editing()
+                    ? ('COMMON.UPDATE' | translate)
+                    : ('COMMON.CREATE' | translate)
+              }}
             </button>
           </div>
         </form>
@@ -241,7 +274,7 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>Delete Organization</h2>
+          <h2>{{ 'ORGANIZATIONS.DELETE' | translate }}</h2>
           <button class="modal-close" (click)="cancelDelete()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -250,23 +283,26 @@
           <div class="delete-warning">
             <span class="material-symbols-outlined warning-icon">warning</span>
             <p>
-              Are you sure you want to delete <strong>{{ deletingOrg()?.name }}</strong
+              {{ 'ORGANIZATIONS.DELETE_CONFIRM' | translate }}
+              <strong>{{ deletingOrg()?.name }}</strong
               >?
             </p>
             <p class="delete-detail">
-              This action cannot be undone. All associated data will be permanently removed.
+              {{ 'ORGANIZATIONS.DELETE_WARNING' | translate }}
             </p>
           </div>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
           <button
             type="button"
             class="btn-danger"
             [disabled]="deleting()"
             (click)="executeDelete()"
           >
-            {{ deleting() ? 'Deleting...' : 'Delete' }}
+            {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
           </button>
         </div>
       </dialog>

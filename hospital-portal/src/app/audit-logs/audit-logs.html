@@ -1,8 +1,8 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Audit Logs</h1>
-      <p class="page-subtitle">System activity trail and security events</p>
+      <h1 class="page-title">{{ 'AUDIT.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'AUDIT.SUBTITLE' | translate }}</p>
     </div>
   </div>
   <div class="summary-cards">
@@ -10,14 +10,14 @@
       <span class="material-symbols-outlined card-icon total">receipt_long</span>
       <div class="card-info">
         <span class="card-value">{{ logs().length }}</span
-        ><span class="card-label">Total Events</span>
+        ><span class="card-label">{{ 'AUDIT.TOTAL_EVENTS' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon types">category</span>
       <div class="card-info">
         <span class="card-value">{{ eventTypes().length }}</span
-        ><span class="card-label">Event Types</span>
+        ><span class="card-label">{{ 'AUDIT.EVENT_TYPES' | translate }}</span>
       </div>
     </div>
   </div>
@@ -29,7 +29,7 @@
         class="filter-select"
         aria-label="Filter by event type"
       >
-        <option value="">All Event Types</option>
+        <option value="">{{ 'AUDIT.ALL_EVENT_TYPES' | translate }}</option>
         @for (et of eventTypes(); track et.eventType) {
           <option [value]="et.eventType">{{ et.eventType }} ({{ et.count }})</option>
         }
@@ -39,7 +39,7 @@
       <span class="material-symbols-outlined">search</span
       ><input
         type="text"
-        placeholder="Search audit logs..."
+        [placeholder]="'AUDIT.SEARCH' | translate"
         [(ngModel)]="searchTerm"
         (input)="applyFilter()"
       />
@@ -48,14 +48,14 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading audit logs...</p>
+      <p>{{ 'AUDIT.LOADING' | translate }}</p>
     </div>
   }
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">receipt_long</span>
-      <h3>No audit logs found</h3>
-      <p>Activity logs will appear here.</p>
+      <h3>{{ 'AUDIT.NO_LOGS' | translate }}</h3>
+      <p>{{ 'AUDIT.LOGS_WILL_APPEAR' | translate }}</p>
     </div>
   }
   @if (!loading() && filtered().length > 0) {
@@ -63,13 +63,13 @@
       <table>
         <thead>
           <tr>
-            <th scope="col">Timestamp</th>
-            <th scope="col">User</th>
-            <th scope="col">Event Type</th>
-            <th scope="col">Description</th>
-            <th scope="col">Entity</th>
-            <th scope="col">Status</th>
-            <th scope="col">IP</th>
+            <th scope="col">{{ 'AUDIT.TIMESTAMP' | translate }}</th>
+            <th scope="col">{{ 'AUDIT.USER' | translate }}</th>
+            <th scope="col">{{ 'AUDIT.EVENT_TYPE' | translate }}</th>
+            <th scope="col">{{ 'AUDIT.DESCRIPTION' | translate }}</th>
+            <th scope="col">{{ 'AUDIT.ENTITY' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'AUDIT.IP' | translate }}</th>
           </tr>
         </thead>
         <tbody>

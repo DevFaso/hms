@@ -1,19 +1,19 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Staff</h1>
+      <h1 class="page-title">{{ 'STAFF.TITLE' | translate }}</h1>
       <p class="page-subtitle">
         @if (!loading()) {
-          {{ filtered().length }} staff member{{ filtered().length !== 1 ? 's' : '' }}
+          {{ filtered().length }} {{ 'STAFF.MEMBERS' | translate }}
         } @else {
-          View and manage hospital staff members
+          {{ 'STAFF.SUBTITLE' | translate }}
         }
       </p>
     </div>
     @if (canManageStaff) {
       <button class="btn-primary" (click)="openCreate()">
         <span class="material-symbols-outlined">add</span>
-        New Staff
+        {{ 'STAFF.NEW' | translate }}
       </button>
     }
   </div>
@@ -24,12 +24,16 @@
       <span class="material-symbols-outlined search-icon">search</span>
       <input
         type="text"
-        placeholder="Search by name, email, department..."
+        [placeholder]="'STAFF.SEARCH_PLACEHOLDER' | translate"
         [value]="searchTerm"
         (input)="searchTerm = $any($event.target).value; applyFilter()"
       />
       @if (searchTerm) {
-        <button class="search-clear" title="Clear search" (click)="searchTerm = ''; applyFilter()">
+        <button
+          class="search-clear"
+          [title]="'COMMON.CLEAR_SEARCH' | translate"
+          (click)="searchTerm = ''; applyFilter()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       }
@@ -39,10 +43,10 @@
       class="filter-toggle-btn"
       [class.has-filters]="activeFilterCount > 0"
       (click)="showFilters.set(!showFilters())"
-      title="More filters"
+      [title]="'COMMON.MORE_FILTERS' | translate"
     >
       <span class="material-symbols-outlined">tune</span>
-      Filters
+      {{ 'COMMON.FILTERS' | translate }}
       @if (activeFilterCount > 0) {
         <span class="filter-badge">{{ activeFilterCount }}</span>
       }
@@ -52,15 +56,15 @@
   @if (showFilters()) {
     <div class="filter-row">
       <div class="filter-group">
-        <label class="filter-label" for="staffDept">Department</label>
+        <label class="filter-label" for="staffDept">{{ 'STAFF.DEPARTMENT' | translate }}</label>
         <select
           id="staffDept"
           class="filter-select"
-          title="Filter by department"
+          [title]="'STAFF.FILTER_BY_DEPARTMENT' | translate"
           [(ngModel)]="deptFilter"
           (ngModelChange)="applyFilter()"
         >
-          <option value="">All Departments</option>
+          <option value="">{{ 'STAFF.ALL_DEPARTMENTS' | translate }}</option>
           @for (dept of uniqueDepartments(); track dept) {
             <option [value]="dept">{{ dept }}</option>
           }
@@ -68,15 +72,17 @@
       </div>
 
       <div class="filter-group">
-        <label class="filter-label" for="staffEmploy">Employment Type</label>
+        <label class="filter-label" for="staffEmploy">{{
+          'STAFF.EMPLOYMENT_TYPE' | translate
+        }}</label>
         <select
           id="staffEmploy"
           class="filter-select"
-          title="Filter by employment type"
+          [title]="'STAFF.FILTER_BY_EMPLOYMENT' | translate"
           [(ngModel)]="employmentTypeFilter"
           (ngModelChange)="applyFilter()"
         >
-          <option value="">All Types</option>
+          <option value="">{{ 'STAFF.ALL_TYPES' | translate }}</option>
           @for (et of employmentTypes; track et) {
             <option [value]="et">{{ et.replaceAll('_', ' ') }}</option>
           }
@@ -84,15 +90,15 @@
       </div>
 
       <div class="filter-group">
-        <label class="filter-label" for="staffTitle">Job Title</label>
+        <label class="filter-label" for="staffTitle">{{ 'STAFF.JOB_TITLE' | translate }}</label>
         <select
           id="staffTitle"
           class="filter-select"
-          title="Filter by job title"
+          [title]="'STAFF.FILTER_BY_TITLE' | translate"
           [(ngModel)]="jobTitleFilter"
           (ngModelChange)="applyFilter()"
         >
-          <option value="">All Titles</option>
+          <option value="">{{ 'STAFF.ALL_TITLES' | translate }}</option>
           @for (jt of jobTitles; track jt) {
             <option [value]="jt">{{ jt.replaceAll('_', ' ') }}</option>
           }
@@ -102,7 +108,7 @@
       @if (activeFilterCount > 0) {
         <button class="clear-filters-btn" (click)="clearFilters()">
           <span class="material-symbols-outlined">filter_alt_off</span>
-          Clear All
+          {{ 'COMMON.CLEAR_ALL' | translate }}
         </button>
       }
     </div>
@@ -141,7 +147,7 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading staff...</p>
+      <p>{{ 'STAFF.LOADING' | translate }}</p>
     </div>
   }
 
@@ -167,12 +173,16 @@
             <span class="status-dot" [class.active]="member.active"></span>
             @if (canManageStaff) {
               <div class="action-group">
-                <button class="action-link" title="Edit" (click)="openEdit(member)">
+                <button
+                  class="action-link"
+                  [title]="'COMMON.EDIT' | translate"
+                  (click)="openEdit(member)"
+                >
                   <span class="material-symbols-outlined">edit</span>
                 </button>
                 <button
                   class="action-link danger"
-                  title="Deactivate"
+                  [title]="'STAFF.DEACTIVATE' | translate"
                   (click)="confirmDelete(member)"
                 >
                   <span class="material-symbols-outlined">person_off</span>
@@ -188,13 +198,15 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">badge</span>
-      <h3>No staff found</h3>
+      <h3>{{ 'STAFF.NO_STAFF_FOUND' | translate }}</h3>
       <p>
         @if (searchTerm || activeFilterCount > 0) {
-          Try adjusting your search or filters.
-          <button class="link-btn" (click)="clearFilters()">Clear all filters</button>
+          {{ 'COMMON.TRY_ADJUSTING' | translate }}
+          <button class="link-btn" (click)="clearFilters()">
+            {{ 'COMMON.CLEAR_ALL_FILTERS' | translate }}
+          </button>
         } @else {
-          Register your first staff member.
+          {{ 'STAFF.REGISTER_FIRST' | translate }}
         }
       </p>
     </div>
@@ -216,7 +228,11 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ editing() ? 'Edit Staff' : 'Register Staff' }}</h2>
+          <h2>
+            {{
+              editing() ? ('STAFF.EDIT_STAFF' | translate) : ('STAFF.REGISTER_STAFF' | translate)
+            }}
+          </h2>
           <button class="modal-close" (click)="closeModal()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -225,9 +241,9 @@
           <div class="modal-body">
             <div class="form-row">
               <div class="field">
-                <label for="sUser">User *</label>
+                <label for="sUser">{{ 'STAFF.USER' | translate }} *</label>
                 <select id="sUser" [(ngModel)]="form.userEmail" name="userEmail" required>
-                  <option value="">Select user</option>
+                  <option value="">{{ 'STAFF.SELECT_USER' | translate }}</option>
                   @for (u of users(); track u.id) {
                     <option [value]="u.email">
                       {{ u.firstName }} {{ u.lastName }} ({{ u.email }})
@@ -236,7 +252,7 @@
                 </select>
               </div>
               <div class="field">
-                <label for="sHospital">Hospital *</label>
+                <label for="sHospital">{{ 'ENCOUNTERS.HOSPITAL' | translate }} *</label>
                 @if (hospitalLocked) {
                   <div class="locked-field">
                     <span class="material-symbols-outlined locked-icon">business</span>
@@ -250,7 +266,7 @@
                     name="hospitalName"
                     required
                   >
-                    <option value="">Select hospital</option>
+                    <option value="">{{ 'STAFF.SELECT_HOSPITAL' | translate }}</option>
                     @for (h of hospitals(); track h.id) {
                       <option [value]="h.name">{{ h.name }}</option>
                     }
@@ -261,18 +277,18 @@
 
             <div class="form-row">
               <div class="field">
-                <label for="sJobTitle">Job Title</label>
+                <label for="sJobTitle">{{ 'STAFF.JOB_TITLE' | translate }}</label>
                 <select id="sJobTitle" [(ngModel)]="form.jobTitle" name="jobTitle">
-                  <option value="">Select title</option>
+                  <option value="">{{ 'STAFF.SELECT_TITLE' | translate }}</option>
                   @for (jt of jobTitles; track jt) {
                     <option [value]="jt">{{ jt.replaceAll('_', ' ') }}</option>
                   }
                 </select>
               </div>
               <div class="field">
-                <label for="sEmployment">Employment Type</label>
+                <label for="sEmployment">{{ 'STAFF.EMPLOYMENT_TYPE' | translate }}</label>
                 <select id="sEmployment" [(ngModel)]="form.employmentType" name="employmentType">
-                  <option value="">Select type</option>
+                  <option value="">{{ 'STAFF.SELECT_TYPE' | translate }}</option>
                   @for (et of employmentTypes; track et) {
                     <option [value]="et">{{ et.replaceAll('_', ' ') }}</option>
                   }
@@ -282,10 +298,10 @@
 
             <div class="form-row">
               <div class="field">
-                <label for="sSpec">Specialization</label>
+                <label for="sSpec">{{ 'STAFF.SPECIALIZATION' | translate }}</label>
                 @if (needsSpecialization) {
                   <select id="sSpec" [(ngModel)]="form.specialization" name="specialization">
-                    <option value="">Select specialization…</option>
+                    <option value="">{{ 'STAFF.SELECT_SPECIALIZATION' | translate }}</option>
                     @for (sp of specializations; track sp) {
                       <option [value]="sp">{{ sp.replaceAll('_', ' ') }}</option>
                     }
@@ -293,12 +309,12 @@
                 } @else {
                   <div class="locked-field">
                     <span class="material-symbols-outlined">block</span>
-                    Not applicable for this role
+                    {{ 'STAFF.NOT_APPLICABLE' | translate }}
                   </div>
                 }
               </div>
               <div class="field">
-                <label for="sLicense">License Number</label>
+                <label for="sLicense">{{ 'STAFF.LICENSE_NUMBER' | translate }}</label>
                 @if (needsLicence) {
                   <input
                     id="sLicense"
@@ -310,7 +326,7 @@
                 } @else {
                   <div class="locked-field">
                     <span class="material-symbols-outlined">block</span>
-                    Not applicable for this role
+                    {{ 'STAFF.NOT_APPLICABLE' | translate }}
                   </div>
                 }
               </div>
@@ -318,17 +334,17 @@
 
             <div class="form-row">
               <div class="field">
-                <label for="sDept">Department</label>
+                <label for="sDept">{{ 'STAFF.DEPARTMENT' | translate }}</label>
                 <input
                   id="sDept"
                   type="text"
                   [(ngModel)]="form.departmentName"
                   name="departmentName"
-                  placeholder="Department name (optional)"
+                  [placeholder]="'STAFF.DEPARTMENT_PLACEHOLDER' | translate"
                 />
               </div>
               <div class="field">
-                <label for="sStartDate">Start Date *</label>
+                <label for="sStartDate">{{ 'STAFF.START_DATE' | translate }} *</label>
                 <input
                   id="sStartDate"
                   type="date"
@@ -340,16 +356,18 @@
             </div>
           </div>
           <div class="modal-actions">
-            <button type="button" class="btn-secondary" (click)="closeModal()">Cancel</button>
+            <button type="button" class="btn-secondary" (click)="closeModal()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
             <button type="submit" class="btn-primary" [disabled]="saving()">
               {{
                 saving()
                   ? editing()
-                    ? 'Saving...'
-                    : 'Registering...'
+                    ? ('COMMON.SAVING' | translate)
+                    : ('STAFF.REGISTERING' | translate)
                   : editing()
-                    ? 'Save Changes'
-                    : 'Register'
+                    ? ('COMMON.SAVE_CHANGES' | translate)
+                    : ('STAFF.REGISTER' | translate)
               }}
             </button>
           </div>
@@ -374,27 +392,29 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>Deactivate Staff</h2>
+          <h2>{{ 'STAFF.DEACTIVATE_STAFF' | translate }}</h2>
           <button class="modal-close" (click)="cancelDelete()">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
         <div class="modal-body">
           <p class="delete-warning">
-            Are you sure you want to deactivate
+            {{ 'STAFF.DEACTIVATE_CONFIRM' | translate }}
             <strong>{{ deletingStaff()?.name }}</strong
-            >? They will no longer be able to access the system.
+            >? {{ 'STAFF.DEACTIVATE_WARNING' | translate }}
           </p>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
           <button
             type="button"
             class="btn-danger"
             [disabled]="deleting()"
             (click)="executeDelete()"
           >
-            {{ deleting() ? 'Deactivating...' : 'Deactivate' }}
+            {{ deleting() ? ('STAFF.DEACTIVATING' | translate) : ('STAFF.DEACTIVATE' | translate) }}
           </button>
         </div>
       </dialog>

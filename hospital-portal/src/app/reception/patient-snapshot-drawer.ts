@@ -10,13 +10,14 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { ReceptionService, FrontDeskPatientSnapshot } from './reception.service';
 import { ToastService } from '../core/toast.service';
 
 @Component({
   selector: 'app-patient-snapshot-drawer',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './patient-snapshot-drawer.html',
   styleUrl: './patient-snapshot-drawer.scss',
 })

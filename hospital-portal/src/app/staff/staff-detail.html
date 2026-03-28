@@ -1,21 +1,21 @@
 <div class="page-container">
   <a class="back-link" routerLink="/staff">
     <span class="material-symbols-outlined">arrow_back</span>
-    Back to Staff
+    {{ 'STAFF.BACK_TO_STAFF' | translate }}
   </a>
 
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading staff member...</p>
+      <p>{{ 'STAFF.LOADING_MEMBER' | translate }}</p>
     </div>
   }
 
   @if (!loading() && !staff()) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">person_off</span>
-      <h3>Staff member not found</h3>
-      <p>The requested staff member could not be loaded.</p>
+      <h3>{{ 'STAFF.NOT_FOUND' | translate }}</h3>
+      <p>{{ 'STAFF.NOT_FOUND_DESC' | translate }}</p>
     </div>
   }
 
@@ -30,12 +30,12 @@
         <div class="header-meta">
           <span class="role-badge">{{ formatJobTitle(s.jobTitle) }}</span>
           <span class="status-badge" [class.active]="s.active" [class.inactive]="!s.active">
-            {{ s.active ? 'Active' : 'Inactive' }}
+            {{ s.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
           </span>
           @if (s.headOfDepartment) {
             <span class="hod-badge">
               <span class="material-symbols-outlined">star</span>
-              Head of Department
+              {{ 'STAFF.HEAD_OF_DEPARTMENT' | translate }}
             </span>
           }
         </div>
@@ -50,7 +50,7 @@
     <div class="tabs">
       <button class="tab" [class.active]="activeTab() === 'overview'" (click)="setTab('overview')">
         <span class="material-symbols-outlined">person</span>
-        Overview
+        {{ 'STAFF.OVERVIEW' | translate }}
       </button>
       <button
         class="tab"
@@ -58,7 +58,7 @@
         (click)="setTab('employment')"
       >
         <span class="material-symbols-outlined">work</span>
-        Employment
+        {{ 'STAFF.EMPLOYMENT' | translate }}
       </button>
       <button
         class="tab"
@@ -66,11 +66,11 @@
         (click)="setTab('department')"
       >
         <span class="material-symbols-outlined">domain</span>
-        Department
+        {{ 'STAFF.DEPARTMENT' | translate }}
       </button>
       <button class="tab" [class.active]="activeTab() === 'schedule'" (click)="setTab('schedule')">
         <span class="material-symbols-outlined">calendar_month</span>
-        Schedule
+        {{ 'STAFF.SCHEDULE' | translate }}
       </button>
     </div>
 
@@ -80,27 +80,27 @@
         <div class="info-card">
           <h3>
             <span class="material-symbols-outlined">badge</span>
-            Personal Information
+            {{ 'STAFF.PERSONAL_INFO' | translate }}
           </h3>
           <div class="info-rows">
             <div class="info-row">
-              <span class="label">Full Name</span>
+              <span class="label">{{ 'STAFF.FULL_NAME' | translate }}</span>
               <span class="value">{{ s.name }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Username</span>
+              <span class="label">{{ 'STAFF.USERNAME' | translate }}</span>
               <span class="value">{{ s.username }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Email</span>
+              <span class="label">{{ 'PATIENTS.EMAIL' | translate }}</span>
               <span class="value">{{ s.email }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Phone</span>
+              <span class="label">{{ 'PATIENTS.PHONE' | translate }}</span>
               <span class="value">{{ s.phoneNumber ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Role</span>
+              <span class="label">{{ 'STAFF.ROLE' | translate }}</span>
               <span class="value">{{ s.roleName ?? '—' }}</span>
             </div>
           </div>
@@ -109,27 +109,27 @@
         <div class="info-card">
           <h3>
             <span class="material-symbols-outlined">local_hospital</span>
-            Hospital Information
+            {{ 'STAFF.HOSPITAL_INFO' | translate }}
           </h3>
           <div class="info-rows">
             <div class="info-row">
-              <span class="label">Hospital</span>
+              <span class="label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span>
               <span class="value">{{ s.hospitalName ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Hospital Email</span>
+              <span class="label">{{ 'STAFF.HOSPITAL_EMAIL' | translate }}</span>
               <span class="value">{{ s.hospitalEmail ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Status</span>
+              <span class="label">{{ 'COMMON.STATUS' | translate }}</span>
               <span class="value">
                 <span class="inline-status" [class.active]="s.active">
-                  {{ s.active ? 'Active' : 'Inactive' }}
+                  {{ s.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
                 </span>
               </span>
             </div>
             <div class="info-row">
-              <span class="label">Member Since</span>
+              <span class="label">{{ 'STAFF.MEMBER_SINCE' | translate }}</span>
               <span class="value">{{ formatDate(s.createdAt) }}</span>
             </div>
           </div>
@@ -143,23 +143,23 @@
         <div class="info-card">
           <h3>
             <span class="material-symbols-outlined">work</span>
-            Employment Details
+            {{ 'STAFF.EMPLOYMENT_DETAILS' | translate }}
           </h3>
           <div class="info-rows">
             <div class="info-row">
-              <span class="label">Job Title</span>
+              <span class="label">{{ 'STAFF.JOB_TITLE' | translate }}</span>
               <span class="value">{{ formatJobTitle(s.jobTitle) }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Employment Type</span>
+              <span class="label">{{ 'STAFF.EMPLOYMENT_TYPE' | translate }}</span>
               <span class="value">{{ formatEmploymentType(s.employmentType) }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Specialization</span>
+              <span class="label">{{ 'STAFF.SPECIALIZATION' | translate }}</span>
               <span class="value">{{ s.specialization ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">License Number</span>
+              <span class="label">{{ 'STAFF.LICENSE_NUMBER' | translate }}</span>
               <span class="value">{{ s.licenseNumber ?? '—' }}</span>
             </div>
           </div>
@@ -168,23 +168,23 @@
         <div class="info-card">
           <h3>
             <span class="material-symbols-outlined">calendar_month</span>
-            Timeline
+            {{ 'STAFF.TIMELINE' | translate }}
           </h3>
           <div class="info-rows">
             <div class="info-row">
-              <span class="label">Start Date</span>
+              <span class="label">{{ 'STAFF.START_DATE' | translate }}</span>
               <span class="value">{{ formatDate(s.startDate) }}</span>
             </div>
             <div class="info-row">
-              <span class="label">End Date</span>
+              <span class="label">{{ 'STAFF.END_DATE' | translate }}</span>
               <span class="value">{{ formatDate(s.endDate) }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Created At</span>
+              <span class="label">{{ 'STAFF.CREATED_AT' | translate }}</span>
               <span class="value">{{ formatDate(s.createdAt) }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Last Updated</span>
+              <span class="label">{{ 'STAFF.LAST_UPDATED' | translate }}</span>
               <span class="value">{{ formatDate(s.updatedAt) }}</span>
             </div>
           </div>
@@ -198,41 +198,41 @@
         <div class="info-card full-width">
           <h3>
             <span class="material-symbols-outlined">domain</span>
-            Department Information
+            {{ 'STAFF.DEPARTMENT_INFO' | translate }}
           </h3>
           @if (s.departmentId) {
             <div class="info-rows">
               <div class="info-row">
-                <span class="label">Department</span>
+                <span class="label">{{ 'STAFF.DEPARTMENT' | translate }}</span>
                 <span class="value">{{ s.departmentName ?? '—' }}</span>
               </div>
               <div class="info-row">
-                <span class="label">Department Email</span>
+                <span class="label">{{ 'STAFF.DEPARTMENT_EMAIL' | translate }}</span>
                 <span class="value">{{ s.departmentEmail ?? '—' }}</span>
               </div>
               <div class="info-row">
-                <span class="label">Department Phone</span>
+                <span class="label">{{ 'STAFF.DEPARTMENT_PHONE' | translate }}</span>
                 <span class="value">{{ s.departmentPhoneNumber ?? '—' }}</span>
               </div>
               <div class="info-row">
-                <span class="label">Head of Department</span>
+                <span class="label">{{ 'STAFF.HEAD_OF_DEPARTMENT' | translate }}</span>
                 <span class="value">
                   @if (s.headOfDepartment) {
-                    <span class="inline-status active">Yes</span>
+                    <span class="inline-status active">{{ 'COMMON.YES' | translate }}</span>
                   } @else {
-                    No
+                    {{ 'COMMON.NO' | translate }}
                   }
                 </span>
               </div>
             </div>
             <a class="dept-link" [routerLink]="['/departments', s.departmentId]">
               <span class="material-symbols-outlined">open_in_new</span>
-              View Department Details
+              {{ 'STAFF.VIEW_DEPARTMENT_DETAILS' | translate }}
             </a>
           } @else {
             <div class="no-dept">
               <span class="material-symbols-outlined">info</span>
-              This staff member is not assigned to any department.
+              {{ 'STAFF.NO_DEPARTMENT_ASSIGNED' | translate }}
             </div>
           }
         </div>
@@ -246,13 +246,17 @@
         <div class="schedule-header">
           <h3>
             <span class="material-symbols-outlined">event_note</span>
-            Weekly Shifts
+            {{ 'STAFF.WEEKLY_SHIFTS' | translate }}
           </h3>
           <div class="week-nav">
             <button class="week-btn" (click)="changeWeek(-1)" aria-label="Previous week">
               <span class="material-symbols-outlined">chevron_left</span>
             </button>
-            <button class="week-label" (click)="goToCurrentWeek()" title="Go to current week">
+            <button
+              class="week-label"
+              (click)="goToCurrentWeek()"
+              [title]="'STAFF.GO_TO_CURRENT_WEEK' | translate"
+            >
               {{ getWeekLabel() }}
             </button>
             <button class="week-btn" (click)="changeWeek(1)" aria-label="Next week">
@@ -264,7 +268,7 @@
         @if (shiftsLoading()) {
           <div class="schedule-loading">
             <div class="spinner-sm"></div>
-            <span>Loading shifts...</span>
+            <span>{{ 'STAFF.LOADING_SHIFTS' | translate }}</span>
           </div>
         } @else {
           <div class="week-grid">
@@ -318,19 +322,19 @@
         <div class="schedule-header">
           <h3>
             <span class="material-symbols-outlined">event_busy</span>
-            Leave Requests
+            {{ 'STAFF.LEAVE_REQUESTS' | translate }}
           </h3>
         </div>
 
         @if (leavesLoading()) {
           <div class="schedule-loading">
             <div class="spinner-sm"></div>
-            <span>Loading leave requests...</span>
+            <span>{{ 'STAFF.LOADING_LEAVE' | translate }}</span>
           </div>
         } @else if (leaves().length === 0) {
           <div class="empty-schedule">
             <span class="material-symbols-outlined">event_available</span>
-            <p>No leave requests on record.</p>
+            <p>{{ 'STAFF.NO_LEAVE_REQUESTS' | translate }}</p>
           </div>
         } @else {
           <div class="leave-list">
@@ -370,13 +374,15 @@
                   @if (leave.requiresCoverage) {
                     <span class="coverage-badge">
                       <span class="material-symbols-outlined">swap_horiz</span>
-                      Coverage Required
+                      {{ 'STAFF.COVERAGE_REQUIRED' | translate }}
                     </span>
                   }
                 </div>
                 <div class="leave-meta">
                   @if (leave.reviewedByName) {
-                    <span class="reviewed-by">Reviewed by {{ leave.reviewedByName }}</span>
+                    <span class="reviewed-by"
+                      >{{ 'STAFF.REVIEWED_BY' | translate }} {{ leave.reviewedByName }}</span
+                    >
                   }
                   @if (leave.managerNote) {
                     <span class="manager-note">{{ leave.managerNote }}</span>

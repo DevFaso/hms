@@ -5,6 +5,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { AuthService } from './auth/auth.service';
 import { RoleContextService } from './core/role-context.service';
+import { AnalyticsService } from './core/services/analytics.service';
 import { environment } from '../environments/environment';
 
 @Component({
@@ -28,10 +29,12 @@ export class AppComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly http = inject(HttpClient);
   private readonly translate = inject(TranslateService);
+  private readonly analytics = inject(AnalyticsService);
 
   ngOnInit(): void {
     this.translate.setDefaultLang('fr');
     this.translate.use(localStorage.getItem('lang') || 'fr');
+    this.analytics.init();
 
     // Bootstrap the XSRF-TOKEN cookie from the server so that the custom
     // CSRF interceptor can attach X-XSRF-TOKEN on subsequent mutating requests.

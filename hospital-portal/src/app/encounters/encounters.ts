@@ -15,11 +15,12 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-encounters',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './encounters.html',
   styleUrl: './encounters.scss',
 })

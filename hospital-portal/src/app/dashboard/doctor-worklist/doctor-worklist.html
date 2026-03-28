@@ -2,10 +2,10 @@
   <div class="card-head">
     <div class="card-title-group">
       <span class="material-symbols-outlined card-title-icon">assignment_ind</span>
-      <h2 class="card-title">My Worklist</h2>
+      <h2 class="card-title">{{ 'DASHBOARD.MY_WORKLIST' | translate }}</h2>
       <span class="count-badge">{{ filteredItems().length }}</span>
     </div>
-    <a routerLink="/encounters" class="card-link">View All</a>
+    <a routerLink="/encounters" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
   </div>
 
   <!-- Tab Bar -->
@@ -37,11 +37,11 @@
       [value]="urgencyFilter()"
       (change)="setUrgencyFilter($any($event.target).value)"
     >
-      <option value="">All Urgencies</option>
-      <option value="EMERGENT">Emergent</option>
-      <option value="URGENT">Urgent</option>
-      <option value="ROUTINE">Routine</option>
-      <option value="LOW">Low</option>
+      <option value="">{{ 'DASHBOARD.ALL_URGENCIES' | translate }}</option>
+      <option value="EMERGENT">{{ 'DASHBOARD.EMERGENT' | translate }}</option>
+      <option value="URGENT">{{ 'DASHBOARD.URGENT' | translate }}</option>
+      <option value="ROUTINE">{{ 'DASHBOARD.ROUTINE' | translate }}</option>
+      <option value="LOW">{{ 'DASHBOARD.LOW' | translate }}</option>
     </select>
     @if (uniqueLocations().length > 0) {
       <select
@@ -49,7 +49,7 @@
         [value]="locationFilter()"
         (change)="setLocationFilter($any($event.target).value)"
       >
-        <option value="">All Locations</option>
+        <option value="">{{ 'DASHBOARD.ALL_LOCATIONS' | translate }}</option>
         @for (loc of uniqueLocations(); track loc) {
           <option [value]="loc">{{ loc }}</option>
         }
@@ -64,7 +64,7 @@
   @if (filteredItems().length === 0) {
     <div class="wl-empty">
       <span class="material-symbols-outlined">checklist</span>
-      <p>No patients in this view</p>
+      <p>{{ 'DASHBOARD.NO_PATIENTS_IN_VIEW' | translate }}</p>
     </div>
   } @else {
     <div class="wl-table">
@@ -117,7 +117,7 @@
             <a
               [routerLink]="['/patients', item.patientId]"
               class="wl-action-btn"
-              title="Open Chart"
+              [title]="'DASHBOARD.OPEN_CHART' | translate"
               (click)="$event.stopPropagation()"
             >
               <span class="material-symbols-outlined">open_in_new</span>
@@ -126,7 +126,7 @@
               <a
                 [routerLink]="['/encounters', item.encounterId]"
                 class="wl-action-btn"
-                title="Open Encounter"
+                [title]="'DASHBOARD.OPEN_ENCOUNTER' | translate"
                 (click)="$event.stopPropagation()"
               >
                 <span class="material-symbols-outlined">stethoscope</span>
@@ -136,7 +136,7 @@
               [routerLink]="['/lab/new']"
               [queryParams]="{ patientId: item.patientId }"
               class="wl-action-btn"
-              title="Order Labs"
+              [title]="'DASHBOARD.ORDER_LABS' | translate"
               (click)="$event.stopPropagation()"
             >
               <span class="material-symbols-outlined">science</span>
@@ -145,7 +145,7 @@
               [routerLink]="['/prescriptions']"
               [queryParams]="{ new: '1', patientId: item.patientId }"
               class="wl-action-btn"
-              title="Write Rx"
+              [title]="'DASHBOARD.WRITE_RX' | translate"
               (click)="$event.stopPropagation()"
             >
               <span class="material-symbols-outlined">medication</span>

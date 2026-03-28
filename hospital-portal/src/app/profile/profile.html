@@ -46,7 +46,11 @@
                 <span class="material-symbols-outlined spinning">progress_activity</span>
               </div>
             }
-            <label class="avatar-edit-btn" for="avatarInput" title="Change photo">
+            <label
+              class="avatar-edit-btn"
+              for="avatarInput"
+              [title]="'PROFILE.CHANGE_PHOTO' | translate"
+            >
               <span class="material-symbols-outlined">photo_camera</span>
             </label>
             <input
@@ -63,7 +67,8 @@
               (click)="removeAvatar()"
               [disabled]="uploadingAvatar()"
             >
-              <span class="material-symbols-outlined">delete</span> Remove Photo
+              <span class="material-symbols-outlined">delete</span>
+              {{ 'PROFILE.REMOVE_PHOTO' | translate }}
             </button>
           }
         </div>
@@ -92,7 +97,7 @@
             }
             <span class="meta-item">
               <span class="material-symbols-outlined">calendar_today</span>
-              Joined {{ memberSince() }}
+              {{ 'PROFILE.JOINED' | translate }} {{ memberSince() }}
             </span>
           </div>
         </div>
@@ -101,15 +106,15 @@
         <div class="header-stats">
           <div class="stat-item">
             <span class="stat-value">{{ allRoles().length }}</span>
-            <span class="stat-label">Roles</span>
+            <span class="stat-label">{{ 'PROFILE.ROLES' | translate }}</span>
           </div>
           <div class="stat-item">
             <span class="stat-value">{{ assignments().length }}</span>
-            <span class="stat-label">Assignments</span>
+            <span class="stat-label">{{ 'PROFILE.ASSIGNMENTS' | translate }}</span>
           </div>
           <div class="stat-item">
             <span class="stat-value">{{ securityScore() }}%</span>
-            <span class="stat-label">Security</span>
+            <span class="stat-label">{{ 'PROFILE.SECURITY' | translate }}</span>
           </div>
         </div>
       </div>
@@ -123,11 +128,11 @@
         (click)="switchTab('overview')"
       >
         <span class="material-symbols-outlined">person</span>
-        <span class="tab-label">Overview</span>
+        <span class="tab-label">{{ 'PROFILE.OVERVIEW' | translate }}</span>
       </button>
       <button class="tab-btn" [class.active]="activeTab() === 'edit'" (click)="switchTab('edit')">
         <span class="material-symbols-outlined">edit</span>
-        <span class="tab-label">Edit Profile</span>
+        <span class="tab-label">{{ 'PROFILE.EDIT_PROFILE' | translate }}</span>
       </button>
       <button
         class="tab-btn"
@@ -135,7 +140,7 @@
         (click)="switchTab('security')"
       >
         <span class="material-symbols-outlined">shield</span>
-        <span class="tab-label">Security</span>
+        <span class="tab-label">{{ 'PROFILE.SECURITY' | translate }}</span>
       </button>
       <button
         class="tab-btn"
@@ -143,7 +148,7 @@
         (click)="switchTab('activity')"
       >
         <span class="material-symbols-outlined">history</span>
-        <span class="tab-label">Activity</span>
+        <span class="tab-label">{{ 'PROFILE.ACTIVITY' | translate }}</span>
       </button>
     </div>
 
@@ -158,33 +163,33 @@
           <div class="card">
             <div class="card-header">
               <span class="material-symbols-outlined card-icon">badge</span>
-              <h3>Personal Information</h3>
+              <h3>{{ 'PROFILE.PERSONAL_INFO' | translate }}</h3>
             </div>
             <div class="card-body">
               <div class="info-grid">
                 <div class="info-item">
-                  <span class="info-label">Full Name</span>
+                  <span class="info-label">{{ 'PROFILE.FULL_NAME' | translate }}</span>
                   <span class="info-value">{{ fullName() }}</span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">Username</span>
+                  <span class="info-label">{{ 'PROFILE.USERNAME' | translate }}</span>
                   <span class="info-value">{{ user()!.username }}</span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">Email</span>
+                  <span class="info-label">{{ 'PROFILE.EMAIL' | translate }}</span>
                   <span class="info-value">{{ user()!.email }}</span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">Phone</span>
+                  <span class="info-label">{{ 'PROFILE.PHONE' | translate }}</span>
                   <span class="info-value">{{ user()!.phoneNumber || '—' }}</span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">Role</span>
+                  <span class="info-label">{{ 'PROFILE.ROLE' | translate }}</span>
                   <span class="info-value profile-type-badge">{{ sessionProfileType() }}</span>
                 </div>
                 @if (showLicenseNumber()) {
                   <div class="info-item">
-                    <span class="info-label">License Number</span>
+                    <span class="info-label">{{ 'PROFILE.LICENSE_NUMBER' | translate }}</span>
                     <span class="info-value">{{ user()!.licenseNumber }}</span>
                   </div>
                 }
@@ -196,37 +201,41 @@
           <div class="card">
             <div class="card-header">
               <span class="material-symbols-outlined card-icon">account_circle</span>
-              <h3>Account Details</h3>
+              <h3>{{ 'PROFILE.ACCOUNT_DETAILS' | translate }}</h3>
             </div>
             <div class="card-body">
               <div class="info-grid">
                 <div class="info-item">
-                  <span class="info-label">Account Status</span>
+                  <span class="info-label">{{ 'PROFILE.ACCOUNT_STATUS' | translate }}</span>
                   <span class="info-value">
                     <span
                       class="status-dot"
                       [class.active]="user()!.active"
                       [class.inactive]="!user()!.active"
                     ></span>
-                    {{ user()!.active ? 'Active' : 'Inactive' }}
+                    {{
+                      user()!.active
+                        ? ('COMMON.ACTIVE' | translate)
+                        : ('COMMON.INACTIVE' | translate)
+                    }}
                   </span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">Member Since</span>
+                  <span class="info-label">{{ 'PROFILE.MEMBER_SINCE' | translate }}</span>
                   <span class="info-value">{{ memberSince() }}</span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">Account Age</span>
+                  <span class="info-label">{{ 'PROFILE.ACCOUNT_AGE' | translate }}</span>
                   <span class="info-value">{{ accountAge() }}</span>
                 </div>
                 <div class="info-item">
-                  <span class="info-label">Last Login</span>
+                  <span class="info-label">{{ 'PROFILE.LAST_LOGIN' | translate }}</span>
                   <span class="info-value">{{ lastLogin() }}</span>
                 </div>
                 @if (isSuperAdmin()) {
                   <div class="info-item">
-                    <span class="info-label">User ID</span>
-                    <span class="info-value id-value" title="Internal system ID">{{
+                    <span class="info-label">{{ 'PROFILE.USER_ID' | translate }}</span>
+                    <span class="info-value id-value" [title]="'PROFILE.INTERNAL_ID' | translate">{{
                       user()!.id
                     }}</span>
                   </div>
@@ -240,7 +249,7 @@
             <div class="card full-width">
               <div class="card-header">
                 <span class="material-symbols-outlined card-icon">assignment_ind</span>
-                <h3>Role Assignments</h3>
+                <h3>{{ 'PROFILE.ROLE_ASSIGNMENTS' | translate }}</h3>
               </div>
               <div class="card-body">
                 <div class="assignments-list">
@@ -261,7 +270,9 @@
                         [class.active]="a.active"
                         [class.inactive]="!a.active"
                       >
-                        {{ a.active ? 'Active' : 'Inactive' }}
+                        {{
+                          a.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
+                        }}
                       </span>
                     </div>
                   }
@@ -274,9 +285,9 @@
           <div class="card full-width">
             <div class="card-header">
               <span class="material-symbols-outlined card-icon">security</span>
-              <h3>Security Overview</h3>
+              <h3>{{ 'PROFILE.SECURITY_OVERVIEW' | translate }}</h3>
               <button class="card-action-btn" (click)="switchTab('security')">
-                <span>View Details</span>
+                <span>{{ 'PROFILE.VIEW_DETAILS' | translate }}</span>
                 <span class="material-symbols-outlined">arrow_forward</span>
               </button>
             </div>
@@ -314,7 +325,7 @@
                           credentials()?.hasPrimaryMfa ? 'check_circle' : 'radio_button_unchecked'
                         }}
                       </span>
-                      <span>Multi-Factor Authentication</span>
+                      <span>{{ 'PROFILE.MFA' | translate }}</span>
                     </div>
                     <div
                       class="check-item"
@@ -327,7 +338,7 @@
                             : 'radio_button_unchecked'
                         }}
                       </span>
-                      <span>Recovery Contact</span>
+                      <span>{{ 'PROFILE.RECOVERY_CONTACT' | translate }}</span>
                     </div>
                     <div class="check-item" [class.checked]="!credentials()?.forcePasswordChange">
                       <span class="material-symbols-outlined">
@@ -337,7 +348,7 @@
                             : 'radio_button_unchecked'
                         }}
                       </span>
-                      <span>Password Up-to-Date</span>
+                      <span>{{ 'PROFILE.PASSWORD_UP_TO_DATE' | translate }}</span>
                     </div>
                   </div>
                 </div>
@@ -355,32 +366,32 @@
           <div class="card">
             <div class="card-header">
               <span class="material-symbols-outlined card-icon">edit</span>
-              <h3>Edit Personal Information</h3>
+              <h3>{{ 'PROFILE.EDIT_PERSONAL_INFO' | translate }}</h3>
             </div>
             <div class="card-body">
               <form class="edit-form" (ngSubmit)="saveProfile()">
                 <div class="form-row">
                   <div class="form-group">
-                    <label for="editFirstName">First Name</label>
+                    <label for="editFirstName">{{ 'PROFILE.FIRST_NAME' | translate }}</label>
                     <input
                       type="text"
                       id="editFirstName"
                       [ngModel]="editForm().firstName"
                       (ngModelChange)="updateField('firstName', $event)"
                       name="firstName"
-                      placeholder="Enter first name"
+                      [placeholder]="'PROFILE.ENTER_FIRST_NAME' | translate"
                       required
                     />
                   </div>
                   <div class="form-group">
-                    <label for="editLastName">Last Name</label>
+                    <label for="editLastName">{{ 'PROFILE.LAST_NAME' | translate }}</label>
                     <input
                       type="text"
                       id="editLastName"
                       [ngModel]="editForm().lastName"
                       (ngModelChange)="updateField('lastName', $event)"
                       name="lastName"
-                      placeholder="Enter last name"
+                      [placeholder]="'PROFILE.ENTER_LAST_NAME' | translate"
                       required
                     />
                   </div>
@@ -388,49 +399,49 @@
 
                 <div class="form-row">
                   <div class="form-group">
-                    <label for="editEmail">Email Address</label>
+                    <label for="editEmail">{{ 'PROFILE.EMAIL_ADDRESS' | translate }}</label>
                     <input
                       type="email"
                       id="editEmail"
                       [ngModel]="editForm().email"
                       (ngModelChange)="updateField('email', $event)"
                       name="email"
-                      placeholder="Enter email"
+                      [placeholder]="'PROFILE.ENTER_EMAIL' | translate"
                       required
                     />
                   </div>
                   <div class="form-group">
-                    <label for="editPhone">Phone Number</label>
+                    <label for="editPhone">{{ 'PROFILE.PHONE_NUMBER' | translate }}</label>
                     <input
                       type="tel"
                       id="editPhone"
                       [ngModel]="editForm().phoneNumber"
                       (ngModelChange)="updateField('phoneNumber', $event)"
                       name="phoneNumber"
-                      placeholder="Enter phone number"
+                      [placeholder]="'PROFILE.ENTER_PHONE' | translate"
                     />
                   </div>
                 </div>
 
                 <div class="form-row">
                   <div class="form-group">
-                    <label for="editUsername">Username</label>
+                    <label for="editUsername">{{ 'PROFILE.USERNAME' | translate }}</label>
                     <input
                       type="text"
                       id="editUsername"
                       [ngModel]="editForm().username"
                       (ngModelChange)="updateField('username', $event)"
                       name="username"
-                      placeholder="Enter username"
+                      [placeholder]="'PROFILE.ENTER_USERNAME' | translate"
                       disabled
                     />
-                    <span class="form-hint">Username cannot be changed</span>
+                    <span class="form-hint">{{ 'PROFILE.USERNAME_HINT' | translate }}</span>
                   </div>
                 </div>
 
                 <div class="form-actions">
                   <button type="button" class="btn btn-secondary" (click)="cancelEdit()">
-                    Cancel
+                    {{ 'COMMON.CANCEL' | translate }}
                   </button>
                   <button
                     type="submit"
@@ -439,10 +450,10 @@
                   >
                     @if (saving()) {
                       <span class="material-symbols-outlined spinning">progress_activity</span>
-                      Saving...
+                      {{ 'COMMON.SAVING' | translate }}
                     } @else {
                       <span class="material-symbols-outlined">save</span>
-                      Save Changes
+                      {{ 'PROFILE.SAVE_CHANGES' | translate }}
                     }
                   </button>
                 </div>
@@ -461,22 +472,24 @@
           <div class="card">
             <div class="card-header">
               <span class="material-symbols-outlined card-icon">lock</span>
-              <h3>Password</h3>
+              <h3>{{ 'PROFILE.PASSWORD' | translate }}</h3>
             </div>
             <div class="card-body">
               <div class="security-action-row">
                 <div class="security-action-info">
-                  <p class="security-action-title">Change Password</p>
+                  <p class="security-action-title">{{ 'PROFILE.CHANGE_PASSWORD' | translate }}</p>
                   <p class="security-action-desc">
-                    Send a password reset link to your registered email address.
+                    {{ 'PROFILE.SEND_RESET_DESC' | translate }}
                     @if (credentials()?.forcePasswordChange) {
-                      <span class="force-change-badge">⚠ Password change required</span>
+                      <span class="force-change-badge"
+                        >⚠ {{ 'PROFILE.PASSWORD_CHANGE_REQUIRED' | translate }}</span
+                      >
                     }
                   </p>
                 </div>
                 <button class="btn btn-secondary" (click)="requestPasswordReset()">
                   <span class="material-symbols-outlined">mail</span>
-                  Send Reset Link
+                  {{ 'PROFILE.SEND_RESET_LINK' | translate }}
                 </button>
               </div>
             </div>
@@ -486,7 +499,7 @@
           <div class="card">
             <div class="card-header">
               <span class="material-symbols-outlined card-icon">phonelink_lock</span>
-              <h3>Multi-Factor Authentication</h3>
+              <h3>{{ 'PROFILE.MFA' | translate }}</h3>
             </div>
             <div class="card-body">
               @if (credentials()?.mfaEnrollments?.length) {
@@ -504,12 +517,14 @@
                       </div>
                       <div class="mfa-badges">
                         @if (mfa.verified) {
-                          <span class="badge-verified">Verified</span>
+                          <span class="badge-verified">{{ 'PROFILE.VERIFIED' | translate }}</span>
                         } @else {
-                          <span class="badge-unverified">Unverified</span>
+                          <span class="badge-unverified">{{
+                            'PROFILE.UNVERIFIED' | translate
+                          }}</span>
                         }
                         @if (mfa.primary) {
-                          <span class="badge-primary">Primary</span>
+                          <span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
                         }
                       </div>
                     </div>
@@ -518,10 +533,8 @@
               } @else {
                 <div class="empty-security-state">
                   <span class="material-symbols-outlined">phonelink_lock</span>
-                  <p>No MFA methods configured</p>
-                  <span class="hint"
-                    >Add multi-factor authentication to improve account security.</span
-                  >
+                  <p>{{ 'PROFILE.NO_MFA' | translate }}</p>
+                  <span class="hint">{{ 'PROFILE.ADD_MFA_HINT' | translate }}</span>
                 </div>
               }
             </div>
@@ -531,7 +544,7 @@
           <div class="card">
             <div class="card-header">
               <span class="material-symbols-outlined card-icon">contact_phone</span>
-              <h3>Recovery Contacts</h3>
+              <h3>{{ 'PROFILE.RECOVERY_CONTACTS' | translate }}</h3>
             </div>
             <div class="card-body">
               @if (credentials()?.recoveryContacts?.length) {
@@ -547,12 +560,14 @@
                       </div>
                       <div class="recovery-badges">
                         @if (rc.verified) {
-                          <span class="badge-verified">Verified</span>
+                          <span class="badge-verified">{{ 'PROFILE.VERIFIED' | translate }}</span>
                         } @else {
-                          <span class="badge-unverified">Unverified</span>
+                          <span class="badge-unverified">{{
+                            'PROFILE.UNVERIFIED' | translate
+                          }}</span>
                         }
                         @if (rc.primary) {
-                          <span class="badge-primary">Primary</span>
+                          <span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
                         }
                       </div>
                     </div>
@@ -561,10 +576,8 @@
               } @else {
                 <div class="empty-security-state">
                   <span class="material-symbols-outlined">contact_phone</span>
-                  <p>No recovery contacts configured</p>
-                  <span class="hint"
-                    >Add recovery contacts to regain access if you lose your credentials.</span
-                  >
+                  <p>{{ 'PROFILE.NO_RECOVERY_CONTACTS' | translate }}</p>
+                  <span class="hint">{{ 'PROFILE.ADD_RECOVERY_HINT' | translate }}</span>
                 </div>
               }
             </div>
@@ -575,7 +588,7 @@
             <div class="card">
               <div class="card-header">
                 <span class="material-symbols-outlined card-icon">health_and_safety</span>
-                <h3>Credential Health Summary</h3>
+                <h3>{{ 'PROFILE.CREDENTIAL_HEALTH' | translate }}</h3>
               </div>
               <div class="card-body">
                 <div class="health-grid">
@@ -590,9 +603,13 @@
                       </span>
                     </span>
                     <div>
-                      <p class="health-title">Password Status</p>
+                      <p class="health-title">{{ 'PROFILE.PASSWORD_STATUS' | translate }}</p>
                       <p class="health-value">
-                        {{ credentials()!.forcePasswordChange ? 'Change Required' : 'Up to Date' }}
+                        {{
+                          credentials()!.forcePasswordChange
+                            ? ('PROFILE.CHANGE_REQUIRED' | translate)
+                            : ('PROFILE.UP_TO_DATE' | translate)
+                        }}
                       </p>
                     </div>
                   </div>
@@ -607,7 +624,7 @@
                       </span>
                     </span>
                     <div>
-                      <p class="health-title">MFA Status</p>
+                      <p class="health-title">{{ 'PROFILE.MFA_STATUS' | translate }}</p>
                       <p class="health-value">
                         {{ credentials()!.mfaEnrolledCount }} enrolled,
                         {{ credentials()!.verifiedMfaCount }} verified
@@ -625,7 +642,7 @@
                       </span>
                     </span>
                     <div>
-                      <p class="health-title">Recovery Contacts</p>
+                      <p class="health-title">{{ 'PROFILE.RECOVERY_CONTACTS' | translate }}</p>
                       <p class="health-value">
                         {{ credentials()!.recoveryContactCount }} configured,
                         {{ credentials()!.verifiedRecoveryContacts }} verified
@@ -641,7 +658,7 @@
                       <span class="material-symbols-outlined">schedule</span>
                     </span>
                     <div>
-                      <p class="health-title">Last Login</p>
+                      <p class="health-title">{{ 'PROFILE.LAST_LOGIN' | translate }}</p>
                       <p class="health-value">{{ lastLogin() }}</p>
                     </div>
                   </div>
@@ -660,19 +677,19 @@
           <div class="card">
             <div class="card-header">
               <span class="material-symbols-outlined card-icon">history</span>
-              <h3>Recent Activity</h3>
+              <h3>{{ 'PROFILE.RECENT_ACTIVITY' | translate }}</h3>
             </div>
             <div class="card-body">
               @if (activityLoading()) {
                 <div class="activity-loading">
                   <span class="material-symbols-outlined spinning">progress_activity</span>
-                  <p>Loading activity...</p>
+                  <p>{{ 'PROFILE.LOADING_ACTIVITY' | translate }}</p>
                 </div>
               } @else if (activityLog().length === 0) {
                 <div class="activity-empty">
                   <span class="material-symbols-outlined">history_toggle_off</span>
-                  <p>No recent activity</p>
-                  <span class="hint">Your recent actions will appear here.</span>
+                  <p>{{ 'PROFILE.NO_ACTIVITY' | translate }}</p>
+                  <span class="hint">{{ 'PROFILE.ACTIVITY_HINT' | translate }}</span>
                 </div>
               } @else {
                 <div class="activity-timeline">

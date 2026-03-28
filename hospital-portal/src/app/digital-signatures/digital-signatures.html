@@ -4,14 +4,16 @@
     <div class="header-left">
       <span class="material-icons header-icon">verified</span>
       <div>
-        <h1>Digital Signatures</h1>
-        <p class="subtitle">Manage clinical document signatures and audit trails</p>
+        <h1>{{ 'SIGNATURES.TITLE' | translate }}</h1>
+        <p class="subtitle">{{ 'SIGNATURES.SUBTITLE' | translate }}</p>
       </div>
     </div>
     <div class="header-actions">
       <div class="stat-pills">
-        <span class="pill signed">{{ signedCount() }} Signed</span>
-        <span class="pill revoked">{{ revokedCount() }} Revoked</span>
+        <span class="pill signed">{{ signedCount() }} {{ 'SIGNATURES.SIGNED' | translate }}</span>
+        <span class="pill revoked"
+          >{{ revokedCount() }} {{ 'SIGNATURES.REVOKED' | translate }}</span
+        >
       </div>
     </div>
   </div>
@@ -22,19 +24,19 @@
       <span class="material-icons search-icon">search</span>
       <input
         type="text"
-        placeholder="Search by signer, hospital, or report type..."
+        [placeholder]="'SIGNATURES.SEARCH_PLACEHOLDER' | translate"
         [ngModel]="search()"
         (ngModelChange)="search.set($event)"
       />
     </div>
     <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
-      <option value="ALL">All Statuses</option>
+      <option value="ALL">{{ 'SIGNATURES.ALL_STATUSES' | translate }}</option>
       @for (s of statuses; track s) {
         <option [value]="s">{{ s }}</option>
       }
     </select>
     <select [ngModel]="typeFilter()" (ngModelChange)="typeFilter.set($event)">
-      <option value="ALL">All Report Types</option>
+      <option value="ALL">{{ 'SIGNATURES.ALL_REPORT_TYPES' | translate }}</option>
       @for (t of reportTypes; track t) {
         <option [value]="t">{{ formatReportType(t) }}</option>
       }
@@ -45,7 +47,7 @@
   @if (loading()) {
     <div class="loading-state">
       <span class="material-icons spin">sync</span>
-      <p>Loading signatures...</p>
+      <p>{{ 'SIGNATURES.LOADING' | translate }}</p>
     </div>
   }
 
@@ -55,12 +57,12 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>Report Type</th>
-            <th>Signed By</th>
-            <th>Hospital</th>
-            <th>Date</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th>{{ 'SIGNATURES.REPORT_TYPE' | translate }}</th>
+            <th>{{ 'SIGNATURES.SIGNED_BY' | translate }}</th>
+            <th>{{ 'ENCOUNTERS.HOSPITAL' | translate }}</th>
+            <th>{{ 'SIGNATURES.DATE' | translate }}</th>
+            <th>{{ 'COMMON.STATUS' | translate }}</th>
+            <th>{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -79,7 +81,7 @@
                 <button
                   class="btn-icon"
                   (click)="openVerify(sig)"
-                  title="Verify"
+                  [title]="'SIGNATURES.VERIFY' | translate"
                   [disabled]="sig.status !== 'SIGNED'"
                 >
                   <span class="material-icons">verified_user</span>
@@ -87,7 +89,7 @@
                 <button
                   class="btn-icon danger"
                   (click)="openRevoke(sig)"
-                  title="Revoke"
+                  [title]="'SIGNATURES.REVOKE' | translate"
                   [disabled]="sig.status !== 'SIGNED'"
                 >
                   <span class="material-icons">block</span>
@@ -100,7 +102,7 @@
       @if (filteredSignatures().length === 0) {
         <div class="empty-state">
           <span class="material-icons">draw</span>
-          <p>No signatures found</p>
+          <p>{{ 'SIGNATURES.NO_SIGNATURES' | translate }}</p>
         </div>
       }
     </div>
@@ -123,54 +125,58 @@
         role="dialog"
       >
         <div class="drawer-header">
-          <h2>Signature Details</h2>
+          <h2>{{ 'SIGNATURES.DETAIL_TITLE' | translate }}</h2>
           <button class="btn-icon" (click)="closeDetail()">
             <span class="material-icons">close</span>
           </button>
         </div>
         <div class="drawer-body">
           <div class="detail-section">
-            <h3>General</h3>
+            <h3>{{ 'SIGNATURES.GENERAL' | translate }}</h3>
             <div class="detail-grid">
               <div class="detail-item">
-                <span class="detail-label">Report Type</span>
+                <span class="detail-label">{{ 'SIGNATURES.REPORT_TYPE' | translate }}</span>
                 <span>{{ formatReportType(selectedSignature()!.reportType) }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Status</span>
+                <span class="detail-label">{{ 'COMMON.STATUS' | translate }}</span>
                 <span class="badge" [class]="statusClass(selectedSignature()!.status)">{{
                   selectedSignature()!.status
                 }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Signed By</span>
+                <span class="detail-label">{{ 'SIGNATURES.SIGNED_BY' | translate }}</span>
                 <span>{{ selectedSignature()!.signedByName }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Hospital</span>
+                <span class="detail-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span>
                 <span>{{ selectedSignature()!.hospitalName }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Signed At</span>
+                <span class="detail-label">{{ 'SIGNATURES.SIGNED_AT' | translate }}</span>
                 <span>{{ formatDate(selectedSignature()!.signatureDateTime) }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Valid</span>
-                <span>{{ selectedSignature()!.isValid ? 'Yes' : 'No' }}</span>
+                <span class="detail-label">{{ 'SIGNATURES.VALID' | translate }}</span>
+                <span>{{
+                  selectedSignature()!.isValid
+                    ? ('COMMON.YES' | translate)
+                    : ('COMMON.NO' | translate)
+                }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Verifications</span>
+                <span class="detail-label">{{ 'SIGNATURES.VERIFICATIONS' | translate }}</span>
                 <span>{{ selectedSignature()!.verificationCount ?? 0 }}</span>
               </div>
               @if (selectedSignature()!.signatureNotes) {
                 <div class="detail-item full">
-                  <span class="detail-label">Notes</span>
+                  <span class="detail-label">{{ 'SIGNATURES.NOTES' | translate }}</span>
                   <span>{{ selectedSignature()!.signatureNotes }}</span>
                 </div>
               }
               @if (selectedSignature()!.revocationReason) {
                 <div class="detail-item full">
-                  <span class="detail-label">Revocation Reason</span>
+                  <span class="detail-label">{{ 'SIGNATURES.REVOCATION_REASON' | translate }}</span>
                   <span class="revocation-text">{{ selectedSignature()!.revocationReason }}</span>
                 </div>
               }
@@ -179,12 +185,14 @@
 
           <!-- Audit Trail -->
           <div class="detail-section">
-            <h3><span class="material-icons">history</span> Audit Trail</h3>
+            <h3>
+              <span class="material-icons">history</span> {{ 'SIGNATURES.AUDIT_TRAIL' | translate }}
+            </h3>
             @if (auditLoading()) {
-              <p class="muted">Loading audit trail...</p>
+              <p class="muted">{{ 'SIGNATURES.LOADING_AUDIT' | translate }}</p>
             }
             @if (!auditLoading() && auditTrail().length === 0) {
-              <p class="muted">No audit entries</p>
+              <p class="muted">{{ 'SIGNATURES.NO_AUDIT' | translate }}</p>
             }
             @for (entry of auditTrail(); track entry.performedAt) {
               <div class="audit-entry">
@@ -220,18 +228,18 @@
         role="dialog"
       >
         <div class="modal-header">
-          <h2>Verify Signature</h2>
+          <h2>{{ 'SIGNATURES.VERIFY_TITLE' | translate }}</h2>
           <button class="btn-icon" (click)="closeVerify()">
             <span class="material-icons">close</span>
           </button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label for="verify-value">Signature Value</label>
+            <label for="verify-value">{{ 'SIGNATURES.SIGNATURE_VALUE' | translate }}</label>
             <input
               id="verify-value"
               type="text"
-              placeholder="Enter signature value to verify"
+              [placeholder]="'SIGNATURES.VERIFY_PLACEHOLDER' | translate"
               [ngModel]="verifyValue()"
               (ngModelChange)="verifyValue.set($event)"
             />
@@ -246,15 +254,21 @@
                 verifyResult()!.valid ? 'check_circle' : 'cancel'
               }}</span>
               <span>{{
-                verifyResult()!.valid ? 'Signature is valid' : 'Signature is invalid'
+                verifyResult()!.valid
+                  ? ('SIGNATURES.VALID_RESULT' | translate)
+                  : ('SIGNATURES.INVALID_RESULT' | translate)
               }}</span>
             </div>
           }
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" (click)="closeVerify()">Close</button>
+          <button class="btn-secondary" (click)="closeVerify()">
+            {{ 'COMMON.CLOSE' | translate }}
+          </button>
           <button class="btn-primary" (click)="doVerify()" [disabled]="verifying()">
-            {{ verifying() ? 'Verifying...' : 'Verify' }}
+            {{
+              verifying() ? ('SIGNATURES.VERIFYING' | translate) : ('SIGNATURES.VERIFY' | translate)
+            }}
           </button>
         </div>
       </div>
@@ -278,7 +292,7 @@
         role="dialog"
       >
         <div class="modal-header">
-          <h2>Revoke Signature</h2>
+          <h2>{{ 'SIGNATURES.REVOKE_TITLE' | translate }}</h2>
           <button class="btn-icon" (click)="closeRevoke()">
             <span class="material-icons">close</span>
           </button>
@@ -286,24 +300,27 @@
         <div class="modal-body">
           <p class="warning-text">
             <span class="material-icons">warning</span>
-            Revoking a signature is irreversible. The signed document will be marked as having a
-            revoked signature.
+            {{ 'SIGNATURES.REVOKE_WARNING' | translate }}
           </p>
           <div class="form-group">
-            <label for="revoke-reason">Reason for Revocation</label>
+            <label for="revoke-reason">{{ 'SIGNATURES.REVOKE_LABEL' | translate }}</label>
             <textarea
               id="revoke-reason"
               rows="3"
-              placeholder="Enter reason for revocation (required)"
+              [placeholder]="'SIGNATURES.REVOKE_PLACEHOLDER' | translate"
               [ngModel]="revokeReason()"
               (ngModelChange)="revokeReason.set($event)"
             ></textarea>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" (click)="closeRevoke()">Cancel</button>
+          <button class="btn-secondary" (click)="closeRevoke()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
           <button class="btn-danger" (click)="doRevoke()" [disabled]="revoking()">
-            {{ revoking() ? 'Revoking...' : 'Revoke Signature' }}
+            {{
+              revoking() ? ('SIGNATURES.REVOKING' | translate) : ('SIGNATURES.REVOKE' | translate)
+            }}
           </button>
         </div>
       </div>

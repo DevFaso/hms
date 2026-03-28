@@ -1,13 +1,13 @@
 @if (items.length === 0) {
-  <div class="empty-state">No payments pending today.</div>
+  <div class="empty-state">{{ 'RECEPTION.NO_PAYMENTS_PENDING' | translate }}</div>
 } @else {
   <table class="pay-table">
     <thead>
       <tr>
-        <th>Time</th>
-        <th>Patient</th>
-        <th>Provider</th>
-        <th>Department</th>
+        <th>{{ 'COMMON.TIME' | translate }}</th>
+        <th>{{ 'PATIENTS.PATIENT' | translate }}</th>
+        <th>{{ 'RECEPTION.PROVIDER' | translate }}</th>
+        <th>{{ 'STAFF.DEPARTMENT' | translate }}</th>
         <th></th>
       </tr>
     </thead>
@@ -25,7 +25,7 @@
           <td>
             <button class="btn-collect" (click)="openPayDialog(item)">
               <span class="material-symbols-outlined">payments</span>
-              Collect
+              {{ 'RECEPTION.COLLECT' | translate }}
             </button>
           </td>
         </tr>
@@ -47,7 +47,7 @@
   ></div>
   <div class="modal-box">
     <div class="modal-header">
-      <h3>Collect Payment — {{ payingItem()!.patientName }}</h3>
+      <h3>{{ 'RECEPTION.COLLECT_PAYMENT' | translate }} — {{ payingItem()!.patientName }}</h3>
       <button class="btn-close" (click)="closePayDialog()">
         <span class="material-symbols-outlined">close</span>
       </button>
@@ -56,20 +56,20 @@
       @if (loadingInvoices()) {
         <div class="loading-row">
           <span class="material-symbols-outlined spin">progress_activity</span>
-          Loading invoices…
+          {{ 'RECEPTION.LOADING_INVOICES' | translate }}
         </div>
       } @else if (openInvoices().length === 0) {
-        <p class="no-invoices">No open invoices found for this patient.</p>
+        <p class="no-invoices">{{ 'RECEPTION.NO_OPEN_INVOICES' | translate }}</p>
       } @else {
         <div class="field-group">
-          <label for="invSelect">Invoice</label>
+          <label for="invSelect">{{ 'RECEPTION.INVOICE' | translate }}</label>
           <select
             id="invSelect"
             class="form-control"
             [ngModel]="selectedInvoiceId()"
             (ngModelChange)="selectedInvoiceId.set($event)"
           >
-            <option [value]="null">-- Select Invoice --</option>
+            <option [value]="null">-- {{ 'RECEPTION.SELECT_INVOICE' | translate }} --</option>
             @for (inv of openInvoices(); track inv.id) {
               <option [value]="inv.id">
                 {{ inv.invoiceNumber }} — Balance: {{ inv.balanceDue | number: '1.2-2' }}
@@ -78,7 +78,7 @@
           </select>
         </div>
         <div class="field-group">
-          <label for="payAmt">Amount</label>
+          <label for="payAmt">{{ 'RECEPTION.AMOUNT' | translate }}</label>
           <input
             id="payAmt"
             type="number"
@@ -91,23 +91,25 @@
           />
         </div>
         <div class="field-group">
-          <label for="payMeth">Method</label>
+          <label for="payMeth">{{ 'RECEPTION.METHOD' | translate }}</label>
           <select
             id="payMeth"
             class="form-control"
             [ngModel]="payMethod()"
             (ngModelChange)="payMethod.set($event)"
           >
-            <option value="CASH">Cash</option>
-            <option value="CARD">Card</option>
-            <option value="INSURANCE">Insurance</option>
-            <option value="OTHER">Other</option>
+            <option value="CASH">{{ 'RECEPTION.CASH' | translate }}</option>
+            <option value="CARD">{{ 'RECEPTION.CARD' | translate }}</option>
+            <option value="INSURANCE">{{ 'RECEPTION.INSURANCE' | translate }}</option>
+            <option value="OTHER">{{ 'COMMON.OTHER' | translate }}</option>
           </select>
         </div>
       }
     </div>
     <div class="modal-footer">
-      <button class="btn-secondary" (click)="closePayDialog()">Cancel</button>
+      <button class="btn-secondary" (click)="closePayDialog()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
       <button
         class="btn-primary"
         [disabled]="!selectedInvoiceId() || !payAmount() || (payAmount() ?? 0) <= 0 || paying()"
@@ -116,7 +118,7 @@
         @if (paying()) {
           <span class="material-symbols-outlined spin">progress_activity</span>
         }
-        Record Payment
+        {{ 'RECEPTION.RECORD_PAYMENT' | translate }}
       </button>
     </div>
   </div>

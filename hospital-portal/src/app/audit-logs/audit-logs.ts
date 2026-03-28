@@ -7,11 +7,12 @@ import {
   AuditEventTypeStatus,
 } from '../services/audit-log.service';
 import { ToastService } from '../core/toast.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-audit-logs',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './audit-logs.html',
   styleUrl: './audit-logs.scss',
 })

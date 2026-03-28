@@ -1,6 +1,7 @@
 import { Component, inject, signal, OnInit, computed, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { ReceptionService, WaitlistEntryRequest, WaitlistEntryResponse } from './reception.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ReferralService, DepartmentMinimal } from '../services/referral.service';
@@ -14,7 +15,7 @@ type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
 @Component({
   selector: 'app-waitlist-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './waitlist-panel.html',
   styleUrl: './waitlist-panel.scss',
 })

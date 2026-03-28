@@ -12,12 +12,13 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
+import { TranslateModule } from '@ngx-translate/core';
 import { RoleContextService } from '../core/role-context.service';
 
 @Component({
   selector: 'app-treatment-plans',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './treatment-plans.html',
   styleUrl: './treatment-plans.scss',
 })

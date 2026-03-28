@@ -10,11 +10,12 @@ import {
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { HasPermissionDirective } from '../shared/directives/has-permission.directive';
+import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-billing',
   standalone: true,
-  imports: [CommonModule, FormsModule, HasPermissionDirective],
+  imports: [CommonModule, FormsModule, HasPermissionDirective, TranslateModule],
   templateUrl: './billing.html',
   styleUrl: './billing.scss',
 })

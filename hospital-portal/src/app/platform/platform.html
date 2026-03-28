@@ -4,13 +4,13 @@
     <div class="header-left">
       <span class="material-icons header-icon">hub</span>
       <div>
-        <h1>Platform Registry</h1>
-        <p class="header-sub">Manage integrations, services &amp; release operations</p>
+        <h1>{{ 'PLATFORM.TITLE' | translate }}</h1>
+        <p class="header-sub">{{ 'PLATFORM.SUBTITLE' | translate }}</p>
       </div>
     </div>
     <div class="header-actions">
       <button class="btn btn-outline" (click)="exportSnapshot()" [disabled]="saving()">
-        <span class="material-icons">download</span> Export Snapshot
+        <span class="material-icons">download</span> {{ 'PLATFORM.EXPORT_SNAPSHOT' | translate }}
       </button>
     </div>
   </header>
@@ -22,28 +22,29 @@
       [class.active]="activeView() === 'dashboard'"
       (click)="switchView('dashboard')"
     >
-      <span class="material-icons">dashboard</span> Dashboard
+      <span class="material-icons">dashboard</span> {{ 'PLATFORM.DASHBOARD' | translate }}
     </button>
     <button
       class="tab-btn"
       [class.active]="activeView() === 'services'"
       (click)="switchView('services')"
     >
-      <span class="material-icons">settings_applications</span> Services
+      <span class="material-icons">settings_applications</span>
+      {{ 'PLATFORM.SERVICES' | translate }}
     </button>
     <button
       class="tab-btn"
       [class.active]="activeView() === 'catalog'"
       (click)="switchView('catalog')"
     >
-      <span class="material-icons">storefront</span> Catalog
+      <span class="material-icons">storefront</span> {{ 'PLATFORM.CATALOG' | translate }}
     </button>
     <button
       class="tab-btn"
       [class.active]="activeView() === 'releases'"
       (click)="switchView('releases')"
     >
-      <span class="material-icons">rocket_launch</span> Releases
+      <span class="material-icons">rocket_launch</span> {{ 'PLATFORM.RELEASES' | translate }}
     </button>
   </nav>
 
@@ -51,7 +52,7 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading platform data…</p>
+      <p>{{ 'PLATFORM.LOADING' | translate }}</p>
     </div>
   }
 
@@ -60,7 +61,9 @@
     <div class="error-banner">
       <span class="material-icons">error_outline</span>
       <span>{{ error() }}</span>
-      <button class="btn btn-sm" (click)="loadDashboard()">Retry</button>
+      <button class="btn btn-sm" (click)="loadDashboard()">
+        {{ 'PLATFORM.RETRY' | translate }}
+      </button>
     </div>
   }
 
@@ -75,28 +78,28 @@
           <span class="material-icons">integration_instructions</span>
           <div class="kpi-body">
             <span class="kpi-value">{{ s.actions.totalIntegrations }}</span>
-            <span class="kpi-label">Total Integrations</span>
+            <span class="kpi-label">{{ 'PLATFORM.TOTAL_INTEGRATIONS' | translate }}</span>
           </div>
         </div>
         <div class="kpi-card kpi-warning">
           <span class="material-icons">pending</span>
           <div class="kpi-body">
             <span class="kpi-value">{{ s.actions.pendingIntegrations }}</span>
-            <span class="kpi-label">Pending</span>
+            <span class="kpi-label">{{ 'COMMON.PENDING' | translate }}</span>
           </div>
         </div>
         <div class="kpi-card kpi-danger">
           <span class="material-icons">link_off</span>
           <div class="kpi-body">
             <span class="kpi-value">{{ s.actions.disabledLinks }}</span>
-            <span class="kpi-label">Disabled Links</span>
+            <span class="kpi-label">{{ 'PLATFORM.DISABLED_LINKS' | translate }}</span>
           </div>
         </div>
         <div class="kpi-card kpi-info">
           <span class="material-icons">event</span>
           <div class="kpi-body">
             <span class="kpi-value">{{ s.actions.activeReleaseWindows }}</span>
-            <span class="kpi-label">Active Releases</span>
+            <span class="kpi-label">{{ 'PLATFORM.ACTIVE_RELEASES' | translate }}</span>
           </div>
         </div>
       </div>
@@ -105,7 +108,8 @@
       @if (s.modules.length > 0) {
         <section class="section">
           <h2 class="section-title">
-            <span class="material-icons">view_module</span> Integration Modules
+            <span class="material-icons">view_module</span>
+            {{ 'PLATFORM.INTEGRATION_MODULES' | translate }}
           </h2>
           <div class="module-grid">
             @for (mod of s.modules; track mod.title) {
@@ -118,22 +122,23 @@
                 <div class="module-stats">
                   <span class="stat stat-active">
                     <span class="material-icons">check_circle</span>
-                    {{ mod.activeIntegrations }} Active
+                    {{ mod.activeIntegrations }} {{ 'COMMON.ACTIVE' | translate }}
                   </span>
                   <span class="stat stat-pending">
                     <span class="material-icons">schedule</span>
-                    {{ mod.pendingIntegrations }} Pending
+                    {{ mod.pendingIntegrations }} {{ 'COMMON.PENDING' | translate }}
                   </span>
                   <span class="stat stat-managed">
                     <span class="material-icons">admin_panel_settings</span>
-                    {{ mod.managedIntegrations }} Managed
+                    {{ mod.managedIntegrations }} {{ 'PLATFORM.MANAGED' | translate }}
                   </span>
                 </div>
                 <button
                   class="btn btn-sm btn-outline module-configure-btn"
                   (click)="switchView('services')"
                 >
-                  <span class="material-icons">settings</span> Configure
+                  <span class="material-icons">settings</span>
+                  {{ 'PLATFORM.CONFIGURE' | translate }}
                 </button>
               </div>
             }
@@ -145,7 +150,8 @@
       @if (s.automationTasks.length > 0) {
         <section class="section">
           <h2 class="section-title">
-            <span class="material-icons">smart_toy</span> Automation Tasks
+            <span class="material-icons">smart_toy</span>
+            {{ 'PLATFORM.AUTOMATION_TASKS' | translate }}
           </h2>
           <div class="automation-grid">
             @for (task of s.automationTasks; track task.id) {
@@ -163,11 +169,11 @@
                     <span class="metric-value">{{ task.metricValue }}</span>
                   </div>
                   <div class="metric">
-                    <span class="metric-label">Next Action</span>
+                    <span class="metric-label">{{ 'PLATFORM.NEXT_ACTION' | translate }}</span>
                     <span class="metric-value">{{ task.nextAction }}</span>
                   </div>
                   <div class="metric">
-                    <span class="metric-label">Last Run</span>
+                    <span class="metric-label">{{ 'PLATFORM.LAST_RUN' | translate }}</span>
                     <span class="metric-value">{{ task.lastRun }}</span>
                   </div>
                 </div>
@@ -177,7 +183,7 @@
                     {{ taskActionLabel(task.status) }}
                   </button>
                   <button class="btn btn-sm btn-outline" (click)="viewAutomationDetails(task)">
-                    <span class="material-icons">info</span> Details
+                    <span class="material-icons">info</span> {{ 'PLATFORM.DETAILS' | translate }}
                   </button>
                 </div>
               </div>
@@ -194,7 +200,9 @@
   @if (activeView() === 'services' && !loading()) {
     <div class="services-toolbar">
       <div class="toolbar-group">
-        <label class="toolbar-label" for="orgSelect">Organization</label>
+        <label class="toolbar-label" for="orgSelect">{{
+          'PLATFORM.ORGANIZATION' | translate
+        }}</label>
         <select
           id="orgSelect"
           class="form-select"
@@ -208,14 +216,14 @@
       </div>
 
       <div class="toolbar-group">
-        <label class="toolbar-label" for="statusSelect">Status</label>
+        <label class="toolbar-label" for="statusSelect">{{ 'COMMON.STATUS' | translate }}</label>
         <select
           id="statusSelect"
           class="form-select"
           [ngModel]="statusFilter()"
           (ngModelChange)="statusFilter.set($event)"
         >
-          <option value="">All</option>
+          <option value="">{{ 'COMMON.ALL' | translate }}</option>
           @for (st of statusOptions; track st) {
             <option [value]="st">{{ st }}</option>
           }
@@ -225,24 +233,24 @@
       <div class="toolbar-spacer"></div>
 
       <button class="btn btn-primary" (click)="openRegisterDrawer()">
-        <span class="material-icons">add</span> Register Service
+        <span class="material-icons">add</span> {{ 'PLATFORM.REGISTER_SERVICE' | translate }}
       </button>
     </div>
 
     @if (servicesLoading()) {
       <div class="loading-state loading-sm">
         <div class="spinner spinner-sm"></div>
-        <p>Loading services…</p>
+        <p>{{ 'PLATFORM.LOADING_SERVICES' | translate }}</p>
       </div>
     }
 
     @if (!servicesLoading() && filteredServices().length === 0) {
       <div class="empty-state">
         <span class="material-icons empty-icon">integration_instructions</span>
-        <h3>No services found</h3>
-        <p>Register a new service or change the status filter.</p>
+        <h3>{{ 'PLATFORM.NO_SERVICES' | translate }}</h3>
+        <p>{{ 'PLATFORM.NO_SERVICES_HINT' | translate }}</p>
         <button class="btn btn-primary" (click)="openRegisterDrawer()">
-          <span class="material-icons">add</span> Register Service
+          <span class="material-icons">add</span> {{ 'PLATFORM.REGISTER_SERVICE' | translate }}
         </button>
       </div>
     }
@@ -252,13 +260,13 @@
         <table class="data-table">
           <thead>
             <tr>
-              <th>Type</th>
-              <th>Provider</th>
-              <th>Status</th>
-              <th>Managed</th>
-              <th>Hospitals</th>
-              <th>Departments</th>
-              <th>Actions</th>
+              <th>{{ 'COMMON.TYPE' | translate }}</th>
+              <th>{{ 'PLATFORM.PROVIDER' | translate }}</th>
+              <th>{{ 'COMMON.STATUS' | translate }}</th>
+              <th>{{ 'PLATFORM.MANAGED' | translate }}</th>
+              <th>{{ 'PLATFORM.HOSPITALS' | translate }}</th>
+              <th>{{ 'PLATFORM.DEPARTMENTS' | translate }}</th>
+              <th>{{ 'COMMON.ACTIONS' | translate }}</th>
             </tr>
           </thead>
           <tbody>
@@ -301,7 +309,7 @@
                     @if (svc.status !== 'ACTIVE') {
                       <button
                         class="icon-btn icon-btn-success"
-                        title="Activate"
+                        [title]="'PLATFORM.ACTIVATE' | translate"
                         (click)="changeServiceStatus(svc, 'ACTIVE')"
                       >
                         <span class="material-icons">check_circle</span>
@@ -310,13 +318,17 @@
                     @if (svc.status === 'ACTIVE') {
                       <button
                         class="icon-btn icon-btn-warning"
-                        title="Deactivate"
+                        [title]="'PLATFORM.DEACTIVATE' | translate"
                         (click)="changeServiceStatus(svc, 'INACTIVE')"
                       >
                         <span class="material-icons">pause_circle</span>
                       </button>
                     }
-                    <button class="icon-btn" title="View Details" (click)="openServiceDetail(svc)">
+                    <button
+                      class="icon-btn"
+                      [title]="'PLATFORM.VIEW_DETAILS' | translate"
+                      (click)="openServiceDetail(svc)"
+                    >
                       <span class="material-icons">open_in_new</span>
                     </button>
                   </div>
@@ -338,7 +350,7 @@
         <span class="material-icons">search</span>
         <input
           type="text"
-          placeholder="Search catalog…"
+          [placeholder]="'PLATFORM.SEARCH_CATALOG' | translate"
           [ngModel]="catalogSearchTerm()"
           (ngModelChange)="catalogSearchTerm.set($event)"
         />
@@ -348,8 +360,8 @@
     @if (filteredCatalog().length === 0) {
       <div class="empty-state">
         <span class="material-icons empty-icon">storefront</span>
-        <h3>No catalog items found</h3>
-        <p>Try adjusting your search terms.</p>
+        <h3>{{ 'PLATFORM.NO_CATALOG' | translate }}</h3>
+        <p>{{ 'PLATFORM.NO_CATALOG_HINT' | translate }}</p>
       </div>
     }
 
@@ -366,9 +378,9 @@
                 <span class="catalog-type">{{ item.serviceType }}</span>
               </div>
               @if (item.enabled) {
-                <span class="enabled-badge">Enabled</span>
+                <span class="enabled-badge">{{ 'PLATFORM.ENABLED' | translate }}</span>
               } @else {
-                <span class="disabled-badge">Disabled</span>
+                <span class="disabled-badge">{{ 'PLATFORM.DISABLED' | translate }}</span>
               }
             </div>
             <p class="catalog-desc">{{ item.description }}</p>
@@ -389,12 +401,14 @@
               }
               @if (item.autoProvision) {
                 <span class="meta-item"
-                  ><span class="material-icons">bolt</span> Auto-provision</span
+                  ><span class="material-icons">bolt</span>
+                  {{ 'PLATFORM.AUTO_PROVISION' | translate }}</span
                 >
               }
               @if (item.managedByPlatform) {
                 <span class="meta-item"
-                  ><span class="material-icons">admin_panel_settings</span> Managed</span
+                  ><span class="material-icons">admin_panel_settings</span>
+                  {{ 'PLATFORM.MANAGED' | translate }}</span
                 >
               }
             </div>
@@ -405,20 +419,21 @@
                 (click)="provisionCatalogItem(item)"
                 [disabled]="saving()"
               >
-                <span class="material-icons">add_circle</span> Provision
+                <span class="material-icons">add_circle</span>
+                {{ 'PLATFORM.PROVISION' | translate }}
               </button>
               @if (item.documentationUrl || item.onboardingGuideUrl || item.baseUrl) {
                 <button class="btn btn-sm btn-outline" (click)="openDocs(item)">
-                  <span class="material-icons">description</span> Docs
+                  <span class="material-icons">description</span> {{ 'PLATFORM.DOCS' | translate }}
                 </button>
               }
               @if (item.sandboxUrl) {
                 <button class="btn btn-sm btn-outline" (click)="openSandbox(item)">
-                  <span class="material-icons">science</span> Sandbox
+                  <span class="material-icons">science</span> {{ 'PLATFORM.SANDBOX' | translate }}
                 </button>
               }
               <button class="btn btn-sm btn-outline" (click)="openCatalogDetail(item)">
-                <span class="material-icons">info</span> Details
+                <span class="material-icons">info</span> {{ 'PLATFORM.DETAILS' | translate }}
               </button>
             </div>
           </div>
@@ -433,11 +448,12 @@
   @if (activeView() === 'releases' && !loading()) {
     <div class="releases-toolbar">
       <h2 class="section-title inline-title">
-        <span class="material-icons">rocket_launch</span> Release Windows
+        <span class="material-icons">rocket_launch</span>
+        {{ 'PLATFORM.RELEASE_WINDOWS' | translate }}
       </h2>
       <div class="toolbar-spacer"></div>
       <button class="btn btn-primary" (click)="openReleaseForm()">
-        <span class="material-icons">add</span> Schedule Release
+        <span class="material-icons">add</span> {{ 'PLATFORM.SCHEDULE_RELEASE' | translate }}
       </button>
     </div>
 
@@ -447,7 +463,7 @@
           <span class="material-icons">event</span>
           <div class="kpi-body">
             <span class="kpi-value">{{ s.actions.activeReleaseWindows }}</span>
-            <span class="kpi-label">Active Windows</span>
+            <span class="kpi-label">{{ 'PLATFORM.ACTIVE_WINDOWS' | translate }}</span>
           </div>
         </div>
         @if (s.actions.lastSnapshotGeneratedAt) {
@@ -455,7 +471,7 @@
             <span class="material-icons">photo_camera</span>
             <div class="kpi-body">
               <span class="kpi-value snapshot-val">{{ s.actions.lastSnapshotGeneratedAt }}</span>
-              <span class="kpi-label">Last Snapshot</span>
+              <span class="kpi-label">{{ 'PLATFORM.LAST_SNAPSHOT' | translate }}</span>
             </div>
           </div>
         }
@@ -465,10 +481,10 @@
     @if (releases().length === 0) {
       <div class="empty-state">
         <span class="material-icons empty-icon">event_busy</span>
-        <h3>No release windows scheduled</h3>
-        <p>Schedule a release window to coordinate deployments.</p>
+        <h3>{{ 'PLATFORM.NO_RELEASES' | translate }}</h3>
+        <p>{{ 'PLATFORM.NO_RELEASES_HINT' | translate }}</p>
         <button class="btn btn-primary" (click)="openReleaseForm()">
-          <span class="material-icons">add</span> Schedule Release
+          <span class="material-icons">add</span> {{ 'PLATFORM.SCHEDULE_RELEASE' | translate }}
         </button>
       </div>
     }
@@ -504,7 +520,7 @@
               @if (rel.freezeChanges) {
                 <div class="release-detail release-freeze">
                   <span class="material-icons">ac_unit</span>
-                  <span>Change Freeze</span>
+                  <span>{{ 'PLATFORM.CHANGE_FREEZE' | translate }}</span>
                 </div>
               }
             </div>
@@ -543,14 +559,14 @@
         @if (!editingService()) {
           <!-- Read-only detail -->
           <div class="detail-section">
-            <h3>Service Information</h3>
+            <h3>{{ 'PLATFORM.SERVICE_INFO' | translate }}</h3>
             <div class="detail-grid">
               <div class="detail-item">
-                <span class="detail-label">Type</span>
+                <span class="detail-label">{{ 'COMMON.TYPE' | translate }}</span>
                 <span>{{ selectedService()!.serviceType }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Status</span>
+                <span class="detail-label">{{ 'COMMON.STATUS' | translate }}</span>
                 <span
                   class="status-pill"
                   [ngClass]="serviceStatusClass(selectedService()!.status)"
@@ -558,37 +574,41 @@
                 >
               </div>
               <div class="detail-item">
-                <span class="detail-label">Provider</span>
+                <span class="detail-label">{{ 'PLATFORM.PROVIDER' | translate }}</span>
                 <span>{{ selectedService()!.provider || '—' }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Base URL</span>
+                <span class="detail-label">{{ 'PLATFORM.BASE_URL' | translate }}</span>
                 <span class="url-text">{{ selectedService()!.baseUrl || '—' }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Documentation</span>
+                <span class="detail-label">{{ 'PLATFORM.DOCUMENTATION' | translate }}</span>
                 @if (selectedService()!.documentationUrl) {
-                  <a [href]="selectedService()!.documentationUrl" target="_blank" class="link"
-                    >View Docs</a
-                  >
+                  <a [href]="selectedService()!.documentationUrl" target="_blank" class="link">{{
+                    'PLATFORM.VIEW_DOCS' | translate
+                  }}</a>
                 } @else {
                   <span>—</span>
                 }
               </div>
               <div class="detail-item">
-                <span class="detail-label">API Key Ref</span>
+                <span class="detail-label">{{ 'PLATFORM.API_KEY_REF' | translate }}</span>
                 <span>{{ selectedService()!.apiKeyReference || '—' }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Platform-Managed</span>
-                <span>{{ selectedService()!.managedByPlatform ? 'Yes' : 'No' }}</span>
+                <span class="detail-label">{{ 'PLATFORM.PLATFORM_MANAGED' | translate }}</span>
+                <span>{{
+                  selectedService()!.managedByPlatform
+                    ? ('COMMON.YES' | translate)
+                    : ('COMMON.NO' | translate)
+                }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Hospital Links</span>
+                <span class="detail-label">{{ 'PLATFORM.HOSPITAL_LINKS' | translate }}</span>
                 <span>{{ selectedService()!.hospitalLinkCount }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Department Links</span>
+                <span class="detail-label">{{ 'PLATFORM.DEPARTMENT_LINKS' | translate }}</span>
                 <span>{{ selectedService()!.departmentLinkCount }}</span>
               </div>
             </div>
@@ -596,22 +616,22 @@
 
           @if (selectedService()!.ownership; as own) {
             <div class="detail-section">
-              <h3>Ownership</h3>
+              <h3>{{ 'PLATFORM.OWNERSHIP' | translate }}</h3>
               <div class="detail-grid">
                 <div class="detail-item">
-                  <span class="detail-label">Owner Team</span>
+                  <span class="detail-label">{{ 'PLATFORM.OWNER_TEAM' | translate }}</span>
                   <span>{{ own.ownerTeam || '—' }}</span>
                 </div>
                 <div class="detail-item">
-                  <span class="detail-label">Contact Email</span>
+                  <span class="detail-label">{{ 'PLATFORM.CONTACT_EMAIL' | translate }}</span>
                   <span>{{ own.ownerContactEmail || '—' }}</span>
                 </div>
                 <div class="detail-item">
-                  <span class="detail-label">Data Steward</span>
+                  <span class="detail-label">{{ 'PLATFORM.DATA_STEWARD' | translate }}</span>
                   <span>{{ own.dataSteward || '—' }}</span>
                 </div>
                 <div class="detail-item">
-                  <span class="detail-label">Service Level</span>
+                  <span class="detail-label">{{ 'PLATFORM.SERVICE_LEVEL' | translate }}</span>
                   <span>{{ own.serviceLevel || '—' }}</span>
                 </div>
               </div>
@@ -620,7 +640,7 @@
 
           <!-- Status Quick Actions -->
           <div class="detail-section">
-            <h3>Quick Actions</h3>
+            <h3>{{ 'PLATFORM.QUICK_ACTIONS' | translate }}</h3>
             <div class="quick-actions">
               @for (st of statusOptions; track st) {
                 <button
@@ -638,13 +658,13 @@
 
           <!-- Hospital Links in drawer -->
           <div class="detail-section">
-            <h3>Hospital Links</h3>
+            <h3>{{ 'PLATFORM.HOSPITAL_LINKS' | translate }}</h3>
             @if (linksLoading()) {
               <div class="loading-state loading-sm">
                 <div class="spinner spinner-sm"></div>
               </div>
             } @else if (hospitalLinks().length === 0) {
-              <p class="muted-text">No hospital links for this service.</p>
+              <p class="muted-text">{{ 'PLATFORM.NO_HOSPITAL_LINKS' | translate }}</p>
             } @else {
               <div class="link-list">
                 @for (link of hospitalLinks(); track link.id) {
@@ -659,7 +679,11 @@
                       [class.btn-success]="!link.enabled"
                       (click)="toggleHospitalLink(link)"
                     >
-                      {{ link.enabled ? 'Unlink' : 'Link' }}
+                      {{
+                        link.enabled
+                          ? ('PLATFORM.UNLINK' | translate)
+                          : ('PLATFORM.LINK' | translate)
+                      }}
                     </button>
                   </div>
                 }
@@ -669,14 +693,14 @@
 
           <div class="drawer-footer">
             <button class="btn btn-primary" (click)="startEditService()">
-              <span class="material-icons">edit</span> Edit Service
+              <span class="material-icons">edit</span> {{ 'PLATFORM.EDIT_SERVICE' | translate }}
             </button>
           </div>
         } @else {
           <!-- Edit form -->
           <form class="edit-form" (ngSubmit)="saveService()">
             <div class="form-group">
-              <label for="editProvider">Provider</label>
+              <label for="editProvider">{{ 'PLATFORM.PROVIDER' | translate }}</label>
               <input
                 id="editProvider"
                 type="text"
@@ -687,7 +711,7 @@
               />
             </div>
             <div class="form-group">
-              <label for="editBaseUrl">Base URL</label>
+              <label for="editBaseUrl">{{ 'PLATFORM.BASE_URL' | translate }}</label>
               <input
                 id="editBaseUrl"
                 type="url"
@@ -698,7 +722,7 @@
               />
             </div>
             <div class="form-group">
-              <label for="editDocUrl">Documentation URL</label>
+              <label for="editDocUrl">{{ 'PLATFORM.DOCUMENTATION_URL' | translate }}</label>
               <input
                 id="editDocUrl"
                 type="url"
@@ -709,7 +733,7 @@
               />
             </div>
             <div class="form-group">
-              <label for="editApiKeyRef">API Key Reference</label>
+              <label for="editApiKeyRef">{{ 'PLATFORM.API_KEY_REF' | translate }}</label>
               <input
                 id="editApiKeyRef"
                 type="text"
@@ -727,12 +751,12 @@
                 (ngModelChange)="updateServiceField('managedByPlatform', $event)"
                 name="managedByPlatform"
               />
-              <label for="editManaged">Managed by Platform</label>
+              <label for="editManaged">{{ 'PLATFORM.MANAGED_BY_PLATFORM' | translate }}</label>
             </div>
 
-            <h4 class="form-section-title">Ownership</h4>
+            <h4 class="form-section-title">{{ 'PLATFORM.OWNERSHIP' | translate }}</h4>
             <div class="form-group">
-              <label for="editOwnerTeam">Owner Team</label>
+              <label for="editOwnerTeam">{{ 'PLATFORM.OWNER_TEAM' | translate }}</label>
               <input
                 id="editOwnerTeam"
                 type="text"
@@ -743,7 +767,7 @@
               />
             </div>
             <div class="form-group">
-              <label for="editContactEmail">Contact Email</label>
+              <label for="editContactEmail">{{ 'PLATFORM.CONTACT_EMAIL' | translate }}</label>
               <input
                 id="editContactEmail"
                 type="email"
@@ -754,7 +778,7 @@
               />
             </div>
             <div class="form-group">
-              <label for="editDataSteward">Data Steward</label>
+              <label for="editDataSteward">{{ 'PLATFORM.DATA_STEWARD' | translate }}</label>
               <input
                 id="editDataSteward"
                 type="text"
@@ -765,7 +789,7 @@
               />
             </div>
             <div class="form-group">
-              <label for="editServiceLevel">Service Level</label>
+              <label for="editServiceLevel">{{ 'PLATFORM.SERVICE_LEVEL' | translate }}</label>
               <input
                 id="editServiceLevel"
                 type="text"
@@ -776,9 +800,11 @@
               />
             </div>
 
-            <h4 class="form-section-title">Metadata</h4>
+            <h4 class="form-section-title">{{ 'PLATFORM.METADATA' | translate }}</h4>
             <div class="form-group">
-              <label for="editIntegrationNotes">Integration Notes</label>
+              <label for="editIntegrationNotes">{{
+                'PLATFORM.INTEGRATION_NOTES' | translate
+              }}</label>
               <textarea
                 id="editIntegrationNotes"
                 class="form-input"
@@ -791,14 +817,14 @@
 
             <div class="drawer-footer">
               <button type="button" class="btn btn-outline" (click)="cancelEditService()">
-                Cancel
+                {{ 'COMMON.CANCEL' | translate }}
               </button>
               <button type="submit" class="btn btn-primary" [disabled]="saving()">
                 @if (saving()) {
                   <div class="spinner spinner-xs"></div>
-                  Saving…
+                  {{ 'COMMON.SAVING' | translate }}
                 } @else {
-                  <span class="material-icons">save</span> Save Changes
+                  <span class="material-icons">save</span> {{ 'PLATFORM.SAVE_CHANGES' | translate }}
                 }
               </button>
             </div>
@@ -821,7 +847,10 @@
     ></div>
     <aside class="drawer">
       <div class="drawer-header">
-        <h2><span class="material-icons">add_circle</span> Register New Service</h2>
+        <h2>
+          <span class="material-icons">add_circle</span>
+          {{ 'PLATFORM.REGISTER_NEW_SERVICE' | translate }}
+        </h2>
         <button class="icon-btn" (click)="closeRegisterDrawer()">
           <span class="material-icons">close</span>
         </button>
@@ -830,7 +859,7 @@
       <div class="drawer-body">
         <form class="edit-form" (ngSubmit)="registerService()">
           <div class="form-group">
-            <label for="regServiceType">Service Type *</label>
+            <label for="regServiceType">{{ 'PLATFORM.SERVICE_TYPE' | translate }} *</label>
             <select
               id="regServiceType"
               class="form-select"
@@ -845,7 +874,7 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="regProvider">Provider</label>
+            <label for="regProvider">{{ 'PLATFORM.PROVIDER' | translate }}</label>
             <input
               id="regProvider"
               type="text"
@@ -857,7 +886,7 @@
             />
           </div>
           <div class="form-group">
-            <label for="regBaseUrl">Base URL</label>
+            <label for="regBaseUrl">{{ 'PLATFORM.BASE_URL' | translate }}</label>
             <input
               id="regBaseUrl"
               type="url"
@@ -869,7 +898,7 @@
             />
           </div>
           <div class="form-group">
-            <label for="regDocUrl">Documentation URL</label>
+            <label for="regDocUrl">{{ 'PLATFORM.DOCUMENTATION_URL' | translate }}</label>
             <input
               id="regDocUrl"
               type="url"
@@ -880,7 +909,7 @@
             />
           </div>
           <div class="form-group">
-            <label for="regApiKeyRef">API Key Reference</label>
+            <label for="regApiKeyRef">{{ 'PLATFORM.API_KEY_REF' | translate }}</label>
             <input
               id="regApiKeyRef"
               type="text"
@@ -898,12 +927,12 @@
               (ngModelChange)="updateRegisterField('managedByPlatform', $event)"
               name="managed"
             />
-            <label for="regManaged">Managed by Platform</label>
+            <label for="regManaged">{{ 'PLATFORM.MANAGED_BY_PLATFORM' | translate }}</label>
           </div>
 
-          <h4 class="form-section-title">Ownership</h4>
+          <h4 class="form-section-title">{{ 'PLATFORM.OWNERSHIP' | translate }}</h4>
           <div class="form-group">
-            <label for="regOwnerTeam">Owner Team</label>
+            <label for="regOwnerTeam">{{ 'PLATFORM.OWNER_TEAM' | translate }}</label>
             <input
               id="regOwnerTeam"
               type="text"
@@ -914,7 +943,7 @@
             />
           </div>
           <div class="form-group">
-            <label for="regContactEmail">Contact Email</label>
+            <label for="regContactEmail">{{ 'PLATFORM.CONTACT_EMAIL' | translate }}</label>
             <input
               id="regContactEmail"
               type="email"
@@ -925,7 +954,7 @@
             />
           </div>
           <div class="form-group">
-            <label for="regDataSteward">Data Steward</label>
+            <label for="regDataSteward">{{ 'PLATFORM.DATA_STEWARD' | translate }}</label>
             <input
               id="regDataSteward"
               type="text"
@@ -936,7 +965,7 @@
             />
           </div>
           <div class="form-group">
-            <label for="regServiceLevel">Service Level</label>
+            <label for="regServiceLevel">{{ 'PLATFORM.SERVICE_LEVEL' | translate }}</label>
             <input
               id="regServiceLevel"
               type="text"
@@ -948,9 +977,9 @@
             />
           </div>
 
-          <h4 class="form-section-title">Metadata</h4>
+          <h4 class="form-section-title">{{ 'PLATFORM.METADATA' | translate }}</h4>
           <div class="form-group">
-            <label for="regIntNotes">Integration Notes</label>
+            <label for="regIntNotes">{{ 'PLATFORM.INTEGRATION_NOTES' | translate }}</label>
             <textarea
               id="regIntNotes"
               class="form-input"
@@ -963,14 +992,15 @@
 
           <div class="drawer-footer">
             <button type="button" class="btn btn-outline" (click)="closeRegisterDrawer()">
-              Cancel
+              {{ 'COMMON.CANCEL' | translate }}
             </button>
             <button type="submit" class="btn btn-primary" [disabled]="saving()">
               @if (saving()) {
                 <div class="spinner spinner-xs"></div>
-                Registering…
+                {{ 'PLATFORM.REGISTERING' | translate }}
               } @else {
-                <span class="material-icons">add_circle</span> Register Service
+                <span class="material-icons">add_circle</span>
+                {{ 'PLATFORM.REGISTER_SERVICE' | translate }}
               }
             </button>
           </div>
@@ -1002,32 +1032,38 @@
       </div>
       <div class="drawer-body">
         <div class="detail-section">
-          <h3>Overview</h3>
+          <h3>{{ 'PLATFORM.OVERVIEW' | translate }}</h3>
           <p>{{ item.description }}</p>
           <div class="detail-grid">
             <div class="detail-item">
-              <span class="detail-label">Service Type</span>
+              <span class="detail-label">{{ 'PLATFORM.SERVICE_TYPE' | translate }}</span>
               <span>{{ item.serviceType }}</span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">Provider</span>
+              <span class="detail-label">{{ 'PLATFORM.PROVIDER' | translate }}</span>
               <span>{{ item.provider || '—' }}</span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">Enabled</span>
-              <span>{{ item.enabled ? 'Yes' : 'No' }}</span>
+              <span class="detail-label">{{ 'PLATFORM.ENABLED' | translate }}</span>
+              <span>{{
+                item.enabled ? ('COMMON.YES' | translate) : ('COMMON.NO' | translate)
+              }}</span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">Auto-Provision</span>
-              <span>{{ item.autoProvision ? 'Yes' : 'No' }}</span>
+              <span class="detail-label">{{ 'PLATFORM.AUTO_PROVISION' | translate }}</span>
+              <span>{{
+                item.autoProvision ? ('COMMON.YES' | translate) : ('COMMON.NO' | translate)
+              }}</span>
             </div>
             <div class="detail-item">
-              <span class="detail-label">Platform-Managed</span>
-              <span>{{ item.managedByPlatform ? 'Yes' : 'No' }}</span>
+              <span class="detail-label">{{ 'PLATFORM.PLATFORM_MANAGED' | translate }}</span>
+              <span>{{
+                item.managedByPlatform ? ('COMMON.YES' | translate) : ('COMMON.NO' | translate)
+              }}</span>
             </div>
             @if (item.featureFlag) {
               <div class="detail-item">
-                <span class="detail-label">Feature Flag</span>
+                <span class="detail-label">{{ 'PLATFORM.FEATURE_FLAG' | translate }}</span>
                 <span class="code-text">{{ item.featureFlag }}</span>
               </div>
             }
@@ -1036,7 +1072,7 @@
 
         @if (item.capabilities && item.capabilities.length > 0) {
           <div class="detail-section">
-            <h3>Capabilities</h3>
+            <h3>{{ 'PLATFORM.CAPABILITIES' | translate }}</h3>
             <div class="catalog-capabilities">
               @for (cap of item.capabilities; track cap) {
                 <span class="capability-chip">{{ cap }}</span>
@@ -1046,14 +1082,14 @@
         }
 
         <div class="detail-section">
-          <h3>URLs</h3>
+          <h3>{{ 'PLATFORM.URLS' | translate }}</h3>
           <div class="detail-grid">
             <div class="detail-item full-width">
-              <span class="detail-label">Base URL</span>
+              <span class="detail-label">{{ 'PLATFORM.BASE_URL' | translate }}</span>
               <span class="url-text">{{ item.baseUrl || '—' }}</span>
             </div>
             <div class="detail-item full-width">
-              <span class="detail-label">Documentation</span>
+              <span class="detail-label">{{ 'PLATFORM.DOCUMENTATION' | translate }}</span>
               @if (item.documentationUrl) {
                 <a [href]="item.documentationUrl" target="_blank" class="link">{{
                   item.documentationUrl
@@ -1063,7 +1099,7 @@
               }
             </div>
             <div class="detail-item full-width">
-              <span class="detail-label">Sandbox</span>
+              <span class="detail-label">{{ 'PLATFORM.SANDBOX' | translate }}</span>
               @if (item.sandboxUrl) {
                 <a [href]="item.sandboxUrl" target="_blank" class="link">{{ item.sandboxUrl }}</a>
               } @else {
@@ -1071,7 +1107,7 @@
               }
             </div>
             <div class="detail-item full-width">
-              <span class="detail-label">Onboarding Guide</span>
+              <span class="detail-label">{{ 'PLATFORM.ONBOARDING_GUIDE' | translate }}</span>
               @if (item.onboardingGuideUrl) {
                 <a [href]="item.onboardingGuideUrl" target="_blank" class="link">{{
                   item.onboardingGuideUrl
@@ -1085,22 +1121,22 @@
 
         @if (item.defaultOwnership) {
           <div class="detail-section">
-            <h3>Default Ownership</h3>
+            <h3>{{ 'PLATFORM.DEFAULT_OWNERSHIP' | translate }}</h3>
             <div class="detail-grid">
               <div class="detail-item">
-                <span class="detail-label">Owner Team</span>
+                <span class="detail-label">{{ 'PLATFORM.OWNER_TEAM' | translate }}</span>
                 <span>{{ item.defaultOwnership.ownerTeam || '—' }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Contact Email</span>
+                <span class="detail-label">{{ 'PLATFORM.CONTACT_EMAIL' | translate }}</span>
                 <span>{{ item.defaultOwnership.ownerContactEmail || '—' }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Data Steward</span>
+                <span class="detail-label">{{ 'PLATFORM.DATA_STEWARD' | translate }}</span>
                 <span>{{ item.defaultOwnership.dataSteward || '—' }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Service Level</span>
+                <span class="detail-label">{{ 'PLATFORM.SERVICE_LEVEL' | translate }}</span>
                 <span>{{ item.defaultOwnership.serviceLevel || '—' }}</span>
               </div>
             </div>
@@ -1113,11 +1149,12 @@
             (click)="provisionCatalogItem(item)"
             [disabled]="saving()"
           >
-            <span class="material-icons">add_circle</span> Provision to Organization
+            <span class="material-icons">add_circle</span>
+            {{ 'PLATFORM.PROVISION_TO_ORG' | translate }}
           </button>
           @if (item.documentationUrl || item.onboardingGuideUrl) {
             <button class="btn btn-outline" (click)="openDocs(item)">
-              <span class="material-icons">description</span> Open Docs
+              <span class="material-icons">description</span> {{ 'PLATFORM.OPEN_DOCS' | translate }}
             </button>
           }
         </div>
@@ -1138,7 +1175,10 @@
     ></div>
     <aside class="drawer">
       <div class="drawer-header">
-        <h2><span class="material-icons">event</span> Schedule Release Window</h2>
+        <h2>
+          <span class="material-icons">event</span>
+          {{ 'PLATFORM.SCHEDULE_RELEASE_WINDOW' | translate }}
+        </h2>
         <button class="icon-btn" (click)="closeReleaseForm()">
           <span class="material-icons">close</span>
         </button>
@@ -1146,7 +1186,7 @@
       <div class="drawer-body">
         <form class="edit-form" (ngSubmit)="scheduleRelease()">
           <div class="form-group">
-            <label for="relName">Name *</label>
+            <label for="relName">{{ 'COMMON.NAME' | translate }} *</label>
             <input
               id="relName"
               type="text"
@@ -1159,7 +1199,7 @@
             />
           </div>
           <div class="form-group">
-            <label for="relDescription">Description</label>
+            <label for="relDescription">{{ 'COMMON.DESCRIPTION' | translate }}</label>
             <textarea
               id="relDescription"
               class="form-input"
@@ -1170,7 +1210,7 @@
             ></textarea>
           </div>
           <div class="form-group">
-            <label for="relEnvironment">Environment *</label>
+            <label for="relEnvironment">{{ 'PLATFORM.ENVIRONMENT' | translate }} *</label>
             <select
               id="relEnvironment"
               class="form-select"
@@ -1179,15 +1219,15 @@
               name="environment"
               required
             >
-              <option value="staging">Staging</option>
-              <option value="production">Production</option>
-              <option value="development">Development</option>
-              <option value="uat">UAT</option>
+              <option value="staging">{{ 'PLATFORM.STAGING' | translate }}</option>
+              <option value="production">{{ 'PLATFORM.PRODUCTION' | translate }}</option>
+              <option value="development">{{ 'PLATFORM.DEVELOPMENT' | translate }}</option>
+              <option value="uat">{{ 'PLATFORM.UAT' | translate }}</option>
             </select>
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label for="relStartsAt">Starts At *</label>
+              <label for="relStartsAt">{{ 'PLATFORM.STARTS_AT' | translate }} *</label>
               <input
                 id="relStartsAt"
                 type="datetime-local"
@@ -1199,7 +1239,7 @@
               />
             </div>
             <div class="form-group">
-              <label for="relEndsAt">Ends At *</label>
+              <label for="relEndsAt">{{ 'PLATFORM.ENDS_AT' | translate }} *</label>
               <input
                 id="relEndsAt"
                 type="datetime-local"
@@ -1219,10 +1259,10 @@
               (ngModelChange)="updateReleaseField('freezeChanges', $event)"
               name="freezeChanges"
             />
-            <label for="freezeChanges">Freeze Changes During Window</label>
+            <label for="freezeChanges">{{ 'PLATFORM.FREEZE_CHANGES_DURING' | translate }}</label>
           </div>
           <div class="form-group">
-            <label for="relOwnerTeam">Owner Team</label>
+            <label for="relOwnerTeam">{{ 'PLATFORM.OWNER_TEAM' | translate }}</label>
             <input
               id="relOwnerTeam"
               type="text"
@@ -1233,7 +1273,7 @@
             />
           </div>
           <div class="form-group">
-            <label for="relNotes">Notes</label>
+            <label for="relNotes">{{ 'PLATFORM.NOTES' | translate }}</label>
             <textarea
               id="relNotes"
               class="form-input"
@@ -1247,14 +1287,15 @@
 
           <div class="drawer-footer">
             <button type="button" class="btn btn-outline" (click)="closeReleaseForm()">
-              Cancel
+              {{ 'COMMON.CANCEL' | translate }}
             </button>
             <button type="submit" class="btn btn-primary" [disabled]="saving()">
               @if (saving()) {
                 <div class="spinner spinner-xs"></div>
-                Scheduling…
+                {{ 'PLATFORM.SCHEDULING' | translate }}
               } @else {
-                <span class="material-icons">event_available</span> Schedule
+                <span class="material-icons">event_available</span>
+                {{ 'PLATFORM.SCHEDULE' | translate }}
               }
             </button>
           </div>

@@ -33,6 +33,7 @@ import {
   NurseCareNoteResponse,
 } from '../services/nurse-task.service';
 import { ToastService } from '../core/toast.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
@@ -49,7 +50,7 @@ type SectionType =
 @Component({
   selector: 'app-nurse-station',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
   templateUrl: './nurse-station.html',
   styleUrl: './nurse-station.scss',
 })

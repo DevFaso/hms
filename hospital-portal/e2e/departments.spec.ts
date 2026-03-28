@@ -9,17 +9,22 @@ test.describe('Departments Module', () => {
   test.describe('Department List', () => {
     test.beforeEach(async ({ page }) => {
       await page.goto('/departments', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(
+        () =>
+          document.querySelector('.page-title') ||
+          document.querySelector('.page-container'),
+        { timeout: 15_000 },
+      );
     });
 
     test('displays departments page with title', async ({ page }) => {
-      await expect(page.locator('main .page-title')).toContainText('Departments');
-      await expect(page.locator('main .page-subtitle')).toContainText('departments');
+      await expect(page.locator('.page-container .page-title')).toContainText(/Departments|Départements/);
     });
 
     test('displays search bar', async ({ page }) => {
       const search = page.locator('.search-bar input');
       await expect(search).toBeVisible();
-      await expect(search).toHaveAttribute('placeholder', /search/i);
+      await expect(search).toHaveAttribute('placeholder', /search|rechercher/i);
     });
 
     test('loads department data (grid or empty state)', async ({ page }) => {
@@ -57,7 +62,7 @@ test.describe('Departments Module', () => {
       const badges = page.locator('.dept-card .status-badge');
       if ((await badges.count()) > 0) {
         const text = await badges.first().textContent();
-        expect(text).toMatch(/Active|Inactive/);
+        expect(text).toMatch(/Active|Inactive|Actif|Inactif/i);
       }
     });
 

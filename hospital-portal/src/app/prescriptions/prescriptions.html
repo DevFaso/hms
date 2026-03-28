@@ -1,12 +1,12 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Prescriptions</h1>
-      <p class="page-subtitle">Medication orders and prescription management</p>
+      <h1 class="page-title">{{ 'PRESCRIPTIONS.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PRESCRIPTIONS.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
       <button class="btn-primary" (click)="openCreate()">
-        <span class="material-symbols-outlined">add</span> New Prescription
+        <span class="material-symbols-outlined">add</span> {{ 'PRESCRIPTIONS.NEW' | translate }}
       </button>
     </div>
   </div>
@@ -15,28 +15,28 @@
       <span class="material-symbols-outlined card-icon active">medication</span>
       <div class="card-info">
         <span class="card-value">{{ countByStatus('DRAFT') }}</span
-        ><span class="card-label">Draft</span>
+        ><span class="card-label">{{ 'PRESCRIPTIONS.DRAFT' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon completed">check_circle</span>
       <div class="card-info">
         <span class="card-value">{{ countByStatus('SIGNED') }}</span
-        ><span class="card-label">Signed</span>
+        ><span class="card-label">{{ 'PRESCRIPTIONS.SIGNED' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon cancelled">cancel</span>
       <div class="card-info">
         <span class="card-value">{{ countByStatus('CANCELLED') }}</span
-        ><span class="card-label">Cancelled</span>
+        ><span class="card-label">{{ 'PRESCRIPTIONS.CANCELLED' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon total">bar_chart</span>
       <div class="card-info">
         <span class="card-value">{{ prescriptions().length }}</span
-        ><span class="card-label">Total</span>
+        ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
       </div>
     </div>
   </div>
@@ -46,40 +46,40 @@
         class="tab-btn"
         [class.active]="activeTab() === 'all'"
         (click)="setTab('all')"
-        title="Show all"
+        [title]="'COMMON.SHOW_ALL' | translate"
       >
-        All
+        {{ 'COMMON.ALL' | translate }}
       </button>
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'active'"
         (click)="setTab('active')"
-        title="Show draft"
+        [title]="'PRESCRIPTIONS.SHOW_DRAFT' | translate"
       >
-        Draft
+        {{ 'PRESCRIPTIONS.DRAFT' | translate }}
       </button>
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'completed'"
         (click)="setTab('completed')"
-        title="Show signed"
+        [title]="'PRESCRIPTIONS.SHOW_SIGNED' | translate"
       >
-        Signed
+        {{ 'PRESCRIPTIONS.SIGNED' | translate }}
       </button>
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'cancelled'"
         (click)="setTab('cancelled')"
-        title="Show cancelled"
+        [title]="'PRESCRIPTIONS.SHOW_CANCELLED' | translate"
       >
-        Cancelled
+        {{ 'PRESCRIPTIONS.CANCELLED' | translate }}
       </button>
     </div>
     <div class="search-box">
       <span class="material-symbols-outlined">search</span
       ><input
         type="text"
-        placeholder="Search prescriptions..."
+        [placeholder]="'PRESCRIPTIONS.SEARCH' | translate"
         [(ngModel)]="searchTerm"
         (input)="applyFilter()"
       />
@@ -88,14 +88,14 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading prescriptions...</p>
+      <p>{{ 'PRESCRIPTIONS.LOADING' | translate }}</p>
     </div>
   }
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">medication</span>
-      <h3>No prescriptions found</h3>
-      <p>Prescriptions will appear here.</p>
+      <h3>{{ 'PRESCRIPTIONS.NO_RESULTS' | translate }}</h3>
+      <p>{{ 'PRESCRIPTIONS.EMPTY_MESSAGE' | translate }}</p>
     </div>
   }
   @if (!loading() && filtered().length > 0) {
@@ -103,21 +103,23 @@
       <table>
         <thead>
           <tr>
-            <th scope="col">Patient</th>
-            <th scope="col">Medication</th>
-            <th scope="col">Dosage</th>
-            <th scope="col">Frequency</th>
-            <th scope="col">Duration</th>
-            <th scope="col">Prescribed By</th>
-            <th scope="col">Status</th>
-            <th scope="col">Actions</th>
+            <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+            <th scope="col">{{ 'PRESCRIPTIONS.MEDICATION' | translate }}</th>
+            <th scope="col">{{ 'PRESCRIPTIONS.DOSAGE' | translate }}</th>
+            <th scope="col">{{ 'PRESCRIPTIONS.FREQUENCY' | translate }}</th>
+            <th scope="col">{{ 'PRESCRIPTIONS.DURATION' | translate }}</th>
+            <th scope="col">{{ 'PRESCRIPTIONS.PRESCRIBED_BY' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
           @for (p of filtered(); track p.id) {
             <tr class="data-row">
               <td>
-                <div class="cell-primary">{{ p.patientFullName || 'Unknown' }}</div>
+                <div class="cell-primary">
+                  {{ p.patientFullName ? p.patientFullName : ('COMMON.UNKNOWN' | translate) }}
+                </div>
               </td>
               <td>
                 <strong>{{ p.medicationDisplayName || p.medicationName }}</strong>
@@ -134,14 +136,22 @@
                   <button
                     class="action-link view-link"
                     (click)="viewDetail(p)"
-                    title="View prescription details"
+                    [title]="'PRESCRIPTIONS.VIEW_DETAILS' | translate"
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  <button class="action-link edit-link" (click)="openEdit(p)" title="Edit">
+                  <button
+                    class="action-link edit-link"
+                    (click)="openEdit(p)"
+                    [title]="'COMMON.EDIT' | translate"
+                  >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="action-link delete-link" (click)="confirmDelete(p)" title="Delete">
+                  <button
+                    class="action-link delete-link"
+                    (click)="confirmDelete(p)"
+                    [title]="'COMMON.DELETE' | translate"
+                  >
                     <span class="material-symbols-outlined">delete</span>
                   </button>
                 </div>
@@ -156,35 +166,39 @@
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
       <div class="detail-panel">
         <div class="detail-header">
-          <h2>Prescription Details</h2>
-          <button class="btn-close" (click)="closeDetail()" title="Close detail panel">
+          <h2>{{ 'PRESCRIPTIONS.DETAILS' | translate }}</h2>
+          <button
+            class="btn-close"
+            (click)="closeDetail()"
+            [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
         <div class="detail-body">
           <div class="detail-grid">
             <div class="detail-field">
-              <span class="field-label">Patient</span
+              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
               ><span class="field-value">{{ rx.patientFullName }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Medication</span
+              <span class="field-label">{{ 'PRESCRIPTIONS.MEDICATION' | translate }}</span
               ><span class="field-value">{{ rx.medicationDisplayName || rx.medicationName }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Dosage</span
+              <span class="field-label">{{ 'PRESCRIPTIONS.DOSAGE' | translate }}</span
               ><span class="field-value">{{ rx.dosage || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Frequency</span
+              <span class="field-label">{{ 'PRESCRIPTIONS.FREQUENCY' | translate }}</span
               ><span class="field-value">{{ rx.frequency || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Duration</span
+              <span class="field-label">{{ 'PRESCRIPTIONS.DURATION' | translate }}</span
               ><span class="field-value">{{ rx.duration || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Status</span
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="field-value"
                 ><span class="status-badge {{ getStatusClass(rx.status) }}">{{
                   rx.status
@@ -192,11 +206,11 @@
               >
             </div>
             <div class="detail-field">
-              <span class="field-label">Prescribed By</span
+              <span class="field-label">{{ 'PRESCRIPTIONS.PRESCRIBED_BY' | translate }}</span
               ><span class="field-value">{{ rx.staffFullName || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Created</span
+              <span class="field-label">{{ 'COMMON.CREATED' | translate }}</span
               ><span class="field-value">{{
                 rx.createdAt ? (rx.createdAt | date: 'medium') : '—'
               }}</span>
@@ -204,7 +218,7 @@
           </div>
           @if (rx.notes) {
             <div class="detail-notes">
-              <span class="field-label">Notes</span>
+              <span class="field-label">{{ 'COMMON.NOTES' | translate }}</span>
               <p>{{ rx.notes }}</p>
             </div>
           }
@@ -224,7 +238,9 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ editing() ? 'Edit Prescription' : 'New Prescription' }}</h2>
+        <h2>
+          {{ editing() ? ('PRESCRIPTIONS.EDIT' | translate) : ('PRESCRIPTIONS.NEW' | translate) }}
+        </h2>
         <button class="modal-close" (click)="closeModal()">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -232,7 +248,7 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label for="rx-patientSearch">Patient *</label>
+            <label for="rx-patientSearch">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
             @if (selectedPatient()) {
               <div class="picker-chip">
                 <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
@@ -246,7 +262,7 @@
                   type="button"
                   class="chip-clear"
                   (click)="clearPatient()"
-                  title="Change patient"
+                  [title]="'COMMON.CHANGE_PATIENT' | translate"
                 >
                   <span class="material-symbols-outlined">close</span>
                 </button>
@@ -258,7 +274,7 @@
                   id="rx-patientSearch"
                   class="picker-input"
                   type="text"
-                  placeholder="Search by name, email or MRN…"
+                  [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
                   [value]="patientQuery()"
                   (input)="onPatientQueryChange($any($event.target).value)"
                   (blur)="patientDropdownOpen.set(false)"
@@ -286,9 +302,9 @@
             }
           </div>
           <div class="field">
-            <label for="rx-staffId">Prescriber</label>
+            <label for="rx-staffId">{{ 'PRESCRIPTIONS.PRESCRIBER' | translate }}</label>
             <select id="rx-staffId" [(ngModel)]="form.staffId">
-              <option value="">Select prescriber...</option>
+              <option value="">{{ 'PRESCRIPTIONS.SELECT_PRESCRIBER' | translate }}</option>
               @for (s of staffMembers(); track s.id) {
                 <option [value]="s.id">{{ s.name }}</option>
               }
@@ -296,42 +312,47 @@
           </div>
         </div>
         <div class="field">
-          <label for="rx-medName">Medication Name *</label>
+          <label for="rx-medName">{{ 'PRESCRIPTIONS.MEDICATION_NAME' | translate }} *</label>
           <input
             id="rx-medName"
             type="text"
             [(ngModel)]="form.medicationName"
-            placeholder="e.g. Amoxicillin 500mg"
+            [placeholder]="'PRESCRIPTIONS.MEDICATION_PLACEHOLDER' | translate"
             required
           />
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="rx-dosage">Dosage</label>
-            <input id="rx-dosage" type="text" [(ngModel)]="form.dosage" placeholder="e.g. 500mg" />
+            <label for="rx-dosage">{{ 'PRESCRIPTIONS.DOSAGE' | translate }}</label>
+            <input
+              id="rx-dosage"
+              type="text"
+              [(ngModel)]="form.dosage"
+              [placeholder]="'PRESCRIPTIONS.DOSAGE_PLACEHOLDER' | translate"
+            />
           </div>
           <div class="field">
-            <label for="rx-frequency">Frequency</label>
+            <label for="rx-frequency">{{ 'PRESCRIPTIONS.FREQUENCY' | translate }}</label>
             <input
               id="rx-frequency"
               type="text"
               [(ngModel)]="form.frequency"
-              placeholder="e.g. 3x daily"
+              [placeholder]="'PRESCRIPTIONS.FREQUENCY_PLACEHOLDER' | translate"
             />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="rx-duration">Duration</label>
+            <label for="rx-duration">{{ 'PRESCRIPTIONS.DURATION' | translate }}</label>
             <input
               id="rx-duration"
               type="text"
               [(ngModel)]="form.duration"
-              placeholder="e.g. 7 days"
+              [placeholder]="'PRESCRIPTIONS.DURATION_PLACEHOLDER' | translate"
             />
           </div>
           <div class="field">
-            <label for="rx-status">Status</label>
+            <label for="rx-status">{{ 'COMMON.STATUS' | translate }}</label>
             <select id="rx-status" [(ngModel)]="form.status">
               @for (s of prescriptionStatuses; track s.value) {
                 <option [value]="s.value">{{ s.label }}</option>
@@ -341,33 +362,41 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="rx-encounterId">Encounter ID</label>
+            <label for="rx-encounterId">{{ 'PRESCRIPTIONS.ENCOUNTER_ID' | translate }}</label>
             <input
               id="rx-encounterId"
               type="text"
               [(ngModel)]="form.encounterId"
-              placeholder="Optional"
+              [placeholder]="'COMMON.OPTIONAL' | translate"
             />
           </div>
         </div>
         <div class="field">
-          <label for="rx-notes">Notes</label>
+          <label for="rx-notes">{{ 'COMMON.NOTES' | translate }}</label>
           <textarea
             id="rx-notes"
             [(ngModel)]="form.notes"
             rows="3"
-            placeholder="Prescription notes..."
+            [placeholder]="'PRESCRIPTIONS.NOTES_PLACEHOLDER' | translate"
           ></textarea>
         </div>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeModal()">Cancel</button>
+        <button class="btn-secondary" (click)="closeModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
         <button
           class="btn-primary"
           (click)="submitForm()"
           [disabled]="saving() || !form.medicationName"
         >
-          {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Create' }}
+          {{
+            saving()
+              ? ('COMMON.SAVING' | translate)
+              : editing()
+                ? ('COMMON.UPDATE' | translate)
+                : ('COMMON.CREATE' | translate)
+          }}
         </button>
       </div>
     </div>
@@ -389,22 +418,24 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>Delete Prescription</h2>
+        <h2>{{ 'PRESCRIPTIONS.DELETE_TITLE' | translate }}</h2>
         <button class="modal-close" (click)="cancelDelete()">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">
         <p class="delete-warning">
-          Are you sure you want to delete the prescription for
+          {{ 'PRESCRIPTIONS.DELETE_CONFIRM' | translate }}
           <strong>{{ deletingRx()?.medicationName }}</strong
-          >? This action cannot be undone.
+          >{{ 'COMMON.CANNOT_UNDO' | translate }}
         </p>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+        <button class="btn-secondary" (click)="cancelDelete()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
         <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
-          {{ deleting() ? 'Deleting...' : 'Delete' }}
+          {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
         </button>
       </div>
     </div>

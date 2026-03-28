@@ -16,11 +16,12 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-consultations',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './consultations.html',
   styleUrl: './consultations.scss',
 })

@@ -15,6 +15,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
   laterality?: ImagingLaterality | '';
@@ -23,7 +24,7 @@ type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
 @Component({
   selector: 'app-imaging',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './imaging.html',
   styleUrl: './imaging.scss',
 })

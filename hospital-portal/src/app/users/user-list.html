@@ -1,19 +1,20 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Users</h1>
+      <h1 class="page-title">{{ 'USERS.TITLE' | translate }}</h1>
       <p class="page-subtitle">
         @if (!loading()) {
-          {{ filtered().length }} user{{ filtered().length !== 1 ? 's' : '' }} ·
-          {{ totalElements() }} total
+          {{ filtered().length }}
+          {{ (filtered().length !== 1 ? 'USERS.USERS_PLURAL' : 'USERS.USER_SINGULAR') | translate }}
+          · {{ totalElements() }} {{ 'USERS.TOTAL' | translate }}
         } @else {
-          Manage system users and access
+          {{ 'USERS.SUBTITLE' | translate }}
         }
       </p>
     </div>
     <button class="btn-primary" (click)="openCreate()">
       <span class="material-symbols-outlined">person_add</span>
-      Register User
+      {{ 'USERS.REGISTER' | translate }}
     </button>
   </div>
 
@@ -23,14 +24,14 @@
       <span class="material-symbols-outlined search-icon">search</span>
       <input
         type="text"
-        placeholder="Search by name, email, username..."
+        [placeholder]="'USERS.SEARCH_PLACEHOLDER' | translate"
         [value]="searchTerm"
         (input)="searchTerm = $any($event.target).value; onSearchChange()"
       />
       @if (searchTerm) {
         <button
           class="search-clear"
-          title="Clear search"
+          [title]="'COMMON.CLEAR_SEARCH' | translate"
           (click)="searchTerm = ''; onSearchChange()"
         >
           <span class="material-symbols-outlined">close</span>
@@ -45,28 +46,28 @@
         [class.active]="!statusFilter"
         (click)="statusFilter = ''; onStatusFilterChange()"
       >
-        All
+        {{ 'COMMON.ALL' | translate }}
       </button>
       <button
         class="status-pill active-pill"
         [class.active]="statusFilter === 'active'"
         (click)="statusFilter = 'active'; onStatusFilterChange()"
       >
-        Active
+        {{ 'COMMON.ACTIVE' | translate }}
       </button>
       <button
         class="status-pill inactive-pill"
         [class.active]="statusFilter === 'inactive'"
         (click)="statusFilter = 'inactive'; onStatusFilterChange()"
       >
-        Inactive
+        {{ 'COMMON.INACTIVE' | translate }}
       </button>
       <button
         class="status-pill deleted-pill"
         [class.active]="statusFilter === 'deleted'"
         (click)="statusFilter = 'deleted'; onStatusFilterChange()"
       >
-        Deleted
+        {{ 'COMMON.DELETED' | translate }}
       </button>
     </div>
 
@@ -74,10 +75,10 @@
       class="filter-toggle-btn"
       [class.has-filters]="activeFilterCount > 0"
       (click)="showFilters.set(!showFilters())"
-      title="More filters"
+      [title]="'COMMON.MORE_FILTERS' | translate"
     >
       <span class="material-symbols-outlined">tune</span>
-      Filters
+      {{ 'COMMON.FILTERS' | translate }}
       @if (activeFilterCount > 0) {
         <span class="filter-badge">{{ activeFilterCount }}</span>
       }
@@ -87,15 +88,15 @@
   @if (showFilters()) {
     <div class="filter-row">
       <div class="filter-group">
-        <label class="filter-label" for="userRoleFilter">Role</label>
+        <label class="filter-label" for="userRoleFilter">{{ 'USERS.ROLE' | translate }}</label>
         <select
           id="userRoleFilter"
           class="filter-select"
-          title="Filter by role"
+          [title]="'USERS.FILTER_BY_ROLE' | translate"
           [(ngModel)]="roleFilter"
           (ngModelChange)="onRoleFilterChange()"
         >
-          <option value="">All Roles</option>
+          <option value="">{{ 'USERS.ALL_ROLES' | translate }}</option>
           @for (role of availableRoles(); track role.id) {
             <option [value]="role.name">{{ role.name }}</option>
           }
@@ -104,7 +105,7 @@
       @if (activeFilterCount > 0) {
         <button class="clear-filters-btn" (click)="clearFilters()">
           <span class="material-symbols-outlined">filter_alt_off</span>
-          Clear All
+          {{ 'COMMON.CLEAR_ALL' | translate }}
         </button>
       }
     </div>
@@ -113,7 +114,7 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading users...</p>
+      <p>{{ 'USERS.LOADING' | translate }}</p>
     </div>
   }
 
@@ -122,12 +123,12 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>User</th>
-            <th>Username</th>
-            <th>Role</th>
-            <th>Profile</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th>{{ 'USERS.USER' | translate }}</th>
+            <th>{{ 'USERS.USERNAME' | translate }}</th>
+            <th>{{ 'USERS.ROLE' | translate }}</th>
+            <th>{{ 'USERS.PROFILE' | translate }}</th>
+            <th>{{ 'COMMON.STATUS' | translate }}</th>
+            <th>{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -156,25 +157,39 @@
                   [class.inactive]="!user.active && !user.deleted"
                   [class.deleted]="user.deleted"
                 >
-                  {{ user.deleted ? 'Deleted' : user.active ? 'Active' : 'Inactive' }}
+                  {{
+                    user.deleted
+                      ? ('COMMON.DELETED' | translate)
+                      : user.active
+                        ? ('COMMON.ACTIVE' | translate)
+                        : ('COMMON.INACTIVE' | translate)
+                  }}
                 </span>
               </td>
               <td>
                 <div class="action-group">
-                  <button class="action-link edit" title="Edit" (click)="openEdit(user)">
+                  <button
+                    class="action-link edit"
+                    [title]="'COMMON.EDIT' | translate"
+                    (click)="openEdit(user)"
+                  >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
                   @if (user.deleted) {
                     <button
                       class="action-link restore"
-                      title="Restore user"
+                      [title]="'USERS.RESTORE_USER' | translate"
                       (click)="restoreUser(user)"
                       [disabled]="restoring()"
                     >
                       <span class="material-symbols-outlined">restore</span>
                     </button>
                   } @else {
-                    <button class="action-link delete" title="Delete" (click)="confirmDelete(user)">
+                    <button
+                      class="action-link delete"
+                      [title]="'COMMON.DELETE' | translate"
+                      (click)="confirmDelete(user)"
+                    >
                       <span class="material-symbols-outlined">delete</span>
                     </button>
                   }
@@ -195,7 +210,10 @@
         >
           <span class="material-symbols-outlined">chevron_left</span>
         </button>
-        <span class="page-info">Page {{ currentPage() + 1 }} of {{ totalPages() }}</span>
+        <span class="page-info"
+          >{{ 'COMMON.PAGE' | translate }} {{ currentPage() + 1 }} {{ 'COMMON.OF' | translate }}
+          {{ totalPages() }}</span
+        >
         <button
           class="page-btn"
           [disabled]="currentPage() >= totalPages() - 1"
@@ -210,13 +228,15 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">manage_accounts</span>
-      <h3>No users found</h3>
+      <h3>{{ 'USERS.NO_USERS_FOUND' | translate }}</h3>
       <p>
         @if (searchTerm || activeFilterCount > 0 || statusFilter) {
-          Try adjusting your search or filters.
-          <button class="link-btn" (click)="clearFilters()">Clear all filters</button>
+          {{ 'COMMON.TRY_ADJUSTING' | translate }}
+          <button class="link-btn" (click)="clearFilters()">
+            {{ 'COMMON.CLEAR_ALL_FILTERS' | translate }}
+          </button>
         } @else {
-          Register a new user to get started.
+          {{ 'USERS.REGISTER_TO_START' | translate }}
         }
       </p>
     </div>
@@ -238,7 +258,11 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ editing() ? 'Edit User' : 'Register New User' }}</h2>
+          <h2>
+            {{
+              editing() ? ('USERS.EDIT_USER' | translate) : ('USERS.REGISTER_NEW_USER' | translate)
+            }}
+          </h2>
           <button class="modal-close" (click)="closeCreate()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -248,7 +272,7 @@
             <!-- Name Row -->
             <div class="field-row">
               <div class="field">
-                <label for="firstName">First Name *</label>
+                <label for="firstName">{{ 'USERS.FIRST_NAME' | translate }} *</label>
                 <input
                   id="firstName"
                   type="text"
@@ -263,7 +287,7 @@
                 }
               </div>
               <div class="field">
-                <label for="lastName">Last Name *</label>
+                <label for="lastName">{{ 'USERS.LAST_NAME' | translate }} *</label>
                 <input
                   id="lastName"
                   type="text"
@@ -282,7 +306,7 @@
             <!-- Username & Email -->
             <div class="field-row">
               <div class="field">
-                <label for="username">Username *</label>
+                <label for="username">{{ 'USERS.USERNAME' | translate }} *</label>
                 <input
                   id="username"
                   type="text"
@@ -297,7 +321,7 @@
                 }
               </div>
               <div class="field">
-                <label for="email">Email *</label>
+                <label for="email">{{ 'PATIENTS.EMAIL' | translate }} *</label>
                 <input
                   id="email"
                   type="email"
@@ -316,7 +340,7 @@
             <!-- Password & Phone -->
             <div class="field-row">
               <div class="field">
-                <label for="password">Password *</label>
+                <label for="password">{{ 'USERS.PASSWORD' | translate }} *</label>
                 <input
                   id="password"
                   type="password"
@@ -331,7 +355,7 @@
                 }
               </div>
               <div class="field">
-                <label for="phoneNumber">Phone Number *</label>
+                <label for="phoneNumber">{{ 'PATIENTS.PHONE' | translate }} *</label>
                 <input
                   id="phoneNumber"
                   type="tel"
@@ -350,7 +374,7 @@
 
             <!-- Roles (multi-select checkboxes) -->
             <fieldset class="field">
-              <legend>Roles *</legend>
+              <legend>{{ 'USERS.ROLES' | translate }} *</legend>
               <div class="role-checkbox-group">
                 @for (role of availableRoles(); track role.id) {
                   <label class="role-checkbox">
@@ -363,7 +387,7 @@
                   </label>
                 }
                 @if (availableRoles().length === 0) {
-                  <span class="hint-text">Loading roles...</span>
+                  <span class="hint-text">{{ 'USERS.LOADING_ROLES' | translate }}</span>
                 }
               </div>
             </fieldset>
@@ -371,29 +395,27 @@
             <!-- License Number (conditional) -->
             @if (licenseRequired) {
               <div class="field">
-                <label for="licenseNumber">License Number *</label>
+                <label for="licenseNumber">{{ 'USERS.LICENSE_NUMBER' | translate }} *</label>
                 <input
                   id="licenseNumber"
                   type="text"
                   [(ngModel)]="createForm.licenseNumber"
                   name="licenseNumber"
                   required
-                  placeholder="Medical license number"
+                  [placeholder]="'USERS.LICENSE_PLACEHOLDER' | translate"
                   [class.input-error]="fieldErrors()['licenseNumber']"
                   (ngModelChange)="clearFieldError('licenseNumber')"
                 />
                 @if (fieldErrors()['licenseNumber']) {
                   <span class="field-error-msg">{{ fieldErrors()['licenseNumber'] }}</span>
                 }
-                <span class="hint-text"
-                  >Required for medical roles (Doctor, Nurse, Lab Scientist, Pharmacist)</span
-                >
+                <span class="hint-text">{{ 'USERS.LICENSE_HINT' | translate }}</span>
               </div>
             }
 
             <!-- Hospital -->
             <div class="field">
-              <label for="hospitalId">Hospital</label>
+              <label for="hospitalId">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</label>
               @if (hospitalLocked) {
                 <div class="locked-field">
                   <span class="material-symbols-outlined locked-icon" aria-hidden="true"
@@ -403,7 +425,7 @@
                 </div>
               } @else {
                 <select id="hospitalId" [(ngModel)]="createForm.hospitalId" name="hospitalId">
-                  <option value="">— None —</option>
+                  <option value="">— {{ 'COMMON.NONE' | translate }} —</option>
                   @for (h of availableHospitals(); track h.id) {
                     <option [value]="h.id">{{ h.name }}</option>
                   }
@@ -414,22 +436,22 @@
             <!-- Job Title & Employment Type -->
             <div class="field-row">
               <div class="field">
-                <label for="jobTitle">Job Title</label>
+                <label for="jobTitle">{{ 'USERS.JOB_TITLE' | translate }}</label>
                 <select id="jobTitle" [(ngModel)]="createForm.jobTitle" name="jobTitle">
-                  <option value="">— Select —</option>
+                  <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
                   @for (jt of jobTitles; track jt) {
                     <option [value]="jt">{{ formatEnumLabel(jt) }}</option>
                   }
                 </select>
               </div>
               <div class="field">
-                <label for="employmentType">Employment Type</label>
+                <label for="employmentType">{{ 'USERS.EMPLOYMENT_TYPE' | translate }}</label>
                 <select
                   id="employmentType"
                   [(ngModel)]="createForm.employmentType"
                   name="employmentType"
                 >
-                  <option value="">— Select —</option>
+                  <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
                   @for (et of employmentTypes; track et) {
                     <option [value]="et">{{ formatEnumLabel(et) }}</option>
                   }
@@ -439,13 +461,13 @@
 
             <!-- Specialization -->
             <div class="field">
-              <label for="specialization">Specialization</label>
+              <label for="specialization">{{ 'USERS.SPECIALIZATION' | translate }}</label>
               <select
                 id="specialization"
                 [(ngModel)]="createForm.specialization"
                 name="specialization"
               >
-                <option value="">— Select —</option>
+                <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
                 @for (sp of specializations; track sp) {
                   <option [value]="sp">{{ formatEnumLabel(sp) }}</option>
                 }
@@ -453,9 +475,17 @@
             </div>
           </div>
           <div class="modal-actions">
-            <button type="button" class="btn-secondary" (click)="closeCreate()">Cancel</button>
+            <button type="button" class="btn-secondary" (click)="closeCreate()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
             <button type="submit" class="btn-primary" [disabled]="saving()">
-              {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Register' }}
+              {{
+                saving()
+                  ? ('COMMON.SAVING' | translate)
+                  : editing()
+                    ? ('COMMON.UPDATE' | translate)
+                    : ('USERS.REGISTER' | translate)
+              }}
             </button>
           </div>
         </form>
@@ -479,7 +509,7 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>Delete User</h2>
+          <h2>{{ 'USERS.DELETE_USER' | translate }}</h2>
           <button class="modal-close" (click)="cancelDelete()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -488,24 +518,26 @@
           <div class="delete-warning">
             <span class="material-symbols-outlined warning-icon">warning</span>
             <p>
-              Are you sure you want to delete
+              {{ 'USERS.CONFIRM_DELETE' | translate }}
               <strong>{{ deletingUser()?.firstName }} {{ deletingUser()?.lastName }}</strong
               >?
             </p>
             <p class="delete-detail">
-              This will permanently remove this user account and all associated data.
+              {{ 'USERS.DELETE_WARNING' | translate }}
             </p>
           </div>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
           <button
             type="button"
             class="btn-danger"
             [disabled]="deleting()"
             (click)="executeDelete()"
           >
-            {{ deleting() ? 'Deleting...' : 'Delete' }}
+            {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
           </button>
         </div>
       </dialog>

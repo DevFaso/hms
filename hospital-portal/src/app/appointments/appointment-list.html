@@ -1,19 +1,19 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Appointments</h1>
+      <h1 class="page-title">{{ 'APPOINTMENTS.TITLE' | translate }}</h1>
       <p class="page-subtitle">
         @if (!loading()) {
-          {{ filtered().length }} appointment{{ filtered().length !== 1 ? 's' : '' }}
+          {{ filtered().length }} {{ 'APPOINTMENTS.APPT_COUNT' | translate }}
         } @else {
-          Schedule and manage patient appointments
+          {{ 'APPOINTMENTS.SUBTITLE' | translate }}
         }
       </p>
     </div>
     @if (canCreate) {
       <a routerLink="/appointments/new" class="btn-primary">
         <span class="material-symbols-outlined">event</span>
-        New Appointment
+        {{ 'APPOINTMENTS.NEW' | translate }}
       </a>
     }
   </div>
@@ -24,7 +24,7 @@
       <span class="material-symbols-outlined search-icon">search</span>
       <input
         type="text"
-        placeholder="Search by patient, doctor, reason, or hospital..."
+        [placeholder]="'APPOINTMENTS.SEARCH' | translate"
         [value]="searchTerm"
         (input)="onSearchChange($any($event.target).value)"
       />
@@ -42,42 +42,42 @@
         [class.active]="!statusFilter"
         (click)="statusFilter = ''; onFilterChange()"
       >
-        All
+        {{ 'COMMON.ALL' | translate }}
       </button>
       <button
         class="status-pill scheduled"
         [class.active]="statusFilter === 'SCHEDULED'"
         (click)="statusFilter = 'SCHEDULED'; onFilterChange()"
       >
-        Scheduled
+        {{ 'APPOINTMENTS.SCHEDULED' | translate }}
       </button>
       <button
         class="status-pill confirmed"
         [class.active]="statusFilter === 'CONFIRMED'"
         (click)="statusFilter = 'CONFIRMED'; onFilterChange()"
       >
-        Confirmed
+        {{ 'APPOINTMENTS.CONFIRMED' | translate }}
       </button>
       <button
         class="status-pill in-progress"
         [class.active]="statusFilter === 'IN_PROGRESS'"
         (click)="statusFilter = 'IN_PROGRESS'; onFilterChange()"
       >
-        In Progress
+        {{ 'ENCOUNTERS.IN_PROGRESS' | translate }}
       </button>
       <button
         class="status-pill completed"
         [class.active]="statusFilter === 'COMPLETED'"
         (click)="statusFilter = 'COMPLETED'; onFilterChange()"
       >
-        Completed
+        {{ 'ENCOUNTERS.COMPLETED' | translate }}
       </button>
       <button
         class="status-pill cancelled"
         [class.active]="statusFilter === 'CANCELLED'"
         (click)="statusFilter = 'CANCELLED'; onFilterChange()"
       >
-        Cancelled
+        {{ 'APPOINTMENTS.CANCELLED' | translate }}
       </button>
     </div>
 
@@ -88,7 +88,7 @@
       title="More filters"
     >
       <span class="material-symbols-outlined">tune</span>
-      More
+      {{ 'COMMON.MORE' | translate }}
       @if (activeFilterCount > 0) {
         <span class="filter-badge">{{ activeFilterCount }}</span>
       }
@@ -99,7 +99,9 @@
   @if (showFilters()) {
     <div class="filter-row">
       <div class="filter-group">
-        <label class="filter-label" for="apptDateFrom">From Date</label>
+        <label class="filter-label" for="apptDateFrom">{{
+          'APPOINTMENTS.FROM_DATE' | translate
+        }}</label>
         <input
           id="apptDateFrom"
           type="date"
@@ -112,7 +114,9 @@
       </div>
 
       <div class="filter-group">
-        <label class="filter-label" for="apptDateTo">To Date</label>
+        <label class="filter-label" for="apptDateTo">{{
+          'APPOINTMENTS.TO_DATE' | translate
+        }}</label>
         <input
           id="apptDateTo"
           type="date"
@@ -126,7 +130,9 @@
 
       @if (hospitals().length > 0) {
         <div class="filter-group">
-          <label class="filter-label" for="apptHospital">Hospital</label>
+          <label class="filter-label" for="apptHospital">{{
+            'ENCOUNTERS.HOSPITAL' | translate
+          }}</label>
           <select
             id="apptHospital"
             class="filter-select"
@@ -134,7 +140,7 @@
             [(ngModel)]="hospitalFilter"
             (ngModelChange)="onFilterChange()"
           >
-            <option value="">All Hospitals</option>
+            <option value="">{{ 'COMMON.ALL_HOSPITALS' | translate }}</option>
             @for (h of hospitals(); track h.id) {
               <option [value]="h.id">{{ h.name }}</option>
             }
@@ -144,16 +150,18 @@
 
       <!-- Today / This Week shortcuts -->
       <div class="filter-group date-shortcuts">
-        <span class="filter-label" aria-hidden="true">Quick Date</span>
+        <span class="filter-label" aria-hidden="true">{{
+          'APPOINTMENTS.QUICK_DATE' | translate
+        }}</span>
         <div class="shortcut-btns">
           <button
             class="shortcut-btn"
             (click)="dateFrom = todayIso(); dateTo = todayIso(); onFilterChange()"
           >
-            Today
+            {{ 'APPOINTMENTS.TODAY' | translate }}
           </button>
           <button class="shortcut-btn" (click)="dateFrom = ''; dateTo = ''; onFilterChange()">
-            All
+            {{ 'COMMON.ALL' | translate }}
           </button>
         </div>
       </div>
@@ -161,7 +169,7 @@
       @if (activeFilterCount > 0) {
         <button class="clear-filters-btn" (click)="clearFilters()">
           <span class="material-symbols-outlined">filter_alt_off</span>
-          Clear All
+          {{ 'COMMON.CLEAR_ALL' | translate }}
         </button>
       }
     </div>
@@ -172,7 +180,7 @@
     <div class="active-chips">
       @if (dateFrom) {
         <span class="filter-chip">
-          From: {{ dateFrom }}
+          {{ 'APPOINTMENTS.FROM' | translate }}: {{ dateFrom }}
           <button class="chip-remove" (click)="removeFilter('dateFrom')">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -180,7 +188,7 @@
       }
       @if (dateTo) {
         <span class="filter-chip">
-          To: {{ dateTo }}
+          {{ 'APPOINTMENTS.TO' | translate }}: {{ dateTo }}
           <button class="chip-remove" (click)="removeFilter('dateTo')">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -200,7 +208,7 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading appointments...</p>
+      <p>{{ 'APPOINTMENTS.LOADING' | translate }}</p>
     </div>
   }
 
@@ -223,7 +231,7 @@
                   : 'none'
               "
             >
-              Patient
+              {{ 'PATIENTS.PATIENT_NAME' | translate }}
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('patient') }}</span>
             </th>
             <th
@@ -240,7 +248,7 @@
                   : 'none'
               "
             >
-              Doctor
+              {{ 'APPOINTMENTS.DOCTOR' | translate }}
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('doctor') }}</span>
             </th>
             <th
@@ -253,11 +261,11 @@
                 sortField() === 'date' ? (sortDir() === 'asc' ? 'ascending' : 'descending') : 'none'
               "
             >
-              Date &amp; Time
+              {{ 'APPOINTMENTS.DATE_TIME' | translate }}
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('date') }}</span>
             </th>
-            <th scope="col">Reason</th>
-            <th scope="col">Hospital</th>
+            <th scope="col">{{ 'APPOINTMENTS.REASON' | translate }}</th>
+            <th scope="col">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</th>
             <th
               class="sortable-th"
               (click)="sort('status')"
@@ -272,10 +280,10 @@
                   : 'none'
               "
             >
-              Status
+              {{ 'COMMON.STATUS' | translate }}
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('status') }}</span>
             </th>
-            <th scope="col">Actions</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -299,7 +307,7 @@
                 <a
                   [routerLink]="['/appointments', appt.id]"
                   class="action-link"
-                  title="View appointment"
+                  [title]="'APPOINTMENTS.VIEW' | translate"
                 >
                   <span class="material-symbols-outlined">arrow_forward</span>
                 </a>
@@ -409,13 +417,15 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">calendar_month</span>
-      <h3>No appointments found</h3>
+      <h3>{{ 'APPOINTMENTS.NO_APPOINTMENTS' | translate }}</h3>
       <p>
         @if (searchTerm || activeFilterCount > 0 || statusFilter) {
-          Try adjusting your search or filters.
-          <button class="link-btn" (click)="clearFilters()">Clear all filters</button>
+          {{ 'COMMON.TRY_ADJUSTING' | translate }}
+          <button class="link-btn" (click)="clearFilters()">
+            {{ 'COMMON.CLEAR_ALL_FILTERS' | translate }}
+          </button>
         } @else {
-          Schedule your first appointment to get started.
+          {{ 'APPOINTMENTS.SCHEDULE_FIRST' | translate }}
         }
       </p>
     </div>

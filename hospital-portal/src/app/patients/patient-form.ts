@@ -9,13 +9,14 @@ import { ToastService } from '../core/toast.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ReceptionService, DuplicateCandidate } from '../reception/reception.service';
+import { TranslateModule } from '@ngx-translate/core';
 import { switchMap, catchError, debounceTime, distinctUntilChanged, Subject } from 'rxjs';
 import { EMPTY } from 'rxjs';
 
 @Component({
   selector: 'app-patient-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
   templateUrl: './patient-form.html',
   styleUrl: './patient-form.scss',
 })

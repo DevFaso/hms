@@ -8,6 +8,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { PermissionService } from '../core/permission.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 type SortField = 'name' | 'mrn' | 'gender' | 'status' | 'createdAt';
 type SortDir = 'asc' | 'desc';
@@ -15,7 +16,7 @@ type SortDir = 'asc' | 'desc';
 @Component({
   selector: 'app-patient-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule],
+  imports: [CommonModule, RouterLink, FormsModule, TranslateModule],
   templateUrl: './patient-list.html',
   styleUrl: './patient-list.scss',
 })

@@ -16,6 +16,12 @@ test.describe('Admin Modules', () => {
 
     test('organizations page loads data or empty state', async ({ page }) => {
       await page.goto('/organizations', { waitUntil: 'domcontentloaded' });
+      await page.waitForFunction(
+        () =>
+          document.querySelector('.page-container') ||
+          document.querySelector('.page-title'),
+        { timeout: 15_000 },
+      );
       await page.waitForFunction(() => !document.querySelector('.loading-state'), {
         timeout: 15_000,
       });

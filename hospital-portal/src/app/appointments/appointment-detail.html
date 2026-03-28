@@ -4,11 +4,11 @@
     <div class="header-left">
       <button class="btn-back" (click)="goBack()">
         <span class="material-symbols-outlined">arrow_back</span>
-        Back to Appointments
+        {{ 'APPOINTMENTS.BACK_TO_LIST' | translate }}
       </button>
       <div>
-        <h1 class="page-title">Appointment Details</h1>
-        <p class="page-subtitle">View and manage this appointment</p>
+        <h1 class="page-title">{{ 'APPOINTMENTS.APPOINTMENT_DETAILS' | translate }}</h1>
+        <p class="page-subtitle">{{ 'APPOINTMENTS.VIEW_MANAGE_SUBTITLE' | translate }}</p>
       </div>
     </div>
 
@@ -17,13 +17,13 @@
         @if (canReschedule) {
           <button class="btn-secondary" (click)="openReschedule()" [disabled]="saving()">
             <span class="material-symbols-outlined">event_repeat</span>
-            Reschedule
+            {{ 'APPOINTMENTS.RESCHEDULE' | translate }}
           </button>
         }
         @if (canCancel) {
           <button class="btn-danger" (click)="openCancelConfirm()" [disabled]="cancelling()">
             <span class="material-symbols-outlined">cancel</span>
-            Cancel Appointment
+            {{ 'APPOINTMENTS.CANCEL_APPOINTMENT' | translate }}
           </button>
         }
       </div>
@@ -34,7 +34,7 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading appointment...</p>
+      <p>{{ 'APPOINTMENTS.LOADING_APPOINTMENT' | translate }}</p>
     </div>
   }
 
@@ -45,14 +45,14 @@
       <div class="status-banner" [class]="getStatusClass(appt.status)">
         <span class="material-symbols-outlined">info</span>
         <span
-          >Status: <strong>{{ appt.status }}</strong></span
+          >{{ 'COMMON.STATUS' | translate }}: <strong>{{ appt.status }}</strong></span
         >
 
         @if (canUpdateStatus) {
           <div class="status-actions">
             @if (appt.status === 'SCHEDULED' || appt.status === 'PENDING') {
               <button class="btn-xs btn-confirm" (click)="markAsConfirmed()" [disabled]="saving()">
-                Confirm
+                {{ 'APPOINTMENTS.CONFIRM' | translate }}
               </button>
             }
             @if (appt.status === 'CONFIRMED' || appt.status === 'IN_PROGRESS') {
@@ -62,11 +62,11 @@
                 [disabled]="saving() || !hasAppointmentStarted"
                 [title]="
                   hasAppointmentStarted
-                    ? 'Mark as completed'
-                    : 'Cannot complete before scheduled start time'
+                    ? ('APPOINTMENTS.MARK_COMPLETED' | translate)
+                    : ('APPOINTMENTS.CANNOT_COMPLETE_BEFORE_START' | translate)
                 "
               >
-                Complete
+                {{ 'APPOINTMENTS.COMPLETE' | translate }}
               </button>
               <button
                 class="btn-xs btn-noshow"
@@ -74,11 +74,11 @@
                 [disabled]="saving() || !hasAppointmentStarted"
                 [title]="
                   hasAppointmentStarted
-                    ? 'Mark as no-show'
-                    : 'Cannot mark no-show before scheduled start time'
+                    ? ('APPOINTMENTS.MARK_NO_SHOW' | translate)
+                    : ('APPOINTMENTS.CANNOT_NO_SHOW_BEFORE_START' | translate)
                 "
               >
-                No Show
+                {{ 'APPOINTMENTS.NO_SHOW' | translate }}
               </button>
             }
           </div>
@@ -89,38 +89,38 @@
       <div class="detail-card">
         <div class="card-header">
           <span class="material-symbols-outlined">calendar_today</span>
-          <h2>Appointment Information</h2>
+          <h2>{{ 'APPOINTMENTS.APPOINTMENT_INFORMATION' | translate }}</h2>
         </div>
         <div class="detail-fields">
           <div class="field-row">
-            <span class="field-label">Date</span>
+            <span class="field-label">{{ 'APPOINTMENTS.DATE' | translate }}</span>
             <span class="field-value">{{ appt.appointmentDate }}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">Time</span>
+            <span class="field-label">{{ 'APPOINTMENTS.TIME' | translate }}</span>
             <span class="field-value">{{ appt.startTime }} – {{ appt.endTime }}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">Reason</span>
+            <span class="field-label">{{ 'APPOINTMENTS.REASON' | translate }}</span>
             <span class="field-value">{{ appt.reason }}</span>
           </div>
           @if (appt.notes) {
             <div class="field-row">
-              <span class="field-label">Notes</span>
+              <span class="field-label">{{ 'APPOINTMENTS.NOTES' | translate }}</span>
               <span class="field-value">{{ appt.notes }}</span>
             </div>
           }
           <div class="field-row">
-            <span class="field-label">Created By</span>
+            <span class="field-label">{{ 'APPOINTMENTS.CREATED_BY' | translate }}</span>
             <span class="field-value">{{ appt.createdByName }}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">Created At</span>
+            <span class="field-label">{{ 'APPOINTMENTS.CREATED_AT' | translate }}</span>
             <span class="field-value">{{ appt.createdAt | date: 'medium' }}</span>
           </div>
           @if (appt.updatedAt !== appt.createdAt) {
             <div class="field-row">
-              <span class="field-label">Last Updated</span>
+              <span class="field-label">{{ 'APPOINTMENTS.LAST_UPDATED' | translate }}</span>
               <span class="field-value">{{ appt.updatedAt | date: 'medium' }}</span>
             </div>
           }
@@ -131,20 +131,20 @@
       <div class="detail-card">
         <div class="card-header">
           <span class="material-symbols-outlined">person</span>
-          <h2>Patient</h2>
+          <h2>{{ 'PATIENTS.PATIENT' | translate }}</h2>
         </div>
         <div class="detail-fields">
           <div class="field-row">
-            <span class="field-label">Name</span>
+            <span class="field-label">{{ 'COMMON.NAME' | translate }}</span>
             <span class="field-value">{{ appt.patientName }}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">Email</span>
+            <span class="field-label">{{ 'COMMON.EMAIL' | translate }}</span>
             <span class="field-value">{{ appt.patientEmail }}</span>
           </div>
           @if (appt.patientPhone) {
             <div class="field-row">
-              <span class="field-label">Phone</span>
+              <span class="field-label">{{ 'COMMON.PHONE' | translate }}</span>
               <span class="field-value">{{ appt.patientPhone }}</span>
             </div>
           }
@@ -155,15 +155,15 @@
       <div class="detail-card">
         <div class="card-header">
           <span class="material-symbols-outlined">medical_services</span>
-          <h2>Doctor / Staff</h2>
+          <h2>{{ 'APPOINTMENTS.DOCTOR_STAFF' | translate }}</h2>
         </div>
         <div class="detail-fields">
           <div class="field-row">
-            <span class="field-label">Name</span>
+            <span class="field-label">{{ 'COMMON.NAME' | translate }}</span>
             <span class="field-value">{{ appt.staffName }}</span>
           </div>
           <div class="field-row">
-            <span class="field-label">Email</span>
+            <span class="field-label">{{ 'COMMON.EMAIL' | translate }}</span>
             <span class="field-value">{{ appt.staffEmail }}</span>
           </div>
         </div>
@@ -173,16 +173,16 @@
       <div class="detail-card">
         <div class="card-header">
           <span class="material-symbols-outlined">local_hospital</span>
-          <h2>Location</h2>
+          <h2>{{ 'APPOINTMENTS.LOCATION' | translate }}</h2>
         </div>
         <div class="detail-fields">
           <div class="field-row">
-            <span class="field-label">Hospital</span>
+            <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span>
             <span class="field-value">{{ appt.hospitalName }}</span>
           </div>
           @if (appt.hospitalAddress) {
             <div class="field-row">
-              <span class="field-label">Address</span>
+              <span class="field-label">{{ 'APPOINTMENTS.ADDRESS' | translate }}</span>
               <span class="field-value">{{ appt.hospitalAddress }}</span>
             </div>
           }
@@ -208,7 +208,7 @@
       tabindex="-1"
     >
       <div class="modal-header">
-        <h2>Reschedule Appointment</h2>
+        <h2>{{ 'APPOINTMENTS.RESCHEDULE_APPOINTMENT' | translate }}</h2>
         <button class="modal-close" (click)="closeReschedule()">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -216,7 +216,7 @@
       <form (ngSubmit)="submitReschedule()">
         <div class="modal-body">
           <div class="field">
-            <label for="reschedDate">New Date *</label>
+            <label for="reschedDate">{{ 'APPOINTMENTS.NEW_DATE' | translate }} *</label>
             <input
               id="reschedDate"
               type="date"
@@ -227,7 +227,7 @@
           </div>
           <div class="form-row-two">
             <div class="field">
-              <label for="reschedStart">Start Time *</label>
+              <label for="reschedStart">{{ 'APPOINTMENTS.START_TIME' | translate }} *</label>
               <input
                 id="reschedStart"
                 type="time"
@@ -237,7 +237,7 @@
               />
             </div>
             <div class="field">
-              <label for="reschedEnd">End Time *</label>
+              <label for="reschedEnd">{{ 'APPOINTMENTS.END_TIME' | translate }} *</label>
               <input
                 id="reschedEnd"
                 type="time"
@@ -248,20 +248,26 @@
             </div>
           </div>
           <div class="field">
-            <label for="reschedNotes">Notes (optional)</label>
+            <label for="reschedNotes">{{ 'APPOINTMENTS.NOTES_OPTIONAL' | translate }}</label>
             <textarea
               id="reschedNotes"
               rows="3"
               [(ngModel)]="rescheduleNotes"
               name="reschedNotes"
-              placeholder="Add any notes about the reschedule..."
+              [placeholder]="'APPOINTMENTS.RESCHEDULE_NOTES_PLACEHOLDER' | translate"
             ></textarea>
           </div>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="closeReschedule()">Cancel</button>
+          <button type="button" class="btn-secondary" (click)="closeReschedule()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
           <button type="submit" class="btn-primary" [disabled]="saving()">
-            {{ saving() ? 'Saving...' : 'Confirm Reschedule' }}
+            {{
+              saving()
+                ? ('COMMON.SAVING' | translate)
+                : ('APPOINTMENTS.CONFIRM_RESCHEDULE' | translate)
+            }}
           </button>
         </div>
       </form>
@@ -285,20 +291,20 @@
       tabindex="-1"
     >
       <div class="modal-header">
-        <h2>Cancel Appointment</h2>
+        <h2>{{ 'APPOINTMENTS.CANCEL_APPOINTMENT' | translate }}</h2>
         <button class="modal-close" (click)="closeCancelConfirm()">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">
         <p class="confirm-message">
-          Are you sure you want to cancel this appointment?<br />
-          <strong>This action cannot be undone.</strong>
+          {{ 'APPOINTMENTS.CANCEL_CONFIRM_MESSAGE' | translate }}<br />
+          <strong>{{ 'APPOINTMENTS.CANNOT_BE_UNDONE' | translate }}</strong>
         </p>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" (click)="closeCancelConfirm()">
-          Keep Appointment
+          {{ 'APPOINTMENTS.KEEP_APPOINTMENT' | translate }}
         </button>
         <button
           type="button"
@@ -306,7 +312,11 @@
           (click)="executeCancel()"
           [disabled]="cancelling()"
         >
-          {{ cancelling() ? 'Cancelling...' : 'Yes, Cancel Appointment' }}
+          {{
+            cancelling()
+              ? ('APPOINTMENTS.CANCELLING' | translate)
+              : ('APPOINTMENTS.YES_CANCEL' | translate)
+          }}
         </button>
       </div>
     </dialog>

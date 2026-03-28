@@ -1,21 +1,20 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Patients</h1>
+      <h1 class="page-title">{{ 'PATIENTS.TITLE' | translate }}</h1>
       <p class="page-subtitle">
         @if (!loading()) {
-          {{ filtered().length }} of {{ patients().length }} patient{{
-            patients().length !== 1 ? 's' : ''
-          }}
+          {{ filtered().length }} / {{ patients().length }}
+          {{ 'PATIENTS.PATIENT_COUNT' | translate }}
         } @else {
-          Manage patient records and registrations
+          {{ 'PATIENTS.SUBTITLE' | translate }}
         }
       </p>
     </div>
     @if (canCreate) {
       <a routerLink="/patients/new" class="btn-primary">
         <span class="material-symbols-outlined">person_add</span>
-        Register Patient
+        {{ 'PATIENTS.REGISTER' | translate }}
       </a>
     }
   </div>
@@ -26,7 +25,7 @@
       <span class="material-symbols-outlined search-icon">search</span>
       <input
         type="text"
-        placeholder="Search by name, email, phone, or MRN..."
+        [placeholder]="'PATIENTS.SEARCH' | translate"
         [value]="searchTerm"
         (input)="onSearchChange($any($event.target).value)"
       />
@@ -44,7 +43,7 @@
       title="Toggle filters"
     >
       <span class="material-symbols-outlined">tune</span>
-      Filters
+      {{ 'COMMON.FILTERS' | translate }}
       @if (activeFilterCount > 0) {
         <span class="filter-badge">{{ activeFilterCount }}</span>
       }
@@ -55,7 +54,7 @@
   @if (showFilters()) {
     <div class="filter-row">
       <div class="filter-group">
-        <label class="filter-label" for="genderFilter">Gender</label>
+        <label class="filter-label" for="genderFilter">{{ 'PATIENTS.GENDER' | translate }}</label>
         <select
           id="genderFilter"
           class="filter-select"
@@ -71,7 +70,7 @@
       </div>
 
       <div class="filter-group">
-        <label class="filter-label" for="statusFilter">Status</label>
+        <label class="filter-label" for="statusFilter">{{ 'COMMON.STATUS' | translate }}</label>
         <select
           id="statusFilter"
           class="filter-select"
@@ -80,13 +79,15 @@
           (ngModelChange)="onFilterChange()"
         >
           <option value="">All</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
+          <option value="active">{{ 'COMMON.ACTIVE' | translate }}</option>
+          <option value="inactive">{{ 'COMMON.INACTIVE' | translate }}</option>
         </select>
       </div>
 
       <div class="filter-group">
-        <label class="filter-label" for="bloodTypeFilter">Blood Type</label>
+        <label class="filter-label" for="bloodTypeFilter">{{
+          'PATIENTS.BLOOD_TYPE' | translate
+        }}</label>
         <select
           id="bloodTypeFilter"
           class="filter-select"
@@ -103,7 +104,9 @@
 
       @if (hospitals().length > 0) {
         <div class="filter-group">
-          <label class="filter-label" for="hospitalFilter">Hospital</label>
+          <label class="filter-label" for="hospitalFilter">{{
+            'ENCOUNTERS.HOSPITAL' | translate
+          }}</label>
           <select
             id="hospitalFilter"
             class="filter-select"
@@ -111,7 +114,7 @@
             [(ngModel)]="hospitalFilter"
             (ngModelChange)="onFilterChange()"
           >
-            <option value="">All Hospitals</option>
+            <option value="">{{ 'COMMON.ALL_HOSPITALS' | translate }}</option>
             @for (h of hospitals(); track h.id) {
               <option [value]="h.id">{{ h.name }}</option>
             }
@@ -122,7 +125,7 @@
       @if (activeFilterCount > 0) {
         <button class="clear-filters-btn" (click)="clearFilters()">
           <span class="material-symbols-outlined">filter_alt_off</span>
-          Clear All
+          {{ 'COMMON.CLEAR_ALL' | translate }}
         </button>
       }
     </div>
@@ -133,7 +136,7 @@
     <div class="active-chips">
       @if (genderFilter) {
         <span class="filter-chip">
-          Gender: {{ formatGender(genderFilter) }}
+          {{ 'PATIENTS.GENDER' | translate }}: {{ formatGender(genderFilter) }}
           <button class="chip-remove" (click)="removeFilter('gender')">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -141,7 +144,7 @@
       }
       @if (statusFilter) {
         <span class="filter-chip">
-          Status: {{ statusFilter | titlecase }}
+          {{ 'COMMON.STATUS' | translate }}: {{ statusFilter | titlecase }}
           <button class="chip-remove" (click)="removeFilter('status')">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -149,7 +152,7 @@
       }
       @if (bloodTypeFilter) {
         <span class="filter-chip">
-          Blood: {{ bloodTypeFilter }}
+          {{ 'PATIENTS.BLOOD' | translate }}: {{ bloodTypeFilter }}
           <button class="chip-remove" (click)="removeFilter('bloodType')">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -157,7 +160,7 @@
       }
       @if (hospitalFilter) {
         <span class="filter-chip">
-          Hospital: {{ hospitalName(hospitalFilter) }}
+          {{ 'ENCOUNTERS.HOSPITAL' | translate }}: {{ hospitalName(hospitalFilter) }}
           <button class="chip-remove" (click)="removeFilter('hospital')">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -170,7 +173,7 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading patients...</p>
+      <p>{{ 'PATIENTS.LOADING' | translate }}</p>
     </div>
   }
 
@@ -190,7 +193,7 @@
                 sortField() === 'name' ? (sortDir() === 'asc' ? 'ascending' : 'descending') : 'none'
               "
             >
-              Name
+              {{ 'PATIENTS.PATIENT_NAME' | translate }}
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('name') }}</span>
             </th>
             <th
@@ -203,11 +206,11 @@
                 sortField() === 'mrn' ? (sortDir() === 'asc' ? 'ascending' : 'descending') : 'none'
               "
             >
-              MRN
+              {{ 'PATIENTS.MRN' | translate }}
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('mrn') }}</span>
             </th>
-            <th scope="col">Email</th>
-            <th scope="col">Phone</th>
+            <th scope="col">{{ 'PATIENTS.EMAIL' | translate }}</th>
+            <th scope="col">{{ 'PATIENTS.PHONE' | translate }}</th>
             <th
               class="sortable-th"
               (click)="sort('gender')"
@@ -222,10 +225,10 @@
                   : 'none'
               "
             >
-              Gender
+              {{ 'PATIENTS.GENDER' | translate }}
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('gender') }}</span>
             </th>
-            <th scope="col">Blood Type</th>
+            <th scope="col">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</th>
             <th
               class="sortable-th"
               (click)="sort('status')"
@@ -240,10 +243,10 @@
                   : 'none'
               "
             >
-              Status
+              {{ 'COMMON.STATUS' | translate }}
               <span class="material-symbols-outlined sort-icon">{{ sortIcon('status') }}</span>
             </th>
-            <th scope="col">Actions</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -280,14 +283,16 @@
                   [class.inactive]="!patient.active"
                 >
                   <span class="status-dot"></span>
-                  {{ patient.active ? 'Active' : 'Inactive' }}
+                  {{
+                    patient.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
+                  }}
                 </span>
               </td>
               <td>
                 <a
                   [routerLink]="['/patients', patient.id]"
                   class="action-link"
-                  title="View patient"
+                  [title]="'PATIENTS.VIEW' | translate"
                 >
                   <span class="material-symbols-outlined">arrow_forward</span>
                 </a>
@@ -398,13 +403,15 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">people</span>
-      <h3>No patients found</h3>
+      <h3>{{ 'PATIENTS.NO_PATIENTS' | translate }}</h3>
       <p>
         @if (searchTerm || activeFilterCount > 0) {
-          Try adjusting your search or filters.
-          <button class="link-btn" (click)="clearFilters()">Clear all filters</button>
+          {{ 'COMMON.TRY_ADJUSTING' | translate }}
+          <button class="link-btn" (click)="clearFilters()">
+            {{ 'COMMON.CLEAR_ALL_FILTERS' | translate }}
+          </button>
         } @else {
-          Register your first patient to get started.
+          {{ 'PATIENTS.REGISTER_FIRST' | translate }}
         }
       </p>
     </div>

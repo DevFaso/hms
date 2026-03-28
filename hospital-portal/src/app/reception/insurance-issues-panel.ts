@@ -1,11 +1,12 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TranslateModule } from '@ngx-translate/core';
 import { InsuranceIssue } from './reception.service';
 
 @Component({
   selector: 'app-insurance-issues-panel',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TranslateModule],
   templateUrl: './insurance-issues-panel.html',
 })
 export class InsuranceIssuesPanelComponent {

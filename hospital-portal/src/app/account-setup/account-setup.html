@@ -2,8 +2,8 @@
   <div class="setup-card">
     <div class="setup-header">
       <span class="material-icons header-icon">security</span>
-      <h1>Account Setup Required</h1>
-      <p class="subtitle">For your security, please update your credentials before continuing.</p>
+      <h1>{{ 'SETUP.TITLE' | translate }}</h1>
+      <p class="subtitle">{{ 'SETUP.SUBTITLE' | translate }}</p>
     </div>
 
     <!-- ── Username Section ── -->
@@ -13,16 +13,15 @@
           <span class="material-icons section-icon">{{
             usernameSuccess ? 'check_circle' : 'person'
           }}</span>
-          <h2>Choose Your Username</h2>
+          <h2>{{ 'SETUP.CHOOSE_USERNAME' | translate }}</h2>
         </div>
 
         @if (!usernameSuccess) {
           <p class="section-desc">
-            Your account was created with a temporary username. Please choose a username you'd like
-            to use.
+            {{ 'SETUP.USERNAME_DESC' | translate }}
           </p>
           <div class="form-group">
-            <label for="newUsername">New Username</label>
+            <label for="newUsername">{{ 'SETUP.NEW_USERNAME' | translate }}</label>
             <input
               type="text"
               id="newUsername"
@@ -32,9 +31,7 @@
               autocomplete="username"
               [disabled]="loading"
             />
-            <span class="form-hint"
-              >3–50 characters. Letters, digits, dots, hyphens, underscores.</span
-            >
+            <span class="form-hint">{{ 'SETUP.USERNAME_HINT' | translate }}</span>
           </div>
           @if (usernameError) {
             <div class="error-message">
@@ -50,12 +47,12 @@
             @if (loading) {
               <span class="spinner"></span>
             }
-            Save Username
+            {{ 'SETUP.SAVE_USERNAME' | translate }}
           </button>
         } @else {
           <div class="success-message">
             <span class="material-icons">check_circle</span>
-            Username updated to <strong>{{ newUsername }}</strong>
+            {{ 'SETUP.USERNAME_UPDATED' | translate: { username: newUsername } }}
           </div>
         }
       </section>
@@ -68,22 +65,22 @@
           <span class="material-icons section-icon">{{
             passwordSuccess ? 'check_circle' : 'lock'
           }}</span>
-          <h2>Set Your Password</h2>
+          <h2>{{ 'SETUP.SET_PASSWORD' | translate }}</h2>
         </div>
 
         @if (!passwordSuccess) {
           <p class="section-desc">
-            Your account was created with a temporary password. Please set a new secure password.
+            {{ 'SETUP.PASSWORD_DESC' | translate }}
           </p>
 
           <div class="form-group">
-            <label for="currentPassword">Current (Temporary) Password</label>
+            <label for="currentPassword">{{ 'SETUP.CURRENT_PASSWORD' | translate }}</label>
             <div class="password-field">
               <input
                 [type]="showCurrentPassword ? 'text' : 'password'"
                 id="currentPassword"
                 [(ngModel)]="currentPassword"
-                placeholder="Enter your temporary password"
+                [placeholder]="'SETUP.CURRENT_PLACEHOLDER' | translate"
                 autocomplete="current-password"
                 [disabled]="loading"
               />
@@ -100,13 +97,13 @@
           </div>
 
           <div class="form-group">
-            <label for="newPassword">New Password</label>
+            <label for="newPassword">{{ 'SETUP.NEW_PASSWORD' | translate }}</label>
             <div class="password-field">
               <input
                 [type]="showNewPassword ? 'text' : 'password'"
                 id="newPassword"
                 [(ngModel)]="newPassword"
-                placeholder="Choose a strong password"
+                [placeholder]="'SETUP.NEW_PLACEHOLDER' | translate"
                 autocomplete="new-password"
                 [disabled]="loading"
               />
@@ -120,16 +117,16 @@
                 }}</span>
               </button>
             </div>
-            <span class="form-hint">Minimum 8 characters.</span>
+            <span class="form-hint">{{ 'SETUP.MIN_LENGTH' | translate }}</span>
           </div>
 
           <div class="form-group">
-            <label for="confirmPassword">Confirm New Password</label>
+            <label for="confirmPassword">{{ 'SETUP.CONFIRM_PASSWORD' | translate }}</label>
             <input
               type="password"
               id="confirmPassword"
               [(ngModel)]="confirmPassword"
-              placeholder="Re-enter your new password"
+              [placeholder]="'SETUP.CONFIRM_PLACEHOLDER' | translate"
               autocomplete="new-password"
               [disabled]="loading"
             />
@@ -149,12 +146,12 @@
             @if (loading) {
               <span class="spinner"></span>
             }
-            Save Password
+            {{ 'SETUP.SAVE_PASSWORD' | translate }}
           </button>
         } @else {
           <div class="success-message">
             <span class="material-icons">check_circle</span>
-            Password updated successfully.
+            {{ 'SETUP.PASSWORD_UPDATED' | translate }}
           </div>
         }
       </section>
@@ -165,10 +162,10 @@
       <div class="continue-section">
         <div class="success-message final-success">
           <span class="material-icons">verified</span>
-          Your account is all set! You can now continue.
+          {{ 'SETUP.ALL_SET' | translate }}
         </div>
         <button class="btn btn-success" (click)="continue()">
-          Continue to Dashboard
+          {{ 'SETUP.CONTINUE' | translate }}
           <span class="material-icons">arrow_forward</span>
         </button>
       </div>

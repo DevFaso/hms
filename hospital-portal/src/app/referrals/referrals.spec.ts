@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
+import { TranslateModule } from '@ngx-translate/core';
 import { ReferralsComponent } from './referrals';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
@@ -46,7 +47,7 @@ describe('ReferralsComponent', () => {
     authStub.getUserProfile.and.returnValue({ staffId: 'staff-1' } as any);
 
     await TestBed.configureTestingModule({
-      imports: [ReferralsComponent],
+      imports: [ReferralsComponent, TranslateModule.forRoot()],
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),

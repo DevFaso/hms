@@ -4,8 +4,8 @@
     <div class="header-left">
       <span class="material-icons header-icon">analytics</span>
       <div>
-        <h1>Platform Analytics</h1>
-        <p class="subtitle">System-wide metrics and trends</p>
+        <h1>{{ 'ANALYTICS.TITLE' | translate }}</h1>
+        <p class="subtitle">{{ 'ANALYTICS.SUBTITLE' | translate }}</p>
       </div>
     </div>
   </div>
@@ -14,7 +14,7 @@
   @if (loading()) {
     <div class="loading-state">
       <span class="material-icons spin">sync</span>
-      <p>Loading analytics...</p>
+      <p>{{ 'ANALYTICS.LOADING' | translate }}</p>
     </div>
   }
 
@@ -38,7 +38,8 @@
     @if (appointmentTrend().length > 0) {
       <div class="card">
         <h2 class="card-title">
-          <span class="material-icons">trending_up</span> Appointment Trend (14 days)
+          <span class="material-icons">trending_up</span>
+          {{ 'ANALYTICS.APPOINTMENT_TREND' | translate }}
         </h2>
         <div class="chart-container">
           <div class="bar-chart">
@@ -63,7 +64,8 @@
       @if (appointmentsByStatus().length > 0) {
         <div class="card">
           <h2 class="card-title">
-            <span class="material-icons">calendar_month</span> Appointments by Status
+            <span class="material-icons">calendar_month</span>
+            {{ 'ANALYTICS.APPOINTMENTS_BY_STATUS' | translate }}
           </h2>
           <div class="status-list">
             @for (item of appointmentsByStatus(); track item.label) {
@@ -90,7 +92,8 @@
       @if (encountersByStatus().length > 0) {
         <div class="card">
           <h2 class="card-title">
-            <span class="material-icons">medical_services</span> Encounters by Status
+            <span class="material-icons">medical_services</span>
+            {{ 'ANALYTICS.ENCOUNTERS_BY_STATUS' | translate }}
           </h2>
           <div class="status-list">
             @for (item of encountersByStatus(); track item.label) {
@@ -117,7 +120,8 @@
       @if (invoicesByStatus().length > 0) {
         <div class="card">
           <h2 class="card-title">
-            <span class="material-icons">receipt_long</span> Invoices by Status
+            <span class="material-icons">receipt_long</span>
+            {{ 'ANALYTICS.INVOICES_BY_STATUS' | translate }}
           </h2>
           <div class="status-list">
             @for (item of invoicesByStatus(); track item.label) {
@@ -145,15 +149,15 @@
     @if (departmentUtil().length > 0) {
       <div class="card">
         <h2 class="card-title">
-          <span class="material-icons">domain</span> Department Utilization (Top 10)
+          <span class="material-icons">domain</span> {{ 'ANALYTICS.DEPT_UTILIZATION' | translate }}
         </h2>
         <div class="table-container">
           <table class="data-table">
             <thead>
               <tr>
-                <th>Department</th>
-                <th class="num">Appointments</th>
-                <th class="num">Encounters</th>
+                <th>{{ 'STAFF.DEPARTMENT' | translate }}</th>
+                <th class="num">{{ 'ANALYTICS.APPOINTMENTS' | translate }}</th>
+                <th class="num">{{ 'ANALYTICS.ENCOUNTERS' | translate }}</th>
               </tr>
             </thead>
             <tbody>
@@ -174,16 +178,17 @@
     @if (hospitalMetrics().length > 0) {
       <div class="card">
         <h2 class="card-title">
-          <span class="material-icons">local_hospital</span> Hospital Metrics
+          <span class="material-icons">local_hospital</span>
+          {{ 'ANALYTICS.HOSPITAL_METRICS' | translate }}
         </h2>
         <div class="table-container">
           <table class="data-table">
             <thead>
               <tr>
-                <th>Hospital</th>
-                <th class="num">Patients</th>
-                <th class="num">Appointments</th>
-                <th class="num">Staff</th>
+                <th>{{ 'ENCOUNTERS.HOSPITAL' | translate }}</th>
+                <th class="num">{{ 'ANALYTICS.PATIENTS' | translate }}</th>
+                <th class="num">{{ 'ANALYTICS.APPOINTMENTS' | translate }}</th>
+                <th class="num">{{ 'ANALYTICS.STAFF' | translate }}</th>
               </tr>
             </thead>
             <tbody>

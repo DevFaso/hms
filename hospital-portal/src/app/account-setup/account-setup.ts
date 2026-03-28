@@ -2,6 +2,7 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
+import { TranslateModule } from '@ngx-translate/core';
 
 import { AuthService } from '../auth/auth.service';
 import { ProfileService } from '../services/profile.service';
@@ -9,7 +10,7 @@ import { ProfileService } from '../services/profile.service';
 @Component({
   selector: 'app-account-setup',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './account-setup.html',
   styleUrls: ['./account-setup.scss'],
 })

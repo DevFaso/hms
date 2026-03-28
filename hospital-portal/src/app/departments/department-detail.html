@@ -1,13 +1,13 @@
 <div class="page-container">
   <a routerLink="/departments" class="back-link">
     <span class="material-symbols-outlined">arrow_back</span>
-    Back to Departments
+    {{ 'DEPARTMENTS.BACK_TO_LIST' | translate }}
   </a>
 
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading department...</p>
+      <p>{{ 'DEPARTMENTS.LOADING' | translate }}</p>
     </div>
   }
 
@@ -27,7 +27,7 @@
             </span>
           }
           <span class="status-badge" [class.active]="dept.active" [class.inactive]="!dept.active">
-            {{ dept.active ? 'Active' : 'Inactive' }}
+            {{ dept.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
           </span>
         </div>
       </div>
@@ -35,16 +35,16 @@
 
     <div class="tabs">
       <button class="tab" [class.active]="activeTab() === 'overview'" (click)="setTab('overview')">
-        Overview
+        {{ 'STAFF.OVERVIEW' | translate }}
       </button>
       <button class="tab" [class.active]="activeTab() === 'staff'" (click)="setTab('staff')">
-        Staff
+        {{ 'STAFF.TITLE' | translate }}
         @if (staff().length) {
           <span class="tab-count">{{ staff().length }}</span>
         }
       </button>
       <button class="tab" [class.active]="activeTab() === 'stats'" (click)="setTab('stats')">
-        Statistics
+        {{ 'DEPARTMENTS.STATISTICS' | translate }}
       </button>
     </div>
 
@@ -53,30 +53,34 @@
         <div class="info-card">
           <h3>
             <span class="material-symbols-outlined">info</span>
-            Department Info
+            {{ 'DEPARTMENTS.DEPARTMENT_INFO' | translate }}
           </h3>
           <div class="info-rows">
             <div class="info-row">
-              <span class="label">Name</span><span class="value">{{ dept.name }}</span>
+              <span class="label">{{ 'DEPARTMENTS.NAME' | translate }}</span
+              ><span class="value">{{ dept.name }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Code</span><span class="value">{{ dept.code }}</span>
+              <span class="label">{{ 'DEPARTMENTS.CODE' | translate }}</span
+              ><span class="value">{{ dept.code }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Description</span
+              <span class="label">{{ 'DEPARTMENTS.DESCRIPTION' | translate }}</span
               ><span class="value">{{ dept.description ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Head of Department</span
+              <span class="label">{{ 'DEPARTMENTS.HEAD' | translate }}</span
               ><span class="value">{{ dept.headOfDepartmentName ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Hospital</span
+              <span class="label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
               ><span class="value">{{ dept.hospitalName ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Status</span
-              ><span class="value">{{ dept.active ? 'Active' : 'Inactive' }}</span>
+              <span class="label">{{ 'COMMON.STATUS' | translate }}</span
+              ><span class="value">{{
+                dept.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
+              }}</span>
             </div>
           </div>
         </div>
@@ -84,24 +88,24 @@
           <div class="info-card">
             <h3>
               <span class="material-symbols-outlined">analytics</span>
-              Quick Stats
+              {{ 'DEPARTMENTS.QUICK_STATS' | translate }}
             </h3>
             <div class="stat-grid">
               <div class="stat-item">
                 <span class="stat-value">{{ s.totalStaff }}</span>
-                <span class="stat-label">Total Staff</span>
+                <span class="stat-label">{{ 'DEPARTMENTS.TOTAL_STAFF' | translate }}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-value">{{ s.activeStaff }}</span>
-                <span class="stat-label">Active Staff</span>
+                <span class="stat-label">{{ 'DEPARTMENTS.ACTIVE_STAFF' | translate }}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-value">{{ s.totalPatients }}</span>
-                <span class="stat-label">Patients</span>
+                <span class="stat-label">{{ 'DEPARTMENTS.PATIENTS' | translate }}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-value">{{ s.totalAppointments }}</span>
-                <span class="stat-label">Appointments</span>
+                <span class="stat-label">{{ 'DEPARTMENTS.APPOINTMENTS' | translate }}</span>
               </div>
             </div>
           </div>
@@ -115,10 +119,10 @@
           <table class="data-table">
             <thead>
               <tr>
-                <th>Name</th>
-                <th>Job Title</th>
-                <th>Email</th>
-                <th>Status</th>
+                <th>{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+                <th>{{ 'STAFF.JOB_TITLE' | translate }}</th>
+                <th>{{ 'PATIENTS.EMAIL' | translate }}</th>
+                <th>{{ 'COMMON.STATUS' | translate }}</th>
               </tr>
             </thead>
             <tbody>
@@ -133,7 +137,9 @@
                       [class.active]="s.active"
                       [class.inactive]="!s.active"
                     >
-                      {{ s.active ? 'Active' : 'Inactive' }}
+                      {{
+                        s.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
+                      }}
                     </span>
                   </td>
                 </tr>
@@ -144,8 +150,8 @@
       } @else {
         <div class="empty-state">
           <span class="material-symbols-outlined empty-icon">group</span>
-          <h3>No staff assigned</h3>
-          <p>No staff members are currently assigned to this department.</p>
+          <h3>{{ 'DEPARTMENTS.NO_STAFF_ASSIGNED' | translate }}</h3>
+          <p>{{ 'DEPARTMENTS.NO_STAFF_ASSIGNED_DESC' | translate }}</p>
         </div>
       }
     }
@@ -157,36 +163,36 @@
             <span class="material-symbols-outlined stat-icon staff-icon">group</span>
             <div>
               <h4>{{ s.totalStaff }}</h4>
-              <p>Total Staff</p>
+              <p>{{ 'DEPARTMENTS.TOTAL_STAFF' | translate }}</p>
             </div>
           </div>
           <div class="stat-card">
             <span class="material-symbols-outlined stat-icon active-icon">how_to_reg</span>
             <div>
               <h4>{{ s.activeStaff }}</h4>
-              <p>Active Staff</p>
+              <p>{{ 'DEPARTMENTS.ACTIVE_STAFF' | translate }}</p>
             </div>
           </div>
           <div class="stat-card">
             <span class="material-symbols-outlined stat-icon patient-icon">people</span>
             <div>
               <h4>{{ s.totalPatients }}</h4>
-              <p>Patients Served</p>
+              <p>{{ 'DEPARTMENTS.PATIENTS_SERVED' | translate }}</p>
             </div>
           </div>
           <div class="stat-card">
             <span class="material-symbols-outlined stat-icon appt-icon">calendar_month</span>
             <div>
               <h4>{{ s.totalAppointments }}</h4>
-              <p>Appointments</p>
+              <p>{{ 'DEPARTMENTS.APPOINTMENTS' | translate }}</p>
             </div>
           </div>
         </div>
       } @else {
         <div class="empty-state">
           <span class="material-symbols-outlined empty-icon">analytics</span>
-          <h3>No statistics available</h3>
-          <p>Statistics for this department are not yet available.</p>
+          <h3>{{ 'DEPARTMENTS.NO_STATS' | translate }}</h3>
+          <p>{{ 'DEPARTMENTS.NO_STATS_DESC' | translate }}</p>
         </div>
       }
     }

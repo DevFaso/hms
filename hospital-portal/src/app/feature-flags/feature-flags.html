@@ -4,17 +4,17 @@
     <div class="header-left">
       <span class="material-icons header-icon">flag</span>
       <div>
-        <h1>Feature Flags</h1>
-        <p class="subtitle">Manage platform feature toggles</p>
+        <h1>{{ 'FLAGS.TITLE' | translate }}</h1>
+        <p class="subtitle">{{ 'FLAGS.SUBTITLE' | translate }}</p>
       </div>
     </div>
     <div class="header-actions">
       <div class="stat-pills">
-        <span class="pill enabled">{{ enabledCount() }} Enabled</span>
-        <span class="pill disabled">{{ disabledCount() }} Disabled</span>
+        <span class="pill enabled">{{ enabledCount() }} {{ 'FLAGS.ENABLED' | translate }}</span>
+        <span class="pill disabled">{{ disabledCount() }} {{ 'FLAGS.DISABLED' | translate }}</span>
       </div>
       <button class="btn-primary" (click)="openCreate()">
-        <span class="material-icons">add</span> New Flag
+        <span class="material-icons">add</span> {{ 'FLAGS.NEW_FLAG' | translate }}
       </button>
     </div>
   </div>
@@ -24,7 +24,7 @@
     <span class="material-icons search-icon">search</span>
     <input
       type="text"
-      placeholder="Search flags..."
+      [placeholder]="'FLAGS.SEARCH_PLACEHOLDER' | translate"
       [ngModel]="search()"
       (ngModelChange)="search.set($event)"
     />
@@ -34,7 +34,7 @@
   @if (loading()) {
     <div class="loading-state">
       <span class="material-icons spin">sync</span>
-      <p>Loading feature flags...</p>
+      <p>{{ 'FLAGS.LOADING' | translate }}</p>
     </div>
   }
 
@@ -42,9 +42,9 @@
   @if (!loading()) {
     <div class="flags-table">
       <div class="table-header">
-        <span class="col-status">Status</span>
-        <span class="col-key">Flag Key</span>
-        <span class="col-actions">Actions</span>
+        <span class="col-status">{{ 'COMMON.STATUS' | translate }}</span>
+        <span class="col-key">{{ 'FLAGS.FLAG_KEY' | translate }}</span>
+        <span class="col-actions">{{ 'COMMON.ACTIONS' | translate }}</span>
       </div>
 
       @for (flag of filteredFlags(); track flag.key) {
@@ -64,14 +64,22 @@
           <div class="col-key">
             <span class="flag-name">{{ flag.key }}</span>
             <span class="flag-badge" [class.on]="flag.enabled">
-              {{ flag.enabled ? 'ON' : 'OFF' }}
+              {{ flag.enabled ? ('FLAGS.ON' | translate) : ('FLAGS.OFF' | translate) }}
             </span>
           </div>
           <div class="col-actions">
-            <button class="btn-icon" (click)="toggleFlag(flag)" title="Toggle">
+            <button
+              class="btn-icon"
+              (click)="toggleFlag(flag)"
+              [title]="'FLAGS.TOGGLE' | translate"
+            >
               <span class="material-icons">{{ flag.enabled ? 'toggle_on' : 'toggle_off' }}</span>
             </button>
-            <button class="btn-icon danger" (click)="removeOverride(flag)" title="Remove override">
+            <button
+              class="btn-icon danger"
+              (click)="removeOverride(flag)"
+              [title]="'FLAGS.REMOVE_OVERRIDE' | translate"
+            >
               <span class="material-icons">delete_outline</span>
             </button>
           </div>
@@ -81,7 +89,7 @@
       @if (filteredFlags().length === 0) {
         <div class="empty-state">
           <span class="material-icons">search_off</span>
-          <p>No flags found matching "{{ search() }}"</p>
+          <p>{{ 'FLAGS.NO_FLAGS' | translate }} "{{ search() }}"</p>
         </div>
       }
     </div>
@@ -104,34 +112,34 @@
         role="dialog"
       >
         <div class="modal-header">
-          <h2>Create Feature Flag</h2>
+          <h2>{{ 'FLAGS.CREATE_TITLE' | translate }}</h2>
           <button class="btn-icon" (click)="closeCreate()">
             <span class="material-icons">close</span>
           </button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label for="flag-key">Flag Key</label>
+            <label for="flag-key">{{ 'FLAGS.KEY_LABEL' | translate }}</label>
             <input
               id="flag-key"
               type="text"
-              placeholder="e.g. TELEHEALTH_ENABLED"
+              [placeholder]="'FLAGS.KEY_PLACEHOLDER' | translate"
               [ngModel]="newFlagKey()"
               (ngModelChange)="newFlagKey.set($event)"
             />
           </div>
           <div class="form-group">
-            <label for="flag-description">Description</label>
+            <label for="flag-description">{{ 'FLAGS.DESCRIPTION_LABEL' | translate }}</label>
             <input
               id="flag-description"
               type="text"
-              placeholder="Optional description"
+              [placeholder]="'FLAGS.DESCRIPTION_PLACEHOLDER' | translate"
               [ngModel]="newFlagDescription()"
               (ngModelChange)="newFlagDescription.set($event)"
             />
           </div>
           <div class="form-group toggle-group">
-            <span class="toggle-group-label">Initial State</span>
+            <span class="toggle-group-label">{{ 'FLAGS.INITIAL_STATE' | translate }}</span>
             <button
               class="toggle-btn"
               [class.on]="newFlagEnabled()"
@@ -141,13 +149,17 @@
                 <span class="toggle-thumb"></span>
               </span>
             </button>
-            <span class="toggle-label">{{ newFlagEnabled() ? 'Enabled' : 'Disabled' }}</span>
+            <span class="toggle-label">{{
+              newFlagEnabled() ? ('FLAGS.ENABLED' | translate) : ('FLAGS.DISABLED' | translate)
+            }}</span>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn-secondary" (click)="closeCreate()">Cancel</button>
+          <button class="btn-secondary" (click)="closeCreate()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
           <button class="btn-primary" (click)="createFlag()" [disabled]="saving()">
-            {{ saving() ? 'Creating...' : 'Create Flag' }}
+            {{ saving() ? ('FLAGS.CREATING' | translate) : ('FLAGS.CREATE' | translate) }}
           </button>
         </div>
       </div>
