@@ -1,6 +1,7 @@
 name: Agent Rules CI
 
 on:
+  workflow_call:
   push:
     branches: [main, develop, uat]
     paths:

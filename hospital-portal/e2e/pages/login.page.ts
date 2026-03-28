@@ -71,6 +71,8 @@ export class LoginPage {
     await expect(this.usernameInput).toBeVisible();
     await expect(this.passwordInput).toBeVisible();
     await expect(this.submitButton).toBeVisible();
-    await expect(this.subtitle).toContainText('Hospital Management System');
+    await expect(this.subtitle).toContainText(
+      /Hospital Management System|Système de Gestion Hospitalière/,
+    );
   }
 }

@@ -2,6 +2,7 @@ import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { TranslateModule } from '@ngx-translate/core';
 import {
   NotificationService,
   NotificationPreferenceUpdate,
@@ -30,31 +31,32 @@ interface PrefRow {
 @Component({
   selector: 'app-notification-settings',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
   template: `
     <div class="settings-page">
       <div class="settings-header">
         <h1>
           <span class="material-symbols-outlined">tune</span>
-          Notification Preferences
+          {{ 'NOTIFICATIONS.SETTINGS_TITLE' | translate }}
         </h1>
         <a routerLink="/notifications" class="back-link">
-          <span class="material-symbols-outlined">arrow_back</span> Back to Notifications
+          <span class="material-symbols-outlined">arrow_back</span>
+          {{ 'NOTIFICATIONS.SETTINGS_BACK' | translate }}
         </a>
       </div>
 
       @if (loading()) {
         <div class="settings-loading">
           <div class="spinner"></div>
-          <span>Loading preferences…</span>
+          <span>{{ 'NOTIFICATIONS.LOADING_PREFERENCES' | translate }}</span>
         </div>
       } @else {
-        <p class="settings-desc">Choose how you want to be notified for each type of event.</p>
+        <p class="settings-desc">{{ 'NOTIFICATIONS.SETTINGS_DESC' | translate }}</p>
 
         <table class="pref-table">
           <thead>
             <tr>
-              <th>Notification Type</th>
+              <th>{{ 'NOTIFICATIONS.NOTIFICATION_TYPE' | translate }}</th>
               @for (ch of channels; track ch) {
                 <th class="channel-col">{{ formatChannel(ch) }}</th>
               }
@@ -83,7 +85,11 @@ interface PrefRow {
 
         <div class="settings-actions">
           <button class="btn-primary" (click)="save()" [disabled]="saving() || !dirty()">
-            {{ saving() ? 'Saving…' : 'Save Preferences' }}
+            {{
+              saving()
+                ? ('NOTIFICATIONS.SAVING' | translate)
+                : ('NOTIFICATIONS.SAVE_PREFERENCES' | translate)
+            }}
           </button>
         </div>
       }

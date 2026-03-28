@@ -28,6 +28,7 @@ test.describe('Appointments Module', () => {
 
     test('status filter has all options', async ({ page }) => {
       const pills = page.locator('.status-pills .status-pill');
+      await expect(pills.first()).toBeVisible({ timeout: 10_000 });
       const texts = await pills.allTextContents();
       expect(texts.map((t) => t.trim())).toContain('All');
       expect(texts.map((t) => t.trim())).toContain('Scheduled');
@@ -39,7 +40,6 @@ test.describe('Appointments Module', () => {
     test('loads appointment data (table or empty state)', async ({ page }) => {
       await page.waitForFunction(
         () =>
-          !document.querySelector('.loading-state') ||
           document.querySelector('.data-table') ||
           document.querySelector('.empty-state'),
         { timeout: 15_000 },

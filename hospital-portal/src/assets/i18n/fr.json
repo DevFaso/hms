@@ -241,7 +241,21 @@
     "MARK_ALL_READ": "Tout marquer comme lu",
     "NO_NOTIFICATIONS": "Aucune notification",
     "UNREAD": "Non lu",
-    "READ": "Lu"
+    "READ": "Lu",
+    "VIEW_ALL": "Voir tout",
+    "ALL": "Tout",
+    "UNREAD_COUNT": "{{count}} notifications non lues",
+    "PREFERENCES": "Préférences",
+    "LOADING": "Chargement des notifications…",
+    "ALL_CAUGHT_UP": "Vous êtes à jour !",
+    "NOTHING_HERE": "Rien ici pour l'instant.",
+    "SETTINGS_TITLE": "Préférences de Notification",
+    "SETTINGS_DESC": "Choisissez comment vous souhaitez être notifié pour chaque type d'événement.",
+    "SETTINGS_BACK": "Retour aux Notifications",
+    "NOTIFICATION_TYPE": "Type de Notification",
+    "SAVE_PREFERENCES": "Enregistrer les Préférences",
+    "SAVING": "Enregistrement…",
+    "LOADING_PREFERENCES": "Chargement des préférences…"
   },
   "ADMISSIONS": {
     "TITLE": "Admissions",

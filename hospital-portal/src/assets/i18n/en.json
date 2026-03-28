@@ -241,7 +241,21 @@
     "MARK_ALL_READ": "Mark all as read",
     "NO_NOTIFICATIONS": "No notifications",
     "UNREAD": "Unread",
-    "READ": "Read"
+    "READ": "Read",
+    "VIEW_ALL": "View all",
+    "ALL": "All",
+    "UNREAD_COUNT": "{{count}} unread notifications",
+    "PREFERENCES": "Preferences",
+    "LOADING": "Loading notifications...",
+    "ALL_CAUGHT_UP": "All caught up!",
+    "NOTHING_HERE": "Nothing here yet.",
+    "SETTINGS_TITLE": "Notification Preferences",
+    "SETTINGS_DESC": "Choose how you want to be notified for each type of event.",
+    "SETTINGS_BACK": "Back to Notifications",
+    "NOTIFICATION_TYPE": "Notification Type",
+    "SAVE_PREFERENCES": "Save Preferences",
+    "SAVING": "Saving…",
+    "LOADING_PREFERENCES": "Loading preferences…"
   },
   "ADMISSIONS": {
     "TITLE": "Admissions",

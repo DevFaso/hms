@@ -143,6 +143,27 @@
     "QUICK_ACTIONS": "Acciones Rápidas",
     "VIEW_ALL": "Ver todo"
   },
+  "NOTIFICATIONS": {
+    "TITLE": "Notificaciones",
+    "MARK_ALL_READ": "Marcar todo como leído",
+    "NO_NOTIFICATIONS": "Sin notificaciones",
+    "UNREAD": "No leído",
+    "READ": "Leído",
+    "VIEW_ALL": "Ver todo",
+    "ALL": "Todo",
+    "UNREAD_COUNT": "{{count}} notificaciones no leídas",
+    "PREFERENCES": "Preferencias",
+    "LOADING": "Cargando notificaciones…",
+    "ALL_CAUGHT_UP": "¡Todo al día!",
+    "NOTHING_HERE": "Nada aquí todavía.",
+    "SETTINGS_TITLE": "Preferencias de Notificación",
+    "SETTINGS_DESC": "Elija cómo desea ser notificado para cada tipo de evento.",
+    "SETTINGS_BACK": "Volver a Notificaciones",
+    "NOTIFICATION_TYPE": "Tipo de Notificación",
+    "SAVE_PREFERENCES": "Guardar Preferencias",
+    "SAVING": "Guardando…",
+    "LOADING_PREFERENCES": "Cargando preferencias…"
+  },
   "LANG": {
     "LABEL": "Idioma",
     "FR": "Français",

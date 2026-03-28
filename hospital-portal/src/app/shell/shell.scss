@@ -446,6 +446,29 @@ $sidebar-active: #2563eb;
   }
 }
 
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.mark-all-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: $primary;
+  padding: 4px;
+  border-radius: 6px;
+
+  &:hover {
+    background: #eff6ff;
+  }
+
+  .material-symbols-outlined {
+    font-size: 20px;
+  }
+}
+
 .close-panel {
   background: none;
   border: none;
@@ -475,6 +498,14 @@ $sidebar-active: #2563eb;
   padding: 0.75rem;
   border-radius: 8px;
   cursor: pointer;
+  width: 100%;
+  background: none;
+  border: none;
+  text-align: left;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  align-items: flex-start;
 
   &:hover {
     background: #f8fafc;
@@ -506,6 +537,32 @@ $sidebar-active: #2563eb;
 .notif-time {
   font-size: 0.6875rem;
   color: #94a3b8;
+}
+
+.notif-unread-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: $primary;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+
+.panel-footer {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid #f1f5f9;
+  text-align: center;
+
+  a {
+    color: $primary;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
 }
 
 // ---------- Profile Menu ----------

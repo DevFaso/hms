@@ -472,6 +472,24 @@ export class ShellComponent implements OnInit, OnDestroy {
     }
   }
 
+  onNotifItemClick(n: Notification): void {
+    if (!n.read) {
+      n.read = true;
+      this.recentNotifications.update((list) => [...list]);
+      this.notifService.markAsReadAndNotify(n.id);
+    }
+    this.closeOverlays();
+    this.router.navigate(['/notifications']);
+  }
+
+  markAllNotificationsRead(): void {
+    this.notifService.markAllReadAndNotify().subscribe({
+      next: () => {
+        this.recentNotifications.update((list) => list.map((n) => ({ ...n, read: true })));
+      },
+    });
+  }
+
   closeOverlays(): void {
     this.profileMenuOpen.set(false);
     this.notifPanelOpen.set(false);
