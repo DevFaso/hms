@@ -1,0 +1,85 @@
+name: Agent Rules CI
+
+on:
+  push:
+    branches: [main, develop, uat]
+    paths:
+      - 'agent/**'
+      - '.github/workflows/agent-lint.yml'
+      - 'scenarios/**'
+  pull_request:
+    paths:
+      - 'agent/**'
+      - '.github/workflows/agent-lint.yml'
+      - 'scenarios/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-lint-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 1. Markdown Lint ──────────────────────────────────────────
+  lint-agent-files:
+    name: Lint AGENT files
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install markdownlint-cli
+        run: npm install -g markdownlint-cli
+
+      - name: Lint agent markdown files
+        run: markdownlint agent/*.md --config .markdownlint.json
+
+  # ── 2. Forbidden Patterns Check ──────────────────────────────
+  check-secrets:
+    name: Check forbidden patterns
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan for hardcoded secrets
+        run: |
+          echo "Scanning for forbidden patterns in agent/ directory..."
+          FOUND=0
+
+          # Check for hardcoded passwords / tokens / secrets
+          if grep -rniE "(password\s*[:=]\s*['\"][^'\"]+|secret\s*[:=]\s*['\"][^'\"]+|token\s*[:=]\s*['\"][^'\"]+|api_key\s*[:=]\s*['\"][^'\"]+)" agent/ --include="*.md"; then
+            echo "::error::Found potential hardcoded secrets in agent/ files"
+            FOUND=1
+          fi
+
+          # Check for AWS keys, JWTs, private keys
+          if grep -rniE "(AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]+\.eyJ|BEGIN (RSA|EC|OPENSSH) PRIVATE KEY)" agent/ --include="*.md"; then
+            echo "::error::Found potential credentials in agent/ files"
+            FOUND=1
+          fi
+
+          if [ "$FOUND" -eq 1 ]; then
+            exit 1
+          fi
+
+          echo "No forbidden patterns found."
+
+  # ── 3. Promptfoo Scenario Tests ──────────────────────────────
+  prompt-tests:
+    name: Scenario tests (Promptfoo)
+    runs-on: ubuntu-latest
+    if: hashFiles('scenarios/*.prompt.yaml') != ''
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install promptfoo
+        run: npm install -g promptfoo
+
+      - name: Run scenario-based tests
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: promptfoo run scenarios/*.prompt.yaml
