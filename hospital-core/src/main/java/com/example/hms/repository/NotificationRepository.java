@@ -10,8 +10,16 @@ import java.util.List;
 import java.util.UUID;
 import java.time.LocalDateTime;
 
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
 @Repository
 public interface NotificationRepository extends JpaRepository<Notification, UUID> {
+
+    @Modifying
+    @Query("UPDATE Notification n SET n.read = true WHERE n.recipientUsername = :username AND n.read = false")
+    int markAllReadForUser(@Param("username") String username);
     List<Notification> findByRecipientUsernameAndReadOrderByCreatedAtDesc(String recipientUsername, boolean read);
 
     List<Notification> findByRecipientUsernameAndMessageContainingIgnoreCaseOrderByCreatedAtDesc(String recipientUsername, String search);

@@ -16,6 +16,7 @@ public interface NotificationService {
     Notification createNotification(String message, String recipientUsername);
     Notification createNotification(String message, String recipientUsername, String type);
     void markAsRead(UUID notificationId);
+    int markAllReadForUser(String username);
 
     // ── Notification preferences ─────────────────────────────────────────
     List<NotificationPreferenceDTO> getPreferences(UUID userId);
