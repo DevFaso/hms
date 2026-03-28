@@ -2,6 +2,7 @@ import { Component, computed, inject, signal, OnInit, OnDestroy } from '@angular
 import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { Subscription } from 'rxjs';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { ToastService } from '../core/toast.service';
@@ -13,6 +14,7 @@ import { NavOrderService } from './nav-order.service';
 interface NavItem {
   icon: string;
   label: string;
+  translationKey?: string;
   route: string;
   permission?: string;
 }
@@ -20,7 +22,7 @@ interface NavItem {
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, LockScreenComponent],
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, LockScreenComponent, TranslateModule],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
 })
@@ -32,8 +34,11 @@ export class ShellComponent implements OnInit, OnDestroy {
   private readonly notifService = inject(NotificationService);
   protected readonly idle = inject(IdleService);
   private readonly navOrder = inject(NavOrderService);
+  readonly translate = inject(TranslateService);
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
+
+  currentLang = signal(localStorage.getItem('lang') || 'fr');
 
   sidebarCollapsed = signal(false);
   profileMenuOpen = signal(false);
@@ -73,115 +78,128 @@ export class ShellComponent implements OnInit, OnDestroy {
     // Patient gets a completely different nav — Epic MyChart style
     if (this.auth.hasAnyRole(['ROLE_PATIENT'])) {
       return [
-        { icon: 'dashboard', label: 'Dashboard', route: '/dashboard' },
-        { icon: 'calendar_month', label: 'My Appointments', route: '/my-appointments' },
-        { icon: 'medication', label: 'Medications', route: '/my-medications' },
-        { icon: 'science', label: 'Test Results', route: '/my-lab-results' },
-        { icon: 'monitor_heart', label: 'Vitals', route: '/my-vitals' },
-        { icon: 'receipt_long', label: 'Billing', route: '/my-billing' },
-        { icon: 'history', label: 'Visit History', route: '/my-visits' },
-        { icon: 'folder_shared', label: 'My Records', route: '/my-records' },
-        { icon: 'share', label: 'Record Sharing', route: '/my-sharing' },
-        { icon: 'summarize', label: 'Visit Summaries', route: '/my-summaries' },
-        { icon: 'chat', label: 'Messages', route: '/chat' },
-        { icon: 'notifications', label: 'Notifications', route: '/notifications' },
+        { icon: 'dashboard', label: 'Dashboard', translationKey: 'NAV.DASHBOARD', route: '/dashboard' },
+        { icon: 'calendar_month', label: 'My Appointments', translationKey: 'NAV.MY_APPOINTMENTS', route: '/my-appointments' },
+        { icon: 'medication', label: 'Medications', translationKey: 'NAV.MEDICATIONS', route: '/my-medications' },
+        { icon: 'science', label: 'Test Results', translationKey: 'NAV.TEST_RESULTS', route: '/my-lab-results' },
+        { icon: 'monitor_heart', label: 'Vitals', translationKey: 'NAV.VITALS', route: '/my-vitals' },
+        { icon: 'receipt_long', label: 'Billing', translationKey: 'NAV.BILLING', route: '/my-billing' },
+        { icon: 'history', label: 'Visit History', translationKey: 'NAV.VISIT_HISTORY', route: '/my-visits' },
+        { icon: 'folder_shared', label: 'My Records', translationKey: 'NAV.MY_RECORDS', route: '/my-records' },
+        { icon: 'share', label: 'Record Sharing', translationKey: 'NAV.RECORD_SHARING', route: '/my-sharing' },
+        { icon: 'summarize', label: 'Visit Summaries', translationKey: 'NAV.VISIT_SUMMARIES', route: '/my-summaries' },
+        { icon: 'chat', label: 'Messages', translationKey: 'NAV.MESSAGES', route: '/chat' },
+        { icon: 'notifications', label: 'Notifications', translationKey: 'NAV.NOTIFICATIONS', route: '/notifications' },
       ];
     }
 
     const items: NavItem[] = [
-      { icon: 'dashboard', label: 'Dashboard', route: '/dashboard' },
-      { icon: 'people', label: 'Patients', route: '/patients', permission: 'View Patient Records' },
+      { icon: 'dashboard', label: 'Dashboard', translationKey: 'NAV.DASHBOARD', route: '/dashboard' },
+      { icon: 'people', label: 'Patients', translationKey: 'NAV.PATIENTS', route: '/patients', permission: 'View Patient Records' },
       {
         icon: 'calendar_month',
         label: 'Appointments',
+        translationKey: 'NAV.APPOINTMENTS',
         route: '/appointments',
         permission: 'View Appointments',
       },
-      { icon: 'badge', label: 'Staff', route: '/staff', permission: 'View Staff' },
+      { icon: 'badge', label: 'Staff', translationKey: 'NAV.STAFF', route: '/staff', permission: 'View Staff' },
       {
         icon: 'event_note',
         label: this.permissions.hasAnyPermission('Manage Staff', 'Manage Staff Schedules')
           ? 'Scheduling'
           : 'Availability',
+        translationKey: this.permissions.hasAnyPermission('Manage Staff', 'Manage Staff Schedules')
+          ? 'NAV.SCHEDULING'
+          : 'NAV.AVAILABILITY',
         route: '/scheduling',
         permission: 'View Staff Schedules',
       },
       {
         icon: 'domain',
         label: 'Departments',
+        translationKey: 'NAV.DEPARTMENTS',
         route: '/departments',
         permission: 'View Departments',
       },
       {
         icon: 'swap_horiz',
         label: 'Encounters',
+        translationKey: 'NAV.ENCOUNTERS',
         route: '/encounters',
         permission: 'Create Encounters',
       },
       {
         icon: 'hotel',
         label: 'Admissions',
+        translationKey: 'NAV.ADMISSIONS',
         route: '/admissions',
         permission: 'Admit Patients',
       },
       {
         icon: 'medication',
         label: 'Prescriptions',
+        translationKey: 'NAV.PRESCRIPTIONS',
         route: '/prescriptions',
         permission: 'View Prescriptions',
       },
       {
         icon: 'monitor_heart',
         label: 'Nurse Station',
+        translationKey: 'NAV.NURSE_STATION',
         route: '/nurse-station',
         permission: 'Access Nurse Station',
       },
       {
         icon: 'radiology',
         label: 'Imaging',
+        translationKey: 'NAV.IMAGING',
         route: '/imaging',
         permission: 'View Imaging Studies',
       },
       {
         icon: 'forum',
         label: 'Consultations',
+        translationKey: 'NAV.CONSULTATIONS',
         route: '/consultations',
         permission: 'Request Consultations',
       },
       {
         icon: 'assignment',
         label: 'Treatment Plans',
+        translationKey: 'NAV.TREATMENT_PLANS',
         route: '/treatment-plans',
         permission: 'Create Treatment Plans',
       },
-      { icon: 'send', label: 'Referrals', route: '/referrals', permission: 'Create Referrals' },
-      { icon: 'receipt_long', label: 'Billing', route: '/billing', permission: 'View Billing' },
-      { icon: 'science', label: 'Laboratory', route: '/lab', permission: 'View Lab' },
+      { icon: 'send', label: 'Referrals', translationKey: 'NAV.REFERRALS', route: '/referrals', permission: 'Create Referrals' },
+      { icon: 'receipt_long', label: 'Billing', translationKey: 'NAV.BILLING', route: '/billing', permission: 'View Billing' },
+      { icon: 'science', label: 'Laboratory', translationKey: 'NAV.LABORATORY', route: '/lab', permission: 'View Lab' },
       {
         icon: 'notifications',
         label: 'Notifications',
+        translationKey: 'NAV.NOTIFICATIONS',
         route: '/notifications',
         permission: 'View Notifications',
       },
-      { icon: 'chat', label: 'Messages', route: '/chat' },
-      { icon: 'campaign', label: 'Announcements', route: '/announcements' },
+      { icon: 'chat', label: 'Messages', translationKey: 'NAV.MESSAGES', route: '/chat' },
+      { icon: 'campaign', label: 'Announcements', translationKey: 'NAV.ANNOUNCEMENTS', route: '/announcements' },
     ];
 
     // Admin items — gated individually so HOSPITAL_ADMIN sees relevant ones
     if (this.permissions.hasPermission('View Hospitals')) {
-      items.push({ icon: 'local_hospital', label: 'Hospitals', route: '/hospitals' });
+      items.push({ icon: 'local_hospital', label: 'Hospitals', translationKey: 'NAV.HOSPITALS', route: '/hospitals' });
     }
     if (this.permissions.hasPermission('*')) {
       items.push(
-        { icon: 'corporate_fare', label: 'Organizations', route: '/organizations' },
-        { icon: 'manage_accounts', label: 'Users', route: '/users' },
-        { icon: 'shield', label: 'Roles', route: '/roles' },
-        { icon: 'hub', label: 'Platform', route: '/platform' },
-        { icon: 'admin_panel_settings', label: 'Administration', route: '/admin' },
+        { icon: 'corporate_fare', label: 'Organizations', translationKey: 'NAV.ORGANIZATIONS', route: '/organizations' },
+        { icon: 'manage_accounts', label: 'Users', translationKey: 'NAV.USERS', route: '/users' },
+        { icon: 'shield', label: 'Roles', translationKey: 'NAV.ROLES', route: '/roles' },
+        { icon: 'hub', label: 'Platform', translationKey: 'NAV.PLATFORM', route: '/platform' },
+        { icon: 'admin_panel_settings', label: 'Administration', translationKey: 'NAV.ADMINISTRATION', route: '/admin' },
       );
     }
     if (this.permissions.hasPermission('View Audit Logs')) {
-      items.push({ icon: 'policy', label: 'Audit Logs', route: '/audit-logs' });
+      items.push({ icon: 'policy', label: 'Audit Logs', translationKey: 'NAV.AUDIT_LOGS', route: '/audit-logs' });
     }
     if (
       this.auth.hasAnyRole([
@@ -191,7 +209,7 @@ export class ShellComponent implements OnInit, OnDestroy {
         'ROLE_SUPER_ADMIN',
       ])
     ) {
-      items.push({ icon: 'space_dashboard', label: 'Front Desk', route: '/reception' });
+      items.push({ icon: 'space_dashboard', label: 'Front Desk', translationKey: 'NAV.FRONT_DESK', route: '/reception' });
     }
 
     // Doctor role: hide admin/nurse-specific entries for a cleaner sidebar
@@ -356,5 +374,11 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   dismissToast(id: number): void {
     this.toast.dismiss(id);
+  }
+
+  switchLang(lang: string): void {
+    this.translate.use(lang);
+    this.currentLang.set(lang);
+    localStorage.setItem('lang', lang);
   }
 }

@@ -264,6 +264,40 @@ $sidebar-active: #2563eb;
   gap: 0.5rem;
 }
 
+// ---------- Language Switcher ----------
+.lang-switcher {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  padding: 2px;
+  margin-right: 0.25rem;
+}
+
+.lang-btn {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+  }
+
+  &.active {
+    background: $primary;
+    color: #fff;
+  }
+}
+
 .icon-btn {
   position: relative;
   background: none;

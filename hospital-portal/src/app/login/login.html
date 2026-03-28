@@ -10,11 +10,11 @@
         </svg>
       </div>
       @if (bootstrapMode) {
-        <h1>Initial Setup</h1>
-        <p class="subtitle">Create your Super Admin account to get started</p>
+        <h1>{{ 'LOGIN.BOOTSTRAP_TITLE' | translate }}</h1>
+        <p class="subtitle">{{ 'LOGIN.BOOTSTRAP_SUBTITLE' | translate }}</p>
       } @else {
         <h1>{{ 'LOGIN.TITLE' | translate }}</h1>
-        <p class="subtitle">Hospital Management System</p>
+        <p class="subtitle">{{ 'LOGIN.SUBTITLE' | translate }}</p>
       }
     </div>
 
