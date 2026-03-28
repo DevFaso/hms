@@ -287,7 +287,32 @@ fun ProfileScreen(
                     } else {
                         profile?.preferredPharmacy?.let {
                             ProfileRow(Icons.Default.LocalPharmacy, "Preferred", it)
-                        } ?: Text("Not set", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } ?: run {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = BrandLightBlue,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.LocalPharmacy, null, tint = BrandBlue, modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Preferred Pharmacy", style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Not set", style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                FilledTonalButton(onClick = { isEditing = true }) {
+                                    Text("Set", style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        }
                     }
                 }
             }

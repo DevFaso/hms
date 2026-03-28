@@ -36,8 +36,8 @@ data class DischargeSummaryDto(
 
 @JsonClass(generateAdapter = true)
 data class CareTeamDto(
-    @Json(name = "primaryPhysician") val primaryPhysician: CareTeamMemberDto? = null,
-    @Json(name = "members") val members: List<CareTeamMemberDto>? = null
+    @Json(name = "primaryCare") val primaryPhysician: CareTeamMemberDto? = null,
+    @Json(name = "primaryCareHistory") val members: List<CareTeamMemberDto>? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -67,39 +67,44 @@ data class DocumentDto(
 @JsonClass(generateAdapter = true)
 data class NotificationDto(
     @Json(name = "id") val id: String = "",
-    @Json(name = "title") val title: String = "",
     @Json(name = "message") val message: String = "",
     @Json(name = "type") val type: String? = null,
-    @Json(name = "isRead") val isRead: Boolean = false,
-    @Json(name = "createdAt") val createdAt: String = "",
-    @Json(name = "actionUrl") val actionUrl: String? = null
-)
+    @Json(name = "read") val isRead: Boolean = false,
+    @Json(name = "createdAt") val createdAt: String = ""
+) {
+    /** Backend has no title field; derive from type or fall back to message. */
+    val title: String get() = type?.replace("_", " ")?.lowercase()
+        ?.replaceFirstChar { it.uppercase() } ?: message.take(60)
+}
 
 @JsonClass(generateAdapter = true)
-data class ChatThreadDto(
-    @Json(name = "id") val id: String = "",
-    @Json(name = "subject") val subject: String = "",
-    @Json(name = "participantName") val participantName: String? = null,
-    @Json(name = "lastMessage") val lastMessage: String? = null,
-    @Json(name = "lastMessageAt") val lastMessageAt: String? = null,
+data class ChatConversationDto(
+    @Json(name = "conversationUserId") val conversationUserId: String = "",
+    @Json(name = "conversationUserName") val conversationUserName: String = "",
+    @Json(name = "lastMessageContent") val lastMessageContent: String? = null,
+    @Json(name = "lastMessageTimestamp") val lastMessageTimestamp: String? = null,
+    @Json(name = "hospitalId") val hospitalId: String? = null,
+    @Json(name = "lastMessageRead") val lastMessageRead: Boolean = true,
     @Json(name = "unreadCount") val unreadCount: Int = 0
 )
 
 @JsonClass(generateAdapter = true)
 data class ChatMessageDto(
     @Json(name = "id") val id: String = "",
-    @Json(name = "threadId") val threadId: String = "",
-    @Json(name = "content") val content: String = "",
+    @Json(name = "timestamp") val timestamp: String = "",
+    @Json(name = "senderId") val senderId: String = "",
     @Json(name = "senderName") val senderName: String? = null,
-    @Json(name = "sentAt") val sentAt: String = "",
-    @Json(name = "isFromPatient") val isFromPatient: Boolean = false,
-    @Json(name = "isRead") val isRead: Boolean = false
+    @Json(name = "senderRole") val senderRole: String? = null,
+    @Json(name = "recipientId") val recipientId: String = "",
+    @Json(name = "recipientName") val recipientName: String? = null,
+    @Json(name = "content") val content: String = "",
+    @Json(name = "read") val read: Boolean = false
 )
 
 @JsonClass(generateAdapter = true)
-data class SendMessageRequest(
-    @Json(name = "content") val content: String,
-    @Json(name = "subject") val subject: String? = null
+data class SendChatMessageRequest(
+    @Json(name = "recipientId") val recipientId: String,
+    @Json(name = "content") val content: String
 )
 
 @JsonClass(generateAdapter = true)

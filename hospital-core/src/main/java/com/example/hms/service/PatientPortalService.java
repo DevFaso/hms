@@ -145,4 +145,21 @@ public interface PatientPortalService {
 
     /** List patients whose data I can view as proxy. */
     List<ProxyResponseDTO> getMyProxyAccess(Authentication auth);
+
+    // ── Proxy data-viewing ───────────────────────────────────────────────
+
+    /** View grantor's appointments as proxy. */
+    List<AppointmentResponseDTO> getProxyAppointments(Authentication auth, UUID patientId, java.util.Locale locale);
+
+    /** View grantor's medications as proxy. */
+    List<PatientMedicationResponseDTO> getProxyMedications(Authentication auth, UUID patientId, int limit);
+
+    /** View grantor's lab results as proxy. */
+    List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId, int limit);
+
+    /** View grantor's billing invoices as proxy. */
+    Page<BillingInvoiceResponseDTO> getProxyBilling(Authentication auth, UUID patientId, Pageable pageable, java.util.Locale locale);
+
+    /** View grantor's health records/summary as proxy. */
+    HealthSummaryDTO getProxyRecords(Authentication auth, UUID patientId, java.util.Locale locale);
 }

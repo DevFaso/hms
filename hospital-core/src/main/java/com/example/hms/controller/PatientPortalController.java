@@ -437,4 +437,57 @@ public class PatientPortalController {
         List<ProxyResponseDTO> access = portalService.getMyProxyAccess(auth);
         return ResponseEntity.ok(ApiResponseWrapper.success(access));
     }
+
+    // ── Proxy data-viewing endpoints ──────────────────────────────────────
+
+    @Operation(summary = "View grantor's appointments as proxy")
+    @GetMapping("/proxy-access/{patientId}/appointments")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponseWrapper<List<AppointmentResponseDTO>>> getProxyAppointments(
+            Authentication auth, @PathVariable UUID patientId) {
+        Locale locale = LocaleContextHolder.getLocale();
+        List<AppointmentResponseDTO> data = portalService.getProxyAppointments(auth, patientId, locale);
+        return ResponseEntity.ok(ApiResponseWrapper.success(data));
+    }
+
+    @Operation(summary = "View grantor's medications as proxy")
+    @GetMapping("/proxy-access/{patientId}/medications")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponseWrapper<List<PatientMedicationResponseDTO>>> getProxyMedications(
+            Authentication auth, @PathVariable UUID patientId,
+            @RequestParam(defaultValue = "50") int limit) {
+        List<PatientMedicationResponseDTO> data = portalService.getProxyMedications(auth, patientId, limit);
+        return ResponseEntity.ok(ApiResponseWrapper.success(data));
+    }
+
+    @Operation(summary = "View grantor's lab results as proxy")
+    @GetMapping("/proxy-access/{patientId}/lab-results")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponseWrapper<List<PatientLabResultResponseDTO>>> getProxyLabResults(
+            Authentication auth, @PathVariable UUID patientId,
+            @RequestParam(defaultValue = "50") int limit) {
+        List<PatientLabResultResponseDTO> data = portalService.getProxyLabResults(auth, patientId, limit);
+        return ResponseEntity.ok(ApiResponseWrapper.success(data));
+    }
+
+    @Operation(summary = "View grantor's billing invoices as proxy")
+    @GetMapping("/proxy-access/{patientId}/billing")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponseWrapper<Page<BillingInvoiceResponseDTO>>> getProxyBilling(
+            Authentication auth, @PathVariable UUID patientId,
+            @PageableDefault(size = 20) Pageable pageable) {
+        Locale locale = LocaleContextHolder.getLocale();
+        Page<BillingInvoiceResponseDTO> data = portalService.getProxyBilling(auth, patientId, pageable, locale);
+        return ResponseEntity.ok(ApiResponseWrapper.success(data));
+    }
+
+    @Operation(summary = "View grantor's health records as proxy")
+    @GetMapping("/proxy-access/{patientId}/records")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<ApiResponseWrapper<HealthSummaryDTO>> getProxyRecords(
+            Authentication auth, @PathVariable UUID patientId) {
+        Locale locale = LocaleContextHolder.getLocale();
+        HealthSummaryDTO data = portalService.getProxyRecords(auth, patientId, locale);
+        return ResponseEntity.ok(ApiResponseWrapper.success(data));
+    }
 }

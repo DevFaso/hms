@@ -51,6 +51,13 @@ public class AnnouncementServiceImpl implements AnnouncementService {
 
         List<User> activeUsers = userRepository.findByIsDeletedFalse();
         for (User user : activeUsers) {
+            // Announcements are internal — skip pure-patient users
+            boolean isOnlyPatient = user.getUserRoles().stream()
+                    .allMatch(ur -> "PATIENT".equalsIgnoreCase(ur.getRole().getCode())
+                            || "ROLE_PATIENT".equalsIgnoreCase(ur.getRole().getCode()));
+            if (user.getUserRoles().isEmpty() || isOnlyPatient) {
+                continue;
+            }
             try {
                 notificationService.createNotification(
                     "New announcement: " + text,

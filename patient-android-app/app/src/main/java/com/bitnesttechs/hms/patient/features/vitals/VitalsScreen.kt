@@ -25,7 +25,6 @@ import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
 fun VitalsScreen(onBack: () -> Unit = {}, viewModel: VitalsViewModel = hiltViewModel()) {
     val vitals by viewModel.vitals.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    var showRecordSheet by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -37,12 +36,7 @@ fun VitalsScreen(onBack: () -> Unit = {}, viewModel: VitalsViewModel = hiltViewM
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
-                    titleContentColor = Color.White),
-                actions = {
-                    IconButton(onClick = { showRecordSheet = true }) {
-                        Icon(Icons.Default.Add, null, tint = Color.White)
-                    }
-                }
+                    titleContentColor = Color.White)
             )
         }
     ) { padding ->
@@ -89,17 +83,6 @@ fun VitalsScreen(onBack: () -> Unit = {}, viewModel: VitalsViewModel = hiltViewM
             }
             item { Spacer(Modifier.height(16.dp)) }
         }
-    }
-
-    if (showRecordSheet) {
-        RecordVitalSheet(
-            isRecording = viewModel.isRecording.collectAsState().value,
-            onDismiss = { showRecordSheet = false },
-            onSubmit = { request ->
-                viewModel.recordVital(request)
-                showRecordSheet = false
-            }
-        )
     }
 }
 

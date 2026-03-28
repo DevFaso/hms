@@ -29,7 +29,7 @@ class NotificationsViewModel @Inject constructor(
             try {
                 val resp = api.getNotifications()
                 if (resp.isSuccessful) {
-                    _notifications.value = resp.body()?.data ?: emptyList()
+                    _notifications.value = resp.body()?.content ?: emptyList()
                 }
             } catch (_: Exception) {
             } finally {
@@ -41,9 +41,11 @@ class NotificationsViewModel @Inject constructor(
     fun markRead(id: String) {
         viewModelScope.launch {
             try {
-                api.markNotificationRead(id)
-                _notifications.value = _notifications.value.map {
-                    if (it.id == id) it.copy(isRead = true) else it
+                val resp = api.markNotificationRead(id)
+                if (resp.isSuccessful) {
+                    _notifications.value = _notifications.value.map {
+                        if (it.id == id) it.copy(isRead = true) else it
+                    }
                 }
             } catch (_: Exception) {}
         }
@@ -52,8 +54,17 @@ class NotificationsViewModel @Inject constructor(
     fun markAllRead() {
         viewModelScope.launch {
             try {
-                api.markAllNotificationsRead()
-                _notifications.value = _notifications.value.map { it.copy(isRead = true) }
+                val unread = _notifications.value.filter { !it.isRead }
+                val marked = mutableSetOf<String>()
+                unread.forEach { notif ->
+                    val resp = api.markNotificationRead(notif.id)
+                    if (resp.isSuccessful) marked.add(notif.id)
+                }
+                if (marked.isNotEmpty()) {
+                    _notifications.value = _notifications.value.map {
+                        if (it.id in marked) it.copy(isRead = true) else it
+                    }
+                }
             } catch (_: Exception) {}
         }
     }

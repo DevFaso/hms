@@ -28,8 +28,11 @@ fun MessagesScreen(
     onThreadClick: (String) -> Unit,
     viewModel: MessagesViewModel = hiltViewModel()
 ) {
-    val threads by viewModel.threads.collectAsState()
+    val conversations by viewModel.conversations.collectAsState()
+    val careTeamMembers by viewModel.careTeamMembers.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isLoadingCareTeam by viewModel.isLoadingCareTeam.collectAsState()
+    var showProviderPicker by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -38,6 +41,17 @@ fun MessagesScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
                     titleContentColor = Color.White)
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = {
+                    viewModel.loadCareTeam()
+                    showProviderPicker = true
+                },
+                containerColor = BrandBlue
+            ) {
+                Icon(Icons.Default.Edit, "New message", tint = Color.White)
+            }
         }
     ) { padding ->
         if (isLoading) {
@@ -46,46 +60,107 @@ fun MessagesScreen(
             }
             return@Scaffold
         }
-        if (threads.isEmpty()) {
+        if (conversations.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(Icons.Default.Message, null, Modifier.size(64.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(8.dp))
                     Text("No messages", style = MaterialTheme.typography.bodyLarge)
+                    Spacer(Modifier.height(12.dp))
+                    FilledTonalButton(onClick = {
+                        viewModel.loadCareTeam()
+                        showProviderPicker = true
+                    }) {
+                        Icon(Icons.Default.Edit, null, Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Message a Provider")
+                    }
                 }
             }
-            return@Scaffold
+        } else {
+            LazyColumn(Modifier.fillMaxSize().padding(padding)) {
+                items(conversations) { convo ->
+                    ListItem(
+                        headlineContent = {
+                            Text(convo.conversationUserName, fontWeight = FontWeight.Medium)
+                        },
+                        supportingContent = convo.lastMessageContent?.let {
+                            { Text(it, maxLines = 1) }
+                        },
+                        leadingContent = {
+                            Box(
+                                Modifier.size(44.dp).clip(CircleShape).background(BrandLightBlue),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Person, null, tint = BrandBlue)
+                            }
+                        },
+                        trailingContent = {
+                            Column(horizontalAlignment = Alignment.End) {
+                                convo.lastMessageTimestamp?.let {
+                                    Text(it.take(10), style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                if (convo.unreadCount > 0) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Badge { Text(convo.unreadCount.toString()) }
+                                }
+                            }
+                        },
+                        modifier = Modifier.clickable {
+                            onThreadClick(convo.conversationUserId)
+                        }
+                    )
+                    HorizontalDivider()
+                }
+            }
         }
+    }
 
-        LazyColumn(Modifier.fillMaxSize().padding(padding)) {
-            items(threads) { thread ->
-                ListItem(
-                    headlineContent = { Text(thread.subject, fontWeight = FontWeight.Medium) },
-                    supportingContent = thread.lastMessage?.let { { Text(it, maxLines = 1) } },
-                    leadingContent = {
-                        Box(
-                            Modifier.size(44.dp).clip(CircleShape).background(BrandLightBlue),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Default.Person, null, tint = BrandBlue)
-                        }
-                    },
-                    trailingContent = {
-                        Column(horizontalAlignment = Alignment.End) {
-                            thread.lastMessageAt?.let {
-                                Text(it.take(10), style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            if (thread.unreadCount > 0) {
-                                Spacer(Modifier.height(4.dp))
-                                Badge { Text(thread.unreadCount.toString()) }
-                            }
-                        }
-                    },
-                    modifier = Modifier.clickable { onThreadClick(thread.id) }
+    if (showProviderPicker) {
+        ModalBottomSheet(onDismissRequest = { showProviderPicker = false }) {
+            Column(Modifier.padding(16.dp)) {
+                Text(
+                    "Select a Provider",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 12.dp)
                 )
-                HorizontalDivider()
+                if (careTeamMembers.isEmpty()) {
+                    Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
+                        if (isLoadingCareTeam) {
+                            CircularProgressIndicator(color = BrandBlue)
+                        } else {
+                            Text("No providers found", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                } else {
+                    careTeamMembers.forEach { member ->
+                        ListItem(
+                            headlineContent = { Text(member.name, fontWeight = FontWeight.Medium) },
+                            supportingContent = {
+                                val info = listOfNotNull(member.role, member.specialty, member.department)
+                                    .joinToString(" · ")
+                                if (info.isNotEmpty()) Text(info)
+                            },
+                            leadingContent = {
+                                Box(
+                                    Modifier.size(40.dp).clip(CircleShape).background(BrandLightBlue),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Person, null, tint = BrandBlue)
+                                }
+                            },
+                            modifier = Modifier.clickable {
+                                showProviderPicker = false
+                                onThreadClick(member.id)
+                            }
+                        )
+                        HorizontalDivider()
+                    }
+                }
+                Spacer(Modifier.height(32.dp))
             }
         }
     }
@@ -166,29 +241,29 @@ fun MessageThreadScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(messages) { msg ->
-                val isFromPatient = msg.isFromPatient
+                val isMine = msg.senderId == viewModel.currentUserId
                 Row(
                     Modifier.fillMaxWidth(),
-                    horizontalArrangement = if (isFromPatient) Arrangement.End else Arrangement.Start
+                    horizontalArrangement = if (isMine) Arrangement.End else Arrangement.Start
                 ) {
                     Surface(
                         shape = RoundedCornerShape(
                             topStart = 16.dp, topEnd = 16.dp,
-                            bottomStart = if (isFromPatient) 16.dp else 4.dp,
-                            bottomEnd = if (isFromPatient) 4.dp else 16.dp
+                            bottomStart = if (isMine) 16.dp else 4.dp,
+                            bottomEnd = if (isMine) 4.dp else 16.dp
                         ),
-                        color = if (isFromPatient) BrandBlue else MaterialTheme.colorScheme.surfaceVariant,
+                        color = if (isMine) BrandBlue else MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier.widthIn(max = 280.dp)
                     ) {
                         Column(Modifier.padding(10.dp)) {
                             Text(
                                 msg.content,
-                                color = if (isFromPatient) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (isMine) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             Text(
-                                msg.sentAt.take(16),
-                                color = if (isFromPatient) Color.White.copy(alpha = 0.7f)
+                                msg.timestamp.take(16),
+                                color = if (isMine) Color.White.copy(alpha = 0.7f)
                                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                                 style = MaterialTheme.typography.labelSmall,
                                 modifier = Modifier.align(Alignment.End)

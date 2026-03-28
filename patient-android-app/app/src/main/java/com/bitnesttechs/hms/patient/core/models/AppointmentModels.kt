@@ -11,6 +11,7 @@ data class AppointmentDto(
     @Json(name = "endTime") val endTime: String? = null,
     @Json(name = "status") val status: String = "",
     @Json(name = "staffId") val staffId: String? = null,
+    @Json(name = "staffUserId") val staffUserId: String? = null,
     @Json(name = "staffName") val staffName: String? = null,
     @Json(name = "staffEmail") val staffEmail: String? = null,
     @Json(name = "departmentId") val departmentId: String? = null,
