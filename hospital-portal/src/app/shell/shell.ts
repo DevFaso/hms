@@ -22,7 +22,14 @@ interface NavItem {
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, LockScreenComponent, TranslateModule],
+  imports: [
+    CommonModule,
+    RouterOutlet,
+    RouterLink,
+    RouterLinkActive,
+    LockScreenComponent,
+    TranslateModule,
+  ],
   templateUrl: './shell.html',
   styleUrl: './shell.scss',
 })
@@ -78,24 +85,90 @@ export class ShellComponent implements OnInit, OnDestroy {
     // Patient gets a completely different nav — Epic MyChart style
     if (this.auth.hasAnyRole(['ROLE_PATIENT'])) {
       return [
-        { icon: 'dashboard', label: 'Dashboard', translationKey: 'NAV.DASHBOARD', route: '/dashboard' },
-        { icon: 'calendar_month', label: 'My Appointments', translationKey: 'NAV.MY_APPOINTMENTS', route: '/my-appointments' },
-        { icon: 'medication', label: 'Medications', translationKey: 'NAV.MEDICATIONS', route: '/my-medications' },
-        { icon: 'science', label: 'Test Results', translationKey: 'NAV.TEST_RESULTS', route: '/my-lab-results' },
-        { icon: 'monitor_heart', label: 'Vitals', translationKey: 'NAV.VITALS', route: '/my-vitals' },
-        { icon: 'receipt_long', label: 'Billing', translationKey: 'NAV.BILLING', route: '/my-billing' },
-        { icon: 'history', label: 'Visit History', translationKey: 'NAV.VISIT_HISTORY', route: '/my-visits' },
-        { icon: 'folder_shared', label: 'My Records', translationKey: 'NAV.MY_RECORDS', route: '/my-records' },
-        { icon: 'share', label: 'Record Sharing', translationKey: 'NAV.RECORD_SHARING', route: '/my-sharing' },
-        { icon: 'summarize', label: 'Visit Summaries', translationKey: 'NAV.VISIT_SUMMARIES', route: '/my-summaries' },
+        {
+          icon: 'dashboard',
+          label: 'Dashboard',
+          translationKey: 'NAV.DASHBOARD',
+          route: '/dashboard',
+        },
+        {
+          icon: 'calendar_month',
+          label: 'My Appointments',
+          translationKey: 'NAV.MY_APPOINTMENTS',
+          route: '/my-appointments',
+        },
+        {
+          icon: 'medication',
+          label: 'Medications',
+          translationKey: 'NAV.MEDICATIONS',
+          route: '/my-medications',
+        },
+        {
+          icon: 'science',
+          label: 'Test Results',
+          translationKey: 'NAV.TEST_RESULTS',
+          route: '/my-lab-results',
+        },
+        {
+          icon: 'monitor_heart',
+          label: 'Vitals',
+          translationKey: 'NAV.VITALS',
+          route: '/my-vitals',
+        },
+        {
+          icon: 'receipt_long',
+          label: 'Billing',
+          translationKey: 'NAV.BILLING',
+          route: '/my-billing',
+        },
+        {
+          icon: 'history',
+          label: 'Visit History',
+          translationKey: 'NAV.VISIT_HISTORY',
+          route: '/my-visits',
+        },
+        {
+          icon: 'folder_shared',
+          label: 'My Records',
+          translationKey: 'NAV.MY_RECORDS',
+          route: '/my-records',
+        },
+        {
+          icon: 'share',
+          label: 'Record Sharing',
+          translationKey: 'NAV.RECORD_SHARING',
+          route: '/my-sharing',
+        },
+        {
+          icon: 'summarize',
+          label: 'Visit Summaries',
+          translationKey: 'NAV.VISIT_SUMMARIES',
+          route: '/my-summaries',
+        },
         { icon: 'chat', label: 'Messages', translationKey: 'NAV.MESSAGES', route: '/chat' },
-        { icon: 'notifications', label: 'Notifications', translationKey: 'NAV.NOTIFICATIONS', route: '/notifications' },
+        {
+          icon: 'notifications',
+          label: 'Notifications',
+          translationKey: 'NAV.NOTIFICATIONS',
+          route: '/notifications',
+        },
       ];
     }
 
     const items: NavItem[] = [
-      { icon: 'dashboard', label: 'Dashboard', translationKey: 'NAV.DASHBOARD', route: '/dashboard' },
-      { icon: 'people', label: 'Patients', translationKey: 'NAV.PATIENTS', route: '/patients', permission: 'View Patient Records' },
+      {
+        icon: 'dashboard',
+        label: 'Dashboard',
+        translationKey: 'NAV.DASHBOARD',
+        route: '/dashboard',
+      },
+      {
+        icon: 'people',
+        label: 'Patients',
+        translationKey: 'NAV.PATIENTS',
+        route: '/patients',
+        permission: 'View Patient Records',
+      },
       {
         icon: 'calendar_month',
         label: 'Appointments',
@@ -103,7 +176,13 @@ export class ShellComponent implements OnInit, OnDestroy {
         route: '/appointments',
         permission: 'View Appointments',
       },
-      { icon: 'badge', label: 'Staff', translationKey: 'NAV.STAFF', route: '/staff', permission: 'View Staff' },
+      {
+        icon: 'badge',
+        label: 'Staff',
+        translationKey: 'NAV.STAFF',
+        route: '/staff',
+        permission: 'View Staff',
+      },
       {
         icon: 'event_note',
         label: this.permissions.hasAnyPermission('Manage Staff', 'Manage Staff Schedules')
@@ -171,9 +250,27 @@ export class ShellComponent implements OnInit, OnDestroy {
         route: '/treatment-plans',
         permission: 'Create Treatment Plans',
       },
-      { icon: 'send', label: 'Referrals', translationKey: 'NAV.REFERRALS', route: '/referrals', permission: 'Create Referrals' },
-      { icon: 'receipt_long', label: 'Billing', translationKey: 'NAV.BILLING', route: '/billing', permission: 'View Billing' },
-      { icon: 'science', label: 'Laboratory', translationKey: 'NAV.LABORATORY', route: '/lab', permission: 'View Lab' },
+      {
+        icon: 'send',
+        label: 'Referrals',
+        translationKey: 'NAV.REFERRALS',
+        route: '/referrals',
+        permission: 'Create Referrals',
+      },
+      {
+        icon: 'receipt_long',
+        label: 'Billing',
+        translationKey: 'NAV.BILLING',
+        route: '/billing',
+        permission: 'View Billing',
+      },
+      {
+        icon: 'science',
+        label: 'Laboratory',
+        translationKey: 'NAV.LABORATORY',
+        route: '/lab',
+        permission: 'View Lab',
+      },
       {
         icon: 'notifications',
         label: 'Notifications',
@@ -182,24 +279,49 @@ export class ShellComponent implements OnInit, OnDestroy {
         permission: 'View Notifications',
       },
       { icon: 'chat', label: 'Messages', translationKey: 'NAV.MESSAGES', route: '/chat' },
-      { icon: 'campaign', label: 'Announcements', translationKey: 'NAV.ANNOUNCEMENTS', route: '/announcements' },
+      {
+        icon: 'campaign',
+        label: 'Announcements',
+        translationKey: 'NAV.ANNOUNCEMENTS',
+        route: '/announcements',
+      },
     ];
 
     // Admin items — gated individually so HOSPITAL_ADMIN sees relevant ones
     if (this.permissions.hasPermission('View Hospitals')) {
-      items.push({ icon: 'local_hospital', label: 'Hospitals', translationKey: 'NAV.HOSPITALS', route: '/hospitals' });
+      items.push({
+        icon: 'local_hospital',
+        label: 'Hospitals',
+        translationKey: 'NAV.HOSPITALS',
+        route: '/hospitals',
+      });
     }
     if (this.permissions.hasPermission('*')) {
       items.push(
-        { icon: 'corporate_fare', label: 'Organizations', translationKey: 'NAV.ORGANIZATIONS', route: '/organizations' },
+        {
+          icon: 'corporate_fare',
+          label: 'Organizations',
+          translationKey: 'NAV.ORGANIZATIONS',
+          route: '/organizations',
+        },
         { icon: 'manage_accounts', label: 'Users', translationKey: 'NAV.USERS', route: '/users' },
         { icon: 'shield', label: 'Roles', translationKey: 'NAV.ROLES', route: '/roles' },
         { icon: 'hub', label: 'Platform', translationKey: 'NAV.PLATFORM', route: '/platform' },
-        { icon: 'admin_panel_settings', label: 'Administration', translationKey: 'NAV.ADMINISTRATION', route: '/admin' },
+        {
+          icon: 'admin_panel_settings',
+          label: 'Administration',
+          translationKey: 'NAV.ADMINISTRATION',
+          route: '/admin',
+        },
       );
     }
     if (this.permissions.hasPermission('View Audit Logs')) {
-      items.push({ icon: 'policy', label: 'Audit Logs', translationKey: 'NAV.AUDIT_LOGS', route: '/audit-logs' });
+      items.push({
+        icon: 'policy',
+        label: 'Audit Logs',
+        translationKey: 'NAV.AUDIT_LOGS',
+        route: '/audit-logs',
+      });
     }
     if (
       this.auth.hasAnyRole([
@@ -209,7 +331,12 @@ export class ShellComponent implements OnInit, OnDestroy {
         'ROLE_SUPER_ADMIN',
       ])
     ) {
-      items.push({ icon: 'space_dashboard', label: 'Front Desk', translationKey: 'NAV.FRONT_DESK', route: '/reception' });
+      items.push({
+        icon: 'space_dashboard',
+        label: 'Front Desk',
+        translationKey: 'NAV.FRONT_DESK',
+        route: '/reception',
+      });
     }
 
     // Doctor role: hide admin/nurse-specific entries for a cleaner sidebar

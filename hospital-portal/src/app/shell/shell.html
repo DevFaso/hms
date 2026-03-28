@@ -41,7 +41,9 @@
           >
           <span class="material-symbols-outlined nav-icon">{{ item.icon }}</span>
           @if (!sidebarCollapsed()) {
-            <span class="nav-label">{{ item.translationKey ? (item.translationKey | translate) : item.label }}</span>
+            <span class="nav-label">{{
+              item.translationKey ? (item.translationKey | translate) : item.label
+            }}</span>
           }
         </a>
       }
@@ -85,19 +87,25 @@
             [class.active]="currentLang() === 'fr'"
             (click)="switchLang('fr')"
             title="Français"
-          >FR</button>
+          >
+            FR
+          </button>
           <button
             class="lang-btn"
             [class.active]="currentLang() === 'en'"
             (click)="switchLang('en')"
             title="English"
-          >EN</button>
+          >
+            EN
+          </button>
           <button
             class="lang-btn"
             [class.active]="currentLang() === 'es'"
             (click)="switchLang('es')"
             title="Español"
-          >ES</button>
+          >
+            ES
+          </button>
         </div>
 
         <!-- Notifications -->
