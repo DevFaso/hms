@@ -253,18 +253,28 @@ public class PatientServiceImpl implements PatientService {
         log.info("[getPatientById] Found patient entity pk={}, user={}", patientId, patient.getUser() != null ? patient.getUser().getId() : "null");
 
         // SECURITY: Enforce hospital scope — non-superadmin must have hospitalId and patient must be registered there.
-        if (hospitalId != null) {
+        boolean isSuperAdmin = roleValidator.isSuperAdminFromAuth();
+        if (hospitalId != null && !isSuperAdmin) {
             boolean registered = registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId);
             log.info("[getPatientById] Hospital scope check: patientId={}, hospitalId={}, registered={}", patientId, hospitalId, registered);
             if (!registered) {
                 throw new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, patientId);
             }
-        } else if (!roleValidator.isSuperAdminFromAuth()) {
+        } else if (hospitalId == null && !isSuperAdmin) {
             throw new com.example.hms.exception.BusinessException(
                 "Hospital context required to view patient details.");
         }
 
-        return buildPatientDto(patient, hospitalId);
+        // Super-admin with a non-matching hospitalId: fall back to unscoped view.
+        UUID effectiveHospitalId = hospitalId;
+        if (isSuperAdmin && hospitalId != null) {
+            boolean registered = registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId);
+            if (!registered) {
+                effectiveHospitalId = null;
+            }
+        }
+
+        return buildPatientDto(patient, effectiveHospitalId);
     }
 
     @Override
