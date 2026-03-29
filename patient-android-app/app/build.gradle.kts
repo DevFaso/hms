@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +8,13 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.kotlin.serialization)
     kotlin("kapt")
+}
+
+// Load signing properties from local.properties
+val localProps = Properties()
+val localPropsFile = rootProject.file("local.properties")
+if (localPropsFile.exists()) {
+    localProps.load(FileInputStream(localPropsFile))
 }
 
 android {
@@ -24,6 +34,15 @@ android {
         buildConfigField("String", "API_BASE_URL", "\"https://hms-production.up.railway.app/api\"")
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file(localProps.getProperty("STORE_FILE", "../upload-keystore.jks"))
+            storePassword = localProps.getProperty("STORE_PASSWORD", "")
+            keyAlias = localProps.getProperty("KEY_ALIAS", "upload")
+            keyPassword = localProps.getProperty("KEY_PASSWORD", "")
+        }
+    }
+
     buildTypes {
         debug {
             isDebuggable = true
@@ -32,6 +51,7 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
