@@ -1494,7 +1494,7 @@ class NurseTaskServiceImplTest {
         pat.setId(patientId);
         Hospital hosp = Hospital.builder().build();
         hosp.setId(hospitalId);
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(pat));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
         when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.empty());
 
@@ -1524,7 +1524,7 @@ class NurseTaskServiceImplTest {
         pat6.setId(patientId);
         Hospital hosp6 = Hospital.builder().build();
         hosp6.setId(hospitalId);
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(pat6));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat6));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp6));
 
         NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
@@ -1547,7 +1547,7 @@ class NurseTaskServiceImplTest {
         pat7.setId(patientId);
         Hospital hosp7 = Hospital.builder().build();
         hosp7.setId(hospitalId);
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(pat7));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat7));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp7));
 
         NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
@@ -1686,7 +1686,7 @@ class NurseTaskServiceImplTest {
         nurse.setId(nurseId);
 
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(pat));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
         when(userRepository.findById(nurseId)).thenReturn(Optional.of(nurse));
 
         NurseTaskCreateRequestDTO req = new NurseTaskCreateRequestDTO();
@@ -1850,7 +1850,7 @@ class NurseTaskServiceImplTest {
         User author = User.builder().firstName("Jane").lastName("RN").username("jane.rn").build();
         author.setId(nurseId);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(pat));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
         when(userRepository.findById(nurseId)).thenReturn(Optional.of(author));
         when(nursingNoteRepository.save(any(NursingNote.class))).thenAnswer(inv -> {
@@ -1887,7 +1887,7 @@ class NurseTaskServiceImplTest {
         User author = User.builder().username("soap_nurse").build(); // no first name → uses username
         author.setId(nurseId);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(pat));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
         when(userRepository.findById(nurseId)).thenReturn(Optional.of(author));
         when(nursingNoteRepository.save(any(NursingNote.class))).thenAnswer(inv -> {
@@ -1914,7 +1914,7 @@ class NurseTaskServiceImplTest {
     @Test
     void createCareNoteThrowsWhenPatientNotFound() {
         UUID patientId = UUID.randomUUID();
-        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
         NurseCareNoteRequestDTO req = new NurseCareNoteRequestDTO();
         req.setTemplate("DAR");

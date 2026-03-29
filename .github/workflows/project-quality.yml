@@ -38,7 +38,7 @@ jobs:
       - name: Lint Dockerfiles
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: '**/Dockerfile'
+          recursive: true
 
       - name: Lint YAML files
         uses: ibiqlik/action-yamllint@v3
