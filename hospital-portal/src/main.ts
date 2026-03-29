@@ -15,10 +15,7 @@ if (environment.faroCollectorUrl) {
           version: '1.0.0',
           environment: environment.production ? 'production' : 'uat',
         },
-        instrumentations: [
-          ...getWebInstrumentations(),
-          new TracingInstrumentation(),
-        ],
+        instrumentations: [...getWebInstrumentations(), new TracingInstrumentation()],
       });
     }),
   );
