@@ -69,18 +69,29 @@ jobs:
   prompt-tests:
     name: Scenario tests (Promptfoo)
     runs-on: ubuntu-latest
-    if: hashFiles('scenarios/*.prompt.yaml') != ''
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check for scenario files
+        id: check_scenarios
+        run: |
+          if ls scenarios/*.prompt.yaml 1>/dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-node@v4
+        if: steps.check_scenarios.outputs.found == 'true'
         with:
           node-version: '20'
 
       - name: Install promptfoo
+        if: steps.check_scenarios.outputs.found == 'true'
         run: npm install -g promptfoo
 
       - name: Run scenario-based tests
+        if: steps.check_scenarios.outputs.found == 'true'
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: promptfoo run scenarios/*.prompt.yaml
