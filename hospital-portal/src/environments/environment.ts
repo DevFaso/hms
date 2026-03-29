@@ -3,4 +3,5 @@ export const environment = {
   apiUrl: '/api',
   apiBase: '/api',
   gaTrackingId: '',
+  faroCollectorUrl: '',
 };
