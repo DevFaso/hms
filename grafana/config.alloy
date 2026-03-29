@@ -1,0 +1,49 @@
+// ── Grafana Alloy configuration for HMS Spring Boot integration ──
+// Used for local development with docker-compose.
+// In production (Railway), the OTEL Java Agent exports directly to Grafana Cloud.
+
+// ── Spring Boot metrics discovery ──────────────────────────────────────────
+discovery.relabel "metrics_integrations_integrations_spring_boot" {
+	targets = [{
+		__address__ = "hms-backend:8081",
+	}]
+
+	rule {
+		target_label = "instance"
+		replacement  = constants.hostname
+	}
+}
+
+// ── Prometheus scrape for Spring Boot actuator ─────────────────────────────
+prometheus.scrape "metrics_integrations_integrations_spring_boot" {
+	targets      = discovery.relabel.metrics_integrations_integrations_spring_boot.output
+	forward_to   = [prometheus.relabel.metrics_integrations_integrations_spring_boot.receiver]
+	job_name     = "integrations/spring-boot"
+	metrics_path = "/api/actuator/prometheus"
+}
+
+// ── Keep only the metrics required by the Grafana Spring Boot dashboard ────
+prometheus.relabel "metrics_integrations_integrations_spring_boot" {
+	forward_to = [prometheus.remote_write.metrics_service.receiver]
+
+	rule {
+		source_labels = ["__name__"]
+		regex         = "up|hikaricp_connections|hikaricp_connections_acquire_seconds_count|hikaricp_connections_acquire_seconds_sum|hikaricp_connections_active|hikaricp_connections_creation_seconds_count|hikaricp_connections_creation_seconds_sum|hikaricp_connections_idle|hikaricp_connections_pending|hikaricp_connections_timeout_total|hikaricp_connections_usage_seconds_count|hikaricp_connections_usage_seconds_sum|http_server_requests_seconds_count|http_server_requests_seconds_sum|jvm_buffer_memory_used_bytes|jvm_buffer_total_capacity_bytes|jvm_classes_loaded_classes|jvm_classes_unloaded_classes_total|jvm_gc_memory_allocated_bytes_total|jvm_gc_memory_promoted_bytes_total|jvm_gc_pause_seconds_count|jvm_gc_pause_seconds_sum|jvm_memory_committed_bytes|jvm_memory_max_bytes|jvm_memory_used_bytes|jvm_threads_daemon_threads|jvm_threads_live_threads|jvm_threads_peak_threads|logback_events_total|process_cpu_usage|process_files_max_files|process_files_open_files|process_start_time_seconds|process_uptime_seconds|system_cpu_count|system_cpu_usage|system_load_average_1m|tomcat_global_error_total|tomcat_global_received_bytes_total|tomcat_global_sent_bytes_total|tomcat_sessions_active_current_sessions|tomcat_threads_busy|tomcat_threads_config_max_threads|tomcat_threads_current_threads"
+		action        = "keep"
+	}
+}
+
+// ── Remote write to Grafana Cloud Mimir ────────────────────────────────────
+// For local dev, forward to the docker-compose Prometheus instead.
+// To send to Grafana Cloud, set GRAFANA_METRICS_URL and GRAFANA_METRICS_USER
+// environment variables on the Alloy container.
+prometheus.remote_write "metrics_service" {
+	endpoint {
+		url = env("GRAFANA_METRICS_URL")
+
+		basic_auth {
+			username = env("GRAFANA_METRICS_USER")
+			password = env("GRAFANA_METRICS_TOKEN")
+		}
+	}
+}
