@@ -57,8 +57,8 @@ jobs:
         id: cfg
         env:
           HMS_PROD_TOKEN: ${{ secrets.HMS_PROD_TOKEN }}
-          HMS_UAT_TOKEN:  ${{ secrets.HMS_UAT_TOKEN }}
-          HMS_DEV_TOKEN:  ${{ secrets.HMS_DEV_TOKEN }}
+          HMS_UAT_TOKEN: ${{ secrets.HMS_UAT_TOKEN }}
+          HMS_DEV_TOKEN: ${{ secrets.HMS_DEV_TOKEN }}
         run: |
           case "${{ github.event.inputs.environment }}" in
             prod)
@@ -100,4 +100,3 @@ jobs:
           railway up \
             --service ${{ steps.cfg.outputs.frontend_svc }} \
             --environment ${{ steps.cfg.outputs.railway_env }}
-
