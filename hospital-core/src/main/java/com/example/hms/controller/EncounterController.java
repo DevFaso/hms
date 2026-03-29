@@ -149,9 +149,9 @@ public class EncounterController {
             if (resolvedHospitalId == null) {
                 throw new BusinessException("Hospital context required to list encounters. Please select an active hospital.");
             }
-        } else if (resolvedHospitalId == null) {
-            // super-admin: allow unscoped, but still prefer JWT if available
-            resolvedHospitalId = jwtHospitalId;
+        } else {
+            // super-admin: allow unscoped (null = global/all)
+            // resolvedHospitalId stays null intentionally
         }
 
         Page<EncounterResponseDTO> page =

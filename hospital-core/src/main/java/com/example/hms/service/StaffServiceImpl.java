@@ -136,8 +136,7 @@ public class StaffServiceImpl implements StaffService {
     public List<StaffResponseDTO> getAllStaff(Locale locale) {
         HospitalContext context = HospitalContextHolder.getContextOrEmpty();
         if (context.isSuperAdmin()) {
-            return staffRepository.findAll().stream()
-                .filter(staff -> staff.getUser() == null || !staff.getUser().isDeleted())
+            return staffRepository.findAllExcludingDeletedUsers().stream()
                 .map(staffMapper::toStaffDTO)
                 .toList();
         }

@@ -130,7 +130,7 @@ class StaffServiceImplTest {
 
     @Test
     void getAllStaff_superAdmin_returnsAll() {
-        when(staffRepository.findAll()).thenReturn(List.of(staff));
+        when(staffRepository.findAllExcludingDeletedUsers()).thenReturn(List.of(staff));
         when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
 
         List<StaffResponseDTO> result = staffService.getAllStaff(locale);
