@@ -779,13 +779,13 @@ class MeControllerTest {
                 .name("Alice Wong")
                 .age(35)
                 .build();
-        when(patientSnapshotService.getSnapshot(patientId)).thenReturn(snapshot);
+        when(patientSnapshotService.getSnapshot(eq(patientId), any())).thenReturn(snapshot);
 
         ResponseEntity<ApiResponseWrapper<PatientSnapshotDTO>> response =
                 controller.getPatientSnapshot(patientId, doctorAuth);
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertEquals("Alice Wong", requireBody(response).getData().getName());
-        verify(patientSnapshotService).getSnapshot(patientId);
+        verify(patientSnapshotService).getSnapshot(eq(patientId), any());
     }
 }

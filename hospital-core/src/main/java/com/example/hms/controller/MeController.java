@@ -263,7 +263,8 @@ public class MeController {
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON','ROLE_NURSE','ROLE_MIDWIFE')")
     public ResponseEntity<ApiResponseWrapper<PatientSnapshotDTO>> getPatientSnapshot(
             @PathVariable UUID patientId, Authentication auth) {
-        PatientSnapshotDTO snapshot = patientSnapshotService.getSnapshot(patientId);
+        UUID hospitalId = resolveHospitalId(auth).orElse(null);
+        PatientSnapshotDTO snapshot = patientSnapshotService.getSnapshot(patientId, hospitalId);
         return ResponseEntity.ok(ApiResponseWrapper.success(snapshot));
     }
 

@@ -26,6 +26,7 @@ import com.example.hms.model.Notification;
 import com.example.hms.model.NursingNote;
 import com.example.hms.model.NursingTask;
 import com.example.hms.model.Patient;
+import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
@@ -1494,6 +1495,7 @@ class NurseTaskServiceImplTest {
         pat.setId(patientId);
         Hospital hosp = Hospital.builder().build();
         hosp.setId(hospitalId);
+        registerPatientAtHospital(pat, hosp);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
         when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.empty());
@@ -1524,6 +1526,7 @@ class NurseTaskServiceImplTest {
         pat6.setId(patientId);
         Hospital hosp6 = Hospital.builder().build();
         hosp6.setId(hospitalId);
+        registerPatientAtHospital(pat6, hosp6);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat6));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp6));
 
@@ -1547,6 +1550,7 @@ class NurseTaskServiceImplTest {
         pat7.setId(patientId);
         Hospital hosp7 = Hospital.builder().build();
         hosp7.setId(hospitalId);
+        registerPatientAtHospital(pat7, hosp7);
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat7));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp7));
 
@@ -1682,6 +1686,7 @@ class NurseTaskServiceImplTest {
         hosp.setId(hospitalId);
         Patient pat = Patient.builder().firstName("Task").lastName("Pat").build();
         pat.setId(patientId);
+        registerPatientAtHospital(pat, hosp);
         User nurse = User.builder().firstName("Jane").lastName("Nurse").build();
         nurse.setId(nurseId);
 
@@ -1847,6 +1852,7 @@ class NurseTaskServiceImplTest {
         pat.setId(patientId);
         Hospital hosp = Hospital.builder().build();
         hosp.setId(hospitalId);
+        registerPatientAtHospital(pat, hosp);
         User author = User.builder().firstName("Jane").lastName("RN").username("jane.rn").build();
         author.setId(nurseId);
 
@@ -1884,6 +1890,7 @@ class NurseTaskServiceImplTest {
         pat.setId(patientId);
         Hospital hosp = Hospital.builder().build();
         hosp.setId(hospitalId);
+        registerPatientAtHospital(pat, hosp);
         User author = User.builder().username("soap_nurse").build(); // no first name → uses username
         author.setId(nurseId);
 
@@ -1923,5 +1930,42 @@ class NurseTaskServiceImplTest {
         UUID hospitalId = UUID.randomUUID();
         assertThatThrownBy(() -> service.createCareNote(patientId, nurseUserId, hospitalId, req))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    /* ---------- helper ---------- */
+
+    private void registerPatientAtHospital(Patient patient, Hospital hospital) {
+        PatientHospitalRegistration reg = new PatientHospitalRegistration(patient, hospital);
+        patient.getHospitalRegistrations().add(reg);
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       Cross-hospital tenant isolation
+       ════════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void captureVitalsRejectsPatientFromDifferentHospital() {
+        UUID patientId = UUID.randomUUID();
+        UUID nurseHospitalId = UUID.randomUUID();
+        UUID patientHospitalId = UUID.randomUUID();
+
+        Hospital patientHosp = Hospital.builder().build();
+        patientHosp.setId(patientHospitalId);
+        Hospital nurseHosp = Hospital.builder().build();
+        nurseHosp.setId(nurseHospitalId);
+
+        Patient pat = Patient.builder().build();
+        pat.setId(patientId);
+        registerPatientAtHospital(pat, patientHosp); // registered at a DIFFERENT hospital
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
+        when(hospitalRepository.findById(nurseHospitalId)).thenReturn(Optional.of(nurseHosp));
+
+        NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
+            .heartRateBpm(72).build();
+
+        assertThatThrownBy(() -> service.captureVitals(patientId, UUID.randomUUID(), nurseHospitalId, req))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("not registered at this hospital");
     }
 }

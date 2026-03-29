@@ -213,10 +213,12 @@ public class PatientController {
     public ResponseEntity<PatientResponseDTO> patchPatient(
         @PathVariable UUID id,
         @Valid @RequestBody PatientProfileUpdateRequestDTO dto,
-        @RequestHeader(name = "Accept-Language", required = false) String lang
+        @RequestHeader(name = "Accept-Language", required = false) String lang,
+        Authentication auth
     ) {
         Locale locale = parseLocale(lang);
-        return ResponseEntity.ok(patientService.patchPatient(id, dto, locale));
+        UUID resolvedHospitalId = resolveHospitalScope(auth, null, false);
+        return ResponseEntity.ok(patientService.patchPatient(id, dto, resolvedHospitalId, locale));
     }
 
     // ----------------------------------------------------------

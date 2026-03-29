@@ -306,6 +306,10 @@ public class PatientServiceImpl implements PatientService {
                 messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale)
             ));
 
+        if (dto.getHospitalId() != null) {
+            ensurePatientRegistered(id, dto.getHospitalId());
+        }
+
         User user = userRepository.findById(dto.getUserId())
             .orElseThrow(() -> new ResourceNotFoundException(MSG_USER_NOT_FOUND_PREFIX + dto.getUserId()));
 
@@ -317,7 +321,7 @@ public class PatientServiceImpl implements PatientService {
 
     @Override
     @Transactional
-    public PatientResponseDTO patchPatient(UUID id, PatientProfileUpdateRequestDTO request, Locale locale) {
+    public PatientResponseDTO patchPatient(UUID id, PatientProfileUpdateRequestDTO request, UUID hospitalId, Locale locale) {
         if (request == null) {
             throw new BusinessException("Update payload is required.");
         }
@@ -325,6 +329,10 @@ public class PatientServiceImpl implements PatientService {
             .orElseThrow(() -> new ResourceNotFoundException(
                 messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale)
             ));
+
+        if (hospitalId != null) {
+            ensurePatientRegistered(id, hospitalId);
+        }
 
         boolean updated = false;
 

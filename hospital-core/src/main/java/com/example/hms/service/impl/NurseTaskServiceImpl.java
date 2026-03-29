@@ -948,6 +948,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
 
+        if (!patient.isRegisteredInHospital(hospitalId)) {
+            throw new BusinessException("Patient is not registered at this hospital.");
+        }
+
         boolean clinicallySig = isClinicallySignificant(request);
 
         PatientVitalSign vital = PatientVitalSign.builder()
@@ -1079,6 +1083,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + request.getPatientId()));
 
+        if (!patient.isRegisteredInHospital(hospitalId)) {
+            throw new BusinessException("Patient is not registered at this hospital.");
+        }
+
         String createdByName = resolveNurseName(nurseUserId);
 
         NursingTask task = NursingTask.builder()
@@ -1152,6 +1160,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
+
+        if (!patient.isRegisteredInHospital(hospitalId)) {
+            throw new BusinessException("Patient is not registered at this hospital.");
+        }
+
         User author = userRepository.findById(nurseUserId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found: " + nurseUserId));
 

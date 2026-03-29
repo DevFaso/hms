@@ -49,11 +49,15 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
     private static final String DIAGNOSIS_STATUS_ACTIVE = "ACTIVE";
 
     @Override
-    public PatientSnapshotDTO getSnapshot(UUID patientId) {
+    public PatientSnapshotDTO getSnapshot(UUID patientId, UUID hospitalId) {
         log.info("Building patient snapshot for: {}", patientId);
 
         Patient patient = patientRepository.findByIdUnscoped(patientId)
                 .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("Patient not found: " + patientId));
+
+        if (hospitalId != null && !patient.isRegisteredInHospital(hospitalId)) {
+            throw new com.example.hms.exception.BusinessException("Patient is not registered at this hospital.");
+        }
 
         int age = patient.getDateOfBirth() != null
                 ? Period.between(patient.getDateOfBirth(), LocalDate.now()).getYears()
