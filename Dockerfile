@@ -39,6 +39,11 @@ RUN useradd -u 10001 -r -s /sbin/nologin appuser
 
 COPY --from=build /app/hospital-core/build/libs/*.jar app.jar
 
+# Download OpenTelemetry Java Agent for Grafana Cloud observability (traces, metrics, logs).
+# The agent auto-instruments the application at startup — no code changes needed.
+# Activated only when OTEL_EXPORTER_OTLP_ENDPOINT is set (Railway env vars).
+ADD --chmod=444 https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.12.0/opentelemetry-javaagent.jar /app/opentelemetry-javaagent.jar
+
 # Copy the entrypoint script that fixes volume-mount ownership at startup.
 # It runs as root, chowns the uploads directory to appuser, then execs the
 # JVM as appuser — so the running process is still unprivileged.
