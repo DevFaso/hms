@@ -1,0 +1,281 @@
+/* App */
+"app_name" = "MediHub Patient";
+"patient_portal" = "Patient Portal";
+"medihub" = "MediHub";
+"copyright" = "MediHub HMS © 2026";
+
+/* Login */
+"login_title" = "MediHub Patient";
+"login_subtitle" = "Your health, in your hands";
+"username_label" = "Username";
+"username_placeholder" = "Enter username";
+"password_label" = "Password";
+"password_placeholder" = "Enter password";
+"sign_in" = "Log In";
+"forgot_password" = "Forgot password?";
+"biometric_sign_in" = "Log in with %@";
+"use_username" = "Use username instead";
+"use_biometric" = "Use %@ instead";
+
+/* Navigation Tabs */
+"tab_dashboard" = "Dashboard";
+"tab_appointments" = "Appointments";
+"tab_messages" = "Messages";
+"tab_profile" = "Profile";
+
+/* Features */
+"lab_results" = "Test Results";
+"lab_results_title" = "Lab Results";
+"medications" = "Medications";
+"medications_title" = "Medications";
+"prescriptions" = "Prescriptions";
+"refills" = "Refills";
+"billing" = "Billing";
+"billing_title" = "Billing";
+"vitals" = "Vitals";
+"vitals_title" = "Vitals";
+"care_team" = "Care Team";
+"care_team_title" = "Care Team";
+"visit_history" = "Visit History";
+"visits_title" = "Visits";
+"documents" = "Documents";
+"health_records" = "Health Records";
+"notifications" = "Notifications";
+"sharing_privacy" = "Sharing & Privacy";
+"family_access" = "Family Access";
+"settings" = "Settings";
+"test_results" = "Test Results";
+"patient" = "Patient";
+"summaries" = "Summaries";
+
+/* Dashboard */
+"welcome" = "Welcome, %@!";
+"welcome_user" = "Welcome, %@!";
+"quick_access" = "Quick Access";
+"upcoming_appointments" = "Upcoming Appointments";
+"recent_lab_results" = "Recent Lab Results";
+"allergies" = "Allergies";
+"active_conditions" = "Active Conditions";
+"chronic_conditions" = "Chronic Conditions";
+"see_all" = "See all";
+"family" = "Family";
+"sharing" = "Sharing";
+"visits" = "Visits";
+
+/* Profile */
+"sign_out" = "Log Out";
+"sign_out_confirm" = "Are you sure you want to log out?";
+"logout" = "Log Out";
+"logout_confirm" = "Are you sure you want to log out?";
+"contact_info" = "Contact Information";
+"done" = "Done";
+"profile_load_error" = "Could not load profile.";
+"cancel" = "Cancel";
+"personal_information" = "Personal Information";
+"medical_information" = "Medical Information";
+"insurance" = "Insurance";
+"emergency_contact" = "Emergency Contact";
+"pharmacy" = "Pharmacy";
+"preferred_pharmacy" = "Preferred Pharmacy";
+"date_of_birth" = "Date of Birth";
+"gender" = "Gender";
+"phone" = "Phone";
+"secondary_phone" = "Secondary Phone";
+"email" = "Email";
+"address" = "Address";
+"address_line_1" = "Address Line 1";
+"address_line_2" = "Address Line 2";
+"city" = "City";
+"state" = "State";
+"zip_code" = "ZIP Code";
+"country" = "Country";
+"blood_type" = "Blood Type";
+"provider" = "Provider";
+"policy_number" = "Policy #";
+"group_number" = "Group #";
+"plan_type" = "Plan Type";
+"member_id" = "Member ID";
+"plan" = "Plan";
+"name_label" = "Name";
+"not_set" = "Not set";
+"no_address" = "No address on file";
+"no_known_allergies" = "No known allergies";
+"no_allergies" = "No known allergies";
+"name" = "Name";
+"language_label" = "Language";
+"username" = "Username";
+"relationship" = "Relationship";
+"change_photo" = "Change photo";
+"profile_photo" = "Profile photo";
+"no_profile_data" = "No profile data";
+"profile_unavailable" = "Profile Unavailable";
+"profile_unavailable_desc" = "Could not load profile.";
+"loading_profile" = "Loading profile…";
+"saving" = "Saving…";
+"edit" = "Edit";
+"save" = "Save";
+
+/* Language */
+"language" = "Language";
+"language_english" = "English";
+"language_french" = "Français";
+"select_language" = "Select Language";
+
+/* Appointments */
+"book_appointment" = "Book Appointment";
+"cancel_appointment" = "Cancel Appointment";
+"reschedule" = "Reschedule";
+"no_appointments" = "No appointments";
+"no_appointments_desc" = "You have no upcoming appointments.";
+"upcoming" = "Upcoming";
+"past" = "Past";
+"doctor" = "Doctor";
+"department" = "Department";
+"date" = "Date";
+"time" = "Time";
+"reason" = "Reason";
+"notes" = "Notes";
+"cancellation_reason" = "Cancellation Reason";
+"appointment_details" = "Appointment Details";
+"status" = "Status";
+"confirm_cancel" = "Confirm Cancellation";
+"new_date" = "New Date";
+"new_time" = "New Time";
+"select_doctor" = "Select Doctor";
+"all_appointments" = "All Appointments";
+
+/* Lab Results */
+"no_lab_results" = "No lab results";
+"no_lab_results_desc" = "No lab results on record.";
+"result" = "Result";
+"reference" = "Reference";
+"ordered_by" = "Ordered by";
+"critical" = "CRITICAL";
+"abnormal" = "ABNORMAL";
+"normal" = "Normal";
+"test_name" = "Test";
+"collected_date" = "Collected";
+
+/* Medications */
+"no_active_medications" = "No active medications";
+"no_prescriptions" = "No prescriptions";
+"no_refills" = "No refill requests";
+"dosage" = "Dosage";
+"frequency" = "Frequency";
+"prescribed_by" = "Prescribed by";
+"refills_remaining" = "Refills remaining";
+"request_refill" = "Request Refill";
+"cancel_refill" = "Cancel Refill";
+"active_medications" = "Active Medications";
+
+/* Billing */
+"outstanding_balance" = "Outstanding Balance";
+"invoices" = "Invoices";
+"no_invoices" = "No invoices";
+"no_invoices_desc" = "No billing records found.";
+"total" = "Total";
+"paid" = "Paid";
+"balance" = "Balance";
+"pay_now" = "Pay Now";
+"payment_amount" = "Payment Amount";
+"confirm_payment" = "Confirm Payment";
+"invoice_details" = "Invoice Details";
+"items" = "Items";
+
+/* Vitals */
+"record_vitals" = "Record Vitals";
+"no_vitals" = "No vitals recorded";
+"no_vitals_desc" = "No vital signs on record.";
+"blood_pressure" = "Blood Pressure";
+"heart_rate" = "Heart Rate";
+"temperature" = "Temperature";
+"oxygen_saturation" = "O₂ Sat";
+"weight" = "Weight";
+"latest_readings" = "Latest Readings";
+"history" = "History";
+"systolic" = "Systolic";
+"diastolic" = "Diastolic";
+"save_vital" = "Save Vital";
+"bpm" = "bpm";
+
+/* Care Team */
+"no_care_team" = "No care team members";
+"no_care_team_desc" = "No care team members assigned.";
+"primary_physician" = "Primary Physician";
+"call" = "Call";
+"role" = "Role";
+"specialty" = "Specialty";
+
+/* Visit History */
+"encounters" = "Encounters";
+"after_visit_summaries" = "After-Visit Summaries";
+"no_encounters" = "No encounters";
+"no_summaries" = "No after-visit summaries";
+"discharge_summary" = "Discharge Summary";
+"diagnosis" = "Diagnosis";
+"visit_date" = "Visit Date";
+"view_summary" = "View Summary";
+
+/* Messages */
+"no_messages" = "No messages";
+"no_messages_desc" = "No messages yet.";
+"no_conversations" = "No conversations yet";
+"new_message" = "New Message";
+"type_message" = "Type a message…";
+"send" = "Send";
+"conversations" = "Conversations";
+
+/* Documents */
+"no_documents" = "No documents";
+"no_documents_desc" = "No documents on file.";
+"category" = "Category";
+"search_documents" = "Search documents";
+
+/* Health Records */
+"overview" = "Overview";
+"immunizations" = "Immunizations";
+"treatment_plans" = "Treatment Plans";
+"referrals" = "Referrals";
+"no_immunizations" = "No immunizations";
+"no_treatment_plans" = "No treatment plans";
+"no_referrals" = "No referrals";
+
+/* Notifications */
+"no_notifications" = "No notifications";
+"no_notifications_desc" = "You're all caught up.";
+"mark_as_read" = "Mark as read";
+"unread" = "Unread";
+
+/* Sharing & Privacy */
+"consents" = "Consents";
+"access_log" = "Access Log";
+"grant_consent" = "Grant Consent";
+"revoke" = "Revoke";
+"no_consents" = "No consents";
+"no_access_logs" = "No access logs";
+
+/* Family Access */
+"granted_by_me" = "Granted by Me";
+"access_i_have" = "Access I Have";
+"grant_access" = "Grant Access";
+"revoke_access" = "Revoke Access";
+"no_family_access" = "No family access records";
+"permissions" = "Permissions";
+"patient_name" = "Patient Name";
+"patient_id" = "Patient ID";
+"proxy_notes" = "Notes";
+
+/* Common */
+"loading" = "Loading…";
+"error_generic" = "Something went wrong. Please try again.";
+"no_data" = "No data available";
+"back" = "Back";
+"delete" = "Delete";
+"confirm" = "Confirm";
+"close" = "Close";
+"ok" = "OK";
+"yes" = "Yes";
+"no" = "No";
+"error" = "Error";
+"retry" = "Retry";
+"refresh" = "Refresh";

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MainTabView: View {
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var localization: LocalizationManager
     @ObservedObject private var profileImageManager = ProfileImageManager.shared
     @State private var selectedTab: Tab = .dashboard
     @State private var showMenu = false
@@ -13,7 +14,6 @@ struct MainTabView: View {
     var body: some View {
         ZStack(alignment: .leading) {
             VStack(spacing: 0) {
-                // Content area
                 Group {
                     switch selectedTab {
                     case .dashboard:
@@ -28,80 +28,97 @@ struct MainTabView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                Divider()
+                // Tab bar
+                VStack(spacing: 0) {
+                    Rectangle()
+                        .fill(Color(.separator).opacity(0.3))
+                        .frame(height: 0.5)
 
-                // Custom tab bar
-                HStack {
-                    tabButton(icon: "house.fill", title: "Dashboard", tab: .dashboard)
-                    tabButton(icon: "calendar", title: "Appointments", tab: .appointments)
-                    tabButton(icon: "message.fill", title: "Messages", tab: .messages)
-                    profileTabButton
+                    HStack(spacing: 0) {
+                        tabButton(icon: "house.fill", titleKey: "tab_dashboard", tab: .dashboard)
+                        tabButton(icon: "calendar", titleKey: "tab_appointments", tab: .appointments)
+                        tabButton(icon: "message.fill", titleKey: "tab_messages", tab: .messages)
+                        profileTabButton
+                    }
+                    .padding(.top, 8)
+                    .padding(.bottom, 4)
+                    .background(.ultraThinMaterial)
                 }
-                .padding(.top, 6)
-                .padding(.bottom, 2)
-                .background(Color(.systemBackground))
             }
             .disabled(showMenu)
 
-            // Slide-out side menu
             if showMenu {
-                Color.black.opacity(0.3)
+                Color.black.opacity(0.35)
                     .ignoresSafeArea()
-                    .onTapGesture { withAnimation { showMenu = false } }
+                    .onTapGesture { withAnimation(.spring(response: 0.3)) { showMenu = false } }
 
                 SideMenuView(selectedTab: $selectedTab, isShowing: $showMenu)
                     .transition(.move(edge: .leading))
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: showMenu)
+        .animation(.spring(response: 0.3), value: showMenu)
     }
 
-    // MARK: - Standard tab button
-
-    private func tabButton(icon: String, title: String, tab: Tab) -> some View {
-        Button {
-            selectedTab = tab
+    private func tabButton(icon: String, titleKey: String, tab: Tab) -> some View {
+        let isSelected = selectedTab == tab
+        return Button {
+            withAnimation(.spring(response: 0.25)) { selectedTab = tab }
         } label: {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 20))
-                Text(title)
-                    .font(.caption2)
+            VStack(spacing: 5) {
+                ZStack {
+                    if isSelected {
+                        Capsule()
+                            .fill(Color("BrandBlue").opacity(0.12))
+                            .frame(width: 48, height: 28)
+                    }
+                    Image(systemName: icon)
+                        .font(.system(size: 18, weight: isSelected ? .semibold : .regular))
+                        .symbolRenderingMode(.hierarchical)
+                }
+                Text(titleKey.localized)
+                    .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
             }
-            .foregroundColor(selectedTab == tab ? Color("BrandBlue") : .gray)
+            .foregroundStyle(isSelected ? Color("BrandBlue") : .secondary)
             .frame(maxWidth: .infinity)
         }
     }
 
-    // MARK: - Profile tab button with photo
-
     private var profileTabButton: some View {
-        Button {
-            selectedTab = .profile
+        let isSelected = selectedTab == .profile
+        return Button {
+            withAnimation(.spring(response: 0.25)) { selectedTab = .profile }
         } label: {
-            VStack(spacing: 4) {
-                if let url = profileImageManager.resolvedURL {
-                    AsyncImage(url: url) { phase in
-                        if let img = phase.image {
-                            img.resizable().scaledToFill()
-                        } else {
-                            Image(systemName: "person.crop.circle.fill")
-                                .font(.system(size: 20))
-                        }
+            VStack(spacing: 5) {
+                ZStack {
+                    if isSelected {
+                        Capsule()
+                            .fill(Color("BrandBlue").opacity(0.12))
+                            .frame(width: 48, height: 28)
                     }
-                    .frame(width: 24, height: 24)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle().stroke(selectedTab == .profile ? Color("BrandBlue") : .clear, lineWidth: 2)
-                    )
-                } else {
-                    Image(systemName: "person.crop.circle.fill")
-                        .font(.system(size: 20))
+                    if let url = profileImageManager.resolvedURL {
+                        AsyncImage(url: url) { phase in
+                            if let img = phase.image {
+                                img.resizable().scaledToFill()
+                            } else {
+                                Image(systemName: "person.crop.circle.fill")
+                                    .font(.system(size: 18))
+                            }
+                        }
+                        .frame(width: 22, height: 22)
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle().stroke(isSelected ? Color("BrandBlue") : .clear, lineWidth: 1.5)
+                        )
+                    } else {
+                        Image(systemName: "person.crop.circle.fill")
+                            .font(.system(size: 18, weight: isSelected ? .semibold : .regular))
+                            .symbolRenderingMode(.hierarchical)
+                    }
                 }
-                Text("Profile")
-                    .font(.caption2)
+                Text("tab_profile".localized)
+                    .font(.system(size: 10, weight: isSelected ? .semibold : .regular))
             }
-            .foregroundColor(selectedTab == .profile ? Color("BrandBlue") : .gray)
+            .foregroundStyle(isSelected ? Color("BrandBlue") : .secondary)
             .frame(maxWidth: .infinity)
         }
     }
@@ -111,115 +128,135 @@ struct MainTabView: View {
 
 struct SideMenuView: View {
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var localization: LocalizationManager
     @ObservedObject private var profileImageManager = ProfileImageManager.shared
     @Binding var selectedTab: MainTabView.Tab
     @Binding var isShowing: Bool
 
-    private let menuItems: [(title: String, icon: String, tab: MainTabView.Tab)] = [
-        ("Dashboard",    "house.fill",               .dashboard),
-        ("Appointments", "calendar",                  .appointments),
-        ("Messages",     "message.fill",              .messages),
-        ("Profile",      "person.crop.circle.fill",   .profile),
-    ]
+    private var menuItems: [(titleKey: String, icon: String, tab: MainTabView.Tab)] {
+        [
+            ("tab_dashboard",    "house.fill",               .dashboard),
+            ("tab_appointments", "calendar",                  .appointments),
+            ("tab_messages",     "message.fill",              .messages),
+            ("tab_profile",      "person.crop.circle.fill",   .profile),
+        ]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
-            VStack(alignment: .leading, spacing: 8) {
-                if let url = profileImageManager.resolvedURL {
-                    AsyncImage(url: url) { phase in
-                        if let img = phase.image {
-                            img.resizable().scaledToFill()
-                        } else {
-                            Image(systemName: "person.crop.circle.fill")
-                                .font(.system(size: 48))
-                                .foregroundColor(.white)
+            VStack(alignment: .leading, spacing: 10) {
+                ZStack(alignment: .bottomTrailing) {
+                    if let url = profileImageManager.resolvedURL {
+                        AsyncImage(url: url) { phase in
+                            if let img = phase.image {
+                                img.resizable().scaledToFill()
+                            } else {
+                                Image(systemName: "person.crop.circle.fill")
+                                    .font(.system(size: 52))
+                                    .foregroundStyle(.white.opacity(0.9))
+                            }
                         }
+                        .frame(width: 64, height: 64)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Color.white.opacity(0.4), lineWidth: 2))
+                    } else {
+                        Image(systemName: "person.crop.circle.fill")
+                            .font(.system(size: 52))
+                            .foregroundStyle(.white.opacity(0.9))
                     }
-                    .frame(width: 56, height: 56)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.white.opacity(0.5), lineWidth: 2))
-                } else {
-                    Image(systemName: "person.crop.circle.fill")
-                        .font(.system(size: 48))
-                        .foregroundColor(.white)
                 }
-                Text(authManager.currentUser?.fullName ?? "Patient")
-                    .font(.title3).bold().foregroundColor(.white)
-                if let email = authManager.currentUser?.email {
-                    Text(email).font(.caption).foregroundColor(.white.opacity(0.8))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(authManager.currentUser?.fullName ?? "patient".localized)
+                        .font(.title3.weight(.bold))
+                        .foregroundStyle(.white)
+                    if let email = authManager.currentUser?.email {
+                        Text(email)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.75))
+                    }
                 }
             }
-            .padding()
-            .padding(.top, 44) // safe area
+            .padding(.horizontal, 20)
+            .padding(.top, 56)
+            .padding(.bottom, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.accentColor)
+            .background(
+                LinearGradient(colors: [Color("BrandBlue"), Color("BrandDarkBlue")],
+                               startPoint: .topLeading, endPoint: .bottomTrailing)
+            )
 
             // Menu items
-            ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(menuItems, id: \.title) { item in
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(menuItems, id: \.titleKey) { item in
                         Button {
-                            withAnimation {
+                            withAnimation(.spring(response: 0.3)) {
                                 selectedTab = item.tab
                                 isShowing = false
                             }
                         } label: {
-                            HStack(spacing: 16) {
+                            HStack(spacing: 14) {
                                 Image(systemName: item.icon)
-                                    .frame(width: 24)
-                                    .foregroundColor(.primary)
-                                Text(item.title)
-                                    .foregroundColor(.primary)
+                                    .font(.system(size: 16, weight: .medium))
+                                    .frame(width: 28)
+                                    .foregroundStyle(selectedTab == item.tab ? Color("BrandBlue") : .primary)
+                                Text(item.titleKey.localized)
+                                    .font(.subheadline.weight(selectedTab == item.tab ? .semibold : .regular))
+                                    .foregroundStyle(selectedTab == item.tab ? Color("BrandBlue") : .primary)
                                 Spacer()
+                                if selectedTab == item.tab {
+                                    Circle()
+                                        .fill(Color("BrandBlue"))
+                                        .frame(width: 6, height: 6)
+                                }
                             }
-                            .padding(.horizontal)
-                            .padding(.vertical, 14)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 13)
                             .background(
-                                selectedTab == item.tab
-                                    ? Color.accentColor.opacity(0.1)
-                                    : Color.clear
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(selectedTab == item.tab ? Color("BrandBlue").opacity(0.08) : .clear)
                             )
-                            .cornerRadius(10)
                         }
                     }
 
-                    Divider().padding(.vertical, 8)
+                    Rectangle()
+                        .fill(Color(.separator).opacity(0.5))
+                        .frame(height: 0.5)
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 16)
 
-                    // Quick links
-                    MenuLink(icon: "pill.fill", title: "Medications") {
-                        selectedTab = .dashboard
-                        isShowing = false
+                    MenuLink(icon: "pill.fill", title: "medications_title".localized) {
+                        selectedTab = .dashboard; isShowing = false
                     }
-                    MenuLink(icon: "creditcard.fill", title: "Billing") {
-                        selectedTab = .dashboard
-                        isShowing = false
+                    MenuLink(icon: "creditcard.fill", title: "billing_title".localized) {
+                        selectedTab = .dashboard; isShowing = false
                     }
-                    MenuLink(icon: "heart.fill", title: "Vitals") {
-                        selectedTab = .dashboard
-                        isShowing = false
+                    MenuLink(icon: "heart.fill", title: "vitals_title".localized) {
+                        selectedTab = .dashboard; isShowing = false
                     }
-                    MenuLink(icon: "testtube.2", title: "Lab Results") {
-                        selectedTab = .dashboard
-                        isShowing = false
+                    MenuLink(icon: "testtube.2", title: "lab_results_title".localized) {
+                        selectedTab = .dashboard; isShowing = false
                     }
-                    MenuLink(icon: "person.2.fill", title: "Care Team") {
-                        selectedTab = .dashboard
-                        isShowing = false
+                    MenuLink(icon: "person.2.fill", title: "care_team_title".localized) {
+                        selectedTab = .dashboard; isShowing = false
                     }
-                    MenuLink(icon: "doc.fill", title: "Documents") {
-                        selectedTab = .profile
-                        isShowing = false
+                    MenuLink(icon: "doc.fill", title: "documents".localized) {
+                        selectedTab = .profile; isShowing = false
                     }
 
-                    Divider().padding(.vertical, 8)
+                    Rectangle()
+                        .fill(Color(.separator).opacity(0.5))
+                        .frame(height: 0.5)
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 16)
 
-                    MenuLink(icon: "gearshape.fill", title: "Settings") {
-                        selectedTab = .profile
-                        isShowing = false
+                    MenuLink(icon: "gearshape.fill", title: "settings".localized) {
+                        selectedTab = .profile; isShowing = false
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, 12)
             }
 
             Spacer()
@@ -228,17 +265,24 @@ struct SideMenuView: View {
             Button(role: .destructive) {
                 authManager.logout()
             } label: {
-                HStack(spacing: 16) {
+                HStack(spacing: 14) {
                     Image(systemName: "rectangle.portrait.and.arrow.right")
-                        .frame(width: 24)
-                    Text("Log Out")
+                        .font(.system(size: 16, weight: .medium))
+                        .frame(width: 28)
+                    Text("logout".localized)
+                        .font(.subheadline.weight(.medium))
                 }
-                .foregroundColor(.red)
-                .padding()
+                .foregroundStyle(.red)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
             }
+
+            Spacer().frame(height: 8)
         }
-        .frame(width: 280)
+        .frame(width: 290)
         .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 0))
+        .shadow(color: .black.opacity(0.15), radius: 20, x: 5, y: 0)
         .ignoresSafeArea(.all, edges: .vertical)
     }
 }
@@ -250,16 +294,21 @@ struct MenuLink: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 16) {
+            HStack(spacing: 14) {
                 Image(systemName: icon)
-                    .frame(width: 24)
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 15, weight: .medium))
+                    .frame(width: 28)
+                    .foregroundStyle(.secondary)
                 Text(title)
-                    .foregroundColor(.primary)
+                    .font(.subheadline)
+                    .foregroundStyle(.primary)
                 Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.tertiary)
             }
-            .padding(.horizontal)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
         }
     }
 }

@@ -16,10 +16,10 @@ struct NotificationsView: View {
 
     private var content: some View {
         Group {
-            if vm.isLoading && vm.notifications.isEmpty { ProgressView("Loading notifications…") }
+            if vm.isLoading && vm.notifications.isEmpty { ProgressView("loading".localized) }
             else if vm.notifications.isEmpty {
-                ContentUnavailableView("No Notifications", systemImage: "bell.slash.fill",
-                    description: Text("You're all caught up."))
+                ContentUnavailableView("no_notifications".localized, systemImage: "bell.slash.fill",
+                    description: Text("no_notifications_desc".localized))
             } else {
                 List(vm.notifications) { notif in
                     NotificationRow(notification: notif)
@@ -27,7 +27,7 @@ struct NotificationsView: View {
                 .listStyle(.insetGrouped)
             }
         }
-        .navigationTitle("Notifications")
+        .navigationTitle("notifications".localized)
         .refreshable { await vm.load() }
     }
 }
@@ -83,10 +83,10 @@ struct DocumentsView: View {
 
     private var content: some View {
         Group {
-            if vm.isLoading && vm.documents.isEmpty { ProgressView("Loading documents…") }
+            if vm.isLoading && vm.documents.isEmpty { ProgressView("loading".localized) }
             else if vm.documents.isEmpty {
-                ContentUnavailableView("No Documents", systemImage: "doc.fill",
-                    description: Text("No documents on file."))
+                ContentUnavailableView("no_documents".localized, systemImage: "doc.fill",
+                    description: Text("no_documents_desc".localized))
             } else {
                 List(vm.documents) { doc in
                     VStack(alignment: .leading, spacing: 4) {
@@ -99,7 +99,7 @@ struct DocumentsView: View {
                 .listStyle(.insetGrouped)
             }
         }
-        .navigationTitle("Documents")
+        .navigationTitle("documents".localized)
         .refreshable { await vm.load() }
     }
 }
@@ -170,7 +170,7 @@ struct HealthRecordsView: View {
                 }
             }
         }
-        .navigationTitle("Health Records")
+        .navigationTitle("health_records".localized)
         .refreshable { await vm.loadAll() }
     }
 
@@ -376,7 +376,7 @@ struct SharingPrivacyView: View {
                 accessLogList
             }
         }
-        .navigationTitle("Sharing & Privacy")
+        .navigationTitle("sharing_privacy".localized)
         .refreshable { await vm.load() }
     }
 

@@ -21,8 +21,8 @@ struct FamilyAccessView: View {
     private var content: some View {
         VStack(spacing: 0) {
             Picker("", selection: $selectedTab) {
-                Text("Granted by Me").tag(0)
-                Text("Access I Have").tag(1)
+                Text("granted_by_me".localized).tag(0)
+                Text("access_i_have".localized).tag(1)
             }
             .pickerStyle(.segmented)
             .padding()
@@ -35,7 +35,7 @@ struct FamilyAccessView: View {
                 accessIHaveTab
             }
         }
-        .navigationTitle("Family Access")
+        .navigationTitle("family_access".localized)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button { showGrantSheet = true } label: {

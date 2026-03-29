@@ -7,11 +7,11 @@ struct MessagesView: View {
         NavigationStack {
             Group {
                 if vm.isLoading && vm.threads.isEmpty {
-                    ProgressView("Loading messages…")
+                    ProgressView("loading".localized)
                 } else if vm.threads.isEmpty {
-                    ContentUnavailableView("No Messages",
+                    ContentUnavailableView("no_messages".localized,
                         systemImage: "message",
-                        description: Text("No messages yet."))
+                        description: Text("no_messages_desc".localized))
                 } else {
                     List(vm.threads) { thread in
                         NavigationLink(value: thread) {
@@ -24,7 +24,7 @@ struct MessagesView: View {
                     }
                 }
             }
-            .navigationTitle("Messages")
+            .navigationTitle("tab_messages".localized)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     NavigationLink(destination: ComposeMessageView()) {

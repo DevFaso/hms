@@ -17,11 +17,11 @@ struct LabResultsView: View {
     private var content: some View {
         Group {
             if vm.isLoading && vm.results.isEmpty {
-                ProgressView("Loading results…")
+                ProgressView("loading".localized)
             } else if vm.results.isEmpty {
-                ContentUnavailableView("No Lab Results",
+                ContentUnavailableView("no_lab_results".localized,
                     systemImage: "testtube.2",
-                    description: Text("No lab results on record."))
+                    description: Text("no_lab_results_desc".localized))
             } else {
                 List(vm.results) { result in
                     LabResultDetailRow(result: result)
@@ -29,7 +29,7 @@ struct LabResultsView: View {
                 .listStyle(.insetGrouped)
             }
         }
-        .navigationTitle("Lab Results")
+        .navigationTitle("lab_results_title".localized)
         .refreshable { await vm.load() }
         .alert("Error", isPresented: .constant(vm.errorMessage != nil)) {
             Button("OK") { vm.errorMessage = nil }

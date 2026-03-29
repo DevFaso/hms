@@ -16,12 +16,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.bitnesttechs.hms.patient.core.models.AppointmentDto
 import com.bitnesttechs.hms.patient.core.models.LabResultDto
+import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,13 +50,13 @@ fun DashboardScreen(
             TopAppBar(
                 navigationIcon = {
                     IconButton(onClick = onMenuClick) {
-                        Icon(Icons.Default.Menu, contentDescription = "Menu", tint = Color.White)
+                        Icon(Icons.Default.Menu, contentDescription = stringResource(R.string.menu), tint = Color.White)
                     }
                 },
                 title = {
                     Column {
-                        Text("MediHub", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text("Patient Portal", style = MaterialTheme.typography.bodySmall,
+                        Text(stringResource(R.string.medihub), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.patient_portal), style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f))
                     }
                 },
@@ -114,7 +116,7 @@ fun DashboardScreen(
                 // Allergies
                 if (!summary.allergies.isNullOrEmpty()) {
                     item {
-                        SectionCard(title = "Allergies") {
+                        SectionCard(title = stringResource(R.string.allergies)) {
                             summary.allergies.forEach { allergy ->
                                 AssistChip(
                                     onClick = {},
@@ -133,7 +135,7 @@ fun DashboardScreen(
                 // Active conditions
                 if (!summary.activeDiagnoses.isNullOrEmpty()) {
                     item {
-                        SectionCard(title = "Active Conditions") {
+                        SectionCard(title = stringResource(R.string.active_conditions)) {
                             summary.activeDiagnoses.forEach { condition ->
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(
@@ -152,7 +154,7 @@ fun DashboardScreen(
                 // Chronic conditions
                 if (!summary.chronicConditions.isNullOrEmpty()) {
                     item {
-                        SectionCard(title = "Chronic Conditions") {
+                        SectionCard(title = stringResource(R.string.chronic_conditions)) {
                             summary.chronicConditions.forEach { condition ->
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Box(
@@ -171,18 +173,18 @@ fun DashboardScreen(
 
             // Quick links
             item {
-                SectionCard(title = "Quick Access") {
+                SectionCard(title = stringResource(R.string.quick_access)) {
                     val quickLinks = listOf(
-                        Triple("Appointments", Icons.Default.CalendarMonth, "tab_appointments"),
-                        Triple("Lab Results", Icons.Default.Science, "lab_results"),
-                        Triple("Medications", Icons.Default.Medication, "medications"),
-                        Triple("Billing", Icons.Default.Receipt, "billing"),
-                        Triple("Vitals", Icons.Default.Favorite, "vitals"),
-                        Triple("Care Team", Icons.Default.Group, "care_team"),
-                        Triple("Visits", Icons.Default.History, "visits"),
-                        Triple("Documents", Icons.Default.Description, "documents"),
-                        Triple("Family", Icons.Default.People, "family_access"),
-                        Triple("Sharing", Icons.Default.Security, "sharing_privacy")
+                        Triple(stringResource(R.string.appointments), Icons.Default.CalendarMonth, "tab_appointments"),
+                        Triple(stringResource(R.string.lab_results), Icons.Default.Science, "lab_results"),
+                        Triple(stringResource(R.string.medications), Icons.Default.Medication, "medications"),
+                        Triple(stringResource(R.string.billing), Icons.Default.Receipt, "billing"),
+                        Triple(stringResource(R.string.vitals), Icons.Default.Favorite, "vitals"),
+                        Triple(stringResource(R.string.care_team), Icons.Default.Group, "care_team"),
+                        Triple(stringResource(R.string.visits), Icons.Default.History, "visits"),
+                        Triple(stringResource(R.string.documents), Icons.Default.Description, "documents"),
+                        Triple(stringResource(R.string.family), Icons.Default.People, "family_access"),
+                        Triple(stringResource(R.string.sharing), Icons.Default.Security, "sharing_privacy")
                     )
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         quickLinks.chunked(4).forEach { rowItems ->
@@ -207,9 +209,9 @@ fun DashboardScreen(
             if (uiState.upcomingAppointments.isNotEmpty()) {
                 item {
                     SectionCard(
-                        title = "Upcoming Appointments",
+                        title = stringResource(R.string.upcoming_appointments),
                         action = { TextButton(onClick = { navController.navigate("tab_appointments") }) {
-                            Text("See all")
+                            Text(stringResource(R.string.see_all))
                         }}
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -225,9 +227,9 @@ fun DashboardScreen(
             if (uiState.recentLabResults.isNotEmpty()) {
                 item {
                     SectionCard(
-                        title = "Recent Lab Results",
+                        title = stringResource(R.string.recent_lab_results),
                         action = { TextButton(onClick = { navController.navigate("lab_results") }) {
-                            Text("See all")
+                            Text(stringResource(R.string.see_all))
                         }}
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

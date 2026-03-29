@@ -1,5 +1,6 @@
 package com.bitnesttechs.hms.patient.navigation
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -35,36 +37,37 @@ import com.bitnesttechs.hms.patient.features.profile.ProfileScreen
 import com.bitnesttechs.hms.patient.features.sharingprivacy.SharingPrivacyScreen
 import com.bitnesttechs.hms.patient.features.visits.VisitHistoryScreen
 import com.bitnesttechs.hms.patient.features.vitals.VitalsScreen
+import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 import kotlinx.coroutines.launch
 
-sealed class Tab(val route: String, val label: String, val icon: ImageVector) {
-    object Dashboard : Tab("tab_dashboard", "Dashboard", Icons.Default.Home)
-    object Appointments : Tab("tab_appointments", "Appointments", Icons.Default.CalendarMonth)
-    object Messages : Tab("tab_messages", "Messages", Icons.Default.Message)
-    object Profile : Tab("tab_profile", "Profile", Icons.Default.AccountCircle)
+sealed class Tab(val route: String, @StringRes val labelRes: Int, val icon: ImageVector) {
+    object Dashboard : Tab("tab_dashboard", R.string.dashboard, Icons.Default.Home)
+    object Appointments : Tab("tab_appointments", R.string.appointments, Icons.Default.CalendarMonth)
+    object Messages : Tab("tab_messages", R.string.messages, Icons.Default.Message)
+    object Profile : Tab("tab_profile", R.string.profile, Icons.Default.AccountCircle)
 }
 
 val bottomTabs = listOf(Tab.Dashboard, Tab.Appointments, Tab.Messages, Tab.Profile)
 
-data class DrawerItem(val label: String, val icon: ImageVector, val route: String)
+data class DrawerItem(@StringRes val labelRes: Int, val icon: ImageVector, val route: String)
 
 val drawerItems = listOf(
-    DrawerItem("Dashboard", Icons.Default.Home, "tab_dashboard"),
-    DrawerItem("Appointments", Icons.Default.CalendarMonth, "tab_appointments"),
-    DrawerItem("Lab Results", Icons.Default.Science, "lab_results"),
-    DrawerItem("Medications", Icons.Default.Medication, "medications"),
-    DrawerItem("Vitals", Icons.Default.Favorite, "vitals"),
-    DrawerItem("Billing", Icons.Default.Receipt, "billing"),
-    DrawerItem("Care Team", Icons.Default.Group, "care_team"),
-    DrawerItem("Visit History", Icons.Default.History, "visits"),
-    DrawerItem("Documents", Icons.Default.Description, "documents"),
-    DrawerItem("Health Records", Icons.Default.FolderShared, "health_records"),
-    DrawerItem("Notifications", Icons.Default.Notifications, "notifications"),
-    DrawerItem("Messages", Icons.Default.Message, "tab_messages"),
-    DrawerItem("Privacy", Icons.Default.Security, "sharing_privacy"),
-    DrawerItem("Family Access", Icons.Default.People, "family_access"),
-    DrawerItem("Profile", Icons.Default.AccountCircle, "tab_profile")
+    DrawerItem(R.string.dashboard, Icons.Default.Home, "tab_dashboard"),
+    DrawerItem(R.string.appointments, Icons.Default.CalendarMonth, "tab_appointments"),
+    DrawerItem(R.string.lab_results, Icons.Default.Science, "lab_results"),
+    DrawerItem(R.string.medications, Icons.Default.Medication, "medications"),
+    DrawerItem(R.string.vitals, Icons.Default.Favorite, "vitals"),
+    DrawerItem(R.string.billing, Icons.Default.Receipt, "billing"),
+    DrawerItem(R.string.care_team, Icons.Default.Group, "care_team"),
+    DrawerItem(R.string.visit_history, Icons.Default.History, "visits"),
+    DrawerItem(R.string.documents, Icons.Default.Description, "documents"),
+    DrawerItem(R.string.health_records, Icons.Default.FolderShared, "health_records"),
+    DrawerItem(R.string.notifications, Icons.Default.Notifications, "notifications"),
+    DrawerItem(R.string.messages, Icons.Default.Message, "tab_messages"),
+    DrawerItem(R.string.privacy, Icons.Default.Security, "sharing_privacy"),
+    DrawerItem(R.string.family_access, Icons.Default.People, "family_access"),
+    DrawerItem(R.string.profile, Icons.Default.AccountCircle, "tab_profile")
 )
 
 @Composable
@@ -89,9 +92,9 @@ fun MainScreen(onLogout: () -> Unit) {
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(24.dp)) {
-                        Text("MediHub", style = MaterialTheme.typography.headlineSmall,
+                        Text(stringResource(R.string.medihub), style = MaterialTheme.typography.headlineSmall,
                             color = androidx.compose.ui.graphics.Color.White, fontWeight = FontWeight.Bold)
-                        Text("Patient Portal", style = MaterialTheme.typography.bodySmall,
+                        Text(stringResource(R.string.patient_portal), style = MaterialTheme.typography.bodySmall,
                             color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.8f))
                     }
                 }
@@ -101,7 +104,7 @@ fun MainScreen(onLogout: () -> Unit) {
                     val selected = currentDestination?.route == item.route
                     NavigationDrawerItem(
                         icon = { Icon(item.icon, null) },
-                        label = { Text(item.label) },
+                        label = { Text(stringResource(item.labelRes)) },
                         selected = selected,
                         onClick = {
                             scope.launch { drawerState.close() }
@@ -139,8 +142,8 @@ fun MainScreen(onLogout: () -> Unit) {
                         bottomTabs.forEach { tab ->
                             val selected = activeTab == tab.route
                             NavigationBarItem(
-                                icon = { Icon(tab.icon, contentDescription = tab.label) },
-                                label = { Text(tab.label) },
+                                icon = { Icon(tab.icon, contentDescription = stringResource(tab.labelRes)) },
+                                label = { Text(stringResource(tab.labelRes)) },
                                 selected = selected,
                                 onClick = {
                                     navController.navigate(tab.route) {
