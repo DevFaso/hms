@@ -127,7 +127,7 @@ public class ConsultationController {
     }
 
     @GetMapping("/stats")
-    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR')")
+    @PreAuthorize("hasAuthority('VIEW_CONSULTATIONS') or hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','DOCTOR','NURSE','MIDWIFE','DENTIST')")
     @Operation(summary = "Consultation statistics", description = "Aggregated counts and averages for analytics")
     public ResponseEntity<ConsultationStatsDTO> getStats(
         @RequestParam(required = false) UUID hospitalId
