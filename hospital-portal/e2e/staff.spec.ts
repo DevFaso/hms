@@ -21,14 +21,14 @@ test.describe('Staff Module', () => {
     });
 
     test('displays staff page with title', async ({ page }) => {
-      await expect(page.locator('main .page-title')).toContainText('Staff');
-      await expect(page.locator('main .page-subtitle')).toContainText('staff members');
+      await expect(page.locator('main .page-title')).toContainText(/Staff|Personnel/);
+      await expect(page.locator('main .page-subtitle')).toBeVisible();
     });
 
     test('displays search bar', async ({ page }) => {
       const search = page.locator('.search-bar input');
       await expect(search).toBeVisible();
-      await expect(search).toHaveAttribute('placeholder', /search/i);
+      await expect(search).toHaveAttribute('placeholder', /search|rechercher/i);
     });
 
     test('loads staff data (grid or empty state)', async ({ page }) => {

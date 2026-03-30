@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App -->
+    <string name="app_name">MediHub Patient</string>
+    <string name="patient_portal">Portail Patient</string>
+    <string name="medihub">MediHub</string>
+    <string name="copyright">MediHub HMS © 2026</string>
+
+    <!-- Login -->
+    <string name="login_title">Bienvenue sur MediHub</string>
+    <string name="login_subtitle">Votre santé, entre vos mains</string>
+    <string name="username_label">Nom d\'utilisateur ou e-mail</string>
+    <string name="password_label">Mot de passe</string>
+    <string name="sign_in">Se connecter</string>
+    <string name="forgot_password">Mot de passe oublié ?</string>
+    <string name="biometric_sign_in">Connexion biométrique</string>
+    <string name="biometric_prompt_title">Vérifiez votre identité</string>
+    <string name="biometric_prompt_subtitle">Utilisez votre empreinte ou visage pour vous connecter</string>
+    <string name="biometric_prompt_cancel">Annuler</string>
+    <string name="biometric_not_available">Biométrie non disponible</string>
+    <string name="show_password">Afficher le mot de passe</string>
+    <string name="hide_password">Masquer le mot de passe</string>
+
+    <!-- Navigation tabs -->
+    <string name="dashboard">Tableau de bord</string>
+    <string name="appointments">Rendez-vous</string>
+    <string name="messages">Messages</string>
+    <string name="profile">Profil</string>
+
+    <!-- Drawer / feature screens -->
+    <string name="lab_results">Résultats de laboratoire</string>
+    <string name="medications">Médicaments</string>
+    <string name="prescriptions">Ordonnances</string>
+    <string name="billing">Facturation</string>
+    <string name="vitals">Signes vitaux</string>
+    <string name="care_team">Équipe de soins</string>
+    <string name="visit_history">Historique des visites</string>
+    <string name="documents">Documents</string>
+    <string name="health_records">Dossier médical</string>
+    <string name="notifications">Notifications</string>
+    <string name="sharing_privacy">Partage et confidentialité</string>
+    <string name="family_access">Accès familial</string>
+    <string name="privacy">Confidentialité</string>
+
+    <!-- Dashboard -->
+    <string name="quick_access">Accès rapide</string>
+    <string name="upcoming_appointments">Prochains rendez-vous</string>
+    <string name="recent_lab_results">Résultats récents</string>
+    <string name="allergies">Allergies</string>
+    <string name="active_conditions">Conditions actives</string>
+    <string name="chronic_conditions">Conditions chroniques</string>
+    <string name="see_all">Voir tout</string>
+    <string name="menu">Menu</string>
+    <string name="refresh">Actualiser</string>
+    <string name="family">Famille</string>
+    <string name="sharing">Partage</string>
+    <string name="visits">Visites</string>
+
+    <!-- Profile -->
+    <string name="sign_out">Se déconnecter</string>
+    <string name="sign_out_confirm">Êtes-vous sûr de vouloir vous déconnecter ?</string>
+    <string name="cancel">Annuler</string>
+    <string name="personal_information">Informations personnelles</string>
+    <string name="medical_information">Informations médicales</string>
+    <string name="insurance">Assurance</string>
+    <string name="emergency_contact">Contact d\'urgence</string>
+    <string name="pharmacy">Pharmacie</string>
+    <string name="preferred_pharmacy">Pharmacie préférée</string>
+    <string name="date_of_birth">Date de naissance</string>
+    <string name="gender">Genre</string>
+    <string name="phone">Téléphone</string>
+    <string name="email">E-mail</string>
+    <string name="address">Adresse</string>
+    <string name="city">Ville</string>
+    <string name="blood_type">Groupe sanguin</string>
+    <string name="provider">Prestataire</string>
+    <string name="policy_number">N° de police</string>
+    <string name="name_label">Nom</string>
+    <string name="not_set">Non défini</string>
+    <string name="set_label">Définir</string>
+    <string name="change_photo">Changer la photo</string>
+    <string name="profile_photo">Photo de profil</string>
+    <string name="no_profile_data">Aucune donnée de profil</string>
+    <string name="mrn_prefix">NRM : %1$s</string>
+
+    <!-- Language -->
+    <string name="language">Langue</string>
+    <string name="language_english">English</string>
+    <string name="language_french">Français</string>
+    <string name="language_settings">Paramètres de langue</string>
+    <string name="select_language">Sélectionner la langue</string>
+
+    <!-- Appointments -->
+    <string name="book_appointment">Prendre rendez-vous</string>
+    <string name="cancel_appointment">Annuler le rendez-vous</string>
+    <string name="reschedule">Reporter</string>
+    <string name="no_appointments">Aucun rendez-vous</string>
+    <string name="upcoming">À venir</string>
+    <string name="past">Passés</string>
+    <string name="doctor">Médecin</string>
+    <string name="department">Service</string>
+    <string name="date_label">Date</string>
+    <string name="time_label">Heure</string>
+    <string name="reason">Motif</string>
+    <string name="notes">Notes</string>
+    <string name="select_doctor">Sélectionner un médecin</string>
+    <string name="select_date">Sélectionner une date</string>
+    <string name="select_time">Sélectionner une heure</string>
+    <string name="cancellation_reason">Motif d\'annulation</string>
+    <string name="appointment_details">Détails du rendez-vous</string>
+    <string name="status">Statut</string>
+
+    <!-- Lab Results -->
+    <string name="no_lab_results">Aucun résultat de laboratoire</string>
+    <string name="result">Résultat</string>
+    <string name="reference">Référence</string>
+    <string name="ordered_by">Prescrit par</string>
+    <string name="critical">CRITIQUE</string>
+    <string name="abnormal">ANORMAL</string>
+    <string name="normal">Normal</string>
+
+    <!-- Medications -->
+    <string name="no_active_medications">Aucun médicament actif</string>
+    <string name="no_prescriptions">Aucune ordonnance</string>
+    <string name="dosage">Dosage</string>
+    <string name="frequency">Fréquence</string>
+    <string name="prescribed_by">Prescrit par</string>
+    <string name="refills_remaining">Renouvellements restants</string>
+
+    <!-- Billing -->
+    <string name="outstanding_balance">Solde impayé</string>
+    <string name="invoices">Factures</string>
+    <string name="no_invoices">Aucune facture</string>
+    <string name="total">Total</string>
+    <string name="paid">Payé</string>
+    <string name="balance">Solde</string>
+
+    <!-- Vitals -->
+    <string name="record_vitals">Enregistrer les signes vitaux</string>
+    <string name="no_vitals">Aucun signe vital enregistré</string>
+    <string name="blood_pressure">Tension artérielle</string>
+    <string name="heart_rate">Fréquence cardiaque</string>
+    <string name="temperature">Température</string>
+    <string name="oxygen_saturation">Saturation en oxygène</string>
+    <string name="weight">Poids</string>
+    <string name="latest_readings">Dernières mesures</string>
+    <string name="history">Historique</string>
+
+    <!-- Care Team -->
+    <string name="no_care_team">Aucun membre de l\'équipe de soins</string>
+    <string name="primary_physician">Médecin traitant</string>
+    <string name="call">Appeler</string>
+    <string name="role">Rôle</string>
+    <string name="specialty">Spécialité</string>
+
+    <!-- Visit History -->
+    <string name="encounters">Consultations</string>
+    <string name="after_visit_summaries">Résumés post-visite</string>
+    <string name="no_encounters">Aucune consultation</string>
+    <string name="no_summaries">Aucun résumé post-visite</string>
+    <string name="discharge_summary">Résumé de sortie</string>
+
+    <!-- Messages -->
+    <string name="no_messages">Aucun message</string>
+    <string name="new_message">Nouveau message</string>
+    <string name="type_message">Saisissez un message…</string>
+    <string name="send">Envoyer</string>
+    <string name="conversations">Conversations</string>
+
+    <!-- Documents -->
+    <string name="no_documents">Aucun document</string>
+    <string name="category">Catégorie</string>
+    <string name="search_documents">Rechercher des documents</string>
+
+    <!-- Health Records -->
+    <string name="overview">Aperçu</string>
+    <string name="immunizations">Vaccinations</string>
+    <string name="treatment_plans">Plans de traitement</string>
+    <string name="referrals">Orientations</string>
+    <string name="no_immunizations">Aucune vaccination</string>
+    <string name="no_treatment_plans">Aucun plan de traitement</string>
+    <string name="no_referrals">Aucune orientation</string>
+
+    <!-- Notifications -->
+    <string name="no_notifications">Aucune notification</string>
+    <string name="mark_as_read">Marquer comme lu</string>
+    <string name="unread">Non lu</string>
+
+    <!-- Sharing & Privacy -->
+    <string name="consents">Consentements</string>
+    <string name="access_log">Journal d\'accès</string>
+    <string name="grant_consent">Accorder le consentement</string>
+    <string name="revoke">Révoquer</string>
+    <string name="no_consents">Aucun consentement</string>
+    <string name="no_access_logs">Aucun journal d\'accès</string>
+
+    <!-- Family Access -->
+    <string name="granted_by_me">Accordé par moi</string>
+    <string name="access_i_have">Accès que j\'ai</string>
+    <string name="grant_access">Accorder l\'accès</string>
+    <string name="revoke_access">Révoquer l\'accès</string>
+    <string name="no_family_access">Aucun accès familial</string>
+    <string name="relationship">Relation</string>
+    <string name="permissions">Autorisations</string>
+
+    <!-- Common -->
+    <string name="loading">Chargement…</string>
+    <string name="error_generic">Une erreur est survenue. Veuillez réessayer.</string>
+    <string name="no_data">Aucune donnée disponible</string>
+    <string name="back">Retour</string>
+    <string name="save">Enregistrer</string>
+    <string name="edit">Modifier</string>
+    <string name="delete">Supprimer</string>
+    <string name="confirm">Confirmer</string>
+    <string name="close">Fermer</string>
+    <string name="ok">OK</string>
+    <string name="yes">Oui</string>
+    <string name="no">Non</string>
+    <string name="error_prefix">Erreur : %1$s</string>
+    <string name="unknown_doctor">Médecin inconnu</string>
+</resources>

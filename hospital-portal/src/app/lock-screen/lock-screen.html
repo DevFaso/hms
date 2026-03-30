@@ -18,8 +18,8 @@
       <p class="user-role">{{ userRole }}</p>
     </div>
 
-    <p class="lock-message">Your session has been locked due to inactivity.</p>
-    <p class="lock-sub">Enter your password to continue.</p>
+    <p class="lock-message">{{ 'LOCK.SESSION_LOCKED' | translate }}</p>
+    <p class="lock-sub">{{ 'LOCK.ENTER_PASSWORD' | translate }}</p>
 
     @if (error) {
       <div class="error-banner" role="alert">
@@ -36,7 +36,7 @@
           [type]="showPassword ? 'text' : 'password'"
           [(ngModel)]="password"
           name="password"
-          placeholder="Enter your password"
+          [placeholder]="'LOCK.PASSWORD_PLACEHOLDER' | translate"
           [disabled]="loading()"
         />
         <button
@@ -55,23 +55,23 @@
       <button type="submit" class="btn-unlock" [disabled]="loading() || !password">
         @if (loading()) {
           <span class="spinner"></span>
-          <span>Verifying...</span>
+          <span>{{ 'LOCK.VERIFYING' | translate }}</span>
         } @else {
           <span class="material-symbols-outlined">lock_open</span>
-          <span>Unlock</span>
+          <span>{{ 'LOCK.UNLOCK' | translate }}</span>
         }
       </button>
     </form>
 
     <div class="lock-footer">
-      <p class="footer-hint">Not {{ userName }}?</p>
+      <p class="footer-hint">{{ 'LOCK.NOT_USER' | translate: { name: userName } }}</p>
       <button class="btn-switch-user" (click)="switchUser()">
         <span class="material-symbols-outlined">person_add</span>
-        Sign in as a different user
+        {{ 'LOCK.SWITCH_USER' | translate }}
       </button>
       <button class="btn-signout" (click)="signOut()">
         <span class="material-symbols-outlined">logout</span>
-        Sign out
+        {{ 'SHELL.SIGN_OUT' | translate }}
       </button>
     </div>
   </div>

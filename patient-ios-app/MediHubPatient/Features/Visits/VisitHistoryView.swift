@@ -18,8 +18,8 @@ struct VisitHistoryView: View {
     private var content: some View {
         VStack(spacing: 0) {
             Picker("", selection: $selectedTab) {
-                Text("Visits").tag(0)
-                Text("Summaries").tag(1)
+                Text("visits_title".localized).tag(0)
+                Text("summaries".localized).tag(1)
             }
             .pickerStyle(.segmented)
             .padding()
@@ -32,7 +32,7 @@ struct VisitHistoryView: View {
                 summariesList
             }
         }
-        .navigationTitle("Visit History")
+        .navigationTitle("visit_history".localized)
         .refreshable { await vm.loadAll() }
     }
 

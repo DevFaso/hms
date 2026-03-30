@@ -52,12 +52,22 @@ test.describe('Clinical Modules', () => {
       test(`${mod.title} shows data or empty state`, async ({ page }) => {
         await page.goto(mod.path, { waitUntil: 'domcontentloaded' });
 
+        // Wait for the page to fully render (page-container or page-title appears)
+        await page.waitForFunction(
+          () =>
+            document.querySelector('.page-container') ||
+            document.querySelector('.page-title'),
+          { timeout: 15_000 },
+        );
+
         await page.waitForFunction(() => !document.querySelector('.loading-state'), {
           timeout: 15_000,
         });
 
         // Should show either data or empty state
-        const dataOrEmpty = page.locator('.data-table, .empty-state, table, .card, .grid, .list');
+        const dataOrEmpty = page.locator(
+          '.data-table, .empty-state, table, .card, .summary-card, .grid, .list',
+        );
         // At least the page container should exist
         const container = page.locator('.page-container');
         const hasContent = (await dataOrEmpty.count()) > 0 || (await container.count()) > 0;

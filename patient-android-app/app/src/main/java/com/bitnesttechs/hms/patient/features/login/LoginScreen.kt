@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -35,6 +36,7 @@ import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bitnesttechs.hms.patient.core.auth.TokenStorage
+import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 import com.bitnesttechs.hms.patient.ui.theme.BrandDarkBlue
 import javax.inject.Inject
@@ -102,7 +104,7 @@ fun LoginScreen(
                 fontWeight = FontWeight.Bold
             )
             Text(
-                "Patient Portal",
+                stringResource(R.string.patient_portal),
                 color = Color.White.copy(alpha = 0.8f),
                 fontSize = 16.sp
             )
@@ -120,7 +122,7 @@ fun LoginScreen(
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Text(
-                        "Sign In",
+                        stringResource(R.string.sign_in),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold
                     )
@@ -129,7 +131,7 @@ fun LoginScreen(
                     OutlinedTextField(
                         value = username,
                         onValueChange = { username = it },
-                        label = { Text("Username or Email") },
+                        label = { Text(stringResource(R.string.username_label)) },
                         leadingIcon = { Icon(Icons.Default.Person, null) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
@@ -143,13 +145,13 @@ fun LoginScreen(
                     OutlinedTextField(
                         value = password,
                         onValueChange = { password = it },
-                        label = { Text("Password") },
+                        label = { Text(stringResource(R.string.password_label)) },
                         leadingIcon = { Icon(Icons.Default.Lock, null) },
                         trailingIcon = {
                             IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                 Icon(
                                     if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = if (passwordVisible) "Hide password" else "Show password"
+                                    contentDescription = if (passwordVisible) stringResource(R.string.hide_password) else stringResource(R.string.show_password)
                                 )
                             }
                         },
@@ -187,7 +189,7 @@ fun LoginScreen(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Text("Sign In", fontSize = 16.sp)
+                            Text(stringResource(R.string.sign_in), fontSize = 16.sp)
                         }
                     }
 
@@ -201,7 +203,7 @@ fun LoginScreen(
                         ) {
                             Icon(Icons.Default.Fingerprint, null, tint = BrandBlue)
                             Spacer(Modifier.width(8.dp))
-                            Text("Sign in with Biometrics", color = BrandBlue)
+                            Text(stringResource(R.string.biometric_sign_in), color = BrandBlue)
                         }
                     }
 
@@ -211,7 +213,7 @@ fun LoginScreen(
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     ) {
                         Text(
-                            "Forgot Password?",
+                            stringResource(R.string.forgot_password),
                             color = BrandDarkBlue,
                             style = MaterialTheme.typography.bodyMedium
                         )
@@ -255,8 +257,8 @@ private fun launchBiometric(context: android.content.Context, viewModel: LoginVi
         }
     )
     val promptInfo = BiometricPrompt.PromptInfo.Builder()
-        .setTitle("Sign in to MediHub")
-        .setSubtitle("Use your biometric credential")
+        .setTitle(context.getString(R.string.biometric_prompt_title))
+        .setSubtitle(context.getString(R.string.biometric_prompt_subtitle))
         .setAllowedAuthenticators(
             BiometricManager.Authenticators.BIOMETRIC_STRONG or
             BiometricManager.Authenticators.DEVICE_CREDENTIAL

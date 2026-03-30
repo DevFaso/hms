@@ -23,16 +23,16 @@ struct AppointmentsView: View {
     private var content: some View {
         Group {
             if vm.isLoading && vm.appointments.isEmpty {
-                ProgressView("Loading appointments…")
+                ProgressView("loading".localized)
             } else if vm.appointments.isEmpty {
-                ContentUnavailableView("No Appointments",
+                ContentUnavailableView("no_appointments".localized,
                     systemImage: "calendar.badge.exclamationmark",
-                    description: Text("You have no appointments."))
+                    description: Text("no_appointments_desc".localized))
             } else {
                 List {
                     // Upcoming
                     if !vm.upcoming.isEmpty {
-                        Section("Upcoming") {
+                        Section("upcoming".localized) {
                             ForEach(vm.upcoming) { appt in
                                 NavigationLink(destination: AppointmentDetailView(appointment: appt)) {
                                     AppointmentRowView(appointment: appt)
@@ -60,7 +60,7 @@ struct AppointmentsView: View {
 
                     // Past
                     if !vm.past.isEmpty {
-                        Section("Past") {
+                        Section("past".localized) {
                             ForEach(vm.past) { appt in
                                 NavigationLink(destination: AppointmentDetailView(appointment: appt)) {
                                     AppointmentRowView(appointment: appt)
@@ -74,7 +74,7 @@ struct AppointmentsView: View {
                 .listStyle(.insetGrouped)
             }
         }
-        .navigationTitle("Appointments")
+        .navigationTitle("tab_appointments".localized)
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
                 Button(action: { showBooking = true }) {

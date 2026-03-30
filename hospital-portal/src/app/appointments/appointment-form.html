@@ -1,15 +1,15 @@
 <div class="page-container">
   <a routerLink="/appointments" class="back-link">
     <span class="material-symbols-outlined">arrow_back</span>
-    Back to Appointments
+    {{ 'APPOINTMENTS.BACK_TO_LIST' | translate }}
   </a>
 
   <div class="form-card">
     <div class="form-header">
       <span class="material-symbols-outlined form-icon">event</span>
       <div>
-        <h1>New Appointment</h1>
-        <p>Schedule a new patient appointment</p>
+        <h1>{{ 'APPOINTMENTS.NEW' | translate }}</h1>
+        <p>{{ 'APPOINTMENTS.SCHEDULE_NEW_SUBTITLE' | translate }}</p>
       </div>
     </div>
 
@@ -17,10 +17,10 @@
       <div class="form-grid">
         <!-- Date & Time -->
         <div class="form-section">
-          <h3>Date & Time</h3>
+          <h3>{{ 'APPOINTMENTS.DATE_TIME' | translate }}</h3>
           <div class="field-row">
             <div class="field">
-              <label for="date">Appointment Date *</label>
+              <label for="date">{{ 'APPOINTMENTS.APPOINTMENT_DATE' | translate }} *</label>
               <input
                 id="date"
                 type="date"
@@ -32,7 +32,7 @@
           </div>
           <div class="field-row two-col">
             <div class="field">
-              <label for="start">Start Time *</label>
+              <label for="start">{{ 'APPOINTMENTS.START_TIME' | translate }} *</label>
               <input
                 id="start"
                 type="time"
@@ -43,7 +43,7 @@
               />
             </div>
             <div class="field">
-              <label for="end">End Time *</label>
+              <label for="end">{{ 'APPOINTMENTS.END_TIME' | translate }} *</label>
               <input
                 id="end"
                 type="time"
@@ -64,7 +64,7 @@
 
         <!-- Patient picker -->
         <div class="form-section">
-          <h3>Patient *</h3>
+          <h3>{{ 'PATIENTS.PATIENT' | translate }} *</h3>
           @if (selectedPatient()) {
             <div class="picker-chip">
               <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
@@ -81,7 +81,7 @@
                 type="button"
                 class="chip-clear"
                 (click)="clearPatient()"
-                title="Change patient"
+                [title]="'APPOINTMENTS.CHANGE_PATIENT' | translate"
               >
                 <span class="material-symbols-outlined">close</span>
               </button>
@@ -92,7 +92,7 @@
               <input
                 class="picker-input"
                 type="text"
-                placeholder="Search by name, email or MRN…"
+                [placeholder]="'APPOINTMENTS.SEARCH_PATIENT_PLACEHOLDER' | translate"
                 [value]="patientQuery()"
                 (input)="onPatientQueryChange($any($event.target).value)"
                 (blur)="patientDropdownOpen.set(false)"
@@ -102,7 +102,10 @@
                 <div class="picker-spinner"></div>
               }
               @if (patientDropdownOpen()) {
-                <ul class="picker-dropdown" aria-label="Patient suggestions">
+                <ul
+                  class="picker-dropdown"
+                  [attr.aria-label]="'APPOINTMENTS.PATIENT_SUGGESTIONS' | translate"
+                >
                   @for (p of patientSuggestions(); track p.id) {
                     <li class="picker-option" (mousedown)="selectPatient(p)">
                       <div class="opt-avatar">{{ patientInitials(p) }}</div>
@@ -122,7 +125,7 @@
 
         <!-- Staff / Doctor picker -->
         <div class="form-section">
-          <h3>Doctor / Staff *</h3>
+          <h3>{{ 'APPOINTMENTS.DOCTOR_STAFF' | translate }} *</h3>
           @if (selectedStaff()) {
             <div class="picker-chip staff-chip">
               <div class="chip-avatar staff-avatar">{{ staffInitials(selectedStaff()!) }}</div>
@@ -139,7 +142,7 @@
                 type="button"
                 class="chip-clear"
                 (click)="clearStaff()"
-                title="Change staff member"
+                [title]="'APPOINTMENTS.CHANGE_STAFF' | translate"
               >
                 <span class="material-symbols-outlined">close</span>
               </button>
@@ -150,7 +153,7 @@
               <input
                 class="picker-input"
                 type="text"
-                placeholder="Search doctor or staff by name…"
+                [placeholder]="'APPOINTMENTS.SEARCH_STAFF_PLACEHOLDER' | translate"
                 [value]="staffQuery()"
                 (input)="onStaffQueryChange($any($event.target).value)"
                 (blur)="staffDropdownOpen.set(false)"
@@ -160,7 +163,10 @@
                 <div class="picker-spinner"></div>
               }
               @if (staffDropdownOpen()) {
-                <ul class="picker-dropdown" aria-label="Staff suggestions">
+                <ul
+                  class="picker-dropdown"
+                  [attr.aria-label]="'APPOINTMENTS.STAFF_SUGGESTIONS' | translate"
+                >
                   @for (s of staffSuggestions(); track s.id) {
                     <li class="picker-option" (mousedown)="selectStaff(s)">
                       <div class="opt-avatar staff-avatar">{{ staffInitials(s) }}</div>
@@ -180,10 +186,12 @@
 
         <!-- LOCATION -->
         <div class="form-section">
-          <h3 class="section-title">LOCATION</h3>
+          <h3 class="section-title">{{ 'APPOINTMENTS.LOCATION' | translate }}</h3>
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label" for="hospital">Hospital</label>
+              <label class="form-label" for="hospital">{{
+                'ENCOUNTERS.HOSPITAL' | translate
+              }}</label>
 
               <!-- LOCKED: receptionist or any hospital-scoped role -->
               @if (lockedHospitalId) {
@@ -201,7 +209,7 @@
                   (ngModelChange)="onHospitalChange($event)"
                   name="hospitalId"
                 >
-                  <option value="">Select hospital...</option>
+                  <option value="">{{ 'APPOINTMENTS.SELECT_HOSPITAL' | translate }}</option>
                   @for (h of hospitals(); track h.id) {
                     <option [value]="h.id">{{ h.name }}</option>
                   }
@@ -210,7 +218,9 @@
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="department">Department</label>
+              <label class="form-label" for="department">{{
+                'APPOINTMENTS.DEPARTMENT' | translate
+              }}</label>
               <select
                 id="department"
                 class="form-select"
@@ -218,7 +228,7 @@
                 name="departmentId"
                 [disabled]="!selectedHospitalId()"
               >
-                <option value="">Select department...</option>
+                <option value="">{{ 'APPOINTMENTS.SELECT_DEPARTMENT' | translate }}</option>
                 @for (d of departments(); track d.id) {
                   <option [value]="d.id">{{ d.name }}</option>
                 }
@@ -229,23 +239,23 @@
 
         <!-- Details -->
         <div class="form-section full-width">
-          <h3>Details</h3>
+          <h3>{{ 'APPOINTMENTS.DETAILS' | translate }}</h3>
           <div class="field">
-            <label for="reason">Reason for Visit</label>
+            <label for="reason">{{ 'APPOINTMENTS.REASON_FOR_VISIT' | translate }}</label>
             <input
               id="reason"
               type="text"
-              placeholder="e.g., Annual checkup, Follow-up"
+              [placeholder]="'APPOINTMENTS.REASON_PLACEHOLDER' | translate"
               [(ngModel)]="form.reason"
               name="reason"
             />
           </div>
           <div class="field notes-field">
-            <label for="notes">Notes</label>
+            <label for="notes">{{ 'APPOINTMENTS.NOTES' | translate }}</label>
             <textarea
               id="notes"
               rows="3"
-              placeholder="Additional notes..."
+              [placeholder]="'APPOINTMENTS.NOTES_PLACEHOLDER' | translate"
               [(ngModel)]="form.notes"
               name="notes"
             ></textarea>
@@ -254,14 +264,14 @@
       </div>
 
       <div class="form-actions">
-        <a routerLink="/appointments" class="btn-secondary">Cancel</a>
+        <a routerLink="/appointments" class="btn-secondary">{{ 'COMMON.CANCEL' | translate }}</a>
         <button type="submit" class="btn-primary" [disabled]="saving()">
           @if (saving()) {
             <span class="mini-spinner"></span>
-            Creating...
+            {{ 'APPOINTMENTS.CREATING' | translate }}
           } @else {
             <span class="material-symbols-outlined">event_available</span>
-            Create Appointment
+            {{ 'APPOINTMENTS.CREATE_APPOINTMENT' | translate }}
           }
         </button>
       </div>

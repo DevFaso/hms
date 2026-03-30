@@ -12,6 +12,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -58,11 +59,21 @@ public class NotificationController {
         return ResponseEntity.ok(notification);
     }
 
-    @PostMapping("/{id}/read")
+    @PutMapping("/{id}/read")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Void> markAsRead(@PathVariable UUID id) {
         notificationService.markAsRead(id);
         return ResponseEntity.ok().build();
+    }
+
+    @PatchMapping("/read-all")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Void> markAllRead(Principal principal) {
+        if (principal == null) {
+            return ResponseEntity.status(401).build();
+        }
+        notificationService.markAllReadForUser(principal.getName());
+        return ResponseEntity.noContent().build();
     }
 
     // ── Notification preferences ─────────────────────────────────────────

@@ -4,16 +4,16 @@
       <h1>
         <span class="material-symbols-outlined">calendar_month</span>
         @if (isSchedulingAdmin) {
-          Staff Scheduling
+          {{ 'SCHEDULING.TITLE' | translate }}
         } @else {
-          Provider Availability
+          {{ 'SCHEDULING.PROVIDER_AVAILABILITY' | translate }}
         }
       </h1>
       <p class="subtitle">
         @if (isSchedulingAdmin) {
-          Manage shifts, schedules, and leave requests
+          {{ 'SCHEDULING.SUBTITLE' | translate }}
         } @else {
-          View staff schedules and on-duty providers
+          {{ 'SCHEDULING.SUBTITLE_PROVIDER' | translate }}
         }
       </p>
     </div>
@@ -21,7 +21,7 @@
       <div class="page-actions">
         <button class="btn-primary" (click)="openBulkModal()">
           <span class="material-symbols-outlined">date_range</span>
-          Bulk Schedule
+          {{ 'SCHEDULING.BULK_SCHEDULE' | translate }}
         </button>
       </div>
     }
@@ -34,28 +34,28 @@
         <span class="material-symbols-outlined">event_note</span>
         <div class="summary-info">
           <span class="summary-value">{{ shifts().length }}</span>
-          <span class="summary-label">Shifts This Week</span>
+          <span class="summary-label">{{ 'SCHEDULING.SHIFTS_THIS_WEEK' | translate }}</span>
         </div>
       </div>
       <div class="summary-card pending-card">
         <span class="material-symbols-outlined">hourglass_top</span>
         <div class="summary-info">
           <span class="summary-value">{{ pendingCount }}</span>
-          <span class="summary-label">Pending Leaves</span>
+          <span class="summary-label">{{ 'SCHEDULING.PENDING_LEAVES' | translate }}</span>
         </div>
       </div>
       <div class="summary-card approved-card">
         <span class="material-symbols-outlined">check_circle</span>
         <div class="summary-info">
           <span class="summary-value">{{ approvedCount }}</span>
-          <span class="summary-label">Approved Leaves</span>
+          <span class="summary-label">{{ 'SCHEDULING.APPROVED_LEAVES' | translate }}</span>
         </div>
       </div>
       <div class="summary-card total-card">
         <span class="material-symbols-outlined">groups</span>
         <div class="summary-info">
           <span class="summary-value">{{ leaves().length }}</span>
-          <span class="summary-label">Total Leave Requests</span>
+          <span class="summary-label">{{ 'SCHEDULING.TOTAL_LEAVE_REQUESTS' | translate }}</span>
         </div>
       </div>
     </div>
@@ -65,7 +65,7 @@
         <span class="material-symbols-outlined">event_note</span>
         <div class="summary-info">
           <span class="summary-value">{{ shifts().length }}</span>
-          <span class="summary-label">Scheduled Staff This Week</span>
+          <span class="summary-label">{{ 'SCHEDULING.SCHEDULED_STAFF_WEEK' | translate }}</span>
         </div>
       </div>
     </div>
@@ -76,11 +76,11 @@
     <div class="tabs">
       <button class="tab" [class.active]="activeView() === 'shifts'" (click)="setView('shifts')">
         <span class="material-symbols-outlined">event_note</span>
-        Shifts
+        {{ 'SCHEDULING.SHIFTS' | translate }}
       </button>
       <button class="tab" [class.active]="activeView() === 'leaves'" (click)="setView('leaves')">
         <span class="material-symbols-outlined">event_busy</span>
-        Leave Requests
+        {{ 'SCHEDULING.LEAVE_REQUESTS' | translate }}
         @if (pendingCount > 0) {
           <span class="badge">{{ pendingCount }}</span>
         }
@@ -95,16 +95,20 @@
         <h3>
           <span class="material-symbols-outlined">view_week</span>
           @if (isSchedulingAdmin) {
-            Weekly Schedule
+            {{ 'SCHEDULING.WEEKLY_SCHEDULE' | translate }}
           } @else {
-            Weekly Staff Availability
+            {{ 'SCHEDULING.WEEKLY_STAFF_AVAILABILITY' | translate }}
           }
         </h3>
         <div class="week-nav">
           <button class="week-btn" (click)="changeWeek(-1)" aria-label="Previous week">
             <span class="material-symbols-outlined">chevron_left</span>
           </button>
-          <button class="week-label" (click)="goToCurrentWeek()" title="Go to current week">
+          <button
+            class="week-label"
+            (click)="goToCurrentWeek()"
+            [title]="'SCHEDULING.GO_TO_CURRENT_WEEK' | translate"
+          >
             {{ getWeekLabel() }}
           </button>
           <button class="week-btn" (click)="changeWeek(1)" aria-label="Next week">
@@ -116,7 +120,7 @@
       @if (shiftsLoading()) {
         <div class="schedule-loading">
           <div class="spinner-sm"></div>
-          <span>Loading shifts...</span>
+          <span>{{ 'SCHEDULING.LOADING_SHIFTS' | translate }}</span>
         </div>
       } @else {
         <div class="week-grid">
@@ -156,7 +160,7 @@
                     </span>
                   </div>
                 } @empty {
-                  <div class="no-shift">No shifts</div>
+                  <div class="no-shift">{{ 'SCHEDULING.NO_SHIFTS' | translate }}</div>
                 }
               </div>
             </div>
@@ -174,48 +178,48 @@
         [class.active]="leaveFilter() === 'ALL'"
         (click)="setLeaveFilter('ALL')"
       >
-        All
+        {{ 'COMMON.ALL' | translate }}
       </button>
       <button
         class="filter-chip pending"
         [class.active]="leaveFilter() === 'PENDING'"
         (click)="setLeaveFilter('PENDING')"
       >
-        Pending
+        {{ 'SCHEDULING.PENDING' | translate }}
       </button>
       <button
         class="filter-chip approved"
         [class.active]="leaveFilter() === 'APPROVED'"
         (click)="setLeaveFilter('APPROVED')"
       >
-        Approved
+        {{ 'SCHEDULING.APPROVED' | translate }}
       </button>
       <button
         class="filter-chip denied"
         [class.active]="leaveFilter() === 'REJECTED'"
         (click)="setLeaveFilter('REJECTED')"
       >
-        Rejected
+        {{ 'SCHEDULING.REJECTED' | translate }}
       </button>
       <button
         class="filter-chip cancelled"
         [class.active]="leaveFilter() === 'CANCELLED'"
         (click)="setLeaveFilter('CANCELLED')"
       >
-        Cancelled
+        {{ 'SCHEDULING.CANCELLED' | translate }}
       </button>
     </div>
 
     @if (leavesLoading()) {
       <div class="schedule-loading">
         <div class="spinner-sm"></div>
-        <span>Loading leave requests...</span>
+        <span>{{ 'SCHEDULING.LOADING_LEAVE_REQUESTS' | translate }}</span>
       </div>
     } @else if (filteredLeaves().length === 0) {
       <div class="empty-schedule">
         <span class="material-symbols-outlined">event_available</span>
-        <h3>No leave requests</h3>
-        <p>No leave requests found matching the selected filter.</p>
+        <h3>{{ 'SCHEDULING.NO_LEAVE_REQUESTS' | translate }}</h3>
+        <p>{{ 'SCHEDULING.NO_LEAVE_MATCHING' | translate }}</p>
       </div>
     } @else {
       <div class="leave-list">
@@ -254,7 +258,7 @@
               @if (leave.requiresCoverage) {
                 <span class="coverage-badge">
                   <span class="material-symbols-outlined">swap_horiz</span>
-                  Coverage Required
+                  {{ 'SCHEDULING.COVERAGE_REQUIRED' | translate }}
                 </span>
               }
             </div>
@@ -263,7 +267,9 @@
                 <span class="leave-dept">{{ leave.departmentName }}</span>
               }
               @if (leave.reviewedByName) {
-                <span class="reviewed-by">Reviewed: {{ leave.reviewedByName }}</span>
+                <span class="reviewed-by"
+                  >{{ 'SCHEDULING.REVIEWED' | translate }}: {{ leave.reviewedByName }}</span
+                >
               }
               @if (leave.managerNote) {
                 <span class="manager-note">"{{ leave.managerNote }}"</span>
@@ -284,8 +290,10 @@
       <div class="modal-title-group">
         <span class="material-symbols-outlined modal-icon">date_range</span>
         <div>
-          <h2 id="bulk-modal-title" class="modal-title">Bulk Schedule Shifts</h2>
-          <p class="modal-subtitle">Schedule recurring shifts over a date range by day of week</p>
+          <h2 id="bulk-modal-title" class="modal-title">
+            {{ 'SCHEDULING.BULK_SCHEDULE_SHIFTS' | translate }}
+          </h2>
+          <p class="modal-subtitle">{{ 'SCHEDULING.BULK_SUBTITLE' | translate }}</p>
         </div>
       </div>
       <button class="modal-close" (click)="closeBulkModal()" aria-label="Close bulk schedule modal">
@@ -301,7 +309,7 @@
         <div class="form-group">
           <label class="form-label" for="bulk-staffSearch">
             <span class="material-symbols-outlined">badge</span>
-            Staff Member <span class="required">*</span>
+            {{ 'SCHEDULING.STAFF_MEMBER' | translate }} <span class="required">*</span>
           </label>
 
           @if (selectedStaff()) {
@@ -331,7 +339,7 @@
                 id="bulk-staffSearch"
                 class="form-input staff-search-input"
                 type="text"
-                placeholder="Search by name, role or hospital…"
+                [placeholder]="'SCHEDULING.SEARCH_STAFF_PLACEHOLDER' | translate"
                 [value]="staffQuery()"
                 (input)="onStaffQueryChange($any($event.target).value)"
                 (blur)="closeSuggestions()"
@@ -355,7 +363,7 @@
                         </span>
                         <span class="sug-hospital">
                           <span class="material-symbols-outlined">local_hospital</span>
-                          {{ s.hospitalName ?? 'Unknown hospital' }}
+                          {{ s.hospitalName ?? ('SCHEDULING.UNKNOWN_HOSPITAL' | translate) }}
                         </span>
                       </div>
                     </li>
@@ -370,7 +378,7 @@
         <div class="form-group">
           <label class="form-label" for="bulk-hospitalId">
             <span class="material-symbols-outlined">local_hospital</span>
-            Hospital <span class="required">*</span>
+            {{ 'ENCOUNTERS.HOSPITAL' | translate }} <span class="required">*</span>
           </label>
 
           @if (selectedStaff()) {
@@ -378,9 +386,11 @@
             <div class="hospital-locked">
               <span class="material-symbols-outlined lock-icon">lock</span>
               <div class="locked-info">
-                <span class="locked-name">{{ selectedStaff()!.hospitalName ?? 'Hospital' }}</span>
+                <span class="locked-name">{{
+                  selectedStaff()!.hospitalName ?? ('ENCOUNTERS.HOSPITAL' | translate)
+                }}</span>
                 <span class="locked-sub"
-                  >Auto-matched from staff ·
+                  >{{ 'SCHEDULING.AUTO_MATCHED' | translate }} ·
                   <span class="uuid-pill"
                     >{{ selectedStaff()!.hospitalId | slice: 0 : 8 }}…</span
                   ></span
@@ -392,7 +402,7 @@
               id="bulk-hospitalId"
               class="form-input"
               type="text"
-              placeholder="Paste hospital UUID"
+              [placeholder]="'SCHEDULING.PASTE_HOSPITAL_UUID' | translate"
               [(ngModel)]="bulk.hospitalId"
             />
           }
@@ -404,14 +414,14 @@
         <div class="form-group">
           <label class="form-label" for="bulk-startDate">
             <span class="material-symbols-outlined">today</span>
-            Start Date <span class="required">*</span>
+            {{ 'SCHEDULING.START_DATE' | translate }} <span class="required">*</span>
           </label>
           <input id="bulk-startDate" class="form-input" type="date" [(ngModel)]="bulk.startDate" />
         </div>
         <div class="form-group">
           <label class="form-label" for="bulk-endDate">
             <span class="material-symbols-outlined">event</span>
-            End Date <span class="required">*</span>
+            {{ 'SCHEDULING.END_DATE' | translate }} <span class="required">*</span>
           </label>
           <input id="bulk-endDate" class="form-input" type="date" [(ngModel)]="bulk.endDate" />
         </div>
@@ -422,30 +432,30 @@
         <div class="form-group">
           <label class="form-label" for="bulk-startTime">
             <span class="material-symbols-outlined">schedule</span>
-            Start Time <span class="required">*</span>
+            {{ 'SCHEDULING.START_TIME' | translate }} <span class="required">*</span>
           </label>
           <input id="bulk-startTime" class="form-input" type="time" [(ngModel)]="bulk.startTime" />
         </div>
         <div class="form-group">
           <label class="form-label" for="bulk-endTime">
             <span class="material-symbols-outlined">schedule</span>
-            End Time <span class="required">*</span>
-            <span class="form-hint">(can be next day)</span>
+            {{ 'SCHEDULING.END_TIME' | translate }} <span class="required">*</span>
+            <span class="form-hint">({{ 'SCHEDULING.CAN_BE_NEXT_DAY' | translate }})</span>
           </label>
           <input id="bulk-endTime" class="form-input" type="time" [(ngModel)]="bulk.endTime" />
         </div>
         <div class="form-group">
           <label class="form-label" for="bulk-shiftType">
             <span class="material-symbols-outlined">brightness_4</span>
-            Shift Type <span class="required">*</span>
+            {{ 'SCHEDULING.SHIFT_TYPE' | translate }} <span class="required">*</span>
           </label>
           <select id="bulk-shiftType" class="form-input form-select" [(ngModel)]="bulk.shiftType">
-            <option value="MORNING">Morning</option>
-            <option value="AFTERNOON">Afternoon</option>
-            <option value="EVENING">Evening</option>
-            <option value="NIGHT">Night</option>
-            <option value="ON_CALL">On Call</option>
-            <option value="FLEX">Flex</option>
+            <option value="MORNING">{{ 'SCHEDULING.MORNING' | translate }}</option>
+            <option value="AFTERNOON">{{ 'SCHEDULING.AFTERNOON' | translate }}</option>
+            <option value="EVENING">{{ 'SCHEDULING.EVENING' | translate }}</option>
+            <option value="NIGHT">{{ 'SCHEDULING.NIGHT' | translate }}</option>
+            <option value="ON_CALL">{{ 'SCHEDULING.ON_CALL' | translate }}</option>
+            <option value="FLEX">{{ 'SCHEDULING.FLEX' | translate }}</option>
           </select>
         </div>
       </div>
@@ -454,12 +464,18 @@
       <fieldset class="form-group form-group--full dow-fieldset">
         <legend class="form-label">
           <span class="material-symbols-outlined">view_week</span>
-          Days of Week <span class="required">*</span>
+          {{ 'SCHEDULING.DAYS_OF_WEEK' | translate }} <span class="required">*</span>
         </legend>
         <div class="dow-presets">
-          <button type="button" class="dow-preset-btn" (click)="selectWeekdays()">Mon–Fri</button>
-          <button type="button" class="dow-preset-btn" (click)="selectWeekend()">Sat–Sun</button>
-          <button type="button" class="dow-preset-btn" (click)="selectAllDays()">All days</button>
+          <button type="button" class="dow-preset-btn" (click)="selectWeekdays()">
+            {{ 'SCHEDULING.MON_FRI' | translate }}
+          </button>
+          <button type="button" class="dow-preset-btn" (click)="selectWeekend()">
+            {{ 'SCHEDULING.SAT_SUN' | translate }}
+          </button>
+          <button type="button" class="dow-preset-btn" (click)="selectAllDays()">
+            {{ 'SCHEDULING.ALL_DAYS' | translate }}
+          </button>
         </div>
         <div class="dow-grid">
           @for (day of allDays; track day) {
@@ -480,13 +496,13 @@
       <div class="form-group form-group--full">
         <label class="form-label" for="bulk-notes">
           <span class="material-symbols-outlined">notes</span>
-          Notes (optional)
+          {{ 'SCHEDULING.NOTES' | translate }} ({{ 'SCHEDULING.OPTIONAL' | translate }})
         </label>
         <input
           id="bulk-notes"
           class="form-input"
           type="text"
-          placeholder="Applied to every generated shift"
+          [placeholder]="'SCHEDULING.NOTES_PLACEHOLDER' | translate"
           [(ngModel)]="bulk.notes"
         />
       </div>
@@ -496,9 +512,9 @@
         <p class="toggle-description">
           <span class="material-symbols-outlined">skip_next</span>
           <span>
-            Skip conflicting dates
+            {{ 'SCHEDULING.SKIP_CONFLICTING' | translate }}
             <span class="toggle-hint">
-              Dates with overlapping shifts or leave will be silently skipped instead of aborting
+              {{ 'SCHEDULING.SKIP_HINT' | translate }}
             </span>
           </span>
         </p>
@@ -522,17 +538,17 @@
             <div class="bulk-stat scheduled">
               <span class="material-symbols-outlined">check_circle</span>
               <span class="bulk-stat-val">{{ bulkResult()!.totalScheduled }}</span>
-              <span class="bulk-stat-lbl">Scheduled</span>
+              <span class="bulk-stat-lbl">{{ 'SCHEDULING.SCHEDULED' | translate }}</span>
             </div>
             <div class="bulk-stat skipped">
               <span class="material-symbols-outlined">cancel</span>
               <span class="bulk-stat-val">{{ bulkResult()!.totalSkipped }}</span>
-              <span class="bulk-stat-lbl">Skipped</span>
+              <span class="bulk-stat-lbl">{{ 'SCHEDULING.SKIPPED' | translate }}</span>
             </div>
           </div>
           @if (bulkResult()!.skipped.length > 0) {
             <div class="bulk-skipped-list">
-              <h4 class="bulk-skipped-title">Skipped dates</h4>
+              <h4 class="bulk-skipped-title">{{ 'SCHEDULING.SKIPPED_DATES' | translate }}</h4>
               @for (skip of bulkResult()!.skipped; track skip.date) {
                 <div class="bulk-skip-row">
                   <span class="material-symbols-outlined skip-icon">event_busy</span>
@@ -548,14 +564,16 @@
 
     <!-- Footer -->
     <div class="modal-footer">
-      <button class="btn-ghost" (click)="closeBulkModal()">Cancel</button>
+      <button class="btn-ghost" (click)="closeBulkModal()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
       <button class="btn-primary" (click)="submitBulk()" [disabled]="bulkSubmitting()">
         @if (bulkSubmitting()) {
           <span class="spinner-sm"></span>
-          Scheduling…
+          {{ 'SCHEDULING.SCHEDULING' | translate }}
         } @else {
           <span class="material-symbols-outlined">bolt</span>
-          Generate Shifts
+          {{ 'SCHEDULING.GENERATE_SHIFTS' | translate }}
         }
       </button>
     </div>

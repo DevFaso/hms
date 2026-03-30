@@ -1,0 +1,59 @@
+name: Project Quality Gates
+
+on:
+  pull_request:
+    branches: [main, develop, uat]
+  push:
+    branches: [main, develop, uat]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: project-quality-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-tests:
+    name: Backend (JUnit, Jacoco)
+    uses: ./.github/workflows/backend-ci.yml
+    secrets: inherit
+
+  frontend-tests:
+    name: Frontend (Jest, Playwright)
+    uses: ./.github/workflows/frontend-ci.yml
+    secrets: inherit
+
+  agent-lint:
+    name: Agent Lint & Prompt Tests
+    uses: ./.github/workflows/agent-lint.yml
+    secrets: inherit
+
+  lint-docker-yaml:
+    name: Lint Dockerfiles & YAML
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint Dockerfiles
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          recursive: true
+
+      - name: Lint YAML files
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: '.'
+          config_file: '.yamllint.yml'
+
+  require-all-pass:
+    name: Require All Jobs Pass
+    runs-on: ubuntu-latest
+    needs:
+      - backend-tests
+      - frontend-tests
+      - agent-lint
+      - lint-docker-yaml
+    steps:
+      - name: All jobs passed
+        run: echo "All required jobs passed. Ready to merge!"

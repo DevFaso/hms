@@ -16,11 +16,11 @@ struct CareTeamView: View {
 
     private var content: some View {
         Group {
-            if vm.isLoading { ProgressView("Loading care team…") }
+            if vm.isLoading { ProgressView("loading".localized) }
             else if vm.members.isEmpty {
-                ContentUnavailableView("No Care Team",
+                ContentUnavailableView("no_care_team".localized,
                     systemImage: "person.2.fill",
-                    description: Text("No care team members assigned."))
+                    description: Text("no_care_team_desc".localized))
             } else {
                 List(vm.members) { member in
                     CareTeamMemberRow(member: member)
@@ -28,7 +28,7 @@ struct CareTeamView: View {
                 .listStyle(.insetGrouped)
             }
         }
-        .navigationTitle("Care Team")
+        .navigationTitle("care_team_title".localized)
         .refreshable { await vm.load() }
     }
 }

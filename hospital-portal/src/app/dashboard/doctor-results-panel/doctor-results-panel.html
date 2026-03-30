@@ -2,20 +2,20 @@
   <div class="card-head">
     <div class="card-title-group">
       <span class="material-symbols-outlined card-title-icon">science</span>
-      <h2 class="card-title">Results to Review</h2>
+      <h2 class="card-title">{{ 'DASHBOARD.RESULTS_TO_REVIEW' | translate }}</h2>
       @if (results().length > 0) {
         <span class="count-badge" [class.count-badge-red]="criticalResults().length > 0">
           {{ results().length }}
         </span>
       }
     </div>
-    <a routerLink="/lab" class="card-link">View All</a>
+    <a routerLink="/lab" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
   </div>
 
   @if (results().length === 0) {
     <div class="rp-empty">
       <span class="material-symbols-outlined">check_circle</span>
-      <p>All results reviewed</p>
+      <p>{{ 'DASHBOARD.ALL_RESULTS_REVIEWED' | translate }}</p>
     </div>
   } @else {
     <div class="rp-sections">
@@ -24,7 +24,7 @@
         <div class="rp-section rp-critical">
           <div class="rp-section-header">
             <span class="rp-dot rp-dot-critical"></span>
-            <span class="rp-section-label">Critical</span>
+            <span class="rp-section-label">{{ 'DASHBOARD.CRITICAL' | translate }}</span>
             <span class="rp-section-count">{{ criticalResults().length }}</span>
           </div>
           @for (r of criticalResults(); track r.id) {
@@ -44,14 +44,14 @@
               <a
                 [routerLink]="['/patients', r.patientId]"
                 class="rp-action"
-                title="Open Chart"
+                [title]="'DASHBOARD.OPEN_CHART' | translate"
                 (click)="$event.stopPropagation()"
               >
                 <span class="material-symbols-outlined">open_in_new</span>
               </a>
               <button
                 class="rp-ack-btn"
-                title="Acknowledge"
+                [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
                 (click)="acknowledgeResult(r.id); $event.stopPropagation()"
               >
                 <span class="material-symbols-outlined">done</span>
@@ -66,7 +66,7 @@
         <div class="rp-section rp-abnormal">
           <div class="rp-section-header">
             <span class="rp-dot rp-dot-abnormal"></span>
-            <span class="rp-section-label">Abnormal</span>
+            <span class="rp-section-label">{{ 'DASHBOARD.ABNORMAL' | translate }}</span>
             <span class="rp-section-count">{{ abnormalResults().length }}</span>
           </div>
           @for (r of abnormalResults(); track r.id) {
@@ -86,14 +86,14 @@
               <a
                 [routerLink]="['/patients', r.patientId]"
                 class="rp-action"
-                title="Open Chart"
+                [title]="'DASHBOARD.OPEN_CHART' | translate"
                 (click)="$event.stopPropagation()"
               >
                 <span class="material-symbols-outlined">open_in_new</span>
               </a>
               <button
                 class="rp-ack-btn"
-                title="Acknowledge"
+                [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
                 (click)="acknowledgeResult(r.id); $event.stopPropagation()"
               >
                 <span class="material-symbols-outlined">done</span>
@@ -108,7 +108,7 @@
         <div class="rp-section rp-normal">
           <div class="rp-section-header">
             <span class="rp-dot rp-dot-normal"></span>
-            <span class="rp-section-label">Normal</span>
+            <span class="rp-section-label">{{ 'DASHBOARD.NORMAL' | translate }}</span>
             <span class="rp-section-count">{{ normalResults().length }}</span>
           </div>
           @for (r of normalResults(); track r.id) {
@@ -128,14 +128,14 @@
               <a
                 [routerLink]="['/patients', r.patientId]"
                 class="rp-action"
-                title="Open Chart"
+                [title]="'DASHBOARD.OPEN_CHART' | translate"
                 (click)="$event.stopPropagation()"
               >
                 <span class="material-symbols-outlined">open_in_new</span>
               </a>
               <button
                 class="rp-ack-btn"
-                title="Acknowledge"
+                [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
                 (click)="acknowledgeResult(r.id); $event.stopPropagation()"
               >
                 <span class="material-symbols-outlined">done</span>

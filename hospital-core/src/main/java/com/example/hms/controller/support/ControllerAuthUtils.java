@@ -128,9 +128,9 @@ public class ControllerAuthUtils {
         UUID jwtHospitalId = extractHospitalIdFromJwt(auth);
 
         if (hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            return preferHospital(requestedHospitalId, jwtHospitalId)
-                .or(() -> fallbackHospitalFromAssignments(auth))
-                .orElse(null);
+            // SUPER_ADMIN: only scope when explicitly requested.
+            // When no hospitalId is provided, return null = global/all.
+            return requestedHospitalId;
         }
 
         if (hasAuthority(auth, "ROLE_RECEPTIONIST")) {

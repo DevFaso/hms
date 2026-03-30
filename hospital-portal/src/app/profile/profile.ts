@@ -5,6 +5,7 @@ import { Router } from '@angular/router';
 
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
+import { TranslateModule } from '@ngx-translate/core';
 import {
   ProfileService,
   UserProfile,
@@ -19,7 +20,7 @@ type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './profile.html',
   styleUrl: './profile.scss',
 })

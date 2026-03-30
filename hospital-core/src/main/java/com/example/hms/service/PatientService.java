@@ -33,7 +33,7 @@ public interface PatientService {
 
     PatientResponseDTO updatePatient(UUID id, PatientRequestDTO patientRequestDTO, Locale locale);
 
-    PatientResponseDTO patchPatient(UUID id, PatientProfileUpdateRequestDTO request, Locale locale);
+    PatientResponseDTO patchPatient(UUID id, PatientProfileUpdateRequestDTO request, UUID hospitalId, Locale locale);
 
     void deletePatient(UUID id, Locale locale);
 

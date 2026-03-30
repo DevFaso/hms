@@ -1,8 +1,8 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Hospitals</h1>
-      <p class="page-subtitle">Manage hospitals and healthcare facilities</p>
+      <h1 class="page-title">{{ 'HOSPITALS.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'HOSPITALS.SUBTITLE' | translate }}</p>
     </div>
     <button class="btn-primary" (click)="openCreate()">
       <span class="material-symbols-outlined">add</span>
@@ -14,7 +14,7 @@
     <span class="material-symbols-outlined search-icon">search</span>
     <input
       type="text"
-      placeholder="Search hospitals..."
+      [placeholder]="'HOSPITALS.SEARCH_PLACEHOLDER' | translate"
       [(ngModel)]="searchTerm"
       (ngModelChange)="applyFilter()"
     />
@@ -23,7 +23,7 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading hospitals...</p>
+      <p>{{ 'HOSPITALS.LOADING' | translate }}</p>
     </div>
   }
 
@@ -32,13 +32,13 @@
       <table class="data-table">
         <thead>
           <tr>
-            <th>Name</th>
-            <th>Code</th>
-            <th>Location</th>
-            <th>Phone</th>
-            <th>Organization</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th>{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+            <th>{{ 'HOSPITALS.CODE' | translate }}</th>
+            <th>{{ 'HOSPITALS.LOCATION' | translate }}</th>
+            <th>{{ 'PATIENTS.PHONE' | translate }}</th>
+            <th>{{ 'HOSPITALS.ORGANIZATION' | translate }}</th>
+            <th>{{ 'COMMON.STATUS' | translate }}</th>
+            <th>{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -69,20 +69,28 @@
                 @if (h.organizationName) {
                   <span class="org-chip">{{ h.organizationName }}</span>
                 } @else {
-                  <span class="text-muted">Unassigned</span>
+                  <span class="text-muted">{{ 'HOSPITALS.UNASSIGNED' | translate }}</span>
                 }
               </td>
               <td>
                 <span class="status-badge" [class.active]="h.active" [class.inactive]="!h.active">
-                  {{ h.active ? 'Active' : 'Inactive' }}
+                  {{ h.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
                 </span>
               </td>
               <td>
                 <div class="action-group">
-                  <button class="action-link" title="Edit" (click)="openEdit(h)">
+                  <button
+                    class="action-link"
+                    [title]="'COMMON.EDIT' | translate"
+                    (click)="openEdit(h)"
+                  >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="action-link danger" title="Delete" (click)="confirmDelete(h)">
+                  <button
+                    class="action-link danger"
+                    [title]="'COMMON.DELETE' | translate"
+                    (click)="confirmDelete(h)"
+                  >
                     <span class="material-symbols-outlined">delete</span>
                   </button>
                 </div>
@@ -97,8 +105,12 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">local_hospital</span>
-      <h3>No hospitals found</h3>
-      <p>{{ searchTerm ? 'Try adjusting your search.' : 'Create your first hospital.' }}</p>
+      <h3>{{ 'HOSPITALS.NO_HOSPITALS_FOUND' | translate }}</h3>
+      <p>
+        {{
+          searchTerm ? ('COMMON.TRY_ADJUSTING' | translate) : ('HOSPITALS.CREATE_FIRST' | translate)
+        }}
+      </p>
     </div>
   }
 
@@ -118,7 +130,9 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ editing() ? 'Edit Hospital' : 'Create Hospital' }}</h2>
+          <h2>
+            {{ editing() ? ('HOSPITALS.EDIT' | translate) : ('HOSPITALS.CREATE' | translate) }}
+          </h2>
           <button class="modal-close" (click)="closeModal()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -127,18 +141,18 @@
           <div class="modal-body">
             <div class="form-row">
               <div class="field">
-                <label for="hName">Name *</label>
+                <label for="hName">{{ 'DEPARTMENTS.NAME' | translate }} *</label>
                 <input
                   id="hName"
                   type="text"
                   [(ngModel)]="form.name"
                   name="name"
-                  placeholder="Hospital name"
+                  [placeholder]="'HOSPITALS.NAME_PLACEHOLDER' | translate"
                   required
                 />
               </div>
               <div class="field">
-                <label for="hPhone">Phone Number *</label>
+                <label for="hPhone">{{ 'PATIENTS.PHONE' | translate }} *</label>
                 <input
                   id="hPhone"
                   type="tel"
@@ -154,7 +168,7 @@
 
             <div class="form-row">
               <div class="field">
-                <label for="hEmail">Email</label>
+                <label for="hEmail">{{ 'PATIENTS.EMAIL' | translate }}</label>
                 <input
                   id="hEmail"
                   type="email"
@@ -164,7 +178,7 @@
                 />
               </div>
               <div class="field">
-                <label for="hWebsite">Website</label>
+                <label for="hWebsite">{{ 'HOSPITALS.WEBSITE' | translate }}</label>
                 <input
                   id="hWebsite"
                   type="url"
@@ -179,7 +193,7 @@
 
             <div class="form-row">
               <div class="field">
-                <label for="hCountry">Country *</label>
+                <label for="hCountry">{{ 'HOSPITALS.COUNTRY' | translate }} *</label>
                 <input
                   id="hCountry"
                   type="text"
@@ -190,7 +204,7 @@
                 />
               </div>
               <div class="field">
-                <label for="hCity">Ville / City *</label>
+                <label for="hCity">{{ 'HOSPITALS.CITY' | translate }} *</label>
                 <input
                   id="hCity"
                   type="text"
@@ -204,7 +218,7 @@
 
             <div class="form-row">
               <div class="field">
-                <label for="hProvince">Province</label>
+                <label for="hProvince">{{ 'HOSPITALS.PROVINCE' | translate }}</label>
                 <input
                   id="hProvince"
                   type="text"
@@ -214,7 +228,7 @@
                 />
               </div>
               <div class="field">
-                <label for="hRegion">Region</label>
+                <label for="hRegion">{{ 'HOSPITALS.REGION' | translate }}</label>
                 <input
                   id="hRegion"
                   type="text"
@@ -227,7 +241,7 @@
 
             <div class="form-row">
               <div class="field">
-                <label for="hSector">Secteur / Neighborhood</label>
+                <label for="hSector">{{ 'HOSPITALS.SECTOR' | translate }}</label>
                 <input
                   id="hSector"
                   type="text"
@@ -237,7 +251,7 @@
                 />
               </div>
               <div class="field">
-                <label for="hAddress">Address / Street</label>
+                <label for="hAddress">{{ 'HOSPITALS.ADDRESS' | translate }}</label>
                 <input
                   id="hAddress"
                   type="text"
@@ -250,7 +264,7 @@
 
             <div class="form-row">
               <div class="field">
-                <label for="hPoBox">B.P. / P.O. Box</label>
+                <label for="hPoBox">{{ 'HOSPITALS.PO_BOX' | translate }}</label>
                 <input
                   id="hPoBox"
                   type="text"
@@ -260,32 +274,32 @@
                 />
               </div>
               <div class="field">
-                <label for="hState">State</label>
+                <label for="hState">{{ 'HOSPITALS.STATE' | translate }}</label>
                 <input
                   id="hState"
                   type="text"
                   [(ngModel)]="form.state"
                   name="state"
-                  placeholder="US/Canada only"
+                  [placeholder]="'HOSPITALS.US_CANADA_ONLY' | translate"
                 />
               </div>
             </div>
 
             <div class="form-row">
               <div class="field">
-                <label for="hZip">Code Postal / Zip Code</label>
+                <label for="hZip">{{ 'HOSPITALS.ZIP_CODE' | translate }}</label>
                 <input
                   id="hZip"
                   type="text"
                   [(ngModel)]="form.zipCode"
                   name="zipCode"
-                  placeholder="Optional"
+                  [placeholder]="'COMMON.OPTIONAL' | translate"
                 />
               </div>
               <div class="field">
-                <label for="hOrgId">Organization</label>
+                <label for="hOrgId">{{ 'HOSPITALS.ORGANIZATION' | translate }}</label>
                 <select id="hOrgId" [(ngModel)]="form.organizationId" name="organizationId">
-                  <option value="">None (unassigned)</option>
+                  <option value="">{{ 'HOSPITALS.NONE_UNASSIGNED' | translate }}</option>
                   @for (org of organizations(); track org.id) {
                     <option [value]="org.id">{{ org.name }} ({{ org.code }})</option>
                   }
@@ -297,22 +311,24 @@
               <div class="field">
                 <label class="toggle-label">
                   <input type="checkbox" [(ngModel)]="form.active" name="active" />
-                  Active
+                  {{ 'COMMON.ACTIVE' | translate }}
                 </label>
               </div>
             }
           </div>
           <div class="modal-actions">
-            <button type="button" class="btn-secondary" (click)="closeModal()">Cancel</button>
+            <button type="button" class="btn-secondary" (click)="closeModal()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
             <button type="submit" class="btn-primary" [disabled]="saving()">
               {{
                 saving()
                   ? editing()
-                    ? 'Saving...'
-                    : 'Creating...'
+                    ? ('COMMON.SAVING' | translate)
+                    : ('COMMON.CREATING' | translate)
                   : editing()
-                    ? 'Save Changes'
-                    : 'Create'
+                    ? ('COMMON.SAVE_CHANGES' | translate)
+                    : ('COMMON.CREATE' | translate)
               }}
             </button>
           </div>
@@ -337,27 +353,29 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>Delete Hospital</h2>
+          <h2>{{ 'HOSPITALS.DELETE' | translate }}</h2>
           <button class="modal-close" (click)="cancelDelete()">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
         <div class="modal-body">
           <p class="delete-warning">
-            Are you sure you want to delete
+            {{ 'HOSPITALS.DELETE_CONFIRM' | translate }}
             <strong>{{ deletingHospital()?.name }}</strong
-            >? This action cannot be undone.
+            >? {{ 'COMMON.CANNOT_UNDO' | translate }}
           </p>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
           <button
             type="button"
             class="btn-danger"
             [disabled]="deleting()"
             (click)="executeDelete()"
           >
-            {{ deleting() ? 'Deleting...' : 'Delete' }}
+            {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
           </button>
         </div>
       </dialog>

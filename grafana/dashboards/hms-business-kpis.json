@@ -1,0 +1,130 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Hospital Management System – Business & Clinical KPIs",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "title": "API Requests by Endpoint (Top 10)",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "topk(10, sum(increase(http_server_requests_seconds_count{application=\"hms\"}[24h])) by (uri))",
+          "legendFormat": "{{uri}}",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    },
+    {
+      "title": "Authentication Events (rate/min)",
+      "type": "timeseries",
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\", uri=~\"/auth/login|/auth/logout\"}[5m])) by (uri) * 60",
+          "legendFormat": "{{uri}}"
+        }
+      ]
+    },
+    {
+      "title": "Patient Operations (rate/min)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\", uri=~\"/patients.*\"}[5m])) by (method) * 60",
+          "legendFormat": "{{method}}"
+        }
+      ]
+    },
+    {
+      "title": "Appointment Operations (rate/min)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\", uri=~\"/appointments.*\"}[5m])) by (method) * 60",
+          "legendFormat": "{{method}}"
+        }
+      ]
+    },
+    {
+      "title": "Encounter & Billing (rate/min)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\", uri=~\"/encounters.*\"}[5m])) * 60",
+          "legendFormat": "Encounters"
+        },
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\", uri=~\"/billing.*|/invoices.*\"}[5m])) * 60",
+          "legendFormat": "Billing"
+        }
+      ]
+    },
+    {
+      "title": "Lab & Imaging Orders (rate/min)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "targets": [
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\", uri=~\"/lab-orders.*\"}[5m])) * 60",
+          "legendFormat": "Lab Orders"
+        },
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{application=\"hms\", uri=~\"/imaging-orders.*\"}[5m])) * 60",
+          "legendFormat": "Imaging Orders"
+        }
+      ]
+    },
+    {
+      "title": "Slowest Endpoints (p99 latency)",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 26 },
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "fieldConfig": {
+        "defaults": { "unit": "s" },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "topk(15, histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"hms\"}[15m])) by (le, uri, method)))",
+          "legendFormat": "{{method}} {{uri}}",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["hms", "business-kpi"],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" }
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "HMS – Business KPIs",
+  "uid": "hms-business-kpi",
+  "version": 1
+}

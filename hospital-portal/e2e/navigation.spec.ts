@@ -22,7 +22,7 @@ test.describe('Shell & Navigation', () => {
 
     test('topbar displays page title', async ({ shellPage }) => {
       await expect(shellPage.pageTitle).toBeVisible();
-      await expect(shellPage.pageTitle).toContainText('Hospital Management System');
+      await expect(shellPage.pageTitle).toContainText(/Hospital Management System|Système de Gestion Hospitalière/);
     });
 
     test('profile button shows user name', async ({ shellPage }) => {
@@ -35,56 +35,57 @@ test.describe('Shell & Navigation', () => {
   });
 
   test.describe('Sidebar Navigation', () => {
-    test('SuperAdmin sees all navigation items', async ({ shellPage }) => {
+    test('SuperAdmin sees all navigation items', async ({ page, shellPage }) => {
+      await page.locator('.nav-label').first().waitFor({ state: 'visible', timeout: 10_000 });
       const labels = await shellPage.getNavLabels();
-      expect(labels).toContain('Dashboard');
+      expect(labels).toContain('Tableau de bord');
       expect(labels).toContain('Patients');
-      expect(labels).toContain('Appointments');
-      expect(labels).toContain('Staff');
-      expect(labels).toContain('Departments');
-      expect(labels).toContain('Billing');
-      expect(labels).toContain('Laboratory');
+      expect(labels).toContain('Rendez-vous');
+      expect(labels).toContain('Personnel');
+      expect(labels).toContain('Départements');
+      expect(labels).toContain('Facturation');
+      expect(labels).toContain('Laboratoire');
       expect(labels).toContain('Notifications');
       expect(labels).toContain('Messages');
-      expect(labels).toContain('Organizations');
-      expect(labels).toContain('Users');
-      expect(labels).toContain('Roles');
-      expect(labels).toContain('Platform');
+      expect(labels).toContain('Organisations');
+      expect(labels).toContain('Utilisateurs');
+      expect(labels).toContain('Rôles');
+      expect(labels).toContain('Plateforme');
     });
 
     test('clicking Dashboard navigates to /dashboard', async ({ page, shellPage }) => {
-      await shellPage.navigateTo('Dashboard');
+      await shellPage.navigateTo('Tableau de bord');
       await expect(page).toHaveURL(/\/dashboard/);
     });
 
     test('clicking Patients navigates to /patients', async ({ page, shellPage }) => {
       await shellPage.navigateTo('Patients');
       await expect(page).toHaveURL(/\/patients/);
-      await expect(page.locator('main .page-title')).toContainText('Patients');
+      await expect(page.locator('main .page-title')).toContainText(/Patients/);
     });
 
     test('clicking Staff navigates to /staff', async ({ page, shellPage }) => {
-      await shellPage.navigateTo('Staff');
+      await shellPage.navigateTo('Personnel');
       await expect(page).toHaveURL(/\/staff/);
     });
 
     test('clicking Departments navigates to /departments', async ({ page, shellPage }) => {
-      await shellPage.navigateTo('Departments');
+      await shellPage.navigateTo('Départements');
       await expect(page).toHaveURL(/\/departments/);
     });
 
     test('clicking Appointments navigates to /appointments', async ({ page, shellPage }) => {
-      await shellPage.navigateTo('Appointments');
+      await shellPage.navigateTo('Rendez-vous');
       await expect(page).toHaveURL(/\/appointments/);
     });
 
     test('clicking Billing navigates to /billing', async ({ page, shellPage }) => {
-      await shellPage.navigateTo('Billing');
+      await shellPage.navigateTo('Facturation');
       await expect(page).toHaveURL(/\/billing/);
     });
 
     test('clicking Laboratory navigates to /lab', async ({ page, shellPage }) => {
-      await shellPage.navigateTo('Laboratory');
+      await shellPage.navigateTo('Laboratoire');
       await expect(page).toHaveURL(/\/lab/);
     });
 
@@ -99,27 +100,27 @@ test.describe('Shell & Navigation', () => {
     });
 
     test('clicking Organizations navigates to /organizations', async ({ page, shellPage }) => {
-      await shellPage.navigateTo('Organizations');
+      await shellPage.navigateTo('Organisations');
       await expect(page).toHaveURL(/\/organizations/);
     });
 
     test('clicking Users navigates to /users', async ({ page, shellPage }) => {
-      await shellPage.navigateTo('Users');
+      await shellPage.navigateTo('Utilisateurs');
       await expect(page).toHaveURL(/\/users/);
     });
 
     test('clicking Roles navigates to /roles', async ({ page, shellPage }) => {
-      await shellPage.navigateTo('Roles');
+      await shellPage.navigateTo('Rôles');
       await expect(page).toHaveURL(/\/roles/);
     });
 
     test('clicking Platform navigates to /platform', async ({ page, shellPage }) => {
-      await shellPage.navigateTo('Platform');
+      await shellPage.navigateTo('Plateforme');
       await expect(page).toHaveURL(/\/platform/);
     });
 
-    test('clicking Encounters navigates to /encounters', async ({ page, shellPage }) => {
-      await shellPage.navigateTo('Encounters');
+    test('clicking Encounters navigates to /encounters', async ({ page }) => {
+      await page.locator('.nav-item[href="/encounters"]').click();
       await expect(page).toHaveURL(/\/encounters/);
     });
 

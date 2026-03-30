@@ -57,7 +57,8 @@
               },
               "allowedCommonJsDependencies": [
                 "jspdf",
-                "sockjs-client"
+                "sockjs-client",
+                "ua-parser-js"
               ],
               "fileReplacements": [
                 {

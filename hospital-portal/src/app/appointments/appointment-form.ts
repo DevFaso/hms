@@ -10,6 +10,7 @@ import { StaffService, StaffResponse } from '../services/staff.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 interface DeptOption {
   id: string;
@@ -19,7 +20,7 @@ interface DeptOption {
 @Component({
   selector: 'app-appointment-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
   templateUrl: './appointment-form.html',
   styleUrl: './appointment-form.scss',
 })

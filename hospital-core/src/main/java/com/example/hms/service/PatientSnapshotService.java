@@ -16,5 +16,5 @@ public interface PatientSnapshotService {
      * @param patientId the patient UUID
      * @return compact snapshot DTO
      */
-    PatientSnapshotDTO getSnapshot(UUID patientId);
+    PatientSnapshotDTO getSnapshot(UUID patientId, UUID hospitalId);
 }

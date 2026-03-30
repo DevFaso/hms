@@ -1,12 +1,12 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Roles & Permissions</h1>
-      <p class="page-subtitle">Manage user roles and permission assignments</p>
+      <h1 class="page-title">{{ 'ROLES.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'ROLES.SUBTITLE' | translate }}</p>
     </div>
     <button class="btn-primary" (click)="openCreate()">
       <span class="material-symbols-outlined">add</span>
-      New Role
+      {{ 'ROLES.NEW' | translate }}
     </button>
   </div>
 
@@ -14,7 +14,7 @@
     <span class="material-symbols-outlined search-icon">search</span>
     <input
       type="text"
-      placeholder="Search roles..."
+      [placeholder]="'ROLES.SEARCH_PLACEHOLDER' | translate"
       [(ngModel)]="searchTerm"
       (ngModelChange)="applyFilter()"
     />
@@ -23,7 +23,7 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading roles...</p>
+      <p>{{ 'ROLES.LOADING' | translate }}</p>
     </div>
   }
 
@@ -46,16 +46,28 @@
           <div class="role-footer">
             <span class="perm-count">
               <span class="material-symbols-outlined">lock</span>
-              {{ role.permissions.length }} permissions
+              {{ role.permissions.length }} {{ 'ROLES.PERMISSIONS' | translate }}
             </span>
             <div class="role-actions">
-              <button class="btn-sm" (click)="openPermissions(role)" title="Manage Permissions">
+              <button
+                class="btn-sm"
+                (click)="openPermissions(role)"
+                [title]="'ROLES.MANAGE_PERMISSIONS' | translate"
+              >
                 <span class="material-symbols-outlined">settings</span>
               </button>
-              <button class="btn-sm edit" (click)="openEdit(role)" title="Edit Role">
+              <button
+                class="btn-sm edit"
+                (click)="openEdit(role)"
+                [title]="'ROLES.EDIT_ROLE' | translate"
+              >
                 <span class="material-symbols-outlined">edit</span>
               </button>
-              <button class="btn-sm delete" (click)="confirmDelete(role)" title="Delete Role">
+              <button
+                class="btn-sm delete"
+                (click)="confirmDelete(role)"
+                [title]="'ROLES.DELETE_ROLE' | translate"
+              >
                 <span class="material-symbols-outlined">delete</span>
               </button>
             </div>
@@ -68,8 +80,10 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">shield</span>
-      <h3>No roles found</h3>
-      <p>{{ searchTerm ? 'Try adjusting your search.' : 'Create your first role.' }}</p>
+      <h3>{{ 'ROLES.NO_ROLES_FOUND' | translate }}</h3>
+      <p>
+        {{ searchTerm ? ('COMMON.TRY_ADJUSTING' | translate) : ('ROLES.CREATE_FIRST' | translate) }}
+      </p>
     </div>
   }
 
@@ -89,7 +103,9 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ editing() ? 'Edit Role' : 'Create Role' }}</h2>
+          <h2>
+            {{ editing() ? ('ROLES.EDIT_ROLE' | translate) : ('ROLES.CREATE_ROLE' | translate) }}
+          </h2>
           <button class="modal-close" (click)="closeCreate()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -97,7 +113,7 @@
         <form (ngSubmit)="submitCreate()">
           <div class="modal-body">
             <div class="field">
-              <label for="roleName">Role Name *</label>
+              <label for="roleName">{{ 'ROLES.ROLE_NAME' | translate }} *</label>
               <input
                 id="roleName"
                 type="text"
@@ -108,30 +124,38 @@
               />
             </div>
             <div class="field">
-              <label for="roleDesc">Description</label>
+              <label for="roleDesc">{{ 'ROLES.DESCRIPTION' | translate }}</label>
               <textarea
                 id="roleDesc"
                 rows="3"
                 [(ngModel)]="createForm.description"
                 name="description"
-                placeholder="Role description..."
+                [placeholder]="'ROLES.DESCRIPTION_PLACEHOLDER' | translate"
               ></textarea>
             </div>
             <div class="field">
-              <label for="roleCode">Code</label>
+              <label for="roleCode">{{ 'ROLES.CODE' | translate }}</label>
               <input
                 id="roleCode"
                 type="text"
                 [(ngModel)]="createForm.code"
                 name="code"
-                placeholder="Optional code"
+                [placeholder]="'ROLES.CODE_PLACEHOLDER' | translate"
               />
             </div>
           </div>
           <div class="modal-actions">
-            <button type="button" class="btn-secondary" (click)="closeCreate()">Cancel</button>
+            <button type="button" class="btn-secondary" (click)="closeCreate()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
             <button type="submit" class="btn-primary" [disabled]="saving()">
-              {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Create' }}
+              {{
+                saving()
+                  ? ('COMMON.SAVING' | translate)
+                  : editing()
+                    ? ('COMMON.UPDATE' | translate)
+                    : ('COMMON.CREATE' | translate)
+              }}
             </button>
           </div>
         </form>
@@ -155,7 +179,7 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>Manage Permissions — {{ selectedRole()?.name }}</h2>
+          <h2>{{ 'ROLES.MANAGE_PERMISSIONS' | translate }} — {{ selectedRole()?.name }}</h2>
           <button class="modal-close" (click)="closePermissions()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -164,7 +188,7 @@
           @if (permissionsLoading()) {
             <div class="loading-state compact">
               <div class="spinner"></div>
-              <p>Loading permissions...</p>
+              <p>{{ 'ROLES.LOADING_PERMISSIONS' | translate }}</p>
             </div>
           } @else {
             <div class="perm-list">
@@ -187,14 +211,16 @@
           }
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="closePermissions()">Cancel</button>
+          <button type="button" class="btn-secondary" (click)="closePermissions()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
           <button
             type="button"
             class="btn-primary"
             [disabled]="saving()"
             (click)="savePermissions()"
           >
-            {{ saving() ? 'Saving...' : 'Save Permissions' }}
+            {{ saving() ? ('COMMON.SAVING' | translate) : ('ROLES.SAVE_PERMISSIONS' | translate) }}
           </button>
         </div>
       </dialog>
@@ -217,7 +243,7 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>Delete Role</h2>
+          <h2>{{ 'ROLES.DELETE_ROLE' | translate }}</h2>
           <button class="modal-close" (click)="cancelDelete()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -226,23 +252,25 @@
           <div class="delete-warning">
             <span class="material-symbols-outlined warning-icon">warning</span>
             <p>
-              Are you sure you want to delete the role <strong>{{ deletingRole()?.name }}</strong
+              {{ 'ROLES.CONFIRM_DELETE' | translate }} <strong>{{ deletingRole()?.name }}</strong
               >?
             </p>
             <p class="delete-detail">
-              Users currently assigned this role will lose associated permissions.
+              {{ 'ROLES.DELETE_WARNING' | translate }}
             </p>
           </div>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
           <button
             type="button"
             class="btn-danger"
             [disabled]="deleting()"
             (click)="executeDelete()"
           >
-            {{ deleting() ? 'Deleting...' : 'Delete' }}
+            {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
           </button>
         </div>
       </dialog>

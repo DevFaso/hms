@@ -8,11 +8,12 @@ import {
   PermissionResponse,
 } from '../services/role.service';
 import { ToastService } from '../core/toast.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-role-list',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './role-list.html',
   styleUrl: './role-list.scss',
 })

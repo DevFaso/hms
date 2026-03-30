@@ -8,13 +8,14 @@ import {
   StaffLeaveResponse,
 } from '../services/staff-scheduling.service';
 import { ToastService } from '../core/toast.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 type TabType = 'overview' | 'employment' | 'department' | 'schedule';
 
 @Component({
   selector: 'app-staff-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, TranslateModule],
   templateUrl: './staff-detail.html',
   styleUrl: './staff-detail.scss',
 })

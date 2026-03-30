@@ -1,6 +1,7 @@
 name: "Backend Quality Gates & Comprehensive Test Suite"
 
 on:
+  workflow_call:
   push:
     branches: [main, develop, uat]
     paths:
@@ -63,6 +64,9 @@ jobs:
       - name: Generate Jacoco Report
         if: always()
         run: ./gradlew :hospital-core:jacocoTestReport
+
+      - name: Verify Test Coverage
+        run: ./gradlew :hospital-core:jacocoTestCoverageVerification
 
       - name: Upload Test Results
         if: always()

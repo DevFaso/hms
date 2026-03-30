@@ -71,7 +71,9 @@ test.describe('Authentication', () => {
     });
 
     test('displays HMS subtitle', async () => {
-      await expect(loginPage.subtitle).toContainText('Hospital Management System');
+      await expect(loginPage.subtitle).toContainText(
+        /Hospital Management System|Système de Gestion Hospitalière/,
+      );
     });
   });
 

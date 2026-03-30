@@ -7,6 +7,7 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ProfileService } from '../services/profile.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 interface Department {
   id: string;
@@ -37,7 +38,7 @@ interface DepartmentRequest {
 @Component({
   selector: 'app-department-list',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './department-list.html',
   styleUrl: './department-list.scss',
 })

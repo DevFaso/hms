@@ -28,7 +28,9 @@
         @if (onCallStatus(); as oc) {
           <div class="oncall-pill" [class.oncall-active]="oc.isOnCall">
             <span class="oncall-dot"></span>
-            {{ oc.isOnCall ? 'On Call' : 'Off Duty' }}
+            {{
+              oc.isOnCall ? ('DASHBOARD.ON_CALL' | translate) : ('DASHBOARD.OFF_DUTY' | translate)
+            }}
             @if (oc.isOnCall && oc.shiftEnd) {
               <span class="oncall-until">until {{ oc.shiftEnd | date: 'shortTime' }}</span>
             }
@@ -53,10 +55,10 @@
             <span class="material-symbols-outlined">search</span>
             <input
               type="text"
-              placeholder="Search patients…"
+              [placeholder]="'DASHBOARD.SEARCH_PATIENTS' | translate"
               class="header-search-input"
               (keydown.enter)="searchPatients($event)"
-              aria-label="Search patients"
+              [attr.aria-label]="'DASHBOARD.SEARCH_PATIENTS' | translate"
             />
           </div>
         </div>
@@ -80,10 +82,12 @@
           </svg>
           <div class="ring-label">
             <span class="ring-pct">{{ scheduleProgress() }}<small>%</small></span>
-            <span class="ring-sub">Done</span>
+            <span class="ring-sub">{{ 'DASHBOARD.DONE' | translate }}</span>
           </div>
         </div>
-        <div class="ring-caption">Schedule<br />Progress</div>
+        <div class="ring-caption">
+          {{ 'DASHBOARD.SCHEDULE' | translate }}<br />{{ 'DASHBOARD.PROGRESS' | translate }}
+        </div>
       </div>
     }
 
@@ -92,22 +96,22 @@
       <div class="hero-admin-strip">
         <div class="hero-admin-stat">
           <span class="has-val">{{ s.activeUsers }}</span>
-          <span class="has-label">Active Users</span>
+          <span class="has-label">{{ 'DASHBOARD.ACTIVE_USERS' | translate }}</span>
         </div>
         <div class="has-divider"></div>
         <div class="hero-admin-stat">
           <span class="has-val">{{ s.activeHospitals }}</span>
-          <span class="has-label">Hospitals</span>
+          <span class="has-label">{{ 'DASHBOARD.HOSPITALS' | translate }}</span>
         </div>
         <div class="has-divider"></div>
         <div class="hero-admin-stat">
           <span class="has-val">{{ s.totalPatients }}</span>
-          <span class="has-label">Patients</span>
+          <span class="has-label">{{ 'PATIENTS.TITLE' | translate }}</span>
         </div>
         <div class="has-divider"></div>
         <div class="hero-admin-stat">
           <span class="has-val">{{ s.todayAppointmentsCount }}</span>
-          <span class="has-label">Today's Appts</span>
+          <span class="has-label">{{ 'DASHBOARD.TODAYS_APPTS' | translate }}</span>
         </div>
       </div>
     }
@@ -116,13 +120,13 @@
       @if (permissions.hasPermission('Create Appointments')) {
         <a class="hero-btn hero-btn-primary" routerLink="/appointments/new">
           <span class="material-symbols-outlined">calendar_add_on</span>
-          New Appointment
+          {{ 'DASHBOARD.NEW_APPOINTMENT' | translate }}
         </a>
       }
       @if (permissions.hasPermission('Create Encounters')) {
         <a class="hero-btn hero-btn-secondary" routerLink="/encounters/new">
           <span class="material-symbols-outlined">stethoscope</span>
-          Start Encounter
+          {{ 'DASHBOARD.START_ENCOUNTER' | translate }}
         </a>
       }
       @if (
@@ -131,10 +135,14 @@
       ) {
         <a class="hero-btn hero-btn-secondary" routerLink="/patients/new">
           <span class="material-symbols-outlined">person_add</span>
-          Register Patient
+          {{ 'DASHBOARD.REGISTER_PATIENT' | translate }}
         </a>
       }
-      <button class="hero-btn hero-btn-ghost" (click)="refreshDashboard()" title="Refresh">
+      <button
+        class="hero-btn hero-btn-ghost"
+        (click)="refreshDashboard()"
+        [title]="'DASHBOARD.REFRESH' | translate"
+      >
         <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
       </button>
     </div>
@@ -145,15 +153,16 @@
     <div class="critical-banner">
       <span class="material-symbols-outlined critical-pulse">emergency</span>
       <strong>
-        {{ criticalAlerts().length }} Critical Alert{{ criticalAlerts().length > 1 ? 's' : '' }}
-        Require Immediate Attention
+        {{ criticalAlerts().length }} {{ 'DASHBOARD.CRITICAL_ALERT' | translate
+        }}{{ criticalAlerts().length > 1 ? 's' : '' }}
+        {{ 'DASHBOARD.REQUIRE_IMMEDIATE_ATTENTION' | translate }}
       </strong>
       <div class="critical-names">
         @for (a of criticalAlerts(); track a.id) {
           <span class="critical-chip">{{ a.patientName }}</span>
         }
       </div>
-      <a class="critical-link" href="#alerts-section">Review Now</a>
+      <a class="critical-link" href="#alerts-section">{{ 'DASHBOARD.REVIEW_NOW' | translate }}</a>
     </div>
   }
 
@@ -198,7 +207,7 @@
           </div>
           <div class="stat-body">
             <span class="stat-value">{{ s.totalPatients }}</span>
-            <span class="stat-label">Total Patients</span>
+            <span class="stat-label">{{ 'DASHBOARD.TOTAL_PATIENTS' | translate }}</span>
           </div>
         </a>
         <a class="stat-card" routerLink="/users">
@@ -207,8 +216,10 @@
           </div>
           <div class="stat-body">
             <span class="stat-value">{{ s.activeUsers }}</span>
-            <span class="stat-label">Active Users</span>
-            <span class="stat-sub-note">of {{ s.totalUsers }} total</span>
+            <span class="stat-label">{{ 'DASHBOARD.ACTIVE_USERS' | translate }}</span>
+            <span class="stat-sub-note">{{
+              'DASHBOARD.OF_TOTAL' | translate: { count: s.totalUsers }
+            }}</span>
           </div>
         </a>
         <a class="stat-card" routerLink="/hospitals">
@@ -217,8 +228,10 @@
           </div>
           <div class="stat-body">
             <span class="stat-value">{{ s.activeHospitals }}</span>
-            <span class="stat-label">Active Hospitals</span>
-            <span class="stat-sub-note">of {{ s.totalHospitals }} total</span>
+            <span class="stat-label">{{ 'DASHBOARD.ACTIVE_HOSPITALS' | translate }}</span>
+            <span class="stat-sub-note">{{
+              'DASHBOARD.OF_TOTAL' | translate: { count: s.totalHospitals }
+            }}</span>
           </div>
         </a>
         <a class="stat-card" routerLink="/organizations">
@@ -227,8 +240,10 @@
           </div>
           <div class="stat-body">
             <span class="stat-value">{{ s.activeOrganizations }}</span>
-            <span class="stat-label">Organizations</span>
-            <span class="stat-sub-note">of {{ s.totalOrganizations }} total</span>
+            <span class="stat-label">{{ 'DASHBOARD.ORGANIZATIONS' | translate }}</span>
+            <span class="stat-sub-note">{{
+              'DASHBOARD.OF_TOTAL' | translate: { count: s.totalOrganizations }
+            }}</span>
           </div>
         </a>
         <a class="stat-card" routerLink="/departments">
@@ -237,7 +252,7 @@
           </div>
           <div class="stat-body">
             <span class="stat-value">{{ s.totalDepartments }}</span>
-            <span class="stat-label">Departments</span>
+            <span class="stat-label">{{ 'DASHBOARD.DEPARTMENTS' | translate }}</span>
           </div>
         </a>
         <a class="stat-card" routerLink="/appointments">
@@ -246,7 +261,7 @@
           </div>
           <div class="stat-body">
             <span class="stat-value">{{ s.todayAppointmentsCount }}</span>
-            <span class="stat-label">Today's Appointments</span>
+            <span class="stat-label">{{ 'DASHBOARD.TODAYS_APPOINTMENTS' | translate }}</span>
           </div>
         </a>
         <a class="stat-card" routerLink="/roles">
@@ -255,7 +270,7 @@
           </div>
           <div class="stat-body">
             <span class="stat-value">{{ s.totalRoles }}</span>
-            <span class="stat-label">Roles</span>
+            <span class="stat-label">{{ 'DASHBOARD.ROLES' | translate }}</span>
           </div>
         </a>
         <a class="stat-card" routerLink="/audit-logs">
@@ -264,7 +279,7 @@
           </div>
           <div class="stat-body">
             <span class="stat-value">{{ recentAuditEvents().length }}</span>
-            <span class="stat-label">Audit Events</span>
+            <span class="stat-label">{{ 'DASHBOARD.AUDIT_EVENTS' | translate }}</span>
           </div>
         </a>
       </section>
@@ -275,7 +290,7 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">grid_view</span>
-                <h2 class="card-title">Quick Navigation</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.QUICK_NAV' | translate }}</h2>
               </div>
             </div>
             <div class="nav-tile-grid">
@@ -301,20 +316,20 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">history</span>
-                <h2 class="card-title">Recent Audit Events</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.RECENT_AUDIT_EVENTS' | translate }}</h2>
               </div>
-              <a routerLink="/audit-logs" class="card-link">View All</a>
+              <a routerLink="/audit-logs" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
             </div>
             @if (recentAuditEvents().length > 0) {
               <div class="table-wrap">
                 <table class="data-table">
                   <thead>
                     <tr>
-                      <th>Event</th>
-                      <th>User</th>
-                      <th>Resource</th>
-                      <th>Time</th>
-                      <th>Status</th>
+                      <th>{{ 'DASHBOARD.EVENT' | translate }}</th>
+                      <th>{{ 'DASHBOARD.USER' | translate }}</th>
+                      <th>{{ 'DASHBOARD.RESOURCE' | translate }}</th>
+                      <th>{{ 'DASHBOARD.TIME' | translate }}</th>
+                      <th>{{ 'COMMON.STATUS' | translate }}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -348,7 +363,7 @@
             } @else {
               <div class="empty-state">
                 <span class="material-symbols-outlined empty-icon-lg">history</span>
-                <p>No recent audit events found.</p>
+                <p>{{ 'DASHBOARD.NO_RECENT_AUDIT_EVENTS' | translate }}</p>
               </div>
             }
           </div>
@@ -382,7 +397,7 @@
           </div>
           <div class="stat-body">
             <span class="stat-value">{{ todayAppointments().length }}</span
-            ><span class="stat-label">Today's Appointments</span>
+            ><span class="stat-label">{{ 'DASHBOARD.TODAYS_APPOINTMENTS' | translate }}</span>
           </div>
         </a>
         <a class="stat-card" routerLink="/appointments">
@@ -391,7 +406,7 @@
           </div>
           <div class="stat-body">
             <span class="stat-value">{{ completedToday() }}</span
-            ><span class="stat-label">Completed Today</span>
+            ><span class="stat-label">{{ 'DASHBOARD.COMPLETED_TODAY' | translate }}</span>
           </div>
         </a>
         <a class="stat-card" routerLink="/patients">
@@ -400,7 +415,7 @@
           </div>
           <div class="stat-body">
             <span class="stat-value">{{ recentPatients().length }}</span
-            ><span class="stat-label">Recent Patients</span>
+            ><span class="stat-label">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</span>
           </div>
         </a>
         <a class="stat-card" routerLink="/appointments">
@@ -409,7 +424,7 @@
           </div>
           <div class="stat-body">
             <span class="stat-value">{{ pendingToday() }}</span
-            ><span class="stat-label">Pending</span>
+            ><span class="stat-label">{{ 'DASHBOARD.PENDING' | translate }}</span>
           </div>
         </a>
         <a class="stat-card" routerLink="/appointments">
@@ -418,7 +433,7 @@
           </div>
           <div class="stat-body">
             <span class="stat-value">{{ inProgressNow() }}</span
-            ><span class="stat-label">In Progress</span>
+            ><span class="stat-label">{{ 'DASHBOARD.IN_PROGRESS' | translate }}</span>
           </div>
         </a>
       }
@@ -433,12 +448,12 @@
               <h2 class="card-title">Today's Schedule</h2>
               <span class="count-badge">{{ todayAppointments().length }}</span>
             </div>
-            <a routerLink="/appointments" class="card-link">View All</a>
+            <a routerLink="/appointments" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
           </div>
           @if (scheduleSlots().length === 0) {
             <div class="empty-schedule">
               <span class="material-symbols-outlined empty-icon">event_available</span>
-              <p>No appointments scheduled for today.</p>
+              <p>{{ 'DASHBOARD.NO_APPOINTMENTS_TODAY' | translate }}</p>
             </div>
           } @else {
             <div class="schedule-list">
@@ -459,7 +474,9 @@
                   </div>
                   <div class="sched-info">
                     <span class="sched-name">{{ slot.patientName }}</span>
-                    <span class="sched-reason">{{ slot.reason || 'General visit' }}</span>
+                    <span class="sched-reason">{{
+                      slot.reason || ('DASHBOARD.GENERAL_VISIT' | translate)
+                    }}</span>
                   </div>
                   <span [class]="getApptStatusClass(slot.status)">{{
                     getApptStatusLabel(slot.status)
@@ -469,18 +486,18 @@
             </div>
             <div class="schedule-summary">
               <span class="sum-item sum-done"
-                ><span class="material-symbols-outlined">task_alt</span
-                >{{ completedToday() }} Done</span
+                ><span class="material-symbols-outlined">task_alt</span>{{ completedToday() }}
+                {{ 'DASHBOARD.DONE' | translate }}</span
               >
               <span class="sum-divider"></span>
               <span class="sum-item sum-active"
-                ><span class="material-symbols-outlined">person_play</span
-                >{{ inProgressNow() }} Active</span
+                ><span class="material-symbols-outlined">person_play</span>{{ inProgressNow() }}
+                {{ 'COMMON.ACTIVE' | translate }}</span
               >
               <span class="sum-divider"></span>
               <span class="sum-item sum-pending"
-                ><span class="material-symbols-outlined">pending</span
-                >{{ pendingToday() }} Pending</span
+                ><span class="material-symbols-outlined">pending</span>{{ pendingToday() }}
+                {{ 'DASHBOARD.PENDING' | translate }}</span
               >
             </div>
           }
@@ -490,7 +507,7 @@
           <div class="card-head">
             <div class="card-title-group">
               <span class="material-symbols-outlined card-title-icon">grid_view</span>
-              <h2 class="card-title">Quick Navigation</h2>
+              <h2 class="card-title">{{ 'DASHBOARD.QUICK_NAV' | translate }}</h2>
             </div>
           </div>
           <div class="nav-tile-grid nav-tile-grid-sm">
@@ -516,25 +533,19 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">groups</span>
-                <h2 class="card-title">Staffing by Department</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.STAFFING_BY_DEPARTMENT' | translate }}</h2>
                 <span class="count-badge">{{ staffingByDepartment().length }}</span>
               </div>
-              <a routerLink="/staff" class="card-link">Manage Staff</a>
+              <a routerLink="/staff" class="card-link">{{
+                'DASHBOARD.MANAGE_STAFF' | translate
+              }}</a>
             </div>
             <div style="overflow-x: auto; padding: 0 16px 16px">
               <table style="width: 100%; border-collapse: collapse; font-size: 13px">
                 <thead>
                   <tr style="border-bottom: 2px solid #e2e8f0; text-align: left">
-                    <th style="padding: 8px 12px; font-weight: 600; color: #475569">Department</th>
-                    <th
-                      style="
-                        padding: 8px 12px;
-                        font-weight: 600;
-                        color: #475569;
-                        text-align: center;
-                      "
-                    >
-                      Scheduled
+                    <th style="padding: 8px 12px; font-weight: 600; color: #475569">
+                      {{ 'STAFF.DEPARTMENT' | translate }}
                     </th>
                     <th
                       style="
@@ -544,7 +555,7 @@
                         text-align: center;
                       "
                     >
-                      Cancelled
+                      {{ 'APPOINTMENTS.SCHEDULED' | translate }}
                     </th>
                     <th
                       style="
@@ -554,7 +565,17 @@
                         text-align: center;
                       "
                     >
-                      Active
+                      {{ 'APPOINTMENTS.CANCELLED' | translate }}
+                    </th>
+                    <th
+                      style="
+                        padding: 8px 12px;
+                        font-weight: 600;
+                        color: #475569;
+                        text-align: center;
+                      "
+                    >
+                      {{ 'COMMON.ACTIVE' | translate }}
                     </th>
                   </tr>
                 </thead>
@@ -592,17 +613,19 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">forum</span>
-                <h2 class="card-title">Consultation Backlog</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.CONSULTATION_BACKLOG' | translate }}</h2>
                 <span class="count-badge">{{ consultBacklog().length }}</span>
                 @if (overdueConsults() > 0) {
                   <span
                     class="count-badge"
                     style="background: #fee2e2; color: #dc2626; margin-left: 4px"
-                    >{{ overdueConsults() }} overdue</span
+                    >{{ overdueConsults() }} {{ 'DASHBOARD.OVERDUE' | translate }}</span
                   >
                 }
               </div>
-              <a routerLink="/consultations" class="card-link">View All</a>
+              <a routerLink="/consultations" class="card-link">{{
+                'COMMON.VIEW_ALL' | translate
+              }}</a>
             </div>
             <div class="schedule-list">
               @for (c of consultBacklog(); track c.consultationId) {
@@ -623,9 +646,9 @@
                       c.status | titlecase
                     }}</span>
                     @if (c.overdue) {
-                      <span style="font-size: 11px; color: #dc2626; font-weight: 600"
-                        >SLA OVERDUE</span
-                      >
+                      <span style="font-size: 11px; color: #dc2626; font-weight: 600">{{
+                        'DASHBOARD.SLA_OVERDUE' | translate
+                      }}</span>
                     }
                   </div>
                 </div>
@@ -640,9 +663,11 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">receipt_long</span>
-                <h2 class="card-title">Invoice Aging</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.INVOICE_AGING' | translate }}</h2>
               </div>
-              <a routerLink="/billing" class="card-link">View Billing</a>
+              <a routerLink="/billing" class="card-link">{{
+                'DASHBOARD.VIEW_BILLING' | translate
+              }}</a>
             </div>
             <div style="padding: 0 16px 16px">
               <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px">
@@ -683,9 +708,9 @@
                   border-radius: 8px;
                 "
               >
-                <span style="font-size: 13px; color: #475569; font-weight: 500"
-                  >Total Outstanding</span
-                >
+                <span style="font-size: 13px; color: #475569; font-weight: 500">{{
+                  'DASHBOARD.TOTAL_OUTSTANDING' | translate
+                }}</span>
                 <span style="font-size: 16px; font-weight: 700; color: #0f172a"
                   >${{ invoiceAging()!.grandTotal | number: '1.0-0' }}</span
                 >
@@ -701,9 +726,9 @@
                   border-radius: 8px;
                 "
               >
-                <span style="font-size: 13px; color: #475569; font-weight: 500"
-                  >Collection Rate</span
-                >
+                <span style="font-size: 13px; color: #475569; font-weight: 500">{{
+                  'DASHBOARD.COLLECTION_RATE' | translate
+                }}</span>
                 <span style="font-size: 16px; font-weight: 700; color: #059669"
                   >{{ paymentCollectionRate() | number: '1.1-1' }}%</span
                 >
@@ -718,9 +743,11 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">trending_up</span>
-                <h2 class="card-title">Daily Collections (30d)</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.DAILY_COLLECTIONS_30D' | translate }}</h2>
               </div>
-              <a routerLink="/billing" class="card-link">View Billing</a>
+              <a routerLink="/billing" class="card-link">{{
+                'DASHBOARD.VIEW_BILLING' | translate
+              }}</a>
             </div>
             <div style="padding: 0 16px 16px">
               <div
@@ -779,7 +806,7 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">bolt</span>
-                <h2 class="card-title">Quick Actions</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
               </div>
             </div>
             <div class="qa-grid" style="padding: 16px">
@@ -806,9 +833,11 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">group</span>
-                <h2 class="card-title">Recent Patients</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</h2>
               </div>
-              <a routerLink="/patients" class="card-link">All Patients</a>
+              <a routerLink="/patients" class="card-link">{{
+                'DASHBOARD.ALL_PATIENTS' | translate
+              }}</a>
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
@@ -838,10 +867,10 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">policy</span>
-                <h2 class="card-title">Recent Activity</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.RECENT_ACTIVITY' | translate }}</h2>
                 <span class="count-badge">{{ hospitalAdminAuditEvents().length }}</span>
               </div>
-              <a routerLink="/audit-logs" class="card-link">View All</a>
+              <a routerLink="/audit-logs" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
             </div>
             <div class="schedule-list">
               @for (evt of hospitalAdminAuditEvents(); track evt.id) {
@@ -868,7 +897,7 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">trending_up</span>
-                <h2 class="card-title">Activity Trend (7d)</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.ACTIVITY_TREND_7D' | translate }}</h2>
               </div>
             </div>
             <div
@@ -911,7 +940,7 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">hub</span>
-                <h2 class="card-title">Integrations</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.INTEGRATIONS' | translate }}</h2>
                 <span class="count-badge">{{ integrations().length }}</span>
               </div>
             </div>
@@ -988,17 +1017,19 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">gpp_maybe</span>
-                <h2 class="card-title">License Expiry Alerts</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.LICENSE_EXPIRY_ALERTS' | translate }}</h2>
                 <span class="count-badge">{{ licenseAlerts().length }}</span>
                 @if (expiredLicenseCount() > 0) {
                   <span
                     class="count-badge"
                     style="background: #fee2e2; color: #dc2626; margin-left: 4px"
-                    >{{ expiredLicenseCount() }} expired</span
+                    >{{ expiredLicenseCount() }} {{ 'DASHBOARD.EXPIRED' | translate }}</span
                   >
                 }
               </div>
-              <a routerLink="/staff" class="card-link">Manage Staff</a>
+              <a routerLink="/staff" class="card-link">{{
+                'DASHBOARD.MANAGE_STAFF' | translate
+              }}</a>
             </div>
             <div class="schedule-list">
               @for (alert of licenseAlerts(); track alert.staffId) {
@@ -1018,7 +1049,7 @@
                       >{{ alert.jobTitle | titlecase }} — {{ alert.departmentName }}</span
                     >
                     <span class="sched-reason"
-                      >License: {{ alert.licenseNumber }} — Expires:
+                      >License: {{ alert.licenseNumber }} — {{ 'DASHBOARD.EXPIRES' | translate }}:
                       {{ alert.licenseExpiryDate }}</span
                     >
                   </div>
@@ -1029,11 +1060,12 @@
                       [class]="'license-severity license-severity-' + alert.severity.toLowerCase()"
                     >
                       @if (alert.severity === 'EXPIRED') {
-                        EXPIRED
+                        {{ 'DASHBOARD.EXPIRED_LABEL' | translate }}
                       } @else if (alert.severity === 'CRITICAL') {
-                        {{ alert.daysUntilExpiry }}d — CRITICAL
+                        {{ alert.daysUntilExpiry }}{{ 'DASHBOARD.DAYS_SHORT' | translate }} —
+                        {{ 'DASHBOARD.CRITICAL' | translate }}
                       } @else {
-                        {{ alert.daysUntilExpiry }}d
+                        {{ alert.daysUntilExpiry }}{{ 'DASHBOARD.DAYS_SHORT' | translate }}
                       }
                     </span>
                   </div>
@@ -1049,9 +1081,9 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">event_busy</span>
-                <h2 class="card-title">Workforce Absence</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.WORKFORCE_ABSENCE' | translate }}</h2>
               </div>
-              <a routerLink="/staff" class="card-link">View Staff</a>
+              <a routerLink="/staff" class="card-link">{{ 'DASHBOARD.VIEW_STAFF' | translate }}</a>
             </div>
             <div class="stat-strip" style="padding: 0 16px 16px">
               <div class="stat-card" style="--stat-color: #d97706; --stat-bg: #fef3c7; flex: 1">
@@ -1060,7 +1092,7 @@
                 </div>
                 <div class="stat-body">
                   <span class="stat-value">{{ leaveMetrics()!.onLeaveToday }}</span>
-                  <span class="stat-label">On Leave Today</span>
+                  <span class="stat-label">{{ 'DASHBOARD.ON_LEAVE_TODAY' | translate }}</span>
                 </div>
               </div>
               <div class="stat-card" style="--stat-color: #2563eb; --stat-bg: #eff6ff; flex: 1">
@@ -1069,7 +1101,7 @@
                 </div>
                 <div class="stat-body">
                   <span class="stat-value">{{ leaveMetrics()!.upcomingLeaveNext7Days }}</span>
-                  <span class="stat-label">Upcoming (7 days)</span>
+                  <span class="stat-label">{{ 'DASHBOARD.UPCOMING_7_DAYS' | translate }}</span>
                 </div>
               </div>
             </div>
@@ -1082,7 +1114,7 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">credit_card</span>
-                <h2 class="card-title">Payment Methods (30d)</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.PAYMENT_METHODS_30D' | translate }}</h2>
               </div>
             </div>
             <div style="padding: 0 16px 16px">
@@ -1129,9 +1161,9 @@
                     margin-top: 4px;
                   "
                 >
-                  <span style="font-size: 13px; font-weight: 600; color: #475569"
-                    >Total Collected</span
-                  >
+                  <span style="font-size: 13px; font-weight: 600; color: #475569">{{
+                    'DASHBOARD.TOTAL_COLLECTED' | translate
+                  }}</span>
                   <span style="font-size: 15px; font-weight: 700; color: #059669"
                     >${{ paymentMethodTotal() | number: '1.0-0' }}</span
                   >
@@ -1147,9 +1179,11 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">cancel</span>
-                <h2 class="card-title">Write-Offs</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.WRITE_OFFS' | translate }}</h2>
               </div>
-              <a routerLink="/billing" class="card-link">View Billing</a>
+              <a routerLink="/billing" class="card-link">{{
+                'DASHBOARD.VIEW_BILLING' | translate
+              }}</a>
             </div>
             <div class="stat-strip" style="padding: 0 16px 16px">
               <div class="stat-card" style="--stat-color: #dc2626; --stat-bg: #fee2e2; flex: 1">
@@ -1158,7 +1192,7 @@
                 </div>
                 <div class="stat-body">
                   <span class="stat-value">{{ writeOffs()!.cancelledCount }}</span>
-                  <span class="stat-label">Cancelled Invoices</span>
+                  <span class="stat-label">{{ 'DASHBOARD.CANCELLED_INVOICES' | translate }}</span>
                 </div>
               </div>
               <div class="stat-card" style="--stat-color: #d97706; --stat-bg: #fef3c7; flex: 1">
@@ -1169,7 +1203,7 @@
                   <span class="stat-value"
                     >${{ writeOffs()!.cancelledTotal | number: '1.0-0' }}</span
                   >
-                  <span class="stat-label">Written Off</span>
+                  <span class="stat-label">{{ 'DASHBOARD.WRITTEN_OFF' | translate }}</span>
                 </div>
               </div>
             </div>
@@ -1182,7 +1216,7 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">bed</span>
-                <h2 class="card-title">Bed Occupancy</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.BED_OCCUPANCY' | translate }}</h2>
               </div>
             </div>
             <div style="padding: 0 16px 16px">
@@ -1198,7 +1232,9 @@
                     border-left: 3px solid #2563eb;
                   "
                 >
-                  <div style="font-size: 11px; color: #64748b; font-weight: 500">Total</div>
+                  <div style="font-size: 11px; color: #64748b; font-weight: 500">
+                    {{ 'DASHBOARD.TOTAL' | translate }}
+                  </div>
                   <div style="font-size: 18px; font-weight: 700; color: #2563eb">
                     {{ bedOccupancy()!.totalBeds }}
                   </div>
@@ -1214,7 +1250,9 @@
                     border-left: 3px solid #dc2626;
                   "
                 >
-                  <div style="font-size: 11px; color: #64748b; font-weight: 500">Occupied</div>
+                  <div style="font-size: 11px; color: #64748b; font-weight: 500">
+                    {{ 'DASHBOARD.OCCUPIED' | translate }}
+                  </div>
                   <div style="font-size: 18px; font-weight: 700; color: #dc2626">
                     {{ bedOccupancy()!.occupiedBeds }}
                   </div>
@@ -1230,7 +1268,9 @@
                     border-left: 3px solid #059669;
                   "
                 >
-                  <div style="font-size: 11px; color: #64748b; font-weight: 500">Available</div>
+                  <div style="font-size: 11px; color: #64748b; font-weight: 500">
+                    {{ 'DASHBOARD.AVAILABLE' | translate }}
+                  </div>
                   <div style="font-size: 18px; font-weight: 700; color: #059669">
                     {{ bedOccupancy()!.availableBeds }}
                   </div>
@@ -1246,7 +1286,9 @@
                     border-left: 3px solid #d97706;
                   "
                 >
-                  <div style="font-size: 11px; color: #64748b; font-weight: 500">Reserved</div>
+                  <div style="font-size: 11px; color: #64748b; font-weight: 500">
+                    {{ 'DASHBOARD.RESERVED' | translate }}
+                  </div>
                   <div style="font-size: 18px; font-weight: 700; color: #d97706">
                     {{ bedOccupancy()!.reservedBeds }}
                   </div>
@@ -1262,9 +1304,9 @@
                   border-radius: 8px;
                 "
               >
-                <span style="font-size: 13px; color: #475569; font-weight: 500"
-                  >Occupancy Rate</span
-                >
+                <span style="font-size: 13px; color: #475569; font-weight: 500">{{
+                  'DASHBOARD.OCCUPANCY_RATE' | translate
+                }}</span>
                 <span
                   style="font-size: 16px; font-weight: 700"
                   [style.color]="
@@ -1287,7 +1329,7 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">domain</span>
-                <h2 class="card-title">Ward Occupancy</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.WARD_OCCUPANCY' | translate }}</h2>
                 <span class="count-badge">{{ wardOccupancy().length }}</span>
               </div>
             </div>
@@ -1295,16 +1337,8 @@
               <table style="width: 100%; border-collapse: collapse; font-size: 13px">
                 <thead>
                   <tr style="border-bottom: 2px solid #e2e8f0; text-align: left">
-                    <th style="padding: 8px 12px; font-weight: 600; color: #475569">Ward</th>
-                    <th
-                      style="
-                        padding: 8px 12px;
-                        font-weight: 600;
-                        color: #475569;
-                        text-align: center;
-                      "
-                    >
-                      Total
+                    <th style="padding: 8px 12px; font-weight: 600; color: #475569">
+                      {{ 'DASHBOARD.WARD' | translate }}
                     </th>
                     <th
                       style="
@@ -1314,7 +1348,7 @@
                         text-align: center;
                       "
                     >
-                      Occupied
+                      {{ 'DASHBOARD.TOTAL' | translate }}
                     </th>
                     <th
                       style="
@@ -1324,7 +1358,7 @@
                         text-align: center;
                       "
                     >
-                      Available
+                      {{ 'DASHBOARD.OCCUPIED' | translate }}
                     </th>
                     <th
                       style="
@@ -1334,7 +1368,17 @@
                         text-align: center;
                       "
                     >
-                      Rate
+                      {{ 'DASHBOARD.AVAILABLE' | translate }}
+                    </th>
+                    <th
+                      style="
+                        padding: 8px 12px;
+                        font-weight: 600;
+                        color: #475569;
+                        text-align: center;
+                      "
+                    >
+                      {{ 'DASHBOARD.RATE' | translate }}
                     </th>
                   </tr>
                 </thead>
@@ -1431,12 +1475,14 @@
           <div class="card-head">
             <div class="card-title-group">
               <span class="material-symbols-outlined card-title-icon">calendar_clock</span>
-              <h2 class="card-title">Today's Schedule</h2>
+              <h2 class="card-title">{{ 'DASHBOARD.TODAYS_SCHEDULE' | translate }}</h2>
               <span class="count-badge">{{ todayAppointments().length }}</span>
             </div>
             <div class="card-head-right">
               <span class="schedule-date-pill">{{ todayLabel }}</span>
-              <a routerLink="/appointments" class="card-link">View All</a>
+              <a routerLink="/appointments" class="card-link">{{
+                'COMMON.VIEW_ALL' | translate
+              }}</a>
             </div>
           </div>
           @if (scheduleLoading()) {
@@ -1454,7 +1500,7 @@
           } @else if (scheduleSlots().length === 0) {
             <div class="empty-schedule">
               <span class="material-symbols-outlined empty-icon">event_available</span>
-              <p>No appointments scheduled for today</p>
+              <p>{{ 'DASHBOARD.NO_APPOINTMENTS_TODAY' | translate }}</p>
             </div>
           } @else {
             <div class="schedule-list">
@@ -1475,7 +1521,9 @@
                   </div>
                   <div class="sched-info">
                     <span class="sched-name">{{ slot.patientName }}</span>
-                    <span class="sched-reason">{{ slot.reason || 'General visit' }}</span>
+                    <span class="sched-reason">{{
+                      slot.reason || ('DASHBOARD.GENERAL_VISIT' | translate)
+                    }}</span>
                   </div>
                   <span [class]="getApptStatusClass(slot.status)">{{
                     getApptStatusLabel(slot.status)
@@ -1485,18 +1533,18 @@
             </div>
             <div class="schedule-summary">
               <span class="sum-item sum-done"
-                ><span class="material-symbols-outlined">task_alt</span
-                >{{ completedToday() }} Done</span
+                ><span class="material-symbols-outlined">task_alt</span>{{ completedToday() }}
+                {{ 'DASHBOARD.DONE' | translate }}</span
               >
               <span class="sum-divider"></span>
               <span class="sum-item sum-active"
-                ><span class="material-symbols-outlined">person_play</span
-                >{{ inProgressNow() }} Active</span
+                ><span class="material-symbols-outlined">person_play</span>{{ inProgressNow() }}
+                {{ 'COMMON.ACTIVE' | translate }}</span
               >
               <span class="sum-divider"></span>
               <span class="sum-item sum-pending"
-                ><span class="material-symbols-outlined">pending</span
-                >{{ pendingToday() }} Pending</span
+                ><span class="material-symbols-outlined">pending</span>{{ pendingToday() }}
+                {{ 'DASHBOARD.PENDING' | translate }}</span
               >
             </div>
           }
@@ -1508,7 +1556,7 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">bolt</span>
-                <h2 class="card-title">Quick Actions</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
               </div>
             </div>
             <div class="qa-grid qa-grid-compact" style="padding: 12px 16px">
@@ -1538,17 +1586,17 @@
           <div class="card-head">
             <div class="card-title-group">
               <span class="material-symbols-outlined card-title-icon">mark_email_unread</span>
-              <h2 class="card-title">Clinical Inbox</h2>
+              <h2 class="card-title">{{ 'DASHBOARD.CLINICAL_INBOX' | translate }}</h2>
               @if (inboxItems().length > 0) {
                 <span class="count-badge count-badge-red">{{ inboxItems().length }}</span>
               }
             </div>
-            <a routerLink="/chat" class="card-link">Open</a>
+            <a routerLink="/chat" class="card-link">{{ 'DASHBOARD.OPEN' | translate }}</a>
           </div>
           @if (inboxItems().length === 0) {
             <div class="inbox-empty">
               <span class="material-symbols-outlined">drafts</span>
-              <p>Inbox clear</p>
+              <p>{{ 'DASHBOARD.INBOX_CLEAR' | translate }}</p>
             </div>
           } @else {
             <div class="inbox-items">
@@ -1618,9 +1666,11 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">group</span>
-                <h2 class="card-title">Recent Patients</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</h2>
               </div>
-              <a routerLink="/patients" class="card-link">All Patients</a>
+              <a routerLink="/patients" class="card-link">{{
+                'DASHBOARD.ALL_PATIENTS' | translate
+              }}</a>
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
@@ -1656,10 +1706,18 @@
                     (click)="$event.stopPropagation()"
                     (keydown.enter)="$event.stopPropagation()"
                   >
-                    <a class="row-action-btn" routerLink="/encounters/new" title="New Encounter">
+                    <a
+                      class="row-action-btn"
+                      routerLink="/encounters/new"
+                      [title]="'DASHBOARD.NEW_ENCOUNTER' | translate"
+                    >
                       <span class="material-symbols-outlined">stethoscope</span>
                     </a>
-                    <a class="row-action-btn" routerLink="/lab" title="View Results">
+                    <a
+                      class="row-action-btn"
+                      routerLink="/lab"
+                      [title]="'DASHBOARD.VIEW_RESULTS' | translate"
+                    >
                       <span class="material-symbols-outlined">science</span>
                     </a>
                   </div>
@@ -1677,7 +1735,7 @@
                 <span class="material-symbols-outlined card-title-icon"
                   >notification_important</span
                 >
-                <h2 class="card-title">Clinical Alerts</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.CLINICAL_ALERTS' | translate }}</h2>
                 @if (unacknowledgedAlerts().length > 0) {
                   <span class="count-badge count-badge-red">{{
                     unacknowledgedAlerts().length
@@ -1717,10 +1775,10 @@
                     <button
                       class="ack-btn"
                       (click)="acknowledgeAlert(alert.id)"
-                      title="Acknowledge"
+                      [title]="'DASHBOARD.ACKNOWLEDGE' | translate"
                     >
                       <span class="material-symbols-outlined">check_circle</span>
-                      <span class="ack-label">Acknowledge</span>
+                      <span class="ack-label">{{ 'DASHBOARD.ACKNOWLEDGE' | translate }}</span>
                     </button>
                   } @else if (alert.acknowledged) {
                     <div class="acked-badge">
@@ -1754,7 +1812,7 @@
         </div>
         <div class="stat-body">
           <span class="stat-value">{{ todayAppointments().length }}</span
-          ><span class="stat-label">Patients Today</span>
+          ><span class="stat-label">{{ 'DASHBOARD.PATIENTS_TODAY' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/nurse-station">
@@ -1763,7 +1821,7 @@
         </div>
         <div class="stat-body">
           <span class="stat-value">{{ roomedPatients().length }}</span
-          ><span class="stat-label">Roomed</span>
+          ><span class="stat-label">{{ 'DASHBOARD.ROOMED' | translate }}</span>
         </div>
       </a>
       <div class="stat-card">
@@ -1772,7 +1830,7 @@
         </div>
         <div class="stat-body">
           <span class="stat-value">{{ unacknowledgedAlerts().length }}</span
-          ><span class="stat-label">Alerts</span>
+          ><span class="stat-label">{{ 'DASHBOARD.ALERTS' | translate }}</span>
         </div>
       </div>
       <a class="stat-card" routerLink="/encounters">
@@ -1781,7 +1839,7 @@
         </div>
         <div class="stat-body">
           <span class="stat-value">{{ completedToday() }}</span
-          ><span class="stat-label">Completed</span>
+          ><span class="stat-label">{{ 'ENCOUNTERS.COMPLETED' | translate }}</span>
         </div>
       </a>
     </section>
@@ -1804,15 +1862,15 @@
           <div class="card-head">
             <div class="card-title-group">
               <span class="material-symbols-outlined card-title-icon">calendar_clock</span>
-              <h2 class="card-title">Patient Schedule</h2>
+              <h2 class="card-title">{{ 'DASHBOARD.PATIENT_SCHEDULE' | translate }}</h2>
               <span class="count-badge">{{ todayAppointments().length }}</span>
             </div>
-            <a routerLink="/appointments" class="card-link">View All</a>
+            <a routerLink="/appointments" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
           </div>
           @if (scheduleSlots().length === 0) {
             <div class="empty-schedule">
               <span class="material-symbols-outlined empty-icon">event_available</span>
-              <p>No patients scheduled today.</p>
+              <p>{{ 'DASHBOARD.NO_PATIENTS_SCHEDULED' | translate }}</p>
             </div>
           } @else {
             <div class="schedule-list">
@@ -1833,7 +1891,9 @@
                   </div>
                   <div class="sched-info">
                     <span class="sched-name">{{ slot.patientName }}</span>
-                    <span class="sched-reason">{{ slot.reason || 'General visit' }}</span>
+                    <span class="sched-reason">{{
+                      slot.reason || ('DASHBOARD.GENERAL_VISIT' | translate)
+                    }}</span>
                   </div>
                   <span [class]="getApptStatusClass(slot.status)">{{
                     getApptStatusLabel(slot.status)
@@ -1843,18 +1903,18 @@
             </div>
             <div class="schedule-summary">
               <span class="sum-item sum-done"
-                ><span class="material-symbols-outlined">task_alt</span
-                >{{ completedToday() }} Done</span
+                ><span class="material-symbols-outlined">task_alt</span>{{ completedToday() }}
+                {{ 'DASHBOARD.DONE' | translate }}</span
               >
               <span class="sum-divider"></span>
               <span class="sum-item sum-active"
-                ><span class="material-symbols-outlined">person_play</span
-                >{{ inProgressNow() }} Active</span
+                ><span class="material-symbols-outlined">person_play</span>{{ inProgressNow() }}
+                {{ 'COMMON.ACTIVE' | translate }}</span
               >
               <span class="sum-divider"></span>
               <span class="sum-item sum-pending"
-                ><span class="material-symbols-outlined">pending</span
-                >{{ pendingToday() }} Pending</span
+                ><span class="material-symbols-outlined">pending</span>{{ pendingToday() }}
+                {{ 'DASHBOARD.PENDING' | translate }}</span
               >
             </div>
           }
@@ -1865,7 +1925,7 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">hotel</span>
-                <h2 class="card-title">Roomed Patients</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.ROOMED_PATIENTS' | translate }}</h2>
                 <span class="count-badge">{{ roomedPatients().length }}</span>
               </div>
             </div>
@@ -1908,7 +1968,7 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">bolt</span>
-                <h2 class="card-title">Quick Actions</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
               </div>
             </div>
             <div class="qa-grid" style="padding: 16px">
@@ -1940,7 +2000,7 @@
                 <span class="material-symbols-outlined card-title-icon"
                   >notification_important</span
                 >
-                <h2 class="card-title">Clinical Alerts</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.CLINICAL_ALERTS' | translate }}</h2>
                 @if (unacknowledgedAlerts().length > 0) {
                   <span class="count-badge count-badge-red">{{
                     unacknowledgedAlerts().length
@@ -1974,7 +2034,7 @@
                   @if (alert.actionRequired && !alert.acknowledged) {
                     <button class="ack-btn" (click)="acknowledgeAlert(alert.id)">
                       <span class="material-symbols-outlined">check_circle</span>
-                      <span class="ack-label">Ack</span>
+                      <span class="ack-label">{{ 'DASHBOARD.ACK' | translate }}</span>
                     </button>
                   } @else if (alert.acknowledged) {
                     <div class="acked-badge">
@@ -1992,19 +2052,19 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">mark_email_unread</span>
-                <h2 class="card-title">Inbox</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.INBOX' | translate }}</h2>
                 @if (totalInboxCount() > 0) {
                   <span class="count-badge count-badge-red">{{ totalInboxCount() }}</span>
                 }
               </div>
-              <a routerLink="/chat" class="card-link">Open</a>
+              <a routerLink="/chat" class="card-link">{{ 'DASHBOARD.OPEN' | translate }}</a>
             </div>
             <div class="inbox-items">
               <a routerLink="/chat" class="inbox-row">
                 <div class="inbox-row-icon inbox-icon-chat">
                   <span class="material-symbols-outlined">chat</span>
                 </div>
-                <span class="inbox-row-label">Messages</span>
+                <span class="inbox-row-label">{{ 'DASHBOARD.MESSAGES' | translate }}</span>
                 <span class="inbox-row-count" [class.count-hot]="ic.unreadMessages > 0">{{
                   ic.unreadMessages
                 }}</span>
@@ -2013,7 +2073,7 @@
                 <div class="inbox-row-icon inbox-icon-task">
                   <span class="material-symbols-outlined">checklist</span>
                 </div>
-                <span class="inbox-row-label">Tasks</span>
+                <span class="inbox-row-label">{{ 'DASHBOARD.TASKS' | translate }}</span>
                 <span class="inbox-row-count" [class.count-hot]="ic.tasksToComplete > 0">{{
                   ic.tasksToComplete
                 }}</span>
@@ -2027,9 +2087,9 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">group</span>
-                <h2 class="card-title">Recent Patients</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</h2>
               </div>
-              <a routerLink="/patients" class="card-link">View All</a>
+              <a routerLink="/patients" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
@@ -2064,7 +2124,7 @@
         </div>
         <div class="stat-body">
           <span class="stat-value">{{ todayAppointments().length }}</span
-          ><span class="stat-label">Today's Appointments</span>
+          ><span class="stat-label">{{ 'DASHBOARD.TODAYS_APPOINTMENTS' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/appointments">
@@ -2073,7 +2133,7 @@
         </div>
         <div class="stat-body">
           <span class="stat-value">{{ completedToday() }}</span
-          ><span class="stat-label">Checked In</span>
+          ><span class="stat-label">{{ 'DASHBOARD.CHECKED_IN' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/appointments">
@@ -2082,7 +2142,7 @@
         </div>
         <div class="stat-body">
           <span class="stat-value">{{ pendingToday() }}</span
-          ><span class="stat-label">Awaiting Check-in</span>
+          ><span class="stat-label">{{ 'DASHBOARD.AWAITING_CHECKIN' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/patients">
@@ -2091,7 +2151,7 @@
         </div>
         <div class="stat-body">
           <span class="stat-value">{{ recentPatients().length }}</span
-          ><span class="stat-label">Recent Patients</span>
+          ><span class="stat-label">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</span>
         </div>
       </a>
     </section>
@@ -2114,15 +2174,15 @@
           <div class="card-head">
             <div class="card-title-group">
               <span class="material-symbols-outlined card-title-icon">queue</span>
-              <h2 class="card-title">Appointment Queue</h2>
+              <h2 class="card-title">{{ 'DASHBOARD.APPOINTMENT_QUEUE' | translate }}</h2>
               <span class="count-badge">{{ todayAppointments().length }}</span>
             </div>
-            <a routerLink="/appointments" class="card-link">Manage</a>
+            <a routerLink="/appointments" class="card-link">{{ 'DASHBOARD.MANAGE' | translate }}</a>
           </div>
           @if (scheduleSlots().length === 0) {
             <div class="empty-schedule">
               <span class="material-symbols-outlined empty-icon">event_available</span>
-              <p>No appointments today.</p>
+              <p>{{ 'DASHBOARD.NO_APPOINTMENTS_TODAY' | translate }}</p>
             </div>
           } @else {
             <div class="schedule-list">
@@ -2143,7 +2203,9 @@
                   </div>
                   <div class="sched-info">
                     <span class="sched-name">{{ slot.patientName }}</span>
-                    <span class="sched-reason">{{ slot.reason || 'Visit' }}</span>
+                    <span class="sched-reason">{{
+                      slot.reason || ('DASHBOARD.VISIT' | translate)
+                    }}</span>
                   </div>
                   <span [class]="getApptStatusClass(slot.status)">{{
                     getApptStatusLabel(slot.status)
@@ -2159,7 +2221,7 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">bolt</span>
-                <h2 class="card-title">Quick Actions</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
               </div>
             </div>
             <div class="qa-grid" style="padding: 16px">
@@ -2189,9 +2251,11 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">person_search</span>
-                <h2 class="card-title">Patient Lookup</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.PATIENT_LOOKUP' | translate }}</h2>
               </div>
-              <a routerLink="/patients" class="card-link">All Patients</a>
+              <a routerLink="/patients" class="card-link">{{
+                'DASHBOARD.ALL_PATIENTS' | translate
+              }}</a>
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
@@ -2230,7 +2294,8 @@
           <span class="material-symbols-outlined stat-icon">science</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span><span class="stat-label">Pending Lab Orders</span>
+          <span class="stat-value">—</span
+          ><span class="stat-label">{{ 'DASHBOARD.PENDING_LAB_ORDERS' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/lab">
@@ -2238,7 +2303,8 @@
           <span class="material-symbols-outlined stat-icon">task_alt</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span><span class="stat-label">Completed Today</span>
+          <span class="stat-value">—</span
+          ><span class="stat-label">{{ 'DASHBOARD.COMPLETED_TODAY' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/lab">
@@ -2246,7 +2312,8 @@
           <span class="material-symbols-outlined stat-icon">biotech</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span><span class="stat-label">In Processing</span>
+          <span class="stat-value">—</span
+          ><span class="stat-label">{{ 'DASHBOARD.IN_PROCESSING' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/patients">
@@ -2255,7 +2322,7 @@
         </div>
         <div class="stat-body">
           <span class="stat-value">{{ recentPatients().length }}</span
-          ><span class="stat-label">Recent Patients</span>
+          ><span class="stat-label">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</span>
         </div>
       </a>
     </section>
@@ -2277,14 +2344,14 @@
           <div class="card-head">
             <div class="card-title-group">
               <span class="material-symbols-outlined card-title-icon">biotech</span>
-              <h2 class="card-title">Lab Work Queue</h2>
+              <h2 class="card-title">{{ 'DASHBOARD.LAB_WORK_QUEUE' | translate }}</h2>
             </div>
-            <a routerLink="/lab" class="card-link">Open Lab Module</a>
+            <a routerLink="/lab" class="card-link">{{ 'DASHBOARD.OPEN_LAB_MODULE' | translate }}</a>
           </div>
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon-lg">science</span>
-            <h3>Lab Module</h3>
-            <p>View and process all pending lab orders from the lab module.</p>
+            <h3>{{ 'DASHBOARD.LAB_MODULE' | translate }}</h3>
+            <p>{{ 'DASHBOARD.LAB_MODULE_DESC' | translate }}</p>
           </div>
         </section>
 
@@ -2293,7 +2360,7 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">bolt</span>
-                <h2 class="card-title">Quick Actions</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
               </div>
             </div>
             <div class="qa-grid" style="padding: 16px">
@@ -2323,9 +2390,9 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">group</span>
-                <h2 class="card-title">Recent Patients</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</h2>
               </div>
-              <a routerLink="/patients" class="card-link">View All</a>
+              <a routerLink="/patients" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
@@ -2359,7 +2426,8 @@
           <span class="material-symbols-outlined stat-icon">local_pharmacy</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span><span class="stat-label">Pending Prescriptions</span>
+          <span class="stat-value">—</span
+          ><span class="stat-label">{{ 'DASHBOARD.PENDING_PRESCRIPTIONS' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/prescriptions">
@@ -2367,7 +2435,8 @@
           <span class="material-symbols-outlined stat-icon">medication_liquid</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span><span class="stat-label">Dispensed Today</span>
+          <span class="stat-value">—</span
+          ><span class="stat-label">{{ 'DASHBOARD.DISPENSED_TODAY' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/prescriptions">
@@ -2375,7 +2444,8 @@
           <span class="material-symbols-outlined stat-icon">loop</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span><span class="stat-label">Refill Requests</span>
+          <span class="stat-value">—</span
+          ><span class="stat-label">{{ 'DASHBOARD.REFILL_REQUESTS' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/patients">
@@ -2384,7 +2454,7 @@
         </div>
         <div class="stat-body">
           <span class="stat-value">{{ recentPatients().length }}</span
-          ><span class="stat-label">Recent Patients</span>
+          ><span class="stat-label">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</span>
         </div>
       </a>
     </section>
@@ -2406,14 +2476,16 @@
           <div class="card-head">
             <div class="card-title-group">
               <span class="material-symbols-outlined card-title-icon">medication_liquid</span>
-              <h2 class="card-title">Prescription Queue</h2>
+              <h2 class="card-title">{{ 'DASHBOARD.PRESCRIPTION_QUEUE' | translate }}</h2>
             </div>
-            <a routerLink="/prescriptions" class="card-link">Open Prescriptions</a>
+            <a routerLink="/prescriptions" class="card-link">{{
+              'DASHBOARD.OPEN_PRESCRIPTIONS' | translate
+            }}</a>
           </div>
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon-lg">local_pharmacy</span>
-            <h3>Pharmacy Module</h3>
-            <p>Manage all prescriptions and dispense medications from the pharmacy module.</p>
+            <h3>{{ 'DASHBOARD.PHARMACY_MODULE' | translate }}</h3>
+            <p>{{ 'DASHBOARD.PHARMACY_MODULE_DESC' | translate }}</p>
           </div>
         </section>
 
@@ -2422,7 +2494,7 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">bolt</span>
-                <h2 class="card-title">Quick Actions</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
               </div>
             </div>
             <div class="qa-grid" style="padding: 16px">
@@ -2452,9 +2524,9 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">group</span>
-                <h2 class="card-title">Recent Patients</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</h2>
               </div>
-              <a routerLink="/patients" class="card-link">View All</a>
+              <a routerLink="/patients" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
@@ -2488,7 +2560,8 @@
           <span class="material-symbols-outlined stat-icon">radiology</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span><span class="stat-label">Pending Studies</span>
+          <span class="stat-value">—</span
+          ><span class="stat-label">{{ 'DASHBOARD.PENDING_STUDIES' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/imaging">
@@ -2496,7 +2569,8 @@
           <span class="material-symbols-outlined stat-icon">task_alt</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span><span class="stat-label">Reported Today</span>
+          <span class="stat-value">—</span
+          ><span class="stat-label">{{ 'DASHBOARD.REPORTED_TODAY' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/imaging">
@@ -2504,7 +2578,8 @@
           <span class="material-symbols-outlined stat-icon">pending</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">—</span><span class="stat-label">Awaiting Report</span>
+          <span class="stat-value">—</span
+          ><span class="stat-label">{{ 'DASHBOARD.AWAITING_REPORT' | translate }}</span>
         </div>
       </a>
       <a class="stat-card" routerLink="/patients">
@@ -2513,7 +2588,7 @@
         </div>
         <div class="stat-body">
           <span class="stat-value">{{ recentPatients().length }}</span
-          ><span class="stat-label">Recent Patients</span>
+          ><span class="stat-label">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</span>
         </div>
       </a>
     </section>
@@ -2535,14 +2610,16 @@
           <div class="card-head">
             <div class="card-title-group">
               <span class="material-symbols-outlined card-title-icon">radiology</span>
-              <h2 class="card-title">Imaging Worklist</h2>
+              <h2 class="card-title">{{ 'DASHBOARD.IMAGING_WORKLIST' | translate }}</h2>
             </div>
-            <a routerLink="/imaging" class="card-link">Open Imaging</a>
+            <a routerLink="/imaging" class="card-link">{{
+              'DASHBOARD.OPEN_IMAGING' | translate
+            }}</a>
           </div>
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon-lg">radiology</span>
-            <h3>Imaging Module</h3>
-            <p>View pending imaging studies and submit radiology reports.</p>
+            <h3>{{ 'DASHBOARD.IMAGING_MODULE' | translate }}</h3>
+            <p>{{ 'DASHBOARD.IMAGING_MODULE_DESC' | translate }}</p>
           </div>
         </section>
 
@@ -2551,7 +2628,7 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">bolt</span>
-                <h2 class="card-title">Quick Actions</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
               </div>
             </div>
             <div class="qa-grid" style="padding: 16px">
@@ -2581,9 +2658,9 @@
             <div class="card-head">
               <div class="card-title-group">
                 <span class="material-symbols-outlined card-title-icon">group</span>
-                <h2 class="card-title">Recent Patients</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</h2>
               </div>
-              <a routerLink="/patients" class="card-link">View All</a>
+              <a routerLink="/patients" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
             </div>
             <div class="patient-list">
               @for (p of recentPatients(); track p.id) {
@@ -2633,16 +2710,18 @@
             <span class="material-symbols-outlined card-title-icon" style="color: #059669"
               >calendar_month</span
             >
-            <h2 class="card-title">Upcoming Appointments</h2>
+            <h2 class="card-title">{{ 'DASHBOARD.UPCOMING_APPOINTMENTS' | translate }}</h2>
           </div>
-          <a routerLink="/my-appointments" class="card-link">View All</a>
+          <a routerLink="/my-appointments" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
         </div>
         <div class="patient-card-body">
           @if (upcomingAppointments().length === 0) {
             <div class="patient-empty-state">
               <span class="material-symbols-outlined empty-icon">event_available</span>
-              <p>No upcoming appointments</p>
-              <a routerLink="/my-appointments" class="patient-btn-sm">Schedule Now</a>
+              <p>{{ 'DASHBOARD.NO_UPCOMING_APPOINTMENTS' | translate }}</p>
+              <a routerLink="/my-appointments" class="patient-btn-sm">{{
+                'DASHBOARD.SCHEDULE_NOW' | translate
+              }}</a>
             </div>
           } @else {
             @for (appt of upcomingAppointments(); track appt.id) {
@@ -2652,9 +2731,11 @@
                   <span class="appt-day">{{ appt.date | date: 'd' }}</span>
                 </div>
                 <div class="appt-details">
-                  <span class="appt-provider">{{ appt.providerName || 'Provider' }}</span>
+                  <span class="appt-provider">{{
+                    appt.providerName || ('DASHBOARD.PROVIDER' | translate)
+                  }}</span>
                   <span class="appt-reason">{{
-                    appt.reason || appt.department || 'General Visit'
+                    appt.reason || appt.department || ('DASHBOARD.GENERAL_VISIT' | translate)
                   }}</span>
                   <span class="appt-time">
                     <span class="material-symbols-outlined" style="font-size: 14px">schedule</span>
@@ -2677,15 +2758,15 @@
             <span class="material-symbols-outlined card-title-icon" style="color: #0d9488"
               >medication</span
             >
-            <h2 class="card-title">Current Medications</h2>
+            <h2 class="card-title">{{ 'DASHBOARD.CURRENT_MEDICATIONS' | translate }}</h2>
           </div>
-          <a routerLink="/my-medications" class="card-link">View All</a>
+          <a routerLink="/my-medications" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
         </div>
         <div class="patient-card-body">
           @if (myMedications().length === 0) {
             <div class="patient-empty-state">
               <span class="material-symbols-outlined empty-icon">medication</span>
-              <p>No active medications</p>
+              <p>{{ 'DASHBOARD.NO_ACTIVE_MEDICATIONS' | translate }}</p>
             </div>
           } @else {
             @for (med of myMedications().slice(0, 4); track med.id) {
@@ -2712,15 +2793,15 @@
             <span class="material-symbols-outlined card-title-icon" style="color: #7c3aed"
               >science</span
             >
-            <h2 class="card-title">Recent Test Results</h2>
+            <h2 class="card-title">{{ 'DASHBOARD.RECENT_TEST_RESULTS' | translate }}</h2>
           </div>
-          <a routerLink="/my-lab-results" class="card-link">View All</a>
+          <a routerLink="/my-lab-results" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
         </div>
         <div class="patient-card-body">
           @if (myLabResults().length === 0) {
             <div class="patient-empty-state">
               <span class="material-symbols-outlined empty-icon">biotech</span>
-              <p>No test results available</p>
+              <p>{{ 'DASHBOARD.NO_TEST_RESULTS' | translate }}</p>
             </div>
           } @else {
             @for (lab of myLabResults().slice(0, 4); track lab.id) {
@@ -2753,22 +2834,22 @@
             <span class="material-symbols-outlined card-title-icon" style="color: #d97706"
               >receipt_long</span
             >
-            <h2 class="card-title">Billing</h2>
+            <h2 class="card-title">{{ 'BILLING.TITLE' | translate }}</h2>
           </div>
-          <a routerLink="/my-billing" class="card-link">View All</a>
+          <a routerLink="/my-billing" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
         </div>
         <div class="patient-card-body">
           @if (myInvoices().length === 0) {
             <div class="patient-empty-state">
               <span class="material-symbols-outlined empty-icon">payments</span>
-              <p>No outstanding bills</p>
+              <p>{{ 'DASHBOARD.NO_OUTSTANDING_BILLS' | translate }}</p>
             </div>
           } @else {
             @for (inv of myInvoices().slice(0, 3); track inv.id) {
               <div class="patient-bill-row">
                 <div class="bill-info">
                   <span class="bill-desc">{{
-                    inv.description || inv.facility || 'Medical Services'
+                    inv.description || inv.facility || ('DASHBOARD.MEDICAL_SERVICES' | translate)
                   }}</span>
                   <span class="bill-date">{{ inv.date | date: 'MMM d, yyyy' }}</span>
                 </div>
@@ -2794,7 +2875,7 @@
               <span class="material-symbols-outlined card-title-icon" style="color: #ec4899"
                 >groups</span
               >
-              <h2 class="card-title">My Care Team</h2>
+              <h2 class="card-title">{{ 'DASHBOARD.MY_CARE_TEAM' | translate }}</h2>
             </div>
           </div>
           <div class="patient-card-body care-team-grid">
@@ -2830,7 +2911,7 @@
                 <span class="material-symbols-outlined card-title-icon" style="color: #dc2626"
                   >health_and_safety</span
                 >
-                <h2 class="card-title">Health at a Glance</h2>
+                <h2 class="card-title">{{ 'DASHBOARD.HEALTH_AT_A_GLANCE' | translate }}</h2>
               </div>
             </div>
             <div class="patient-card-body health-glance-grid">
@@ -2840,7 +2921,7 @@
                     <span class="material-symbols-outlined" style="font-size: 16px; color: #dc2626"
                       >warning</span
                     >
-                    Allergies
+                    {{ 'DASHBOARD.ALLERGIES' | translate }}
                   </h4>
                   <div class="hg-chips">
                     @for (allergy of hs.allergies; track allergy) {
@@ -2855,7 +2936,7 @@
                     <span class="material-symbols-outlined" style="font-size: 16px; color: #2563eb"
                       >clinical_notes</span
                     >
-                    Active Conditions
+                    {{ 'DASHBOARD.ACTIVE_CONDITIONS' | translate }}
                   </h4>
                   <div class="hg-chips">
                     @for (dx of hs.activeDiagnoses; track dx) {
@@ -2881,9 +2962,9 @@
           <div class="card-head">
             <div class="card-title-group">
               <span class="material-symbols-outlined card-title-icon">calendar_month</span>
-              <h2 class="card-title">Today's Appointments</h2>
+              <h2 class="card-title">{{ 'DASHBOARD.TODAYS_APPOINTMENTS' | translate }}</h2>
             </div>
-            <a routerLink="/appointments" class="card-link">View All</a>
+            <a routerLink="/appointments" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
           </div>
           <div class="schedule-list">
             @for (appt of todayAppointments(); track appt.id) {
@@ -2908,9 +2989,11 @@
           <div class="card-head">
             <div class="card-title-group">
               <span class="material-symbols-outlined card-title-icon">people</span>
-              <h2 class="card-title">Recent Patients</h2>
+              <h2 class="card-title">{{ 'DASHBOARD.RECENT_PATIENTS' | translate }}</h2>
             </div>
-            <a routerLink="/patients" class="card-link">All Patients</a>
+            <a routerLink="/patients" class="card-link">{{
+              'DASHBOARD.ALL_PATIENTS' | translate
+            }}</a>
           </div>
           <div class="patient-list">
             @for (p of recentPatients(); track p.id) {
@@ -2934,8 +3017,8 @@
         <section class="card empty-card">
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon-lg">medical_services</span>
-            <h3>Welcome to HMS</h3>
-            <p>Your dashboard will populate as you start using the system.</p>
+            <h3>{{ 'DASHBOARD.WELCOME_HMS' | translate }}</h3>
+            <p>{{ 'DASHBOARD.WELCOME_DESC' | translate }}</p>
           </div>
         </section>
       }

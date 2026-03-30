@@ -10,6 +10,7 @@ import {
 import { UserService, UserSummary } from '../services/user.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 /** Maps each role to the set of roles it is allowed to message. */
 const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
@@ -99,7 +100,7 @@ const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './chat.html',
   styleUrl: './chat.scss',
 })

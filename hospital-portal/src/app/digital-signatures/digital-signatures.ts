@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 
@@ -36,7 +37,7 @@ interface AuditEntry {
 @Component({
   selector: 'app-digital-signatures',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './digital-signatures.html',
   styleUrl: './digital-signatures.scss',
 })

@@ -7,11 +7,12 @@ import { UserService, UserSummary } from '../services/user.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PermissionService } from '../core/permission.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-staff-list',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './staff-list.html',
   styleUrl: './staff-list.scss',
 })

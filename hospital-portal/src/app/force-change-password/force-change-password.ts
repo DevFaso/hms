@@ -2,13 +2,14 @@ import { HttpClient } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { TranslateModule } from '@ngx-translate/core';
 
 import { AuthService } from '../auth/auth.service';
 
 @Component({
   selector: 'app-force-change-password',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, TranslateModule],
   templateUrl: './force-change-password.html',
   styleUrls: ['./force-change-password.scss'],
 })

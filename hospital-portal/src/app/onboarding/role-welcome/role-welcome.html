@@ -3,7 +3,7 @@
   @if (pageState === 'loading') {
     <div class="rw-card rw-card--centered">
       <div class="rw-spinner" aria-label="Loading"></div>
-      <p class="rw-muted">Loading your assignment details…</p>
+      <p class="rw-muted">{{ 'ONBOARDING.LOADING' | translate }}</p>
     </div>
   }
 
@@ -11,9 +11,11 @@
   @if (pageState === 'not-found') {
     <div class="rw-card rw-card--centered">
       <div class="rw-icon rw-icon--warn">⚠️</div>
-      <h1 class="rw-title">Link not found</h1>
+      <h1 class="rw-title">{{ 'ONBOARDING.NOT_FOUND' | translate }}</h1>
       <p class="rw-body">{{ errorMessage }}</p>
-      <button class="rw-btn rw-btn--primary" (click)="goToLogin()">Go to Login</button>
+      <button class="rw-btn rw-btn--primary" (click)="goToLogin()">
+        {{ 'ONBOARDING.GO_TO_LOGIN' | translate }}
+      </button>
     </div>
   }
 
@@ -21,9 +23,11 @@
   @if (pageState === 'error') {
     <div class="rw-card rw-card--centered">
       <div class="rw-icon rw-icon--error">✕</div>
-      <h1 class="rw-title">Something went wrong</h1>
+      <h1 class="rw-title">{{ 'ONBOARDING.ERROR_TITLE' | translate }}</h1>
       <p class="rw-body">{{ errorMessage }}</p>
-      <button class="rw-btn rw-btn--primary" (click)="goToLogin()">Go to Login</button>
+      <button class="rw-btn rw-btn--primary" (click)="goToLogin()">
+        {{ 'ONBOARDING.GO_TO_LOGIN' | translate }}
+      </button>
     </div>
   }
 
@@ -31,7 +35,7 @@
   @if (pageState === 'already-verified' && assignment) {
     <div class="rw-card rw-card--centered">
       <div class="rw-icon rw-icon--success">✓</div>
-      <h1 class="rw-title">Already Confirmed</h1>
+      <h1 class="rw-title">{{ 'ONBOARDING.ALREADY_CONFIRMED' | translate }}</h1>
       <p class="rw-body">
         Your assignment as <strong>{{ assignment.roleName }}</strong>
         @if (assignment.hospitalName) {
@@ -39,7 +43,9 @@
         }
         was already confirmed. Your access is active.
       </p>
-      <button class="rw-btn rw-btn--primary" (click)="goToLogin()">Go to Login</button>
+      <button class="rw-btn rw-btn--primary" (click)="goToLogin()">
+        {{ 'ONBOARDING.GO_TO_LOGIN' | translate }}
+      </button>
     </div>
   }
 
@@ -51,31 +57,33 @@
         <div class="rw-logo-area">
           <div class="rw-logo-badge">HMS</div>
         </div>
-        <h1 class="rw-title">Welcome, {{ assignment.assigneeName }}!</h1>
-        <p class="rw-subtitle">You've been assigned a new role in the system</p>
+        <h1 class="rw-title">
+          {{ 'ONBOARDING.WELCOME' | translate }} {{ assignment.assigneeName }}!
+        </h1>
+        <p class="rw-subtitle">{{ 'ONBOARDING.ASSIGNED_ROLE' | translate }}</p>
       </div>
 
       <!-- Role / Hospital info -->
       <div class="rw-info-grid">
         <div class="rw-info-item">
-          <span class="rw-info-label">Role</span>
+          <span class="rw-info-label">{{ 'ONBOARDING.ROLE' | translate }}</span>
           <span class="rw-info-value">{{ assignment.roleName }}</span>
         </div>
         @if (assignment.hospitalName) {
           <div class="rw-info-item">
-            <span class="rw-info-label">Organization</span>
+            <span class="rw-info-label">{{ 'ONBOARDING.ORGANIZATION' | translate }}</span>
             <span class="rw-info-value">{{ assignment.hospitalName }}</span>
           </div>
         }
         @if (assignment.hospitalAddress) {
           <div class="rw-info-item">
-            <span class="rw-info-label">Location</span>
+            <span class="rw-info-label">{{ 'ONBOARDING.LOCATION' | translate }}</span>
             <span class="rw-info-value">{{ assignment.hospitalAddress }}</span>
           </div>
         }
         @if (assignment.roleDescription) {
           <div class="rw-info-item rw-info-item--full">
-            <span class="rw-info-label">About this role</span>
+            <span class="rw-info-label">{{ 'ONBOARDING.ABOUT_ROLE' | translate }}</span>
             <span class="rw-info-value">{{ assignment.roleDescription }}</span>
           </div>
         }
@@ -84,7 +92,7 @@
       <!-- Profile checklist -->
       @if (assignment.profileChecklist && assignment.profileChecklist.length > 0) {
         <div class="rw-checklist">
-          <h2 class="rw-checklist__title">What you'll be able to do</h2>
+          <h2 class="rw-checklist__title">{{ 'ONBOARDING.ABILITIES_TITLE' | translate }}</h2>
           <ul class="rw-checklist__list">
             @for (item of assignment.profileChecklist; track item) {
               <li class="rw-checklist__item">
@@ -98,9 +106,9 @@
 
       <!-- Verification section -->
       <div class="rw-verify">
-        <h2 class="rw-verify__title">Confirm your assignment</h2>
+        <h2 class="rw-verify__title">{{ 'ONBOARDING.CONFIRM_TITLE' | translate }}</h2>
         <p class="rw-verify__hint">
-          Enter the 6-digit confirmation code from your email to activate your access.
+          {{ 'ONBOARDING.CONFIRM_HINT' | translate }}
         </p>
 
         <!-- Digit inputs -->
@@ -136,9 +144,9 @@
         >
           @if (verifying) {
             <span class="rw-btn-spinner"></span>
-            Verifying…
+            {{ 'ONBOARDING.VERIFYING' | translate }}
           } @else {
-            Confirm & Activate Access
+            {{ 'ONBOARDING.CONFIRM_ACTIVATE' | translate }}
           }
         </button>
       </div>
@@ -149,7 +157,7 @@
   @if (pageState === 'success' && assignment) {
     <div class="rw-card rw-card--centered">
       <div class="rw-icon rw-icon--success">✓</div>
-      <h1 class="rw-title">Access Activated!</h1>
+      <h1 class="rw-title">{{ 'ONBOARDING.ACCESS_ACTIVATED' | translate }}</h1>
       <p class="rw-body">
         Your role as <strong>{{ assignment.roleName }}</strong>
         @if (assignment.hospitalName) {
@@ -162,52 +170,70 @@
       @if (assignment.tempUsername && assignment.tempPassword) {
         <div class="rw-credentials-box">
           <div class="rw-credentials-icon">🔑</div>
-          <h2 class="rw-credentials-title">Your Login Credentials</h2>
+          <h2 class="rw-credentials-title">{{ 'ONBOARDING.CREDENTIALS_TITLE' | translate }}</h2>
           <p class="rw-credentials-hint">
-            Use these temporary credentials to log in for the first time.<br />
-            You will be asked to set a new password immediately after signing in.
+            {{ 'ONBOARDING.CREDENTIALS_HINT' | translate }}<br />
+            {{ 'ONBOARDING.CREDENTIALS_HINT2' | translate }}
           </p>
           <div class="rw-credentials-grid">
             <div class="rw-credentials-item">
-              <span class="rw-credentials-label">Username</span>
+              <span class="rw-credentials-label">{{ 'ONBOARDING.USERNAME' | translate }}</span>
               <div class="rw-credentials-value-row">
                 <span class="rw-credentials-value">{{ assignment.tempUsername }}</span>
                 <button
                   class="rw-copy-btn"
                   [class.rw-copy-btn--copied]="copiedUsername"
                   (click)="copyToClipboard(assignment.tempUsername!, 'username')"
-                  [title]="copiedUsername ? 'Copied!' : 'Copy username'"
+                  [title]="
+                    copiedUsername
+                      ? ('ONBOARDING.COPIED' | translate)
+                      : ('ONBOARDING.COPY_USERNAME' | translate)
+                  "
                   type="button"
                 >
-                  {{ copiedUsername ? '✓ Copied' : 'Copy' }}
+                  {{
+                    copiedUsername
+                      ? ('ONBOARDING.COPIED' | translate)
+                      : ('ONBOARDING.COPY' | translate)
+                  }}
                 </button>
               </div>
             </div>
             <div class="rw-credentials-item">
-              <span class="rw-credentials-label">Temporary Password</span>
+              <span class="rw-credentials-label">{{ 'ONBOARDING.TEMP_PASSWORD' | translate }}</span>
               <div class="rw-credentials-value-row">
                 <span class="rw-credentials-value">{{ assignment.tempPassword }}</span>
                 <button
                   class="rw-copy-btn"
                   [class.rw-copy-btn--copied]="copiedPassword"
                   (click)="copyToClipboard(assignment.tempPassword!, 'password')"
-                  [title]="copiedPassword ? 'Copied!' : 'Copy password'"
+                  [title]="
+                    copiedPassword
+                      ? ('ONBOARDING.COPIED' | translate)
+                      : ('ONBOARDING.COPY_PASSWORD' | translate)
+                  "
                   type="button"
                 >
-                  {{ copiedPassword ? '✓ Copied' : 'Copy' }}
+                  {{
+                    copiedPassword
+                      ? ('ONBOARDING.COPIED' | translate)
+                      : ('ONBOARDING.COPY' | translate)
+                  }}
                 </button>
               </div>
             </div>
           </div>
           <p class="rw-credentials-warn">
-            ⚠️ These credentials are shown only once. Screenshot or copy them before continuing.
+            {{ 'ONBOARDING.CREDENTIALS_WARN' | translate }}
           </p>
         </div>
       } @else {
-        <p class="rw-body">You can now log in with your existing credentials.</p>
+        <p class="rw-body">{{ 'ONBOARDING.EXISTING_CREDENTIALS' | translate }}</p>
       }
 
-      <button class="rw-btn rw-btn--primary" (click)="goToLogin()">Continue to Login →</button>
+      <button class="rw-btn rw-btn--primary" (click)="goToLogin()">
+        {{ 'ONBOARDING.CONTINUE_TO_LOGIN' | translate }}
+      </button>
     </div>
   }
 </div>

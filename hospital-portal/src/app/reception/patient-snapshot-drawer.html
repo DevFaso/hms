@@ -9,7 +9,7 @@
 ></div>
 <div class="drawer-panel">
   <div class="drawer-header">
-    <h2>Patient Snapshot</h2>
+    <h2>{{ 'RECEPTION.PATIENT_SNAPSHOT' | translate }}</h2>
     <button class="btn-icon-close" (click)="panelClosed.emit()" aria-label="Close">
       <span class="material-symbols-outlined">close</span>
     </button>
@@ -34,19 +34,21 @@
       ) {
         <div class="alert-chips">
           @if (s.alerts.incompleteDemographics) {
-            <span class="alert-chip warn">Incomplete Demographics</span>
+            <span class="alert-chip warn">{{
+              'RECEPTION.INCOMPLETE_DEMOGRAPHICS' | translate
+            }}</span>
           }
           @if (s.alerts.missingInsurance) {
-            <span class="alert-chip danger">No Insurance</span>
+            <span class="alert-chip danger">{{ 'RECEPTION.NO_INSURANCE' | translate }}</span>
           }
           @if (s.alerts.expiredInsurance) {
-            <span class="alert-chip danger">Expired Insurance</span>
+            <span class="alert-chip danger">{{ 'RECEPTION.EXPIRED_INSURANCE' | translate }}</span>
           }
           @if (s.alerts.noPrimaryInsurance) {
-            <span class="alert-chip warn">No Primary Insurance</span>
+            <span class="alert-chip warn">{{ 'RECEPTION.NO_PRIMARY_INSURANCE' | translate }}</span>
           }
           @if (s.alerts.outstandingBalance) {
-            <span class="alert-chip danger">Outstanding Balance</span>
+            <span class="alert-chip danger">{{ 'RECEPTION.OUTSTANDING_BALANCE' | translate }}</span>
           }
         </div>
       }
@@ -55,39 +57,39 @@
       <div class="snap-card">
         <div class="snap-card-title">
           <span class="material-symbols-outlined">person</span>
-          Demographics
+          {{ 'RECEPTION.DEMOGRAPHICS' | translate }}
         </div>
         <div class="snap-field">
-          <span class="field-label">Name</span>
+          <span class="field-label">{{ 'PATIENTS.NAME' | translate }}</span>
           <span class="field-val">{{ s.fullName }}</span>
         </div>
         @if (s.mrn) {
           <div class="snap-field">
-            <span class="field-label">MRN</span>
+            <span class="field-label">{{ 'PATIENTS.MRN' | translate }}</span>
             <span class="field-val">{{ s.mrn }}</span>
           </div>
         }
         @if (s.dob) {
           <div class="snap-field">
-            <span class="field-label">Date of Birth</span>
+            <span class="field-label">{{ 'PATIENTS.DATE_OF_BIRTH' | translate }}</span>
             <span class="field-val">{{ s.dob | date: 'mediumDate' }}</span>
           </div>
         }
         @if (s.phone) {
           <div class="snap-field">
-            <span class="field-label">Phone</span>
+            <span class="field-label">{{ 'PATIENTS.PHONE' | translate }}</span>
             <span class="field-val">{{ s.phone }}</span>
           </div>
         }
         @if (s.email) {
           <div class="snap-field">
-            <span class="field-label">Email</span>
+            <span class="field-label">{{ 'PATIENTS.EMAIL' | translate }}</span>
             <span class="field-val">{{ s.email }}</span>
           </div>
         }
         @if (s.address) {
           <div class="snap-field">
-            <span class="field-label">Address</span>
+            <span class="field-label">{{ 'PATIENTS.ADDRESS' | translate }}</span>
             <span class="field-val">{{ s.address }}</span>
           </div>
         }
@@ -97,38 +99,38 @@
       <div class="snap-card">
         <div class="snap-card-title">
           <span class="material-symbols-outlined">health_and_safety</span>
-          Insurance
+          {{ 'RECEPTION.INSURANCE' | translate }}
         </div>
         @if (s.insurance.primaryPayer) {
           <div class="snap-field">
-            <span class="field-label">Primary Payer</span>
+            <span class="field-label">{{ 'RECEPTION.PRIMARY_PAYER' | translate }}</span>
             <span class="field-val">{{ s.insurance.primaryPayer }}</span>
           </div>
         }
         @if (s.insurance.policyNumber) {
           <div class="snap-field">
-            <span class="field-label">Policy #</span>
+            <span class="field-label">{{ 'RECEPTION.POLICY_NUMBER' | translate }}</span>
             <span class="field-val">{{ s.insurance.policyNumber }}</span>
           </div>
         }
         @if (s.insurance.expiresOn) {
           <div class="snap-field">
-            <span class="field-label">Expires</span>
+            <span class="field-label">{{ 'RECEPTION.EXPIRES' | translate }}</span>
             <span class="field-val" [class.expired-val]="s.insurance.expired">
               {{ s.insurance.expiresOn | date: 'mediumDate' }}
               @if (s.insurance.expired) {
-                <span class="alert-chip danger small">EXPIRED</span>
+                <span class="alert-chip danger small">{{ 'RECEPTION.EXPIRED' | translate }}</span>
               }
             </span>
           </div>
         }
         <div class="snap-field">
-          <span class="field-label">Active Coverage</span>
+          <span class="field-label">{{ 'RECEPTION.ACTIVE_COVERAGE' | translate }}</span>
           <span class="field-val">
             @if (s.insurance.hasActiveCoverage) {
-              <span class="badge-yes">Yes</span>
+              <span class="badge-yes">{{ 'COMMON.YES' | translate }}</span>
             } @else {
-              <span class="badge-no">No</span>
+              <span class="badge-no">{{ 'COMMON.NO' | translate }}</span>
             }
           </span>
         </div>
@@ -136,7 +138,7 @@
         <!-- MVP 11: Eligibility attestation badge + button -->
         @if (s.insurance.verifiedAt) {
           <div class="snap-field">
-            <span class="field-label">Eligibility Verified</span>
+            <span class="field-label">{{ 'RECEPTION.ELIGIBILITY_VERIFIED' | translate }}</span>
             <span class="field-val attested-chip">
               <span class="material-symbols-outlined small">verified</span>
               {{ s.insurance.verifiedBy }} · {{ s.insurance.verifiedAt | date: 'mediumDate' }}
@@ -147,7 +149,11 @@
           <div class="snap-field">
             <button class="btn-attest" (click)="openAttestModal()">
               <span class="material-symbols-outlined small">task_alt</span>
-              {{ s.insurance.verifiedAt ? 'Re-verify Eligibility' : 'Mark Eligibility Verified' }}
+              {{
+                s.insurance.verifiedAt
+                  ? ('RECEPTION.REVERIFY_ELIGIBILITY' | translate)
+                  : ('RECEPTION.MARK_ELIGIBILITY_VERIFIED' | translate)
+              }}
             </button>
           </div>
         }
@@ -157,14 +163,14 @@
       <div class="snap-card">
         <div class="snap-card-title">
           <span class="material-symbols-outlined">receipt_long</span>
-          Billing
+          {{ 'RECEPTION.BILLING' | translate }}
         </div>
         <div class="snap-field">
-          <span class="field-label">Open Invoices</span>
+          <span class="field-label">{{ 'RECEPTION.OPEN_INVOICES' | translate }}</span>
           <span class="field-val">{{ s.billing.openInvoiceCount }}</span>
         </div>
         <div class="snap-field">
-          <span class="field-label">Total Balance Due</span>
+          <span class="field-label">{{ 'RECEPTION.TOTAL_BALANCE_DUE' | translate }}</span>
           <span class="field-val" [class.balance-due]="s.billing.totalBalanceDue > 0">
             {{ s.billing.totalBalanceDue | number: '1.2-2' }}
           </span>
@@ -184,35 +190,43 @@
     (click)="showAttestModal.set(false)"
     (keydown.escape)="showAttestModal.set(false)"
   ></div>
-  <div class="attest-modal" role="dialog" aria-modal="true" aria-label="Attest Eligibility">
+  <div
+    class="attest-modal"
+    role="dialog"
+    aria-modal="true"
+    [attr.aria-label]="'RECEPTION.ATTEST_ELIGIBILITY' | translate"
+  >
     <div class="attest-header">
-      <h3>Attest Insurance Eligibility</h3>
+      <h3>{{ 'RECEPTION.ATTEST_ELIGIBILITY' | translate }}</h3>
       <button class="btn-icon-close" (click)="showAttestModal.set(false)" aria-label="Close">
         <span class="material-symbols-outlined">close</span>
       </button>
     </div>
     <div class="attest-body">
       <p class="attest-desc">
-        Manually confirm that the patient's insurance eligibility has been verified. This is a
-        placeholder until a live clearinghouse integration is available.
+        {{ 'RECEPTION.ATTEST_DESC' | translate }}
       </p>
-      <label class="form-label" for="attest-notes">Notes (optional)</label>
+      <label class="form-label" for="attest-notes">{{
+        'RECEPTION.NOTES_OPTIONAL' | translate
+      }}</label>
       <textarea
         id="attest-notes"
         class="form-textarea"
         rows="3"
-        placeholder="e.g. Called CNSS — eligibility confirmed for 2026"
+        [placeholder]="'RECEPTION.ATTEST_PLACEHOLDER' | translate"
         [ngModel]="attestNotes()"
         (ngModelChange)="attestNotes.set($event)"
       ></textarea>
     </div>
     <div class="attest-footer">
-      <button class="btn-secondary-sm" (click)="showAttestModal.set(false)">Cancel</button>
+      <button class="btn-secondary-sm" (click)="showAttestModal.set(false)">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
       <button class="btn-primary-sm" [disabled]="attestSaving()" (click)="submitAttestation()">
         @if (attestSaving()) {
           <span class="material-symbols-outlined spin-sm">progress_activity</span>
         }
-        Mark Verified
+        {{ 'RECEPTION.MARK_VERIFIED' | translate }}
       </button>
     </div>
   </div>

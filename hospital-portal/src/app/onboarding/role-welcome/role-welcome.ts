@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterModule } from '@angular/router';
+import { TranslateModule } from '@ngx-translate/core';
 
 import {
   AssignmentPublicService,
@@ -21,7 +22,7 @@ type PageState = 'loading' | 'loaded' | 'already-verified' | 'success' | 'not-fo
 @Component({
   selector: 'app-role-welcome',
   standalone: true,
-  imports: [FormsModule, RouterModule],
+  imports: [FormsModule, RouterModule, TranslateModule],
   templateUrl: './role-welcome.html',
   styleUrls: ['./role-welcome.scss'],
 })

@@ -1,13 +1,13 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Departments</h1>
-      <p class="page-subtitle">Manage hospital departments and divisions</p>
+      <h1 class="page-title">{{ 'DEPARTMENTS.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'DEPARTMENTS.SUBTITLE' | translate }}</p>
     </div>
     @if (canManage) {
       <button class="btn-primary" (click)="openCreate()">
         <span class="material-symbols-outlined">add</span>
-        New Department
+        {{ 'DEPARTMENTS.NEW' | translate }}
       </button>
     }
   </div>
@@ -16,7 +16,7 @@
     <span class="material-symbols-outlined search-icon">search</span>
     <input
       type="text"
-      placeholder="Search departments..."
+      [placeholder]="'DEPARTMENTS.SEARCH_PLACEHOLDER' | translate"
       [(ngModel)]="searchTerm"
       (ngModelChange)="applyFilter()"
     />
@@ -25,7 +25,7 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading departments...</p>
+      <p>{{ 'DEPARTMENTS.LOADING' | translate }}</p>
     </div>
   }
 
@@ -51,14 +51,22 @@
               </span>
             }
             <span class="status-badge" [class.active]="dept.active">
-              {{ dept.active ? 'Active' : 'Inactive' }}
+              {{ dept.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
             </span>
             <div class="action-group">
               @if (canManage) {
-                <button class="action-link" title="Edit" (click)="openEdit(dept)">
+                <button
+                  class="action-link"
+                  [title]="'COMMON.EDIT' | translate"
+                  (click)="openEdit(dept)"
+                >
                   <span class="material-symbols-outlined">edit</span>
                 </button>
-                <button class="action-link danger" title="Delete" (click)="confirmDelete(dept)">
+                <button
+                  class="action-link danger"
+                  [title]="'COMMON.DELETE' | translate"
+                  (click)="confirmDelete(dept)"
+                >
                   <span class="material-symbols-outlined">delete</span>
                 </button>
               }
@@ -72,8 +80,14 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">domain</span>
-      <h3>No departments found</h3>
-      <p>{{ searchTerm ? 'Try adjusting your search.' : 'Create your first department.' }}</p>
+      <h3>{{ 'DEPARTMENTS.NO_DEPARTMENTS_FOUND' | translate }}</h3>
+      <p>
+        {{
+          searchTerm
+            ? ('COMMON.TRY_ADJUSTING' | translate)
+            : ('DEPARTMENTS.CREATE_FIRST' | translate)
+        }}
+      </p>
     </div>
   }
 
@@ -93,7 +107,9 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ editing() ? 'Edit Department' : 'Create Department' }}</h2>
+          <h2>
+            {{ editing() ? ('DEPARTMENTS.EDIT' | translate) : ('DEPARTMENTS.CREATE' | translate) }}
+          </h2>
           <button class="modal-close" (click)="closeModal()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -102,7 +118,7 @@
           <div class="modal-body">
             <div class="form-row">
               <div class="field">
-                <label for="dHospital">Hospital *</label>
+                <label for="dHospital">{{ 'ENCOUNTERS.HOSPITAL' | translate }} *</label>
                 @if (hospitalLocked) {
                   <div class="locked-field">
                     <span class="material-symbols-outlined locked-icon">business</span>
@@ -117,7 +133,7 @@
                     required
                     (ngModelChange)="onHospitalChange($event)"
                   >
-                    <option value="">Select hospital</option>
+                    <option value="">{{ 'DEPARTMENTS.SELECT_HOSPITAL' | translate }}</option>
                     @for (h of hospitals(); track h.id) {
                       <option [value]="h.id">{{ h.name }}</option>
                     }
@@ -125,7 +141,7 @@
                 }
               </div>
               <div class="field">
-                <label for="dName">Name *</label>
+                <label for="dName">{{ 'DEPARTMENTS.NAME' | translate }} *</label>
                 <input
                   id="dName"
                   type="text"
@@ -139,7 +155,7 @@
 
             <div class="form-row">
               <div class="field">
-                <label for="dCode">Code *</label>
+                <label for="dCode">{{ 'DEPARTMENTS.CODE' | translate }} *</label>
                 <input
                   id="dCode"
                   type="text"
@@ -149,10 +165,10 @@
                   placeholder="e.g., CARDIO-01"
                   required
                 />
-                <span class="field-hint">Uppercase letters, digits, - and _ only</span>
+                <span class="field-hint">{{ 'DEPARTMENTS.CODE_HINT' | translate }}</span>
               </div>
               <div class="field">
-                <label for="dEmail">Email</label>
+                <label for="dEmail">{{ 'PATIENTS.EMAIL' | translate }}</label>
                 <input
                   id="dEmail"
                   type="email"
@@ -165,7 +181,7 @@
 
             <div class="form-row">
               <div class="field">
-                <label for="dPhone">Phone Number</label>
+                <label for="dPhone">{{ 'PATIENTS.PHONE' | translate }}</label>
                 <input
                   id="dPhone"
                   type="tel"
@@ -175,14 +191,14 @@
                 />
               </div>
               <div class="field">
-                <label for="dHead">Head of Department</label>
+                <label for="dHead">{{ 'DEPARTMENTS.HEAD' | translate }}</label>
                 @if (!form.hospitalId) {
                   <select id="dHead-empty" disabled class="select-placeholder">
-                    <option value="">Select a hospital first</option>
+                    <option value="">{{ 'DEPARTMENTS.SELECT_HOSPITAL_FIRST' | translate }}</option>
                   </select>
                 } @else if (staffLoading()) {
                   <select id="dHead-loading" disabled class="select-loading">
-                    <option value="">Loading staff…</option>
+                    <option value="">{{ 'COMMON.LOADING' | translate }}</option>
                   </select>
                 } @else {
                   <select
@@ -190,7 +206,7 @@
                     [(ngModel)]="form.headOfDepartmentEmail"
                     name="headOfDepartmentEmail"
                   >
-                    <option value="">— None —</option>
+                    <option value="">— {{ 'COMMON.NONE' | translate }} —</option>
                     @for (s of staffForHospital(); track s.id) {
                       <option [value]="s.email">
                         {{ s.name }}{{ s.jobTitle ? ' · ' + s.jobTitle : '' }}
@@ -202,13 +218,13 @@
             </div>
 
             <div class="field">
-              <label for="dDesc">Description</label>
+              <label for="dDesc">{{ 'DEPARTMENTS.DESCRIPTION' | translate }}</label>
               <textarea
                 id="dDesc"
                 [(ngModel)]="form.description"
                 name="description"
                 rows="3"
-                placeholder="Brief description of the department"
+                [placeholder]="'DEPARTMENTS.DESCRIPTION_PLACEHOLDER' | translate"
               ></textarea>
             </div>
 
@@ -216,22 +232,24 @@
               <div class="field">
                 <label class="toggle-label">
                   <input type="checkbox" [(ngModel)]="form.active" name="active" />
-                  Active
+                  {{ 'COMMON.ACTIVE' | translate }}
                 </label>
               </div>
             }
           </div>
           <div class="modal-actions">
-            <button type="button" class="btn-secondary" (click)="closeModal()">Cancel</button>
+            <button type="button" class="btn-secondary" (click)="closeModal()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
             <button type="submit" class="btn-primary" [disabled]="saving()">
               {{
                 saving()
                   ? editing()
-                    ? 'Saving...'
-                    : 'Creating...'
+                    ? ('COMMON.SAVING' | translate)
+                    : ('COMMON.CREATING' | translate)
                   : editing()
-                    ? 'Save Changes'
-                    : 'Create'
+                    ? ('COMMON.SAVE_CHANGES' | translate)
+                    : ('COMMON.CREATE' | translate)
               }}
             </button>
           </div>
@@ -256,27 +274,29 @@
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>Delete Department</h2>
+          <h2>{{ 'DEPARTMENTS.DELETE' | translate }}</h2>
           <button class="modal-close" (click)="cancelDelete()">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
         <div class="modal-body">
           <p class="delete-warning">
-            Are you sure you want to delete
+            {{ 'DEPARTMENTS.DELETE_CONFIRM' | translate }}
             <strong>{{ deletingDept()?.name }}</strong
-            >? This action cannot be undone.
+            >? {{ 'COMMON.CANNOT_UNDO' | translate }}
           </p>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
           <button
             type="button"
             class="btn-danger"
             [disabled]="deleting()"
             (click)="executeDelete()"
           >
-            {{ deleting() ? 'Deleting...' : 'Delete' }}
+            {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
           </button>
         </div>
       </dialog>

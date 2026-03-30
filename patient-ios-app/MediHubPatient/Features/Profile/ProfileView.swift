@@ -4,70 +4,83 @@ import PhotosUI
 struct ProfileView: View {
     @StateObject private var vm = ProfileViewModel()
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var localization: LocalizationManager
     @State private var showLogoutConfirm = false
     @State private var isEditing = false
     @State private var showPhotoPicker = false
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var showError = false
+    @State private var showLanguagePicker = false
 
     var body: some View {
         NavigationStack {
             Group {
-                if vm.isLoading && vm.profile == nil { ProgressView("Loading profile…") }
-                else if let profile = vm.profile {
+                if vm.isLoading && vm.profile == nil {
+                    VStack(spacing: 12) {
+                        ProgressView().controlSize(.large)
+                        Text("loading".localized)
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                } else if let profile = vm.profile {
                     List {
-                        // Avatar + Name
+                        // Avatar + Name header
                         Section {
                             HStack(spacing: 16) {
-                                // Profile photo
                                 ZStack(alignment: .bottomTrailing) {
                                     if let img = vm.profileImage {
                                         Image(uiImage: img)
                                             .resizable()
                                             .scaledToFill()
-                                            .frame(width: 72, height: 72)
+                                            .frame(width: 76, height: 76)
                                             .clipShape(Circle())
+                                            .overlay(Circle().stroke(Color("BrandBlue").opacity(0.2), lineWidth: 2))
                                     } else if let url = profile.profileImageUrl, !url.isEmpty {
                                         AsyncImage(url: URL(string: url.hasPrefix("http") ? url : AppEnvironment.baseURL.replacingOccurrences(of: "/api", with: "") + url)) { phase in
                                             if let img = phase.image {
                                                 img.resizable().scaledToFill()
                                             } else {
                                                 Image(systemName: "person.crop.circle.fill")
-                                                    .font(.system(size: 60))
-                                                    .foregroundColor(.accentColor)
+                                                    .font(.system(size: 64))
+                                                    .foregroundStyle(Color("BrandBlue").opacity(0.6))
                                             }
                                         }
-                                        .frame(width: 72, height: 72)
+                                        .frame(width: 76, height: 76)
                                         .clipShape(Circle())
+                                        .overlay(Circle().stroke(Color("BrandBlue").opacity(0.2), lineWidth: 2))
                                     } else {
                                         Image(systemName: "person.crop.circle.fill")
-                                            .font(.system(size: 60))
-                                            .foregroundColor(.accentColor)
+                                            .font(.system(size: 64))
+                                            .foregroundStyle(Color("BrandBlue").opacity(0.6))
                                     }
 
-                                    // Camera badge
-                                    Button {
-                                        showPhotoPicker = true
-                                    } label: {
+                                    Button { showPhotoPicker = true } label: {
                                         Image(systemName: "camera.fill")
-                                            .font(.caption2)
-                                            .foregroundColor(.white)
-                                            .padding(6)
-                                            .background(Color.accentColor)
+                                            .font(.system(size: 10, weight: .semibold))
+                                            .foregroundStyle(.white)
+                                            .padding(7)
+                                            .background(Color("BrandBlue"))
                                             .clipShape(Circle())
+                                            .shadow(color: .black.opacity(0.2), radius: 2, y: 1)
                                     }
                                     .offset(x: 4, y: 4)
                                 }
 
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(profile.fullName).font(.title3).bold()
-                                    if let email = profile.email { Text(email).font(.caption).foregroundColor(.secondary) }
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(profile.fullName)
+                                        .font(.title3.weight(.bold))
+                                    if let email = profile.email {
+                                        Text(email)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
                                     if let phone = profile.displayPhone {
-                                        Text(phone).font(.caption).foregroundColor(.secondary)
+                                        Text(phone)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
                                     }
                                 }
                             }
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 10)
                         }
 
                         if isEditing {
@@ -76,12 +89,38 @@ struct ProfileView: View {
                             readOnlyContent(profile)
                         }
 
+                        // Language
+                        Section {
+                            Button {
+                                showLanguagePicker = true
+                            } label: {
+                                HStack {
+                                    Label("language".localized, systemImage: "globe")
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    Text(localization.supportedLanguages.first { $0.code == localization.currentLanguage }?.name ?? localization.currentLanguage)
+                                        .foregroundStyle(.secondary)
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundStyle(.tertiary)
+                                }
+                            }
+                        }
+
                         // Actions
                         Section {
-                            NavigationLink("Health Records") { HealthRecordsView() }
-                            NavigationLink("Documents") { DocumentsView() }
-                            NavigationLink("Sharing & Privacy") { SharingPrivacyView() }
-                            NavigationLink("Family Access") { FamilyAccessView() }
+                            NavigationLink { HealthRecordsView() } label: {
+                                Label("health_records".localized, systemImage: "heart.text.square")
+                            }
+                            NavigationLink { DocumentsView() } label: {
+                                Label("documents".localized, systemImage: "doc.fill")
+                            }
+                            NavigationLink { SharingPrivacyView() } label: {
+                                Label("sharing_privacy".localized, systemImage: "lock.shield")
+                            }
+                            NavigationLink { FamilyAccessView() } label: {
+                                Label("family_access".localized, systemImage: "person.2.circle")
+                            }
                         }
 
                         // Logout
@@ -89,48 +128,42 @@ struct ProfileView: View {
                             Button(role: .destructive) {
                                 showLogoutConfirm = true
                             } label: {
-                                Label("Log Out", systemImage: "rectangle.portrait.and.arrow.right")
+                                Label("logout".localized, systemImage: "rectangle.portrait.and.arrow.right")
                             }
                         }
                     }
                     .listStyle(.insetGrouped)
                 } else {
-                    ContentUnavailableView("Profile Unavailable",
+                    ContentUnavailableView("profile_unavailable".localized,
                         systemImage: "person.crop.circle.badge.exclamationmark",
-                        description: Text("Could not load profile."))
+                        description: Text("profile_load_error".localized))
                 }
             }
-            .navigationTitle("Profile")
+            .navigationTitle("tab_profile".localized)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if vm.profile != nil {
-                        Button(isEditing ? "Save" : "Edit") {
+                        Button(isEditing ? "save".localized : "edit".localized) {
                             if isEditing {
-                                Task {
-                                    await vm.saveProfile()
-                                    isEditing = false
-                                }
+                                Task { await vm.saveProfile(); isEditing = false }
                             } else {
-                                vm.prepareEdit()
-                                isEditing = true
+                                vm.prepareEdit(); isEditing = true
                             }
                         }
-                        .bold(isEditing)
+                        .fontWeight(isEditing ? .bold : .regular)
                     }
                 }
                 if isEditing {
                     ToolbarItem(placement: .navigationBarLeading) {
-                        Button("Cancel") {
-                            isEditing = false
-                        }
+                        Button("cancel".localized) { isEditing = false }
                     }
                 }
             }
             .refreshable { await vm.load() }
-            .confirmationDialog("Log Out", isPresented: $showLogoutConfirm) {
-                Button("Log Out", role: .destructive) { authManager.logout() }
-                Button("Cancel", role: .cancel) {}
-            } message: { Text("Are you sure you want to log out?") }
+            .confirmationDialog("logout".localized, isPresented: $showLogoutConfirm) {
+                Button("logout".localized, role: .destructive) { authManager.logout() }
+                Button("cancel".localized, role: .cancel) {}
+            } message: { Text("logout_confirm".localized) }
             .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhoto, matching: .images)
             .onChange(of: selectedPhoto) { _, newItem in
                 if let newItem {
@@ -142,10 +175,13 @@ struct ProfileView: View {
                 }
             }
             .onChange(of: vm.errorMessage) { _, newVal in showError = (newVal != nil) }
-            .alert("Error", isPresented: $showError) {
-                Button("OK") { vm.errorMessage = nil }
+            .alert("error".localized, isPresented: $showError) {
+                Button("ok".localized) { vm.errorMessage = nil }
             } message: {
                 Text(vm.errorMessage ?? "")
+            }
+            .sheet(isPresented: $showLanguagePicker) {
+                LanguagePickerSheet()
             }
         }
         .task { await vm.load() }
@@ -155,51 +191,51 @@ struct ProfileView: View {
 
     @ViewBuilder
     private func readOnlyContent(_ profile: PatientProfileDTO) -> some View {
-        Section("Personal Information") {
-            ProfileRow(label: "Date of Birth", value: profile.dateOfBirth)
-            ProfileRow(label: "Gender", value: profile.gender)
-            ProfileRow(label: "Blood Type", value: profile.bloodType)
-            ProfileRow(label: "Language", value: profile.preferredLanguage)
-            ProfileRow(label: "Username", value: profile.username)
+        Section("personal_information".localized) {
+            ProfileRow(label: "date_of_birth".localized, value: profile.dateOfBirth)
+            ProfileRow(label: "gender".localized, value: profile.gender)
+            ProfileRow(label: "blood_type".localized, value: profile.bloodType)
+            ProfileRow(label: "language".localized, value: profile.preferredLanguage)
+            ProfileRow(label: "username".localized, value: profile.username)
         }
 
-        Section("Address") {
+        Section("address".localized) {
             if let addr = profile.displayAddress {
                 Text(addr).font(.subheadline)
             } else {
-                Text("No address on file").foregroundColor(.secondary)
+                Text("no_address".localized).foregroundStyle(.secondary)
             }
         }
 
-        Section("Insurance") {
-            ProfileRow(label: "Provider", value: profile.insuranceProvider)
-            ProfileRow(label: "Policy #", value: profile.insurancePolicyNumber)
-            ProfileRow(label: "Group #", value: profile.insuranceGroupNumber)
-            ProfileRow(label: "Plan Type", value: profile.insurancePlanType)
+        Section("insurance".localized) {
+            ProfileRow(label: "provider".localized, value: profile.insuranceProvider)
+            ProfileRow(label: "policy_number".localized, value: profile.insurancePolicyNumber)
+            ProfileRow(label: "group_number".localized, value: profile.insuranceGroupNumber)
+            ProfileRow(label: "plan_type".localized, value: profile.insurancePlanType)
             if let memberId = profile.insuranceMemberId {
-                ProfileRow(label: "Member ID", value: memberId)
+                ProfileRow(label: "member_id".localized, value: memberId)
             }
             if let plan = profile.insurancePlan {
-                ProfileRow(label: "Plan", value: plan)
+                ProfileRow(label: "plan".localized, value: plan)
             }
         }
 
-        Section("Allergies") {
+        Section("allergies".localized) {
             if profile.allergiesList.isEmpty {
-                Text("No known allergies").foregroundColor(.secondary)
+                Text("no_allergies".localized).foregroundStyle(.secondary)
             } else {
                 ForEach(profile.allergiesList, id: \.self) { allergy in
                     Label(allergy, systemImage: "exclamationmark.triangle.fill")
-                        .foregroundColor(.red)
+                        .foregroundStyle(.red)
                 }
             }
         }
 
-        Section("Emergency Contact") {
-            ProfileRow(label: "Name", value: profile.emergencyContactName)
-            ProfileRow(label: "Phone", value: profile.emergencyContactPhone)
+        Section("emergency_contact".localized) {
+            ProfileRow(label: "name".localized, value: profile.emergencyContactName)
+            ProfileRow(label: "phone".localized, value: profile.emergencyContactPhone)
             if let rel = profile.emergencyContactRelationship {
-                ProfileRow(label: "Relationship", value: rel)
+                ProfileRow(label: "relationship".localized, value: rel)
             }
         }
     }
@@ -208,34 +244,85 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var editableContent: some View {
-        Section("Contact Information") {
-            EditableRow(label: "Phone", text: $vm.editPhone)
-            EditableRow(label: "Secondary Phone", text: $vm.editPhoneSecondary)
-            EditableRow(label: "Email", text: $vm.editEmail)
+        Section("contact_info".localized) {
+            EditableRow(label: "phone".localized, text: $vm.editPhone)
+            EditableRow(label: "secondary_phone".localized, text: $vm.editPhoneSecondary)
+            EditableRow(label: "email".localized, text: $vm.editEmail)
         }
 
-        Section("Address") {
-            EditableRow(label: "Address Line 1", text: $vm.editAddress1)
-            EditableRow(label: "Address Line 2", text: $vm.editAddress2)
-            EditableRow(label: "City", text: $vm.editCity)
-            EditableRow(label: "State", text: $vm.editState)
-            EditableRow(label: "ZIP Code", text: $vm.editZip)
-            EditableRow(label: "Country", text: $vm.editCountry)
+        Section("address".localized) {
+            EditableRow(label: "address_line_1".localized, text: $vm.editAddress1)
+            EditableRow(label: "address_line_2".localized, text: $vm.editAddress2)
+            EditableRow(label: "city".localized, text: $vm.editCity)
+            EditableRow(label: "state".localized, text: $vm.editState)
+            EditableRow(label: "zip_code".localized, text: $vm.editZip)
+            EditableRow(label: "country".localized, text: $vm.editCountry)
         }
 
-        Section("Emergency Contact") {
-            EditableRow(label: "Name", text: $vm.editEmergencyName)
-            EditableRow(label: "Phone", text: $vm.editEmergencyPhone)
-            EditableRow(label: "Relationship", text: $vm.editEmergencyRelationship)
+        Section("emergency_contact".localized) {
+            EditableRow(label: "name".localized, text: $vm.editEmergencyName)
+            EditableRow(label: "phone".localized, text: $vm.editEmergencyPhone)
+            EditableRow(label: "relationship".localized, text: $vm.editEmergencyRelationship)
         }
 
-        Section("Pharmacy") {
-            EditableRow(label: "Preferred Pharmacy", text: $vm.editPharmacy)
+        Section("pharmacy".localized) {
+            EditableRow(label: "preferred_pharmacy".localized, text: $vm.editPharmacy)
         }
 
         if vm.isSaving {
             Section {
-                HStack { Spacer(); ProgressView("Saving…"); Spacer() }
+                HStack {
+                    Spacer()
+                    ProgressView()
+                    Text("saving".localized).font(.subheadline).foregroundStyle(.secondary)
+                    Spacer()
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Language Picker
+
+struct LanguagePickerSheet: View {
+    @EnvironmentObject var localization: LocalizationManager
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(localization.supportedLanguages, id: \.code) { lang in
+                    Button {
+                        localization.setLanguage(lang.code)
+                        dismiss()
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(lang.name)
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+                                Text(lang.code.uppercased())
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if localization.currentLanguage == lang.code {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(Color("BrandBlue"))
+                                    .font(.title3)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle("select_language".localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("done".localized) { dismiss() }
+                }
             }
         }
     }

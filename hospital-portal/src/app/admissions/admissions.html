@@ -1,12 +1,12 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Admissions</h1>
-      <p class="page-subtitle">Inpatient admissions and bed management</p>
+      <h1 class="page-title">{{ 'ADMISSIONS.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'ADMISSIONS.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
       <button class="btn-primary" (click)="openCreate()">
-        <span class="material-symbols-outlined">add</span> New Admission
+        <span class="material-symbols-outlined">add</span> {{ 'ADMISSIONS.NEW' | translate }}
       </button>
     </div>
   </div>
@@ -22,7 +22,7 @@
       <span class="material-symbols-outlined card-icon admitted">hotel</span>
       <div class="card-info">
         <span class="card-value">{{ countByStatus('ACTIVE') }}</span
-        ><span class="card-label">Admitted</span>
+        ><span class="card-label">{{ 'ADMISSIONS.ADMITTED' | translate }}</span>
       </div>
     </div>
     <div
@@ -36,14 +36,14 @@
       <span class="material-symbols-outlined card-icon discharged">logout</span>
       <div class="card-info">
         <span class="card-value">{{ countByStatus('DISCHARGED') }}</span
-        ><span class="card-label">Discharged</span>
+        ><span class="card-label">{{ 'ADMISSIONS.DISCHARGED' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon pending">schedule</span>
       <div class="card-info">
         <span class="card-value">{{ countByStatus('PENDING') }}</span
-        ><span class="card-label">Pending</span>
+        ><span class="card-label">{{ 'ADMISSIONS.PENDING' | translate }}</span>
       </div>
     </div>
     <div
@@ -57,35 +57,35 @@
       <span class="material-symbols-outlined card-icon total">bar_chart</span>
       <div class="card-info">
         <span class="card-value">{{ admissions().length }}</span
-        ><span class="card-label">Total</span>
+        ><span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
       </div>
     </div>
   </div>
   <div class="filter-bar">
     <div class="tabs">
       <button class="tab-btn" [class.active]="activeTab() === 'all'" (click)="setTab('all')">
-        All
+        {{ 'COMMON.ALL' | translate }}
       </button>
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'admitted'"
         (click)="setTab('admitted')"
       >
-        Admitted
+        {{ 'ADMISSIONS.ADMITTED' | translate }}
       </button>
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'discharged'"
         (click)="setTab('discharged')"
       >
-        Discharged
+        {{ 'ADMISSIONS.DISCHARGED' | translate }}
       </button>
     </div>
     <div class="search-box">
       <span class="material-symbols-outlined">search</span
       ><input
         type="text"
-        placeholder="Search admissions..."
+        [placeholder]="'ADMISSIONS.SEARCH' | translate"
         [(ngModel)]="searchTerm"
         (input)="applyFilter()"
       />
@@ -94,14 +94,14 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading admissions...</p>
+      <p>{{ 'ADMISSIONS.LOADING' | translate }}</p>
     </div>
   }
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">hotel</span>
-      <h3>No admissions found</h3>
-      <p>Admissions will appear here.</p>
+      <h3>{{ 'ADMISSIONS.NO_RESULTS' | translate }}</h3>
+      <p>{{ 'ADMISSIONS.EMPTY_MESSAGE' | translate }}</p>
     </div>
   }
   @if (!loading() && filtered().length > 0) {
@@ -109,21 +109,23 @@
       <table>
         <thead>
           <tr>
-            <th scope="col">Patient</th>
-            <th scope="col">Room/Bed</th>
-            <th scope="col">Type</th>
-            <th scope="col">Acuity</th>
-            <th scope="col">Chief Complaint</th>
-            <th scope="col">Admitted</th>
-            <th scope="col">Status</th>
-            <th scope="col" class="actions-col">Actions</th>
+            <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+            <th scope="col">{{ 'ADMISSIONS.ROOM_BED' | translate }}</th>
+            <th scope="col">{{ 'ADMISSIONS.TYPE' | translate }}</th>
+            <th scope="col">{{ 'ADMISSIONS.ACUITY' | translate }}</th>
+            <th scope="col">{{ 'ADMISSIONS.CHIEF_COMPLAINT' | translate }}</th>
+            <th scope="col">{{ 'ADMISSIONS.ADMITTED' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col" class="actions-col">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
           @for (a of filtered(); track a.id) {
             <tr class="data-row">
               <td>
-                <div class="cell-primary">{{ a.patientName || 'Unknown' }}</div>
+                <div class="cell-primary">
+                  {{ a.patientName ? a.patientName : ('COMMON.UNKNOWN' | translate) }}
+                </div>
               </td>
               <td>{{ a.roomBed || '—' }}</td>
               <td>{{ a.admissionType || '—' }}</td>
@@ -165,7 +167,7 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ editing() ? 'Edit Admission' : 'New Admission' }}</h2>
+        <h2>{{ editing() ? ('ADMISSIONS.EDIT' | translate) : ('ADMISSIONS.NEW' | translate) }}</h2>
         <button class="modal-close" (click)="closeModal()">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -173,7 +175,7 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label for="adm-patientSearch">Patient *</label>
+            <label for="adm-patientSearch">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
             @if (selectedPatient()) {
               <div class="picker-chip">
                 <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
@@ -187,7 +189,7 @@
                   type="button"
                   class="chip-clear"
                   (click)="clearPatient()"
-                  title="Change patient"
+                  [title]="'COMMON.CHANGE_PATIENT' | translate"
                 >
                   <span class="material-symbols-outlined">close</span>
                 </button>
@@ -199,7 +201,7 @@
                   id="adm-patientSearch"
                   class="picker-input"
                   type="text"
-                  placeholder="Search by name, email or MRN…"
+                  [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
                   [value]="patientQuery()"
                   (input)="onPatientQueryChange($any($event.target).value)"
                   (blur)="patientDropdownOpen.set(false)"
@@ -227,7 +229,7 @@
             }
           </div>
           <div class="field">
-            <label for="adm-hospitalId">Hospital *</label>
+            <label for="adm-hospitalId">{{ 'ENCOUNTERS.HOSPITAL' | translate }} *</label>
             @if (hospitalLocked) {
               <div class="locked-field">
                 <span class="material-symbols-outlined locked-icon">business</span>
@@ -241,7 +243,7 @@
                 (change)="onHospitalChange($any($event.target).value)"
                 required
               >
-                <option value="">Select hospital...</option>
+                <option value="">{{ 'COMMON.SELECT_HOSPITAL' | translate }}</option>
                 @for (h of hospitals(); track h.id) {
                   <option [value]="h.id">{{ h.name }}</option>
                 }
@@ -251,27 +253,27 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="adm-providerId">Admitting Provider *</label>
+            <label for="adm-providerId">{{ 'ADMISSIONS.ADMITTING_PROVIDER' | translate }} *</label>
             <select id="adm-providerId" [(ngModel)]="form.admittingProviderId" required>
-              <option value="">Select provider...</option>
+              <option value="">{{ 'ADMISSIONS.SELECT_PROVIDER' | translate }}</option>
               @for (s of staffMembers(); track s.id) {
                 <option [value]="s.id">{{ s.name }}</option>
               }
             </select>
           </div>
           <div class="field">
-            <label for="adm-roomBed">Room / Bed</label>
+            <label for="adm-roomBed">{{ 'ADMISSIONS.ROOM_BED' | translate }}</label>
             <input
               id="adm-roomBed"
               type="text"
               [(ngModel)]="form.roomBed"
-              placeholder="e.g. Room 201-B"
+              [placeholder]="'ADMISSIONS.ROOM_BED_PLACEHOLDER' | translate"
             />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="adm-type">Admission Type *</label>
+            <label for="adm-type">{{ 'ADMISSIONS.ADMISSION_TYPE' | translate }} *</label>
             <select id="adm-type" [(ngModel)]="form.admissionType" required>
               @for (t of admissionTypes; track t) {
                 <option [value]="t">{{ t }}</option>
@@ -279,7 +281,7 @@
             </select>
           </div>
           <div class="field">
-            <label for="adm-acuity">Acuity Level *</label>
+            <label for="adm-acuity">{{ 'ADMISSIONS.ACUITY_LEVEL' | translate }} *</label>
             <select id="adm-acuity" [(ngModel)]="form.acuityLevel" required>
               @for (l of acuityLevels; track l) {
                 <option [value]="l">{{ acuityLabel[l] || l }}</option>
@@ -289,7 +291,7 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="adm-dateTime">Admission Date/Time *</label>
+            <label for="adm-dateTime">{{ 'ADMISSIONS.ADMIT_DATE' | translate }} *</label>
             <input
               id="adm-dateTime"
               type="datetime-local"
@@ -298,10 +300,14 @@
             />
           </div>
           <div class="field">
-            <label for="adm-deptId">Department</label>
+            <label for="adm-deptId">{{ 'STAFF.DEPARTMENT' | translate }}</label>
             <select id="adm-deptId" [(ngModel)]="form.departmentId">
               <option value="">
-                {{ form.hospitalId ? 'Any department' : 'Select hospital first' }}
+                {{
+                  form.hospitalId
+                    ? ('ADMISSIONS.ANY_DEPARTMENT' | translate)
+                    : ('ADMISSIONS.SELECT_HOSPITAL_FIRST' | translate)
+                }}
               </option>
               @for (d of departments(); track d.id) {
                 <option [value]="d.id">{{ d.name }}</option>
@@ -310,27 +316,29 @@
           </div>
         </div>
         <div class="field">
-          <label for="adm-complaint">Chief Complaint *</label>
+          <label for="adm-complaint">{{ 'ADMISSIONS.CHIEF_COMPLAINT' | translate }} *</label>
           <textarea
             id="adm-complaint"
             [(ngModel)]="form.chiefComplaint"
             rows="2"
-            placeholder="Reason for admission..."
+            [placeholder]="'ADMISSIONS.CHIEF_COMPLAINT_PLACEHOLDER' | translate"
             required
           ></textarea>
         </div>
         <div class="field">
-          <label for="adm-notes">Admission Notes</label>
+          <label for="adm-notes">{{ 'ADMISSIONS.ADMISSION_NOTES' | translate }}</label>
           <textarea
             id="adm-notes"
             [(ngModel)]="form.admissionNotes"
             rows="2"
-            placeholder="Additional notes..."
+            [placeholder]="'COMMON.ADDITIONAL_NOTES' | translate"
           ></textarea>
         </div>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeModal()">Cancel</button>
+        <button class="btn-secondary" (click)="closeModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
         <button
           class="btn-primary"
           (click)="submitForm()"
@@ -343,7 +351,13 @@
             !form.chiefComplaint
           "
         >
-          {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Create' }}
+          {{
+            saving()
+              ? ('COMMON.SAVING' | translate)
+              : editing()
+                ? ('COMMON.UPDATE' | translate)
+                : ('COMMON.CREATE' | translate)
+          }}
         </button>
       </div>
     </div>
@@ -365,22 +379,24 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>Delete Admission</h2>
+        <h2>{{ 'ADMISSIONS.DELETE_TITLE' | translate }}</h2>
         <button class="modal-close" (click)="cancelDelete()">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">
         <p class="delete-warning">
-          Are you sure you want to delete the admission for
+          {{ 'ADMISSIONS.DELETE_CONFIRM' | translate }}
           <strong>{{ deletingAdm()?.patientName }}</strong
-          >? This action cannot be undone.
+          >{{ 'COMMON.CANNOT_UNDO' | translate }}
         </p>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+        <button class="btn-secondary" (click)="cancelDelete()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
         <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
-          {{ deleting() ? 'Deleting...' : 'Delete' }}
+          {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
         </button>
       </div>
     </div>

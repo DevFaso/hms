@@ -943,10 +943,14 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (hospitalId == null) throw new BusinessException("Hospital context required.");
         if (request == null) throw new BusinessException("Vital sign data required.");
 
-        Patient patient = patientRepository.findById(patientId)
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
+
+        if (!patient.isRegisteredInHospital(hospitalId)) {
+            throw new BusinessException("Patient is not registered at this hospital.");
+        }
 
         boolean clinicallySig = isClinicallySignificant(request);
 
@@ -1076,8 +1080,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     public NurseTaskItemDTO createNursingTask(UUID nurseUserId, UUID hospitalId, NurseTaskCreateRequestDTO request) {
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
-        Patient patient = patientRepository.findById(request.getPatientId())
+        Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + request.getPatientId()));
+
+        if (!patient.isRegisteredInHospital(hospitalId)) {
+            throw new BusinessException("Patient is not registered at this hospital.");
+        }
 
         String createdByName = resolveNurseName(nurseUserId);
 
@@ -1148,10 +1156,15 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     @Transactional
     public NurseCareNoteResponseDTO createCareNote(UUID patientId, UUID nurseUserId,
                                                    UUID hospitalId, NurseCareNoteRequestDTO request) {
-        Patient patient = patientRepository.findById(patientId)
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND + patientId));
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_HOSPITAL_NOT_FOUND + hospitalId));
+
+        if (!patient.isRegisteredInHospital(hospitalId)) {
+            throw new BusinessException("Patient is not registered at this hospital.");
+        }
+
         User author = userRepository.findById(nurseUserId)
             .orElseThrow(() -> new ResourceNotFoundException("User not found: " + nurseUserId));
 

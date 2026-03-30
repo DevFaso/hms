@@ -4,8 +4,12 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- White cross / plus medical symbol centered in adaptive icon safe zone -->
+    <!-- Blue circle -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M54,54m-27,0a27,27 0,1 1,54 0a27,27 0,1 1,-54 0" />
+    <!-- White medical cross centered in safe zone -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M46,30 L62,30 L62,46 L78,46 L78,62 L62,62 L62,78 L46,78 L46,62 L30,62 L30,46 L46,46 Z" />
+        android:pathData="M49.2,39 L58.8,39 L58.8,49.2 L69,49.2 L69,58.8 L58.8,58.8 L58.8,69 L49.2,69 L49.2,58.8 L39,58.8 L39,49.2 L49.2,49.2 Z" />
 </vector>

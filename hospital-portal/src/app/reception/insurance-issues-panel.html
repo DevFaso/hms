@@ -1,14 +1,14 @@
 @if (issues.length === 0) {
-  <div class="empty-state">No insurance issues today.</div>
+  <div class="empty-state">{{ 'RECEPTION.NO_INSURANCE_ISSUES' | translate }}</div>
 } @else {
   <table class="issues-table">
     <thead>
       <tr>
-        <th>Time</th>
-        <th>Patient</th>
-        <th>Issue</th>
-        <th>Provider</th>
-        <th>Department</th>
+        <th>{{ 'COMMON.TIME' | translate }}</th>
+        <th>{{ 'PATIENTS.PATIENT' | translate }}</th>
+        <th>{{ 'RECEPTION.ISSUE' | translate }}</th>
+        <th>{{ 'RECEPTION.PROVIDER' | translate }}</th>
+        <th>{{ 'STAFF.DEPARTMENT' | translate }}</th>
         <th></th>
       </tr>
     </thead>
@@ -32,7 +32,7 @@
             <button
               class="btn-icon"
               (click)="patientClicked.emit(issue.patientId)"
-              title="View patient"
+              [title]="'RECEPTION.VIEW_PATIENT' | translate"
             >
               <span class="material-symbols-outlined">person_search</span>
             </button>

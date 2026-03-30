@@ -1,5 +1,5 @@
 @if (!board) {
-  <div class="flow-empty">Loading flow board…</div>
+  <div class="flow-empty">{{ 'RECEPTION.LOADING_FLOW_BOARD' | translate }}</div>
 } @else {
   <div class="flow-grid" cdkDropListGroup>
     @for (col of columns; track col.key) {
@@ -32,7 +32,11 @@
               (click)="patientClicked.emit(item.patientId)"
               (keydown.enter)="patientClicked.emit(item.patientId)"
             >
-              <div class="card-drag-handle" cdkDragHandle title="Drag to move">
+              <div
+                class="card-drag-handle"
+                cdkDragHandle
+                [title]="'RECEPTION.DRAG_TO_MOVE' | translate"
+              >
                 <span class="drag-dots">⠿</span>
               </div>
               <div class="card-name">{{ item.patientName }}</div>
@@ -43,18 +47,31 @@
                 <div class="card-meta">{{ item.providerName }}</div>
               }
               @if (item.waitMinutes > 0) {
-                <div class="card-wait">{{ item.waitMinutes }}m wait</div>
+                <div class="card-wait">
+                  {{ item.waitMinutes }}{{ 'RECEPTION.MIN_WAIT' | translate }}
+                </div>
               }
               <div class="card-flags">
                 @if (item.hasInsuranceIssue) {
-                  <span class="flag-dot ins" title="Insurance issue"></span>
+                  <span
+                    class="flag-dot ins"
+                    [title]="'RECEPTION.INSURANCE_ISSUE' | translate"
+                  ></span>
                 }
                 @if (item.hasOutstandingBalance) {
-                  <span class="flag-dot bal" title="Outstanding balance"></span>
+                  <span
+                    class="flag-dot bal"
+                    [title]="'RECEPTION.OUTSTANDING_BALANCE' | translate"
+                  ></span>
                 }
               </div>
               @if (!item.encounterId) {
-                <div class="card-no-drag" title="No encounter – cannot drag">🔒</div>
+                <div
+                  class="card-no-drag"
+                  [title]="'RECEPTION.NO_ENCOUNTER_CANNOT_DRAG' | translate"
+                >
+                  🔒
+                </div>
               }
             </div>
           }

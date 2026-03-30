@@ -1,0 +1,281 @@
+/* App */
+"app_name" = "MediHub Patient";
+"patient_portal" = "Portail Patient";
+"medihub" = "MediHub";
+"copyright" = "MediHub HMS © 2026";
+
+/* Login */
+"login_title" = "MediHub Patient";
+"login_subtitle" = "Votre santé, entre vos mains";
+"username_label" = "Nom d'utilisateur";
+"username_placeholder" = "Saisissez votre nom d'utilisateur";
+"password_label" = "Mot de passe";
+"password_placeholder" = "Saisissez votre mot de passe";
+"sign_in" = "Se connecter";
+"forgot_password" = "Mot de passe oublié ?";
+"biometric_sign_in" = "Connexion avec %@";
+"use_username" = "Utiliser le nom d'utilisateur";
+"use_biometric" = "Utiliser %@";
+
+/* Navigation Tabs */
+"tab_dashboard" = "Tableau de bord";
+"tab_appointments" = "Rendez-vous";
+"tab_messages" = "Messages";
+"tab_profile" = "Profil";
+
+/* Features */
+"lab_results" = "Résultats d'analyse";
+"lab_results_title" = "Résultats d'analyse";
+"medications" = "Médicaments";
+"medications_title" = "Médicaments";
+"prescriptions" = "Ordonnances";
+"refills" = "Renouvellements";
+"billing" = "Facturation";
+"billing_title" = "Facturation";
+"vitals" = "Signes vitaux";
+"vitals_title" = "Signes vitaux";
+"care_team" = "Équipe de soins";
+"care_team_title" = "Équipe de soins";
+"visit_history" = "Historique des visites";
+"visits_title" = "Visites";
+"documents" = "Documents";
+"health_records" = "Dossier médical";
+"notifications" = "Notifications";
+"sharing_privacy" = "Partage et confidentialité";
+"family_access" = "Accès familial";
+"settings" = "Paramètres";
+"test_results" = "Résultats d'analyse";
+"patient" = "Patient";
+"summaries" = "Résumés";
+
+/* Dashboard */
+"welcome" = "Bienvenue, %@ !";
+"welcome_user" = "Bienvenue, %@ !";
+"quick_access" = "Accès rapide";
+"upcoming_appointments" = "Prochains rendez-vous";
+"recent_lab_results" = "Résultats récents";
+"allergies" = "Allergies";
+"active_conditions" = "Conditions actives";
+"chronic_conditions" = "Conditions chroniques";
+"see_all" = "Voir tout";
+"family" = "Famille";
+"sharing" = "Partage";
+"visits" = "Visites";
+
+/* Profile */
+"sign_out" = "Se déconnecter";
+"sign_out_confirm" = "Êtes-vous sûr de vouloir vous déconnecter ?";
+"logout" = "Se déconnecter";
+"logout_confirm" = "Êtes-vous sûr de vouloir vous déconnecter ?";
+"contact_info" = "Coordonnées";
+"done" = "Terminé";
+"profile_load_error" = "Impossible de charger le profil.";
+"cancel" = "Annuler";
+"personal_information" = "Informations personnelles";
+"medical_information" = "Informations médicales";
+"insurance" = "Assurance";
+"emergency_contact" = "Contact d'urgence";
+"pharmacy" = "Pharmacie";
+"preferred_pharmacy" = "Pharmacie préférée";
+"date_of_birth" = "Date de naissance";
+"gender" = "Genre";
+"phone" = "Téléphone";
+"secondary_phone" = "Téléphone secondaire";
+"email" = "E-mail";
+"address" = "Adresse";
+"address_line_1" = "Adresse ligne 1";
+"address_line_2" = "Adresse ligne 2";
+"city" = "Ville";
+"state" = "État/Région";
+"zip_code" = "Code postal";
+"country" = "Pays";
+"blood_type" = "Groupe sanguin";
+"provider" = "Prestataire";
+"policy_number" = "N° de police";
+"group_number" = "N° de groupe";
+"plan_type" = "Type de plan";
+"member_id" = "N° de membre";
+"plan" = "Plan";
+"name_label" = "Nom";
+"not_set" = "Non défini";
+"no_address" = "Aucune adresse enregistrée";
+"no_known_allergies" = "Aucune allergie connue";
+"no_allergies" = "Aucune allergie connue";
+"name" = "Nom";
+"language_label" = "Langue";
+"username" = "Nom d'utilisateur";
+"relationship" = "Relation";
+"change_photo" = "Changer la photo";
+"profile_photo" = "Photo de profil";
+"no_profile_data" = "Aucune donnée de profil";
+"profile_unavailable" = "Profil indisponible";
+"profile_unavailable_desc" = "Impossible de charger le profil.";
+"loading_profile" = "Chargement du profil…";
+"saving" = "Enregistrement…";
+"edit" = "Modifier";
+"save" = "Enregistrer";
+
+/* Language */
+"language" = "Langue";
+"language_english" = "English";
+"language_french" = "Français";
+"select_language" = "Sélectionner la langue";
+
+/* Appointments */
+"book_appointment" = "Prendre rendez-vous";
+"cancel_appointment" = "Annuler le rendez-vous";
+"reschedule" = "Reporter";
+"no_appointments" = "Aucun rendez-vous";
+"no_appointments_desc" = "Vous n'avez aucun rendez-vous à venir.";
+"upcoming" = "À venir";
+"past" = "Passés";
+"doctor" = "Médecin";
+"department" = "Service";
+"date" = "Date";
+"time" = "Heure";
+"reason" = "Motif";
+"notes" = "Notes";
+"cancellation_reason" = "Motif d'annulation";
+"appointment_details" = "Détails du rendez-vous";
+"status" = "Statut";
+"confirm_cancel" = "Confirmer l'annulation";
+"new_date" = "Nouvelle date";
+"new_time" = "Nouvelle heure";
+"select_doctor" = "Sélectionner un médecin";
+"all_appointments" = "Tous les rendez-vous";
+
+/* Lab Results */
+"no_lab_results" = "Aucun résultat disponible";
+"no_lab_results_desc" = "Aucun résultat d'analyse disponible.";
+"result" = "Résultat";
+"reference" = "Référence";
+"ordered_by" = "Prescrit par";
+"critical" = "CRITIQUE";
+"abnormal" = "ANORMAL";
+"normal" = "Normal";
+"test_name" = "Analyse";
+"collected_date" = "Prélevé le";
+
+/* Medications */
+"no_active_medications" = "Aucun médicament actif";
+"no_prescriptions" = "Aucune ordonnance";
+"no_refills" = "Aucune demande de renouvellement";
+"dosage" = "Dosage";
+"frequency" = "Fréquence";
+"prescribed_by" = "Prescrit par";
+"refills_remaining" = "Renouvellements restants";
+"request_refill" = "Demander un renouvellement";
+"cancel_refill" = "Annuler le renouvellement";
+"active_medications" = "Médicaments actifs";
+
+/* Billing */
+"outstanding_balance" = "Solde impayé";
+"invoices" = "Factures";
+"no_invoices" = "Aucune facture";
+"no_invoices_desc" = "Aucun relevé de facturation trouvé.";
+"total" = "Total";
+"paid" = "Payé";
+"balance" = "Solde";
+"pay_now" = "Payer maintenant";
+"payment_amount" = "Montant du paiement";
+"confirm_payment" = "Confirmer le paiement";
+"invoice_details" = "Détails de la facture";
+"items" = "Articles";
+
+/* Vitals */
+"record_vitals" = "Enregistrer les signes vitaux";
+"no_vitals" = "Aucun signe vital enregistré";
+"no_vitals_desc" = "Aucun signe vital enregistré.";
+"blood_pressure" = "Tension artérielle";
+"heart_rate" = "Fréquence cardiaque";
+"temperature" = "Température";
+"oxygen_saturation" = "Sat O₂";
+"weight" = "Poids";
+"latest_readings" = "Dernières mesures";
+"history" = "Historique";
+"systolic" = "Systolique";
+"diastolic" = "Diastolique";
+"save_vital" = "Enregistrer les données";
+"bpm" = "bpm";
+
+/* Care Team */
+"no_care_team" = "Aucun membre de l'équipe de soins";
+"no_care_team_desc" = "Aucun membre de l'équipe de soins assigné.";
+"primary_physician" = "Médecin traitant";
+"call" = "Appeler";
+"role" = "Rôle";
+"specialty" = "Spécialité";
+
+/* Visit History */
+"encounters" = "Consultations";
+"after_visit_summaries" = "Résumés post-visite";
+"no_encounters" = "Aucune consultation";
+"no_summaries" = "Aucun résumé post-visite";
+"discharge_summary" = "Résumé de sortie";
+"diagnosis" = "Diagnostic";
+"visit_date" = "Date de visite";
+"view_summary" = "Voir le résumé";
+
+/* Messages */
+"no_messages" = "Aucun message";
+"no_messages_desc" = "Aucun message pour le moment.";
+"no_conversations" = "Aucune conversation";
+"new_message" = "Nouveau message";
+"type_message" = "Saisissez un message…";
+"send" = "Envoyer";
+"conversations" = "Conversations";
+
+/* Documents */
+"no_documents" = "Aucun document";
+"no_documents_desc" = "Aucun document enregistré.";
+"category" = "Catégorie";
+"search_documents" = "Rechercher des documents";
+
+/* Health Records */
+"overview" = "Aperçu";
+"immunizations" = "Vaccinations";
+"treatment_plans" = "Plans de traitement";
+"referrals" = "Orientations";
+"no_immunizations" = "Aucune vaccination";
+"no_treatment_plans" = "Aucun plan de traitement";
+"no_referrals" = "Aucune orientation";
+
+/* Notifications */
+"no_notifications" = "Aucune notification";
+"no_notifications_desc" = "Vous êtes à jour.";
+"mark_as_read" = "Marquer comme lu";
+"unread" = "Non lu";
+
+/* Sharing & Privacy */
+"consents" = "Consentements";
+"access_log" = "Journal d'accès";
+"grant_consent" = "Accorder le consentement";
+"revoke" = "Révoquer";
+"no_consents" = "Aucun consentement";
+"no_access_logs" = "Aucun journal d'accès";
+
+/* Family Access */
+"granted_by_me" = "Accordé par moi";
+"access_i_have" = "Accès que j'ai";
+"grant_access" = "Accorder l'accès";
+"revoke_access" = "Révoquer l'accès";
+"no_family_access" = "Aucun accès familial";
+"permissions" = "Autorisations";
+"patient_name" = "Nom du patient";
+"patient_id" = "ID du patient";
+"proxy_notes" = "Notes";
+
+/* Common */
+"loading" = "Chargement…";
+"error_generic" = "Une erreur est survenue. Veuillez réessayer.";
+"no_data" = "Aucune donnée disponible";
+"back" = "Retour";
+"delete" = "Supprimer";
+"confirm" = "Confirmer";
+"close" = "Fermer";
+"ok" = "OK";
+"yes" = "Oui";
+"no" = "Non";
+"error" = "Erreur";
+"retry" = "Réessayer";
+"refresh" = "Actualiser";

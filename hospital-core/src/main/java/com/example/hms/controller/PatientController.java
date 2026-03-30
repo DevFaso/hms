@@ -213,10 +213,12 @@ public class PatientController {
     public ResponseEntity<PatientResponseDTO> patchPatient(
         @PathVariable UUID id,
         @Valid @RequestBody PatientProfileUpdateRequestDTO dto,
-        @RequestHeader(name = "Accept-Language", required = false) String lang
+        @RequestHeader(name = "Accept-Language", required = false) String lang,
+        Authentication auth
     ) {
         Locale locale = parseLocale(lang);
-        return ResponseEntity.ok(patientService.patchPatient(id, dto, locale));
+        UUID resolvedHospitalId = resolveHospitalScope(auth, null, false);
+        return ResponseEntity.ok(patientService.patchPatient(id, dto, resolvedHospitalId, locale));
     }
 
     // ----------------------------------------------------------
@@ -729,9 +731,9 @@ public class PatientController {
         UUID jwtHospitalId = authUtils.extractHospitalIdFromJwt(auth);
 
         if (authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            return authUtils.preferHospital(requestedHospitalId, jwtHospitalId)
-                .or(() -> authUtils.fallbackHospitalFromAssignments(auth))
-                .orElse(null);
+            // SUPER_ADMIN: only scope when explicitly requested.
+            // When no hospitalId is provided, return null = global/all.
+            return requestedHospitalId;
         }
 
         if (authUtils.hasAuthority(auth, ROLE_RECEPTIONIST)) {

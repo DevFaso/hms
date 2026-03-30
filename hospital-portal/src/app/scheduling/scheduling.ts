@@ -15,11 +15,12 @@ import {
 import { StaffService, StaffResponse } from '../services/staff.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-scheduling',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './scheduling.html',
   styleUrl: './scheduling.scss',
 })

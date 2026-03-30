@@ -1,19 +1,21 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Notifications</h1>
-      <p class="page-subtitle">{{ unreadCount() }} unread notifications</p>
+      <h1 class="page-title">{{ 'NOTIFICATIONS.TITLE' | translate }}</h1>
+      <p class="page-subtitle">
+        {{ 'NOTIFICATIONS.UNREAD_COUNT' | translate: { count: unreadCount() } }}
+      </p>
     </div>
     <div class="header-actions">
       @if (unreadCount() > 0) {
         <button class="btn-secondary" (click)="markAllRead()">
           <span class="material-symbols-outlined">done_all</span>
-          Mark all read
+          {{ 'NOTIFICATIONS.MARK_ALL_READ' | translate }}
         </button>
       }
       <a class="btn-secondary" routerLink="/notification-settings">
         <span class="material-symbols-outlined">tune</span>
-        Preferences
+        {{ 'NOTIFICATIONS.PREFERENCES' | translate }}
       </a>
     </div>
   </div>
@@ -21,20 +23,20 @@
   <!-- Filters -->
   <div class="tabs">
     <button class="tab" [class.active]="activeFilter() === 'all'" (click)="setFilter('all')">
-      All
+      {{ 'NOTIFICATIONS.ALL' | translate }}
     </button>
     <button class="tab" [class.active]="activeFilter() === 'unread'" (click)="setFilter('unread')">
-      Unread
+      {{ 'NOTIFICATIONS.UNREAD' | translate }}
     </button>
     <button class="tab" [class.active]="activeFilter() === 'read'" (click)="setFilter('read')">
-      Read
+      {{ 'NOTIFICATIONS.READ' | translate }}
     </button>
   </div>
 
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading notifications...</p>
+      <p>{{ 'NOTIFICATIONS.LOADING' | translate }}</p>
     </div>
   }
 
@@ -74,8 +76,14 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">notifications_off</span>
-      <h3>No notifications</h3>
-      <p>{{ activeFilter() === 'unread' ? 'All caught up!' : 'Nothing here yet.' }}</p>
+      <h3>{{ 'NOTIFICATIONS.NO_NOTIFICATIONS' | translate }}</h3>
+      <p>
+        {{
+          activeFilter() === 'unread'
+            ? ('NOTIFICATIONS.ALL_CAUGHT_UP' | translate)
+            : ('NOTIFICATIONS.NOTHING_HERE' | translate)
+        }}
+      </p>
     </div>
   }
 </div>

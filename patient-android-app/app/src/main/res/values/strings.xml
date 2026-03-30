@@ -1,21 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- App -->
     <string name="app_name">MediHub Patient</string>
+    <string name="patient_portal">Patient Portal</string>
+    <string name="medihub">MediHub</string>
+    <string name="copyright">MediHub HMS © 2026</string>
+
+    <!-- Login -->
     <string name="login_title">Welcome to MediHub</string>
     <string name="login_subtitle">Your health, in your hands</string>
     <string name="username_label">Username or Email</string>
     <string name="password_label">Password</string>
     <string name="sign_in">Sign In</string>
+    <string name="forgot_password">Forgot Password?</string>
     <string name="biometric_sign_in">Sign in with Biometrics</string>
     <string name="biometric_prompt_title">Verify your identity</string>
     <string name="biometric_prompt_subtitle">Use your fingerprint or face to sign in</string>
     <string name="biometric_prompt_cancel">Cancel</string>
+    <string name="biometric_not_available">Biometric not available</string>
+    <string name="show_password">Show password</string>
+    <string name="hide_password">Hide password</string>
+
+    <!-- Navigation tabs -->
     <string name="dashboard">Dashboard</string>
     <string name="appointments">Appointments</string>
     <string name="messages">Messages</string>
     <string name="profile">Profile</string>
+
+    <!-- Drawer / feature screens -->
     <string name="lab_results">Lab Results</string>
     <string name="medications">Medications</string>
+    <string name="prescriptions">Prescriptions</string>
     <string name="billing">Billing</string>
     <string name="vitals">Vitals</string>
     <string name="care_team">Care Team</string>
@@ -24,8 +39,183 @@
     <string name="health_records">Health Records</string>
     <string name="notifications">Notifications</string>
     <string name="sharing_privacy">Sharing &amp; Privacy</string>
+    <string name="family_access">Family Access</string>
+    <string name="privacy">Privacy</string>
+
+    <!-- Dashboard -->
+    <string name="quick_access">Quick Access</string>
+    <string name="upcoming_appointments">Upcoming Appointments</string>
+    <string name="recent_lab_results">Recent Lab Results</string>
+    <string name="allergies">Allergies</string>
+    <string name="active_conditions">Active Conditions</string>
+    <string name="chronic_conditions">Chronic Conditions</string>
+    <string name="see_all">See all</string>
+    <string name="menu">Menu</string>
+    <string name="refresh">Refresh</string>
+    <string name="family">Family</string>
+    <string name="sharing">Sharing</string>
+    <string name="visits">Visits</string>
+
+    <!-- Profile -->
     <string name="sign_out">Sign Out</string>
+    <string name="sign_out_confirm">Are you sure you want to sign out?</string>
+    <string name="cancel">Cancel</string>
+    <string name="personal_information">Personal Information</string>
+    <string name="medical_information">Medical Information</string>
+    <string name="insurance">Insurance</string>
+    <string name="emergency_contact">Emergency Contact</string>
+    <string name="pharmacy">Pharmacy</string>
+    <string name="preferred_pharmacy">Preferred Pharmacy</string>
+    <string name="date_of_birth">Date of Birth</string>
+    <string name="gender">Gender</string>
+    <string name="phone">Phone</string>
+    <string name="email">Email</string>
+    <string name="address">Address</string>
+    <string name="city">City</string>
+    <string name="blood_type">Blood Type</string>
+    <string name="provider">Provider</string>
+    <string name="policy_number">Policy #</string>
+    <string name="name_label">Name</string>
+    <string name="not_set">Not set</string>
+    <string name="set_label">Set</string>
+    <string name="change_photo">Change photo</string>
+    <string name="profile_photo">Profile photo</string>
+    <string name="no_profile_data">No profile data</string>
+    <string name="mrn_prefix">MRN: %1$s</string>
+
+    <!-- Language -->
+    <string name="language">Language</string>
+    <string name="language_english">English</string>
+    <string name="language_french">Français</string>
+    <string name="language_settings">Language Settings</string>
+    <string name="select_language">Select Language</string>
+
+    <!-- Appointments -->
+    <string name="book_appointment">Book Appointment</string>
+    <string name="cancel_appointment">Cancel Appointment</string>
+    <string name="reschedule">Reschedule</string>
+    <string name="no_appointments">No appointments</string>
+    <string name="upcoming">Upcoming</string>
+    <string name="past">Past</string>
+    <string name="doctor">Doctor</string>
+    <string name="department">Department</string>
+    <string name="date_label">Date</string>
+    <string name="time_label">Time</string>
+    <string name="reason">Reason</string>
+    <string name="notes">Notes</string>
+    <string name="select_doctor">Select a doctor</string>
+    <string name="select_date">Select date</string>
+    <string name="select_time">Select time</string>
+    <string name="cancellation_reason">Cancellation Reason</string>
+    <string name="appointment_details">Appointment Details</string>
+    <string name="status">Status</string>
+
+    <!-- Lab Results -->
+    <string name="no_lab_results">No lab results</string>
+    <string name="result">Result</string>
+    <string name="reference">Reference</string>
+    <string name="ordered_by">Ordered by</string>
+    <string name="critical">CRITICAL</string>
+    <string name="abnormal">ABNORMAL</string>
+    <string name="normal">Normal</string>
+
+    <!-- Medications -->
+    <string name="no_active_medications">No active medications</string>
+    <string name="no_prescriptions">No prescriptions</string>
+    <string name="dosage">Dosage</string>
+    <string name="frequency">Frequency</string>
+    <string name="prescribed_by">Prescribed by</string>
+    <string name="refills_remaining">Refills remaining</string>
+
+    <!-- Billing -->
+    <string name="outstanding_balance">Outstanding Balance</string>
+    <string name="invoices">Invoices</string>
+    <string name="no_invoices">No invoices</string>
+    <string name="total">Total</string>
+    <string name="paid">Paid</string>
+    <string name="balance">Balance</string>
+
+    <!-- Vitals -->
+    <string name="record_vitals">Record Vitals</string>
+    <string name="no_vitals">No vitals recorded</string>
+    <string name="blood_pressure">Blood Pressure</string>
+    <string name="heart_rate">Heart Rate</string>
+    <string name="temperature">Temperature</string>
+    <string name="oxygen_saturation">Oxygen Saturation</string>
+    <string name="weight">Weight</string>
+    <string name="latest_readings">Latest Readings</string>
+    <string name="history">History</string>
+
+    <!-- Care Team -->
+    <string name="no_care_team">No care team members</string>
+    <string name="primary_physician">Primary Physician</string>
+    <string name="call">Call</string>
+    <string name="role">Role</string>
+    <string name="specialty">Specialty</string>
+
+    <!-- Visit History -->
+    <string name="encounters">Encounters</string>
+    <string name="after_visit_summaries">After-Visit Summaries</string>
+    <string name="no_encounters">No encounters</string>
+    <string name="no_summaries">No after-visit summaries</string>
+    <string name="discharge_summary">Discharge Summary</string>
+
+    <!-- Messages -->
+    <string name="no_messages">No messages</string>
+    <string name="new_message">New Message</string>
+    <string name="type_message">Type a message…</string>
+    <string name="send">Send</string>
+    <string name="conversations">Conversations</string>
+
+    <!-- Documents -->
+    <string name="no_documents">No documents</string>
+    <string name="category">Category</string>
+    <string name="search_documents">Search documents</string>
+
+    <!-- Health Records -->
+    <string name="overview">Overview</string>
+    <string name="immunizations">Immunizations</string>
+    <string name="treatment_plans">Treatment Plans</string>
+    <string name="referrals">Referrals</string>
+    <string name="no_immunizations">No immunizations</string>
+    <string name="no_treatment_plans">No treatment plans</string>
+    <string name="no_referrals">No referrals</string>
+
+    <!-- Notifications -->
+    <string name="no_notifications">No notifications</string>
+    <string name="mark_as_read">Mark as read</string>
+    <string name="unread">Unread</string>
+
+    <!-- Sharing & Privacy -->
+    <string name="consents">Consents</string>
+    <string name="access_log">Access Log</string>
+    <string name="grant_consent">Grant Consent</string>
+    <string name="revoke">Revoke</string>
+    <string name="no_consents">No consents</string>
+    <string name="no_access_logs">No access logs</string>
+
+    <!-- Family Access -->
+    <string name="granted_by_me">Granted by Me</string>
+    <string name="access_i_have">Access I Have</string>
+    <string name="grant_access">Grant Access</string>
+    <string name="revoke_access">Revoke Access</string>
+    <string name="no_family_access">No family access records</string>
+    <string name="relationship">Relationship</string>
+    <string name="permissions">Permissions</string>
+
+    <!-- Common -->
     <string name="loading">Loading…</string>
     <string name="error_generic">Something went wrong. Please try again.</string>
     <string name="no_data">No data available</string>
+    <string name="back">Back</string>
+    <string name="save">Save</string>
+    <string name="edit">Edit</string>
+    <string name="delete">Delete</string>
+    <string name="confirm">Confirm</string>
+    <string name="close">Close</string>
+    <string name="ok">OK</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="error_prefix">Error: %1$s</string>
+    <string name="unknown_doctor">Unknown Doctor</string>
 </resources>

@@ -4,6 +4,7 @@ struct DashboardView: View {
     @Binding var showMenu: Bool
     @StateObject private var vm = DashboardViewModel()
     @EnvironmentObject var authManager: AuthManager
+    @EnvironmentObject var localization: LocalizationManager
     @State private var navigateTo: DashboardDestination?
 
     enum DashboardDestination: Hashable {
@@ -13,31 +14,35 @@ struct DashboardView: View {
         case familyAccess, sharingPrivacy
     }
 
-    private let quickLinks: [(title: String, icon: String, color: Color, dest: DashboardDestination)] = [
-        ("Appointments", "calendar",        .green,  .appointments),
-        ("Test Results", "testtube.2",      .purple, .labResults),
-        ("Medications",  "pill.fill",       .teal,   .medications),
-        ("Billing",      "creditcard.fill", .orange, .billing),
-        ("Care Team",    "person.2.fill",   .pink,   .careTeam),
-        ("Vitals",       "heart.fill",      .red,    .vitals),
-        ("Visits",       "building.2.fill", .indigo, .visits),
-        ("Documents",    "doc.fill",        .blue,   .documents),
-        ("Family",       "person.2.circle", .cyan,   .familyAccess),
-        ("Sharing",      "lock.shield",     .mint,   .sharingPrivacy),
-    ]
+    private var quickLinks: [(titleKey: String, icon: String, color: Color, dest: DashboardDestination)] {
+        [
+            ("tab_appointments", "calendar",        .green,  .appointments),
+            ("test_results",     "testtube.2",      .purple, .labResults),
+            ("medications_title","pill.fill",       .teal,   .medications),
+            ("billing_title",    "creditcard.fill", .orange, .billing),
+            ("care_team_title",  "person.2.fill",   .pink,   .careTeam),
+            ("vitals_title",     "heart.fill",      .red,    .vitals),
+            ("visits_title",     "building.2.fill", .indigo, .visits),
+            ("documents",        "doc.fill",        .blue,   .documents),
+            ("family_access",    "person.2.circle", .cyan,   .familyAccess),
+            ("sharing_privacy",  "lock.shield",     .mint,   .sharingPrivacy),
+        ]
+    }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 24) {
 
                     // MARK: Welcome header
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Welcome, \(authManager.currentUser?.firstName ?? "Patient")!")
-                                .font(.title2).bold()
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(String(format: "welcome_user".localized,
+                                        authManager.currentUser?.firstName ?? "patient".localized))
+                                .font(.system(size: 26, weight: .bold, design: .rounded))
                             Text(Date.now.formatted(.dateTime.weekday(.wide).month().day()))
-                                .font(.subheadline).foregroundColor(.secondary)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                         }
                         Spacer()
                         if vm.unreadNotificationCount > 0 {
@@ -45,14 +50,17 @@ struct DashboardView: View {
                                 ZStack(alignment: .topTrailing) {
                                     Image(systemName: "bell.fill")
                                         .font(.title2)
-                                        .foregroundColor(.accentColor)
+                                        .foregroundStyle(Color("BrandBlue"))
+                                        .frame(width: 44, height: 44)
+                                        .background(Color("BrandBlue").opacity(0.1))
+                                        .clipShape(Circle())
                                     Text("\(vm.unreadNotificationCount)")
-                                        .font(.caption2).bold()
-                                        .foregroundColor(.white)
-                                        .padding(4)
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 18, height: 18)
                                         .background(Color.red)
                                         .clipShape(Circle())
-                                        .offset(x: 6, y: -6)
+                                        .offset(x: 4, y: -4)
                                 }
                             }
                         }
@@ -65,12 +73,12 @@ struct DashboardView: View {
                             HStack(spacing: 8) {
                                 ForEach(allergies, id: \.self) { allergy in
                                     Label(allergy, systemImage: "exclamationmark.triangle.fill")
-                                        .font(.caption).bold()
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 6)
-                                        .background(Color.red.opacity(0.1))
-                                        .foregroundColor(.red)
-                                        .cornerRadius(20)
+                                        .font(.caption.weight(.semibold))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 7)
+                                        .background(Color.red.opacity(0.08))
+                                        .foregroundStyle(.red)
+                                        .clipShape(Capsule())
                                 }
                             }
                             .padding(.horizontal)
@@ -78,22 +86,32 @@ struct DashboardView: View {
                     }
 
                     // MARK: Quick links grid
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()),
-                                        GridItem(.flexible()), GridItem(.flexible())],
-                              spacing: 12) {
-                        ForEach(quickLinks, id: \.title) { link in
+                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
+                                        GridItem(.flexible(), spacing: 12),
+                                        GridItem(.flexible(), spacing: 12),
+                                        GridItem(.flexible(), spacing: 12)],
+                              spacing: 14) {
+                        ForEach(quickLinks, id: \.titleKey) { link in
                             NavigationLink(value: link.dest) {
-                                VStack(spacing: 8) {
+                                VStack(spacing: 10) {
                                     Image(systemName: link.icon)
-                                        .font(.title2)
-                                        .foregroundColor(.white)
-                                        .frame(width: 52, height: 52)
-                                        .background(link.color)
-                                        .cornerRadius(14)
-                                    Text(link.title)
-                                        .font(.caption)
-                                        .foregroundColor(.primary)
+                                        .font(.system(size: 22, weight: .medium))
+                                        .foregroundStyle(.white)
+                                        .frame(width: 50, height: 50)
+                                        .background(
+                                            LinearGradient(
+                                                colors: [link.color, link.color.opacity(0.7)],
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                                        .shadow(color: link.color.opacity(0.25), radius: 4, y: 2)
+                                    Text(link.titleKey.localized)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(.primary)
                                         .multilineTextAlignment(.center)
+                                        .lineLimit(2)
                                 }
                             }
                         }
@@ -102,7 +120,7 @@ struct DashboardView: View {
 
                     // MARK: Upcoming appointments
                     if !vm.upcomingAppointments.isEmpty {
-                        SectionCard(title: "Upcoming Appointments", icon: "calendar") {
+                        SectionCard(title: "upcoming_appointments".localized, icon: "calendar") {
                             ForEach(vm.upcomingAppointments) { appt in
                                 NavigationLink(destination: AppointmentDetailView(appointment: appt)) {
                                     AppointmentRowView(appointment: appt)
@@ -119,7 +137,7 @@ struct DashboardView: View {
 
                     // MARK: Recent lab results
                     if !vm.labResults.isEmpty {
-                        SectionCard(title: "Recent Lab Results", icon: "testtube.2") {
+                        SectionCard(title: "recent_lab_results".localized, icon: "testtube.2") {
                             ForEach(vm.labResults.prefix(3)) { lab in
                                 LabResultRowView(result: lab)
                                     .padding(.vertical, 4)
@@ -133,11 +151,11 @@ struct DashboardView: View {
 
                     // MARK: Active conditions
                     if let conditions = vm.healthSummary?.activeDiagnoses, !conditions.isEmpty {
-                        SectionCard(title: "Active Conditions", icon: "stethoscope") {
+                        SectionCard(title: "active_conditions".localized, icon: "stethoscope") {
                             ForEach(conditions, id: \.self) { condition in
                                 Label(condition, systemImage: "circle.fill")
                                     .font(.subheadline)
-                                    .foregroundColor(.primary)
+                                    .foregroundStyle(.primary)
                                     .padding(.vertical, 2)
                             }
                         }
@@ -146,20 +164,22 @@ struct DashboardView: View {
                 }
                 .padding(.vertical)
             }
-            .navigationTitle("Dashboard")
+            .navigationTitle("tab_dashboard".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button {
-                        withAnimation { showMenu.toggle() }
+                        withAnimation(.spring(response: 0.3)) { showMenu.toggle() }
                     } label: {
                         Image(systemName: "line.3.horizontal")
-                            .font(.title3)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(.primary)
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { Task { await vm.loadAll() } }) {
                         Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 14, weight: .medium))
                     }
                 }
             }
@@ -182,10 +202,16 @@ struct DashboardView: View {
             }
             .overlay {
                 if vm.isLoading && vm.healthSummary == nil {
-                    ProgressView("Loading…")
-                        .padding(24)
-                        .background(.regularMaterial)
-                        .cornerRadius(16)
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .controlSize(.large)
+                        Text("loading".localized)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(28)
+                    .background(.regularMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                 }
             }
         }
@@ -201,14 +227,19 @@ struct SectionCard<Content: View>: View {
     @ViewBuilder let content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Label(title, systemImage: icon)
-                .font(.headline)
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color("BrandBlue"))
+                Text(title)
+                    .font(.headline)
+            }
             content
         }
-        .padding()
+        .padding(16)
         .background(Color(.secondarySystemBackground))
-        .cornerRadius(16)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
 
@@ -218,24 +249,24 @@ struct AppointmentRowView: View {
     let appointment: AppointmentDTO
     var body: some View {
         HStack(spacing: 12) {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(appointment.statusColor == "green" ? Color.green : Color.blue)
-                .frame(width: 4)
+            RoundedRectangle(cornerRadius: 4)
+                .fill(appointment.statusColor == "green" ? Color.green : Color("BrandBlue"))
+                .frame(width: 4, height: 48)
             VStack(alignment: .leading, spacing: 4) {
                 Text(appointment.staffName ?? "Doctor")
-                    .font(.subheadline).bold()
+                    .font(.subheadline.weight(.semibold))
                 Text(appointment.hospitalName ?? "")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.caption).foregroundStyle(.secondary)
                 if let date = appointment.appointmentDate {
                     HStack(spacing: 4) {
                         Image(systemName: "calendar")
-                            .font(.caption2).foregroundColor(.secondary)
-                        Text(date).font(.caption2).foregroundColor(.secondary)
+                            .font(.system(size: 9)).foregroundStyle(.secondary)
+                        Text(date).font(.caption2).foregroundStyle(.secondary)
                         if let time = appointment.timeRange {
-                            Text("·").foregroundColor(.secondary)
+                            Text("·").foregroundStyle(.secondary)
                             Image(systemName: "clock")
-                                .font(.caption2).foregroundColor(.secondary)
-                            Text(time).font(.caption2).foregroundColor(.secondary)
+                                .font(.system(size: 9)).foregroundStyle(.secondary)
+                            Text(time).font(.caption2).foregroundStyle(.secondary)
                         }
                     }
                 }
@@ -253,20 +284,20 @@ struct LabResultRowView: View {
     var body: some View {
         HStack {
             Image(systemName: result.abnormal ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                .foregroundColor(result.abnormal ? .red : .green)
-                .font(.caption)
+                .foregroundStyle(result.abnormal ? .red : .green)
+                .font(.subheadline)
             VStack(alignment: .leading, spacing: 2) {
-                Text(result.testName ?? "Test").font(.subheadline).bold()
+                Text(result.testName ?? "Test").font(.subheadline.weight(.semibold))
                 Text(result.collectedDate ?? result.resultDate ?? result.orderedDate ?? "")
-                    .font(.caption).foregroundColor(.secondary)
+                    .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 2) {
                 Text(result.result ?? "—").font(.subheadline)
                 if result.isCritical {
-                    Text("CRITICAL").font(.caption2).bold().foregroundColor(.red)
+                    Text("CRITICAL").font(.system(size: 9, weight: .bold)).foregroundStyle(.red)
                 } else if result.abnormal {
-                    Text("ABNORMAL").font(.caption2).bold().foregroundColor(.orange)
+                    Text("ABNORMAL").font(.system(size: 9, weight: .bold)).foregroundStyle(.orange)
                 }
             }
         }
@@ -292,15 +323,16 @@ struct StatusBadge: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2).bold()
+            .font(.system(size: 10, weight: .bold))
             .padding(.horizontal, 8).padding(.vertical, 4)
-            .background(swiftColor.opacity(0.15))
-            .foregroundColor(swiftColor)
-            .cornerRadius(8)
+            .background(swiftColor.opacity(0.12))
+            .foregroundStyle(swiftColor)
+            .clipShape(Capsule())
     }
 }
 
 #Preview {
     DashboardView(showMenu: .constant(false))
         .environmentObject(AuthManager.shared)
+        .environmentObject(LocalizationManager.shared)
 }

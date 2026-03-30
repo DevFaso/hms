@@ -25,4 +25,13 @@ chown -R appuser:appuser "${UPLOAD_DIR}"
 chmod 750 "${UPLOAD_DIR}"
 
 echo "[entrypoint] Starting application as appuser..."
-exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} -Dserver.port=${PORT:-8081} -jar /app/app.jar"
+
+# Attach the OpenTelemetry Java Agent when OTEL_EXPORTER_OTLP_ENDPOINT is set.
+# This auto-instruments the app to export traces, metrics, and logs to Grafana Cloud.
+OTEL_AGENT=""
+if [ -n "${OTEL_EXPORTER_OTLP_ENDPOINT:-}" ] && [ -f /app/opentelemetry-javaagent.jar ]; then
+  OTEL_AGENT="-javaagent:/app/opentelemetry-javaagent.jar"
+  echo "[entrypoint] OpenTelemetry agent enabled → ${OTEL_EXPORTER_OTLP_ENDPOINT}"
+fi
+
+exec su -s /bin/sh appuser -c "exec ${JAVA_BIN} ${OTEL_AGENT} -Dserver.port=${PORT:-8081} -jar /app/app.jar"

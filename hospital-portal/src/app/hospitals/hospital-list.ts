@@ -5,11 +5,12 @@ import { HospitalService, HospitalResponse, HospitalRequest } from '../services/
 import { OrganizationService, OrganizationResponse } from '../services/organization.service';
 
 import { ToastService } from '../core/toast.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-hospital-list',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './hospital-list.html',
   styleUrl: './hospital-list.scss',
 })

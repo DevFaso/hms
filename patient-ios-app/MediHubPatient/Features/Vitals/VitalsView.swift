@@ -18,11 +18,11 @@ struct VitalsView: View {
     private var content: some View {
         Group {
             if vm.isLoading && vm.vitals.isEmpty {
-                ProgressView("Loading vitals…")
+                ProgressView("loading".localized)
             } else if vm.vitals.isEmpty {
-                ContentUnavailableView("No Vitals Recorded",
+                ContentUnavailableView("no_vitals".localized,
                     systemImage: "heart.fill",
-                    description: Text("No vital signs on record."))
+                    description: Text("no_vitals_desc".localized))
             } else {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
@@ -34,7 +34,7 @@ struct VitalsView: View {
                 }
             }
         }
-        .navigationTitle("Vitals")
+        .navigationTitle("vitals_title".localized)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button(action: { showRecordSheet = true }) {

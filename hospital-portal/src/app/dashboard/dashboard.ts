@@ -54,6 +54,7 @@ import {
   PortalInvoice,
   CareTeamDTO,
 } from '../services/patient-portal.service';
+import { TranslateModule } from '@ngx-translate/core';
 import { DoctorWorklistComponent } from './doctor-worklist/doctor-worklist';
 import { DoctorPatientFlowComponent } from './doctor-patient-flow/doctor-patient-flow';
 import { DoctorResultsPanelComponent } from './doctor-results-panel/doctor-results-panel';
@@ -112,6 +113,7 @@ interface NavTile {
     RouterLink,
     DatePipe,
     TitleCasePipe,
+    TranslateModule,
     DoctorWorklistComponent,
     DoctorPatientFlowComponent,
     DoctorResultsPanelComponent,

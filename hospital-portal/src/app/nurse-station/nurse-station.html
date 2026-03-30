@@ -2,14 +2,14 @@
   <!-- ── Header with Refresh ──────────────────────────────── -->
   <div class="page-header">
     <div>
-      <h1 class="page-title">Nurse Station</h1>
-      <p class="page-subtitle">Clinical tasks, medications, and patient care</p>
+      <h1 class="page-title">{{ 'NURSE.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'NURSE.SUBTITLE' | translate }}</p>
     </div>
     <div class="header-actions">
       @if (lastRefreshed()) {
         <span class="last-refreshed">Updated {{ lastRefreshed() | date: 'shortTime' }}</span>
       }
-      <button class="refresh-btn" (click)="refresh()" title="Refresh now">
+      <button class="refresh-btn" (click)="refresh()" [title]="'COMMON.REFRESH' | translate">
         <span class="material-symbols-outlined">refresh</span>
       </button>
     </div>
@@ -18,13 +18,13 @@
   <!-- ── Filter Bar ───────────────────────────────────────── -->
   <div class="filter-bar">
     <button class="filter-btn" [class.active]="filterMode() === 'me'" (click)="setFilter('me')">
-      My Patients
+      {{ 'NURSE.MY_PATIENTS' | translate }}
     </button>
     <button class="filter-btn" [class.active]="filterMode() === 'unit'" (click)="setFilter('unit')">
-      My Unit
+      {{ 'NURSE.MY_UNIT' | translate }}
     </button>
     <button class="filter-btn" [class.active]="filterMode() === 'all'" (click)="setFilter('all')">
-      All
+      {{ 'COMMON.ALL' | translate }}
     </button>
   </div>
 
@@ -34,28 +34,28 @@
       <span class="material-symbols-outlined card-icon vitals">monitor_heart</span>
       <div class="card-info">
         <span class="card-value">{{ summary()?.vitalsDue ?? vitals().length }}</span>
-        <span class="card-label">Vitals Due</span>
+        <span class="card-label">{{ 'NURSE.VITALS_DUE' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon meds">medication</span>
       <div class="card-info">
         <span class="card-value">{{ summary()?.medicationsDue ?? medications().length }}</span>
-        <span class="card-label">Medications Due</span>
+        <span class="card-label">{{ 'NURSE.MEDICATIONS_DUE' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon orders">assignment</span>
       <div class="card-info">
         <span class="card-value">{{ summary()?.ordersPending ?? orders().length }}</span>
-        <span class="card-label">Orders</span>
+        <span class="card-label">{{ 'NURSE.ORDERS' | translate }}</span>
       </div>
     </div>
     <div class="summary-card overdue">
       <span class="material-symbols-outlined card-icon overdue-icon">warning</span>
       <div class="card-info">
         <span class="card-value">{{ summary()?.medicationsOverdue ?? overdueCount() }}</span>
-        <span class="card-label">Overdue</span>
+        <span class="card-label">{{ 'NURSE.OVERDUE' | translate }}</span>
       </div>
     </div>
   </div>
@@ -68,73 +68,73 @@
           class="tab-btn"
           [class.active]="activeSection() === 'vitals'"
           (click)="setSection('vitals')"
-          title="View vitals due"
+          [title]="'NURSE.VITALS_DUE' | translate"
         >
-          Vitals Due
+          {{ 'NURSE.VITALS_DUE' | translate }}
         </button>
         <button
           class="tab-btn"
           [class.active]="activeSection() === 'medications'"
           (click)="setSection('medications')"
-          title="View medication MAR"
+          [title]="'NURSE.MEDICATION_MAR' | translate"
         >
-          Medication MAR
+          {{ 'NURSE.MEDICATION_MAR' | translate }}
         </button>
         <button
           class="tab-btn"
           [class.active]="activeSection() === 'orders'"
           (click)="setSection('orders')"
-          title="View orders"
+          [title]="'NURSE.ORDERS' | translate"
         >
-          Orders
+          {{ 'NURSE.ORDERS' | translate }}
         </button>
         <button
           class="tab-btn"
           [class.active]="activeSection() === 'handoffs'"
           (click)="setSection('handoffs')"
-          title="View handoffs"
+          [title]="'NURSE.HANDOFFS' | translate"
         >
-          Handoffs
+          {{ 'NURSE.HANDOFFS' | translate }}
         </button>
         <button
           class="tab-btn"
           [class.active]="activeSection() === 'workboard'"
           (click)="setSection('workboard')"
-          title="Patient workboard"
+          [title]="'NURSE.WORKBOARD' | translate"
         >
-          Workboard
+          {{ 'NURSE.WORKBOARD' | translate }}
         </button>
         <button
           class="tab-btn"
           [class.active]="activeSection() === 'flowboard'"
           (click)="setSection('flowboard')"
-          title="Patient flow board"
+          [title]="'NURSE.FLOW_BOARD' | translate"
         >
-          Flow Board
+          {{ 'NURSE.FLOW_BOARD' | translate }}
         </button>
         <button
           class="tab-btn"
           [class.active]="activeSection() === 'admissions'"
           (click)="setSection('admissions')"
-          title="Pending admissions"
+          [title]="'NURSE.ADMISSIONS' | translate"
         >
-          Admissions
+          {{ 'NURSE.ADMISSIONS' | translate }}
         </button>
         <button
           class="tab-btn"
           [class.active]="activeSection() === 'tasks'"
           (click)="setSection('tasks')"
-          title="Nursing task board"
+          [title]="'NURSE.TASK_BOARD' | translate"
         >
-          Task Board
+          {{ 'NURSE.TASK_BOARD' | translate }}
         </button>
         <button
           class="tab-btn"
           [class.active]="activeSection() === 'inbox'"
           (click)="setSection('inbox')"
-          title="Nurse communication inbox"
+          [title]="'NURSE.INBOX' | translate"
         >
-          Inbox
+          {{ 'NURSE.INBOX' | translate }}
           @if (inboxUnreadCount() > 0) {
             <span class="badge-count">{{ inboxUnreadCount() }}</span>
           }
@@ -144,7 +144,7 @@
       @if (loading()) {
         <div class="loading-state">
           <div class="spinner"></div>
-          <p>Loading tasks...</p>
+          <p>{{ 'NURSE.LOADING_TASKS' | translate }}</p>
         </div>
       }
 
@@ -153,7 +153,7 @@
         @if (vitals().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">monitor_heart</span>
-            <h3>No vitals due</h3>
+            <h3>{{ 'NURSE.NO_VITALS_DUE' | translate }}</h3>
           </div>
         }
         @if (vitals().length > 0) {
@@ -161,11 +161,11 @@
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Patient</th>
-                  <th scope="col">Type</th>
-                  <th scope="col">Due Time</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Action</th>
+                  <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
+                  <th scope="col">{{ 'COMMON.TYPE' | translate }}</th>
+                  <th scope="col">{{ 'NURSE.DUE_TIME' | translate }}</th>
+                  <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                  <th scope="col">{{ 'COMMON.ACTION' | translate }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -186,9 +186,9 @@
                     <td>{{ v.dueTime | date: 'shortTime' }}</td>
                     <td>
                       @if (v.overdue) {
-                        <span class="badge-overdue">Overdue</span>
+                        <span class="badge-overdue">{{ 'NURSE.OVERDUE' | translate }}</span>
                       } @else {
-                        <span class="badge-pending">Pending</span>
+                        <span class="badge-pending">{{ 'NURSE.PENDING' | translate }}</span>
                       }
                     </td>
                     <td>
@@ -197,7 +197,8 @@
                         (click)="recordVitals(v.patientId)"
                         [disabled]="!v.patientId"
                       >
-                        <span class="material-symbols-outlined">edit_note</span> Record
+                        <span class="material-symbols-outlined">edit_note</span>
+                        {{ 'NURSE.RECORD' | translate }}
                       </button>
                     </td>
                   </tr>
@@ -213,7 +214,7 @@
         @if (medications().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">medication</span>
-            <h3>No medications scheduled</h3>
+            <h3>{{ 'NURSE.NO_MEDICATIONS' | translate }}</h3>
           </div>
         }
         @if (medications().length > 0) {
@@ -221,13 +222,13 @@
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Patient</th>
-                  <th scope="col">Medication</th>
-                  <th scope="col">Dose</th>
-                  <th scope="col">Route</th>
-                  <th scope="col">Due</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Actions</th>
+                  <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
+                  <th scope="col">{{ 'NURSE.MEDICATION' | translate }}</th>
+                  <th scope="col">{{ 'NURSE.DOSE' | translate }}</th>
+                  <th scope="col">{{ 'NURSE.ROUTE' | translate }}</th>
+                  <th scope="col">{{ 'NURSE.DUE' | translate }}</th>
+                  <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                  <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -261,29 +262,33 @@
                           class="action-btn action-give"
                           (click)="administerMedication(m.id)"
                           [disabled]="actionInProgress() === m.id"
-                          title="Administer"
+                          [title]="'NURSE.ADMINISTER' | translate"
                         >
-                          <span class="material-symbols-outlined">check_circle</span> Give
+                          <span class="material-symbols-outlined">check_circle</span>
+                          {{ 'NURSE.GIVE' | translate }}
                         </button>
                         <button
                           class="action-btn action-hold"
                           (click)="promptHoldRefuse(m.id, 'HELD')"
                           [disabled]="actionInProgress() === m.id"
-                          title="Hold"
+                          [title]="'NURSE.HOLD' | translate"
                         >
-                          <span class="material-symbols-outlined">pause_circle</span> Hold
+                          <span class="material-symbols-outlined">pause_circle</span>
+                          {{ 'NURSE.HOLD' | translate }}
                         </button>
                         <button
                           class="action-btn action-refuse"
                           (click)="promptHoldRefuse(m.id, 'REFUSED')"
                           [disabled]="actionInProgress() === m.id"
-                          title="Refuse"
+                          [title]="'NURSE.REFUSE' | translate"
                         >
-                          <span class="material-symbols-outlined">cancel</span> Refuse
+                          <span class="material-symbols-outlined">cancel</span>
+                          {{ 'NURSE.REFUSE' | translate }}
                         </button>
                       } @else {
                         <span class="action-done">
-                          <span class="material-symbols-outlined">task_alt</span> Done
+                          <span class="material-symbols-outlined">task_alt</span>
+                          {{ 'NURSE.DONE' | translate }}
                         </span>
                       }
                     </td>
@@ -300,7 +305,7 @@
         @if (orders().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">assignment</span>
-            <h3>No orders pending</h3>
+            <h3>{{ 'NURSE.NO_ORDERS' | translate }}</h3>
           </div>
         }
         @if (orders().length > 0) {
@@ -308,10 +313,10 @@
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Patient</th>
-                  <th scope="col">Order Type</th>
-                  <th scope="col">Priority</th>
-                  <th scope="col">Due</th>
+                  <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
+                  <th scope="col">{{ 'NURSE.ORDER_TYPE' | translate }}</th>
+                  <th scope="col">{{ 'NURSE.PRIORITY' | translate }}</th>
+                  <th scope="col">{{ 'NURSE.DUE' | translate }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -348,7 +353,7 @@
         @if (handoffs().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">swap_horiz</span>
-            <h3>No handoffs</h3>
+            <h3>{{ 'NURSE.NO_HANDOFFS' | translate }}</h3>
           </div>
         }
         @if (handoffs().length > 0) {
@@ -367,16 +372,17 @@
                   }
                   <span class="handoff-dir">{{ h.direction }}</span>
                 </div>
-                <p class="handoff-note">{{ h.note || 'No notes' }}</p>
+                <p class="handoff-note">{{ h.note || ('NURSE.NO_NOTES' | translate) }}</p>
                 <div class="handoff-footer">
                   <span class="handoff-time">{{ h.updatedAt | date: 'medium' }}</span>
                   <button
                     class="action-btn action-complete"
                     (click)="completeHandoff(h.id)"
                     [disabled]="actionInProgress() === h.id"
-                    title="Complete handoff"
+                    [title]="'NURSE.COMPLETE_HANDOFF' | translate"
                   >
-                    <span class="material-symbols-outlined">check_circle</span> Complete
+                    <span class="material-symbols-outlined">check_circle</span>
+                    {{ 'NURSE.COMPLETE' | translate }}
                   </button>
                 </div>
               </div>
@@ -390,8 +396,8 @@
         @if (workboard().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">grid_view</span>
-            <h3>No active patients on workboard</h3>
-            <p>Active admissions will appear here.</p>
+            <h3>{{ 'NURSE.NO_WORKBOARD_PATIENTS' | translate }}</h3>
+            <p>{{ 'NURSE.ACTIVE_ADMISSIONS_HERE' | translate }}</p>
           </div>
         }
         @if (workboard().length > 0) {
@@ -437,7 +443,8 @@
                 <div class="workboard-card-indicators">
                   @if (p.vitalsDue) {
                     <span class="indicator indicator-warn">
-                      <span class="material-symbols-outlined">monitor_heart</span> Vitals Due
+                      <span class="material-symbols-outlined">monitor_heart</span>
+                      {{ 'NURSE.VITALS_DUE' | translate }}
                     </span>
                   } @else if (p.lastVitalsTime) {
                     <span class="indicator indicator-ok">
@@ -448,13 +455,13 @@
                   @if (p.medsDue > 0) {
                     <span class="indicator indicator-warn">
                       <span class="material-symbols-outlined">medication</span>
-                      {{ p.medsDue }} Med{{ p.medsDue > 1 ? 's' : '' }} Due
+                      {{ p.medsDue }} {{ 'NURSE.MEDS' | translate }} {{ 'NURSE.DUE' | translate }}
                     </span>
                   }
                   @if (p.admittedAt) {
                     <span class="indicator indicator-neutral">
                       <span class="material-symbols-outlined">login</span>
-                      Admitted {{ p.admittedAt | date: 'shortDate' }}
+                      {{ 'NURSE.ADMITTED' | translate }} {{ p.admittedAt | date: 'shortDate' }}
                     </span>
                   }
                 </div>
@@ -462,17 +469,19 @@
                   <button
                     class="action-btn action-record"
                     (click)="recordVitals(p.patientId, p.patientName)"
-                    title="Record vitals inline"
+                    [title]="'NURSE.RECORD_VITALS' | translate"
                   >
-                    <span class="material-symbols-outlined">edit_note</span> Vitals
+                    <span class="material-symbols-outlined">edit_note</span>
+                    {{ 'NURSE.VITALS' | translate }}
                   </button>
                   @if (p.patientId) {
                     <a
                       class="action-btn action-view"
                       [routerLink]="['/patients', p.patientId]"
-                      title="View patient record"
+                      [title]="'NURSE.VIEW_PATIENT' | translate"
                     >
-                      <span class="material-symbols-outlined">open_in_new</span> Chart
+                      <span class="material-symbols-outlined">open_in_new</span>
+                      {{ 'NURSE.CHART' | translate }}
                     </a>
                   }
                 </div>
@@ -493,8 +502,8 @@
         ) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">view_kanban</span>
-            <h3>No patients on flow board</h3>
-            <p>Active admissions will appear here sorted by status.</p>
+            <h3>{{ 'NURSE.NO_FLOW_BOARD' | translate }}</h3>
+            <p>{{ 'NURSE.FLOW_BOARD_APPEAR' | translate }}</p>
           </div>
         } @else {
           <div class="flow-board">
@@ -502,7 +511,7 @@
             <div class="flow-column">
               <div class="flow-column-header flow-header-pending">
                 <span class="material-symbols-outlined">pending</span>
-                Pending
+                {{ 'NURSE.PENDING' | translate }}
                 <span class="flow-count">{{ flowBoard()!.pending.length }}</span>
               </div>
               <div class="flow-cards">
@@ -533,7 +542,7 @@
             <div class="flow-column">
               <div class="flow-column-header flow-header-active">
                 <span class="material-symbols-outlined">local_hospital</span>
-                Active
+                {{ 'COMMON.ACTIVE' | translate }}
                 <span class="flow-count">{{ flowBoard()!.active.length }}</span>
               </div>
               <div class="flow-cards">
@@ -564,7 +573,7 @@
             <div class="flow-column">
               <div class="flow-column-header flow-header-critical">
                 <span class="material-symbols-outlined">warning</span>
-                Critical / Severe
+                {{ 'NURSE.CRITICAL_SEVERE' | translate }}
                 <span class="flow-count">{{ flowBoard()!.critical.length }}</span>
               </div>
               <div class="flow-cards">
@@ -595,7 +604,7 @@
             <div class="flow-column">
               <div class="flow-column-header flow-header-discharge">
                 <span class="material-symbols-outlined">logout</span>
-                Awaiting Discharge
+                {{ 'NURSE.AWAITING_DISCHARGE' | translate }}
                 <span class="flow-count">{{ flowBoard()!.awaitingDischarge.length }}</span>
               </div>
               <div class="flow-cards">
@@ -630,8 +639,8 @@
         @if (pendingAdmissions().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">transfer_within_a_station</span>
-            <h3>No pending admissions or discharges</h3>
-            <p>New arrivals and discharge-ready patients will appear here.</p>
+            <h3>{{ 'NURSE.NO_PENDING_ADMISSIONS' | translate }}</h3>
+            <p>{{ 'NURSE.ADMISSIONS_APPEAR_HERE' | translate }}</p>
           </div>
         }
         @if (pendingAdmissions().length > 0) {
@@ -639,15 +648,15 @@
             <table>
               <thead>
                 <tr>
-                  <th scope="col">Patient</th>
-                  <th scope="col">MRN</th>
-                  <th scope="col">Status</th>
-                  <th scope="col">Acuity</th>
-                  <th scope="col">Room/Bed</th>
-                  <th scope="col">Department</th>
-                  <th scope="col">Doctor</th>
-                  <th scope="col">Admitted</th>
-                  <th scope="col">Type</th>
+                  <th scope="col">{{ 'PATIENTS.PATIENT' | translate }}</th>
+                  <th scope="col">{{ 'NURSE.MRN' | translate }}</th>
+                  <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                  <th scope="col">{{ 'NURSE.ACUITY' | translate }}</th>
+                  <th scope="col">{{ 'NURSE.ROOM_BED' | translate }}</th>
+                  <th scope="col">{{ 'STAFF.DEPARTMENT' | translate }}</th>
+                  <th scope="col">{{ 'NURSE.DOCTOR' | translate }}</th>
+                  <th scope="col">{{ 'NURSE.ADMITTED' | translate }}</th>
+                  <th scope="col">{{ 'COMMON.TYPE' | translate }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -696,16 +705,17 @@
       <!-- ═══════════ TASK BOARD TAB ═══════════ -->
       @if (!loading() && activeSection() === 'tasks') {
         <div class="task-board-header">
-          <h3>Nursing Task Board</h3>
+          <h3>{{ 'NURSE.TASK_BOARD' | translate }}</h3>
           <button class="btn-small btn-primary" (click)="openTaskCreate()">
-            <span class="material-symbols-outlined">add_task</span> New Task
+            <span class="material-symbols-outlined">add_task</span>
+            {{ 'NURSE.NEW_TASK' | translate }}
           </button>
         </div>
         @if (nursingTasks().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">task_alt</span>
-            <h3>No active nursing tasks</h3>
-            <p>Create a new task to track bedside care activities.</p>
+            <h3>{{ 'NURSE.NO_TASKS' | translate }}</h3>
+            <p>{{ 'NURSE.CREATE_TASK_HINT' | translate }}</p>
           </div>
         }
         @if (nursingTasks().length > 0) {
@@ -746,13 +756,15 @@
                       (click)="completeTask(task.id)"
                       [disabled]="actionInProgress() === task.id"
                     >
-                      <span class="material-symbols-outlined">check_circle</span> Complete
+                      <span class="material-symbols-outlined">check_circle</span>
+                      {{ 'NURSE.COMPLETE' | translate }}
                     </button>
                     <button
                       class="btn-small btn-outline"
                       (click)="openCareNote(task.patientId, task.patientName)"
                     >
-                      <span class="material-symbols-outlined">edit_note</span> Note
+                      <span class="material-symbols-outlined">edit_note</span>
+                      {{ 'NURSE.NOTE' | translate }}
                     </button>
                   } @else {
                     <span class="task-completed-info">
@@ -772,16 +784,18 @@
       <!-- ═══════════ INBOX TAB ═══════════ -->
       @if (!loading() && activeSection() === 'inbox') {
         <div class="inbox-header">
-          <h3>Communication Inbox</h3>
+          <h3>{{ 'NURSE.COMMUNICATION_INBOX' | translate }}</h3>
           @if (inboxUnreadCount() > 0) {
-            <button class="btn-small btn-outline" (click)="markAllRead()">Mark All Read</button>
+            <button class="btn-small btn-outline" (click)="markAllRead()">
+              {{ 'NURSE.MARK_ALL_READ' | translate }}
+            </button>
           }
         </div>
         @if (inboxItems().length === 0) {
           <div class="empty-state">
             <span class="material-symbols-outlined empty-icon">inbox</span>
-            <h3>No messages</h3>
-            <p>Physician orders, lab requests, and handoff communications will appear here.</p>
+            <h3>{{ 'NURSE.NO_MESSAGES' | translate }}</h3>
+            <p>{{ 'NURSE.MESSAGES_APPEAR_HERE' | translate }}</p>
           </div>
         }
         @if (inboxItems().length > 0) {
@@ -813,9 +827,12 @@
 
     <!-- ── Announcements Sidebar ──────────────────────────── -->
     <aside class="announcements-sidebar">
-      <h3><span class="material-symbols-outlined">campaign</span> Announcements</h3>
+      <h3>
+        <span class="material-symbols-outlined">campaign</span>
+        {{ 'NURSE.ANNOUNCEMENTS' | translate }}
+      </h3>
       @if (announcements().length === 0) {
-        <p class="no-announcements">No announcements</p>
+        <p class="no-announcements">{{ 'NURSE.NO_ANNOUNCEMENTS' | translate }}</p>
       }
       @for (a of announcements(); track a.id) {
         <div class="announcement-card">
@@ -849,24 +866,36 @@
       (keydown.escape)="cancelHoldRefuse()"
     >
       <h3 id="reason-dialog-title">
-        {{ reasonPrompt()?.action === 'HELD' ? 'Hold' : 'Refuse' }} Medication
+        {{
+          reasonPrompt()?.action === 'HELD'
+            ? ('NURSE.HOLD' | translate)
+            : ('NURSE.REFUSE' | translate)
+        }}
+        {{ 'NURSE.MEDICATION' | translate }}
       </h3>
-      <p>Please provide a reason:</p>
+      <p>{{ 'NURSE.PROVIDE_REASON' | translate }}</p>
       <textarea
         class="reason-input"
         [ngModel]="reasonText()"
         (ngModelChange)="reasonText.set($event)"
-        placeholder="Enter reason..."
+        [placeholder]="'NURSE.ENTER_REASON' | translate"
         rows="3"
       ></textarea>
       <div class="modal-actions">
-        <button class="modal-btn modal-cancel" (click)="cancelHoldRefuse()">Cancel</button>
+        <button class="modal-btn modal-cancel" (click)="cancelHoldRefuse()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
         <button
           class="modal-btn modal-confirm"
           (click)="confirmHoldRefuse()"
           [disabled]="!reasonText()"
         >
-          Confirm {{ reasonPrompt()?.action === 'HELD' ? 'Hold' : 'Refuse' }}
+          {{ 'NURSE.CONFIRM' | translate }}
+          {{
+            reasonPrompt()?.action === 'HELD'
+              ? ('NURSE.HOLD' | translate)
+              : ('NURSE.REFUSE' | translate)
+          }}
         </button>
       </div>
     </div>
@@ -894,11 +923,11 @@
     >
       <h3 id="vitals-dialog-title">
         <span class="material-symbols-outlined">monitor_heart</span>
-        Record Vitals — {{ vitalsCaptureFor()?.patientName }}
+        {{ 'NURSE.RECORD_VITALS' | translate }} — {{ vitalsCaptureFor()?.patientName }}
       </h3>
       <div class="vitals-form-grid">
         <div class="vitals-field">
-          <label for="vf-temp">Temperature (°C)</label>
+          <label for="vf-temp">{{ 'NURSE.TEMPERATURE' | translate }} (°C)</label>
           <input
             id="vf-temp"
             type="number"
@@ -911,7 +940,7 @@
           />
         </div>
         <div class="vitals-field">
-          <label for="vf-hr">Heart Rate (bpm)</label>
+          <label for="vf-hr">{{ 'NURSE.HEART_RATE' | translate }} (bpm)</label>
           <input
             id="vf-hr"
             type="number"
@@ -923,7 +952,7 @@
           />
         </div>
         <div class="vitals-field">
-          <label for="vf-rr">Resp. Rate (bpm)</label>
+          <label for="vf-rr">{{ 'NURSE.RESP_RATE' | translate }} (bpm)</label>
           <input
             id="vf-rr"
             type="number"
@@ -935,7 +964,7 @@
           />
         </div>
         <div class="vitals-field">
-          <label for="vf-sbp">Systolic BP (mmHg)</label>
+          <label for="vf-sbp">{{ 'NURSE.SYSTOLIC_BP' | translate }} (mmHg)</label>
           <input
             id="vf-sbp"
             type="number"
@@ -947,7 +976,7 @@
           />
         </div>
         <div class="vitals-field">
-          <label for="vf-dbp">Diastolic BP (mmHg)</label>
+          <label for="vf-dbp">{{ 'NURSE.DIASTOLIC_BP' | translate }} (mmHg)</label>
           <input
             id="vf-dbp"
             type="number"
@@ -959,7 +988,7 @@
           />
         </div>
         <div class="vitals-field">
-          <label for="vf-spo2">SpO₂ (%)</label>
+          <label for="vf-spo2">{{ 'NURSE.SPO2' | translate }} (%)</label>
           <input
             id="vf-spo2"
             type="number"
@@ -971,7 +1000,7 @@
           />
         </div>
         <div class="vitals-field">
-          <label for="vf-glucose">Blood Glucose (mg/dL)</label>
+          <label for="vf-glucose">{{ 'NURSE.BLOOD_GLUCOSE' | translate }} (mg/dL)</label>
           <input
             id="vf-glucose"
             type="number"
@@ -983,7 +1012,7 @@
           />
         </div>
         <div class="vitals-field">
-          <label for="vf-weight">Weight (kg)</label>
+          <label for="vf-weight">{{ 'NURSE.WEIGHT' | translate }} (kg)</label>
           <input
             id="vf-weight"
             type="number"
@@ -996,11 +1025,11 @@
           />
         </div>
         <div class="vitals-field vitals-field-full">
-          <label for="vf-notes">Notes</label>
+          <label for="vf-notes">{{ 'NURSE.NOTES' | translate }}</label>
           <textarea
             id="vf-notes"
             class="reason-input"
-            placeholder="Clinical notes (optional)"
+            [placeholder]="'NURSE.CLINICAL_NOTES' | translate"
             rows="2"
             [value]="vitalsForm().notes ?? ''"
             (input)="updateVitalsNotes($any($event.target).value)"
@@ -1013,7 +1042,7 @@
           (click)="closeVitalsDialog()"
           [disabled]="vitalsCapturing()"
         >
-          Cancel
+          {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
           class="modal-btn modal-confirm"
@@ -1021,9 +1050,11 @@
           [disabled]="vitalsCapturing()"
         >
           @if (vitalsCapturing()) {
-            <span class="material-symbols-outlined">hourglass_empty</span> Saving...
+            <span class="material-symbols-outlined">hourglass_empty</span>
+            {{ 'COMMON.SAVING' | translate }}
           } @else {
-            <span class="material-symbols-outlined">save</span> Save Vitals
+            <span class="material-symbols-outlined">save</span>
+            {{ 'NURSE.SAVE_VITALS' | translate }}
           }
         </button>
       </div>
@@ -1048,14 +1079,14 @@
       role="dialog"
     >
       <div class="modal-header">
-        <h3>Create Nursing Task</h3>
+        <h3>{{ 'NURSE.CREATE_TASK' | translate }}</h3>
         <button class="modal-close" (click)="closeTaskCreate()">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">
         <div class="form-row">
-          <label for="tc-patient">Patient ID</label>
+          <label for="tc-patient">{{ 'NURSE.PATIENT_ID' | translate }}</label>
           <input
             id="tc-patient"
             type="text"
@@ -1066,51 +1097,51 @@
           />
         </div>
         <div class="form-row">
-          <label for="tc-category">Category</label>
+          <label for="tc-category">{{ 'NURSE.CATEGORY' | translate }}</label>
           <select
             id="tc-category"
             class="reason-input"
             [value]="taskForm().category"
             (change)="updateTaskField('category', $any($event.target).value)"
           >
-            <option value="">Select…</option>
-            <option value="DRESSING_CHANGE">Dressing Change</option>
-            <option value="IV_CHECK">IV Check</option>
-            <option value="CATHETER_CARE">Catheter Care</option>
-            <option value="PAIN_REASSESSMENT">Pain Reassessment</option>
-            <option value="MOBILITY_ASSIST">Mobility Assist</option>
-            <option value="INTAKE_OUTPUT">Intake &amp; Output</option>
-            <option value="WOUND_CARE">Wound Care</option>
-            <option value="OTHER">Other</option>
+            <option value="">{{ 'NURSE.SELECT' | translate }}</option>
+            <option value="DRESSING_CHANGE">{{ 'NURSE.DRESSING_CHANGE' | translate }}</option>
+            <option value="IV_CHECK">{{ 'NURSE.IV_CHECK' | translate }}</option>
+            <option value="CATHETER_CARE">{{ 'NURSE.CATHETER_CARE' | translate }}</option>
+            <option value="PAIN_REASSESSMENT">{{ 'NURSE.PAIN_REASSESSMENT' | translate }}</option>
+            <option value="MOBILITY_ASSIST">{{ 'NURSE.MOBILITY_ASSIST' | translate }}</option>
+            <option value="INTAKE_OUTPUT">{{ 'NURSE.INTAKE_OUTPUT' | translate }}</option>
+            <option value="WOUND_CARE">{{ 'NURSE.WOUND_CARE' | translate }}</option>
+            <option value="OTHER">{{ 'COMMON.OTHER' | translate }}</option>
           </select>
         </div>
         <div class="form-row">
-          <label for="tc-description">Description</label>
+          <label for="tc-description">{{ 'NURSE.DESCRIPTION' | translate }}</label>
           <textarea
             id="tc-description"
             class="reason-input"
             rows="2"
-            placeholder="Task details (optional)"
+            [placeholder]="'NURSE.TASK_DETAILS' | translate"
             [value]="taskForm().description ?? ''"
             (input)="updateTaskField('description', $any($event.target).value)"
           ></textarea>
         </div>
         <div class="form-row-inline">
           <div class="form-row">
-            <label for="tc-priority">Priority</label>
+            <label for="tc-priority">{{ 'NURSE.PRIORITY' | translate }}</label>
             <select
               id="tc-priority"
               class="reason-input"
               [value]="taskForm().priority"
               (change)="updateTaskField('priority', $any($event.target).value)"
             >
-              <option value="ROUTINE">Routine</option>
-              <option value="URGENT">Urgent</option>
-              <option value="STAT">Stat</option>
+              <option value="ROUTINE">{{ 'NURSE.ROUTINE' | translate }}</option>
+              <option value="URGENT">{{ 'NURSE.URGENT' | translate }}</option>
+              <option value="STAT">{{ 'NURSE.STAT' | translate }}</option>
             </select>
           </div>
           <div class="form-row">
-            <label for="tc-due">Due At</label>
+            <label for="tc-due">{{ 'NURSE.DUE_AT' | translate }}</label>
             <input
               id="tc-due"
               type="datetime-local"
@@ -1127,7 +1158,7 @@
           (click)="closeTaskCreate()"
           [disabled]="taskCreating()"
         >
-          Cancel
+          {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
           class="modal-btn modal-confirm"
@@ -1135,9 +1166,11 @@
           [disabled]="taskCreating() || !taskForm().patientId || !taskForm().category"
         >
           @if (taskCreating()) {
-            <span class="material-symbols-outlined">hourglass_empty</span> Creating...
+            <span class="material-symbols-outlined">hourglass_empty</span>
+            {{ 'NURSE.CREATING' | translate }}
           } @else {
-            <span class="material-symbols-outlined">add_task</span> Create Task
+            <span class="material-symbols-outlined">add_task</span>
+            {{ 'NURSE.CREATE_TASK' | translate }}
           }
         </button>
       </div>
@@ -1162,25 +1195,25 @@
       role="dialog"
     >
       <div class="modal-header">
-        <h3>Care Note — {{ careNoteFor()!.patientName }}</h3>
+        <h3>{{ 'NURSE.CARE_NOTE' | translate }} — {{ careNoteFor()!.patientName }}</h3>
         <button class="modal-close" (click)="closeCareNote()">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">
         <div class="form-row">
-          <label for="cn-title">Title</label>
+          <label for="cn-title">{{ 'NURSE.TITLE_LABEL' | translate }}</label>
           <input
             id="cn-title"
             type="text"
             class="reason-input"
-            placeholder="Note title"
+            [placeholder]="'NURSE.NOTE_TITLE' | translate"
             [value]="careNoteForm().title ?? ''"
             (input)="updateCareNoteField('title', $any($event.target).value)"
           />
         </div>
         <div class="form-row">
-          <span class="form-label">Template</span>
+          <span class="form-label">{{ 'NURSE.TEMPLATE' | translate }}</span>
           <div class="template-toggle">
             <button
               class="toggle-btn"
@@ -1202,34 +1235,34 @@
         @if (careNoteForm().template === 'DAR') {
           <div class="care-note-fields">
             <div class="form-row">
-              <label for="cn-data">Data (Subjective + Objective)</label>
+              <label for="cn-data">{{ 'NURSE.DATA_SUBJECTIVE_OBJECTIVE' | translate }}</label>
               <textarea
                 id="cn-data"
                 class="reason-input"
                 rows="2"
-                placeholder="Patient data and assessment findings"
+                [placeholder]="'NURSE.DATA_PLACEHOLDER' | translate"
                 [value]="careNoteForm().dataPart ?? ''"
                 (input)="updateCareNoteField('dataPart', $any($event.target).value)"
               ></textarea>
             </div>
             <div class="form-row">
-              <label for="cn-action">Action</label>
+              <label for="cn-action">{{ 'NURSE.ACTION' | translate }}</label>
               <textarea
                 id="cn-action"
                 class="reason-input"
                 rows="2"
-                placeholder="Interventions performed"
+                [placeholder]="'NURSE.ACTION_PLACEHOLDER' | translate"
                 [value]="careNoteForm().actionPart ?? ''"
                 (input)="updateCareNoteField('actionPart', $any($event.target).value)"
               ></textarea>
             </div>
             <div class="form-row">
-              <label for="cn-response">Response</label>
+              <label for="cn-response">{{ 'NURSE.RESPONSE' | translate }}</label>
               <textarea
                 id="cn-response"
                 class="reason-input"
                 rows="2"
-                placeholder="Patient response to interventions"
+                [placeholder]="'NURSE.RESPONSE_PLACEHOLDER' | translate"
                 [value]="careNoteForm().responsePart ?? ''"
                 (input)="updateCareNoteField('responsePart', $any($event.target).value)"
               ></textarea>
@@ -1240,67 +1273,67 @@
         @if (careNoteForm().template === 'SOAPIE') {
           <div class="care-note-fields">
             <div class="form-row">
-              <label for="cn-subj">Subjective</label>
+              <label for="cn-subj">{{ 'NURSE.SUBJECTIVE' | translate }}</label>
               <textarea
                 id="cn-subj"
                 class="reason-input"
                 rows="2"
-                placeholder="Patient's complaints and statements"
+                [placeholder]="'NURSE.SUBJECTIVE_PLACEHOLDER' | translate"
                 [value]="careNoteForm().subjective ?? ''"
                 (input)="updateCareNoteField('subjective', $any($event.target).value)"
               ></textarea>
             </div>
             <div class="form-row">
-              <label for="cn-obj">Objective</label>
+              <label for="cn-obj">{{ 'NURSE.OBJECTIVE' | translate }}</label>
               <textarea
                 id="cn-obj"
                 class="reason-input"
                 rows="2"
-                placeholder="Measurable findings, vital signs"
+                [placeholder]="'NURSE.OBJECTIVE_PLACEHOLDER' | translate"
                 [value]="careNoteForm().objective ?? ''"
                 (input)="updateCareNoteField('objective', $any($event.target).value)"
               ></textarea>
             </div>
             <div class="form-row">
-              <label for="cn-assess">Assessment</label>
+              <label for="cn-assess">{{ 'NURSE.ASSESSMENT' | translate }}</label>
               <textarea
                 id="cn-assess"
                 class="reason-input"
                 rows="2"
-                placeholder="Nursing diagnosis / clinical assessment"
+                [placeholder]="'NURSE.ASSESSMENT_PLACEHOLDER' | translate"
                 [value]="careNoteForm().assessment ?? ''"
                 (input)="updateCareNoteField('assessment', $any($event.target).value)"
               ></textarea>
             </div>
             <div class="form-row">
-              <label for="cn-plan">Plan</label>
+              <label for="cn-plan">{{ 'NURSE.PLAN' | translate }}</label>
               <textarea
                 id="cn-plan"
                 class="reason-input"
                 rows="2"
-                placeholder="Care plan and goals"
+                [placeholder]="'NURSE.PLAN_PLACEHOLDER' | translate"
                 [value]="careNoteForm().plan ?? ''"
                 (input)="updateCareNoteField('plan', $any($event.target).value)"
               ></textarea>
             </div>
             <div class="form-row">
-              <label for="cn-impl">Implementation</label>
+              <label for="cn-impl">{{ 'NURSE.IMPLEMENTATION' | translate }}</label>
               <textarea
                 id="cn-impl"
                 class="reason-input"
                 rows="2"
-                placeholder="Interventions carried out"
+                [placeholder]="'NURSE.IMPLEMENTATION_PLACEHOLDER' | translate"
                 [value]="careNoteForm().implementation ?? ''"
                 (input)="updateCareNoteField('implementation', $any($event.target).value)"
               ></textarea>
             </div>
             <div class="form-row">
-              <label for="cn-eval">Evaluation</label>
+              <label for="cn-eval">{{ 'NURSE.EVALUATION' | translate }}</label>
               <textarea
                 id="cn-eval"
                 class="reason-input"
                 rows="2"
-                placeholder="Outcome of interventions"
+                [placeholder]="'NURSE.EVALUATION_PLACEHOLDER' | translate"
                 [value]="careNoteForm().evaluation ?? ''"
                 (input)="updateCareNoteField('evaluation', $any($event.target).value)"
               ></textarea>
@@ -1309,12 +1342,12 @@
         }
 
         <div class="form-row">
-          <label for="cn-narrative">Narrative / Free Text</label>
+          <label for="cn-narrative">{{ 'NURSE.NARRATIVE' | translate }}</label>
           <textarea
             id="cn-narrative"
             class="reason-input"
             rows="3"
-            placeholder="Additional narrative notes"
+            [placeholder]="'NURSE.NARRATIVE_PLACEHOLDER' | translate"
             [value]="careNoteForm().narrative ?? ''"
             (input)="updateCareNoteField('narrative', $any($event.target).value)"
           ></textarea>
@@ -1326,7 +1359,7 @@
           (click)="closeCareNote()"
           [disabled]="careNoteCreating()"
         >
-          Cancel
+          {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
           class="modal-btn modal-confirm"
@@ -1334,9 +1367,10 @@
           [disabled]="careNoteCreating()"
         >
           @if (careNoteCreating()) {
-            <span class="material-symbols-outlined">hourglass_empty</span> Saving...
+            <span class="material-symbols-outlined">hourglass_empty</span>
+            {{ 'COMMON.SAVING' | translate }}
           } @else {
-            <span class="material-symbols-outlined">save</span> Save Note
+            <span class="material-symbols-outlined">save</span> {{ 'NURSE.SAVE_NOTE' | translate }}
           }
         </button>
       </div>

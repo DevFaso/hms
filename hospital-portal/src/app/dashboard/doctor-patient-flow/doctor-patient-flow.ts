@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
+import { TranslateModule } from '@ngx-translate/core';
 import { PatientFlowItem } from '../../services/dashboard.service';
 
 interface FlowColumn {
@@ -13,7 +14,7 @@ interface FlowColumn {
 @Component({
   selector: 'app-doctor-patient-flow',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, TranslateModule],
   templateUrl: './doctor-patient-flow.html',
   styleUrl: './doctor-patient-flow.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

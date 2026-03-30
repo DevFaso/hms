@@ -74,6 +74,12 @@ public class NotificationServiceImpl implements NotificationService {
         });
     }
 
+    @Override
+    @Transactional
+    public int markAllReadForUser(String username) {
+        return notificationRepository.markAllReadForUser(username);
+    }
+
     // ── Notification preferences ─────────────────────────────────────────
 
     @Override

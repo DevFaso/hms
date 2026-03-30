@@ -102,7 +102,7 @@ class PatientSnapshotServiceImplTest {
         UUID patientId = UUID.randomUUID();
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
-        assertThrows(ResourceNotFoundException.class, () -> service.getSnapshot(patientId));
+        assertThrows(ResourceNotFoundException.class, () -> service.getSnapshot(patientId, null));
     }
 
     @Test
@@ -112,7 +112,7 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertNotNull(result);
         assertEquals(patientId, result.getPatientId());
@@ -140,7 +140,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertFalse(result.getAllergies().isEmpty());
         assertTrue(result.getAllergies().contains("Penicillin"));
@@ -162,7 +162,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertTrue(result.getAllergies().contains("Sulfa drugs"));
     }
@@ -175,7 +175,7 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(3, result.getActiveDiagnoses().size());
         assertTrue(result.getActiveDiagnoses().contains("Diabetes"));
@@ -203,7 +203,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getActiveMedications().size());
         PatientSnapshotDTO.MedicationItem med = result.getActiveMedications().get(0);
@@ -235,7 +235,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertFalse(result.getRecentVitals().isEmpty());
         PatientSnapshotDTO.VitalItem v = result.getRecentVitals().get(0);
@@ -272,7 +272,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(labResult));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getLatestLabs().size());
         PatientSnapshotDTO.LabItem lab = result.getLatestLabs().get(0);
@@ -304,7 +304,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getPendingOrders().size());
         PatientSnapshotDTO.OrderItem order = result.getPendingOrders().get(0);
@@ -330,7 +330,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertTrue(result.getPendingOrders().isEmpty());
     }
@@ -357,7 +357,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertFalse(result.getCareTeam().isEmpty());
         PatientSnapshotDTO.CareTeamMember member = result.getCareTeam().get(0);
@@ -372,7 +372,7 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertNotNull(result.getRecentNotes());
         assertTrue(result.getRecentNotes().isEmpty());
@@ -393,7 +393,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertNotNull(result);
         assertEquals("Alice Wong", result.getName());
@@ -407,7 +407,7 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(0, result.getAge());
     }
@@ -429,7 +429,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertNotNull(result);
         assertTrue(result.getActiveMedications().isEmpty());
@@ -450,7 +450,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertNotNull(result);
         assertTrue(result.getRecentVitals().isEmpty());
@@ -471,7 +471,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenThrow(new RuntimeException("DB error"));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertNotNull(result);
         assertTrue(result.getLatestLabs().isEmpty());
@@ -492,7 +492,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertNotNull(result);
         assertTrue(result.getPendingOrders().isEmpty());
@@ -513,7 +513,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenThrow(new RuntimeException("DB error"));
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertNotNull(result);
         assertTrue(result.getCareTeam().isEmpty());
@@ -529,7 +529,7 @@ class PatientSnapshotServiceImplTest {
         when(vital.getTemperatureCelsius()).thenReturn(null);
         when(vital.getHeartRateBpm()).thenReturn(72);
         when(vital.getSystolicBpMmHg()).thenReturn(null);
-        // diastolicBpMmHg not stubbed — short-circuit && means it won't be called
+        // diastolicBpMmHg not stubbed â€” short-circuit && means it won't be called
         when(vital.getSpo2Percent()).thenReturn(97);
         when(vital.getRecordedAt()).thenReturn(null);
 
@@ -542,7 +542,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getRecentVitals().size());
         PatientSnapshotDTO.VitalItem v = result.getRecentVitals().get(0);
@@ -577,7 +577,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(List.of(labResult));
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getLatestLabs().size());
         assertEquals("Lab Test", result.getLatestLabs().get(0).getTest());
@@ -608,7 +608,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getPendingOrders().size());
         assertEquals("Chem Panel", result.getPendingOrders().get(0).getDescription());
@@ -635,7 +635,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getPendingOrders().size());
         assertEquals("Lab Order", result.getPendingOrders().get(0).getDescription());
@@ -663,7 +663,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getCareTeam().size());
         assertEquals("Staff", result.getCareTeam().get(0).getRole());
@@ -688,7 +688,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(enc));
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertTrue(result.getCareTeam().isEmpty());
     }
@@ -701,7 +701,7 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertTrue(result.getAllergies().isEmpty());
     }
@@ -714,7 +714,7 @@ class PatientSnapshotServiceImplTest {
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertTrue(result.getActiveDiagnoses().isEmpty());
     }
@@ -722,7 +722,7 @@ class PatientSnapshotServiceImplTest {
     @Test
     void getSnapshot_withStructuredDiagnoses_shouldFormatWithIcdCode() {
         UUID patientId = UUID.randomUUID();
-        // Inline patient mock — not using stubPatient() because getChronicConditions()
+        // Inline patient mock â€” not using stubPatient() because getChronicConditions()
         // is never called when structured diagnoses are non-empty (short-circuit)
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(patientId);
@@ -746,7 +746,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getActiveDiagnoses().size());
         assertEquals("E11.9 \u2013 Type 2 Diabetes", result.getActiveDiagnoses().get(0));
@@ -777,7 +777,7 @@ class PatientSnapshotServiceImplTest {
         when(labResultRepository.findByLabOrder_Patient_Id(patientId)).thenReturn(Collections.emptyList());
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertEquals(1, result.getActiveDiagnoses().size());
         assertEquals("Hypertension", result.getActiveDiagnoses().get(0));
@@ -811,7 +811,7 @@ class PatientSnapshotServiceImplTest {
         when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
                 .thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertFalse(result.getRecentNotes().isEmpty());
         assertEquals("Dr. Smith", result.getRecentNotes().get(0).getAuthor());
@@ -844,13 +844,13 @@ class PatientSnapshotServiceImplTest {
         when(patientDiagnosisRepository.findByPatient_IdAndStatusOrderByDiagnosedAtDesc(patientId, "ACTIVE"))
                 .thenReturn(Collections.emptyList());
 
-        PatientSnapshotDTO result = service.getSnapshot(patientId);
+        PatientSnapshotDTO result = service.getSnapshot(patientId, null);
 
         assertFalse(result.getRecentNotes().isEmpty());
         PatientSnapshotDTO.NoteItem note = result.getRecentNotes().get(0);
         assertTrue(note.getSnippet().length() <= 201); // 200 + ellipsis char
-        assertEquals("Unknown", note.getAuthor()); // null staff → Unknown
-        assertEquals("Encounter", note.getType()); // null encounterType → Encounter
-        assertEquals("", note.getDate()); // null date → empty
+        assertEquals("Unknown", note.getAuthor()); // null staff â†’ Unknown
+        assertEquals("Encounter", note.getType()); // null encounterType â†’ Encounter
+        assertEquals("", note.getDate()); // null date â†’ empty
     }
 }

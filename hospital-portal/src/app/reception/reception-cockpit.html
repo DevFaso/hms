@@ -3,7 +3,7 @@
   <div class="cockpit-header">
     <div class="cockpit-title">
       <span class="material-symbols-outlined">space_dashboard</span>
-      <h1>Front Desk Cockpit</h1>
+      <h1>{{ 'RECEPTION.TITLE' | translate }}</h1>
     </div>
     <div class="cockpit-actions">
       <input
@@ -14,11 +14,11 @@
       />
       <button class="btn-secondary" (click)="loadAll()">
         <span class="material-symbols-outlined">refresh</span>
-        Refresh
+        {{ 'COMMON.REFRESH' | translate }}
       </button>
       <button class="btn-primary" (click)="showWalkIn.set(true)">
         <span class="material-symbols-outlined">person_add</span>
-        Walk-In
+        {{ 'RECEPTION.WALKIN' | translate }}
       </button>
     </div>
   </div>
@@ -28,36 +28,36 @@
     <div class="summary-strip">
       <button class="sum-card" (click)="statusFilter.set('ALL'); activeTab.set('queue')">
         <span class="sum-num">{{ s.scheduledToday }}</span>
-        <span class="sum-label">Scheduled</span>
+        <span class="sum-label">{{ 'RECEPTION.SCHEDULED' | translate }}</span>
       </button>
       <button
         class="sum-card arrived"
         (click)="statusFilter.set('ARRIVED'); activeTab.set('queue')"
       >
         <span class="sum-num">{{ s.arrivedCount }}</span>
-        <span class="sum-label">Arrived</span>
+        <span class="sum-label">{{ 'RECEPTION.ARRIVED' | translate }}</span>
       </button>
       <button
         class="sum-card in-progress"
         (click)="statusFilter.set('IN_PROGRESS'); activeTab.set('queue')"
       >
         <span class="sum-num">{{ s.inProgressCount }}</span>
-        <span class="sum-label">In Progress</span>
+        <span class="sum-label">{{ 'RECEPTION.IN_PROGRESS' | translate }}</span>
       </button>
       <button class="sum-card warning" (click)="activeTab.set('insurance')">
         <span class="sum-num">{{ insuranceIssues().length }}</span>
-        <span class="sum-label">Ins. Issues</span>
+        <span class="sum-label">{{ 'RECEPTION.INS_ISSUES' | translate }}</span>
       </button>
       <button class="sum-card danger" (click)="activeTab.set('payments')">
         <span class="sum-num">{{ paymentsPending().length }}</span>
-        <span class="sum-label">Payments Due</span>
+        <span class="sum-label">{{ 'RECEPTION.PAYMENTS_DUE' | translate }}</span>
       </button>
       <button
         class="sum-card walk-in"
         (click)="statusFilter.set('WALK_IN'); activeTab.set('queue')"
       >
         <span class="sum-num">{{ s.walkInCount }}</span>
-        <span class="sum-label">Walk-Ins</span>
+        <span class="sum-label">{{ 'RECEPTION.WALK_INS' | translate }}</span>
       </button>
     </div>
   }
@@ -65,26 +65,26 @@
   <!-- Tabs -->
   <div class="tab-bar">
     <button [class.active]="activeTab() === 'queue'" (click)="activeTab.set('queue')">
-      Queue
+      {{ 'RECEPTION.QUEUE' | translate }}
       <span class="badge">{{ queueItems().length }}</span>
     </button>
     <button [class.active]="activeTab() === 'insurance'" (click)="activeTab.set('insurance')">
-      Insurance Issues
+      {{ 'RECEPTION.INSURANCE_ISSUES' | translate }}
       @if (insuranceIssues().length) {
         <span class="badge warn">{{ insuranceIssues().length }}</span>
       }
     </button>
     <button [class.active]="activeTab() === 'payments'" (click)="activeTab.set('payments')">
-      Payments Pending
+      {{ 'RECEPTION.PAYMENTS_PENDING' | translate }}
       @if (paymentsPending().length) {
         <span class="badge danger">{{ paymentsPending().length }}</span>
       }
     </button>
     <button [class.active]="activeTab() === 'flowboard'" (click)="activeTab.set('flowboard')">
-      Flow Board
+      {{ 'RECEPTION.FLOW_BOARD' | translate }}
     </button>
     <button [class.active]="activeTab() === 'waitlist'" (click)="activeTab.set('waitlist')">
-      Waitlist
+      {{ 'RECEPTION.WAITLIST' | translate }}
     </button>
   </div>
 
@@ -106,22 +106,22 @@
       @if (loading()) {
         <div class="loading-row">
           <span class="material-symbols-outlined spin">progress_activity</span>
-          Loading queue…
+          {{ 'RECEPTION.LOADING_QUEUE' | translate }}
         </div>
       } @else if (filteredQueue().length === 0) {
-        <div class="empty-state">No patients in queue for this filter.</div>
+        <div class="empty-state">{{ 'RECEPTION.NO_PATIENTS_IN_QUEUE' | translate }}</div>
       } @else {
         <table class="queue-table">
           <thead>
             <tr>
-              <th>Time</th>
-              <th>Patient</th>
-              <th>Provider</th>
-              <th>Department</th>
-              <th>Reason</th>
-              <th>Status</th>
-              <th>Wait</th>
-              <th>Flags</th>
+              <th>{{ 'COMMON.TIME' | translate }}</th>
+              <th>{{ 'PATIENTS.PATIENT' | translate }}</th>
+              <th>{{ 'RECEPTION.PROVIDER' | translate }}</th>
+              <th>{{ 'STAFF.DEPARTMENT' | translate }}</th>
+              <th>{{ 'RECEPTION.REASON' | translate }}</th>
+              <th>{{ 'COMMON.STATUS' | translate }}</th>
+              <th>{{ 'RECEPTION.WAIT' | translate }}</th>
+              <th>{{ 'RECEPTION.FLAGS' | translate }}</th>
               <th></th>
             </tr>
           </thead>
@@ -148,17 +148,23 @@
                 <td>{{ item.waitMinutes > 0 ? item.waitMinutes + 'm' : '—' }}</td>
                 <td>
                   @if (item.hasInsuranceIssue) {
-                    <span class="flag-chip warn" title="Insurance issue">INS</span>
+                    <span class="flag-chip warn" [title]="'RECEPTION.INSURANCE_ISSUE' | translate"
+                      >INS</span
+                    >
                   }
                   @if (item.hasOutstandingBalance) {
-                    <span class="flag-chip danger" title="Outstanding balance">$</span>
+                    <span
+                      class="flag-chip danger"
+                      [title]="'RECEPTION.OUTSTANDING_BALANCE' | translate"
+                      >$</span
+                    >
                   }
                 </td>
                 <td>
                   <button
                     class="btn-icon"
                     (click)="openSnapshot(item.patientId)"
-                    title="Patient snapshot"
+                    [title]="'RECEPTION.PATIENT_SNAPSHOT' | translate"
                   >
                     <span class="material-symbols-outlined">person_search</span>
                   </button>

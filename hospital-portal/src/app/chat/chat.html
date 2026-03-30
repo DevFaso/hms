@@ -1,12 +1,12 @@
 <div class="page-container chat-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Messages</h1>
-      <p class="page-subtitle">Internal team communications</p>
+      <h1 class="page-title">{{ 'CHAT.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'CHAT.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
       <button class="btn-outline" (click)="loadConversations()">
-        <span class="material-symbols-outlined">refresh</span> Refresh
+        <span class="material-symbols-outlined">refresh</span> {{ 'COMMON.REFRESH' | translate }}
       </button>
     </div>
   </div>
@@ -14,16 +14,18 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading conversations...</p>
+      <p>{{ 'CHAT.LOADING_CONVERSATIONS' | translate }}</p>
     </div>
   }
 
   @if (error(); as err) {
     <div class="error-state">
       <span class="material-symbols-outlined error-icon">error</span>
-      <h3>Something went wrong</h3>
+      <h3>{{ 'CHAT.ERROR_TITLE' | translate }}</h3>
       <p>{{ err }}</p>
-      <button class="btn-primary" (click)="loadConversations()">Retry</button>
+      <button class="btn-primary" (click)="loadConversations()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
     </div>
   }
 
@@ -32,8 +34,12 @@
       <!-- Sidebar: Conversations -->
       <div class="conv-sidebar">
         <div class="conv-header">
-          <h3>Conversations</h3>
-          <button class="btn-new-chat" (click)="openNewConversation()" title="New conversation">
+          <h3>{{ 'CHAT.CONVERSATIONS' | translate }}</h3>
+          <button
+            class="btn-new-chat"
+            (click)="openNewConversation()"
+            [title]="'CHAT.NEW_CONVERSATION' | translate"
+          >
             <span class="material-symbols-outlined">edit_square</span>
           </button>
         </div>
@@ -43,7 +49,7 @@
           <span class="material-symbols-outlined search-icon">search</span>
           <input
             type="text"
-            placeholder="Search conversations..."
+            [placeholder]="'CHAT.SEARCH_CONVERSATIONS' | translate"
             [ngModel]="convSearchTerm()"
             (ngModelChange)="convSearchTerm.set($event)"
           />
@@ -73,9 +79,10 @@
         } @else {
           <div class="conv-empty">
             <span class="material-symbols-outlined">chat_bubble_outline</span>
-            <p>No conversations yet</p>
+            <p>{{ 'CHAT.NO_CONVERSATIONS' | translate }}</p>
             <button class="btn-start-chat" (click)="openNewConversation()">
-              <span class="material-symbols-outlined">add</span> Start a conversation
+              <span class="material-symbols-outlined">add</span>
+              {{ 'CHAT.START_CONVERSATION' | translate }}
             </button>
           </div>
         }
@@ -87,8 +94,12 @@
         @if (showNewConversation()) {
           <div class="new-conv-panel">
             <div class="new-conv-header">
-              <h3>New Conversation</h3>
-              <button class="btn-icon" (click)="closeNewConversation()" title="Close">
+              <h3>{{ 'CHAT.NEW_CONVERSATION' | translate }}</h3>
+              <button
+                class="btn-icon"
+                (click)="closeNewConversation()"
+                [title]="'COMMON.CLOSE' | translate"
+              >
                 <span class="material-symbols-outlined">close</span>
               </button>
             </div>
@@ -96,7 +107,7 @@
               <span class="material-symbols-outlined search-icon">person_search</span>
               <input
                 type="text"
-                placeholder="Search users by name or email..."
+                [placeholder]="'CHAT.SEARCH_USERS' | translate"
                 [ngModel]="userSearchTerm()"
                 (ngModelChange)="userSearchTerm.set($event)"
               />
@@ -105,7 +116,7 @@
             @if (loadingUsers()) {
               <div class="new-conv-loading">
                 <div class="spinner-sm"></div>
-                <p>Loading users...</p>
+                <p>{{ 'CHAT.LOADING_USERS' | translate }}</p>
               </div>
             } @else if (filteredUsers().length > 0) {
               <div class="new-conv-users">
@@ -125,7 +136,7 @@
             } @else {
               <div class="new-conv-empty">
                 <span class="material-symbols-outlined">group_off</span>
-                <p>No users found</p>
+                <p>{{ 'CHAT.NO_USERS_FOUND' | translate }}</p>
               </div>
             }
           </div>
@@ -139,7 +150,11 @@
               <span class="msg-header-name">{{ conv.conversationUserName }}</span>
             </div>
             <div class="msg-header-actions">
-              <button class="btn-icon" (click)="refreshMessages()" title="Refresh messages">
+              <button
+                class="btn-icon"
+                (click)="refreshMessages()"
+                [title]="'CHAT.REFRESH_MESSAGES' | translate"
+              >
                 <span class="material-symbols-outlined">refresh</span>
               </button>
             </div>
@@ -159,7 +174,7 @@
             @if (messages().length === 0) {
               <div class="msg-empty">
                 <span class="material-symbols-outlined">waving_hand</span>
-                <p>No messages yet. Say hello!</p>
+                <p>{{ 'CHAT.NO_MESSAGES' | translate }}</p>
               </div>
             }
           </div>
@@ -167,7 +182,7 @@
           <div class="msg-input-area">
             <input
               type="text"
-              placeholder="Type a message..."
+              [placeholder]="'CHAT.TYPE_MESSAGE' | translate"
               [(ngModel)]="messageText"
               (keydown.enter)="sendMessage()"
             />
@@ -185,10 +200,11 @@
         @if (!showNewConversation() && !activeConversation()) {
           <div class="no-conversation">
             <span class="material-symbols-outlined">chat</span>
-            <h3>Select a conversation</h3>
-            <p>Choose a conversation from the sidebar or start a new one.</p>
+            <h3>{{ 'CHAT.SELECT_CONVERSATION' | translate }}</h3>
+            <p>{{ 'CHAT.SELECT_CONVERSATION_HINT' | translate }}</p>
             <button class="btn-primary" (click)="openNewConversation()">
-              <span class="material-symbols-outlined">add</span> New Conversation
+              <span class="material-symbols-outlined">add</span>
+              {{ 'CHAT.NEW_CONVERSATION' | translate }}
             </button>
           </div>
         }

@@ -1,13 +1,13 @@
 <div class="page-container">
   <a routerLink="/patients" class="back-link">
     <span class="material-symbols-outlined">arrow_back</span>
-    Back to Patients
+    {{ 'PATIENTS.BACK_TO_PATIENTS' | translate }}
   </a>
 
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading patient record...</p>
+      <p>{{ 'PATIENTS.LOADING_RECORD' | translate }}</p>
     </div>
   }
 
@@ -20,7 +20,8 @@
         <div class="header-meta">
           @if (p.mrn) {
             <span class="meta-tag mrn"
-              ><span class="material-symbols-outlined">badge</span> MRN: {{ p.mrn }}</span
+              ><span class="material-symbols-outlined">badge</span>
+              {{ 'PATIENTS.MRN' | translate }}: {{ p.mrn }}</span
             >
           }
           <span class="meta-tag"
@@ -33,7 +34,7 @@
             >
           }
           <span class="status-badge" [class.active]="p.active" [class.inactive]="!p.active">{{
-            p.active ? 'Active' : 'Inactive'
+            p.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
           }}</span>
         </div>
       </div>
@@ -45,26 +46,26 @@
         class="tab"
         [class.active]="activeTab() === 'overview'"
         (click)="setTab('overview')"
-        title="Patient overview"
+        [title]="'PATIENTS.OVERVIEW_TITLE' | translate"
       >
-        Overview
+        {{ 'PATIENTS.OVERVIEW' | translate }}
       </button>
       <button
         class="tab"
         [class.active]="activeTab() === 'medical'"
         (click)="setTab('medical')"
-        title="Medical info"
+        [title]="'PATIENTS.MEDICAL_TITLE' | translate"
       >
-        Medical
+        {{ 'PATIENTS.MEDICAL' | translate }}
       </button>
       @if (canViewVitals()) {
         <button
           class="tab"
           [class.active]="activeTab() === 'vitals'"
           (click)="setTab('vitals')"
-          title="Vital signs"
+          [title]="'PATIENTS.VITALS_TITLE' | translate"
         >
-          Vitals
+          {{ 'PATIENTS.VITALS' | translate }}
         </button>
       }
       @if (canViewEncounters()) {
@@ -72,28 +73,28 @@
           class="tab"
           [class.active]="activeTab() === 'encounters'"
           (click)="setTab('encounters')"
-          title="Clinical encounters"
+          [title]="'PATIENTS.ENCOUNTERS_TITLE' | translate"
         >
-          Encounters
+          {{ 'PATIENTS.ENCOUNTERS_TAB' | translate }}
         </button>
       }
       <button
         class="tab"
         [class.active]="activeTab() === 'appointments'"
         (click)="setTab('appointments')"
-        title="Appointment history"
+        [title]="'PATIENTS.APPOINTMENTS_TITLE' | translate"
       >
-        Appointments
+        {{ 'PATIENTS.APPOINTMENTS_TAB' | translate }}
       </button>
       @if (canViewSharing()) {
         <button
           class="tab sharing-tab"
           [class.active]="activeTab() === 'sharing'"
           (click)="setTab('sharing')"
-          title="Cross-hospital record sharing"
+          [title]="'PATIENTS.SHARING_TITLE' | translate"
         >
           <span class="material-symbols-outlined tab-icon">share</span>
-          Record Sharing
+          {{ 'PATIENTS.SHARING' | translate }}
         </button>
       }
     </div>
@@ -102,59 +103,69 @@
     @if (activeTab() === 'overview') {
       <div class="info-grid">
         <div class="info-card">
-          <h3><span class="material-symbols-outlined">person</span> Personal Information</h3>
+          <h3>
+            <span class="material-symbols-outlined">person</span>
+            {{ 'PATIENTS.PERSONAL_INFO' | translate }}
+          </h3>
           <div class="info-rows">
             <div class="info-row">
-              <span class="label">Full Name</span
+              <span class="label">{{ 'PATIENTS.FULL_NAME' | translate }}</span
               ><span class="value">{{ p.firstName }} {{ p.lastName }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Email</span><span class="value">{{ p.email || '—' }}</span>
+              <span class="label">{{ 'PATIENTS.EMAIL' | translate }}</span
+              ><span class="value">{{ p.email || '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Phone</span
+              <span class="label">{{ 'PATIENTS.PHONE' | translate }}</span
               ><span class="value">{{ p.phoneNumberPrimary ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Date of Birth</span
+              <span class="label">{{ 'PATIENTS.DOB' | translate }}</span
               ><span class="value">{{ p.dateOfBirth ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Gender</span><span class="value">{{ p.gender ?? '—' }}</span>
+              <span class="label">{{ 'PATIENTS.GENDER' | translate }}</span
+              ><span class="value">{{ p.gender ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Country</span><span class="value">{{ p.country ?? '—' }}</span>
+              <span class="label">{{ 'PATIENTS.COUNTRY' | translate }}</span
+              ><span class="value">{{ p.country ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Ville / City</span><span class="value">{{ p.city ?? '—' }}</span>
+              <span class="label">{{ 'PATIENTS.CITY' | translate }}</span
+              ><span class="value">{{ p.city ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Province / Region</span
+              <span class="label">{{ 'PATIENTS.STATE' | translate }}</span
               ><span class="value">{{ p.state ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Secteur / Neighborhood</span
+              <span class="label">{{ 'PATIENTS.ADDRESS' | translate }}</span
               ><span class="value">{{ p.address ?? '—' }}</span>
             </div>
           </div>
         </div>
         <div class="info-card">
           <h3>
-            <span class="material-symbols-outlined">local_hospital</span> Hospital Information
+            <span class="material-symbols-outlined">local_hospital</span>
+            {{ 'PATIENTS.HOSPITAL_INFO' | translate }}
           </h3>
           <div class="info-rows">
             <div class="info-row">
-              <span class="label">Hospital</span
+              <span class="label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
               ><span class="value">{{ p.hospitalName ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">MRN</span><span class="value">{{ p.mrn ?? '—' }}</span>
+              <span class="label">{{ 'PATIENTS.MRN' | translate }}</span
+              ><span class="value">{{ p.mrn ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Username</span><span class="value">{{ p.username || '—' }}</span>
+              <span class="label">{{ 'PATIENTS.USERNAME' | translate }}</span
+              ><span class="value">{{ p.username || '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Registered</span
+              <span class="label">{{ 'PATIENTS.REGISTERED' | translate }}</span
               ><span class="value">{{ p.createdAt | date: 'mediumDate' }}</span>
             </div>
           </div>
@@ -166,21 +177,31 @@
     @if (activeTab() === 'medical') {
       <div class="info-grid">
         <div class="info-card">
-          <h3><span class="material-symbols-outlined">bloodtype</span> Medical Details</h3>
+          <h3>
+            <span class="material-symbols-outlined">bloodtype</span>
+            {{ 'PATIENTS.MEDICAL_DETAILS' | translate }}
+          </h3>
           <div class="info-rows">
             <div class="info-row">
-              <span class="label">Blood Type</span
+              <span class="label">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</span
               ><span class="value">{{ p.bloodType ?? '—' }}</span>
             </div>
             <div class="info-row">
-              <span class="label">Allergies</span
-              ><span class="value">{{ p.allergies ?? 'None recorded' }}</span>
+              <span class="label">{{ 'PATIENTS.ALLERGIES' | translate }}</span
+              ><span class="value">{{
+                p.allergies ?? ('PATIENTS.NONE_RECORDED' | translate)
+              }}</span>
             </div>
           </div>
         </div>
         <div class="info-card">
-          <h3><span class="material-symbols-outlined">history</span> Medical History</h3>
-          <p class="medical-text">{{ p.medicalHistorySummary ?? 'No medical history on file.' }}</p>
+          <h3>
+            <span class="material-symbols-outlined">history</span>
+            {{ 'PATIENTS.MEDICAL_HISTORY' | translate }}
+          </h3>
+          <p class="medical-text">
+            {{ p.medicalHistorySummary ?? ('PATIENTS.NO_MEDICAL_HISTORY' | translate) }}
+          </p>
         </div>
       </div>
     }
@@ -190,7 +211,7 @@
       @if (vitalsLoading()) {
         <div class="loading-state">
           <div class="spinner"></div>
-          <p>Loading vitals...</p>
+          <p>{{ 'PATIENTS.LOADING_VITALS' | translate }}</p>
         </div>
       }
       @if (!vitalsLoading() && vitals().length > 0) {
@@ -199,7 +220,9 @@
             <div class="vital-card">
               <div class="vital-header">
                 <span class="vital-date">{{ v.recordedAt | date: 'medium' }}</span>
-                <span class="vital-by">by {{ v.staffName || '—' }}</span>
+                <span class="vital-by"
+                  >{{ 'PATIENTS.BY' | translate }} {{ v.staffName || '—' }}</span
+                >
               </div>
               <div class="vital-metrics">
                 @if (v.heartRate) {
@@ -209,7 +232,7 @@
                       <strong>{{ v.heartRate }}</strong
                       ><small> bpm</small>
                     </div>
-                    <span class="vital-label">Heart Rate</span>
+                    <span class="vital-label">{{ 'PATIENTS.HEART_RATE' | translate }}</span>
                   </div>
                 }
                 @if (v.systolicBp || v.diastolicBp) {
@@ -219,7 +242,7 @@
                       <strong>{{ v.systolicBp }}/{{ v.diastolicBp }}</strong
                       ><small> mmHg</small>
                     </div>
-                    <span class="vital-label">Blood Pressure</span>
+                    <span class="vital-label">{{ 'PATIENTS.BLOOD_PRESSURE' | translate }}</span>
                   </div>
                 }
                 @if (v.temperature) {
@@ -229,7 +252,7 @@
                       <strong>{{ v.temperature }}</strong
                       ><small> °C</small>
                     </div>
-                    <span class="vital-label">Temperature</span>
+                    <span class="vital-label">{{ 'PATIENTS.TEMPERATURE' | translate }}</span>
                   </div>
                 }
                 @if (v.oxygenSaturation) {
@@ -239,7 +262,7 @@
                       <strong>{{ v.oxygenSaturation }}</strong
                       ><small>%</small>
                     </div>
-                    <span class="vital-label">SpO₂</span>
+                    <span class="vital-label">{{ 'PATIENTS.SPO2' | translate }}</span>
                   </div>
                 }
                 @if (v.respiratoryRate) {
@@ -249,7 +272,7 @@
                       <strong>{{ v.respiratoryRate }}</strong
                       ><small> /min</small>
                     </div>
-                    <span class="vital-label">Resp. Rate</span>
+                    <span class="vital-label">{{ 'PATIENTS.RESP_RATE' | translate }}</span>
                   </div>
                 }
                 @if (v.painLevel !== null && v.painLevel !== undefined) {
@@ -259,7 +282,7 @@
                       <strong>{{ v.painLevel }}</strong
                       ><small>/10</small>
                     </div>
-                    <span class="vital-label">Pain Level</span>
+                    <span class="vital-label">{{ 'PATIENTS.PAIN_LEVEL' | translate }}</span>
                   </div>
                 }
                 @if (v.weight) {
@@ -269,7 +292,7 @@
                       <strong>{{ v.weight }}</strong
                       ><small> kg</small>
                     </div>
-                    <span class="vital-label">Weight</span>
+                    <span class="vital-label">{{ 'PATIENTS.WEIGHT' | translate }}</span>
                   </div>
                 }
                 @if (v.height) {
@@ -279,7 +302,7 @@
                       <strong>{{ v.height }}</strong
                       ><small> cm</small>
                     </div>
-                    <span class="vital-label">Height</span>
+                    <span class="vital-label">{{ 'PATIENTS.HEIGHT' | translate }}</span>
                   </div>
                 }
               </div>
@@ -293,8 +316,8 @@
       @if (!vitalsLoading() && vitals().length === 0) {
         <div class="empty-state">
           <span class="material-symbols-outlined empty-icon">monitor_heart</span>
-          <h3>No vitals recorded</h3>
-          <p>Vital signs will appear here when recorded.</p>
+          <h3>{{ 'PATIENTS.NO_VITALS' | translate }}</h3>
+          <p>{{ 'PATIENTS.NO_VITALS_DESC' | translate }}</p>
         </div>
       }
     }
@@ -304,7 +327,7 @@
       @if (encountersLoading()) {
         <div class="loading-state">
           <div class="spinner"></div>
-          <p>Loading encounters...</p>
+          <p>{{ 'PATIENTS.LOADING_ENCOUNTERS' | translate }}</p>
         </div>
       }
       @if (!encountersLoading() && encounters().length > 0) {
@@ -312,12 +335,12 @@
           <table>
             <thead>
               <tr>
-                <th scope="col">Date</th>
-                <th scope="col">Type</th>
-                <th scope="col">Provider</th>
-                <th scope="col">Department</th>
-                <th scope="col">Status</th>
-                <th scope="col">Notes</th>
+                <th scope="col">{{ 'PATIENTS.DATE' | translate }}</th>
+                <th scope="col">{{ 'PATIENTS.TYPE' | translate }}</th>
+                <th scope="col">{{ 'PATIENTS.PROVIDER' | translate }}</th>
+                <th scope="col">{{ 'STAFF.DEPARTMENT' | translate }}</th>
+                <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+                <th scope="col">{{ 'PATIENTS.NOTES' | translate }}</th>
               </tr>
             </thead>
             <tbody>
@@ -342,8 +365,8 @@
       @if (!encountersLoading() && encounters().length === 0) {
         <div class="empty-state">
           <span class="material-symbols-outlined empty-icon">medical_information</span>
-          <h3>No encounters</h3>
-          <p>Clinical encounters will appear here.</p>
+          <h3>{{ 'PATIENTS.NO_ENCOUNTERS' | translate }}</h3>
+          <p>{{ 'PATIENTS.NO_ENCOUNTERS_DESC' | translate }}</p>
         </div>
       }
     }
@@ -353,7 +376,7 @@
       @if (appointmentsLoading()) {
         <div class="loading-state">
           <div class="spinner"></div>
-          <p>Loading appointments...</p>
+          <p>{{ 'PATIENTS.LOADING_APPOINTMENTS' | translate }}</p>
         </div>
       }
       @if (!appointmentsLoading() && appointments().length > 0) {
@@ -361,11 +384,11 @@
           <table>
             <thead>
               <tr>
-                <th scope="col">Date</th>
-                <th scope="col">Time</th>
-                <th scope="col">Provider</th>
-                <th scope="col">Reason</th>
-                <th scope="col">Status</th>
+                <th scope="col">{{ 'PATIENTS.DATE' | translate }}</th>
+                <th scope="col">{{ 'PATIENTS.TIME' | translate }}</th>
+                <th scope="col">{{ 'PATIENTS.PROVIDER' | translate }}</th>
+                <th scope="col">{{ 'PATIENTS.REASON' | translate }}</th>
+                <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
               </tr>
             </thead>
             <tbody>
@@ -387,8 +410,8 @@
       @if (!appointmentsLoading() && appointments().length === 0) {
         <div class="empty-state">
           <span class="material-symbols-outlined empty-icon">calendar_month</span>
-          <h3>No appointments</h3>
-          <p>Patient appointment history will appear here.</p>
+          <h3>{{ 'PATIENTS.NO_APPOINTMENTS' | translate }}</h3>
+          <p>{{ 'PATIENTS.NO_APPOINTMENTS_DESC' | translate }}</p>
         </div>
       }
     }
@@ -398,11 +421,12 @@
       <div class="sharing-panel">
         <!-- Request panel -->
         <div class="sharing-request-card">
-          <h3><span class="material-symbols-outlined">share</span> Smart Record Request</h3>
+          <h3>
+            <span class="material-symbols-outlined">share</span>
+            {{ 'PATIENTS.SMART_RECORD_REQUEST' | translate }}
+          </h3>
           <p class="sharing-hint">
-            Select the hospital requesting access. The system automatically resolves the fastest
-            consent path: <strong>Same-hospital</strong> → <strong>Intra-org</strong> →
-            <strong>Cross-org</strong>.
+            {{ 'PATIENTS.SHARING_HINT' | translate }}
           </p>
 
           <div class="sharing-controls">
@@ -414,7 +438,9 @@
                 [value]="selectedHospitalId()"
                 (change)="selectedHospitalId.set($any($event.target).value)"
               >
-                <option value="">— Select requesting hospital —</option>
+                <option value="">
+                  — {{ 'PATIENTS.SELECT_REQUESTING_HOSPITAL' | translate }} —
+                </option>
                 @for (h of hospitals(); track h.id) {
                   <option [value]="h.id">{{ h.name }}</option>
                 }
@@ -426,14 +452,20 @@
               [disabled]="sharingLoading() || !selectedHospitalId()"
             >
               @if (sharingLoading()) {
-                <span class="spinner-btn"></span> Resolving…
+                <span class="spinner-btn"></span> {{ 'PATIENTS.RESOLVING' | translate }}
               } @else {
-                <span class="material-symbols-outlined">search</span> Request Records
+                <span class="material-symbols-outlined">search</span>
+                {{ 'PATIENTS.REQUEST_RECORDS' | translate }}
               }
             </button>
             @if (canManageConsents()) {
-              <button class="btn-outline" (click)="openGrantModal()" title="Grant sharing consent">
-                <span class="material-symbols-outlined">add_task</span> Grant Consent
+              <button
+                class="btn-outline"
+                (click)="openGrantModal()"
+                [title]="'PATIENTS.GRANT_CONSENT_TITLE' | translate"
+              >
+                <span class="material-symbols-outlined">add_task</span>
+                {{ 'PATIENTS.GRANT_CONSENT' | translate }}
               </button>
             }
           </div>
@@ -462,40 +494,43 @@
                 {{ result.shareScopeLabel }}
               </span>
               <span class="result-timestamp"
-                >Resolved {{ result.resolvedAt | date: 'medium' }}</span
+                >{{ 'PATIENTS.RESOLVED' | translate }}
+                {{ result.resolvedAt | date: 'medium' }}</span
               >
             </div>
 
             <!-- Provenance detail -->
             <div class="provenance-grid">
               <div class="provenance-item">
-                <span class="provenance-label">Source Hospital</span>
+                <span class="provenance-label">{{ 'PATIENTS.SOURCE_HOSPITAL' | translate }}</span>
                 <span class="provenance-value">{{ result.resolvedFromHospitalName }}</span>
               </div>
               <div class="provenance-item">
-                <span class="provenance-label">Requesting Hospital</span>
+                <span class="provenance-label">{{
+                  'PATIENTS.REQUESTING_HOSPITAL' | translate
+                }}</span>
                 <span class="provenance-value">{{ result.requestingHospitalName }}</span>
               </div>
               @if (result.organizationName) {
                 <div class="provenance-item">
-                  <span class="provenance-label">Organisation</span>
+                  <span class="provenance-label">{{ 'PATIENTS.ORGANISATION' | translate }}</span>
                   <span class="provenance-value">{{ result.organizationName }}</span>
                 </div>
               }
               @if (result.consentId) {
                 <div class="provenance-item">
-                  <span class="provenance-label">Consent ID</span>
+                  <span class="provenance-label">{{ 'PATIENTS.CONSENT_ID' | translate }}</span>
                   <span class="provenance-value consent-id">{{ result.consentId }}</span>
                 </div>
                 <div class="provenance-item">
-                  <span class="provenance-label">Granted At</span>
+                  <span class="provenance-label">{{ 'PATIENTS.GRANTED_AT' | translate }}</span>
                   <span class="provenance-value">{{
                     result.consentGrantedAt | date: 'mediumDate'
                   }}</span>
                 </div>
                 @if (result.consentExpiresAt) {
                   <div class="provenance-item">
-                    <span class="provenance-label">Expires</span>
+                    <span class="provenance-label">{{ 'PATIENTS.EXPIRES' | translate }}</span>
                     <span class="provenance-value">{{
                       result.consentExpiresAt | date: 'mediumDate'
                     }}</span>
@@ -503,7 +538,7 @@
                 }
                 @if (result.consentPurpose) {
                   <div class="provenance-item">
-                    <span class="provenance-label">Purpose</span>
+                    <span class="provenance-label">{{ 'PATIENTS.PURPOSE' | translate }}</span>
                     <span class="provenance-value">{{ result.consentPurpose }}</span>
                   </div>
                 }
@@ -512,7 +547,7 @@
 
             <!-- Export actions -->
             <div class="export-actions">
-              <span class="export-label">Export record:</span>
+              <span class="export-label">{{ 'PATIENTS.EXPORT_RECORD' | translate }}:</span>
               <button class="btn-outline-sm" (click)="exportRecord('pdf')">
                 <span class="material-symbols-outlined">picture_as_pdf</span> PDF
               </button>
@@ -525,53 +560,57 @@
             <div class="record-summary-grid">
               <div class="summary-stat">
                 <span class="stat-count">{{ result.patientRecord.encounters?.length ?? 0 }}</span>
-                <span class="stat-label">Encounters</span>
+                <span class="stat-label">{{ 'PATIENTS.ENCOUNTERS_TAB' | translate }}</span>
               </div>
               <div class="summary-stat">
                 <span class="stat-count">{{ result.patientRecord.labOrders?.length ?? 0 }}</span>
-                <span class="stat-label">Lab Orders</span>
+                <span class="stat-label">{{ 'PATIENTS.LAB_ORDERS' | translate }}</span>
               </div>
               <div class="summary-stat">
                 <span class="stat-count">{{
                   result.patientRecord.prescriptions?.length ?? 0
                 }}</span>
-                <span class="stat-label">Prescriptions</span>
+                <span class="stat-label">{{ 'PATIENTS.PRESCRIPTIONS' | translate }}</span>
               </div>
               <div class="summary-stat">
                 <span class="stat-count">{{
                   result.patientRecord.allergiesDetailed?.length ?? 0
                 }}</span>
-                <span class="stat-label">Allergies</span>
+                <span class="stat-label">{{ 'PATIENTS.ALLERGIES' | translate }}</span>
               </div>
               <div class="summary-stat">
                 <span class="stat-count">{{ result.patientRecord.problems?.length ?? 0 }}</span>
-                <span class="stat-label">Problems</span>
+                <span class="stat-label">{{ 'PATIENTS.PROBLEMS' | translate }}</span>
               </div>
               <div class="summary-stat">
                 <span class="stat-count">{{
                   result.patientRecord.surgicalHistory?.length ?? 0
                 }}</span>
-                <span class="stat-label">Surgical Hx</span>
+                <span class="stat-label">{{ 'PATIENTS.SURGICAL_HX' | translate }}</span>
               </div>
             </div>
 
             <!-- Patient demographics from shared record -->
             <div class="shared-demographics">
-              <h4>Patient Demographics (as recorded at {{ result.resolvedFromHospitalName }})</h4>
+              <h4>
+                {{ 'PATIENTS.DEMOGRAPHICS_AT' | translate }} {{ result.resolvedFromHospitalName }})
+              </h4>
               <div class="info-rows">
                 <div class="info-row">
-                  <span class="label">MRNs</span>
+                  <span class="label">{{ 'PATIENTS.MRNS' | translate }}</span>
                   <span class="value">{{
                     result.patientRecord.hospitalMRNs?.join(', ') || '—'
                   }}</span>
                 </div>
                 <div class="info-row">
-                  <span class="label">Blood Type</span>
+                  <span class="label">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</span>
                   <span class="value">{{ result.patientRecord.bloodType || '—' }}</span>
                 </div>
                 <div class="info-row">
-                  <span class="label">Allergies</span>
-                  <span class="value">{{ result.patientRecord.allergies || 'None recorded' }}</span>
+                  <span class="label">{{ 'PATIENTS.ALLERGIES' | translate }}</span>
+                  <span class="value">{{
+                    result.patientRecord.allergies || ('PATIENTS.NONE_RECORDED' | translate)
+                  }}</span>
                 </div>
               </div>
             </div>
@@ -597,50 +636,53 @@
             (keydown)="$event.key !== 'Escape' && $event.stopPropagation()"
           >
             <div class="modal-header">
-              <h3><span class="material-symbols-outlined">add_task</span> Grant Sharing Consent</h3>
+              <h3>
+                <span class="material-symbols-outlined">add_task</span>
+                {{ 'PATIENTS.GRANT_SHARING_CONSENT' | translate }}
+              </h3>
               <button class="modal-close" (click)="closeGrantModal()" aria-label="Close">
                 <span class="material-symbols-outlined">close</span>
               </button>
             </div>
             <div class="modal-body">
               <label class="form-label">
-                From Hospital (source)
+                {{ 'PATIENTS.FROM_HOSPITAL' | translate }}
                 <select
                   class="hospital-select"
                   [value]="grantFromHospitalId()"
                   (change)="grantFromHospitalId.set($any($event.target).value)"
                 >
-                  <option value="">— Select source hospital —</option>
+                  <option value="">— {{ 'PATIENTS.SELECT_SOURCE_HOSPITAL' | translate }} —</option>
                   @for (h of hospitals(); track h.id) {
                     <option [value]="h.id">{{ h.name }}</option>
                   }
                 </select>
               </label>
               <label class="form-label">
-                To Hospital (requesting)
+                {{ 'PATIENTS.TO_HOSPITAL' | translate }}
                 <select
                   class="hospital-select"
                   [value]="grantToHospitalId()"
                   (change)="grantToHospitalId.set($any($event.target).value)"
                 >
-                  <option value="">— Select target hospital —</option>
+                  <option value="">— {{ 'PATIENTS.SELECT_TARGET_HOSPITAL' | translate }} —</option>
                   @for (h of hospitals(); track h.id) {
                     <option [value]="h.id">{{ h.name }}</option>
                   }
                 </select>
               </label>
               <label class="form-label">
-                Purpose (optional)
+                {{ 'PATIENTS.PURPOSE_OPTIONAL' | translate }}
                 <input
                   type="text"
                   class="form-input"
-                  placeholder="e.g. Emergency consultation"
+                  [placeholder]="'PATIENTS.PURPOSE_PLACEHOLDER' | translate"
                   [value]="grantPurpose()"
                   (input)="grantPurpose.set($any($event.target).value)"
                 />
               </label>
               <label class="form-label">
-                Expiry Date (optional)
+                {{ 'PATIENTS.EXPIRY_DATE_OPTIONAL' | translate }}
                 <input
                   type="datetime-local"
                   class="form-input"
@@ -650,16 +692,18 @@
               </label>
             </div>
             <div class="modal-footer">
-              <button class="btn-outline" (click)="closeGrantModal()">Cancel</button>
+              <button class="btn-outline" (click)="closeGrantModal()">
+                {{ 'COMMON.CANCEL' | translate }}
+              </button>
               <button
                 class="btn-primary"
                 (click)="submitGrant()"
                 [disabled]="grantLoading() || !grantFromHospitalId() || !grantToHospitalId()"
               >
                 @if (grantLoading()) {
-                  <span class="spinner-btn"></span> Saving…
+                  <span class="spinner-btn"></span> {{ 'COMMON.SAVING' | translate }}
                 } @else {
-                  Grant Consent
+                  {{ 'PATIENTS.GRANT_CONSENT' | translate }}
                 }
               </button>
             </div>

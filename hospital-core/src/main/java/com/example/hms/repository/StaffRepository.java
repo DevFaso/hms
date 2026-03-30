@@ -17,6 +17,10 @@ import java.util.UUID;
 
 @Repository
 public interface StaffRepository extends JpaRepository<Staff, UUID> {
+    @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
+    @Query("SELECT s FROM Staff s WHERE s.user.isDeleted = false")
+    List<Staff> findAllExcludingDeletedUsers();
+
     @Query("SELECT s FROM Staff s WHERE s.user.username = :identifier OR s.licenseNumber = :identifier OR s.assignment.role.code = :identifier")
     java.util.Optional<Staff> findByUsernameOrLicenseOrRoleCode(@Param("identifier") String identifier);
     // Lookup staff by user email (excludes deleted users)

@@ -1,11 +1,12 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Encounters</h1>
-      <p class="page-subtitle">Clinical encounters and visit management</p>
+      <h1 class="page-title">{{ 'ENCOUNTERS.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'ENCOUNTERS.SUBTITLE' | translate }}</p>
     </div>
     <button class="btn-primary" (click)="openCreate()">
-      <span class="material-symbols-outlined">add</span> New Encounter
+      <span class="material-symbols-outlined">add</span>
+      {{ 'ENCOUNTERS.NEW_ENCOUNTER' | translate }}
     </button>
   </div>
 
@@ -14,28 +15,28 @@
       <span class="material-symbols-outlined card-icon open">meeting_room</span>
       <div class="card-info">
         <span class="card-value">{{ countByStatus('SCHEDULED') }}</span>
-        <span class="card-label">Scheduled</span>
+        <span class="card-label">{{ 'ENCOUNTERS.SCHEDULED' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon progress">pending</span>
       <div class="card-info">
         <span class="card-value">{{ countByStatus('IN_PROGRESS') }}</span>
-        <span class="card-label">In Progress</span>
+        <span class="card-label">{{ 'ENCOUNTERS.IN_PROGRESS' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon completed">check_circle</span>
       <div class="card-info">
         <span class="card-value">{{ countByStatus('COMPLETED') }}</span>
-        <span class="card-label">Completed</span>
+        <span class="card-label">{{ 'ENCOUNTERS.COMPLETED' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon total">bar_chart</span>
       <div class="card-info">
         <span class="card-value">{{ encounters().length }}</span>
-        <span class="card-label">Total</span>
+        <span class="card-label">{{ 'COMMON.TOTAL' | translate }}</span>
       </div>
     </div>
   </div>
@@ -43,24 +44,24 @@
   <div class="filter-bar">
     <div class="tabs">
       <button class="tab-btn" [class.active]="activeTab() === 'all'" (click)="setTab('all')">
-        All
+        {{ 'COMMON.ALL' | translate }}
       </button>
       <button class="tab-btn" [class.active]="activeTab() === 'open'" (click)="setTab('open')">
-        Active
+        {{ 'COMMON.ACTIVE' | translate }}
       </button>
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'completed'"
         (click)="setTab('completed')"
       >
-        Completed
+        {{ 'ENCOUNTERS.COMPLETED' | translate }}
       </button>
     </div>
     <div class="search-box">
       <span class="material-symbols-outlined">search</span>
       <input
         type="text"
-        placeholder="Search encounters..."
+        [placeholder]="'ENCOUNTERS.SEARCH' | translate"
         [(ngModel)]="searchTerm"
         (input)="applyFilter()"
       />
@@ -70,15 +71,15 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading encounters...</p>
+      <p>{{ 'ENCOUNTERS.LOADING' | translate }}</p>
     </div>
   }
 
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">medical_services</span>
-      <h3>No encounters found</h3>
-      <p>Clinical encounters will appear here.</p>
+      <h3>{{ 'ENCOUNTERS.NO_ENCOUNTERS' | translate }}</h3>
+      <p>{{ 'ENCOUNTERS.EMPTY_MSG' | translate }}</p>
     </div>
   }
 
@@ -87,13 +88,13 @@
       <table>
         <thead>
           <tr>
-            <th scope="col">Patient</th>
-            <th scope="col">Provider</th>
-            <th scope="col">Department</th>
-            <th scope="col">Type</th>
-            <th scope="col">Date</th>
-            <th scope="col">Status</th>
-            <th scope="col">Actions</th>
+            <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+            <th scope="col">{{ 'ENCOUNTERS.PROVIDER' | translate }}</th>
+            <th scope="col">{{ 'STAFF.DEPARTMENT' | translate }}</th>
+            <th scope="col">{{ 'COMMON.TYPE' | translate }}</th>
+            <th scope="col">{{ 'COMMON.DATE' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -144,7 +145,7 @@
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
       <div class="detail-panel">
         <div class="detail-header">
-          <h2>Encounter Details</h2>
+          <h2>{{ 'ENCOUNTERS.DETAILS' | translate }}</h2>
           <button class="btn-icon" title="Close" (click)="closeDetail()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -152,37 +153,37 @@
         <div class="detail-body">
           <div class="detail-grid">
             <div class="detail-field">
-              <span class="field-label">Patient</span
+              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
               ><span class="field-value">{{ enc.patientName || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Provider</span
+              <span class="field-label">{{ 'ENCOUNTERS.PROVIDER' | translate }}</span
               ><span class="field-value">{{ enc.staffName || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Department</span
+              <span class="field-label">{{ 'STAFF.DEPARTMENT' | translate }}</span
               ><span class="field-value">{{ enc.departmentName || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Hospital</span
+              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
               ><span class="field-value">{{ enc.hospitalName || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Type</span
+              <span class="field-label">{{ 'COMMON.TYPE' | translate }}</span
               ><span class="field-value">{{ enc.encounterType || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Status</span
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="status-badge {{ getStatusClass(enc.status) }}">{{ enc.status }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Date</span
+              <span class="field-label">{{ 'COMMON.DATE' | translate }}</span
               ><span class="field-value">{{
                 enc.encounterDate ? (enc.encounterDate | date: 'medium') : '—'
               }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Created</span
+              <span class="field-label">{{ 'ENCOUNTERS.CREATED' | translate }}</span
               ><span class="field-value">{{
                 enc.createdAt ? (enc.createdAt | date: 'medium') : '—'
               }}</span>
@@ -198,7 +199,7 @@
 
           @if (enc.appointmentReason) {
             <div class="detail-section">
-              <h3>Appointment</h3>
+              <h3>{{ 'ENCOUNTERS.APPOINTMENT' | translate }}</h3>
               <p>{{ enc.appointmentReason }}</p>
             </div>
           }
@@ -210,22 +211,25 @@
                 title="Add clinical note"
                 (click)="showNoteForm.set(true)"
               >
-                <span class="material-symbols-outlined">add</span> Add Note
+                <span class="material-symbols-outlined">add</span>
+                {{ 'ENCOUNTERS.ADD_NOTE' | translate }}
               </button>
             } @else {
-              <h3>Add Note</h3>
+              <h3>{{ 'ENCOUNTERS.ADD_NOTE' | translate }}</h3>
               <textarea
                 class="note-input"
                 [(ngModel)]="noteContent"
                 rows="4"
-                placeholder="Enter clinical note..."
+                [placeholder]="'ENCOUNTERS.NOTE_PLACEHOLDER' | translate"
                 aria-label="Clinical note"
               ></textarea>
               <div class="note-actions">
                 <button class="btn-primary" (click)="addNote()" [disabled]="!noteContent.trim()">
-                  Save Note
+                  {{ 'COMMON.SAVE' | translate }} {{ 'ENCOUNTERS.NOTES' | translate }}
                 </button>
-                <button class="btn-secondary" (click)="showNoteForm.set(false)">Cancel</button>
+                <button class="btn-secondary" (click)="showNoteForm.set(false)">
+                  {{ 'COMMON.CANCEL' | translate }}
+                </button>
               </div>
             }
           </div>
@@ -245,7 +249,11 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ editing() ? 'Edit Encounter' : 'New Encounter' }}</h2>
+        <h2>
+          {{
+            editing() ? ('ENCOUNTERS.EDIT' | translate) : ('ENCOUNTERS.NEW_ENCOUNTER' | translate)
+          }}
+        </h2>
         <button class="modal-close" (click)="closeModal()">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -253,7 +261,7 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label for="enc-patientSearch">Patient *</label>
+            <label for="enc-patientSearch">{{ 'APPOINTMENTS.PATIENT' | translate }} *</label>
             @if (selectedPatient()) {
               <div class="picker-chip">
                 <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
@@ -279,7 +287,7 @@
                   id="enc-patientSearch"
                   class="picker-input"
                   type="text"
-                  placeholder="Search by name, email or MRN…"
+                  [placeholder]="'ENCOUNTERS.PATIENT_SEARCH' | translate"
                   [value]="patientQuery()"
                   (input)="onPatientQueryChange($any($event.target).value)"
                   (blur)="patientDropdownOpen.set(false)"
@@ -307,9 +315,9 @@
             }
           </div>
           <div class="field">
-            <label for="enc-staffId">Staff *</label>
+            <label for="enc-staffId">{{ 'ENCOUNTERS.STAFF' | translate }} *</label>
             <select id="enc-staffId" [(ngModel)]="form.staffId" required>
-              <option value="">Select provider...</option>
+              <option value="">{{ 'ENCOUNTERS.SELECT_PROVIDER' | translate }}</option>
               @for (s of staffMembers(); track s.id) {
                 <option [value]="s.id">{{ s.name }}</option>
               }
@@ -318,7 +326,7 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="enc-hospitalId">Hospital *</label>
+            <label for="enc-hospitalId">{{ 'ENCOUNTERS.HOSPITAL' | translate }} *</label>
             @if (lockedHospitalId) {
               <!-- Staff is locked to their current hospital -->
               <input
@@ -342,7 +350,7 @@
                 (change)="onHospitalChange($any($event.target).value)"
                 required
               >
-                <option value="">Select hospital...</option>
+                <option value="">{{ 'ENCOUNTERS.SELECT_HOSPITAL' | translate }}</option>
                 @for (h of hospitals(); track h.id) {
                   <option [value]="h.id">{{ h.name }}</option>
                 }
@@ -350,7 +358,7 @@
             }
           </div>
           <div class="field">
-            <label for="enc-type">Encounter Type *</label>
+            <label for="enc-type">{{ 'ENCOUNTERS.TYPE' | translate }} *</label>
             <select id="enc-type" [(ngModel)]="form.encounterType" required>
               @for (t of encounterTypes; track t) {
                 <option [value]="t">{{ t }}</option>
@@ -360,11 +368,11 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="enc-date">Encounter Date *</label>
+            <label for="enc-date">{{ 'ENCOUNTERS.DATE' | translate }} *</label>
             <input id="enc-date" type="date" [(ngModel)]="form.encounterDate" required />
           </div>
           <div class="field">
-            <label for="enc-deptId">Department</label>
+            <label for="enc-deptId">{{ 'STAFF.DEPARTMENT' | translate }}</label>
             <select id="enc-deptId" [(ngModel)]="form.departmentId">
               <option value="">
                 {{ form.hospitalId ? 'Any department' : 'Select hospital first' }}
@@ -376,17 +384,19 @@
           </div>
         </div>
         <div class="field">
-          <label for="enc-notes">Notes</label>
+          <label for="enc-notes">{{ 'ENCOUNTERS.NOTES' | translate }}</label>
           <textarea
             id="enc-notes"
             [(ngModel)]="form.notes"
             rows="3"
-            placeholder="Clinical notes..."
+            [placeholder]="'ENCOUNTERS.NOTE_PLACEHOLDER' | translate"
           ></textarea>
         </div>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeModal()">Cancel</button>
+        <button class="btn-secondary" (click)="closeModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
         <button
           class="btn-primary"
           (click)="submitForm()"
@@ -394,7 +404,13 @@
             saving() || !form.patientId || !form.staffId || !form.hospitalId || !form.encounterDate
           "
         >
-          {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Create' }}
+          {{
+            saving()
+              ? ('COMMON.SAVING' | translate)
+              : editing()
+                ? ('COMMON.UPDATE' | translate)
+                : ('COMMON.CREATE' | translate)
+          }}
         </button>
       </div>
     </div>
@@ -416,7 +432,7 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>Delete Encounter</h2>
+        <h2>{{ 'ENCOUNTERS.DELETE' | translate }}</h2>
         <button class="modal-close" (click)="cancelDelete()">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -429,9 +445,11 @@
         </p>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+        <button class="btn-secondary" (click)="cancelDelete()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
         <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
-          {{ deleting() ? 'Deleting...' : 'Delete' }}
+          {{ deleting() ? ('ENCOUNTERS.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
         </button>
       </div>
     </div>

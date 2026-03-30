@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { TranslateModule } from '@ngx-translate/core';
 import { CdkDragDrop, DragDropModule, transferArrayItem } from '@angular/cdk/drag-drop';
 import { FlowBoard, ReceptionQueueItem } from './reception.service';
 
@@ -13,7 +14,7 @@ type ColKey = keyof FlowBoard;
 @Component({
   selector: 'app-flow-board',
   standalone: true,
-  imports: [CommonModule, DragDropModule],
+  imports: [CommonModule, DragDropModule, TranslateModule],
   templateUrl: './flow-board.html',
   styleUrl: './flow-board.scss',
 })

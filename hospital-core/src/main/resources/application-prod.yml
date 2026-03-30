@@ -43,10 +43,18 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: when_authorized
+  otlp:
+    metrics:
+      export:
+        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:}
+        headers:
+          Authorization: ${GRAFANA_OTLP_AUTH_HEADER:}
+        enabled: ${OTEL_METRICS_ENABLED:false}
+        step: 60s
 
 # ===================== Seed Data =====================
 # Roles and org security data are managed by Liquibase migrations

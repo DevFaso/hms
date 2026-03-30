@@ -25,7 +25,7 @@ struct BillingView: View {
                     if vm.totalDue > 0 {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("Outstanding Balance").font(.caption).foregroundColor(.white.opacity(0.85))
+                                Text("outstanding_balance".localized).font(.caption).foregroundColor(.white.opacity(0.85))
                                 Text(vm.totalDue, format: .currency(code: "USD"))
                                     .font(.title2).bold().foregroundColor(.white)
                             }
@@ -54,7 +54,7 @@ struct BillingView: View {
                 }
             }
         }
-        .navigationTitle("Billing")
+        .navigationTitle("billing_title".localized)
         .refreshable { await vm.load() }
         .sheet(item: $payTarget) { invoice in
             PaymentSheet(invoice: invoice, vm: vm)

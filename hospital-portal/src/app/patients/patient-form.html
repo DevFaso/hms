@@ -1,19 +1,19 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Register Patient</h1>
-      <p class="page-subtitle">Add a new patient to the system</p>
+      <h1 class="page-title">{{ 'PATIENTS.REGISTER' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PATIENTS.ADD_SUBTITLE' | translate }}</p>
     </div>
     <a routerLink="/patients" class="btn-secondary">
       <span class="material-symbols-outlined">arrow_back</span>
-      Back to Patients
+      {{ 'PATIENTS.BACK_TO_PATIENTS' | translate }}
     </a>
   </div>
 
   <form class="form-card" (ngSubmit)="onSubmit()">
     <div class="form-grid">
       <div class="form-group">
-        <label for="firstName">First Name *</label>
+        <label for="firstName">{{ 'PATIENTS.FIRST_NAME' | translate }} *</label>
         <input
           id="firstName"
           type="text"
@@ -24,11 +24,11 @@
         />
       </div>
       <div class="form-group">
-        <label for="middleName">Middle Name</label>
+        <label for="middleName">{{ 'PATIENTS.MIDDLE_NAME' | translate }}</label>
         <input id="middleName" type="text" [(ngModel)]="form.middleName" name="middleName" />
       </div>
       <div class="form-group">
-        <label for="lastName">Last Name *</label>
+        <label for="lastName">{{ 'PATIENTS.LAST_NAME' | translate }} *</label>
         <input
           id="lastName"
           type="text"
@@ -39,11 +39,11 @@
         />
       </div>
       <div class="form-group">
-        <label for="email">Email *</label>
+        <label for="email">{{ 'PATIENTS.EMAIL' | translate }} *</label>
         <input id="email" type="email" [(ngModel)]="form.email" name="email" required />
       </div>
       <div class="form-group">
-        <label for="phonePrimary">Phone Number *</label>
+        <label for="phonePrimary">{{ 'PATIENTS.PHONE' | translate }} *</label>
         <input
           id="phonePrimary"
           type="tel"
@@ -53,7 +53,7 @@
         />
       </div>
       <div class="form-group">
-        <label for="phoneSecondary">Secondary Phone</label>
+        <label for="phoneSecondary">{{ 'PATIENTS.SECONDARY_PHONE' | translate }}</label>
         <input
           id="phoneSecondary"
           type="tel"
@@ -62,7 +62,7 @@
         />
       </div>
       <div class="form-group">
-        <label for="dob">Date of Birth *</label>
+        <label for="dob">{{ 'PATIENTS.DOB' | translate }} *</label>
         <input
           id="dob"
           type="date"
@@ -73,18 +73,18 @@
         />
       </div>
       <div class="form-group">
-        <label for="gender">Gender *</label>
+        <label for="gender">{{ 'PATIENTS.GENDER' | translate }} *</label>
         <select id="gender" [(ngModel)]="form.gender" name="gender" required>
-          <option value="">Select gender</option>
-          <option value="MALE">Male</option>
-          <option value="FEMALE">Female</option>
-          <option value="OTHER">Other</option>
+          <option value="">{{ 'PATIENTS.SELECT_GENDER' | translate }}</option>
+          <option value="MALE">{{ 'PATIENTS.MALE' | translate }}</option>
+          <option value="FEMALE">{{ 'PATIENTS.FEMALE' | translate }}</option>
+          <option value="OTHER">{{ 'PATIENTS.OTHER' | translate }}</option>
         </select>
       </div>
       <div class="form-group">
-        <label for="bloodType">Blood Type</label>
+        <label for="bloodType">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</label>
         <select id="bloodType" [(ngModel)]="form.bloodType" name="bloodType">
-          <option value="">Select blood type</option>
+          <option value="">{{ 'PATIENTS.SELECT_BLOOD_TYPE' | translate }}</option>
           <option value="A+">A+</option>
           <option value="A-">A-</option>
           <option value="B+">B+</option>
@@ -96,7 +96,7 @@
         </select>
       </div>
       <div class="form-group">
-        <label for="hospital">Hospital *</label>
+        <label for="hospital">{{ 'ENCOUNTERS.HOSPITAL' | translate }} *</label>
         @if (hospitalLocked) {
           <div class="locked-field">
             <span class="material-symbols-outlined locked-icon">business</span>
@@ -105,7 +105,7 @@
           <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
         } @else {
           <select id="hospital" [(ngModel)]="form.hospitalId" name="hospitalId" required>
-            <option value="">Select hospital</option>
+            <option value="">{{ 'PATIENTS.SELECT_HOSPITAL' | translate }}</option>
             @for (h of hospitals; track h.id) {
               <option [value]="h.id">{{ h.name }}</option>
             }
@@ -114,66 +114,66 @@
       </div>
 
       <div class="form-group full-width section-divider">
-        <h3 class="section-title">Location</h3>
+        <h3 class="section-title">{{ 'PATIENTS.LOCATION' | translate }}</h3>
       </div>
       <div class="form-group">
-        <label for="country">Country *</label>
+        <label for="country">{{ 'PATIENTS.COUNTRY' | translate }} *</label>
         <input
           id="country"
           type="text"
           [(ngModel)]="form.country"
           name="country"
           required
-          placeholder="e.g., Burkina Faso, USA, France"
+          [placeholder]="'PATIENTS.COUNTRY_PLACEHOLDER' | translate"
         />
       </div>
       <div class="form-group">
-        <label for="city">Ville / City *</label>
+        <label for="city">{{ 'PATIENTS.CITY' | translate }} *</label>
         <input
           id="city"
           type="text"
           [(ngModel)]="form.city"
           name="city"
           required
-          placeholder="e.g., Ouagadougou, Paris, New York"
+          [placeholder]="'PATIENTS.CITY_PLACEHOLDER' | translate"
         />
       </div>
       <div class="form-group">
-        <label for="state">Province / Region</label>
+        <label for="state">{{ 'PATIENTS.STATE' | translate }}</label>
         <input
           id="state"
           type="text"
           [(ngModel)]="form.state"
           name="state"
-          placeholder="e.g., Kadiogo, Île-de-France, California"
+          [placeholder]="'PATIENTS.STATE_PLACEHOLDER' | translate"
         />
       </div>
       <div class="form-group">
-        <label for="address">Secteur / Neighborhood</label>
+        <label for="address">{{ 'PATIENTS.ADDRESS' | translate }}</label>
         <input
           id="address"
           type="text"
           [(ngModel)]="form.address"
           name="address"
-          placeholder="e.g., Secteur 30, Quartier Dassasgho"
+          [placeholder]="'PATIENTS.ADDRESS_PLACEHOLDER' | translate"
         />
       </div>
       <div class="form-group">
-        <label for="zipCode">Code Postal / Zip Code</label>
+        <label for="zipCode">{{ 'PATIENTS.ZIP_CODE' | translate }}</label>
         <input
           id="zipCode"
           type="text"
           [(ngModel)]="form.zipCode"
           name="zipCode"
-          placeholder="Optional"
+          [placeholder]="'PATIENTS.OPTIONAL' | translate"
         />
       </div>
 
       <div class="form-group full-width section-divider">
-        <h3 class="section-title">Emergency Contact</h3>
+        <h3 class="section-title">{{ 'PATIENTS.EMERGENCY_CONTACT' | translate }}</h3>
       </div>
       <div class="form-group">
-        <label for="ecName">Contact Name</label>
+        <label for="ecName">{{ 'PATIENTS.EC_NAME' | translate }}</label>
         <input
           id="ecName"
           type="text"
@@ -182,7 +182,7 @@
         />
       </div>
       <div class="form-group">
-        <label for="ecPhone">Contact Phone</label>
+        <label for="ecPhone">{{ 'PATIENTS.EC_PHONE' | translate }}</label>
         <input
           id="ecPhone"
           type="tel"
@@ -191,37 +191,37 @@
         />
       </div>
       <div class="form-group">
-        <label for="ecRelation">Relationship</label>
+        <label for="ecRelation">{{ 'PATIENTS.EC_RELATIONSHIP' | translate }}</label>
         <input
           id="ecRelation"
           type="text"
           [(ngModel)]="form.emergencyContactRelationship"
           name="emergencyContactRelationship"
-          placeholder="e.g., Spouse, Parent, Sibling"
+          [placeholder]="'PATIENTS.EC_RELATIONSHIP_PLACEHOLDER' | translate"
         />
       </div>
 
       <div class="form-group full-width section-divider">
-        <h3 class="section-title">Medical Information</h3>
+        <h3 class="section-title">{{ 'PATIENTS.MEDICAL_INFO' | translate }}</h3>
       </div>
       <div class="form-group full-width">
-        <label for="allergies">Allergies</label>
+        <label for="allergies">{{ 'PATIENTS.ALLERGIES' | translate }}</label>
         <textarea
           id="allergies"
           [(ngModel)]="form.allergies"
           name="allergies"
           rows="2"
-          placeholder="Known allergies..."
+          [placeholder]="'PATIENTS.ALLERGIES_PLACEHOLDER' | translate"
         ></textarea>
       </div>
       <div class="form-group full-width">
-        <label for="medicalHistory">Medical History Summary</label>
+        <label for="medicalHistory">{{ 'PATIENTS.MEDICAL_HISTORY' | translate }}</label>
         <textarea
           id="medicalHistory"
           [(ngModel)]="form.medicalHistorySummary"
           name="medicalHistorySummary"
           rows="3"
-          placeholder="Relevant medical history..."
+          [placeholder]="'PATIENTS.MEDICAL_HISTORY_PLACEHOLDER' | translate"
         ></textarea>
       </div>
     </div>
@@ -232,20 +232,26 @@
         <div class="duplicate-warning-strip">
           <span class="material-symbols-outlined">warning</span>
           <span>
-            {{ duplicateCandidates.length }} possible duplicate
-            {{ duplicateCandidates.length === 1 ? 'record' : 'records' }} found. Review before
-            registering.
+            {{ duplicateCandidates.length }} {{ 'PATIENTS.POSSIBLE_DUPLICATE' | translate }}
+            {{
+              duplicateCandidates.length === 1
+                ? ('PATIENTS.RECORD' | translate)
+                : ('PATIENTS.RECORDS' | translate)
+            }}
+            {{ 'PATIENTS.FOUND_REVIEW' | translate }}
           </span>
-          <button type="button" class="btn-link" (click)="showDuplicateWarning = true">View</button>
+          <button type="button" class="btn-link" (click)="showDuplicateWarning = true">
+            {{ 'PATIENTS.VIEW' | translate }}
+          </button>
         </div>
       }
       <button type="submit" class="btn-primary" [disabled]="saving">
         @if (saving) {
           <span class="spinner-sm"></span>
         }
-        Register Patient
+        {{ 'PATIENTS.REGISTER' | translate }}
       </button>
-      <a routerLink="/patients" class="btn-secondary">Cancel</a>
+      <a routerLink="/patients" class="btn-secondary">{{ 'COMMON.CANCEL' | translate }}</a>
     </div>
   </form>
 </div>
@@ -256,20 +262,19 @@
   <div class="dup-modal" role="alertdialog" aria-modal="true">
     <div class="dup-modal-header">
       <span class="material-symbols-outlined warn-icon">warning</span>
-      <h2>Possible Duplicate Patients</h2>
+      <h2>{{ 'PATIENTS.POSSIBLE_DUPLICATES' | translate }}</h2>
     </div>
     <p class="dup-modal-desc">
-      The following existing records closely match the information you've entered. Please review
-      before proceeding.
+      {{ 'PATIENTS.DUPLICATE_DESC' | translate }}
     </p>
     <table class="dup-table">
       <thead>
         <tr>
-          <th>Name</th>
-          <th>MRN</th>
-          <th>Date of Birth</th>
-          <th>Phone</th>
-          <th>Match</th>
+          <th>{{ 'PATIENTS.NAME' | translate }}</th>
+          <th>{{ 'PATIENTS.MRN' | translate }}</th>
+          <th>{{ 'PATIENTS.DOB' | translate }}</th>
+          <th>{{ 'PATIENTS.PHONE' | translate }}</th>
+          <th>{{ 'PATIENTS.MATCH' | translate }}</th>
         </tr>
       </thead>
       <tbody>
@@ -297,10 +302,10 @@
     </table>
     <div class="dup-modal-footer">
       <button type="button" class="btn-secondary" (click)="showDuplicateWarning = false">
-        Go Back &amp; Review
+        {{ 'PATIENTS.GO_BACK_REVIEW' | translate }}
       </button>
       <button type="button" class="btn-danger" (click)="proceedDespiteDuplicate()">
-        Proceed Anyway (New Patient)
+        {{ 'PATIENTS.PROCEED_ANYWAY' | translate }}
       </button>
     </div>
   </div>

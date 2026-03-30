@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
+import { TranslateModule } from '@ngx-translate/core';
 
 interface DepartmentDetail {
   id: string;
@@ -36,7 +37,7 @@ interface DepartmentStats {
 @Component({
   selector: 'app-department-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterLink, TranslateModule],
   templateUrl: './department-detail.html',
   styleUrl: './department-detail.scss',
 })

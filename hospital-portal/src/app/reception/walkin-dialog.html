@@ -7,10 +7,15 @@
   (keydown.enter)="dismissed.emit()"
   (keydown.escape)="dismissed.emit()"
 ></div>
-<div class="dialog-box" role="dialog" aria-modal="true" aria-label="Register Walk-In">
+<div
+  class="dialog-box"
+  role="dialog"
+  aria-modal="true"
+  [attr.aria-label]="'RECEPTION.REGISTER_WALKIN' | translate"
+>
   <div class="dialog-header">
     <span class="material-symbols-outlined header-icon">person_add</span>
-    <h2>Register Walk-In</h2>
+    <h2>{{ 'RECEPTION.REGISTER_WALKIN' | translate }}</h2>
     <button class="btn-close" (click)="dismissed.emit()" aria-label="Close">
       <span class="material-symbols-outlined">close</span>
     </button>
@@ -19,13 +24,15 @@
   <div class="dialog-body">
     <!-- Patient Search -->
     <div class="field-group">
-      <label for="patientSearch">Patient <span class="required">*</span></label>
+      <label for="patientSearch"
+        >{{ 'PATIENTS.PATIENT' | translate }} <span class="required">*</span></label
+      >
       <div class="search-wrapper">
         <input
           id="patientSearch"
           type="text"
           class="form-control"
-          placeholder="Search by name, MRN, or email…"
+          [placeholder]="'RECEPTION.SEARCH_PATIENT_PLACEHOLDER' | translate"
           [ngModel]="patientQuery()"
           (ngModelChange)="onPatientQueryChange($event)"
           autocomplete="off"
@@ -64,13 +71,15 @@
 
     <!-- Provider Search -->
     <div class="field-group">
-      <label for="staffSearch">Provider <span class="required">*</span></label>
+      <label for="staffSearch"
+        >{{ 'RECEPTION.PROVIDER' | translate }} <span class="required">*</span></label
+      >
       <div class="search-wrapper">
         <input
           id="staffSearch"
           type="text"
           class="form-control"
-          placeholder="Filter by provider name…"
+          [placeholder]="'RECEPTION.FILTER_PROVIDER' | translate"
           [ngModel]="staffQuery()"
           (ngModelChange)="staffQuery.set($event); selectedStaff.set(null)"
           autocomplete="off"
@@ -109,7 +118,7 @@
 
     <!-- Encounter Type -->
     <div class="field-group">
-      <label for="encType">Type</label>
+      <label for="encType">{{ 'RECEPTION.TYPE' | translate }}</label>
       <select
         id="encType"
         class="form-control"
@@ -124,12 +133,12 @@
 
     <!-- Notes -->
     <div class="field-group">
-      <label for="walkinNotes">Chief Complaint / Notes</label>
+      <label for="walkinNotes">{{ 'RECEPTION.CHIEF_COMPLAINT' | translate }}</label>
       <textarea
         id="walkinNotes"
         class="form-control"
         rows="3"
-        placeholder="Brief reason for visit…"
+        [placeholder]="'RECEPTION.REASON_FOR_VISIT' | translate"
         [ngModel]="notes()"
         (ngModelChange)="notes.set($event)"
       ></textarea>
@@ -137,7 +146,9 @@
   </div>
 
   <div class="dialog-footer">
-    <button class="btn-secondary" (click)="dismissed.emit()" [disabled]="saving()">Cancel</button>
+    <button class="btn-secondary" (click)="dismissed.emit()" [disabled]="saving()">
+      {{ 'COMMON.CANCEL' | translate }}
+    </button>
     <button
       class="btn-primary"
       [disabled]="!selectedPatient() || !selectedStaff() || saving()"
@@ -146,7 +157,7 @@
       @if (saving()) {
         <span class="material-symbols-outlined spin">progress_activity</span>
       }
-      Register Walk-In
+      {{ 'RECEPTION.REGISTER_WALKIN' | translate }}
     </button>
   </div>
 </div>

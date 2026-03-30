@@ -1,6 +1,7 @@
 import { Component, Output, EventEmitter, inject, signal, OnInit, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule } from '@ngx-translate/core';
 import { HttpClient } from '@angular/common/http';
 import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -13,7 +14,7 @@ type EncounterType = 'CONSULTATION' | 'FOLLOW_UP' | 'EMERGENCY' | 'OUTPATIENT' |
 @Component({
   selector: 'app-walkin-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, TranslateModule],
   templateUrl: './walkin-dialog.html',
 })
 export class WalkInDialogComponent implements OnInit {

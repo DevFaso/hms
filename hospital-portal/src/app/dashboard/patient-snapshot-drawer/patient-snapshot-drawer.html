@@ -22,7 +22,7 @@
           (click)="close()"
         >
           <span class="material-symbols-outlined">open_in_full</span>
-          Full Chart
+          {{ 'DASHBOARD.FULL_CHART' | translate }}
         </a>
         <button class="drawer-close" (click)="close()">
           <span class="material-symbols-outlined">close</span>
@@ -43,7 +43,7 @@
       <div class="drawer-section">
         <button class="section-toggle" (click)="toggle('allergies')">
           <span class="material-symbols-outlined section-icon">warning</span>
-          <span class="section-title">Allergies</span>
+          <span class="section-title">{{ 'DASHBOARD.ALLERGIES' | translate }}</span>
           <span class="section-count">{{ pt.allergies.length }}</span>
           <span class="material-symbols-outlined toggle-arrow">{{
             allergiesOpen() ? 'expand_less' : 'expand_more'
@@ -52,7 +52,7 @@
         @if (allergiesOpen()) {
           <div class="section-body">
             @if (pt.allergies.length === 0) {
-              <span class="no-data">No known allergies</span>
+              <span class="no-data">{{ 'DASHBOARD.NO_KNOWN_ALLERGIES' | translate }}</span>
             } @else {
               <div class="allergy-tags">
                 @for (a of pt.allergies; track a) {
@@ -68,7 +68,7 @@
       <div class="drawer-section">
         <button class="section-toggle" (click)="toggle('diagnoses')">
           <span class="material-symbols-outlined section-icon">medical_information</span>
-          <span class="section-title">Active Diagnoses</span>
+          <span class="section-title">{{ 'DASHBOARD.ACTIVE_DIAGNOSES' | translate }}</span>
           <span class="section-count">{{ pt.activeDiagnoses.length }}</span>
           <span class="material-symbols-outlined toggle-arrow">{{
             diagnosesOpen() ? 'expand_less' : 'expand_more'
@@ -77,7 +77,7 @@
         @if (diagnosesOpen()) {
           <div class="section-body">
             @if (pt.activeDiagnoses.length === 0) {
-              <span class="no-data">None documented</span>
+              <span class="no-data">{{ 'DASHBOARD.NONE_DOCUMENTED' | translate }}</span>
             } @else {
               <ul class="dx-list">
                 @for (dx of pt.activeDiagnoses; track dx) {
@@ -93,7 +93,7 @@
       <div class="drawer-section">
         <button class="section-toggle" (click)="toggle('meds')">
           <span class="material-symbols-outlined section-icon">medication</span>
-          <span class="section-title">Active Medications</span>
+          <span class="section-title">{{ 'DASHBOARD.ACTIVE_MEDICATIONS' | translate }}</span>
           <span class="section-count">{{ pt.activeMedications.length }}</span>
           <span class="material-symbols-outlined toggle-arrow">{{
             medsOpen() ? 'expand_less' : 'expand_more'
@@ -102,7 +102,7 @@
         @if (medsOpen()) {
           <div class="section-body">
             @if (pt.activeMedications.length === 0) {
-              <span class="no-data">No active medications</span>
+              <span class="no-data">{{ 'DASHBOARD.NO_ACTIVE_MEDICATIONS' | translate }}</span>
             } @else {
               @for (med of pt.activeMedications; track med.name) {
                 <div class="med-row">
@@ -119,7 +119,7 @@
       <div class="drawer-section">
         <button class="section-toggle" (click)="toggle('vitals')">
           <span class="material-symbols-outlined section-icon">monitor_heart</span>
-          <span class="section-title">Recent Vitals</span>
+          <span class="section-title">{{ 'DASHBOARD.RECENT_VITALS' | translate }}</span>
           <span class="section-count">{{ pt.recentVitals.length }}</span>
           <span class="material-symbols-outlined toggle-arrow">{{
             vitalsOpen() ? 'expand_less' : 'expand_more'
@@ -128,7 +128,7 @@
         @if (vitalsOpen()) {
           <div class="section-body">
             @if (pt.recentVitals.length === 0) {
-              <span class="no-data">No recent vitals</span>
+              <span class="no-data">{{ 'DASHBOARD.NO_RECENT_VITALS' | translate }}</span>
             } @else {
               <div class="vitals-grid">
                 @for (v of pt.recentVitals; track v.type + v.timestamp) {
@@ -147,7 +147,7 @@
       <div class="drawer-section">
         <button class="section-toggle" (click)="toggle('labs')">
           <span class="material-symbols-outlined section-icon">science</span>
-          <span class="section-title">Latest Labs</span>
+          <span class="section-title">{{ 'DASHBOARD.LATEST_LABS' | translate }}</span>
           <span class="section-count">{{ pt.latestLabs.length }}</span>
           <span class="material-symbols-outlined toggle-arrow">{{
             labsOpen() ? 'expand_less' : 'expand_more'
@@ -156,7 +156,7 @@
         @if (labsOpen()) {
           <div class="section-body">
             @if (pt.latestLabs.length === 0) {
-              <span class="no-data">No recent labs</span>
+              <span class="no-data">{{ 'DASHBOARD.NO_RECENT_LABS' | translate }}</span>
             } @else {
               @for (lab of pt.latestLabs; track lab.test + lab.date) {
                 <div class="lab-row">
@@ -179,7 +179,7 @@
       <div class="drawer-section">
         <button class="section-toggle" (click)="toggle('orders')">
           <span class="material-symbols-outlined section-icon">assignment</span>
-          <span class="section-title">Pending Orders</span>
+          <span class="section-title">{{ 'DASHBOARD.PENDING_ORDERS' | translate }}</span>
           <span class="section-count">{{ pt.pendingOrders.length }}</span>
           <span class="material-symbols-outlined toggle-arrow">{{
             ordersOpen() ? 'expand_less' : 'expand_more'
@@ -188,7 +188,7 @@
         @if (ordersOpen()) {
           <div class="section-body">
             @if (pt.pendingOrders.length === 0) {
-              <span class="no-data">No pending orders</span>
+              <span class="no-data">{{ 'DASHBOARD.NO_PENDING_ORDERS' | translate }}</span>
             } @else {
               @for (o of pt.pendingOrders; track o.description + o.orderedAt) {
                 <div class="order-row">
@@ -205,7 +205,7 @@
       <div class="drawer-section">
         <button class="section-toggle" (click)="toggle('notes')">
           <span class="material-symbols-outlined section-icon">description</span>
-          <span class="section-title">Recent Notes</span>
+          <span class="section-title">{{ 'DASHBOARD.RECENT_NOTES' | translate }}</span>
           <span class="section-count">{{ pt.recentNotes.length }}</span>
           <span class="material-symbols-outlined toggle-arrow">{{
             notesOpen() ? 'expand_less' : 'expand_more'
@@ -214,7 +214,7 @@
         @if (notesOpen()) {
           <div class="section-body">
             @if (pt.recentNotes.length === 0) {
-              <span class="no-data">No recent notes</span>
+              <span class="no-data">{{ 'DASHBOARD.NO_RECENT_NOTES' | translate }}</span>
             } @else {
               @for (n of pt.recentNotes; track n.date + n.type) {
                 <div class="note-row">

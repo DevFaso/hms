@@ -1,12 +1,12 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Laboratory</h1>
-      <p class="page-subtitle">Manage lab orders, results, and diagnostics</p>
+      <h1 class="page-title">{{ 'LAB.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'LAB.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
       <button class="btn-primary" (click)="openCreate()">
-        <span class="material-symbols-outlined">add</span> New Lab Order
+        <span class="material-symbols-outlined">add</span> {{ 'LAB.NEW_ORDER' | translate }}
       </button>
     </div>
   </div>
@@ -16,28 +16,28 @@
       <span class="material-symbols-outlined card-icon total">science</span>
       <div class="card-info">
         <span class="card-value">{{ stats().total }}</span
-        ><span class="card-label">Total Orders</span>
+        ><span class="card-label">{{ 'LAB.TOTAL_ORDERS' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon pending">pending</span>
       <div class="card-info">
         <span class="card-value">{{ stats().pending }}</span
-        ><span class="card-label">Pending</span>
+        ><span class="card-label">{{ 'LAB.PENDING' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon completed">check_circle</span>
       <div class="card-info">
         <span class="card-value">{{ stats().completed }}</span
-        ><span class="card-label">Completed</span>
+        ><span class="card-label">{{ 'LAB.COMPLETED' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon cancelled">cancel</span>
       <div class="card-info">
         <span class="card-value">{{ stats().cancelled }}</span
-        ><span class="card-label">Cancelled</span>
+        ><span class="card-label">{{ 'LAB.CANCELLED' | translate }}</span>
       </div>
     </div>
   </div>
@@ -47,25 +47,25 @@
       class="tab"
       [class.active]="activeTab() === 'all'"
       (click)="setTab('all')"
-      title="All lab orders"
+      [title]="'LAB.ALL_ORDERS' | translate"
     >
-      All ({{ orders().length }})
+      {{ 'COMMON.ALL' | translate }} ({{ orders().length }})
     </button>
     <button
       class="tab"
       [class.active]="activeTab() === 'pending'"
       (click)="setTab('pending')"
-      title="Pending lab orders"
+      [title]="'LAB.PENDING_ORDERS' | translate"
     >
-      Pending ({{ stats().pending }})
+      {{ 'LAB.PENDING' | translate }} ({{ stats().pending }})
     </button>
     <button
       class="tab"
       [class.active]="activeTab() === 'completed'"
       (click)="setTab('completed')"
-      title="Completed lab orders"
+      [title]="'LAB.COMPLETED_ORDERS' | translate"
     >
-      Completed ({{ stats().completed }})
+      {{ 'LAB.COMPLETED' | translate }} ({{ stats().completed }})
     </button>
   </div>
 
@@ -73,7 +73,7 @@
     <span class="material-symbols-outlined">search</span
     ><input
       type="text"
-      placeholder="Search by order code, patient, test, or status..."
+      [placeholder]="'LAB.SEARCH' | translate"
       [(ngModel)]="searchTerm"
       (input)="applyFilter()"
     />
@@ -82,7 +82,7 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading lab orders...</p>
+      <p>{{ 'LAB.LOADING' | translate }}</p>
     </div>
   }
 
@@ -91,13 +91,13 @@
       <table>
         <thead>
           <tr>
-            <th scope="col">Order Code</th>
-            <th scope="col">Patient</th>
-            <th scope="col">Test</th>
-            <th scope="col">Hospital</th>
-            <th scope="col">Ordered</th>
-            <th scope="col">Status</th>
-            <th scope="col">Actions</th>
+            <th scope="col">{{ 'LAB.ORDER_CODE' | translate }}</th>
+            <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+            <th scope="col">{{ 'LAB.TEST' | translate }}</th>
+            <th scope="col">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</th>
+            <th scope="col">{{ 'LAB.ORDERED' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -125,17 +125,21 @@
                 <div class="action-group">
                   <button
                     class="action-link view-link"
-                    title="View order details"
+                    [title]="'LAB.VIEW_DETAILS' | translate"
                     (click)="viewOrder(order)"
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  <button class="action-link edit-link" title="Edit" (click)="openEdit(order)">
+                  <button
+                    class="action-link edit-link"
+                    [title]="'COMMON.EDIT' | translate"
+                    (click)="openEdit(order)"
+                  >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
                   <button
                     class="action-link delete-link"
-                    title="Delete"
+                    [title]="'COMMON.DELETE' | translate"
                     (click)="confirmDelete(order)"
                   >
                     <span class="material-symbols-outlined">delete</span>
@@ -152,8 +156,10 @@
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">science</span>
-      <h3>No lab orders found</h3>
-      <p>{{ searchTerm ? 'Try adjusting your search.' : 'No lab orders placed yet.' }}</p>
+      <h3>{{ 'LAB.NO_RESULTS' | translate }}</h3>
+      <p>
+        {{ searchTerm ? ('COMMON.TRY_ADJUSTING' | translate) : ('LAB.NO_ORDERS_YET' | translate) }}
+      </p>
     </div>
   }
 
@@ -161,55 +167,59 @@
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
       <div class="detail-panel">
         <div class="panel-header">
-          <h2>Lab Order {{ o.labOrderCode }}</h2>
-          <button class="close-btn" title="Close detail panel" (click)="closeDetail()">
+          <h2>{{ 'LAB.ORDER' | translate }} {{ o.labOrderCode }}</h2>
+          <button
+            class="close-btn"
+            [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
+            (click)="closeDetail()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
         <div class="panel-body">
           <div class="detail-grid">
             <div class="detail-field">
-              <span class="field-label">Patient</span
+              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
               ><span class="field-value">{{ o.patientFullName }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Email</span
+              <span class="field-label">{{ 'COMMON.EMAIL' | translate }}</span
               ><span class="field-value">{{ o.patientEmail || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Hospital</span
+              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
               ><span class="field-value">{{ o.hospitalName || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Test</span
+              <span class="field-label">{{ 'LAB.TEST' | translate }}</span
               ><span class="field-value">{{ o.labTestName }} ({{ o.labTestCode }})</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Order Date</span
+              <span class="field-label">{{ 'LAB.ORDER_DATE' | translate }}</span
               ><span class="field-value">{{ o.orderDatetime | date: 'long' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Status</span
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="status-badge" [class]="getStatusClass(o.status)">{{ o.status }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Diagnosis Code</span
+              <span class="field-label">{{ 'LAB.DIAGNOSIS_CODE' | translate }}</span
               ><span class="field-value">{{ o.primaryDiagnosisCode || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Order Channel</span
+              <span class="field-label">{{ 'LAB.ORDER_CHANNEL' | translate }}</span
               ><span class="field-value">{{ o.orderChannel || '—' }}</span>
             </div>
           </div>
           @if (o.clinicalIndication) {
             <div class="notes-section">
-              <span class="field-label">Clinical Indication</span>
+              <span class="field-label">{{ 'LAB.CLINICAL_INDICATION' | translate }}</span>
               <p>{{ o.clinicalIndication }}</p>
             </div>
           }
           @if (o.notes) {
             <div class="notes-section">
-              <span class="field-label">Notes</span>
+              <span class="field-label">{{ 'COMMON.NOTES' | translate }}</span>
               <p>{{ o.notes }}</p>
             </div>
           }
@@ -229,7 +239,7 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ editing() ? 'Edit Lab Order' : 'New Lab Order' }}</h2>
+        <h2>{{ editing() ? ('LAB.EDIT_ORDER' | translate) : ('LAB.NEW_ORDER' | translate) }}</h2>
         <button class="modal-close" (click)="closeModal()">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -237,7 +247,7 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label for="lab-patientSearch">Patient *</label>
+            <label for="lab-patientSearch">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
             @if (selectedPatient()) {
               <div class="picker-chip">
                 <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
@@ -251,7 +261,7 @@
                   type="button"
                   class="chip-clear"
                   (click)="clearPatient()"
-                  title="Change patient"
+                  [title]="'COMMON.CHANGE_PATIENT' | translate"
                 >
                   <span class="material-symbols-outlined">close</span>
                 </button>
@@ -263,7 +273,7 @@
                   id="lab-patientSearch"
                   class="picker-input"
                   type="text"
-                  placeholder="Search by name, email or MRN…"
+                  [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
                   [value]="patientQuery()"
                   (input)="onPatientQueryChange($any($event.target).value)"
                   (blur)="patientDropdownOpen.set(false)"
@@ -291,7 +301,7 @@
             }
           </div>
           <div class="field">
-            <label for="lab-hospitalId">Hospital *</label>
+            <label for="lab-hospitalId">{{ 'ENCOUNTERS.HOSPITAL' | translate }} *</label>
             @if (hospitalLocked) {
               <div class="locked-field">
                 <span class="material-symbols-outlined locked-icon">business</span>
@@ -300,7 +310,7 @@
               <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
             } @else {
               <select id="lab-hospitalId" [(ngModel)]="form.hospitalId" required>
-                <option value="">Select hospital...</option>
+                <option value="">{{ 'COMMON.SELECT_HOSPITAL' | translate }}</option>
                 @for (h of hospitals(); track h.id) {
                   <option [value]="h.id">{{ h.name }}</option>
                 }
@@ -310,92 +320,92 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="lab-testDef">Lab Test *</label>
+            <label for="lab-testDef">{{ 'LAB.LAB_TEST' | translate }} *</label>
             <select
               id="lab-testDef"
               [(ngModel)]="form.labTestDefinitionId"
               (ngModelChange)="onTestDefChange($event)"
               required
             >
-              <option value="">Select lab test...</option>
+              <option value="">{{ 'LAB.SELECT_TEST' | translate }}</option>
               @for (def of labTestDefs(); track def.id) {
                 <option [value]="def.id">{{ def.testName }} ({{ def.testCode }})</option>
               }
             </select>
           </div>
           <div class="field">
-            <label for="lab-testCode">Test Code</label>
+            <label for="lab-testCode">{{ 'LAB.TEST_CODE' | translate }}</label>
             <input
               id="lab-testCode"
               type="text"
               [(ngModel)]="form.testCode"
-              placeholder="Auto-filled"
+              [placeholder]="'LAB.AUTO_FILLED' | translate"
               readonly
             />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="lab-priority">Priority</label>
+            <label for="lab-priority">{{ 'LAB.PRIORITY' | translate }}</label>
             <select id="lab-priority" [(ngModel)]="form.priority">
-              <option value="">Select priority...</option>
+              <option value="">{{ 'LAB.SELECT_PRIORITY' | translate }}</option>
               @for (p of priorities; track p) {
                 <option [value]="p">{{ p }}</option>
               }
             </select>
           </div>
           <div class="field">
-            <label for="lab-encounterId">Encounter ID</label>
+            <label for="lab-encounterId">{{ 'LAB.ENCOUNTER_ID' | translate }}</label>
             <input
               id="lab-encounterId"
               type="text"
               [(ngModel)]="form.encounterId"
-              placeholder="Optional"
+              [placeholder]="'COMMON.OPTIONAL' | translate"
             />
           </div>
         </div>
         <div class="field">
-          <label for="lab-clinicalIndication">Clinical Indication *</label>
+          <label for="lab-clinicalIndication">{{ 'LAB.CLINICAL_INDICATION' | translate }} *</label>
           <textarea
             id="lab-clinicalIndication"
             [(ngModel)]="form.clinicalIndication"
             rows="2"
-            placeholder="Clinical indication..."
+            [placeholder]="'LAB.CLINICAL_INDICATION_PLACEHOLDER' | translate"
             required
           ></textarea>
         </div>
         <div class="field">
-          <label for="lab-medNecessity">Medical Necessity Note *</label>
+          <label for="lab-medNecessity">{{ 'LAB.MEDICAL_NECESSITY' | translate }} *</label>
           <textarea
             id="lab-medNecessity"
             [(ngModel)]="form.medicalNecessityNote"
             rows="2"
-            placeholder="Medical necessity..."
+            [placeholder]="'LAB.MEDICAL_NECESSITY_PLACEHOLDER' | translate"
             required
           ></textarea>
         </div>
         <div class="field">
-          <label for="lab-notes">Notes</label>
+          <label for="lab-notes">{{ 'COMMON.NOTES' | translate }}</label>
           <textarea
             id="lab-notes"
             [(ngModel)]="form.notes"
             rows="2"
-            placeholder="Additional notes..."
+            [placeholder]="'COMMON.ADDITIONAL_NOTES' | translate"
           ></textarea>
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="lab-diagnosisCode">Primary Diagnosis Code (ICD-10) *</label>
+            <label for="lab-diagnosisCode">{{ 'LAB.DIAGNOSIS_CODE_LABEL' | translate }} *</label>
             <input
               id="lab-diagnosisCode"
               type="text"
               [(ngModel)]="form.primaryDiagnosisCode"
-              placeholder="e.g. R50.9"
+              [placeholder]="'LAB.DIAGNOSIS_CODE_PLACEHOLDER' | translate"
               required
             />
           </div>
           <div class="field">
-            <label for="lab-orderChannel">Order Channel *</label>
+            <label for="lab-orderChannel">{{ 'LAB.ORDER_CHANNEL' | translate }} *</label>
             <select id="lab-orderChannel" [(ngModel)]="form.orderChannel" required>
               @for (ch of orderChannels; track ch.value) {
                 <option [value]="ch.value">{{ ch.label }}</option>
@@ -416,12 +426,14 @@
               "
               [checked]="!!form.providerSignature"
             />
-            I electronically attest that the above information is accurate. *
+            {{ 'LAB.ATTESTATION' | translate }} *
           </label>
         </div>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeModal()">Cancel</button>
+        <button class="btn-secondary" (click)="closeModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
         <button
           class="btn-primary"
           (click)="submitForm()"
@@ -437,7 +449,13 @@
             !form.providerSignature
           "
         >
-          {{ saving() ? 'Saving...' : editing() ? 'Update' : 'Create' }}
+          {{
+            saving()
+              ? ('COMMON.SAVING' | translate)
+              : editing()
+                ? ('COMMON.UPDATE' | translate)
+                : ('COMMON.CREATE' | translate)
+          }}
         </button>
       </div>
     </div>
@@ -459,22 +477,24 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>Delete Lab Order</h2>
+        <h2>{{ 'LAB.DELETE_TITLE' | translate }}</h2>
         <button class="modal-close" (click)="cancelDelete()">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">
         <p class="delete-warning">
-          Are you sure you want to delete lab order
+          {{ 'LAB.DELETE_CONFIRM' | translate }}
           <strong>{{ deletingOrder()?.labOrderCode }}</strong
-          >? This action cannot be undone.
+          >{{ 'COMMON.CANNOT_UNDO' | translate }}
         </p>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" (click)="cancelDelete()">Cancel</button>
+        <button class="btn-secondary" (click)="cancelDelete()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
         <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
-          {{ deleting() ? 'Deleting...' : 'Delete' }}
+          {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
         </button>
       </div>
     </div>

@@ -1,12 +1,12 @@
 <div class="page-container">
   <div class="page-header">
     <div>
-      <h1 class="page-title">Imaging</h1>
-      <p class="page-subtitle">Radiology orders, scheduling, and reports</p>
+      <h1 class="page-title">{{ 'IMAGING.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'IMAGING.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
       <button class="btn-primary" (click)="openCreate()">
-        <span class="material-symbols-outlined">add</span> New Order
+        <span class="material-symbols-outlined">add</span> {{ 'IMAGING.NEW_ORDER' | translate }}
       </button>
     </div>
   </div>
@@ -15,21 +15,21 @@
       <span class="material-symbols-outlined card-icon active">radiology</span>
       <div class="card-info">
         <span class="card-value">{{ countByGroup('active') }}</span
-        ><span class="card-label">Active Orders</span>
+        ><span class="card-label">{{ 'IMAGING.ACTIVE_ORDERS' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon completed">check_circle</span>
       <div class="card-info">
         <span class="card-value">{{ countByGroup('completed') }}</span
-        ><span class="card-label">Completed</span>
+        ><span class="card-label">{{ 'IMAGING.COMPLETED' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon total">bar_chart</span>
       <div class="card-info">
         <span class="card-value">{{ orders().length }}</span
-        ><span class="card-label">Total Orders</span>
+        ><span class="card-label">{{ 'IMAGING.TOTAL_ORDERS' | translate }}</span>
       </div>
     </div>
   </div>
@@ -39,40 +39,40 @@
         class="tab-btn"
         [class.active]="activeTab() === 'all'"
         (click)="setTab('all')"
-        title="Show all orders"
+        [title]="'IMAGING.SHOW_ALL' | translate"
       >
-        All
+        {{ 'COMMON.ALL' | translate }}
       </button>
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'ordered'"
         (click)="setTab('ordered')"
-        title="Show active orders"
+        [title]="'IMAGING.SHOW_ACTIVE' | translate"
       >
-        Active
+        {{ 'COMMON.ACTIVE' | translate }}
       </button>
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'completed'"
         (click)="setTab('completed')"
-        title="Show completed"
+        [title]="'IMAGING.SHOW_COMPLETED' | translate"
       >
-        Completed
+        {{ 'IMAGING.COMPLETED' | translate }}
       </button>
       <button
         class="tab-btn"
         [class.active]="activeTab() === 'cancelled'"
         (click)="setTab('cancelled')"
-        title="Show cancelled"
+        [title]="'IMAGING.SHOW_CANCELLED' | translate"
       >
-        Cancelled
+        {{ 'IMAGING.CANCELLED' | translate }}
       </button>
     </div>
     <div class="search-box">
       <span class="material-symbols-outlined">search</span
       ><input
         type="text"
-        placeholder="Search imaging orders..."
+        [placeholder]="'IMAGING.SEARCH_PLACEHOLDER' | translate"
         [(ngModel)]="searchTerm"
         (input)="applyFilter()"
       />
@@ -81,14 +81,14 @@
   @if (loading()) {
     <div class="loading-state">
       <div class="spinner"></div>
-      <p>Loading imaging orders...</p>
+      <p>{{ 'IMAGING.LOADING' | translate }}</p>
     </div>
   }
   @if (!loading() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">radiology</span>
-      <h3>No imaging orders found</h3>
-      <p>Orders will appear here.</p>
+      <h3>{{ 'IMAGING.NO_ORDERS_FOUND' | translate }}</h3>
+      <p>{{ 'IMAGING.ORDERS_WILL_APPEAR' | translate }}</p>
     </div>
   }
   @if (!loading() && filtered().length > 0) {
@@ -96,21 +96,23 @@
       <table>
         <thead>
           <tr>
-            <th scope="col">Patient</th>
-            <th scope="col">Modality</th>
-            <th scope="col">Study</th>
-            <th scope="col">Body Region</th>
-            <th scope="col">Priority</th>
-            <th scope="col">Ordered</th>
-            <th scope="col">Status</th>
-            <th scope="col">Actions</th>
+            <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+            <th scope="col">{{ 'IMAGING.MODALITY' | translate }}</th>
+            <th scope="col">{{ 'IMAGING.STUDY' | translate }}</th>
+            <th scope="col">{{ 'IMAGING.BODY_REGION' | translate }}</th>
+            <th scope="col">{{ 'IMAGING.PRIORITY' | translate }}</th>
+            <th scope="col">{{ 'IMAGING.ORDERED' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
           @for (o of filtered(); track o.id) {
             <tr class="data-row">
               <td>
-                <div class="cell-primary">{{ o.patientDisplayName || 'Unknown' }}</div>
+                <div class="cell-primary">
+                  {{ o.patientDisplayName || ('COMMON.UNKNOWN' | translate) }}
+                </div>
                 <div class="cell-secondary">{{ o.patientMrn }}</div>
               </td>
               <td>
@@ -132,18 +134,22 @@
                   <button
                     class="action-link"
                     (click)="viewDetail(o)"
-                    title="View imaging order details"
+                    [title]="'IMAGING.VIEW_DETAILS' | translate"
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
                   @if (!['COMPLETED', 'FINAL', 'CANCELLED'].includes(o.status)) {
-                    <button class="action-link" (click)="openEdit(o)" title="Edit order">
+                    <button
+                      class="action-link"
+                      (click)="openEdit(o)"
+                      [title]="'IMAGING.EDIT_ORDER' | translate"
+                    >
                       <span class="material-symbols-outlined">edit</span>
                     </button>
                     <button
                       class="action-link delete"
                       (click)="confirmCancel(o)"
-                      title="Cancel order"
+                      [title]="'IMAGING.CANCEL_ORDER' | translate"
                     >
                       <span class="material-symbols-outlined">cancel</span>
                     </button>
@@ -160,39 +166,43 @@
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
       <div class="detail-panel">
         <div class="detail-header">
-          <h2>Imaging Order Details</h2>
-          <button class="btn-close" (click)="closeDetail()" title="Close detail panel">
+          <h2>{{ 'IMAGING.ORDER_DETAILS' | translate }}</h2>
+          <button
+            class="btn-close"
+            (click)="closeDetail()"
+            [title]="'IMAGING.CLOSE_DETAIL' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
         <div class="detail-body">
           <div class="detail-grid">
             <div class="detail-field">
-              <span class="field-label">Patient</span
+              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
               ><span class="field-value">{{ ord.patientDisplayName }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">MRN</span
+              <span class="field-label">{{ 'IMAGING.MRN' | translate }}</span
               ><span class="field-value">{{ ord.patientMrn }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Modality</span
+              <span class="field-label">{{ 'IMAGING.MODALITY' | translate }}</span
               ><span class="field-value">{{ ord.modality }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Study Type</span
+              <span class="field-label">{{ 'IMAGING.STUDY_TYPE' | translate }}</span
               ><span class="field-value">{{ ord.studyType }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Body Region</span
+              <span class="field-label">{{ 'IMAGING.BODY_REGION' | translate }}</span
               ><span class="field-value">{{ ord.bodyRegion || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Laterality</span
+              <span class="field-label">{{ 'IMAGING.LATERALITY' | translate }}</span
               ><span class="field-value">{{ ord.laterality || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Priority</span
+              <span class="field-label">{{ 'IMAGING.PRIORITY' | translate }}</span
               ><span class="field-value"
                 ><span class="priority-badge {{ getPriorityClass(ord.priority) }}">{{
                   ord.priority
@@ -200,7 +210,7 @@
               >
             </div>
             <div class="detail-field">
-              <span class="field-label">Status</span
+              <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
               ><span class="field-value"
                 ><span class="status-badge {{ getStatusClass(ord.status) }}">{{
                   ord.status
@@ -208,23 +218,23 @@
               >
             </div>
             <div class="detail-field">
-              <span class="field-label">Ordering Provider</span
+              <span class="field-label">{{ 'IMAGING.ORDERING_PROVIDER' | translate }}</span
               ><span class="field-value">{{ ord.orderingProviderName || '—' }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Ordered At</span
+              <span class="field-label">{{ 'IMAGING.ORDERED_AT' | translate }}</span
               ><span class="field-value">{{
                 ord.orderedAt ? (ord.orderedAt | date: 'medium') : '—'
               }}</span>
             </div>
             <div class="detail-field">
-              <span class="field-label">Scheduled</span
+              <span class="field-label">{{ 'IMAGING.SCHEDULED' | translate }}</span
               ><span class="field-value"
                 >{{ ord.scheduledDate || '—' }} {{ ord.scheduledTime || '' }}</span
               >
             </div>
             <div class="detail-field">
-              <span class="field-label">Completed</span
+              <span class="field-label">{{ 'IMAGING.COMPLETED_AT' | translate }}</span
               ><span class="field-value">{{
                 ord.completedAt ? (ord.completedAt | date: 'medium') : '—'
               }}</span>
@@ -232,7 +242,7 @@
           </div>
           @if (ord.clinicalQuestion) {
             <div class="detail-notes">
-              <span class="field-label">Clinical Question</span>
+              <span class="field-label">{{ 'IMAGING.CLINICAL_QUESTION' | translate }}</span>
               <p>{{ ord.clinicalQuestion }}</p>
             </div>
           }
@@ -251,13 +261,21 @@
     ></div>
     <div class="modal modal-lg">
       <div class="modal-header">
-        <h2>{{ editing() ? 'Edit' : 'New' }} Imaging Order</h2>
-        <button class="modal-close" (click)="closeModal()" title="Close">&times;</button>
+        <h2>
+          {{
+            editing()
+              ? ('IMAGING.EDIT_ORDER' | translate)
+              : ('IMAGING.NEW_IMAGING_ORDER' | translate)
+          }}
+        </h2>
+        <button class="modal-close" (click)="closeModal()" [title]="'COMMON.CLOSE' | translate">
+          &times;
+        </button>
       </div>
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label for="img-patientSearch">Patient *</label>
+            <label for="img-patientSearch">{{ 'PATIENTS.PATIENT_NAME' | translate }} *</label>
             @if (selectedPatient()) {
               <div class="picker-chip">
                 <span class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</span>
@@ -269,7 +287,12 @@
                     selectedPatient()!.mrn || selectedPatient()!.email
                   }}</span>
                 </span>
-                <button type="button" class="chip-clear" (click)="clearPatient()" title="Remove">
+                <button
+                  type="button"
+                  class="chip-clear"
+                  (click)="clearPatient()"
+                  [title]="'COMMON.REMOVE' | translate"
+                >
                   ×
                 </button>
               </div>
@@ -283,7 +306,7 @@
                   [value]="patientQuery()"
                   (input)="onPatientQueryChange($any($event.target).value)"
                   (blur)="patientDropdownOpen.set(false)"
-                  placeholder="Search by name, email or MRN…"
+                  [placeholder]="'IMAGING.SEARCH_PATIENT_PLACEHOLDER' | translate"
                   autocomplete="off"
                 />
                 @if (patientSearchLoading()) {
@@ -306,7 +329,7 @@
             }
           </div>
           <div class="field">
-            <label for="img-hospitalId">Hospital</label>
+            <label for="img-hospitalId">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</label>
             @if (hospitalLocked) {
               <div class="locked-field">
                 <span class="material-symbols-outlined locked-icon">business</span>
@@ -314,8 +337,12 @@
               </div>
               <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
             } @else {
-              <select id="img-hospitalId" [(ngModel)]="form.hospitalId" title="Hospital">
-                <option value="">Select hospital</option>
+              <select
+                id="img-hospitalId"
+                [(ngModel)]="form.hospitalId"
+                [title]="'ENCOUNTERS.HOSPITAL' | translate"
+              >
+                <option value="">{{ 'IMAGING.SELECT_HOSPITAL' | translate }}</option>
                 @for (h of hospitals(); track h.id) {
                   <option [value]="h.id">{{ h.name }}</option>
                 }
@@ -325,16 +352,24 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="img-modality">Modality</label>
-            <select id="img-modality" [(ngModel)]="form.modality" title="Modality">
+            <label for="img-modality">{{ 'IMAGING.MODALITY' | translate }}</label>
+            <select
+              id="img-modality"
+              [(ngModel)]="form.modality"
+              [title]="'IMAGING.MODALITY' | translate"
+            >
               @for (m of modalities; track m) {
                 <option [value]="m">{{ m }}</option>
               }
             </select>
           </div>
           <div class="field">
-            <label for="img-priority">Priority</label>
-            <select id="img-priority" [(ngModel)]="form.priority" title="Priority">
+            <label for="img-priority">{{ 'IMAGING.PRIORITY' | translate }}</label>
+            <select
+              id="img-priority"
+              [(ngModel)]="form.priority"
+              [title]="'IMAGING.PRIORITY' | translate"
+            >
               @for (p of priorities; track p) {
                 <option [value]="p">{{ p }}</option>
               }
@@ -343,7 +378,7 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="img-studyType">Study Type</label>
+            <label for="img-studyType">{{ 'IMAGING.STUDY_TYPE' | translate }}</label>
             <input
               id="img-studyType"
               type="text"
@@ -352,7 +387,7 @@
             />
           </div>
           <div class="field">
-            <label for="img-bodyRegion">Body Region</label>
+            <label for="img-bodyRegion">{{ 'IMAGING.BODY_REGION' | translate }}</label>
             <input
               id="img-bodyRegion"
               type="text"
@@ -363,29 +398,41 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="img-laterality">Laterality</label>
-            <select id="img-laterality" [(ngModel)]="form.laterality" title="Laterality">
-              <option value="">Not specified</option>
+            <label for="img-laterality">{{ 'IMAGING.LATERALITY' | translate }}</label>
+            <select
+              id="img-laterality"
+              [(ngModel)]="form.laterality"
+              [title]="'IMAGING.LATERALITY' | translate"
+            >
+              <option value="">{{ 'IMAGING.NOT_SPECIFIED' | translate }}</option>
               @for (lat of lateralities; track lat.value) {
                 <option [value]="lat.value">{{ lat.label }}</option>
               }
             </select>
           </div>
           <div class="field full-width">
-            <label for="img-clinicalQ">Clinical Question</label>
+            <label for="img-clinicalQ">{{ 'IMAGING.CLINICAL_QUESTION' | translate }}</label>
             <input
               id="img-clinicalQ"
               type="text"
               [(ngModel)]="form.clinicalQuestion"
-              placeholder="Optional"
+              [placeholder]="'SCHEDULING.OPTIONAL' | translate"
             />
           </div>
         </div>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeModal()">Cancel</button>
+        <button class="btn-secondary" (click)="closeModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
         <button class="btn-primary" (click)="submitForm()" [disabled]="saving()">
-          {{ saving() ? 'Saving...' : editing() ? 'Update Order' : 'Create Order' }}
+          {{
+            saving()
+              ? ('COMMON.SAVING' | translate)
+              : editing()
+                ? ('IMAGING.UPDATE_ORDER' | translate)
+                : ('IMAGING.CREATE_ORDER' | translate)
+          }}
         </button>
       </div>
     </div>
@@ -401,23 +448,34 @@
     ></div>
     <div class="modal">
       <div class="modal-header">
-        <h2>Cancel Order</h2>
-        <button class="modal-close" (click)="cancelDeleteAction()" title="Close">&times;</button>
+        <h2>{{ 'IMAGING.CANCEL_ORDER' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="cancelDeleteAction()"
+          [title]="'COMMON.CLOSE' | translate"
+        >
+          &times;
+        </button>
       </div>
       <div class="modal-body">
         <div class="delete-warning">
           <span class="material-symbols-outlined">warning</span>
           <p>
-            Cancel the <strong>{{ deletingItem()?.modality }}</strong> order for
+            {{ 'IMAGING.CONFIRM_CANCEL' | translate }}
+            <strong>{{ deletingItem()?.modality }}</strong> {{ 'IMAGING.ORDER_FOR' | translate }}
             <strong>{{ deletingItem()?.patientDisplayName }}</strong
             >?
           </p>
         </div>
       </div>
       <div class="modal-actions">
-        <button class="btn-secondary" (click)="cancelDeleteAction()">Keep</button>
+        <button class="btn-secondary" (click)="cancelDeleteAction()">
+          {{ 'IMAGING.KEEP' | translate }}
+        </button>
         <button class="btn-danger" (click)="executeCancel()" [disabled]="deleting()">
-          {{ deleting() ? 'Cancelling...' : 'Cancel Order' }}
+          {{
+            deleting() ? ('IMAGING.CANCELLING' | translate) : ('IMAGING.CANCEL_ORDER' | translate)
+          }}
         </button>
       </div>
     </div>

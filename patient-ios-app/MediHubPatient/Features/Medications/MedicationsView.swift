@@ -20,9 +20,9 @@ struct MedicationsView: View {
     private var content: some View {
         VStack(spacing: 0) {
             Picker("", selection: $selectedTab) {
-                Text("Medications").tag(0)
-                Text("Prescriptions").tag(1)
-                Text("Refills").tag(2)
+                Text("medications_title".localized).tag(0)
+                Text("prescriptions".localized).tag(1)
+                Text("refills".localized).tag(2)
             }
             .pickerStyle(.segmented)
             .padding()
@@ -37,7 +37,7 @@ struct MedicationsView: View {
                 }
             }
         }
-        .navigationTitle("Medications")
+        .navigationTitle("medications_title".localized)
         .refreshable { await vm.load() }
         .onChange(of: vm.errorMessage) { _, newVal in showError = (newVal != nil) }
         .alert("Error", isPresented: $showError) {
