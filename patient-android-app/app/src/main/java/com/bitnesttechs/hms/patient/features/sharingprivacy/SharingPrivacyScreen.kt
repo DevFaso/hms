@@ -1,5 +1,7 @@
 package com.bitnesttechs.hms.patient.features.sharingprivacy
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -84,9 +86,14 @@ private fun ConsentsTab(consents: List<ConsentDto>, onRevoke: (String) -> Unit) 
 @Composable
 private fun ConsentCard(consent: ConsentDto, onRevoke: (String) -> Unit) {
     var showConfirm by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
     val isActive = consent.status.uppercase() == "ACTIVE" || consent.status.uppercase() == "GRANTED"
 
-    Card(shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(1.dp)) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(1.dp),
+        modifier = Modifier.clickable { expanded = !expanded }
+    ) {
         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically) {
@@ -100,6 +107,12 @@ private fun ConsentCard(consent: ConsentDto, onRevoke: (String) -> Unit) {
                         color = if (isActive) Color(0xFF166534) else Color(0xFFDC2626),
                         fontWeight = FontWeight.SemiBold)
                 }
+                Icon(
+                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    modifier = Modifier.padding(start = 4.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             consent.recipientName?.let {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -109,14 +122,59 @@ private fun ConsentCard(consent: ConsentDto, onRevoke: (String) -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            consent.expiresAt?.let {
-                Text("Expires: ${it.take(10)}", style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+            AnimatedVisibility(visible = expanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    HorizontalDivider(Modifier.padding(vertical = 4.dp))
+                    consent.title.takeIf { it.isNotBlank() }?.let {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.Title, null, modifier = Modifier.size(14.dp), tint = BrandBlue)
+                            Text("Title: $it", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    consent.description?.let {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.Description, null, modifier = Modifier.size(14.dp), tint = BrandBlue)
+                            Text(it, style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                    consent.type.takeIf { it.isNotBlank() && it != consent.consentType }?.let {
+                        Text("Type: ${it.replace("_", " ").replaceFirstChar { c -> c.uppercase() }}",
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    consent.grantedAt?.let {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(14.dp), tint = Color(0xFF166534))
+                            Text("Granted: ${it.take(10)}", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    consent.expiresAt?.let {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.Schedule, null, modifier = Modifier.size(14.dp), tint = Color(0xFFFF9800))
+                            Text("Expires: ${it.take(10)}", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    if (isActive) {
+                        TextButton(onClick = { showConfirm = true },
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                            Text("Revoke Access")
+                        }
+                    }
+                }
             }
-            if (isActive) {
-                TextButton(onClick = { showConfirm = true },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
-                    Text("Revoke Access")
+
+            // Show expiry in collapsed view too
+            if (!expanded) {
+                consent.expiresAt?.let {
+                    Text("Expires: ${it.take(10)}", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                if (isActive) {
+                    TextButton(onClick = { showConfirm = true },
+                        colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)) {
+                        Text("Revoke Access")
+                    }
                 }
             }
         }

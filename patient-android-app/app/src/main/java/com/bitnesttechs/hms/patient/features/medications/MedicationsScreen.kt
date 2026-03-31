@@ -1,11 +1,15 @@
 package com.bitnesttechs.hms.patient.features.medications
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Medication
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -102,21 +106,47 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                         }
                     }
                     items(prescriptions) { rx ->
-                        Card(shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(2.dp)) {
+                        var expanded by remember { mutableStateOf(false) }
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(2.dp),
+                            modifier = Modifier.clickable { expanded = !expanded }
+                        ) {
                             Column(Modifier.padding(16.dp)) {
-                                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                    Text(rx.medicationName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Text(rx.medicationName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.weight(1f))
                                     Surface(shape = RoundedCornerShape(50), color = BrandBlue.copy(alpha = 0.1f)) {
                                         Text("Refills: ${rx.refillsRemaining}",
                                             Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                             style = MaterialTheme.typography.labelSmall, color = BrandBlue)
                                     }
+                                    Icon(
+                                        if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = if (expanded) "Collapse" else "Expand",
+                                        modifier = Modifier.padding(start = 4.dp)
+                                    )
                                 }
                                 rx.dosage?.let { Text("Dosage: $it", style = MaterialTheme.typography.bodySmall) }
                                 rx.frequency?.let { Text("Frequency: $it", style = MaterialTheme.typography.bodySmall) }
-                                rx.prescribedBy?.let { Text("Prescribed by: $it", style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                rx.expiryDate?.let { Text("Expires: $it", style = MaterialTheme.typography.bodySmall) }
+
+                                AnimatedVisibility(visible = expanded) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
+                                        rx.prescribedBy?.let { Text("Prescribed by: $it", style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                        rx.prescribedDate?.let { Text("Prescribed date: ${it.take(10)}", style = MaterialTheme.typography.bodySmall) }
+                                        rx.expiryDate?.let { Text("Expires: ${it.take(10)}", style = MaterialTheme.typography.bodySmall) }
+                                        rx.quantity?.let { Text("Quantity: $it", style = MaterialTheme.typography.bodySmall) }
+                                        rx.status.takeIf { it.isNotBlank() }?.let { Text("Status: $it", style = MaterialTheme.typography.bodySmall) }
+                                        rx.instructions?.let {
+                                            Spacer(Modifier.height(4.dp))
+                                            Text("Instructions: $it", style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
