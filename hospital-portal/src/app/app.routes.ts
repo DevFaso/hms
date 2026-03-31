@@ -19,6 +19,11 @@ export const routes: Routes = [
       import('./reset-password/reset-password').then((m) => m.ResetPasswordComponent),
   },
   {
+    path: 'privacy-policy',
+    loadComponent: () =>
+      import('./privacy-policy/privacy-policy').then((m) => m.PrivacyPolicyComponent),
+  },
+  {
     path: 'onboarding/role-welcome',
     loadComponent: () =>
       import('./onboarding/role-welcome/role-welcome').then((m) => m.RoleWelcomeComponent),

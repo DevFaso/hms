@@ -2,6 +2,7 @@ package com.bitnesttechs.hms.patient.features.appointments
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bitnesttechs.hms.patient.core.auth.TokenStorage
 import com.bitnesttechs.hms.patient.core.models.*
 import com.bitnesttechs.hms.patient.core.network.ApiService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -9,6 +10,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 data class DoctorOption(
@@ -22,7 +25,10 @@ data class DoctorOption(
 )
 
 @HiltViewModel
-class AppointmentsViewModel @Inject constructor(private val api: ApiService) : ViewModel() {
+class AppointmentsViewModel @Inject constructor(
+    private val api: ApiService,
+    private val tokenStorage: TokenStorage
+) : ViewModel() {
     private val _appointments = MutableStateFlow<List<AppointmentDto>>(emptyList())
     val appointments: StateFlow<List<AppointmentDto>> = _appointments.asStateFlow()
     private val _isLoading = MutableStateFlow(true)
@@ -68,9 +74,15 @@ class AppointmentsViewModel @Inject constructor(private val api: ApiService) : V
     }
 
     fun bookAppointment(request: BookAppointmentRequest) {
+        // Enrich request with patient identity and computed endTime
+        val enriched = request.copy(
+            patientUsername = request.patientUsername ?: tokenStorage.savedUsername,
+            endTime = request.endTime ?: request.startTime?.let { computeEndTime(it) },
+            status = "SCHEDULED"
+        )
         viewModelScope.launch {
             try {
-                val resp = api.bookAppointment(request)
+                val resp = api.bookAppointment(enriched)
                 if (resp.isSuccessful) {
                     _bookingResult.value = "Appointment booked successfully!"
                     load() // refresh list
@@ -81,6 +93,12 @@ class AppointmentsViewModel @Inject constructor(private val api: ApiService) : V
                 _bookingResult.value = "Error: ${e.message}"
             }
         }
+    }
+
+    private fun computeEndTime(startTime: String): String {
+        val fmt = DateTimeFormatter.ofPattern("HH:mm")
+        val start = LocalTime.parse(startTime.take(5), fmt)
+        return start.plusMinutes(30).format(fmt)
     }
 
     fun cancelAppointment(appointmentId: String, reason: String?) {
