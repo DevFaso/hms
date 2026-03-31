@@ -62,8 +62,9 @@ class ProfileViewModel @Inject constructor(
             try {
                 val resp = api.updateProfile(update)
                 if (resp.isSuccessful) {
-                    _profile.value = resp.body()?.data
                     _saveResult.value = "Profile updated successfully"
+                    // Re-fetch the full profile to ensure all fields are in sync
+                    load()
                 } else {
                     _saveResult.value = "Update failed: ${resp.code()}"
                 }

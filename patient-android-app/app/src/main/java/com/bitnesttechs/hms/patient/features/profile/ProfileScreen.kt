@@ -129,7 +129,7 @@ fun ProfileScreen(
                 Card(
                     shape = RoundedCornerShape(20.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF1C1B1F)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(
@@ -451,7 +451,7 @@ private fun ProfileCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = Color.White, contentColor = Color(0xFF1C1B1F)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -516,8 +516,15 @@ private fun EditableProfileRow(icon: ImageVector, label: String, value: String, 
             label = { Text(label) },
             modifier = Modifier.weight(1f),
             singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium,
-            shape = RoundedCornerShape(12.dp)
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color(0xFF1C1B1F)),
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color(0xFF1C1B1F),
+                unfocusedTextColor = Color(0xFF1C1B1F),
+                focusedLabelColor = BrandBlue,
+                unfocusedLabelColor = Color(0xFF757575),
+                cursorColor = BrandBlue
+            )
         )
     }
 }

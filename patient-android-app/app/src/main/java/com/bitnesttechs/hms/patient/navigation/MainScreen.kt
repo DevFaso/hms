@@ -3,7 +3,9 @@ package com.bitnesttechs.hms.patient.navigation
 import androidx.annotation.StringRes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -86,6 +88,7 @@ fun MainScreen(onLogout: () -> Unit) {
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(modifier = Modifier.width(300.dp)) {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                 // Header
                 Surface(
                     color = BrandBlue,
@@ -117,6 +120,8 @@ fun MainScreen(onLogout: () -> Unit) {
                         },
                         modifier = Modifier.padding(horizontal = 12.dp)
                     )
+                }
+                Spacer(Modifier.height(16.dp))
                 }
             }
         }

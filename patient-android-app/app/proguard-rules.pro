@@ -41,6 +41,9 @@
     volatile <fields>;
 }
 
+# Keep Material Icons Extended (prevents R8 from stripping icon vector paths)
+-keep class androidx.compose.material.icons.** { *; }
+
 # Remove logging in release
 -assumenosideeffects class android.util.Log {
     public static *** d(...);
