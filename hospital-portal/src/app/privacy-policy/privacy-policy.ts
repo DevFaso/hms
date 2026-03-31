@@ -12,14 +12,14 @@ import { Component } from '@angular/core';
         <section>
           <h2>1. Introduction</h2>
           <p>
-            Bitnest Technologies ("we", "us", or "our") operates the My Chart BF mobile
-            application and the MediHub web platform (collectively, the "Service"). This
-            Privacy Policy explains how we collect, use, disclose, and safeguard your
-            personal and health information when you use our Service.
+            Bitnest Technologies ("we", "us", or "our") operates the My Chart BF mobile application
+            and the MediHub web platform (collectively, the "Service"). This Privacy Policy explains
+            how we collect, use, disclose, and safeguard your personal and health information when
+            you use our Service.
           </p>
           <p>
-            By using the Service, you agree to the collection and use of information in
-            accordance with this policy. If you do not agree, please do not use the Service.
+            By using the Service, you agree to the collection and use of information in accordance
+            with this policy. If you do not agree, please do not use the Service.
           </p>
         </section>
 
@@ -55,8 +55,10 @@ import { Component } from '@angular/core';
           <ul>
             <li>Device type, operating system, and app version</li>
             <li>Network connectivity status</li>
-            <li>Biometric authentication status (fingerprint/face; biometric data is
-              stored on-device only and never transmitted to our servers)</li>
+            <li>
+              Biometric authentication status (fingerprint/face; biometric data is stored on-device
+              only and never transmitted to our servers)
+            </li>
           </ul>
 
           <h3>2.5 Communication Data</h3>
@@ -91,10 +93,22 @@ import { Component } from '@angular/core';
           <h2>4. Data Sharing &amp; Disclosure</h2>
           <p>We do not sell your personal or health information. We may share data with:</p>
           <ul>
-            <li><strong>Healthcare providers:</strong> Doctors, nurses, and staff involved in your care at participating hospitals</li>
-            <li><strong>Inter-hospital sharing:</strong> Only when you grant explicit consent through our consent management feature</li>
-            <li><strong>Service providers:</strong> Trusted third parties that assist in operating the Service (hosting, infrastructure), bound by confidentiality agreements</li>
-            <li><strong>Legal requirements:</strong> When required by law, regulation, or legal process</li>
+            <li>
+              <strong>Healthcare providers:</strong> Doctors, nurses, and staff involved in your
+              care at participating hospitals
+            </li>
+            <li>
+              <strong>Inter-hospital sharing:</strong> Only when you grant explicit consent through
+              our consent management feature
+            </li>
+            <li>
+              <strong>Service providers:</strong> Trusted third parties that assist in operating the
+              Service (hosting, infrastructure), bound by confidentiality agreements
+            </li>
+            <li>
+              <strong>Legal requirements:</strong> When required by law, regulation, or legal
+              process
+            </li>
           </ul>
         </section>
 
@@ -110,18 +124,18 @@ import { Component } from '@angular/core';
             <li>Comprehensive audit logging of record access</li>
           </ul>
           <p>
-            While we strive to protect your information, no method of electronic
-            transmission or storage is 100% secure. We cannot guarantee absolute security.
+            While we strive to protect your information, no method of electronic transmission or
+            storage is 100% secure. We cannot guarantee absolute security.
           </p>
         </section>
 
         <section>
           <h2>6. Data Retention</h2>
           <p>
-            We retain your personal and health information for as long as your account
-            is active or as needed to provide the Service. Medical records are retained
-            in accordance with applicable healthcare regulations. You may request
-            deletion of your account by contacting us.
+            We retain your personal and health information for as long as your account is active or
+            as needed to provide the Service. Medical records are retained in accordance with
+            applicable healthcare regulations. You may request deletion of your account by
+            contacting us.
           </p>
         </section>
 
@@ -141,18 +155,17 @@ import { Component } from '@angular/core';
         <section>
           <h2>8. Children's Privacy</h2>
           <p>
-            The Service is intended for users aged 18 and older. We do not knowingly
-            collect personal information from children under 18. If we become aware
-            that we have collected data from a child under 18, we will take steps to
-            delete that information.
+            The Service is intended for users aged 18 and older. We do not knowingly collect
+            personal information from children under 18. If we become aware that we have collected
+            data from a child under 18, we will take steps to delete that information.
           </p>
         </section>
 
         <section>
           <h2>9. Third-Party Services</h2>
           <p>
-            The app uses the following third-party libraries for functionality purposes
-            only (not for advertising or analytics tracking):
+            The app uses the following third-party libraries for functionality purposes only (not
+            for advertising or analytics tracking):
           </p>
           <ul>
             <li>Retrofit &amp; OkHttp &mdash; secure API communication</li>
@@ -162,18 +175,16 @@ import { Component } from '@angular/core';
             <li>Hilt &mdash; dependency injection</li>
           </ul>
           <p>
-            None of these libraries collect, transmit, or share personal data with
-            third parties.
+            None of these libraries collect, transmit, or share personal data with third parties.
           </p>
         </section>
 
         <section>
           <h2>10. Changes to This Policy</h2>
           <p>
-            We may update this Privacy Policy from time to time. We will notify you of
-            any changes by updating the "Last updated" date at the top of this page.
-            Continued use of the Service after changes constitutes acceptance of the
-            updated policy.
+            We may update this Privacy Policy from time to time. We will notify you of any changes
+            by updating the "Last updated" date at the top of this page. Continued use of the
+            Service after changes constitutes acceptance of the updated policy.
           </p>
         </section>
 
@@ -189,46 +200,48 @@ import { Component } from '@angular/core';
       </div>
     </div>
   `,
-  styles: [`
-    .privacy-policy {
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 40px 20px;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      color: #333;
-      line-height: 1.7;
-    }
-    h1 {
-      font-size: 2rem;
-      margin-bottom: 4px;
-      color: #1a1a2e;
-    }
-    .last-updated {
-      color: #666;
-      font-size: 0.9rem;
-      margin-bottom: 32px;
-    }
-    h2 {
-      font-size: 1.3rem;
-      margin-top: 32px;
-      margin-bottom: 12px;
-      color: #1a1a2e;
-    }
-    h3 {
-      font-size: 1.1rem;
-      margin-top: 16px;
-      margin-bottom: 8px;
-      color: #444;
-    }
-    ul {
-      padding-left: 24px;
-    }
-    li {
-      margin-bottom: 6px;
-    }
-    section {
-      margin-bottom: 16px;
-    }
-  `],
+  styles: [
+    `
+      .privacy-policy {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        color: #333;
+        line-height: 1.7;
+      }
+      h1 {
+        font-size: 2rem;
+        margin-bottom: 4px;
+        color: #1a1a2e;
+      }
+      .last-updated {
+        color: #666;
+        font-size: 0.9rem;
+        margin-bottom: 32px;
+      }
+      h2 {
+        font-size: 1.3rem;
+        margin-top: 32px;
+        margin-bottom: 12px;
+        color: #1a1a2e;
+      }
+      h3 {
+        font-size: 1.1rem;
+        margin-top: 16px;
+        margin-bottom: 8px;
+        color: #444;
+      }
+      ul {
+        padding-left: 24px;
+      }
+      li {
+        margin-bottom: 6px;
+      }
+      section {
+        margin-bottom: 16px;
+      }
+    `,
+  ],
 })
 export class PrivacyPolicyComponent {}
