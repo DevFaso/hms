@@ -31,7 +31,9 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Build config fields — override with local.properties or CI env vars
-        buildConfigField("String", "API_BASE_URL", "\"https://hms-production.up.railway.app/api\"")
+        // TODO: revert to production before Play Store release
+        // buildConfigField("String", "API_BASE_URL", "\"https://hms-production.up.railway.app/api\"")
+        buildConfigField("String", "API_BASE_URL", "\"https://api.hms.dev.bitnesttechs.com/api\"")
     }
 
     signingConfigs {
