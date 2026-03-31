@@ -39,6 +39,7 @@ import com.bitnesttechs.hms.patient.core.auth.TokenStorage
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 import com.bitnesttechs.hms.patient.ui.theme.BrandDarkBlue
+import com.bitnesttechs.hms.patient.ui.theme.NeutralGrey
 import javax.inject.Inject
 
 @Composable
@@ -124,7 +125,23 @@ fun LoginScreen(
                     Text(
                         stringResource(R.string.sign_in),
                         style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1C1B1F)
+                    )
+
+                    // Force dark text colors on white card (fixes dark mode white-on-white)
+                    val fieldColors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color(0xFF1C1B1F),
+                        unfocusedTextColor = Color(0xFF1C1B1F),
+                        focusedLabelColor = BrandBlue,
+                        unfocusedLabelColor = NeutralGrey,
+                        focusedLeadingIconColor = BrandBlue,
+                        unfocusedLeadingIconColor = NeutralGrey,
+                        focusedTrailingIconColor = BrandBlue,
+                        unfocusedTrailingIconColor = NeutralGrey,
+                        focusedBorderColor = BrandBlue,
+                        unfocusedBorderColor = NeutralGrey,
+                        cursorColor = BrandBlue
                     )
 
                     // Username
@@ -135,6 +152,7 @@ fun LoginScreen(
                         leadingIcon = { Icon(Icons.Default.Person, null) },
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
+                        colors = fieldColors,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                         keyboardActions = KeyboardActions(
                             onNext = { focusManager.moveFocus(FocusDirection.Down) }
@@ -159,6 +177,7 @@ fun LoginScreen(
                         else PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true,
+                        colors = fieldColors,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Password,
                             imeAction = ImeAction.Done
