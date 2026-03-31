@@ -7,6 +7,11 @@
 -keep class javax.inject.** { *; }
 -dontwarn dagger.hilt.**
 
+# Keep app classes needed by Hilt/Compose codegen
+-keep class com.bitnesttechs.hms.patient.ComposableSingletons** { *; }
+-keep class com.bitnesttechs.hms.patient.core.auth.** { *; }
+-keep class com.bitnesttechs.hms.patient.core.locale.** { *; }
+
 # Keep Moshi JSON adapters
 -keep class com.squareup.moshi.** { *; }
 -keep @com.squareup.moshi.JsonClass class * { *; }
