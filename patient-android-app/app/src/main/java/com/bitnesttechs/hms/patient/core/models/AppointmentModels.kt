@@ -41,6 +41,8 @@ data class BookAppointmentRequest(
     @Json(name = "appointmentDate") val appointmentDate: String,
     @Json(name = "startTime") val startTime: String? = null,
     @Json(name = "endTime") val endTime: String? = null,
+    @Json(name = "status") val status: String = "SCHEDULED",
+    @Json(name = "patientUsername") val patientUsername: String? = null,
     @Json(name = "staffId") val staffId: String? = null,
     @Json(name = "staffEmail") val staffEmail: String? = null,
     @Json(name = "hospitalId") val hospitalId: String? = null,
