@@ -2,6 +2,7 @@ package com.bitnesttechs.hms.patient.features.profile
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -50,9 +51,9 @@ fun ProfileScreen(
     var showLanguageDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
-    // Photo picker launcher
+    // Android system photo picker (no READ_MEDIA_IMAGES permission needed)
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         uri?.let { viewModel.uploadPhoto(context, it) }
     }
@@ -152,7 +153,7 @@ fun ProfileScreen(
                                     modifier = Modifier
                                         .size(96.dp)
                                         .clip(CircleShape)
-                                        .clickable { photoPickerLauncher.launch("image/*") },
+                                        .clickable { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
                                     contentScale = ContentScale.Crop
                                 )
                             } else {
@@ -161,7 +162,7 @@ fun ProfileScreen(
                                     color = BrandBlue,
                                     modifier = Modifier
                                         .size(96.dp)
-                                        .clickable { photoPickerLauncher.launch("image/*") }
+                                        .clickable { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
                                 ) {
                                     Box(contentAlignment = Alignment.Center) {
                                         Text(

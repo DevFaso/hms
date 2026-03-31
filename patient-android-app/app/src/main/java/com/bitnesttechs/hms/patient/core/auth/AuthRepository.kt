@@ -39,7 +39,14 @@ class AuthRepository @Inject constructor(
                 _currentUser.value = body.user // computed property builds UserDto from flat fields
                 AuthResult.Success
             } else {
-                AuthResult.Error("Login failed")
+                val errorBody = response.errorBody()?.string()
+                val msg = when (response.code()) {
+                    401 -> "Invalid username or password"
+                    403 -> "Account locked or disabled"
+                    404 -> "Server not reachable"
+                    else -> errorBody?.take(200) ?: "Login failed (${response.code()})"
+                }
+                AuthResult.Error(msg)
             }
         } catch (e: Exception) {
             AuthResult.Error(e.message ?: "Network error")
