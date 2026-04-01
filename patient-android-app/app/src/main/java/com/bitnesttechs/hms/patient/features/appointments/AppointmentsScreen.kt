@@ -21,6 +21,10 @@ import com.bitnesttechs.hms.patient.features.dashboard.StatusBadge
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 import com.bitnesttechs.hms.patient.ui.theme.SuccessGreen
 import com.bitnesttechs.hms.patient.ui.theme.ErrorRed
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -205,11 +209,24 @@ fun BookAppointmentSheet(
     val doctors = viewModel.doctorOptions
     var selectedDoctorKey by remember { mutableStateOf(doctors.firstOrNull()?.key ?: "") }
     var date by remember { mutableStateOf("") }
-    var startTime by remember { mutableStateOf("09:00") }
+    var selectedHour by remember { mutableIntStateOf(9) }
+    var selectedMinute by remember { mutableIntStateOf(0) }
     var reason by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    var showDatePicker by remember { mutableStateOf(false) }
 
     val selectedDoctor = doctors.find { it.key == selectedDoctorKey }
+
+    // Format the selected time for display (12-hour AM/PM)
+    val displayTime = remember(selectedHour, selectedMinute) {
+        LocalTime.of(selectedHour, selectedMinute)
+            .format(DateTimeFormatter.ofPattern("hh:mm a", Locale.getDefault()))
+    }
+    // Format as HH:mm for the API (24-hour)
+    val apiTime = remember(selectedHour, selectedMinute) {
+        String.format(Locale.US, "%02d:%02d", selectedHour, selectedMinute)
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -266,20 +283,35 @@ fun BookAppointmentSheet(
                 }
             }
 
+            // Date picker field
             OutlinedTextField(
                 value = date,
-                onValueChange = { date = it },
-                label = { Text("Date (YYYY-MM-DD)") },
-                placeholder = { Text("2026-04-20") },
-                modifier = Modifier.fillMaxWidth()
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Appointment Date") },
+                placeholder = { Text("Select date") },
+                trailingIcon = {
+                    IconButton(onClick = { showDatePicker = true }) {
+                        Icon(Icons.Default.CalendarMonth, "Pick date")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().clickable { showDatePicker = true }
             )
+
+            // Time picker field (shows AM/PM display)
             OutlinedTextField(
-                value = startTime,
-                onValueChange = { startTime = it },
-                label = { Text("Start Time (HH:mm)") },
-                placeholder = { Text("09:00") },
-                modifier = Modifier.fillMaxWidth()
+                value = displayTime,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Start Time") },
+                trailingIcon = {
+                    IconButton(onClick = { showTimePicker = true }) {
+                        Icon(Icons.Default.Schedule, "Pick time")
+                    }
+                },
+                modifier = Modifier.fillMaxWidth().clickable { showTimePicker = true }
             )
+
             OutlinedTextField(
                 value = reason,
                 onValueChange = { reason = it },
@@ -293,7 +325,7 @@ fun BookAppointmentSheet(
                         viewModel.bookAppointment(
                             BookAppointmentRequest(
                                 appointmentDate = date,
-                                startTime = startTime,
+                                startTime = apiTime,
                                 staffId = doc.staffId,
                                 staffEmail = doc.staffEmail,
                                 hospitalId = doc.hospitalId,
@@ -313,5 +345,60 @@ fun BookAppointmentSheet(
 
             Spacer(Modifier.height(32.dp))
         }
+    }
+
+    // Date picker dialog
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    // Only allow today and future dates
+                    val today = System.currentTimeMillis() - 86_400_000 // allow today
+                    return utcTimeMillis >= today
+                }
+            }
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    datePickerState.selectedDateMillis?.let { millis ->
+                        val instant = java.time.Instant.ofEpochMilli(millis)
+                        val ld = instant.atZone(java.time.ZoneId.of("UTC")).toLocalDate()
+                        date = ld.format(DateTimeFormatter.ISO_LOCAL_DATE)
+                    }
+                    showDatePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
+
+    // Time picker dialog
+    if (showTimePicker) {
+        val timePickerState = rememberTimePickerState(
+            initialHour = selectedHour,
+            initialMinute = selectedMinute,
+            is24Hour = false
+        )
+        AlertDialog(
+            onDismissRequest = { showTimePicker = false },
+            title = { Text("Select Time") },
+            text = { TimePicker(state = timePickerState) },
+            confirmButton = {
+                TextButton(onClick = {
+                    selectedHour = timePickerState.hour
+                    selectedMinute = timePickerState.minute
+                    showTimePicker = false
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showTimePicker = false }) { Text("Cancel") }
+            }
+        )
     }
 }

@@ -28,7 +28,6 @@ public class AppointmentRequestDTO {
     @NotNull(message = "Start time is required.")
     private LocalTime startTime;
 
-    @NotNull(message = "End time is required.")
     private LocalTime endTime;
 
 
@@ -54,7 +53,6 @@ public class AppointmentRequestDTO {
     private String departmentName;
     private String departmentCode;
 
-    @NotNull(message = "Appointment status is required.")
     private AppointmentStatus status;
 
     private String reason;

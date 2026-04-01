@@ -91,7 +91,6 @@ export class AppointmentFormComponent implements OnInit {
     appointmentDate: '',
     startTime: '',
     endTime: '',
-    status: 'SCHEDULED',
     reason: '',
     notes: '',
   };
@@ -357,11 +356,11 @@ export class AppointmentFormComponent implements OnInit {
 
   // ── Submit ───────────────────────────────────────────────
   submit(): void {
-    if (!this.form.appointmentDate || !this.form.startTime || !this.form.endTime) {
-      this.toast.error('Date, start time, and end time are required');
+    if (!this.form.appointmentDate || !this.form.startTime) {
+      this.toast.error('Date and start time are required');
       return;
     }
-    if (!this.validateTimes()) return;
+    if (this.form.endTime && !this.validateTimes()) return;
     if (!this.form.patientId) {
       this.toast.error('Please select a patient');
       return;

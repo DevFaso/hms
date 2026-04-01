@@ -198,8 +198,8 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentSummaryDTO createAppointment(AppointmentRequestDTO request, Locale locale, String username) {
         User currentUser = getUserOrThrow(username);
 
-        // --- Patient resolution ---
-        final Patient patient = resolvePatient(request, locale);
+        // --- Patient resolution (falls back to authenticated user) ---
+        final Patient patient = resolvePatient(request, locale, username);
 
         // Authorization: Staff/admins can book for any patient; pure patients can only book for themselves
         boolean isStaffOrAdmin = isSuperAdmin(currentUser)
@@ -251,9 +251,12 @@ public class AppointmentServiceImpl implements AppointmentService {
             .stream().findFirst()
             .orElseThrow(() -> new BusinessException("Staff role assignment not found"));
 
-        // --- Time validations ---
+        // --- Time validations (default endTime = startTime + 30 min) ---
+        LocalTime endTime = request.getEndTime() != null
+                ? request.getEndTime()
+                : request.getStartTime().plusMinutes(30);
         LocalDateTime requestedStart = LocalDateTime.of(request.getAppointmentDate(), request.getStartTime());
-        LocalDateTime requestedEnd = LocalDateTime.of(request.getAppointmentDate(), request.getEndTime());
+        LocalDateTime requestedEnd = LocalDateTime.of(request.getAppointmentDate(), endTime);
         if (!requestedEnd.isAfter(requestedStart)) {
             throw new BusinessException("Appointment end time must be after start time");
         }
@@ -279,7 +282,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (hasConflict) {
             throw new BusinessException(messageSource.getMessage(
                 "appointment.staff.unavailable",
-                new Object[]{staff.getId(), request.getAppointmentDate(), request.getStartTime(), request.getEndTime()},
+                new Object[]{staff.getId(), request.getAppointmentDate(), request.getStartTime(), endTime},
                 locale
             ));
         }
@@ -292,7 +295,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setDepartment(department);
         appointment.setAppointmentDate(request.getAppointmentDate());
         appointment.setStartTime(request.getStartTime());
-        appointment.setEndTime(request.getEndTime());
+        appointment.setEndTime(endTime);
     appointment.setNotes(request.getNotes());
     AppointmentStatus status = Optional.ofNullable(request.getStatus()).orElse(AppointmentStatus.SCHEDULED);
     appointment.setStatus(status);
@@ -351,7 +354,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     /* ------- small private helpers to keep createAppointment tidy ------- */
 
-    private Patient resolvePatient(AppointmentRequestDTO request, Locale locale) {
+    private Patient resolvePatient(AppointmentRequestDTO request, Locale locale, String authenticatedUsername) {
         if (request.getPatientId() != null) {
             return patientRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -366,6 +369,14 @@ public class AppointmentServiceImpl implements AppointmentService {
             return patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
                 .stream().findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Patient not found for email: " + request.getPatientEmail()));
+        }
+        // Fallback: use the authenticated user's identity (supports mobile/patient-portal clients)
+        if (authenticatedUsername != null) {
+            UUID userId = userRepository.findByUsername(authenticatedUsername)
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + authenticatedUsername))
+                .getId();
+            return patientRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found for username: " + authenticatedUsername));
         }
         throw new BusinessException("Patient identifier required");
     }
