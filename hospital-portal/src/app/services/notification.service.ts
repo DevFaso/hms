@@ -47,6 +47,7 @@ export class NotificationService {
 
   /** Exponential-backoff state for WebSocket reconnection */
   private reconnectAttempts = 0;
+  private readonly maxReconnectAttempts = 5;
   private readonly maxReconnectDelay = 60_000; // cap at 60 s
   private readonly baseReconnectDelay = 5_000; // start at 5 s
 
@@ -109,6 +110,14 @@ export class NotificationService {
 
           reconnectDelay: this.baseReconnectDelay,
 
+          // Abort reconnection if the token has expired or max retries exceeded
+          beforeConnect: () => {
+            if (this.auth.isExpired() || this.reconnectAttempts >= this.maxReconnectAttempts) {
+              this.disconnectWebSocket();
+              throw new Error('Token expired or max reconnect attempts reached');
+            }
+          },
+
           onConnect: () => {
             this.reconnectAttempts = 0;
             if (this.stompClient) {
@@ -126,8 +135,8 @@ export class NotificationService {
           },
 
           onDisconnect: () => {
-            // If token has expired while connected, stop reconnecting
-            if (this.auth.isExpired()) {
+            // If token has expired or max retries exceeded, stop reconnecting
+            if (this.auth.isExpired() || this.reconnectAttempts >= this.maxReconnectAttempts) {
               this.disconnectWebSocket();
               return;
             }
@@ -143,7 +152,7 @@ export class NotificationService {
 
           onStompError: () => {
             // STOMP-level auth failures — stop reconnecting with stale token
-            if (this.auth.isExpired()) {
+            if (this.auth.isExpired() || this.reconnectAttempts >= this.maxReconnectAttempts) {
               this.disconnectWebSocket();
               return;
             }
@@ -159,7 +168,7 @@ export class NotificationService {
 
           onWebSocketError: () => {
             // Transport-level failure (401 from SockJS /info) — stop if token expired
-            if (this.auth.isExpired()) {
+            if (this.auth.isExpired() || this.reconnectAttempts >= this.maxReconnectAttempts) {
               this.disconnectWebSocket();
               return;
             }
