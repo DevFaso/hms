@@ -87,7 +87,12 @@ class AppointmentsViewModel @Inject constructor(
                     _bookingResult.value = "Appointment booked successfully!"
                     load() // refresh list
                 } else {
-                    _bookingResult.value = "Booking failed: ${resp.code()}"
+                    val errorBody = resp.errorBody()?.string()
+                    val detail = errorBody
+                        ?.let { runCatching { org.json.JSONObject(it).optString("message") }.getOrNull() }
+                        ?.takeIf { it.isNotBlank() }
+                        ?: "status ${resp.code()}"
+                    _bookingResult.value = "Booking failed: $detail"
                 }
             } catch (e: Exception) {
                 _bookingResult.value = "Error: ${e.message}"

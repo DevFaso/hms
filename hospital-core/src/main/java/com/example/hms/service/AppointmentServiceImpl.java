@@ -198,8 +198,8 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentSummaryDTO createAppointment(AppointmentRequestDTO request, Locale locale, String username) {
         User currentUser = getUserOrThrow(username);
 
-        // --- Patient resolution ---
-        final Patient patient = resolvePatient(request, locale);
+        // --- Patient resolution (falls back to authenticated user) ---
+        final Patient patient = resolvePatient(request, locale, username);
 
         // Authorization: Staff/admins can book for any patient; pure patients can only book for themselves
         boolean isStaffOrAdmin = isSuperAdmin(currentUser)
@@ -351,7 +351,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     /* ------- small private helpers to keep createAppointment tidy ------- */
 
-    private Patient resolvePatient(AppointmentRequestDTO request, Locale locale) {
+    private Patient resolvePatient(AppointmentRequestDTO request, Locale locale, String authenticatedUsername) {
         if (request.getPatientId() != null) {
             return patientRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -366,6 +366,14 @@ public class AppointmentServiceImpl implements AppointmentService {
             return patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
                 .stream().findFirst()
                 .orElseThrow(() -> new ResourceNotFoundException("Patient not found for email: " + request.getPatientEmail()));
+        }
+        // Fallback: use the authenticated user's identity (supports mobile/patient-portal clients)
+        if (authenticatedUsername != null) {
+            UUID userId = userRepository.findByUsername(authenticatedUsername)
+                .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + authenticatedUsername))
+                .getId();
+            return patientRepository.findByUserId(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found for username: " + authenticatedUsername));
         }
         throw new BusinessException("Patient identifier required");
     }
