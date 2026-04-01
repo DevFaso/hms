@@ -42,8 +42,8 @@ export interface AppointmentResponse {
 export interface AppointmentUpsertRequest {
   appointmentDate: string;
   startTime: string;
-  endTime: string;
-  status: AppointmentStatus;
+  endTime?: string;
+  status?: AppointmentStatus;
   patientId?: string;
   patientEmail?: string;
   staffId?: string;

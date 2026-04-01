@@ -10,8 +10,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 
 data class DoctorOption(
@@ -74,11 +72,9 @@ class AppointmentsViewModel @Inject constructor(
     }
 
     fun bookAppointment(request: BookAppointmentRequest) {
-        // Enrich request with patient identity and computed endTime
+        // Enrich request with patient identity; endTime and status are derived server-side
         val enriched = request.copy(
-            patientUsername = request.patientUsername ?: tokenStorage.savedUsername,
-            endTime = request.endTime ?: request.startTime?.let { computeEndTime(it) },
-            status = "SCHEDULED"
+            patientUsername = request.patientUsername ?: tokenStorage.savedUsername
         )
         viewModelScope.launch {
             try {
@@ -98,12 +94,6 @@ class AppointmentsViewModel @Inject constructor(
                 _bookingResult.value = "Error: ${e.message}"
             }
         }
-    }
-
-    private fun computeEndTime(startTime: String): String {
-        val fmt = DateTimeFormatter.ofPattern("HH:mm")
-        val start = LocalTime.parse(startTime.take(5), fmt)
-        return start.plusMinutes(30).format(fmt)
     }
 
     fun cancelAppointment(appointmentId: String, reason: String?) {

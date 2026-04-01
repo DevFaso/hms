@@ -43,15 +43,15 @@
               />
             </div>
             <div class="field">
-              <label for="end">{{ 'APPOINTMENTS.END_TIME' | translate }} *</label>
+              <label for="end">{{ 'APPOINTMENTS.END_TIME' | translate }}</label>
               <input
                 id="end"
                 type="time"
                 [(ngModel)]="form.endTime"
                 name="endTime"
-                required
                 (change)="onEndTimeChange()"
               />
+              <small class="field-hint">Auto-calculated if left empty (30 min default)</small>
             </div>
           </div>
           @if (timeError()) {
