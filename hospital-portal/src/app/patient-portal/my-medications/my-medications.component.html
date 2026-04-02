@@ -161,8 +161,60 @@
                     }}</span>
                   </div>
                 </div>
+                @if (rx.status === 'ACTIVE' && (rx.refillsRemaining ?? 0) > 0) {
+                  <div class="refill-action">
+                    @if (hasActiveRefill(rx.id)) {
+                      <span class="refill-pending">
+                        <span class="material-symbols-outlined">hourglass_top</span>
+                        {{ 'PORTAL.MEDICATIONS.REFILL_PENDING' | translate }}
+                      </span>
+                    } @else {
+                      <button
+                        class="refill-btn"
+                        (click)="requestRefill(rx); $event.stopPropagation()"
+                        [disabled]="requestingRefill() === rx.id"
+                      >
+                        <span class="material-symbols-outlined">refresh</span>
+                        {{
+                          requestingRefill() === rx.id
+                            ? ('PORTAL.MEDICATIONS.REQUESTING' | translate)
+                            : ('PORTAL.MEDICATIONS.REQUEST_REFILL' | translate)
+                        }}
+                      </button>
+                    }
+                  </div>
+                }
               </div>
             }
+          }
+        </div>
+      </section>
+    }
+
+    @if (refills().length > 0) {
+      <section class="portal-section">
+        <h2 class="portal-section-title">{{ 'PORTAL.MEDICATIONS.REFILL_HISTORY' | translate }}</h2>
+        <div class="portal-list">
+          @for (r of refills(); track r.id) {
+            <div class="portal-list-item">
+              <div class="pli-icon" style="background: #fef3c7; color: #d97706">
+                <span class="material-symbols-outlined">refresh</span>
+              </div>
+              <div class="pli-body">
+                <span class="pli-title">{{ r.medicationName }}</span>
+                <span class="pli-meta">
+                  {{ 'PORTAL.MEDICATIONS.REQUESTED' | translate }}
+                  {{ r.requestedAt | date: 'mediumDate' }}
+                  @if (r.updatedAt && r.status !== 'PENDING' && r.status !== 'REQUESTED') {
+                    · {{ 'PORTAL.MEDICATIONS.COMPLETED' | translate }}
+                    {{ r.updatedAt | date: 'mediumDate' }}
+                  }
+                </span>
+              </div>
+              <span class="portal-status-chip" [attr.data-status]="r.status">{{
+                r.status | enumLabel: 'status'
+              }}</span>
+            </div>
           }
         </div>
       </section>

@@ -28,6 +28,54 @@
 
   <!-- CONSENTS TAB -->
   @if (activeTab() === 'consents') {
+    <div class="sharing-actions">
+      <button class="share-btn" (click)="openShareForm()">
+        <span class="material-symbols-outlined">add_circle</span>
+        {{ 'PORTAL.SHARING.SHARE_RECORDS' | translate }}
+      </button>
+    </div>
+
+    @if (showShareForm()) {
+      <div class="share-form-card">
+        <h3>{{ 'PORTAL.SHARING.SHARE_FORM_TITLE' | translate }}</h3>
+        <div class="share-form-fields">
+          <div class="share-field">
+            <label>{{ 'PORTAL.SHARING.HOSPITAL_ID' | translate }}</label>
+            <input
+              type="text"
+              [(ngModel)]="shareHospitalId"
+              [placeholder]="'PORTAL.SHARING.HOSPITAL_ID_PLACEHOLDER' | translate"
+            />
+          </div>
+          <div class="share-field">
+            <label>{{ 'PORTAL.SHARING.SHARE_PURPOSE' | translate }}</label>
+            <select [(ngModel)]="sharePurpose">
+              <option value="">{{ 'PORTAL.SHARING.PURPOSE_TREATMENT' | translate }}</option>
+              <option value="Second Opinion">{{ 'PORTAL.SHARING.PURPOSE_SECOND_OPINION' | translate }}</option>
+              <option value="Referral">{{ 'PORTAL.SHARING.PURPOSE_REFERRAL' | translate }}</option>
+              <option value="Transfer">{{ 'PORTAL.SHARING.PURPOSE_TRANSFER' | translate }}</option>
+            </select>
+          </div>
+          <div class="share-field">
+            <label>{{ 'PORTAL.SHARING.EXPIRATION' | translate }}</label>
+            <input type="date" [(ngModel)]="shareExpiration" />
+          </div>
+        </div>
+        <div class="share-form-actions">
+          <button class="share-cancel-btn" (click)="cancelShare()">
+            {{ 'PORTAL.SHARING.CANCEL' | translate }}
+          </button>
+          <button
+            class="share-submit-btn"
+            (click)="submitShare()"
+            [disabled]="sharing() || !shareHospitalId.trim()"
+          >
+            {{ sharing() ? ('PORTAL.SHARING.SHARING' | translate) : ('PORTAL.SHARING.CONFIRM_SHARE' | translate) }}
+          </button>
+        </div>
+      </div>
+    }
+
     @if (loadingConsents()) {
       <div class="portal-loading">
         <div class="portal-spinner"></div>

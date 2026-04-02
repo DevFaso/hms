@@ -3,6 +3,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { MyMedicationsComponent } from './my-medications.component';
 import { PatientPortalService } from '../../services/patient-portal.service';
+import { ToastService } from '../../core/toast.service';
 
 describe('MyMedicationsComponent', () => {
   let component: MyMedicationsComponent;
@@ -11,12 +12,22 @@ describe('MyMedicationsComponent', () => {
   const mockPortalService = {
     getMyMedications: () => of([]),
     getMyPrescriptions: () => of([]),
+    getMyRefills: () => of([]),
+    requestRefill: () => of({}),
+  };
+
+  const mockToast = {
+    success: jasmine.createSpy('success'),
+    error: jasmine.createSpy('error'),
   };
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [MyMedicationsComponent, TranslateModule.forRoot()],
-      providers: [{ provide: PatientPortalService, useValue: mockPortalService }],
+      providers: [
+        { provide: PatientPortalService, useValue: mockPortalService },
+        { provide: ToastService, useValue: mockToast },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(MyMedicationsComponent);

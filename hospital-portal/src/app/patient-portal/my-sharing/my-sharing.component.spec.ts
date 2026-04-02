@@ -13,6 +13,8 @@ describe('MySharingComponent', () => {
     getMyConsents: () => of([]),
     getMyAccessLog: () => of([]),
     revokeConsent: () => of({}),
+    grantConsent: () => of({}),
+    getMyProfile: () => of({ hospitalId: 'test-hospital-id' }),
   };
 
   const mockToast = {
@@ -45,5 +47,12 @@ describe('MySharingComponent', () => {
   it('should switch to access log tab', () => {
     component.switchToAccessLog();
     expect(component.activeTab()).toBe('access-log');
+  });
+
+  it('should open and close share form', () => {
+    component.openShareForm();
+    expect(component.showShareForm()).toBe(true);
+    component.cancelShare();
+    expect(component.showShareForm()).toBe(false);
   });
 });

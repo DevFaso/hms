@@ -1,5 +1,6 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 import {
   PatientPortalService,
@@ -12,7 +13,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 @Component({
   selector: 'app-my-sharing',
   standalone: true,
-  imports: [CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
+  imports: [CommonModule, DatePipe, FormsModule, EnumLabelPipe, TranslateModule],
   templateUrl: './my-sharing.component.html',
   styleUrls: ['./my-sharing.component.scss', '../patient-portal-pages.scss'],
 })
@@ -28,6 +29,14 @@ export class MySharingComponent implements OnInit {
   revoking = signal(false);
   accessLogLoaded = false;
 
+  // Share form state
+  showShareForm = signal(false);
+  sharing = signal(false);
+  shareHospitalId = '';
+  sharePurpose = '';
+  shareExpiration = '';
+  private patientHospitalId = '';
+
   ngOnInit(): void {
     this.portal.getMyConsents().subscribe({
       next: (c) => {
@@ -35,6 +44,11 @@ export class MySharingComponent implements OnInit {
         this.loadingConsents.set(false);
       },
       error: () => this.loadingConsents.set(false),
+    });
+    this.portal.getMyProfile().subscribe({
+      next: (profile) => {
+        this.patientHospitalId = profile.hospitalId ?? '';
+      },
     });
   }
 
@@ -68,5 +82,40 @@ export class MySharingComponent implements OnInit {
         this.revoking.set(false);
       },
     });
+  }
+
+  openShareForm(): void {
+    this.shareHospitalId = '';
+    this.sharePurpose = '';
+    this.shareExpiration = '';
+    this.showShareForm.set(true);
+  }
+
+  cancelShare(): void {
+    this.showShareForm.set(false);
+  }
+
+  submitShare(): void {
+    if (!this.shareHospitalId.trim()) return;
+    this.sharing.set(true);
+    this.portal
+      .grantConsent({
+        fromHospitalId: this.patientHospitalId,
+        toHospitalId: this.shareHospitalId.trim(),
+        purpose: this.sharePurpose.trim() || 'Treatment',
+        consentExpiration: this.shareExpiration || '',
+      })
+      .subscribe({
+        next: (consent) => {
+          this.consents.update((list) => [consent, ...list]);
+          this.toast.success('PORTAL.SHARING.CONSENT_GRANTED');
+          this.sharing.set(false);
+          this.showShareForm.set(false);
+        },
+        error: () => {
+          this.toast.error('PORTAL.SHARING.CONSENT_GRANT_FAILED');
+          this.sharing.set(false);
+        },
+      });
   }
 }

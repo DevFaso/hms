@@ -44,6 +44,7 @@ import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyResponseDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProxyRepository;
 import com.example.hms.repository.PatientRepository;
@@ -121,6 +122,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final PatientPrimaryCareService primaryCareService;
     private final AuditEventLogService auditEventLogService;
     private final PatientHospitalRegistrationRepository registrationRepository;
+    private final HospitalRepository hospitalRepository;
     private final com.example.hms.repository.UserRepository userRepository;
     private final EmailService emailService;
 
@@ -587,6 +589,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     private PatientProfileDTO toProfileDTO(Patient p) {
+        UUID hospId = resolvePatientHospitalId(p);
+        String hospName = null;
+        if (hospId != null) {
+            hospName = hospitalRepository.findById(hospId)
+                    .map(h -> h.getName())
+                    .orElse(null);
+        }
+
         return PatientProfileDTO.builder()
                 .id(p.getId())
                 .firstName(p.getFirstName())
@@ -612,6 +622,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .preferredPharmacy(p.getPreferredPharmacy())
                 .username(p.getUser() != null ? p.getUser().getUsername() : null)
                 .profileImageUrl(p.getUser() != null ? p.getUser().getProfileImageUrl() : null)
+                .hospitalId(hospId)
+                .hospitalName(hospName)
                 .build();
     }
 
