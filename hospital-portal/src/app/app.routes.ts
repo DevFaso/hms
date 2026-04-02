@@ -545,7 +545,9 @@ export const routes: Routes = [
           roles: ['ROLE_RECEPTIONIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
-          import('./reception/reception-cockpit').then((m) => m.ReceptionCockpitComponent),
+          import('./reception/reception-cockpit/reception-cockpit.component').then(
+            (m) => m.ReceptionCockpitComponent,
+          ),
       },
 
       // Administration

@@ -40,25 +40,28 @@
         <h3>{{ 'PORTAL.SHARING.SHARE_FORM_TITLE' | translate }}</h3>
         <div class="share-form-fields">
           <div class="share-field">
-            <label>{{ 'PORTAL.SHARING.HOSPITAL_ID' | translate }}</label>
+            <label for="share-hospital-id">{{ 'PORTAL.SHARING.HOSPITAL_ID' | translate }}</label>
             <input
+              id="share-hospital-id"
               type="text"
               [(ngModel)]="shareHospitalId"
               [placeholder]="'PORTAL.SHARING.HOSPITAL_ID_PLACEHOLDER' | translate"
             />
           </div>
           <div class="share-field">
-            <label>{{ 'PORTAL.SHARING.SHARE_PURPOSE' | translate }}</label>
-            <select [(ngModel)]="sharePurpose">
+            <label for="share-purpose">{{ 'PORTAL.SHARING.SHARE_PURPOSE' | translate }}</label>
+            <select id="share-purpose" [(ngModel)]="sharePurpose">
               <option value="">{{ 'PORTAL.SHARING.PURPOSE_TREATMENT' | translate }}</option>
-              <option value="Second Opinion">{{ 'PORTAL.SHARING.PURPOSE_SECOND_OPINION' | translate }}</option>
+              <option value="Second Opinion">
+                {{ 'PORTAL.SHARING.PURPOSE_SECOND_OPINION' | translate }}
+              </option>
               <option value="Referral">{{ 'PORTAL.SHARING.PURPOSE_REFERRAL' | translate }}</option>
               <option value="Transfer">{{ 'PORTAL.SHARING.PURPOSE_TRANSFER' | translate }}</option>
             </select>
           </div>
           <div class="share-field">
-            <label>{{ 'PORTAL.SHARING.EXPIRATION' | translate }}</label>
-            <input type="date" [(ngModel)]="shareExpiration" />
+            <label for="share-expiration">{{ 'PORTAL.SHARING.EXPIRATION' | translate }}</label>
+            <input id="share-expiration" type="date" [(ngModel)]="shareExpiration" />
           </div>
         </div>
         <div class="share-form-actions">
@@ -70,7 +73,11 @@
             (click)="submitShare()"
             [disabled]="sharing() || !shareHospitalId.trim()"
           >
-            {{ sharing() ? ('PORTAL.SHARING.SHARING' | translate) : ('PORTAL.SHARING.CONFIRM_SHARE' | translate) }}
+            {{
+              sharing()
+                ? ('PORTAL.SHARING.SHARING' | translate)
+                : ('PORTAL.SHARING.CONFIRM_SHARE' | translate)
+            }}
           </button>
         </div>
       </div>

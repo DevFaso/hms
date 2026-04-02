@@ -19,7 +19,7 @@
     @if (loading()) {
       <div class="loading-row">
         <span class="material-symbols-outlined spin">progress_activity</span>
-        Loading…
+        {{ 'COMMON.LOADING' | translate }}
       </div>
     } @else if (error()) {
       <div class="error-msg">{{ error() }}</div>

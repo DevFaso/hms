@@ -92,8 +92,7 @@ export class MyMedicationsComponent implements OnInit {
   hasActiveRefill(prescriptionId: string): boolean {
     return this.refills().some(
       (r) =>
-        r.prescriptionId === prescriptionId &&
-        (r.status === 'PENDING' || r.status === 'REQUESTED'),
+        r.prescriptionId === prescriptionId && (r.status === 'PENDING' || r.status === 'REQUESTED'),
     );
   }
 }

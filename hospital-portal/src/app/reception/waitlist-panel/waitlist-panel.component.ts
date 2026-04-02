@@ -1,13 +1,17 @@
 import { Component, inject, signal, OnInit, computed, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
-import { ReceptionService, WaitlistEntryRequest, WaitlistEntryResponse } from './reception.service';
-import { PatientService, PatientResponse } from '../services/patient.service';
-import { ReferralService, DepartmentMinimal } from '../services/referral.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
-import { RoleContextService } from '../core/role-context.service';
-import { ToastService } from '../core/toast.service';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import {
+  ReceptionService,
+  WaitlistEntryRequest,
+  WaitlistEntryResponse,
+} from '../reception.service';
+import { PatientService, PatientResponse } from '../../services/patient.service';
+import { ReferralService, DepartmentMinimal } from '../../services/referral.service';
+import { StaffService, StaffResponse } from '../../services/staff.service';
+import { RoleContextService } from '../../core/role-context.service';
+import { ToastService } from '../../core/toast.service';
 import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
 
 type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
@@ -16,8 +20,8 @@ type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
   selector: 'app-waitlist-panel',
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
-  templateUrl: './waitlist-panel.html',
-  styleUrl: './waitlist-panel.scss',
+  templateUrl: './waitlist-panel.component.html',
+  styleUrl: './waitlist-panel.component.scss',
 })
 export class WaitlistPanelComponent implements OnInit {
   @Output() patientClicked = new EventEmitter<string>();
@@ -28,6 +32,7 @@ export class WaitlistPanelComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly roleCtx = inject(RoleContextService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   /* ── List state ─────────── */
   entries = signal<WaitlistEntryResponse[]>([]);
@@ -99,7 +104,7 @@ export class WaitlistPanelComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load waitlist');
+        this.toast.error(this.translate.instant('RECEPTION.LOAD_WAITLIST_FAILED'));
         this.loading.set(false);
       },
     });
@@ -131,7 +136,7 @@ export class WaitlistPanelComponent implements OnInit {
 
   submitAdd(): void {
     if (!this.selectedPatient() || !this.selectedDeptId()) {
-      this.toast.error('Patient and department are required');
+      this.toast.error(this.translate.instant('RECEPTION.PATIENT_DEPT_REQUIRED'));
       return;
     }
     const req: WaitlistEntryRequest = {
@@ -146,13 +151,15 @@ export class WaitlistPanelComponent implements OnInit {
     this.saving.set(true);
     this.receptionService.addToWaitlist(req).subscribe({
       next: () => {
-        this.toast.success('Added to waitlist');
+        this.toast.success(this.translate.instant('RECEPTION.ADDED_TO_WAITLIST'));
         this.showAddForm.set(false);
         this.saving.set(false);
         this.loadEntries();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? 'Failed to add to waitlist');
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('RECEPTION.ADD_WAITLIST_FAILED'),
+        );
         this.saving.set(false);
       },
     });
@@ -161,38 +168,33 @@ export class WaitlistPanelComponent implements OnInit {
   offerSlot(id: string): void {
     this.receptionService.offerWaitlistSlot(id).subscribe({
       next: () => {
-        this.toast.success('Slot offered — schedule an appointment for this patient');
+        this.toast.success(this.translate.instant('RECEPTION.SLOT_OFFERED'));
         this.loadEntries();
       },
-      error: () => this.toast.error('Failed to offer slot'),
+      error: () => this.toast.error(this.translate.instant('RECEPTION.OFFER_FAILED')),
     });
   }
 
   closeEntry(id: string): void {
     this.receptionService.closeWaitlistEntry(id).subscribe({
       next: () => {
-        this.toast.success('Waitlist entry closed');
+        this.toast.success(this.translate.instant('RECEPTION.ENTRY_CLOSED'));
         this.loadEntries();
       },
-      error: () => this.toast.error('Failed to close entry'),
+      error: () => this.toast.error(this.translate.instant('RECEPTION.CLOSE_FAILED')),
     });
   }
 
-  priorityClass(p: string): string {
-    const map: Record<string, string> = {
-      ROUTINE: 'priority-routine',
-      URGENT: 'priority-urgent',
-      STAT: 'priority-stat',
-    };
-    return map[p] ?? '';
+  filterLabel(status: WaitlistStatus): string {
+    if (status === 'ALL') return this.translate.instant('COMMON.ALL');
+    return this.translate.instant('RECEPTION.' + status);
   }
 
-  statusClass(s: string): string {
-    const map: Record<string, string> = {
-      WAITING: 'status-waiting',
-      OFFERED: 'status-offered',
-      CLOSED: 'status-closed',
-    };
-    return map[s] ?? '';
+  priorityClass(priority: string): string {
+    return 'priority-' + priority.toLowerCase();
+  }
+
+  statusClass(status: string): string {
+    return 'status-' + status.toLowerCase();
   }
 }

@@ -70,6 +70,10 @@
   background: #eff6ff;
   color: #1d4ed8;
 }
+.col-confirmed .col-header {
+  background: #dbeafe;
+  color: #1e40af;
+}
 .col-arrived .col-header {
   background: #d1fae5;
   color: #065f46;
@@ -193,10 +197,4 @@
   right: 0.25rem;
   font-size: 0.65rem;
   opacity: 0.4;
-}
-
-/* Confirmed column colour */
-.col-confirmed .col-header {
-  background: #dbeafe;
-  color: #1e40af;
 }

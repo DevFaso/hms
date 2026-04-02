@@ -1,21 +1,21 @@
 import { Component, inject, signal, computed, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   ReceptionService,
   ReceptionDashboardSummary,
   ReceptionQueueItem,
   InsuranceIssue,
   FlowBoard,
-} from './reception.service';
-import { ToastService } from '../core/toast.service';
-import { PatientSnapshotDrawerComponent } from './patient-snapshot-drawer';
-import { InsuranceIssuesPanelComponent } from './insurance-issues-panel';
-import { PaymentPendingPanelComponent } from './payment-pending-panel';
-import { FlowBoardComponent, FlowBoardStatusChange } from './flow-board';
-import { WalkInDialogComponent } from './walkin-dialog';
-import { WaitlistPanelComponent } from './waitlist-panel';
+} from '../reception.service';
+import { ToastService } from '../../core/toast.service';
+import { PatientSnapshotDrawerComponent } from '../patient-snapshot-drawer/patient-snapshot-drawer.component';
+import { InsuranceIssuesPanelComponent } from '../insurance-issues-panel/insurance-issues-panel.component';
+import { PaymentPendingPanelComponent } from '../payment-pending-panel/payment-pending-panel.component';
+import { FlowBoardComponent, FlowBoardStatusChange } from '../flow-board/flow-board.component';
+import { WalkInDialogComponent } from '../walkin-dialog/walkin-dialog.component';
+import { WaitlistPanelComponent } from '../waitlist-panel/waitlist-panel.component';
 
 type Tab = 'queue' | 'insurance' | 'payments' | 'flowboard' | 'waitlist';
 type StatusFilter =
@@ -46,12 +46,13 @@ function todayIso(): string {
     WalkInDialogComponent,
     WaitlistPanelComponent,
   ],
-  templateUrl: './reception-cockpit.html',
-  styleUrl: './reception-cockpit.scss',
+  templateUrl: './reception-cockpit.component.html',
+  styleUrl: './reception-cockpit.component.scss',
 })
 export class ReceptionCockpitComponent implements OnInit {
   private readonly receptionService = inject(ReceptionService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   readonly STATUS_FILTERS: StatusFilter[] = [
     'ALL',
@@ -94,7 +95,7 @@ export class ReceptionCockpitComponent implements OnInit {
 
     this.receptionService.getDashboardSummary(date).subscribe({
       next: (s) => this.summary.set(s),
-      error: () => this.toast.error('Failed to load summary'),
+      error: () => this.toast.error(this.translate.instant('RECEPTION.LOAD_SUMMARY_FAILED')),
     });
 
     this.receptionService.getQueue({ date }).subscribe({
@@ -103,7 +104,7 @@ export class ReceptionCockpitComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load queue');
+        this.toast.error(this.translate.instant('RECEPTION.LOAD_QUEUE_FAILED'));
         this.loading.set(false);
       },
     });
@@ -145,7 +146,7 @@ export class ReceptionCockpitComponent implements OnInit {
   onWalkInCreated(): void {
     this.showWalkIn.set(false);
     this.loadAll();
-    this.toast.success('Walk-in encounter created');
+    this.toast.success(this.translate.instant('RECEPTION.WALKIN_CREATED'));
   }
 
   statusClass(status: string): string {
@@ -162,23 +163,21 @@ export class ReceptionCockpitComponent implements OnInit {
     return 'status-badge ' + (map[status] ?? 'badge-default');
   }
 
-  statusLabel(status: string): string {
-    return status.replace(/_/g, ' ');
-  }
-
   filterLabel(f: StatusFilter): string {
-    return f === 'ALL' ? 'All' : f.replace(/_/g, ' ');
+    if (f === 'ALL') return this.translate.instant('COMMON.ALL');
+    const key = 'RECEPTION.' + f;
+    return this.translate.instant(key);
   }
 
   onFlowBoardStatusChanged(change: FlowBoardStatusChange): void {
     this.receptionService.updateEncounterStatus(change.encounterId, change.newStatus).subscribe({
       next: () => {
-        this.toast.success('Status updated');
+        this.toast.success(this.translate.instant('RECEPTION.STATUS_UPDATED'));
         this.receptionService.getFlowBoard(this.selectedDate()).subscribe({
           next: (board) => this.flowBoard.set(board),
         });
       },
-      error: () => this.toast.error('Failed to update encounter status'),
+      error: () => this.toast.error(this.translate.instant('RECEPTION.STATUS_UPDATE_FAILED')),
     });
   }
 }

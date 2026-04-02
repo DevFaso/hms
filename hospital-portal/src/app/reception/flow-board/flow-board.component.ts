@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { CdkDragDrop, DragDropModule, transferArrayItem } from '@angular/cdk/drag-drop';
-import { FlowBoard, ReceptionQueueItem } from './reception.service';
+import { FlowBoard, ReceptionQueueItem } from '../reception.service';
 
 export interface FlowBoardStatusChange {
   encounterId: string;
@@ -15,22 +15,22 @@ type ColKey = keyof FlowBoard;
   selector: 'app-flow-board',
   standalone: true,
   imports: [CommonModule, DragDropModule, TranslateModule],
-  templateUrl: './flow-board.html',
-  styleUrl: './flow-board.scss',
+  templateUrl: './flow-board.component.html',
+  styleUrl: './flow-board.component.scss',
 })
 export class FlowBoardComponent implements OnChanges {
   @Input() board: FlowBoard | null = null;
   @Output() patientClicked = new EventEmitter<string>();
   @Output() statusChanged = new EventEmitter<FlowBoardStatusChange>();
 
-  readonly columns: { key: ColKey; label: string; colorClass: string }[] = [
-    { key: 'scheduled', label: 'Scheduled', colorClass: 'col-scheduled' },
-    { key: 'confirmed', label: 'Confirmed', colorClass: 'col-confirmed' },
-    { key: 'arrived', label: 'Arrived', colorClass: 'col-arrived' },
-    { key: 'inProgress', label: 'In Progress', colorClass: 'col-in-progress' },
-    { key: 'completed', label: 'Completed', colorClass: 'col-completed' },
-    { key: 'noShow', label: 'No Show', colorClass: 'col-no-show' },
-    { key: 'walkIn', label: 'Walk-In', colorClass: 'col-walk-in' },
+  readonly columns: { key: ColKey; labelKey: string; colorClass: string }[] = [
+    { key: 'scheduled', labelKey: 'RECEPTION.SCHEDULED', colorClass: 'col-scheduled' },
+    { key: 'confirmed', labelKey: 'RECEPTION.CONFIRMED', colorClass: 'col-confirmed' },
+    { key: 'arrived', labelKey: 'RECEPTION.ARRIVED', colorClass: 'col-arrived' },
+    { key: 'inProgress', labelKey: 'RECEPTION.IN_PROGRESS', colorClass: 'col-in-progress' },
+    { key: 'completed', labelKey: 'RECEPTION.COMPLETED', colorClass: 'col-completed' },
+    { key: 'noShow', labelKey: 'RECEPTION.NO_SHOW', colorClass: 'col-no-show' },
+    { key: 'walkIn', labelKey: 'RECEPTION.WALKIN', colorClass: 'col-walk-in' },
   ];
 
   /** Mutable local copy so CDK can splice arrays */

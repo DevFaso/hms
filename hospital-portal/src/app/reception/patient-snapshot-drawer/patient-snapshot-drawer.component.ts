@@ -10,16 +10,16 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
-import { ReceptionService, FrontDeskPatientSnapshot } from './reception.service';
-import { ToastService } from '../core/toast.service';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ReceptionService, FrontDeskPatientSnapshot } from '../reception.service';
+import { ToastService } from '../../core/toast.service';
 
 @Component({
   selector: 'app-patient-snapshot-drawer',
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
-  templateUrl: './patient-snapshot-drawer.html',
-  styleUrl: './patient-snapshot-drawer.scss',
+  templateUrl: './patient-snapshot-drawer.component.html',
+  styleUrl: './patient-snapshot-drawer.component.scss',
 })
 export class PatientSnapshotDrawerComponent implements OnChanges {
   @Input() patientId: string | null = null;
@@ -27,6 +27,7 @@ export class PatientSnapshotDrawerComponent implements OnChanges {
 
   private readonly receptionService = inject(ReceptionService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   snapshot = signal<FrontDeskPatientSnapshot | null>(null);
   loading = signal(false);
@@ -53,7 +54,7 @@ export class PatientSnapshotDrawerComponent implements OnChanges {
         this.loading.set(false);
       },
       error: () => {
-        this.error.set('Failed to load patient snapshot.');
+        this.error.set(this.translate.instant('RECEPTION.LOAD_SNAPSHOT_FAILED'));
         this.loading.set(false);
       },
     });
@@ -67,20 +68,19 @@ export class PatientSnapshotDrawerComponent implements OnChanges {
   submitAttestation(): void {
     const insuranceId = this.snapshot()?.insurance?.insuranceId;
     if (!insuranceId) {
-      this.toast.error('No insurance record to attest');
+      this.toast.error(this.translate.instant('RECEPTION.NO_INSURANCE_TO_ATTEST'));
       return;
     }
     this.attestSaving.set(true);
     this.receptionService.attestEligibility(insuranceId, this.attestNotes()).subscribe({
       next: () => {
-        this.toast.success('Eligibility verified');
+        this.toast.success(this.translate.instant('RECEPTION.ELIGIBILITY_VERIFIED_SUCCESS'));
         this.showAttestModal.set(false);
         this.attestSaving.set(false);
-        // Reload snapshot to show updated verified badge
         if (this.patientId) this.loadSnapshot(this.patientId);
       },
       error: () => {
-        this.toast.error('Failed to save attestation');
+        this.toast.error(this.translate.instant('RECEPTION.ATTEST_FAILED'));
         this.attestSaving.set(false);
       },
     });

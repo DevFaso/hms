@@ -1,10 +1,10 @@
 import { Component, Input, Output, EventEmitter, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { ReceptionQueueItem, ReceptionService } from './reception.service';
-import { ToastService } from '../core/toast.service';
+import { ReceptionQueueItem, ReceptionService } from '../reception.service';
+import { ToastService } from '../../core/toast.service';
 
 interface OpenInvoice {
   id: string;
@@ -19,7 +19,8 @@ interface OpenInvoice {
   selector: 'app-payment-pending-panel',
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
-  templateUrl: './payment-pending-panel.html',
+  templateUrl: './payment-pending-panel.component.html',
+  styleUrl: './payment-pending-panel.component.scss',
 })
 export class PaymentPendingPanelComponent {
   @Input() items: ReceptionQueueItem[] = [];
@@ -29,6 +30,7 @@ export class PaymentPendingPanelComponent {
   private readonly receptionService = inject(ReceptionService);
   private readonly http = inject(HttpClient);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   payingItem = signal<ReceptionQueueItem | null>(null);
   openInvoices = signal<OpenInvoice[]>([]);
@@ -71,7 +73,7 @@ export class PaymentPendingPanelComponent {
           this.loadingInvoices.set(false);
         },
         error: () => {
-          this.toast.error('Failed to load invoices');
+          this.toast.error(this.translate.instant('RECEPTION.LOAD_INVOICES_FAILED'));
           this.loadingInvoices.set(false);
         },
       });
@@ -93,11 +95,11 @@ export class PaymentPendingPanelComponent {
         this.paying.set(false);
         this.closePayDialog();
         this.paymentCollected.emit();
-        this.toast.success('Payment recorded successfully');
+        this.toast.success(this.translate.instant('RECEPTION.PAYMENT_RECORDED'));
       },
       error: (err) => {
         this.paying.set(false);
-        const msg = err?.error?.message ?? 'Failed to record payment';
+        const msg = err?.error?.message ?? this.translate.instant('RECEPTION.PAYMENT_FAILED');
         this.toast.error(msg);
       },
     });

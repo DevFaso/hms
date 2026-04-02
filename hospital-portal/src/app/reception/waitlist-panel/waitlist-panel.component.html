@@ -8,7 +8,7 @@
           [class.active]="statusFilter() === opt"
           (click)="statusFilter.set(opt); loadEntries()"
         >
-          {{ opt }}
+          {{ filterLabel(opt) }}
         </button>
       }
     </div>
@@ -54,7 +54,9 @@
             <td>{{ entry.departmentName }}</td>
             <td>{{ entry.preferredProviderName ?? '—' }}</td>
             <td>
-              <span [ngClass]="priorityClass(entry.priority)">{{ entry.priority }}</span>
+              <span [ngClass]="priorityClass(entry.priority)">{{
+                'RECEPTION.' + entry.priority | translate
+              }}</span>
             </td>
             <td>
               @if (entry.requestedDateFrom || entry.requestedDateTo) {
@@ -65,7 +67,9 @@
             </td>
             <td class="reason-cell">{{ entry.reason ?? '—' }}</td>
             <td>
-              <span [ngClass]="statusClass(entry.status)">{{ entry.status }}</span>
+              <span [ngClass]="statusClass(entry.status)">{{
+                'RECEPTION.' + entry.status | translate
+              }}</span>
             </td>
             <td class="actions-cell">
               @if (entry.status === 'WAITING') {
@@ -221,7 +225,7 @@
           (ngModelChange)="priority.set($event)"
         >
           @for (p of priorities; track p) {
-            <option [value]="p">{{ p }}</option>
+            <option [value]="p">{{ 'RECEPTION.' + p | translate }}</option>
           }
         </select>
       </div>

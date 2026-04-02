@@ -142,14 +142,16 @@
                 <td class="reason-cell">{{ item.appointmentReason ?? '—' }}</td>
                 <td>
                   <span [ngClass]="statusClass(item.status)">
-                    {{ statusLabel(item.status) }}
+                    {{ 'RECEPTION.' + item.status | translate }}
                   </span>
                 </td>
                 <td>{{ item.waitMinutes > 0 ? item.waitMinutes + 'm' : '—' }}</td>
                 <td>
                   @if (item.hasInsuranceIssue) {
-                    <span class="flag-chip warn" [title]="'RECEPTION.INSURANCE_ISSUE' | translate"
-                      >INS</span
+                    <span
+                      class="flag-chip warn"
+                      [title]="'RECEPTION.INSURANCE_ISSUE' | translate"
+                      >{{ 'RECEPTION.INS_FLAG' | translate }}</span
                     >
                   }
                   @if (item.hasOutstandingBalance) {

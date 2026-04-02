@@ -5,7 +5,7 @@
     @for (col of columns; track col.key) {
       <div class="flow-col" [ngClass]="col.colorClass">
         <div class="col-header">
-          <span class="col-title">{{ col.label }}</span>
+          <span class="col-title">{{ col.labelKey | translate }}</span>
           <span class="col-count">{{ localBoard[col.key].length }}</span>
         </div>
         <div

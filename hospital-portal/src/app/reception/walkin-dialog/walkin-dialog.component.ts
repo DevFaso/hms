@@ -1,13 +1,13 @@
 import { Component, Output, EventEmitter, inject, signal, OnInit, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpClient } from '@angular/common/http';
 import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
-import { PatientService, PatientResponse } from '../services/patient.service';
-import { StaffService, StaffResponse } from '../services/staff.service';
-import { RoleContextService } from '../core/role-context.service';
-import { ToastService } from '../core/toast.service';
+import { PatientService, PatientResponse } from '../../services/patient.service';
+import { StaffService, StaffResponse } from '../../services/staff.service';
+import { RoleContextService } from '../../core/role-context.service';
+import { ToastService } from '../../core/toast.service';
 
 type EncounterType = 'CONSULTATION' | 'FOLLOW_UP' | 'EMERGENCY' | 'OUTPATIENT' | 'INPATIENT';
 
@@ -15,7 +15,8 @@ type EncounterType = 'CONSULTATION' | 'FOLLOW_UP' | 'EMERGENCY' | 'OUTPATIENT' |
   selector: 'app-walkin-dialog',
   standalone: true,
   imports: [CommonModule, FormsModule, TranslateModule],
-  templateUrl: './walkin-dialog.html',
+  templateUrl: './walkin-dialog.component.html',
+  styleUrl: './walkin-dialog.component.scss',
 })
 export class WalkInDialogComponent implements OnInit {
   @Output() dismissed = new EventEmitter<void>();
@@ -26,6 +27,7 @@ export class WalkInDialogComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly roleCtx = inject(RoleContextService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   /* ── Patient search ─────────────────────── */
   patientQuery = signal('');
@@ -101,7 +103,7 @@ export class WalkInDialogComponent implements OnInit {
     const hospitalId = this.roleCtx.activeHospitalId;
 
     if (!patient || !staff || !hospitalId) {
-      this.toast.error('Please select a patient, provider, and ensure a hospital is active');
+      this.toast.error(this.translate.instant('RECEPTION.WALKIN_VALIDATION_ERROR'));
       return;
     }
 
@@ -123,7 +125,7 @@ export class WalkInDialogComponent implements OnInit {
       },
       error: (err) => {
         this.saving.set(false);
-        const msg = err?.error?.message ?? 'Failed to create walk-in encounter';
+        const msg = err?.error?.message ?? this.translate.instant('RECEPTION.WALKIN_FAILED');
         this.toast.error(msg);
       },
     });
