@@ -1,0 +1,82 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">monitor_heart</span>
+      {{ 'PORTAL.VITALS.TITLE' | translate }}
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>{{ 'PORTAL.VITALS.LOADING' | translate }}</p>
+    </div>
+  } @else if (vitals().length === 0) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">monitor_heart</span>
+      <h3>{{ 'PORTAL.VITALS.EMPTY_TITLE' | translate }}</h3>
+      <p>{{ 'PORTAL.VITALS.EMPTY_DESC' | translate }}</p>
+    </div>
+  } @else {
+    <section class="portal-section">
+      <div class="vitals-grid">
+        @for (v of vitals(); track v.id) {
+          <div
+            class="vital-card"
+            (click)="toggleExpand(v.id)"
+            role="button"
+            tabindex="0"
+            (keydown.enter)="toggleExpand(v.id)"
+            [class.expanded]="expandedId() === v.id"
+          >
+            <div class="vc-icon">
+              <span class="material-symbols-outlined">{{ getVitalIcon(v.type) }}</span>
+            </div>
+            <div class="vc-body">
+              <span class="vc-type">{{ v.type | enumLabel: 'vitalType' }}</span>
+              <span class="vc-value"
+                >{{ v.value }} <small>{{ v.unit }}</small></span
+              >
+              <span class="vc-meta"
+                >{{ v.recordedAt | date: 'MMM d, yyyy' }} ·
+                {{ v.source | enumLabel: 'vitalSource' }}</span
+              >
+            </div>
+            <span class="material-symbols-outlined vc-expand-icon">
+              {{ expandedId() === v.id ? 'expand_less' : 'expand_more' }}
+            </span>
+          </div>
+
+          @if (expandedId() === v.id) {
+            <div class="vital-detail-panel">
+              <div class="vd-grid">
+                <div class="vd-item">
+                  <span class="vd-label">{{ 'PORTAL.VITALS.TYPE' | translate }}</span>
+                  <span class="vd-value">{{ v.type | enumLabel: 'vitalType' }}</span>
+                </div>
+                <div class="vd-item">
+                  <span class="vd-label">{{ 'PORTAL.VITALS.VALUE' | translate }}</span>
+                  <span class="vd-value vd-value-highlight">{{ v.value }} {{ v.unit }}</span>
+                </div>
+                <div class="vd-item">
+                  <span class="vd-label">{{ 'PORTAL.VITALS.RECORDED' | translate }}</span>
+                  <span class="vd-value">{{ v.recordedAt | date: 'medium' }}</span>
+                </div>
+                <div class="vd-item">
+                  <span class="vd-label">{{ 'PORTAL.VITALS.SOURCE' | translate }}</span>
+                  <span class="vd-value">{{ v.source | enumLabel: 'vitalSource' }}</span>
+                </div>
+                @if (getNormalRange(v.type)) {
+                  <div class="vd-item">
+                    <span class="vd-label">{{ 'PORTAL.VITALS.NORMAL_RANGE' | translate }}</span>
+                    <span class="vd-value">{{ getNormalRange(v.type) }}</span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+        }
+      </div>
+    </section>
+  }
+</div>

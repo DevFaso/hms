@@ -1,0 +1,29 @@
+.sharing-consent-item .consent-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.revoke-btn {
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.revoke-btn:hover:not(:disabled) {
+  background: #fee2e2;
+}
+.revoke-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.rec-muted {
+  font-size: 13px;
+  color: #94a3b8;
+}

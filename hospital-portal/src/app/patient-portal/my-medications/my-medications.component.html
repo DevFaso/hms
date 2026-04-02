@@ -1,0 +1,171 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">medication</span>
+      {{ 'PORTAL.MEDICATIONS.TITLE' | translate }}
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>{{ 'PORTAL.MEDICATIONS.LOADING' | translate }}</p>
+    </div>
+  } @else if (medications().length === 0 && prescriptions().length === 0) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">medication</span>
+      <h3>{{ 'PORTAL.MEDICATIONS.EMPTY_TITLE' | translate }}</h3>
+      <p>{{ 'PORTAL.MEDICATIONS.EMPTY_DESC' | translate }}</p>
+    </div>
+  } @else {
+    @if (medications().length > 0) {
+      <section class="portal-section">
+        <h2 class="portal-section-title">{{ 'PORTAL.MEDICATIONS.ACTIVE' | translate }}</h2>
+        <div class="portal-list">
+          @for (med of medications(); track med.id) {
+            <div
+              class="portal-list-item clickable"
+              (click)="toggleMed(med.id)"
+              role="button"
+              tabindex="0"
+              (keydown.enter)="toggleMed(med.id)"
+              [class.expanded]="expandedMedId() === med.id"
+            >
+              <div class="pli-icon" style="background: #ccfbf1; color: #0d9488">
+                <span class="material-symbols-outlined">pill</span>
+              </div>
+              <div class="pli-body">
+                <span class="pli-title">{{ med.name }}</span>
+                <span class="pli-sub">{{ med.dosage }} · {{ med.frequency }}</span>
+                <span class="pli-meta"
+                  >{{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}
+                  {{ med.prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate) }} ·
+                  {{ 'PORTAL.MEDICATIONS.STARTED' | translate }}
+                  {{ med.startDate | date: 'MMM d, yyyy' }}</span
+                >
+              </div>
+              <span class="portal-status-chip" [attr.data-status]="med.status">{{
+                med.status | enumLabel: 'status'
+              }}</span>
+            </div>
+
+            @if (expandedMedId() === med.id) {
+              <div class="detail-panel">
+                <div class="detail-grid">
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.MEDICATIONS.MEDICATION' | translate }}</span>
+                    <span class="dv">{{ med.name }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.MEDICATIONS.DOSAGE' | translate }}</span>
+                    <span class="dv">{{ med.dosage }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.MEDICATIONS.FREQUENCY' | translate }}</span>
+                    <span class="dv">{{ med.frequency }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}</span>
+                    <span class="dv">{{
+                      med.prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate)
+                    }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.MEDICATIONS.START_DATE' | translate }}</span>
+                    <span class="dv">{{ med.startDate | date: 'mediumDate' }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.MEDICATIONS.STATUS' | translate }}</span>
+                    <span class="dv portal-status-chip" [attr.data-status]="med.status">{{
+                      med.status | enumLabel: 'status'
+                    }}</span>
+                  </div>
+                </div>
+              </div>
+            }
+          }
+        </div>
+      </section>
+    }
+
+    @if (prescriptions().length > 0) {
+      <section class="portal-section">
+        <h2 class="portal-section-title">{{ 'PORTAL.MEDICATIONS.PRESCRIPTIONS' | translate }}</h2>
+        <div class="portal-list">
+          @for (rx of prescriptions(); track rx.id) {
+            <div
+              class="portal-list-item clickable"
+              (click)="toggleRx(rx.id)"
+              role="button"
+              tabindex="0"
+              (keydown.enter)="toggleRx(rx.id)"
+              [class.expanded]="expandedRxId() === rx.id"
+            >
+              <div class="pli-icon" style="background: #ede9fe; color: #7c3aed">
+                <span class="material-symbols-outlined">local_pharmacy</span>
+              </div>
+              <div class="pli-body">
+                <span class="pli-title">{{ rx.medicationName }}</span>
+                <span class="pli-sub">{{ rx.dosage }} · {{ rx.frequency }}</span>
+                <span class="pli-meta">
+                  {{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}
+                  {{ rx.prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate) }}
+                  @if (rx.refillsRemaining !== undefined) {
+                    · {{ rx.refillsRemaining }}
+                    {{ 'PORTAL.MEDICATIONS.REFILLS_REMAINING' | translate | lowercase }}
+                  }
+                </span>
+              </div>
+              <span class="portal-status-chip" [attr.data-status]="rx.status">{{
+                rx.status | enumLabel: 'status'
+              }}</span>
+            </div>
+
+            @if (expandedRxId() === rx.id) {
+              <div class="detail-panel">
+                <div class="detail-grid">
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.MEDICATIONS.MEDICATION' | translate }}</span>
+                    <span class="dv">{{ rx.medicationName }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.MEDICATIONS.DOSAGE' | translate }}</span>
+                    <span class="dv">{{ rx.dosage }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.MEDICATIONS.FREQUENCY' | translate }}</span>
+                    <span class="dv">{{ rx.frequency }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}</span>
+                    <span class="dv">{{
+                      rx.prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate)
+                    }}</span>
+                  </div>
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.MEDICATIONS.PRESCRIBED_DATE' | translate }}</span>
+                    <span class="dv">{{ rx.prescribedDate | date: 'mediumDate' }}</span>
+                  </div>
+                  @if (rx.refillsRemaining !== undefined) {
+                    <div class="detail-item">
+                      <span class="dl">{{
+                        'PORTAL.MEDICATIONS.REFILLS_REMAINING' | translate
+                      }}</span>
+                      <span class="dv">{{ rx.refillsRemaining }}</span>
+                    </div>
+                  }
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.MEDICATIONS.STATUS' | translate }}</span>
+                    <span class="dv portal-status-chip" [attr.data-status]="rx.status">{{
+                      rx.status | enumLabel: 'status'
+                    }}</span>
+                  </div>
+                </div>
+              </div>
+            }
+          }
+        </div>
+      </section>
+    }
+  }
+</div>

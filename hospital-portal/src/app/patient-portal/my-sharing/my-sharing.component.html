@@ -1,0 +1,117 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">share</span>
+      {{ 'PORTAL.SHARING.TITLE' | translate }}
+    </h1>
+  </div>
+
+  <!-- Tabs -->
+  <div class="rec-tabs">
+    <button
+      class="rec-tab"
+      [class.active]="activeTab() === 'consents'"
+      (click)="activeTab.set('consents')"
+    >
+      <span class="material-symbols-outlined">handshake</span>
+      {{ 'PORTAL.SHARING.CONSENTS_TAB' | translate }}
+    </button>
+    <button
+      class="rec-tab"
+      [class.active]="activeTab() === 'access-log'"
+      (click)="switchToAccessLog()"
+    >
+      <span class="material-symbols-outlined">visibility</span>
+      {{ 'PORTAL.SHARING.ACCESS_LOG_TAB' | translate }}
+    </button>
+  </div>
+
+  <!-- CONSENTS TAB -->
+  @if (activeTab() === 'consents') {
+    @if (loadingConsents()) {
+      <div class="portal-loading">
+        <div class="portal-spinner"></div>
+        <span>{{ 'PORTAL.SHARING.LOADING_CONSENTS' | translate }}</span>
+      </div>
+    } @else if (!consents().length) {
+      <div class="portal-empty">
+        <span class="material-symbols-outlined">verified_user</span>
+        <h3>{{ 'PORTAL.SHARING.NO_CONSENTS_TITLE' | translate }}</h3>
+        <p>{{ 'PORTAL.SHARING.NO_CONSENTS_DESC' | translate }}</p>
+        <p class="rec-muted" style="margin-top: 8px">
+          {{ 'PORTAL.SHARING.NO_CONSENTS_HINT' | translate }}
+        </p>
+      </div>
+    } @else {
+      <div class="portal-list" style="margin-top: 16px">
+        @for (c of consents(); track c.id) {
+          <div class="portal-list-item sharing-consent-item">
+            <div class="pli-icon" style="background: #d1fae5">
+              <span class="material-symbols-outlined" style="color: #059669">verified_user</span>
+            </div>
+            <div class="pli-body">
+              <span class="pli-title">{{ c.fromHospitalName }} → {{ c.toHospitalName }}</span>
+              <span class="pli-sub"
+                >{{ 'PORTAL.SHARING.PURPOSE' | translate }}
+                {{ c.purpose || ('PORTAL.SHARING.TREATMENT' | translate) }}</span
+              >
+              <span class="pli-meta">
+                {{ 'PORTAL.SHARING.GRANTED' | translate }} {{ c.grantedAt | date: 'mediumDate' }}
+                @if (c.expiresAt) {
+                  · {{ 'PORTAL.SHARING.EXPIRES' | translate }}
+                  {{ c.expiresAt | date: 'mediumDate' }}
+                }
+              </span>
+            </div>
+            <div class="consent-actions">
+              <span class="portal-status-chip" [attr.data-status]="c.status">{{
+                c.status | enumLabel: 'status'
+              }}</span>
+              @if (c.status === 'ACTIVE') {
+                <button class="revoke-btn" (click)="revokeConsent(c)" [disabled]="revoking()">
+                  {{ 'PORTAL.SHARING.REVOKE' | translate }}
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+
+  <!-- ACCESS LOG TAB -->
+  @if (activeTab() === 'access-log') {
+    @if (loadingLog()) {
+      <div class="portal-loading">
+        <div class="portal-spinner"></div>
+        <span>{{ 'PORTAL.SHARING.LOADING_LOG' | translate }}</span>
+      </div>
+    } @else if (!accessLog().length) {
+      <div class="portal-empty">
+        <span class="material-symbols-outlined">shield</span>
+        <h3>{{ 'PORTAL.SHARING.NO_ACCESS_TITLE' | translate }}</h3>
+        <p>{{ 'PORTAL.SHARING.NO_ACCESS_DESC' | translate }}</p>
+      </div>
+    } @else {
+      <div class="portal-list" style="margin-top: 16px">
+        @for (entry of accessLog(); track entry.id) {
+          <div class="portal-list-item">
+            <div class="pli-icon" style="background: #f1f5f9">
+              <span class="material-symbols-outlined" style="color: #64748b">visibility</span>
+            </div>
+            <div class="pli-body">
+              <span class="pli-title">{{ entry.accessedBy }}</span>
+              <span class="pli-sub"
+                >{{ entry.accessedByRole | enumLabel: 'role' }} ·
+                {{ entry.accessType | enumLabel: 'accessType' }}</span
+              >
+              <span class="pli-meta"
+                >{{ entry.resourceAccessed }} · {{ entry.accessedAt | date: 'medium' }}</span
+              >
+            </div>
+          </div>
+        }
+      </div>
+    }
+  }
+</div>
