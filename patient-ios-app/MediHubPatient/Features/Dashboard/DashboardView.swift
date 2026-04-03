@@ -33,59 +33,6 @@ struct DashboardView: View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
-                    // MARK: Welcome header
-
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(String(format: "welcome_user".localized,
-                                        authManager.currentUser?.firstName ?? "patient".localized))
-                                .font(.system(size: 26, weight: .bold, design: .rounded))
-                            Text(Date.now.formatted(.dateTime.weekday(.wide).month().day()))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if vm.unreadNotificationCount > 0 {
-                            NavigationLink(value: DashboardDestination.notifications) {
-                                ZStack(alignment: .topTrailing) {
-                                    Image(systemName: "bell.fill")
-                                        .font(.title2)
-                                        .foregroundStyle(Color("BrandBlue"))
-                                        .frame(width: 44, height: 44)
-                                        .background(Color("BrandBlue").opacity(0.1))
-                                        .clipShape(Circle())
-                                    Text("\(vm.unreadNotificationCount)")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundStyle(.white)
-                                        .frame(width: 18, height: 18)
-                                        .background(Color.red)
-                                        .clipShape(Circle())
-                                        .offset(x: 4, y: -4)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-
-                    // MARK: Health alerts
-
-                    if let allergies = vm.healthSummary?.allergies, !allergies.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(allergies, id: \.self) { allergy in
-                                    Label(allergy, systemImage: "exclamationmark.triangle.fill")
-                                        .font(.caption.weight(.semibold))
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 7)
-                                        .background(Color.red.opacity(0.08))
-                                        .foregroundStyle(.red)
-                                        .clipShape(Capsule())
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                    }
-
                     // MARK: Quick links grid
 
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
