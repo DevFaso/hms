@@ -97,4 +97,17 @@ public class LabQcEventServiceImpl implements LabQcEventService {
         return qcEventRepository.findByHospitalId(scopedHospitalId, pageable)
             .map(qcEventMapper::toResponseDTO);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<LabQcEventResponseDTO> getQcEventsByDefinition(UUID testDefinitionId, Pageable pageable, Locale locale) {
+        UUID scopedHospitalId = roleValidator.requireActiveHospitalId();
+        if (scopedHospitalId == null) {
+            // SUPER_ADMIN: no hospital scoping — return across all hospitals
+            return qcEventRepository.findByTestDefinitionId(testDefinitionId, pageable)
+                .map(qcEventMapper::toResponseDTO);
+        }
+        return qcEventRepository.findByTestDefinitionIdAndHospitalId(testDefinitionId, scopedHospitalId, pageable)
+            .map(qcEventMapper::toResponseDTO);
+    }
 }

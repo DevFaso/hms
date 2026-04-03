@@ -1,8 +1,11 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.LabTestDefinitionApprovalStatus;
 import com.example.hms.model.converter.LabTestReferenceRangeConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Entity;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.FetchType;
@@ -24,10 +27,12 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 @Entity
 @Table(
@@ -110,6 +115,30 @@ public class LabTestDefinition extends BaseEntity {
     @JoinColumn(name = "hospital_id",
         foreignKey = @ForeignKey(name = "fk_labtestdef_hospital"))
     private Hospital hospital;
+
+    // ── Approval workflow ──────────────────────────────────────────────────────
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "approval_status", nullable = false, length = 40)
+    @Builder.Default
+    private LabTestDefinitionApprovalStatus approvalStatus = LabTestDefinitionApprovalStatus.DRAFT;
+
+    /** UUID of the Lab Director who approved or rejected this definition. */
+    @Column(name = "approved_by_id")
+    private UUID approvedById;
+
+    @Column(name = "approved_at")
+    private LocalDateTime approvedAt;
+
+    /** UUID of the Quality Manager who completed QA review. */
+    @Column(name = "reviewed_by_id")
+    private UUID reviewedById;
+
+    @Column(name = "reviewed_at")
+    private LocalDateTime reviewedAt;
+
+    @Column(name = "rejection_reason", length = 2048)
+    private String rejectionReason;
 
     @PrePersist
     @PreUpdate

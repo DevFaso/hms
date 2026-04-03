@@ -12,4 +12,8 @@ import java.util.UUID;
 public interface LabQcEventRepository extends JpaRepository<LabQcEvent, UUID> {
 
     Page<LabQcEvent> findByHospitalId(UUID hospitalId, Pageable pageable);
+
+    Page<LabQcEvent> findByTestDefinitionId(UUID testDefinitionId, Pageable pageable);
+
+    Page<LabQcEvent> findByTestDefinitionIdAndHospitalId(UUID testDefinitionId, UUID hospitalId, Pageable pageable);
 }
