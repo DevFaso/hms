@@ -1,0 +1,256 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">folder_shared</span>
+      {{ 'PORTAL.RECORDS.TITLE' | translate }}
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <span>{{ 'PORTAL.RECORDS.LOADING' | translate }}</span>
+    </div>
+  } @else {
+    <!-- Action bar -->
+    <div class="records-actions">
+      <button class="rec-action-btn" (click)="printRecords()">
+        <span class="material-symbols-outlined">print</span>
+        {{ 'PORTAL.RECORDS.PRINT' | translate }}
+      </button>
+    </div>
+
+    <!-- Tabs -->
+    <div class="rec-tabs">
+      @for (tab of tabs; track tab.key) {
+        <button
+          class="rec-tab"
+          [class.active]="activeTab() === tab.key"
+          (click)="activeTab.set(tab.key)"
+        >
+          <span class="material-symbols-outlined">{{ tab.icon }}</span>
+          {{ tab.labelKey | translate }}
+        </button>
+      }
+    </div>
+
+    <!-- Overview -->
+    @if (activeTab() === 'overview') {
+      <div class="rec-section">
+        <h2 class="portal-section-title">{{ 'PORTAL.RECORDS.PERSONAL_INFO' | translate }}</h2>
+        @if (summary()) {
+          <div class="rec-info-grid">
+            <div class="rec-info-item">
+              <span class="info-label">{{ 'PORTAL.RECORDS.NAME' | translate }}</span>
+              <span class="info-value"
+                >{{ summary()!.profile.firstName }} {{ summary()!.profile.lastName }}</span
+              >
+            </div>
+            <div class="rec-info-item">
+              <span class="info-label">{{ 'PORTAL.RECORDS.DATE_OF_BIRTH' | translate }}</span>
+              <span class="info-value">{{
+                summary()!.profile.dateOfBirth | date: 'mediumDate'
+              }}</span>
+            </div>
+            <div class="rec-info-item">
+              <span class="info-label">{{ 'PORTAL.RECORDS.GENDER' | translate }}</span>
+              <span class="info-value">{{ summary()!.profile.gender | enumLabel: 'gender' }}</span>
+            </div>
+            <div class="rec-info-item">
+              <span class="info-label">{{ 'PORTAL.RECORDS.BLOOD_TYPE' | translate }}</span>
+              <span class="info-value">{{
+                summary()!.profile.bloodType || ('PORTAL.RECORDS.NOT_RECORDED' | translate)
+              }}</span>
+            </div>
+            <div class="rec-info-item">
+              <span class="info-label">{{ 'PORTAL.RECORDS.PRIMARY_PROVIDER' | translate }}</span>
+              <span class="info-value">{{
+                summary()!.profile.primaryCareProvider ||
+                  ('PORTAL.RECORDS.NOT_ASSIGNED' | translate)
+              }}</span>
+            </div>
+            <div class="rec-info-item">
+              <span class="info-label">{{ 'PORTAL.RECORDS.FACILITY' | translate }}</span>
+              <span class="info-value">{{ summary()!.profile.facility || '—' }}</span>
+            </div>
+          </div>
+        }
+
+        <h2 class="portal-section-title" style="margin-top: 24px">
+          {{ 'PORTAL.RECORDS.ALLERGIES' | translate }}
+        </h2>
+        @if (summary()?.allergies?.length) {
+          <div class="rec-chip-list">
+            @for (a of summary()!.allergies; track a) {
+              <span class="rec-chip rec-chip-danger">{{ a }}</span>
+            }
+          </div>
+        } @else {
+          <p class="rec-muted">{{ 'PORTAL.RECORDS.NO_ALLERGIES' | translate }}</p>
+        }
+
+        <h2 class="portal-section-title" style="margin-top: 24px">
+          {{ 'PORTAL.RECORDS.ACTIVE_CONDITIONS' | translate }}
+        </h2>
+        @if (summary()?.activeDiagnoses?.length) {
+          <div class="rec-chip-list">
+            @for (d of summary()!.activeDiagnoses; track d) {
+              <span class="rec-chip">{{ d }}</span>
+            }
+          </div>
+        } @else {
+          <p class="rec-muted">{{ 'PORTAL.RECORDS.NO_CONDITIONS' | translate }}</p>
+        }
+      </div>
+    }
+
+    <!-- Encounters -->
+    @if (activeTab() === 'encounters') {
+      <div class="rec-section">
+        @if (!encounters().length) {
+          <div class="portal-empty">
+            <span class="material-symbols-outlined">event_busy</span>
+            <h3>{{ 'PORTAL.RECORDS.NO_VISITS' | translate }}</h3>
+            <p>{{ 'PORTAL.RECORDS.VISITS_DESC' | translate }}</p>
+          </div>
+        } @else {
+          <div class="portal-list">
+            @for (e of encounters(); track e.id) {
+              <div class="portal-list-item">
+                <div class="pli-icon" style="background: #dbeafe">
+                  <span class="material-symbols-outlined" style="color: #2563eb">stethoscope</span>
+                </div>
+                <div class="pli-body">
+                  <span class="pli-title"
+                    >{{ e.type | enumLabel: 'encounterType' }} — {{ e.providerName }}</span
+                  >
+                  <span class="pli-sub">{{ e.chiefComplaint }}</span>
+                  @if (e.diagnosisSummary) {
+                    <span class="pli-meta"
+                      >{{ 'PORTAL.RECORDS.DIAGNOSIS_PREFIX' | translate }}
+                      {{ e.diagnosisSummary }}</span
+                    >
+                  }
+                  <span class="pli-meta"
+                    >{{ e.date | date: 'mediumDate' }} · {{ e.department }}</span
+                  >
+                </div>
+                <span class="portal-status-chip" [attr.data-status]="e.status">{{
+                  e.status | enumLabel: 'status'
+                }}</span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Lab Results -->
+    @if (activeTab() === 'labs') {
+      <div class="rec-section">
+        @if (!labs().length) {
+          <div class="portal-empty">
+            <span class="material-symbols-outlined">science</span>
+            <h3>{{ 'PORTAL.RECORDS.NO_LABS' | translate }}</h3>
+            <p>{{ 'PORTAL.RECORDS.LABS_DESC' | translate }}</p>
+          </div>
+        } @else {
+          <div class="portal-list">
+            @for (l of labs(); track l.id) {
+              <div class="portal-list-item" [class.item-abnormal]="l.isAbnormal">
+                <div class="pli-icon" [style.background]="l.isAbnormal ? '#fee2e2' : '#d1fae5'">
+                  <span
+                    class="material-symbols-outlined"
+                    [style.color]="l.isAbnormal ? '#dc2626' : '#059669'"
+                  >
+                    {{ l.isAbnormal ? 'warning' : 'check_circle' }}
+                  </span>
+                </div>
+                <div class="pli-body">
+                  <span class="pli-title">{{ l.testName }}</span>
+                  <span class="pli-sub"
+                    >{{ 'PORTAL.RECORDS.RESULT_PREFIX' | translate }} {{ l.result }}
+                    <span class="rec-muted"
+                      >({{ 'PORTAL.RECORDS.REF_PREFIX' | translate }} {{ l.referenceRange }})</span
+                    >
+                  </span>
+                  <span class="pli-meta">{{ l.collectedDate | date: 'mediumDate' }}</span>
+                </div>
+                <span class="portal-status-chip" [attr.data-status]="l.status">{{
+                  l.status | enumLabel: 'status'
+                }}</span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Medications -->
+    @if (activeTab() === 'medications') {
+      <div class="rec-section">
+        @if (!medications().length) {
+          <div class="portal-empty">
+            <span class="material-symbols-outlined">medication</span>
+            <h3>{{ 'PORTAL.RECORDS.NO_MEDS' | translate }}</h3>
+            <p>{{ 'PORTAL.RECORDS.MEDS_DESC' | translate }}</p>
+          </div>
+        } @else {
+          <div class="portal-list">
+            @for (m of medications(); track m.id) {
+              <div class="portal-list-item">
+                <div class="pli-icon" style="background: #fef3c7">
+                  <span class="material-symbols-outlined" style="color: #d97706">medication</span>
+                </div>
+                <div class="pli-body">
+                  <span class="pli-title">{{ m.name }}</span>
+                  <span class="pli-sub">{{ m.dosage }} · {{ m.frequency }}</span>
+                  <span class="pli-meta"
+                    >{{ 'PORTAL.RECORDS.PRESCRIBED_BY' | translate }} {{ m.prescribedBy }} ·
+                    {{ m.startDate | date: 'mediumDate' }}</span
+                  >
+                </div>
+                <span class="portal-status-chip" [attr.data-status]="m.status">{{
+                  m.status | enumLabel: 'status'
+                }}</span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Immunizations -->
+    @if (activeTab() === 'immunizations') {
+      <div class="rec-section">
+        @if (!immunizations().length) {
+          <div class="portal-empty">
+            <span class="material-symbols-outlined">vaccines</span>
+            <h3>{{ 'PORTAL.RECORDS.NO_IMMUNIZATIONS' | translate }}</h3>
+            <p>{{ 'PORTAL.RECORDS.IMMUNIZATIONS_DESC' | translate }}</p>
+          </div>
+        } @else {
+          <div class="portal-list">
+            @for (im of immunizations(); track im.id) {
+              <div class="portal-list-item">
+                <div class="pli-icon" style="background: #ede9fe">
+                  <span class="material-symbols-outlined" style="color: #7c3aed">vaccines</span>
+                </div>
+                <div class="pli-body">
+                  <span class="pli-title">{{ im.vaccineName }}</span>
+                  <span class="pli-sub"
+                    >{{ 'PORTAL.RECORDS.ADMINISTERED_BY' | translate }} {{ im.provider }}</span
+                  >
+                  <span class="pli-meta">{{ im.dateAdministered | date: 'mediumDate' }}</span>
+                </div>
+                <span class="portal-status-chip" [attr.data-status]="im.status">{{
+                  im.status | enumLabel: 'status'
+                }}</span>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  }
+</div>

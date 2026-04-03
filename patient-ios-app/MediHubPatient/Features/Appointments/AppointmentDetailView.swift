@@ -106,7 +106,7 @@ struct AppointmentDetailView: View {
 
     // MARK: - Detail Card
 
-    private func detailCard<Content: View>(title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+    private func detailCard(title: String, icon: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
@@ -152,29 +152,29 @@ struct AppointmentDetailView: View {
 
     private var statusSwiftColor: Color {
         switch appointment.status?.uppercased() {
-        case "SCHEDULED", "CONFIRMED": return .green
-        case "PENDING":                return .yellow
-        case "CANCELLED", "NO_SHOW":   return .red
-        case "COMPLETED":              return .gray
-        case "RESCHEDULED":            return .orange
-        default:                       return .blue
+        case "SCHEDULED", "CONFIRMED": .green
+        case "PENDING": .yellow
+        case "CANCELLED", "NO_SHOW": .red
+        case "COMPLETED": .gray
+        case "RESCHEDULED": .orange
+        default: .blue
         }
     }
 
     private var statusIcon: String {
         switch appointment.status?.uppercased() {
-        case "SCHEDULED", "CONFIRMED": return "calendar.badge.checkmark"
-        case "PENDING":                return "clock.badge.questionmark"
-        case "CANCELLED":              return "calendar.badge.minus"
-        case "NO_SHOW":                return "person.slash"
-        case "COMPLETED":              return "checkmark.circle.fill"
-        case "RESCHEDULED":            return "calendar.badge.clock"
-        default:                       return "calendar"
+        case "SCHEDULED", "CONFIRMED": "calendar.badge.checkmark"
+        case "PENDING": "clock.badge.questionmark"
+        case "CANCELLED": "calendar.badge.minus"
+        case "NO_SHOW": "person.slash"
+        case "COMPLETED": "checkmark.circle.fill"
+        case "RESCHEDULED": "calendar.badge.clock"
+        default: "calendar"
         }
     }
 
     private func formatDate(_ iso: String?) -> String {
-        guard let iso = iso else { return "—" }
+        guard let iso else { return "—" }
         let inFmt = DateFormatter()
         inFmt.dateFormat = "yyyy-MM-dd"
         guard let date = inFmt.date(from: iso) else { return iso }
@@ -184,7 +184,7 @@ struct AppointmentDetailView: View {
     }
 
     private func formatDateTime(_ iso: String?) -> String {
-        guard let iso = iso else { return "—" }
+        guard let iso else { return "—" }
         let inFmt = DateFormatter()
         inFmt.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS"
         if let date = inFmt.date(from: iso) {

@@ -130,8 +130,8 @@ struct ProxyDetailView: View {
             }
 
             Text(isGrantor
-                 ? (proxy.proxyDisplayName ?? proxy.proxyUsername ?? "User")
-                 : (proxy.grantorName ?? "Patient"))
+                ? (proxy.proxyDisplayName ?? proxy.proxyUsername ?? "User")
+                : (proxy.grantorName ?? "Patient"))
                 .font(.title2).bold()
 
             if let relationship = proxy.relationship {
@@ -156,7 +156,7 @@ struct ProxyDetailView: View {
 
     // MARK: - Detail Card
 
-    private func detailCard<Content: View>(title: String, icon: String, @ViewBuilder content: () -> Content) -> some View {
+    private func detailCard(title: String, icon: String, @ViewBuilder content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
@@ -202,21 +202,21 @@ struct ProxyDetailView: View {
 
     private var statusColor: Color {
         switch proxy.status?.uppercased() {
-        case "ACTIVE":  return .green
-        case "REVOKED": return .red
-        case "EXPIRED": return .orange
-        default:        return .gray
+        case "ACTIVE": .green
+        case "REVOKED": .red
+        case "EXPIRED": .orange
+        default: .gray
         }
     }
 
     private func permissionIcon(_ perm: String) -> String {
         switch perm.uppercased() {
-        case "VIEW_RECORDS":       return "doc.text.fill"
-        case "VIEW_APPOINTMENTS":  return "calendar"
-        case "VIEW_MEDICATIONS":   return "pills.fill"
-        case "VIEW_LAB_RESULTS":   return "testtube.2"
-        case "VIEW_BILLING":       return "creditcard.fill"
-        default:                   return "eye.fill"
+        case "VIEW_RECORDS": "doc.text.fill"
+        case "VIEW_APPOINTMENTS": "calendar"
+        case "VIEW_MEDICATIONS": "pills.fill"
+        case "VIEW_LAB_RESULTS": "testtube.2"
+        case "VIEW_BILLING": "creditcard.fill"
+        default: "eye.fill"
         }
     }
 
@@ -226,12 +226,12 @@ struct ProxyDetailView: View {
 
     private func permissionDescription(_ perm: String) -> String {
         switch perm.uppercased() {
-        case "VIEW_RECORDS":       return "Access to medical records and health summary"
-        case "VIEW_APPOINTMENTS":  return "View upcoming and past appointments"
-        case "VIEW_MEDICATIONS":   return "View current medications and prescriptions"
-        case "VIEW_LAB_RESULTS":   return "View lab test results"
-        case "VIEW_BILLING":       return "View invoices and payment history"
-        default:                   return "General access permission"
+        case "VIEW_RECORDS": "Access to medical records and health summary"
+        case "VIEW_APPOINTMENTS": "View upcoming and past appointments"
+        case "VIEW_MEDICATIONS": "View current medications and prescriptions"
+        case "VIEW_LAB_RESULTS": "View lab test results"
+        case "VIEW_BILLING": "View invoices and payment history"
+        default: "General access permission"
         }
     }
 

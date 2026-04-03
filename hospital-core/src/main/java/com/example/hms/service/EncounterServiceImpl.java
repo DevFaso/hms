@@ -40,6 +40,7 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.ObgynReferralRepository;
+import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.StaffRepository;
@@ -230,6 +231,7 @@ public class EncounterServiceImpl implements EncounterService {
 
     private final EncounterRepository encounterRepository;
     private final PatientRepository patientRepository;
+    private final PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
     private final StaffRepository staffRepository;
     private final HospitalRepository hospitalRepository;
     private final AppointmentRepository appointmentRepository;
@@ -483,7 +485,10 @@ public class EncounterServiceImpl implements EncounterService {
 
     private EncounterResolution resolveEncounterResolution(EncounterRequestDTO request, Locale locale) {
         UUID patientId = resolvePatientId(request, locale);
-        Patient patient = patientRepository.findById(patientId)
+        // Use unscoped query: multi-hospital patients have Patient.hospitalId set to
+        // their FIRST hospital, so the tenant-scoped findById misses them when accessed
+        // from a different hospital. Security is enforced via registration check below.
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_PATIENT_NOT_FOUND, null, locale)));
 
         UUID staffId = resolveStaffId(request, locale);
@@ -493,6 +498,11 @@ public class EncounterServiceImpl implements EncounterService {
         UUID hospitalId = resolveHospitalId(request, locale);
         Hospital hospital = hospitalRepository.findById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(messageSource.getMessage(MSG_HOSPITAL_NOT_FOUND, null, locale)));
+
+        // SECURITY: Verify the patient is registered at this hospital
+        if (!patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)) {
+            throw new ResourceNotFoundException(messageSource.getMessage(MSG_PATIENT_NOT_FOUND, null, locale));
+        }
 
         ensureStaffHospitalAlignment(staff, hospitalId, locale);
 

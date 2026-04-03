@@ -27,10 +27,10 @@ final class LoginViewModel: ObservableObject {
 
         if available {
             switch context.biometryType {
-            case .faceID:    biometricType = "Face ID"
-            case .touchID:   biometricType = "Touch ID"
-            case .opticID:   biometricType = "Optic ID"
-            default:         biometricType = "Biometrics"
+            case .faceID: biometricType = "Face ID"
+            case .touchID: biometricType = "Touch ID"
+            case .opticID: biometricType = "Optic ID"
+            default: biometricType = "Biometrics"
             }
         }
     }
@@ -50,19 +50,19 @@ final class LoginViewModel: ObservableObject {
                 guard let self else { return }
                 if success {
                     do {
-                        try await self.authManager.biometricLogin()
+                        try await authManager.biometricLogin()
                     } catch {
-                        self.errorMessage = error.localizedDescription
+                        errorMessage = error.localizedDescription
                     }
                 } else {
                     // User cancelled — don't show error
                     if let laError = error as? LAError, laError.code == .userCancel {
                         // silently ignore
                     } else {
-                        self.errorMessage = error?.localizedDescription
+                        errorMessage = error?.localizedDescription
                     }
                 }
-                self.isLoading = false
+                isLoading = false
             }
         }
     }
@@ -71,7 +71,8 @@ final class LoginViewModel: ObservableObject {
 
     func loginWithCredentials() {
         guard !username.trimmingCharacters(in: .whitespaces).isEmpty,
-              !password.isEmpty else {
+              !password.isEmpty
+        else {
             errorMessage = "Please enter your username and password."
             return
         }

@@ -1,0 +1,194 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">receipt_long</span>
+      {{ 'PORTAL.BILLING.TITLE' | translate }}
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>{{ 'PORTAL.BILLING.LOADING' | translate }}</p>
+    </div>
+  } @else if (invoices().length === 0) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">payments</span>
+      <h3>{{ 'PORTAL.BILLING.EMPTY_TITLE' | translate }}</h3>
+      <p>{{ 'PORTAL.BILLING.EMPTY_DESC' | translate }}</p>
+    </div>
+  } @else {
+    @if (totalBalance() > 0) {
+      <div class="billing-summary-card">
+        <div class="bsc-icon">
+          <span class="material-symbols-outlined">account_balance_wallet</span>
+        </div>
+        <div class="bsc-body">
+          <span class="bsc-label">{{ 'PORTAL.BILLING.TOTAL_BALANCE' | translate }}</span>
+          <span class="bsc-amount">{{ totalBalance() | currency }}</span>
+        </div>
+      </div>
+    }
+
+    <section class="portal-section">
+      <h2 class="portal-section-title">{{ 'PORTAL.BILLING.STATEMENTS' | translate }}</h2>
+      <div class="portal-list">
+        @for (inv of invoices(); track inv.id) {
+          <div class="portal-list-item">
+            <div
+              class="pli-icon"
+              [style.background]="inv.balance > 0 ? '#fef3c7' : '#d1fae5'"
+              [style.color]="inv.balance > 0 ? '#d97706' : '#059669'"
+            >
+              <span class="material-symbols-outlined">{{
+                inv.balance > 0 ? 'pending' : 'check_circle'
+              }}</span>
+            </div>
+            <div class="pli-body">
+              <span class="pli-title">{{
+                inv.description || inv.facility || ('PORTAL.BILLING.MEDICAL_SERVICES' | translate)
+              }}</span>
+              <span class="pli-sub"
+                >{{ 'PORTAL.BILLING.INVOICE' | translate }} #{{ inv.invoiceNumber }} ·
+                {{ inv.date | date: 'MMM d, yyyy' }}</span
+              >
+              <span class="pli-meta"
+                >{{ 'PORTAL.BILLING.DUE' | translate }}
+                {{ inv.dueDate | date: 'MMM d, yyyy' }}</span
+              >
+            </div>
+            <div class="pli-end">
+              <span class="pli-amount" [class.has-balance]="inv.balance > 0">{{
+                inv.balance | currency
+              }}</span>
+              <span class="pli-status" [attr.data-status]="inv.status">{{
+                inv.status | enumLabel: 'status'
+              }}</span>
+              @if (inv.balance > 0 && inv.status !== 'DRAFT') {
+                <button class="pay-btn" (click)="openPayDialog(inv)">
+                  <span class="material-symbols-outlined">payment</span>
+                  {{ 'PORTAL.BILLING.PAY_NOW' | translate }}
+                </button>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </section>
+  }
+
+  <!-- Payment Dialog -->
+  @if (payingInvoice()) {
+    <div
+      class="pay-overlay"
+      role="dialog"
+      aria-modal="true"
+      (click)="closePayDialog()"
+      (keydown.escape)="closePayDialog()"
+      tabindex="-1"
+    >
+      <div
+        class="pay-dialog"
+        role="document"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closePayDialog()"
+      >
+        <div class="pay-dialog-header">
+          <h3>
+            <span class="material-symbols-outlined">payment</span>
+            {{ 'PORTAL.BILLING.MAKE_PAYMENT' | translate }}
+          </h3>
+          <button class="pay-dialog-close" (click)="closePayDialog()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="pay-dialog-body">
+          <div class="pay-invoice-info">
+            <span class="pay-label">{{ 'PORTAL.BILLING.INVOICE' | translate }}</span>
+            <span class="pay-value">#{{ payingInvoice()!.invoiceNumber }}</span>
+          </div>
+          <div class="pay-invoice-info">
+            <span class="pay-label">{{ 'PORTAL.BILLING.BALANCE_DUE' | translate }}</span>
+            <span class="pay-value pay-balance">{{ payingInvoice()!.balance | currency }}</span>
+          </div>
+
+          @if (payError()) {
+            <div class="pay-error">{{ payError() }}</div>
+          }
+          @if (paySuccess()) {
+            <div class="pay-success">{{ paySuccess() }}</div>
+          }
+
+          @if (!paySuccess()) {
+            <div class="pay-field">
+              <label for="payAmount">{{ 'PORTAL.BILLING.AMOUNT' | translate }}</label>
+              <input
+                id="payAmount"
+                type="number"
+                [min]="0.01"
+                [max]="payingInvoice()!.balance"
+                step="0.01"
+                [(ngModel)]="payAmount"
+                [placeholder]="'PORTAL.BILLING.ENTER_AMOUNT' | translate"
+              />
+            </div>
+
+            <div class="pay-field">
+              <label for="payMethod">{{ 'PORTAL.BILLING.PAYMENT_METHOD' | translate }}</label>
+              <select id="payMethod" [(ngModel)]="payMethod">
+                <option value="CARD">{{ 'PORTAL.BILLING.CARD' | translate }}</option>
+                <option value="BANK_TRANSFER">
+                  {{ 'PORTAL.BILLING.BANK_TRANSFER' | translate }}
+                </option>
+                <option value="MOBILE_MONEY">
+                  {{ 'PORTAL.BILLING.MOBILE_MONEY' | translate }}
+                </option>
+                <option value="CASH">{{ 'PORTAL.BILLING.CASH' | translate }}</option>
+              </select>
+            </div>
+
+            <div class="pay-field">
+              <label for="payRef">{{ 'PORTAL.BILLING.REFERENCE' | translate }}</label>
+              <input
+                id="payRef"
+                type="text"
+                [(ngModel)]="payReference"
+                [placeholder]="'PORTAL.BILLING.REFERENCE_PLACEHOLDER' | translate"
+                maxlength="500"
+              />
+            </div>
+
+            <div class="pay-actions">
+              <button
+                class="pay-cancel-btn"
+                (click)="closePayDialog()"
+                [disabled]="payProcessing()"
+              >
+                {{ 'PORTAL.BILLING.CANCEL' | translate }}
+              </button>
+              <button
+                class="pay-submit-btn"
+                (click)="submitPayment()"
+                [disabled]="payProcessing() || !payAmount || payAmount <= 0"
+              >
+                @if (payProcessing()) {
+                  <span class="pay-spinner"></span> {{ 'PORTAL.BILLING.PROCESSING' | translate }}
+                } @else {
+                  {{ 'PORTAL.BILLING.PAY' | translate }}
+                  {{ payAmount ? (payAmount | currency) : '' }}
+                }
+              </button>
+            </div>
+          } @else {
+            <div class="pay-actions">
+              <button class="pay-submit-btn" (click)="closePayDialog()">
+                {{ 'PORTAL.BILLING.DONE' | translate }}
+              </button>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

@@ -26,6 +26,8 @@ export interface PatientProfileDTO {
   facility: string;
   memberSince: string;
   profileImageUrl: string | null;
+  hospitalId?: string;
+  hospitalName?: string;
 }
 
 export interface HealthSummaryDTO {
@@ -98,6 +100,21 @@ export interface PortalEncounter {
   status: string;
 }
 
+/** Raw shape returned by the backend EncounterResponseDTO */
+interface EncounterApiResponse {
+  id: string;
+  encounterDate: string;
+  encounterType: string;
+  staffName: string;
+  staffFullName: string;
+  departmentName: string;
+  status: string;
+  note?: {
+    chiefComplaint?: string;
+    assessment?: string;
+  };
+}
+
 export interface PortalInvoice {
   id: string;
   invoiceNumber: string;
@@ -154,11 +171,22 @@ export interface PatientConsent {
   fromHospitalName: string;
   toHospitalId: string;
   toHospitalName: string;
-  consentType: string;
   purpose: string;
   grantedAt: string;
   expiresAt: string;
   status: string;
+}
+
+/** Raw shape from backend PatientConsentResponseDTO */
+interface ConsentApiResponse {
+  id: string;
+  consentGiven: boolean;
+  consentTimestamp: string;
+  consentExpiration: string;
+  purpose: string;
+  patientId: string;
+  fromHospital: { id: string; name: string };
+  toHospital: { id: string; name: string };
 }
 
 export interface PortalConsentRequest {
@@ -182,11 +210,10 @@ export interface MedicationRefill {
   id: string;
   prescriptionId: string;
   medicationName: string;
-  dosage: string;
   preferredPharmacy: string;
   status: string;
   requestedAt: string;
-  completedAt: string | null;
+  updatedAt: string | null;
   notes: string;
 }
 
@@ -322,8 +349,19 @@ export class PatientPortalService {
   }
 
   getMyEncounters(): Observable<PortalEncounter[]> {
-    return this.http.get<ApiWrapper<PortalEncounter[]>>(`${this.base}/encounters`).pipe(
-      map((r) => r.data ?? []),
+    return this.http.get<ApiWrapper<EncounterApiResponse[]>>(`${this.base}/encounters`).pipe(
+      map((r) =>
+        (r.data ?? []).map((e) => ({
+          id: e.id,
+          date: e.encounterDate,
+          type: e.encounterType ?? '',
+          providerName: e.staffName ?? e.staffFullName ?? '',
+          department: e.departmentName ?? '',
+          chiefComplaint: e.note?.chiefComplaint ?? '',
+          diagnosisSummary: e.note?.assessment ?? '',
+          status: e.status ?? '',
+        })),
+      ),
       catchError(() => of([])),
     );
   }
@@ -372,19 +410,33 @@ export class PatientPortalService {
 
   getMyConsents(): Observable<PatientConsent[]> {
     return this.http
-      .get<ApiWrapper<PageWrapper<PatientConsent>>>(`${this.base}/consents`, {
+      .get<ApiWrapper<PageWrapper<ConsentApiResponse>>>(`${this.base}/consents`, {
         params: { page: 0, size: 50 },
       })
       .pipe(
-        map((r) => r.data?.content ?? []),
+        map((r) => (r.data?.content ?? []).map((c) => this.mapConsent(c))),
         catchError(() => of([])),
       );
   }
 
   grantConsent(dto: PortalConsentRequest): Observable<PatientConsent> {
     return this.http
-      .post<ApiWrapper<PatientConsent>>(`${this.base}/consents`, dto)
-      .pipe(map((r) => r.data));
+      .post<ApiWrapper<ConsentApiResponse>>(`${this.base}/consents`, dto)
+      .pipe(map((r) => this.mapConsent(r.data)));
+  }
+
+  private mapConsent(c: ConsentApiResponse): PatientConsent {
+    return {
+      id: c.id,
+      fromHospitalId: c.fromHospital?.id ?? '',
+      fromHospitalName: c.fromHospital?.name ?? '',
+      toHospitalId: c.toHospital?.id ?? '',
+      toHospitalName: c.toHospital?.name ?? '',
+      purpose: c.purpose ?? '',
+      grantedAt: c.consentTimestamp ?? '',
+      expiresAt: c.consentExpiration ?? '',
+      status: c.consentGiven ? 'ACTIVE' : 'REVOKED',
+    };
   }
 
   revokeConsent(fromHospitalId: string, toHospitalId: string): Observable<void> {

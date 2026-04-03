@@ -1,0 +1,186 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">calendar_month</span>
+      {{ 'PORTAL.APPOINTMENTS.TITLE' | translate }}
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>{{ 'PORTAL.APPOINTMENTS.LOADING' | translate }}</p>
+    </div>
+  } @else if (appointments().length === 0) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">event_available</span>
+      <h3>{{ 'PORTAL.APPOINTMENTS.EMPTY_TITLE' | translate }}</h3>
+      <p>{{ 'PORTAL.APPOINTMENTS.EMPTY_DESC' | translate }}</p>
+    </div>
+  } @else {
+    <!-- Upcoming -->
+    @if (upcoming().length > 0) {
+      <section class="portal-section">
+        <h2 class="portal-section-title">{{ 'PORTAL.APPOINTMENTS.UPCOMING' | translate }}</h2>
+        @for (appt of upcoming(); track appt.id) {
+          <div
+            class="portal-appt-card"
+            (click)="toggleExpand(appt.id)"
+            role="button"
+            tabindex="0"
+            (keydown.enter)="toggleExpand(appt.id)"
+            [class.expanded]="expandedId() === appt.id"
+          >
+            <div class="pac-date">
+              <span class="pac-month">{{ appt.date | date: 'MMM' }}</span>
+              <span class="pac-day">{{ appt.date | date: 'd' }}</span>
+            </div>
+            <div class="pac-body">
+              <span class="pac-provider">{{
+                appt.providerName || ('PORTAL.APPOINTMENTS.PROVIDER' | translate)
+              }}</span>
+              <span class="pac-detail">{{
+                appt.reason || appt.department || ('PORTAL.APPOINTMENTS.GENERAL_VISIT' | translate)
+              }}</span>
+              <span class="pac-time">
+                <span class="material-symbols-outlined" style="font-size: 14px">schedule</span>
+                {{ appt.startTime }} {{ appt.location ? '· ' + appt.location : '' }}
+              </span>
+            </div>
+            <span class="pac-status" [attr.data-status]="appt.status">{{
+              appt.status | enumLabel: 'status'
+            }}</span>
+          </div>
+
+          @if (expandedId() === appt.id) {
+            <div class="appt-detail-panel">
+              <div class="appt-detail-grid">
+                <div class="appt-detail-item">
+                  <span class="adl">{{ 'PORTAL.APPOINTMENTS.DATE' | translate }}</span>
+                  <span class="adv">{{ appt.date | date: 'fullDate' }}</span>
+                </div>
+                <div class="appt-detail-item">
+                  <span class="adl">{{ 'PORTAL.APPOINTMENTS.TIME' | translate }}</span>
+                  <span class="adv"
+                    >{{ appt.startTime }}{{ appt.endTime ? ' – ' + appt.endTime : '' }}</span
+                  >
+                </div>
+                <div class="appt-detail-item">
+                  <span class="adl">{{ 'PORTAL.APPOINTMENTS.PROVIDER' | translate }}</span>
+                  <span class="adv">{{
+                    appt.providerName || ('PORTAL.APPOINTMENTS.NOT_ASSIGNED' | translate)
+                  }}</span>
+                </div>
+                <div class="appt-detail-item">
+                  <span class="adl">{{ 'PORTAL.APPOINTMENTS.DEPARTMENT' | translate }}</span>
+                  <span class="adv">{{
+                    appt.department || ('PORTAL.APPOINTMENTS.GENERAL' | translate)
+                  }}</span>
+                </div>
+                @if (appt.location) {
+                  <div class="appt-detail-item">
+                    <span class="adl">{{ 'PORTAL.APPOINTMENTS.LOCATION' | translate }}</span>
+                    <span class="adv">{{ appt.location }}</span>
+                  </div>
+                }
+                @if (appt.reason) {
+                  <div class="appt-detail-item">
+                    <span class="adl">{{ 'PORTAL.APPOINTMENTS.REASON' | translate }}</span>
+                    <span class="adv">{{ appt.reason }}</span>
+                  </div>
+                }
+                <div class="appt-detail-item">
+                  <span class="adl">{{ 'PORTAL.APPOINTMENTS.STATUS' | translate }}</span>
+                  <span class="adv portal-status-chip" [attr.data-status]="appt.status">{{
+                    appt.status | enumLabel: 'status'
+                  }}</span>
+                </div>
+              </div>
+            </div>
+          }
+        }
+      </section>
+    }
+
+    <!-- Past -->
+    @if (past().length > 0) {
+      <section class="portal-section">
+        <h2 class="portal-section-title">{{ 'PORTAL.APPOINTMENTS.PAST' | translate }}</h2>
+        @for (appt of past(); track appt.id) {
+          <div
+            class="portal-appt-card past"
+            (click)="toggleExpand(appt.id)"
+            role="button"
+            tabindex="0"
+            (keydown.enter)="toggleExpand(appt.id)"
+            [class.expanded]="expandedId() === appt.id"
+          >
+            <div class="pac-date">
+              <span class="pac-month">{{ appt.date | date: 'MMM' }}</span>
+              <span class="pac-day">{{ appt.date | date: 'd' }}</span>
+            </div>
+            <div class="pac-body">
+              <span class="pac-provider">{{
+                appt.providerName || ('PORTAL.APPOINTMENTS.PROVIDER' | translate)
+              }}</span>
+              <span class="pac-detail">{{
+                appt.reason || appt.department || ('PORTAL.APPOINTMENTS.GENERAL_VISIT' | translate)
+              }}</span>
+              <span class="pac-time">{{ appt.date | date: 'MMM d, yyyy' }}</span>
+            </div>
+            <span class="pac-status" [attr.data-status]="appt.status">{{
+              appt.status | enumLabel: 'status'
+            }}</span>
+          </div>
+
+          @if (expandedId() === appt.id) {
+            <div class="appt-detail-panel">
+              <div class="appt-detail-grid">
+                <div class="appt-detail-item">
+                  <span class="adl">{{ 'PORTAL.APPOINTMENTS.DATE' | translate }}</span>
+                  <span class="adv">{{ appt.date | date: 'fullDate' }}</span>
+                </div>
+                <div class="appt-detail-item">
+                  <span class="adl">{{ 'PORTAL.APPOINTMENTS.TIME' | translate }}</span>
+                  <span class="adv"
+                    >{{ appt.startTime }}{{ appt.endTime ? ' – ' + appt.endTime : '' }}</span
+                  >
+                </div>
+                <div class="appt-detail-item">
+                  <span class="adl">{{ 'PORTAL.APPOINTMENTS.PROVIDER' | translate }}</span>
+                  <span class="adv">{{
+                    appt.providerName || ('PORTAL.APPOINTMENTS.NOT_ASSIGNED' | translate)
+                  }}</span>
+                </div>
+                <div class="appt-detail-item">
+                  <span class="adl">{{ 'PORTAL.APPOINTMENTS.DEPARTMENT' | translate }}</span>
+                  <span class="adv">{{
+                    appt.department || ('PORTAL.APPOINTMENTS.GENERAL' | translate)
+                  }}</span>
+                </div>
+                @if (appt.location) {
+                  <div class="appt-detail-item">
+                    <span class="adl">{{ 'PORTAL.APPOINTMENTS.LOCATION' | translate }}</span>
+                    <span class="adv">{{ appt.location }}</span>
+                  </div>
+                }
+                @if (appt.reason) {
+                  <div class="appt-detail-item">
+                    <span class="adl">{{ 'PORTAL.APPOINTMENTS.REASON' | translate }}</span>
+                    <span class="adv">{{ appt.reason }}</span>
+                  </div>
+                }
+                <div class="appt-detail-item">
+                  <span class="adl">{{ 'PORTAL.APPOINTMENTS.STATUS' | translate }}</span>
+                  <span class="adv portal-status-chip" [attr.data-status]="appt.status">{{
+                    appt.status | enumLabel: 'status'
+                  }}</span>
+                </div>
+              </div>
+            </div>
+          }
+        }
+      </section>
+    }
+  }
+</div>

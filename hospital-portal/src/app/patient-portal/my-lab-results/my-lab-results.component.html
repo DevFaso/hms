@@ -1,0 +1,103 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">science</span>
+      {{ 'PORTAL.LAB_RESULTS.TITLE' | translate }}
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>{{ 'PORTAL.LAB_RESULTS.LOADING' | translate }}</p>
+    </div>
+  } @else if (results().length === 0) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">biotech</span>
+      <h3>{{ 'PORTAL.LAB_RESULTS.EMPTY_TITLE' | translate }}</h3>
+      <p>{{ 'PORTAL.LAB_RESULTS.EMPTY_DESC' | translate }}</p>
+    </div>
+  } @else {
+    <section class="portal-section">
+      <div class="portal-list">
+        @for (lab of results(); track lab.id) {
+          <div
+            class="portal-list-item clickable"
+            [class.item-abnormal]="lab.isAbnormal"
+            (click)="toggleExpand(lab.id)"
+            role="button"
+            tabindex="0"
+            (keydown.enter)="toggleExpand(lab.id)"
+            [class.expanded]="expandedId() === lab.id"
+          >
+            <div
+              class="pli-icon"
+              [style.background]="lab.isAbnormal ? '#fee2e2' : '#d1fae5'"
+              [style.color]="lab.isAbnormal ? '#dc2626' : '#059669'"
+            >
+              <span class="material-symbols-outlined">{{
+                lab.isAbnormal ? 'warning' : 'check_circle'
+              }}</span>
+            </div>
+            <div class="pli-body">
+              <span class="pli-title">{{ lab.testName }}</span>
+              <span class="pli-sub">
+                {{ 'PORTAL.LAB_RESULTS.RESULT' | translate }}: <strong>{{ lab.result }}</strong>
+                @if (lab.referenceRange) {
+                  &nbsp;({{ 'PORTAL.LAB_RESULTS.NORMAL_PREFIX' | translate }}
+                  {{ lab.referenceRange }})
+                }
+              </span>
+              <span class="pli-meta"
+                >{{ lab.collectedDate | date: 'MMM d, yyyy' }} ·
+                {{ lab.status | enumLabel: 'status' }}</span
+              >
+            </div>
+            @if (lab.isAbnormal) {
+              <span class="abnormal-badge">{{ 'PORTAL.LAB_RESULTS.ABNORMAL' | translate }}</span>
+            }
+          </div>
+
+          @if (expandedId() === lab.id) {
+            <div class="detail-panel">
+              <div class="detail-grid">
+                <div class="detail-item">
+                  <span class="dl">{{ 'PORTAL.LAB_RESULTS.TEST_NAME' | translate }}</span>
+                  <span class="dv">{{ lab.testName }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="dl">{{ 'PORTAL.LAB_RESULTS.RESULT' | translate }}</span>
+                  <span class="dv" [class.text-danger]="lab.isAbnormal">{{ lab.result }}</span>
+                </div>
+                @if (lab.referenceRange) {
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.LAB_RESULTS.REFERENCE_RANGE' | translate }}</span>
+                    <span class="dv">{{ lab.referenceRange }}</span>
+                  </div>
+                }
+                <div class="detail-item">
+                  <span class="dl">{{ 'PORTAL.LAB_RESULTS.COLLECTION_DATE' | translate }}</span>
+                  <span class="dv">{{ lab.collectedDate | date: 'medium' }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="dl">{{ 'PORTAL.LAB_RESULTS.STATUS' | translate }}</span>
+                  <span class="dv portal-status-chip" [attr.data-status]="lab.status">{{
+                    lab.status | enumLabel: 'status'
+                  }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="dl">{{ 'PORTAL.LAB_RESULTS.INTERPRETATION' | translate }}</span>
+                  <span class="dv" [class.text-danger]="lab.isAbnormal">{{
+                    lab.isAbnormal
+                      ? ('PORTAL.LAB_RESULTS.ABNORMAL_RESULT' | translate)
+                      : ('PORTAL.LAB_RESULTS.NORMAL_RESULT' | translate)
+                  }}</span>
+                </div>
+              </div>
+            </div>
+          }
+        }
+      </div>
+    </section>
+  }
+</div>

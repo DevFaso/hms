@@ -1,0 +1,206 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">family_restroom</span>
+      {{ 'PORTAL.FAMILY.TITLE' | translate }}
+    </h1>
+    <button class="btn-primary" (click)="showGrantForm.set(!showGrantForm())">
+      <span class="material-symbols-outlined">person_add</span>
+      {{
+        showGrantForm()
+          ? ('PORTAL.FAMILY.CANCEL' | translate)
+          : ('PORTAL.FAMILY.GRANT_ACCESS' | translate)
+      }}
+    </button>
+  </div>
+
+  <!-- Grant Form -->
+  @if (showGrantForm()) {
+    <div class="portal-card grant-form">
+      <h3>{{ 'PORTAL.FAMILY.GRANT_PROXY' | translate }}</h3>
+      <div class="form-grid">
+        <label>
+          {{ 'PORTAL.FAMILY.USERNAME' | translate }}
+          <input
+            type="text"
+            [(ngModel)]="form.proxyUsername"
+            [placeholder]="'PORTAL.FAMILY.USERNAME_PLACEHOLDER' | translate"
+          />
+        </label>
+        <label>
+          {{ 'PORTAL.FAMILY.RELATIONSHIP' | translate }}
+          <select [(ngModel)]="form.relationship">
+            <option value="">{{ 'PORTAL.FAMILY.SELECT' | translate }}</option>
+            <option value="PARENT">{{ 'PORTAL.FAMILY.PARENT' | translate }}</option>
+            <option value="SPOUSE">{{ 'PORTAL.FAMILY.SPOUSE' | translate }}</option>
+            <option value="CHILD">{{ 'PORTAL.FAMILY.CHILD' | translate }}</option>
+            <option value="CAREGIVER">{{ 'PORTAL.FAMILY.CAREGIVER' | translate }}</option>
+            <option value="LEGAL_GUARDIAN">{{ 'PORTAL.FAMILY.LEGAL_GUARDIAN' | translate }}</option>
+            <option value="SIBLING">{{ 'PORTAL.FAMILY.SIBLING' | translate }}</option>
+            <option value="OTHER">{{ 'PORTAL.FAMILY.OTHER' | translate }}</option>
+          </select>
+        </label>
+        <label>
+          {{ 'PORTAL.FAMILY.PERMISSIONS' | translate }}
+          <select [(ngModel)]="form.permissions">
+            <option value="ALL">{{ 'PORTAL.FAMILY.ALL_ACCESS' | translate }}</option>
+            <option value="APPOINTMENTS">
+              {{ 'PORTAL.FAMILY.APPOINTMENTS_ONLY' | translate }}
+            </option>
+            <option value="LAB_RESULTS">{{ 'PORTAL.FAMILY.LAB_RESULTS_ONLY' | translate }}</option>
+            <option value="MEDICATIONS">{{ 'PORTAL.FAMILY.MEDICATIONS_ONLY' | translate }}</option>
+            <option value="VITALS">{{ 'PORTAL.FAMILY.VITALS_ONLY' | translate }}</option>
+            <option value="BILLING">{{ 'PORTAL.FAMILY.BILLING_ONLY' | translate }}</option>
+            <option value="APPOINTMENTS,LAB_RESULTS,MEDICATIONS">
+              {{ 'PORTAL.FAMILY.APPT_LAB_MED' | translate }}
+            </option>
+          </select>
+        </label>
+        <label>
+          {{ 'PORTAL.FAMILY.NOTES' | translate }}
+          <input
+            type="text"
+            [(ngModel)]="form.notes"
+            [placeholder]="'PORTAL.FAMILY.NOTES_PLACEHOLDER' | translate"
+          />
+        </label>
+      </div>
+      <button class="btn-primary" (click)="grantAccess()" [disabled]="granting()">
+        {{
+          granting()
+            ? ('PORTAL.FAMILY.GRANTING' | translate)
+            : ('PORTAL.FAMILY.GRANT_ACCESS' | translate)
+        }}
+      </button>
+    </div>
+  }
+
+  <!-- Tabs -->
+  <div class="rec-tabs">
+    <button
+      class="rec-tab"
+      [class.active]="activeTab() === 'granted'"
+      (click)="activeTab.set('granted')"
+    >
+      <span class="material-symbols-outlined">person_add</span>
+      {{ 'PORTAL.FAMILY.GRANTED_TAB' | translate }}
+    </button>
+    <button
+      class="rec-tab"
+      [class.active]="activeTab() === 'received'"
+      (click)="switchToReceived()"
+    >
+      <span class="material-symbols-outlined">group</span>
+      {{ 'PORTAL.FAMILY.RECEIVED_TAB' | translate }}
+    </button>
+  </div>
+
+  <!-- GRANTED BY ME -->
+  @if (activeTab() === 'granted') {
+    @if (loading()) {
+      <div class="portal-loading">
+        <div class="portal-spinner"></div>
+        <span>{{ 'PORTAL.FAMILY.LOADING_GRANTS' | translate }}</span>
+      </div>
+    } @else if (!proxies().length) {
+      <div class="portal-empty">
+        <span class="material-symbols-outlined empty-icon">person_off</span>
+        <p>{{ 'PORTAL.FAMILY.NO_GRANTS' | translate }}</p>
+      </div>
+    } @else {
+      <div class="portal-table-wrapper">
+        <table class="portal-table">
+          <thead>
+            <tr>
+              <th>{{ 'PORTAL.FAMILY.PERSON' | translate }}</th>
+              <th>{{ 'PORTAL.FAMILY.RELATIONSHIP' | translate }}</th>
+              <th>{{ 'PORTAL.FAMILY.PERMISSIONS' | translate }}</th>
+              <th>{{ 'PORTAL.FAMILY.GRANTED_DATE' | translate }}</th>
+              <th>{{ 'PORTAL.FAMILY.EXPIRES' | translate }}</th>
+              <th>{{ 'PORTAL.FAMILY.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of proxies(); track p.id) {
+              <tr>
+                <td>
+                  <strong>{{ p.proxyDisplayName }}</strong
+                  ><br />
+                  <small class="text-muted">{{ p.proxyUsername }}</small>
+                </td>
+                <td>
+                  <span class="badge">{{ p.relationship }}</span>
+                </td>
+                <td>{{ p.permissions }}</td>
+                <td>{{ p.createdAt | date: 'mediumDate' }}</td>
+                <td>
+                  {{
+                    p.expiresAt
+                      ? (p.expiresAt | date: 'mediumDate')
+                      : ('PORTAL.FAMILY.NEVER' | translate)
+                  }}
+                </td>
+                <td>
+                  <button class="btn-danger-sm" (click)="revokeAccess(p.id)">
+                    <span class="material-symbols-outlined">block</span>
+                    {{ 'PORTAL.FAMILY.REVOKE' | translate }}
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+
+  <!-- ACCESS I HAVE (as proxy) -->
+  @if (activeTab() === 'received') {
+    @if (loadingReceived()) {
+      <div class="portal-loading">
+        <div class="portal-spinner"></div>
+        <span>{{ 'PORTAL.FAMILY.LOADING' | translate }}</span>
+      </div>
+    } @else if (!proxyAccess().length) {
+      <div class="portal-empty">
+        <span class="material-symbols-outlined empty-icon">person_off</span>
+        <p>{{ 'PORTAL.FAMILY.NO_RECEIVED' | translate }}</p>
+      </div>
+    } @else {
+      <div class="portal-table-wrapper">
+        <table class="portal-table">
+          <thead>
+            <tr>
+              <th>{{ 'PORTAL.FAMILY.PATIENT' | translate }}</th>
+              <th>{{ 'PORTAL.FAMILY.RELATIONSHIP' | translate }}</th>
+              <th>{{ 'PORTAL.FAMILY.PERMISSIONS' | translate }}</th>
+              <th>{{ 'PORTAL.FAMILY.SINCE' | translate }}</th>
+              <th>{{ 'PORTAL.FAMILY.EXPIRES' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of proxyAccess(); track p.id) {
+              <tr>
+                <td>
+                  <strong>{{ p.grantorName }}</strong>
+                </td>
+                <td>
+                  <span class="badge">{{ p.relationship | enumLabel: 'relationship' }}</span>
+                </td>
+                <td>{{ p.permissions | enumLabel: 'permissions' }}</td>
+                <td>{{ p.createdAt | date: 'mediumDate' }}</td>
+                <td>
+                  {{
+                    p.expiresAt
+                      ? (p.expiresAt | date: 'mediumDate')
+                      : ('PORTAL.FAMILY.NEVER' | translate)
+                  }}
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</div>

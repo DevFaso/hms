@@ -1,0 +1,126 @@
+@if (items.length === 0) {
+  <div class="empty-state">{{ 'RECEPTION.NO_PAYMENTS_PENDING' | translate }}</div>
+} @else {
+  <table class="pay-table">
+    <thead>
+      <tr>
+        <th>{{ 'COMMON.TIME' | translate }}</th>
+        <th>{{ 'PATIENTS.PATIENT' | translate }}</th>
+        <th>{{ 'RECEPTION.PROVIDER' | translate }}</th>
+        <th>{{ 'STAFF.DEPARTMENT' | translate }}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (item of items; track item.patientId + (item.appointmentId ?? '')) {
+        <tr>
+          <td>{{ item.appointmentTime ?? '—' }}</td>
+          <td>
+            <button class="patient-link" (click)="patientClicked.emit(item.patientId)">
+              {{ item.patientName }}
+            </button>
+          </td>
+          <td>{{ item.providerName ?? '—' }}</td>
+          <td>{{ item.departmentName ?? '—' }}</td>
+          <td>
+            <button class="btn-collect" (click)="openPayDialog(item)">
+              <span class="material-symbols-outlined">payments</span>
+              {{ 'RECEPTION.COLLECT' | translate }}
+            </button>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}
+
+<!-- Payment Dialog -->
+@if (payingItem()) {
+  <div
+    class="modal-overlay"
+    role="button"
+    tabindex="0"
+    aria-label="Close dialog"
+    (click)="closePayDialog()"
+    (keydown.enter)="closePayDialog()"
+    (keydown.escape)="closePayDialog()"
+  ></div>
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>{{ 'RECEPTION.COLLECT_PAYMENT' | translate }} — {{ payingItem()!.patientName }}</h3>
+      <button class="btn-close" (click)="closePayDialog()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      @if (loadingInvoices()) {
+        <div class="loading-row">
+          <span class="material-symbols-outlined spin">progress_activity</span>
+          {{ 'RECEPTION.LOADING_INVOICES' | translate }}
+        </div>
+      } @else if (openInvoices().length === 0) {
+        <p class="no-invoices">{{ 'RECEPTION.NO_OPEN_INVOICES' | translate }}</p>
+      } @else {
+        <div class="field-group">
+          <label for="invSelect">{{ 'RECEPTION.INVOICE' | translate }}</label>
+          <select
+            id="invSelect"
+            class="form-control"
+            [ngModel]="selectedInvoiceId()"
+            (ngModelChange)="selectedInvoiceId.set($event)"
+          >
+            <option [value]="null">-- {{ 'RECEPTION.SELECT_INVOICE' | translate }} --</option>
+            @for (inv of openInvoices(); track inv.id) {
+              <option [value]="inv.id">
+                {{ inv.invoiceNumber }} — {{ 'RECEPTION.BALANCE' | translate }}:
+                {{ inv.balanceDue | number: '1.2-2' }}
+              </option>
+            }
+          </select>
+        </div>
+        <div class="field-group">
+          <label for="payAmt">{{ 'RECEPTION.AMOUNT' | translate }}</label>
+          <input
+            id="payAmt"
+            type="number"
+            class="form-control"
+            min="0.01"
+            step="0.01"
+            [ngModel]="payAmount()"
+            (ngModelChange)="payAmount.set($event)"
+            placeholder="0.00"
+          />
+        </div>
+        <div class="field-group">
+          <label for="payMeth">{{ 'RECEPTION.METHOD' | translate }}</label>
+          <select
+            id="payMeth"
+            class="form-control"
+            [ngModel]="payMethod()"
+            (ngModelChange)="payMethod.set($event)"
+          >
+            <option value="CASH">{{ 'RECEPTION.CASH' | translate }}</option>
+            <option value="CARD">{{ 'RECEPTION.CARD' | translate }}</option>
+            <option value="INSURANCE">{{ 'RECEPTION.INSURANCE' | translate }}</option>
+            <option value="OTHER">{{ 'COMMON.OTHER' | translate }}</option>
+          </select>
+        </div>
+      }
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" (click)="closePayDialog()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button
+        class="btn-primary"
+        [disabled]="!selectedInvoiceId() || !payAmount() || (payAmount() ?? 0) <= 0 || paying()"
+        (click)="submitPayment()"
+      >
+        @if (paying()) {
+          <span class="material-symbols-outlined spin">progress_activity</span>
+        }
+        {{ 'RECEPTION.RECORD_PAYMENT' | translate }}
+      </button>
+    </div>
+  </div>
+}

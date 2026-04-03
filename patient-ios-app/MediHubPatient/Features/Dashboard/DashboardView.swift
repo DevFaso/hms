@@ -16,16 +16,16 @@ struct DashboardView: View {
 
     private var quickLinks: [(titleKey: String, icon: String, color: Color, dest: DashboardDestination)] {
         [
-            ("tab_appointments", "calendar",        .green,  .appointments),
-            ("test_results",     "testtube.2",      .purple, .labResults),
-            ("medications_title","pill.fill",       .teal,   .medications),
-            ("billing_title",    "creditcard.fill", .orange, .billing),
-            ("care_team_title",  "person.2.fill",   .pink,   .careTeam),
-            ("vitals_title",     "heart.fill",      .red,    .vitals),
-            ("visits_title",     "building.2.fill", .indigo, .visits),
-            ("documents",        "doc.fill",        .blue,   .documents),
-            ("family_access",    "person.2.circle", .cyan,   .familyAccess),
-            ("sharing_privacy",  "lock.shield",     .mint,   .sharingPrivacy),
+            ("tab_appointments", "calendar", .green, .appointments),
+            ("test_results", "testtube.2", .purple, .labResults),
+            ("medications_title", "pill.fill", .teal, .medications),
+            ("billing_title", "creditcard.fill", .orange, .billing),
+            ("care_team_title", "person.2.fill", .pink, .careTeam),
+            ("vitals_title", "heart.fill", .red, .vitals),
+            ("visits_title", "building.2.fill", .indigo, .visits),
+            ("documents", "doc.fill", .blue, .documents),
+            ("family_access", "person.2.circle", .cyan, .familyAccess),
+            ("sharing_privacy", "lock.shield", .mint, .sharingPrivacy),
         ]
     }
 
@@ -33,64 +33,14 @@ struct DashboardView: View {
         NavigationStack {
             ScrollView(showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
-
-                    // MARK: Welcome header
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(String(format: "welcome_user".localized,
-                                        authManager.currentUser?.firstName ?? "patient".localized))
-                                .font(.system(size: 26, weight: .bold, design: .rounded))
-                            Text(Date.now.formatted(.dateTime.weekday(.wide).month().day()))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        if vm.unreadNotificationCount > 0 {
-                            NavigationLink(value: DashboardDestination.notifications) {
-                                ZStack(alignment: .topTrailing) {
-                                    Image(systemName: "bell.fill")
-                                        .font(.title2)
-                                        .foregroundStyle(Color("BrandBlue"))
-                                        .frame(width: 44, height: 44)
-                                        .background(Color("BrandBlue").opacity(0.1))
-                                        .clipShape(Circle())
-                                    Text("\(vm.unreadNotificationCount)")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundStyle(.white)
-                                        .frame(width: 18, height: 18)
-                                        .background(Color.red)
-                                        .clipShape(Circle())
-                                        .offset(x: 4, y: -4)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.horizontal)
-
-                    // MARK: Health alerts
-                    if let allergies = vm.healthSummary?.allergies, !allergies.isEmpty {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                ForEach(allergies, id: \.self) { allergy in
-                                    Label(allergy, systemImage: "exclamationmark.triangle.fill")
-                                        .font(.caption.weight(.semibold))
-                                        .padding(.horizontal, 12)
-                                        .padding(.vertical, 7)
-                                        .background(Color.red.opacity(0.08))
-                                        .foregroundStyle(.red)
-                                        .clipShape(Capsule())
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                    }
-
                     // MARK: Quick links grid
+
                     LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
                                         GridItem(.flexible(), spacing: 12),
                                         GridItem(.flexible(), spacing: 12),
                                         GridItem(.flexible(), spacing: 12)],
-                              spacing: 14) {
+                              spacing: 14)
+                    {
                         ForEach(quickLinks, id: \.titleKey) { link in
                             NavigationLink(value: link.dest) {
                                 VStack(spacing: 10) {
@@ -119,14 +69,15 @@ struct DashboardView: View {
                     .padding(.horizontal)
 
                     // MARK: Upcoming appointments
+
                     if !vm.upcomingAppointments.isEmpty {
                         SectionCard(title: "upcoming_appointments".localized, icon: "calendar") {
                             ForEach(vm.upcomingAppointments) { appt in
                                 NavigationLink(destination: AppointmentDetailView(appointment: appt)) {
                                     AppointmentRowView(appointment: appt)
                                 }
-                                    .buttonStyle(.plain)
-                                    .padding(.vertical, 4)
+                                .buttonStyle(.plain)
+                                .padding(.vertical, 4)
                                 if appt.id != vm.upcomingAppointments.last?.id {
                                     Divider()
                                 }
@@ -136,6 +87,7 @@ struct DashboardView: View {
                     }
 
                     // MARK: Recent lab results
+
                     if !vm.labResults.isEmpty {
                         SectionCard(title: "recent_lab_results".localized, icon: "testtube.2") {
                             ForEach(vm.labResults.prefix(3)) { lab in
@@ -150,6 +102,7 @@ struct DashboardView: View {
                     }
 
                     // MARK: Active conditions
+
                     if let conditions = vm.healthSummary?.activeDiagnoses, !conditions.isEmpty {
                         SectionCard(title: "active_conditions".localized, icon: "stethoscope") {
                             ForEach(conditions, id: \.self) { condition in
@@ -186,22 +139,22 @@ struct DashboardView: View {
             .refreshable { await vm.loadAll() }
             .navigationDestination(for: DashboardDestination.self) { dest in
                 switch dest {
-                case .appointments:  AppointmentsView(embeddedInNav: false)
-                case .labResults:    LabResultsView(embeddedInNav: false)
-                case .medications:   MedicationsView(embeddedInNav: false)
-                case .billing:       BillingView(embeddedInNav: false)
-                case .careTeam:      CareTeamView(embeddedInNav: false)
-                case .vitals:        VitalsView(embeddedInNav: false)
-                case .visits:        VisitHistoryView(embeddedInNav: false)
-                case .documents:     DocumentsView(embeddedInNav: false)
+                case .appointments: AppointmentsView(embeddedInNav: false)
+                case .labResults: LabResultsView(embeddedInNav: false)
+                case .medications: MedicationsView(embeddedInNav: false)
+                case .billing: BillingView(embeddedInNav: false)
+                case .careTeam: CareTeamView(embeddedInNav: false)
+                case .vitals: VitalsView(embeddedInNav: false)
+                case .visits: VisitHistoryView(embeddedInNav: false)
+                case .documents: DocumentsView(embeddedInNav: false)
                 case .notifications: NotificationsView(embeddedInNav: false)
                 case .healthRecords: HealthRecordsView(embeddedInNav: false)
-                case .familyAccess:  FamilyAccessView(embeddedInNav: false)
+                case .familyAccess: FamilyAccessView(embeddedInNav: false)
                 case .sharingPrivacy: SharingPrivacyView(embeddedInNav: false)
                 }
             }
             .overlay {
-                if vm.isLoading && vm.healthSummary == nil {
+                if vm.isLoading, vm.healthSummary == nil {
                     VStack(spacing: 12) {
                         ProgressView()
                             .controlSize(.large)
@@ -312,12 +265,12 @@ struct StatusBadge: View {
 
     private var swiftColor: Color {
         switch color {
-        case "green":  return .green
-        case "red":    return .red
-        case "yellow": return .yellow
-        case "orange": return .orange
-        case "gray":   return .gray
-        default:       return .blue
+        case "green": .green
+        case "red": .red
+        case "yellow": .yellow
+        case "orange": .orange
+        case "gray": .gray
+        default: .blue
         }
     }
 

@@ -31,8 +31,8 @@ struct MedicationsView: View {
                 ProgressView().padding()
             } else {
                 switch selectedTab {
-                case 0:  medicationsList
-                case 1:  prescriptionsList
+                case 0: medicationsList
+                case 1: prescriptionsList
                 default: refillsList
                 }
             }
@@ -56,8 +56,8 @@ struct MedicationsView: View {
         Group {
             if vm.medications.isEmpty {
                 ContentUnavailableView("No Medications",
-                    systemImage: "pill.fill",
-                    description: Text("No active medications on record."))
+                                       systemImage: "pill.fill",
+                                       description: Text("No active medications on record."))
             } else {
                 List(vm.medications) { med in
                     VStack(alignment: .leading, spacing: 4) {
@@ -90,8 +90,8 @@ struct MedicationsView: View {
         Group {
             if vm.prescriptions.isEmpty {
                 ContentUnavailableView("No Prescriptions",
-                    systemImage: "doc.text.fill",
-                    description: Text("No prescriptions on record."))
+                                       systemImage: "doc.text.fill",
+                                       description: Text("No prescriptions on record."))
             } else {
                 List(vm.prescriptions) { rx in
                     VStack(alignment: .leading, spacing: 4) {
@@ -139,8 +139,8 @@ struct MedicationsView: View {
         Group {
             if vm.refills.isEmpty {
                 ContentUnavailableView("No Refills",
-                    systemImage: "arrow.clockwise",
-                    description: Text("No refill requests on record."))
+                                       systemImage: "arrow.clockwise",
+                                       description: Text("No refill requests on record."))
             } else {
                 List(vm.refills) { refill in
                     VStack(alignment: .leading, spacing: 4) {
@@ -181,10 +181,10 @@ struct MedicationsView: View {
 
     private func refillStatusColor(_ status: String?) -> String {
         switch status?.uppercased() {
-        case "COMPLETED", "FILLED": return "green"
-        case "PENDING", "REQUESTED": return "yellow"
-        case "CANCELLED", "DENIED": return "red"
-        default: return "blue"
+        case "COMPLETED", "FILLED": "green"
+        case "PENDING", "REQUESTED": "yellow"
+        case "CANCELLED", "DENIED": "red"
+        default: "blue"
         }
     }
 }
@@ -273,16 +273,16 @@ final class MedicationsViewModel: ObservableObject {
         isLoading = true
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in
-                self.medications = (try? await APIClient.shared.get(
+                self.medications = await (try? APIClient.shared.get(
                     APIEndpoints.medications,
                     queryItems: [URLQueryItem(name: "limit", value: "50")]
                 )) ?? []
             }
             group.addTask { @MainActor in
-                self.prescriptions = (try? await APIClient.shared.get(APIEndpoints.prescriptions)) ?? []
+                self.prescriptions = await (try? APIClient.shared.get(APIEndpoints.prescriptions)) ?? []
             }
             group.addTask { @MainActor in
-                self.refills = (try? await APIClient.shared.get(APIEndpoints.refills)) ?? []
+                self.refills = await (try? APIClient.shared.get(APIEndpoints.refills)) ?? []
             }
         }
         isLoading = false

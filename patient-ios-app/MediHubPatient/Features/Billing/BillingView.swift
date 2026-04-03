@@ -17,7 +17,7 @@ struct BillingView: View {
 
     private var content: some View {
         Group {
-            if vm.isLoading && vm.invoices.isEmpty {
+            if vm.isLoading, vm.invoices.isEmpty {
                 ProgressView("Loading invoices…")
             } else {
                 VStack(spacing: 0) {
@@ -37,14 +37,14 @@ struct BillingView: View {
 
                     if vm.invoices.isEmpty {
                         ContentUnavailableView("No Invoices",
-                            systemImage: "creditcard",
-                            description: Text("No billing records found."))
+                                               systemImage: "creditcard",
+                                               description: Text("No billing records found."))
                     } else {
                         List(vm.invoices) { invoice in
                             InvoiceRowView(invoice: invoice)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
-                                    if !invoice.isPaid && !invoice.isCancelled {
+                                    if !invoice.isPaid, !invoice.isCancelled {
                                         payTarget = invoice
                                     }
                                 }
@@ -188,8 +188,13 @@ struct PaymentSheet: View {
 }
 
 extension InvoiceDTO: @retroactive Hashable {
-    static func == (lhs: InvoiceDTO, rhs: InvoiceDTO) -> Bool { lhs.id == rhs.id }
-    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+    static func == (lhs: InvoiceDTO, rhs: InvoiceDTO) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
 }
 
 @MainActor
@@ -215,7 +220,7 @@ final class BillingViewModel: ObservableObject {
             invoices = page.content
         } catch {
             // fallback: try direct array
-            invoices = (try? await APIClient.shared.get(APIEndpoints.invoices)) ?? []
+            invoices = await (try? APIClient.shared.get(APIEndpoints.invoices)) ?? []
         }
         isLoading = false
     }

@@ -1,0 +1,82 @@
+@if (!board) {
+  <div class="flow-empty">{{ 'RECEPTION.LOADING_FLOW_BOARD' | translate }}</div>
+} @else {
+  <div class="flow-grid" cdkDropListGroup>
+    @for (col of columns; track col.key) {
+      <div class="flow-col" [ngClass]="col.colorClass">
+        <div class="col-header">
+          <span class="col-title">{{ col.labelKey | translate }}</span>
+          <span class="col-count">{{ localBoard[col.key].length }}</span>
+        </div>
+        <div
+          class="col-body"
+          cdkDropList
+          [id]="listId(col.key)"
+          [cdkDropListData]="localBoard[col.key]"
+          [cdkDropListConnectedTo]="listIds"
+          (cdkDropListDropped)="drop($event, col.key)"
+        >
+          @if (localBoard[col.key].length === 0) {
+            <div class="col-empty">—</div>
+          }
+          @for (
+            item of localBoard[col.key];
+            track item.patientId + (item.appointmentId ?? item.encounterId ?? '')
+          ) {
+            <div
+              class="patient-card"
+              cdkDrag
+              [cdkDragDisabled]="!item.encounterId"
+              role="button"
+              tabindex="0"
+              (click)="patientClicked.emit(item.patientId)"
+              (keydown.enter)="patientClicked.emit(item.patientId)"
+            >
+              <div
+                class="card-drag-handle"
+                cdkDragHandle
+                [title]="'RECEPTION.DRAG_TO_MOVE' | translate"
+              >
+                <span class="drag-dots">⠿</span>
+              </div>
+              <div class="card-name">{{ item.patientName }}</div>
+              @if (item.appointmentTime) {
+                <div class="card-meta">{{ item.appointmentTime }}</div>
+              }
+              @if (item.providerName) {
+                <div class="card-meta">{{ item.providerName }}</div>
+              }
+              @if (item.waitMinutes > 0) {
+                <div class="card-wait">
+                  {{ item.waitMinutes }}{{ 'RECEPTION.MIN_WAIT' | translate }}
+                </div>
+              }
+              <div class="card-flags">
+                @if (item.hasInsuranceIssue) {
+                  <span
+                    class="flag-dot ins"
+                    [title]="'RECEPTION.INSURANCE_ISSUE' | translate"
+                  ></span>
+                }
+                @if (item.hasOutstandingBalance) {
+                  <span
+                    class="flag-dot bal"
+                    [title]="'RECEPTION.OUTSTANDING_BALANCE' | translate"
+                  ></span>
+                }
+              </div>
+              @if (!item.encounterId) {
+                <div
+                  class="card-no-drag"
+                  [title]="'RECEPTION.NO_ENCOUNTER_CANNOT_DRAG' | translate"
+                >
+                  🔒
+                </div>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    }
+  </div>
+}

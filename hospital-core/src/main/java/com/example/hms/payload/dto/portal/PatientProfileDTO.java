@@ -57,4 +57,8 @@ public class PatientProfileDTO {
     private String mrn;
     private String username;
     private String profileImageUrl;
+
+    // Hospital context
+    private UUID hospitalId;
+    private String hospitalName;
 }

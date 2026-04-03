@@ -1,0 +1,106 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">summarize</span>
+      {{ 'PORTAL.SUMMARIES.TITLE' | translate }}
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <span>{{ 'PORTAL.SUMMARIES.LOADING' | translate }}</span>
+    </div>
+  } @else if (!summaries().length) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">article</span>
+      <h3>{{ 'PORTAL.SUMMARIES.EMPTY_TITLE' | translate }}</h3>
+      <p>{{ 'PORTAL.SUMMARIES.EMPTY_DESC' | translate }}</p>
+    </div>
+  } @else {
+    <div class="avs-list">
+      @for (s of summaries(); track s.id) {
+        <div class="avs-card" [class.expanded]="expandedId() === s.id">
+          <div
+            class="avs-header"
+            role="button"
+            tabindex="0"
+            (click)="toggle(s.id)"
+            (keydown.enter)="toggle(s.id)"
+          >
+            <div class="avs-header-left">
+              <div class="avs-date-badge">
+                <span class="avs-month">{{ s.encounterDate | date: 'MMM' }}</span>
+                <span class="avs-day">{{ s.encounterDate | date: 'd' }}</span>
+              </div>
+              <div class="avs-header-info">
+                <span class="avs-provider">{{ s.providerName }}</span>
+                <span class="avs-dept">{{ s.department }} · {{ s.chiefComplaint }}</span>
+              </div>
+            </div>
+            <span class="material-symbols-outlined avs-expand-icon">
+              {{ expandedId() === s.id ? 'expand_less' : 'expand_more' }}
+            </span>
+          </div>
+
+          @if (expandedId() === s.id) {
+            <div class="avs-body">
+              @if (s.diagnoses?.length) {
+                <div class="avs-section">
+                  <h4>{{ 'PORTAL.SUMMARIES.DIAGNOSES' | translate }}</h4>
+                  <ul>
+                    @for (d of s.diagnoses; track d) {
+                      <li>{{ d }}</li>
+                    }
+                  </ul>
+                </div>
+              }
+
+              @if (s.treatmentSummary) {
+                <div class="avs-section">
+                  <h4>{{ 'PORTAL.SUMMARIES.TREATMENT_SUMMARY' | translate }}</h4>
+                  <p>{{ s.treatmentSummary }}</p>
+                </div>
+              }
+
+              @if (s.instructions) {
+                <div class="avs-section">
+                  <h4>{{ 'PORTAL.SUMMARIES.INSTRUCTIONS' | translate }}</h4>
+                  <p>{{ s.instructions }}</p>
+                </div>
+              }
+
+              @if (s.medications?.length) {
+                <div class="avs-section">
+                  <h4>{{ 'PORTAL.SUMMARIES.MEDICATIONS' | translate }}</h4>
+                  <ul>
+                    @for (m of s.medications; track m) {
+                      <li>{{ m }}</li>
+                    }
+                  </ul>
+                </div>
+              }
+
+              @if (s.followUpDate) {
+                <div class="avs-section">
+                  <h4>{{ 'PORTAL.SUMMARIES.FOLLOW_UP' | translate }}</h4>
+                  <p>
+                    {{ 'PORTAL.SUMMARIES.SCHEDULED_FOR' | translate }}
+                    {{ s.followUpDate | date: 'mediumDate' }}
+                  </p>
+                </div>
+              }
+
+              <div class="avs-actions">
+                <button class="avs-print-btn" (click)="printSummary($event)">
+                  <span class="material-symbols-outlined">print</span>
+                  {{ 'PORTAL.SUMMARIES.PRINT' | translate }}
+                </button>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

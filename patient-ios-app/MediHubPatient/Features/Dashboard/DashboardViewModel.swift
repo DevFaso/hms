@@ -44,24 +44,24 @@ final class DashboardViewModel: ObservableObject {
     }
 
     private func loadAppointments() async {
-        appointments = (try? await APIClient.shared.get(APIEndpoints.appointments)) ?? []
+        appointments = await (try? APIClient.shared.get(APIEndpoints.appointments)) ?? []
     }
 
     private func loadMedications() async {
-        medications = (try? await APIClient.shared.get(
+        medications = await (try? APIClient.shared.get(
             APIEndpoints.medications,
             queryItems: [URLQueryItem(name: "limit", value: "5")]
         )) ?? []
     }
 
     private func loadLabResults() async {
-        labResults = (try? await APIClient.shared.get(
+        labResults = await (try? APIClient.shared.get(
             APIEndpoints.labResults,
             queryItems: [URLQueryItem(name: "limit", value: "5")]
         )) ?? []
     }
 
     private func loadNotifications() async {
-        notifications = (try? await APIClient.shared.get(APIEndpoints.notifications)) ?? []
+        notifications = await (try? APIClient.shared.get(APIEndpoints.notifications)) ?? []
     }
 }

@@ -2,6 +2,7 @@ import Foundation
 import Security
 
 // MARK: - KeychainHelper
+
 // Stores/retrieves JWT tokens securely in the iOS Keychain.
 
 final class KeychainHelper {
@@ -9,10 +10,10 @@ final class KeychainHelper {
     private init() {}
 
     private enum Keys {
-        static let accessToken  = "com.bitnesttechs.hms.patient.accessToken"
+        static let accessToken = "com.bitnesttechs.hms.patient.accessToken"
         static let refreshToken = "com.bitnesttechs.hms.patient.refreshToken"
-        static let username     = "com.bitnesttechs.hms.patient.username"
-        static let password     = "com.bitnesttechs.hms.patient.password"
+        static let username = "com.bitnesttechs.hms.patient.username"
+        static let password = "com.bitnesttechs.hms.patient.password"
     }
 
     // MARK: - Public accessors
@@ -52,10 +53,10 @@ final class KeychainHelper {
     private func save(_ value: String, key: String) -> Bool {
         guard let data = value.data(using: .utf8) else { return false }
         let query: [String: Any] = [
-            kSecClass as String:       kSecClassGenericPassword,
+            kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
-            kSecValueData as String:   data,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            kSecValueData as String: data,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
         ]
         SecItemDelete(query as CFDictionary)
         return SecItemAdd(query as CFDictionary, nil) == errSecSuccess
@@ -63,10 +64,10 @@ final class KeychainHelper {
 
     private func read(key: String) -> String? {
         let query: [String: Any] = [
-            kSecClass as String:       kSecClassGenericPassword,
+            kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: key,
-            kSecReturnData as String:  true,
-            kSecMatchLimit as String:  kSecMatchLimitOne
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
         ]
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
@@ -79,8 +80,8 @@ final class KeychainHelper {
     @discardableResult
     private func delete(key: String) -> Bool {
         let query: [String: Any] = [
-            kSecClass as String:       kSecClassGenericPassword,
-            kSecAttrAccount as String: key
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: key,
         ]
         return SecItemDelete(query as CFDictionary) == errSecSuccess
     }

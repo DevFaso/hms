@@ -18,23 +18,33 @@ struct InvoiceDTO: Codable, Identifiable {
     let hospitalName: String?
     let items: [InvoiceItemDTO]?
 
-    var isPaid: Bool { status?.uppercased() == "PAID" }
-    var isCancelled: Bool { status?.uppercased() == "CANCELLED" }
+    var isPaid: Bool {
+        status?.uppercased() == "PAID"
+    }
+
+    var isCancelled: Bool {
+        status?.uppercased() == "CANCELLED"
+    }
 
     var displayBalance: Double {
         balance ?? amount ?? 0
     }
 
-    var displayDate: String? { date ?? invoiceDate }
-    var displayFacility: String? { facility ?? hospitalName }
+    var displayDate: String? {
+        date ?? invoiceDate
+    }
+
+    var displayFacility: String? {
+        facility ?? hospitalName
+    }
 
     var statusColor: String {
         switch status?.uppercased() {
-        case "PAID":      return "green"
-        case "OVERDUE":   return "red"
-        case "PENDING":   return "yellow"
-        case "CANCELLED": return "gray"
-        default:          return "orange"
+        case "PAID": "green"
+        case "OVERDUE": "red"
+        case "PENDING": "yellow"
+        case "CANCELLED": "gray"
+        default: "orange"
         }
     }
 }
@@ -54,7 +64,7 @@ struct PageDTO<T: Codable>: Codable {
     let content: [T]
     let totalElements: Int?
     let totalPages: Int?
-    let number: Int?       // current page (0-based)
+    let number: Int? // current page (0-based)
     let size: Int?
     let last: Bool?
 }

@@ -17,12 +17,12 @@ struct VitalsView: View {
 
     private var content: some View {
         Group {
-            if vm.isLoading && vm.vitals.isEmpty {
+            if vm.isLoading, vm.vitals.isEmpty {
                 ProgressView("loading".localized)
             } else if vm.vitals.isEmpty {
                 ContentUnavailableView("no_vitals".localized,
-                    systemImage: "heart.fill",
-                    description: Text("no_vitals_desc".localized))
+                                       systemImage: "heart.fill",
+                                       description: Text("no_vitals_desc".localized))
             } else {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
@@ -142,7 +142,7 @@ final class VitalsViewModel: ObservableObject {
 
     func load() async {
         isLoading = true
-        vitals = (try? await APIClient.shared.get(
+        vitals = await (try? APIClient.shared.get(
             APIEndpoints.vitals,
             queryItems: [URLQueryItem(name: "limit", value: "20")]
         )) ?? []

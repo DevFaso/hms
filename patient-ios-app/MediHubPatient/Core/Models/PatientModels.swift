@@ -23,7 +23,9 @@ struct PatientProfileDTO: Codable, Identifiable {
     // API returns "id" directly — also accept "patientId" for compat
     let rawId: String?
     let patientId: String?
-    var id: String? { rawId ?? patientId }
+    var id: String? {
+        rawId ?? patientId
+    }
 
     let firstName: String?
     let lastName: String?
@@ -64,7 +66,7 @@ struct PatientProfileDTO: Codable, Identifiable {
     let insuranceGroupNumber: String?
     let insurancePlanType: String?
 
-    // allergies comes as String from /profile, [String] from /health-summary
+    /// allergies comes as String from /profile, [String] from /health-summary
     let allergies: FlexibleAllergies
 
     enum CodingKeys: String, CodingKey {
@@ -90,7 +92,9 @@ struct PatientProfileDTO: Codable, Identifiable {
         allergies.values
     }
 
-    var displayPhone: String? { phone ?? phoneNumberPrimary }
+    var displayPhone: String? {
+        phone ?? phoneNumberPrimary
+    }
 
     var displayAddress: String? {
         if let a = address, !a.isEmpty { return a }
@@ -146,7 +150,9 @@ struct HealthSummaryDTO: Codable {
     let outstandingBalance: Double?
 
     /// Unified vitals — prefer recentVitals, fall back to latestVitals
-    var allVitals: [VitalSignDTO] { recentVitals ?? latestVitals ?? [] }
+    var allVitals: [VitalSignDTO] {
+        recentVitals ?? latestVitals ?? []
+    }
 }
 
 // MARK: - Profile Update Request (matches PatientProfileUpdateDTO)

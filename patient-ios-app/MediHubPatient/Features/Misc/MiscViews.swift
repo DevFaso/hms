@@ -16,10 +16,10 @@ struct NotificationsView: View {
 
     private var content: some View {
         Group {
-            if vm.isLoading && vm.notifications.isEmpty { ProgressView("loading".localized) }
+            if vm.isLoading, vm.notifications.isEmpty { ProgressView("loading".localized) }
             else if vm.notifications.isEmpty {
                 ContentUnavailableView("no_notifications".localized, systemImage: "bell.slash.fill",
-                    description: Text("no_notifications_desc".localized))
+                                       description: Text("no_notifications_desc".localized))
             } else {
                 List(vm.notifications) { notif in
                     NotificationRow(notification: notif)
@@ -60,7 +60,7 @@ final class NotificationsViewModel: ObservableObject {
 
     func load() async {
         isLoading = true
-        notifications = (try? await APIClient.shared.get(APIEndpoints.notifications)) ?? []
+        notifications = await (try? APIClient.shared.get(APIEndpoints.notifications)) ?? []
         isLoading = false
     }
 }
@@ -83,10 +83,10 @@ struct DocumentsView: View {
 
     private var content: some View {
         Group {
-            if vm.isLoading && vm.documents.isEmpty { ProgressView("loading".localized) }
+            if vm.isLoading, vm.documents.isEmpty { ProgressView("loading".localized) }
             else if vm.documents.isEmpty {
                 ContentUnavailableView("no_documents".localized, systemImage: "doc.fill",
-                    description: Text("no_documents_desc".localized))
+                                       description: Text("no_documents_desc".localized))
             } else {
                 List(vm.documents) { doc in
                     VStack(alignment: .leading, spacing: 4) {
@@ -119,7 +119,7 @@ final class DocumentsViewModel: ObservableObject {
         if let content = page?.content {
             documents = content
         } else {
-            documents = (try? await APIClient.shared.get(APIEndpoints.documents)) ?? []
+            documents = await (try? APIClient.shared.get(APIEndpoints.documents)) ?? []
         }
         isLoading = false
     }
@@ -175,6 +175,7 @@ struct HealthRecordsView: View {
     }
 
     // MARK: Overview
+
     private var overviewTab: some View {
         List {
             if let profile = vm.summary?.profile {
@@ -207,11 +208,12 @@ struct HealthRecordsView: View {
     }
 
     // MARK: Encounters
+
     private var encountersTab: some View {
         Group {
             if vm.encounters.isEmpty {
                 ContentUnavailableView("No Encounters", systemImage: "building.2.fill",
-                    description: Text("No encounters found."))
+                                       description: Text("No encounters found."))
             } else {
                 List(vm.encounters) { enc in
                     EncounterRowView(encounter: enc)
@@ -222,11 +224,12 @@ struct HealthRecordsView: View {
     }
 
     // MARK: Labs
+
     private var labsTab: some View {
         Group {
             if vm.labs.isEmpty {
                 ContentUnavailableView("No Lab Results", systemImage: "testtube.2",
-                    description: Text("No lab results on file."))
+                                       description: Text("No lab results on file."))
             } else {
                 List(vm.labs) { lab in
                     LabResultDetailRow(result: lab)
@@ -237,11 +240,12 @@ struct HealthRecordsView: View {
     }
 
     // MARK: Medications
+
     private var medicationsTab: some View {
         Group {
             if vm.medications.isEmpty {
                 ContentUnavailableView("No Medications", systemImage: "pill.fill",
-                    description: Text("No medications on record."))
+                                       description: Text("No medications on record."))
             } else {
                 List(vm.medications) { med in
                     HStack {
@@ -260,11 +264,12 @@ struct HealthRecordsView: View {
     }
 
     // MARK: Immunizations
+
     private var immunizationsTab: some View {
         Group {
             if vm.immunizations.isEmpty {
                 ContentUnavailableView("No Immunizations", systemImage: "syringe.fill",
-                    description: Text("No immunization records."))
+                                       description: Text("No immunization records."))
             } else {
                 List(vm.immunizations) { imm in
                     VStack(alignment: .leading, spacing: 4) {
@@ -320,22 +325,22 @@ final class HealthRecordsViewModel: ObservableObject {
                 self.summary = try? await APIClient.shared.get(APIEndpoints.healthSummary)
             }
             group.addTask { @MainActor in
-                self.encounters = (try? await APIClient.shared.get(APIEndpoints.encounters)) ?? []
+                self.encounters = await (try? APIClient.shared.get(APIEndpoints.encounters)) ?? []
             }
             group.addTask { @MainActor in
-                self.labs = (try? await APIClient.shared.get(
+                self.labs = await (try? APIClient.shared.get(
                     APIEndpoints.labResults,
                     queryItems: [URLQueryItem(name: "limit", value: "50")]
                 )) ?? []
             }
             group.addTask { @MainActor in
-                self.medications = (try? await APIClient.shared.get(
+                self.medications = await (try? APIClient.shared.get(
                     APIEndpoints.medications,
                     queryItems: [URLQueryItem(name: "limit", value: "50")]
                 )) ?? []
             }
             group.addTask { @MainActor in
-                self.immunizations = (try? await APIClient.shared.get(APIEndpoints.immunizations)) ?? []
+                self.immunizations = await (try? APIClient.shared.get(APIEndpoints.immunizations)) ?? []
             }
         }
         isLoading = false
@@ -384,7 +389,7 @@ struct SharingPrivacyView: View {
         Group {
             if vm.consents.isEmpty {
                 ContentUnavailableView("No Consents", systemImage: "lock.shield",
-                    description: Text("No active sharing consents."))
+                                       description: Text("No active sharing consents."))
             } else {
                 List {
                     ForEach(vm.consents) { consent in
@@ -431,7 +436,7 @@ struct SharingPrivacyView: View {
         Group {
             if vm.accessLog.isEmpty {
                 ContentUnavailableView("No Access Records", systemImage: "eye.slash",
-                    description: Text("No one has viewed your records."))
+                                       description: Text("No one has viewed your records."))
             } else {
                 List(vm.accessLog) { log in
                     VStack(alignment: .leading, spacing: 4) {
@@ -477,7 +482,7 @@ final class SharingPrivacyViewModel: ObservableObject {
                 self.consents = page?.content ?? []
                 // Fallback: try direct array
                 if self.consents.isEmpty {
-                    self.consents = (try? await APIClient.shared.get(APIEndpoints.consents)) ?? []
+                    self.consents = await (try? APIClient.shared.get(APIEndpoints.consents)) ?? []
                 }
             }
             group.addTask { @MainActor in
@@ -487,7 +492,7 @@ final class SharingPrivacyViewModel: ObservableObject {
                 )
                 self.accessLog = page?.content ?? []
                 if self.accessLog.isEmpty {
-                    self.accessLog = (try? await APIClient.shared.get(APIEndpoints.accessLog)) ?? []
+                    self.accessLog = await (try? APIClient.shared.get(APIEndpoints.accessLog)) ?? []
                 }
             }
         }
@@ -499,7 +504,7 @@ final class SharingPrivacyViewModel: ObservableObject {
             APIEndpoints.consents,
             queryItems: [
                 URLQueryItem(name: "fromHospitalId", value: fromHospitalId),
-                URLQueryItem(name: "toHospitalId", value: toHospitalId)
+                URLQueryItem(name: "toHospitalId", value: toHospitalId),
             ]
         )
         await load()

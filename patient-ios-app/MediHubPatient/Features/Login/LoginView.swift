@@ -14,7 +14,7 @@ struct LoginView: View {
                 stops: [
                     .init(color: Color("BrandBlue"), location: 0),
                     .init(color: Color("BrandDarkBlue"), location: 0.6),
-                    .init(color: Color("BrandDarkBlue").opacity(0.95), location: 1)
+                    .init(color: Color("BrandDarkBlue").opacity(0.95), location: 1),
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing

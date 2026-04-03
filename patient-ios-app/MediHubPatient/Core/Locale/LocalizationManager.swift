@@ -15,18 +15,19 @@ final class LocalizationManager: ObservableObject {
 
     static let supportedLanguages: [(code: String, name: String)] = [
         ("en", "English"),
-        ("fr", "Français")
+        ("fr", "Français"),
     ]
 
     private init() {
         let saved = UserDefaults.standard.string(forKey: "app_language") ?? "en"
-        self.currentLanguage = saved
-        self.bundle = Self.loadBundle(for: saved)
+        currentLanguage = saved
+        bundle = Self.loadBundle(for: saved)
     }
 
     private static func loadBundle(for languageCode: String) -> Bundle {
         guard let path = Bundle.main.path(forResource: languageCode, ofType: "lproj"),
-              let bundle = Bundle(path: path) else {
+              let bundle = Bundle(path: path)
+        else {
             return Bundle.main
         }
         return bundle
@@ -35,9 +36,13 @@ final class LocalizationManager: ObservableObject {
     func localizedString(_ key: String) -> String {
         bundle.localizedString(forKey: key, value: nil, table: nil)
     }
+
+    func setLanguage(_ code: String) {
+        currentLanguage = code
+    }
 }
 
-// Convenience extension for SwiftUI Text
+/// Convenience extension for SwiftUI Text
 extension String {
     var localized: String {
         LocalizationManager.shared.localizedString(self)

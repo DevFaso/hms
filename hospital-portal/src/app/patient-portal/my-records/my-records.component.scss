@@ -1,0 +1,52 @@
+.records-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.rec-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.rec-action-btn:hover {
+  background: #e2e8f0;
+}
+.rec-action-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+.rec-section {
+  margin-top: 16px;
+}
+.rec-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rec-chip {
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 16px;
+  background: #f1f5f9;
+  color: #475569;
+}
+.rec-chip-danger {
+  background: #fee2e2;
+  color: #dc2626;
+}
+.rec-muted {
+  font-size: 13px;
+  color: #94a3b8;
+}
+.item-abnormal {
+  border-left: 3px solid #dc2626;
+}

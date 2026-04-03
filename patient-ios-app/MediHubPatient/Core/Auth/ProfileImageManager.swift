@@ -1,5 +1,5 @@
-import SwiftUI
 import Combine
+import SwiftUI
 
 /// Shared manager that keeps the current user's profile‐image URL
 /// in sync across the entire app (tab bar, side menu, profile view, etc.).

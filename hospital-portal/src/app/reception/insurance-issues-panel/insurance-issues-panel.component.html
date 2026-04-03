@@ -1,0 +1,44 @@
+@if (issues.length === 0) {
+  <div class="empty-state">{{ 'RECEPTION.NO_INSURANCE_ISSUES' | translate }}</div>
+} @else {
+  <table class="issues-table">
+    <thead>
+      <tr>
+        <th>{{ 'COMMON.TIME' | translate }}</th>
+        <th>{{ 'PATIENTS.PATIENT' | translate }}</th>
+        <th>{{ 'RECEPTION.ISSUE' | translate }}</th>
+        <th>{{ 'RECEPTION.PROVIDER' | translate }}</th>
+        <th>{{ 'STAFF.DEPARTMENT' | translate }}</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (issue of issues; track issue.patientId + (issue.appointmentId ?? '')) {
+        <tr>
+          <td>{{ issue.appointmentTime ?? '—' }}</td>
+          <td>
+            <button class="patient-link" (click)="patientClicked.emit(issue.patientId)">
+              {{ issue.patientName }}
+            </button>
+          </td>
+          <td>
+            <span class="issue-chip" [ngClass]="issueClass(issue.issueType)">
+              {{ issueLabel(issue.issueType) }}
+            </span>
+          </td>
+          <td>{{ issue.providerName ?? '—' }}</td>
+          <td>{{ issue.departmentName ?? '—' }}</td>
+          <td>
+            <button
+              class="btn-icon"
+              (click)="patientClicked.emit(issue.patientId)"
+              [title]="'RECEPTION.VIEW_PATIENT' | translate"
+            >
+              <span class="material-symbols-outlined">person_search</span>
+            </button>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+}

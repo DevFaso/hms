@@ -1,0 +1,51 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">groups</span>
+      {{ 'PORTAL.CARE_TEAM.TITLE' | translate }}
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>{{ 'PORTAL.CARE_TEAM.LOADING' | translate }}</p>
+    </div>
+  } @else if (members().length === 0) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">groups</span>
+      <h3>{{ 'PORTAL.CARE_TEAM.EMPTY_TITLE' | translate }}</h3>
+      <p>{{ 'PORTAL.CARE_TEAM.EMPTY_DESC' | translate }}</p>
+    </div>
+  } @else {
+    <section class="portal-section">
+      <div class="care-team-list">
+        @for (m of members(); track m.name) {
+          <div class="ct-card" [class.ct-primary]="m.isPrimary">
+            @if (m.isPrimary) {
+              <span class="ct-badge">{{ 'PORTAL.CARE_TEAM.PRIMARY_PROVIDER' | translate }}</span>
+            }
+            <div class="ct-avatar" [style.background]="m.isPrimary ? '#dbeafe' : '#f1f5f9'">
+              <span
+                class="material-symbols-outlined"
+                [style.color]="m.isPrimary ? '#2563eb' : '#64748b'"
+              >
+                {{ m.isPrimary ? 'star' : 'person' }}
+              </span>
+            </div>
+            <div class="ct-info">
+              <span class="ct-name">{{ m.name }}</span>
+              <span class="ct-role">{{ m.specialty || m.role }}</span>
+              @if (m.phone) {
+                <span class="ct-contact">
+                  <span class="material-symbols-outlined" style="font-size: 14px">phone</span>
+                  {{ m.phone }}
+                </span>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </section>
+  }
+</div>

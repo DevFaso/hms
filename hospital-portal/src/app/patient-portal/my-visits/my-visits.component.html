@@ -1,0 +1,103 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">history</span>
+      {{ 'PORTAL.VISITS.TITLE' | translate }}
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>{{ 'PORTAL.VISITS.LOADING' | translate }}</p>
+    </div>
+  } @else if (encounters().length === 0) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined">event_note</span>
+      <h3>{{ 'PORTAL.VISITS.EMPTY_TITLE' | translate }}</h3>
+      <p>{{ 'PORTAL.VISITS.EMPTY_DESC' | translate }}</p>
+    </div>
+  } @else {
+    <section class="portal-section">
+      <div class="portal-list">
+        @for (enc of encounters(); track enc.id) {
+          <div
+            class="portal-list-item clickable"
+            (click)="toggleExpand(enc.id)"
+            role="button"
+            tabindex="0"
+            (keydown.enter)="toggleExpand(enc.id)"
+            [class.expanded]="expandedId() === enc.id"
+          >
+            <div class="pli-icon" style="background: #eef2ff; color: #4f46e5">
+              <span class="material-symbols-outlined">clinical_notes</span>
+            </div>
+            <div class="pli-body">
+              <span class="pli-title"
+                >{{ enc.type | enumLabel: 'encounterType' }} ·
+                {{ enc.department || ('PORTAL.VISITS.GENERAL' | translate) }}</span
+              >
+              <span class="pli-sub">{{
+                enc.providerName || ('PORTAL.VISITS.PROVIDER' | translate)
+              }}</span>
+              <span class="pli-meta">
+                {{ enc.date | date: 'MMM d, yyyy' }}
+                @if (enc.chiefComplaint) {
+                  · {{ enc.chiefComplaint }}
+                }
+              </span>
+            </div>
+            <span class="portal-status-chip" [attr.data-status]="enc.status">{{
+              enc.status | enumLabel: 'status'
+            }}</span>
+          </div>
+
+          @if (expandedId() === enc.id) {
+            <div class="detail-panel">
+              <div class="detail-grid">
+                <div class="detail-item">
+                  <span class="dl">{{ 'PORTAL.VISITS.VISIT_TYPE' | translate }}</span>
+                  <span class="dv">{{ enc.type | enumLabel: 'encounterType' }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="dl">{{ 'PORTAL.VISITS.DATE' | translate }}</span>
+                  <span class="dv">{{ enc.date | date: 'fullDate' }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="dl">{{ 'PORTAL.VISITS.PROVIDER' | translate }}</span>
+                  <span class="dv">{{
+                    enc.providerName || ('PORTAL.VISITS.NOT_ASSIGNED' | translate)
+                  }}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="dl">{{ 'PORTAL.VISITS.DEPARTMENT' | translate }}</span>
+                  <span class="dv">{{
+                    enc.department || ('PORTAL.VISITS.GENERAL' | translate)
+                  }}</span>
+                </div>
+                @if (enc.chiefComplaint) {
+                  <div class="detail-item">
+                    <span class="dl">{{ 'PORTAL.VISITS.CHIEF_COMPLAINT' | translate }}</span>
+                    <span class="dv">{{ enc.chiefComplaint }}</span>
+                  </div>
+                }
+                @if (enc.diagnosisSummary) {
+                  <div class="detail-item detail-item-wide">
+                    <span class="dl">{{ 'PORTAL.VISITS.DIAGNOSIS' | translate }}</span>
+                    <span class="dv">{{ enc.diagnosisSummary }}</span>
+                  </div>
+                }
+                <div class="detail-item">
+                  <span class="dl">{{ 'PORTAL.VISITS.STATUS' | translate }}</span>
+                  <span class="dv portal-status-chip" [attr.data-status]="enc.status">{{
+                    enc.status | enumLabel: 'status'
+                  }}</span>
+                </div>
+              </div>
+            </div>
+          }
+        }
+      </div>
+    </section>
+  }
+</div>

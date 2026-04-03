@@ -1,0 +1,163 @@
+<div
+  class="dialog-overlay"
+  role="button"
+  tabindex="0"
+  aria-label="Close dialog"
+  (click)="dismissed.emit()"
+  (keydown.enter)="dismissed.emit()"
+  (keydown.escape)="dismissed.emit()"
+></div>
+<div
+  class="dialog-box"
+  role="dialog"
+  aria-modal="true"
+  [attr.aria-label]="'RECEPTION.REGISTER_WALKIN' | translate"
+>
+  <div class="dialog-header">
+    <span class="material-symbols-outlined header-icon">person_add</span>
+    <h2>{{ 'RECEPTION.REGISTER_WALKIN' | translate }}</h2>
+    <button class="btn-close" (click)="dismissed.emit()" aria-label="Close">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+  </div>
+
+  <div class="dialog-body">
+    <!-- Patient Search -->
+    <div class="field-group">
+      <label for="patientSearch"
+        >{{ 'PATIENTS.PATIENT' | translate }} <span class="required">*</span></label
+      >
+      <div class="search-wrapper">
+        <input
+          id="patientSearch"
+          type="text"
+          class="form-control"
+          [placeholder]="'RECEPTION.SEARCH_PATIENT_PLACEHOLDER' | translate"
+          [ngModel]="patientQuery()"
+          (ngModelChange)="onPatientQueryChange($event)"
+          autocomplete="off"
+        />
+        @if (searchingPatients()) {
+          <span class="search-spinner material-symbols-outlined spin">progress_activity</span>
+        }
+      </div>
+      @if (patientResults().length > 0 && !selectedPatient()) {
+        <ul class="autocomplete-list">
+          @for (p of patientResults(); track p.id) {
+            <li
+              role="button"
+              tabindex="0"
+              (click)="selectPatient(p)"
+              (keydown.enter)="selectPatient(p)"
+            >
+              <span class="result-name">{{ p.firstName }} {{ p.lastName }}</span>
+              @if (p.mrn) {
+                <span class="result-meta">MRN: {{ p.mrn }}</span>
+              }
+            </li>
+          }
+        </ul>
+      }
+      @if (selectedPatient()) {
+        <div class="selected-badge">
+          <span class="material-symbols-outlined">check_circle</span>
+          {{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}
+          <button class="clear-btn" (click)="selectedPatient.set(null); patientQuery.set('')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+      }
+    </div>
+
+    <!-- Provider Search -->
+    <div class="field-group">
+      <label for="staffSearch"
+        >{{ 'RECEPTION.PROVIDER' | translate }} <span class="required">*</span></label
+      >
+      <div class="search-wrapper">
+        <input
+          id="staffSearch"
+          type="text"
+          class="form-control"
+          [placeholder]="'RECEPTION.FILTER_PROVIDER' | translate"
+          [ngModel]="staffQuery()"
+          (ngModelChange)="staffQuery.set($event); selectedStaff.set(null)"
+          autocomplete="off"
+        />
+      </div>
+      @if (filteredStaff().length > 0 && !selectedStaff()) {
+        <ul class="autocomplete-list">
+          @for (s of filteredStaff().slice(0, 10); track s.id) {
+            <li
+              role="button"
+              tabindex="0"
+              (click)="selectStaff(s)"
+              (keydown.enter)="selectStaff(s)"
+            >
+              <span class="result-name">{{ s.name }}</span>
+              @if (s.departmentName) {
+                <span class="result-meta">{{ s.departmentName }}</span>
+              }
+            </li>
+          }
+        </ul>
+      }
+      @if (selectedStaff()) {
+        <div class="selected-badge">
+          <span class="material-symbols-outlined">check_circle</span>
+          {{ selectedStaff()!.name }}
+          @if (selectedStaff()!.departmentName) {
+            <span class="result-meta">— {{ selectedStaff()!.departmentName }}</span>
+          }
+          <button class="clear-btn" (click)="selectedStaff.set(null); staffQuery.set('')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+      }
+    </div>
+
+    <!-- Encounter Type -->
+    <div class="field-group">
+      <label for="encType">{{ 'RECEPTION.TYPE' | translate }}</label>
+      <select
+        id="encType"
+        class="form-control"
+        [ngModel]="encounterType()"
+        (ngModelChange)="encounterType.set($event)"
+      >
+        @for (t of encounterTypes; track t) {
+          <option [value]="t">{{ 'ENCOUNTERS.' + t | translate }}</option>
+        }
+      </select>
+    </div>
+
+    <!-- Notes -->
+    <div class="field-group">
+      <label for="walkinNotes">{{ 'RECEPTION.CHIEF_COMPLAINT' | translate }}</label>
+      <textarea
+        id="walkinNotes"
+        class="form-control"
+        rows="3"
+        [placeholder]="'RECEPTION.REASON_FOR_VISIT' | translate"
+        [ngModel]="notes()"
+        (ngModelChange)="notes.set($event)"
+      ></textarea>
+    </div>
+  </div>
+
+  <div class="dialog-footer">
+    <button class="btn-secondary" (click)="dismissed.emit()" [disabled]="saving()">
+      {{ 'COMMON.CANCEL' | translate }}
+    </button>
+    <button
+      class="btn-primary"
+      [disabled]="!selectedPatient() || !selectedStaff() || saving()"
+      (click)="submit()"
+    >
+      @if (saving()) {
+        <span class="material-symbols-outlined spin">progress_activity</span>
+      }
+      {{ 'RECEPTION.REGISTER_WALKIN' | translate }}
+    </button>
+  </div>
+</div>
