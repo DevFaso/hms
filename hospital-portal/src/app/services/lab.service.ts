@@ -43,6 +43,79 @@ export interface LabTestDefinition {
   category: string;
   sampleType: string;
   isActive: boolean;
+  approvalStatus:
+    | 'DRAFT'
+    | 'PENDING_QA_REVIEW'
+    | 'PENDING_DIRECTOR_APPROVAL'
+    | 'APPROVED'
+    | 'ACTIVE'
+    | 'REJECTED'
+    | 'RETIRED';
+  approvedById: string | null;
+  approvedAt: string | null;
+  reviewedById: string | null;
+  reviewedAt: string | null;
+  rejectionReason: string | null;
+}
+
+export interface LabTestDefinitionApprovalRequest {
+  action: 'SUBMIT_FOR_QA' | 'COMPLETE_QA_REVIEW' | 'APPROVE' | 'ACTIVATE' | 'REJECT' | 'RETIRE';
+  rejectionReason?: string;
+}
+
+export type ValidationStudyType =
+  | 'PRECISION'
+  | 'ACCURACY'
+  | 'REFERENCE_RANGE'
+  | 'METHOD_COMPARISON'
+  | 'INTERFERENCE'
+  | 'CARRYOVER'
+  | 'LINEARITY';
+
+export interface LabTestValidationStudy {
+  id: string;
+  labTestDefinitionId: string;
+  testCode: string;
+  testName: string;
+  studyType: ValidationStudyType;
+  studyDate: string;
+  performedByUserId: string | null;
+  performedByDisplay: string | null;
+  summary: string | null;
+  resultData: string | null;
+  passed: boolean;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LabTestValidationStudyRequest {
+  studyType: ValidationStudyType;
+  studyDate: string;
+  performedByUserId?: string;
+  performedByDisplay?: string;
+  summary?: string;
+  resultData?: string;
+  passed: boolean;
+  notes?: string;
+}
+
+export type QcEventLevel = 'LOW_CONTROL' | 'HIGH_CONTROL';
+
+export interface LabQcEvent {
+  id: string;
+  hospitalId: string;
+  analyzerId: string | null;
+  testDefinitionId: string;
+  testDefinitionName: string;
+  qcLevel: QcEventLevel;
+  measuredValue: number;
+  expectedValue: number;
+  passed: boolean;
+  recordedAt: string;
+  recordedById: string | null;
+  notes: string | null;
+  createdAt: string;
 }
 
 export interface LabOrderRequest {
@@ -134,6 +207,29 @@ export class LabService {
       .pipe(map((res) => res?.data ?? []));
   }
 
+  searchTestDefinitions(params: {
+    keyword?: string;
+    approvalStatus?: LabTestDefinition['approvalStatus'];
+    page?: number;
+    size?: number;
+  }): Observable<{ content: LabTestDefinition[]; totalElements: number }> {
+    let httpParams = new HttpParams();
+    if (params.keyword) httpParams = httpParams.set('keyword', params.keyword);
+    if (params.approvalStatus) httpParams = httpParams.set('approvalStatus', params.approvalStatus);
+    if (params.page !== undefined) httpParams = httpParams.set('page', String(params.page));
+    if (params.size !== undefined) httpParams = httpParams.set('size', String(params.size));
+    return this.http
+      .get<ApiWrapper<PageResponse<LabTestDefinition>>>('/lab-test-definitions/search', {
+        params: httpParams,
+      })
+      .pipe(
+        map((res) => ({
+          content: res?.data?.content ?? [],
+          totalElements: res?.data?.totalElements ?? 0,
+        })),
+      );
+  }
+
   updateOrder(id: string, req: Partial<LabOrderRequest>): Observable<LabOrderResponse> {
     return this.http
       .put<ApiWrapper<LabOrderResponse>>(`/lab-orders/${id}`, req)
@@ -142,5 +238,56 @@ export class LabService {
 
   deleteOrder(id: string): Observable<void> {
     return this.http.delete<void>(`/lab-orders/${id}`);
+  }
+
+  submitApprovalAction(
+    id: string,
+    req: LabTestDefinitionApprovalRequest,
+  ): Observable<LabTestDefinition> {
+    return this.http
+      .post<ApiWrapper<LabTestDefinition>>(`/lab-test-definitions/${id}/approval`, req)
+      .pipe(map((res) => res.data));
+  }
+
+  getValidationStudies(definitionId: string): Observable<LabTestValidationStudy[]> {
+    return this.http
+      .get<
+        ApiWrapper<LabTestValidationStudy[]>
+      >(`/lab-test-definitions/${definitionId}/validation-studies`)
+      .pipe(map((res) => res?.data ?? []));
+  }
+
+  createValidationStudy(
+    definitionId: string,
+    req: LabTestValidationStudyRequest,
+  ): Observable<LabTestValidationStudy> {
+    return this.http
+      .post<
+        ApiWrapper<LabTestValidationStudy>
+      >(`/lab-test-definitions/${definitionId}/validation-studies`, req)
+      .pipe(map((res) => res.data));
+  }
+
+  updateValidationStudy(
+    id: string,
+    req: LabTestValidationStudyRequest,
+  ): Observable<LabTestValidationStudy> {
+    return this.http
+      .put<ApiWrapper<LabTestValidationStudy>>(`/lab-test-validation-studies/${id}`, req)
+      .pipe(map((res) => res.data));
+  }
+
+  deleteValidationStudy(id: string): Observable<void> {
+    return this.http.delete<void>(`/lab-test-validation-studies/${id}`);
+  }
+
+  getQcEventsByDefinition(definitionId: string, size = 150): Observable<LabQcEvent[]> {
+    const params = new HttpParams()
+      .set('testDefinitionId', definitionId)
+      .set('size', String(size))
+      .set('sort', 'recordedAt,asc');
+    return this.http
+      .get<ApiWrapper<PageResponse<LabQcEvent>>>('/lab-qc-events', { params })
+      .pipe(map((res) => res?.data?.content ?? []));
   }
 }

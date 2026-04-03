@@ -1,5 +1,6 @@
 package com.example.hms.repository;
 
+import com.example.hms.enums.LabTestDefinitionApprovalStatus;
 import com.example.hms.model.LabTestDefinition;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -42,11 +43,13 @@ public interface LabTestDefinitionRepository extends JpaRepository<LabTestDefini
           AND (:unit IS NULL OR LOWER(l.unit) = LOWER(:unit))
           AND (:category IS NULL OR LOWER(l.category) = LOWER(:category))
           AND (:active IS NULL OR l.active = :active)
+          AND (:approvalStatus IS NULL OR l.approvalStatus = :approvalStatus)
     """)
     Page<LabTestDefinition> search(@Param("keyword") String keyword,
                                    @Param("unit") String unit,
                                    @Param("category") String category,
                                    @Param("active") Boolean active,
+                                   @Param("approvalStatus") LabTestDefinitionApprovalStatus approvalStatus,
                                    Pageable pageable);
 
     @Query("""

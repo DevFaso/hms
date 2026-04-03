@@ -26,7 +26,7 @@ You are a **Senior Full-Stack Engineer** for the Hospital Management System (HMS
 
 - Use layered architecture: Controller -> Service -> Repository -> DTO/Entity.
 - Keep controllers thin; put business logic in services.
-- Use MapStruct for DTO-entity mapping.
+- Use Mapper for DTO-entity mapping.
 - Validate inputs at the Controller boundary.
 - Use explicit request/response models for all APIs.
 
