@@ -609,7 +609,8 @@ class LabTestDefinitionServiceImplTest {
             when(userRepository.findByUsername("tester")).thenReturn(Optional.of(scientist));
             when(repository.findById(defId)).thenReturn(Optional.of(definition));
 
-            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("SUBMIT_FOR_QA")))
+            var req = approvalReq("SUBMIT_FOR_QA");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessageContaining("Action not allowed from status");
         }
@@ -626,7 +627,8 @@ class LabTestDefinitionServiceImplTest {
             when(userRepository.findByUsername("tester")).thenReturn(Optional.of(nurse));
             when(repository.findById(defId)).thenReturn(Optional.of(definition));
 
-            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("SUBMIT_FOR_QA")))
+            var req = approvalReq("SUBMIT_FOR_QA");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(AccessDeniedException.class)
                     .hasMessageContaining("Insufficient role");
         }
@@ -664,7 +666,8 @@ class LabTestDefinitionServiceImplTest {
             when(userRepository.findByUsername("tester")).thenReturn(Optional.of(qm));
             when(repository.findById(defId)).thenReturn(Optional.of(definition));
 
-            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("COMPLETE_QA_REVIEW")))
+            var req = approvalReq("COMPLETE_QA_REVIEW");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(IllegalStateException.class);
         }
     }
@@ -702,7 +705,8 @@ class LabTestDefinitionServiceImplTest {
             when(userRepository.findByUsername("tester")).thenReturn(Optional.of(qm));
             when(repository.findById(defId)).thenReturn(Optional.of(definition));
 
-            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("APPROVE")))
+            var req = approvalReq("APPROVE");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(AccessDeniedException.class);
         }
     }
@@ -739,7 +743,8 @@ class LabTestDefinitionServiceImplTest {
             when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
             when(repository.findById(defId)).thenReturn(Optional.of(definition));
 
-            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("ACTIVATE")))
+            var req = approvalReq("ACTIVATE");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(IllegalStateException.class);
         }
     }
@@ -776,7 +781,8 @@ class LabTestDefinitionServiceImplTest {
             when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
             when(repository.findById(defId)).thenReturn(Optional.of(definition));
 
-            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("REJECT")))
+            var req = approvalReq("REJECT");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("rejection reason");
         }
@@ -792,7 +798,8 @@ class LabTestDefinitionServiceImplTest {
             when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
             when(repository.findById(defId)).thenReturn(Optional.of(definition));
 
-            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("REJECT", "   ")))
+            var req = approvalReq("REJECT", "   ");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(IllegalArgumentException.class);
         }
     }
@@ -808,7 +815,8 @@ class LabTestDefinitionServiceImplTest {
             when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
             when(repository.findById(defId)).thenReturn(Optional.of(definition));
 
-            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("REJECT", "reason")))
+            var req = approvalReq("REJECT", "reason");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(IllegalStateException.class);
         }
     }
@@ -845,7 +853,8 @@ class LabTestDefinitionServiceImplTest {
             when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
             when(repository.findById(defId)).thenReturn(Optional.of(definition));
 
-            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("RETIRE")))
+            var req = approvalReq("RETIRE");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(IllegalStateException.class);
         }
     }
@@ -862,7 +871,8 @@ class LabTestDefinitionServiceImplTest {
             when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
             when(repository.findById(defId)).thenReturn(Optional.of(definition));
 
-            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("MAGIC_SPELL")))
+            var req = approvalReq("MAGIC_SPELL");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(IllegalArgumentException.class)
                     .hasMessageContaining("Unknown approval action");
         }
@@ -877,7 +887,8 @@ class LabTestDefinitionServiceImplTest {
             when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
             when(repository.findById(defId)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("SUBMIT_FOR_QA")))
+            var req = approvalReq("SUBMIT_FOR_QA");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(EntityNotFoundException.class);
         }
     }
@@ -887,7 +898,8 @@ class LabTestDefinitionServiceImplTest {
         try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn(null);
 
-            assertThatThrownBy(() -> service.processApprovalAction(defId, approvalReq("SUBMIT_FOR_QA")))
+            var req = approvalReq("SUBMIT_FOR_QA");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
                     .isInstanceOf(AccessDeniedException.class)
                     .hasMessageContaining("Unauthenticated");
         }

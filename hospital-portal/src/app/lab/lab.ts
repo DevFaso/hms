@@ -397,7 +397,7 @@ export class LabComponent implements OnInit {
     this.processingApproval.set(true);
     this.labService.submitApprovalAction(def.id, req).subscribe({
       next: (updated) => {
-        this.toast.success(`Definition ${updated.approvalStatus.toLowerCase().replace('_', ' ')}`);
+        this.toast.success(`Definition ${updated.approvalStatus.toLowerCase().replace(/_/g, ' ')}`);
         this.labService.listTestDefinitions().subscribe((defs) => this.labTestDefs.set(defs));
         this.closeApprovalModal();
         this.processingApproval.set(false);

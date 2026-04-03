@@ -101,7 +101,13 @@ public class LabQcEventServiceImpl implements LabQcEventService {
     @Override
     @Transactional(readOnly = true)
     public Page<LabQcEventResponseDTO> getQcEventsByDefinition(UUID testDefinitionId, Pageable pageable, Locale locale) {
-        return qcEventRepository.findByTestDefinitionId(testDefinitionId, pageable)
+        UUID scopedHospitalId = roleValidator.requireActiveHospitalId();
+        if (scopedHospitalId == null) {
+            // SUPER_ADMIN: no hospital scoping — return across all hospitals
+            return qcEventRepository.findByTestDefinitionId(testDefinitionId, pageable)
+                .map(qcEventMapper::toResponseDTO);
+        }
+        return qcEventRepository.findByTestDefinitionIdAndHospitalId(testDefinitionId, scopedHospitalId, pageable)
             .map(qcEventMapper::toResponseDTO);
     }
 }
