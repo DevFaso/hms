@@ -1,5 +1,7 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.LabTestDefinitionApprovalStatus;
+import com.example.hms.payload.dto.LabTestDefinitionApprovalRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
 import org.springframework.data.domain.Page;
@@ -15,5 +17,6 @@ public interface LabTestDefinitionService {
     List<LabTestDefinitionResponseDTO> getActiveByHospital(UUID hospitalId);
     LabTestDefinitionResponseDTO update(UUID id, LabTestDefinitionRequestDTO dto);
     void delete(UUID id);
-    Page<LabTestDefinitionResponseDTO> search(String keyword, String unit, String category, Boolean active, Pageable pageable);
+    Page<LabTestDefinitionResponseDTO> search(String keyword, String unit, String category, Boolean active, LabTestDefinitionApprovalStatus approvalStatus, Pageable pageable);
+    LabTestDefinitionResponseDTO processApprovalAction(UUID id, LabTestDefinitionApprovalRequestDTO dto);
 }

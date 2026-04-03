@@ -53,6 +53,12 @@ public class LabTestDefinitionMapper {
                 .preparationInstructions(entity.getPreparationInstructions())
                 .turnaroundTime(entity.getTurnaroundTimeMinutes())
                 .active(entity.isActive())
+                .approvalStatus(entity.getApprovalStatus() != null ? entity.getApprovalStatus().name() : null)
+                .approvedById(entity.getApprovedById())
+                .approvedAt(entity.getApprovedAt())
+                .reviewedById(entity.getReviewedById())
+                .reviewedAt(entity.getReviewedAt())
+                .rejectionReason(entity.getRejectionReason())
                 .referenceRanges(mapToDtoRanges(entity.getReferenceRanges()))
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
@@ -82,23 +88,7 @@ public class LabTestDefinitionMapper {
     }
 
     public LabTestDefinitionResponseDTO toResponseDTO(LabTestDefinition labTestDefinition) {
-        if (labTestDefinition == null) return null;
-
-        return LabTestDefinitionResponseDTO.builder()
-                .id(labTestDefinition.getId())
-                .testCode(labTestDefinition.getTestCode())
-                .name(labTestDefinition.getName())
-                .description(labTestDefinition.getDescription())
-                .category(labTestDefinition.getCategory())
-                .unit(labTestDefinition.getUnit())
-                .sampleType(labTestDefinition.getSampleType())
-                .preparationInstructions(labTestDefinition.getPreparationInstructions())
-                .turnaroundTime(labTestDefinition.getTurnaroundTimeMinutes())
-                .active(labTestDefinition.isActive())
-                .referenceRanges(mapToDtoRanges(labTestDefinition.getReferenceRanges()))
-                .createdAt(labTestDefinition.getCreatedAt())
-                .updatedAt(labTestDefinition.getUpdatedAt())
-                .build();
+        return toDto(labTestDefinition);
     }
 
     private List<LabTestReferenceRange> mapToEntityRanges(List<LabTestReferenceRangeDTO> ranges) {
