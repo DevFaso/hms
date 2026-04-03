@@ -37,11 +37,12 @@ struct VisitHistoryView: View {
     }
 
     // MARK: - Visits Tab
+
     private var visitsList: some View {
         Group {
             if vm.encounters.isEmpty {
                 ContentUnavailableView("No Visits", systemImage: "building.2.fill",
-                    description: Text("No visit history found."))
+                                       description: Text("No visit history found."))
             } else {
                 List(vm.encounters) { encounter in
                     EncounterRowView(encounter: encounter)
@@ -52,11 +53,12 @@ struct VisitHistoryView: View {
     }
 
     // MARK: - Summaries Tab
+
     private var summariesList: some View {
         Group {
             if vm.summaries.isEmpty {
                 ContentUnavailableView("No Summaries", systemImage: "doc.text",
-                    description: Text("No after-visit summaries available."))
+                                       description: Text("No after-visit summaries available."))
             } else {
                 List(vm.summaries) { summary in
                     AfterVisitSummaryCard(summary: summary)
@@ -186,10 +188,10 @@ final class VisitHistoryViewModel: ObservableObject {
         isLoading = true
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in
-                self.encounters = (try? await APIClient.shared.get(APIEndpoints.encounters)) ?? []
+                self.encounters = await (try? APIClient.shared.get(APIEndpoints.encounters)) ?? []
             }
             group.addTask { @MainActor in
-                self.summaries = (try? await APIClient.shared.get(APIEndpoints.afterVisitSummaries)) ?? []
+                self.summaries = await (try? APIClient.shared.get(APIEndpoints.afterVisitSummaries)) ?? []
             }
         }
         isLoading = false

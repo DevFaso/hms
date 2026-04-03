@@ -22,12 +22,12 @@ struct AppointmentsView: View {
 
     private var content: some View {
         Group {
-            if vm.isLoading && vm.appointments.isEmpty {
+            if vm.isLoading, vm.appointments.isEmpty {
                 ProgressView("loading".localized)
             } else if vm.appointments.isEmpty {
                 ContentUnavailableView("no_appointments".localized,
-                    systemImage: "calendar.badge.exclamationmark",
-                    description: Text("no_appointments_desc".localized))
+                                       systemImage: "calendar.badge.exclamationmark",
+                                       description: Text("no_appointments_desc".localized))
             } else {
                 List {
                     // Upcoming
@@ -37,23 +37,23 @@ struct AppointmentsView: View {
                                 NavigationLink(destination: AppointmentDetailView(appointment: appt)) {
                                     AppointmentRowView(appointment: appt)
                                 }
-                                    .padding(.vertical, 4)
-                                    .swipeActions(edge: .trailing) {
-                                        Button(role: .destructive) {
-                                            cancelTarget = appt
-                                            showCancelAlert = true
-                                        } label: {
-                                            Label("Cancel", systemImage: "xmark.circle")
-                                        }
+                                .padding(.vertical, 4)
+                                .swipeActions(edge: .trailing) {
+                                    Button(role: .destructive) {
+                                        cancelTarget = appt
+                                        showCancelAlert = true
+                                    } label: {
+                                        Label("Cancel", systemImage: "xmark.circle")
                                     }
-                                    .swipeActions(edge: .leading) {
-                                        Button {
-                                            rescheduleTarget = appt
-                                        } label: {
-                                            Label("Reschedule", systemImage: "calendar.badge.clock")
-                                        }
-                                        .tint(.orange)
+                                }
+                                .swipeActions(edge: .leading) {
+                                    Button {
+                                        rescheduleTarget = appt
+                                    } label: {
+                                        Label("Reschedule", systemImage: "calendar.badge.clock")
                                     }
+                                    .tint(.orange)
+                                }
                             }
                         }
                     }
@@ -65,8 +65,8 @@ struct AppointmentsView: View {
                                 NavigationLink(destination: AppointmentDetailView(appointment: appt)) {
                                     AppointmentRowView(appointment: appt)
                                 }
-                                    .padding(.vertical, 4)
-                                    .opacity(0.7)
+                                .padding(.vertical, 4)
+                                .opacity(0.7)
                             }
                         }
                     }
@@ -108,7 +108,7 @@ struct AppointmentsView: View {
             Button("Keep", role: .cancel) { cancelTarget = nil; cancelReason = "" }
         } message: {
             if let appt = cancelTarget {
-                Text("Cancel appointment with \(appt.staffName ?? "provider") on \(appt.appointmentDate ?? "")?" )
+                Text("Cancel appointment with \(appt.staffName ?? "provider") on \(appt.appointmentDate ?? "")?")
             } else {
                 Text("Are you sure you want to cancel this appointment?")
             }
@@ -279,20 +279,22 @@ struct BookAppointmentSheet: View {
         comps.hour = 9; comps.minute = 0
         return Calendar.current.date(from: comps) ?? Date()
     }()
+
     @State private var endTime = {
         var comps = Calendar.current.dateComponents([.year, .month, .day], from: Date())
         comps.hour = 9; comps.minute = 30
         return Calendar.current.date(from: comps) ?? Date()
     }()
+
     @State private var selectedDoctorKey = ""
     @State private var reason = ""
     @State private var notes = ""
     @State private var isSubmitting = false
     @State private var errorMsg: String?
 
-    // Build unique doctor entries from past appointments
+    /// Build unique doctor entries from past appointments
     private struct DoctorOption: Hashable {
-        let key: String          // unique composite key
+        let key: String // unique composite key
         let staffId: String
         let staffName: String
         let staffEmail: String?
@@ -314,7 +316,8 @@ struct BookAppointmentSheet: View {
                     key: key, staffId: sid, staffName: sname,
                     staffEmail: appt.staffEmail,
                     hospitalName: hname, hospitalId: appt.hospitalId,
-                    departmentId: appt.departmentId))
+                    departmentId: appt.departmentId
+                ))
             }
         }
         return result.sorted { $0.staffName < $1.staffName }
@@ -359,9 +362,9 @@ struct BookAppointmentSheet: View {
 
                 Section("Details") {
                     TextField("Reason for visit", text: $reason, axis: .vertical)
-                        .lineLimit(2...4)
+                        .lineLimit(2 ... 4)
                     TextField("Additional notes (optional)", text: $notes, axis: .vertical)
-                        .lineLimit(2...4)
+                        .lineLimit(2 ... 4)
                 }
 
                 if let err = errorMsg {

@@ -20,7 +20,9 @@ struct MedicationDTO: Codable, Identifiable {
     let refillsRemaining: Int?
 
     /// Display name: prefer `name`, fall back to `medicationName`
-    var displayName: String { name ?? medicationName ?? "Medication" }
+    var displayName: String {
+        name ?? medicationName ?? "Medication"
+    }
 }
 
 // MARK: - Prescription Models (matches PortalPrescription)

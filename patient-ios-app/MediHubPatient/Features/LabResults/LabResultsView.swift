@@ -16,12 +16,12 @@ struct LabResultsView: View {
 
     private var content: some View {
         Group {
-            if vm.isLoading && vm.results.isEmpty {
+            if vm.isLoading, vm.results.isEmpty {
                 ProgressView("loading".localized)
             } else if vm.results.isEmpty {
                 ContentUnavailableView("no_lab_results".localized,
-                    systemImage: "testtube.2",
-                    description: Text("no_lab_results_desc".localized))
+                                       systemImage: "testtube.2",
+                                       description: Text("no_lab_results_desc".localized))
             } else {
                 List(vm.results) { result in
                     LabResultDetailRow(result: result)

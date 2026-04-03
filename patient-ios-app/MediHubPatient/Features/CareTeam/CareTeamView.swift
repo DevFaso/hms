@@ -19,8 +19,8 @@ struct CareTeamView: View {
             if vm.isLoading { ProgressView("loading".localized) }
             else if vm.members.isEmpty {
                 ContentUnavailableView("no_care_team".localized,
-                    systemImage: "person.2.fill",
-                    description: Text("no_care_team_desc".localized))
+                                       systemImage: "person.2.fill",
+                                       description: Text("no_care_team_desc".localized))
             } else {
                 List(vm.members) { member in
                     CareTeamMemberRow(member: member)
@@ -73,7 +73,7 @@ final class CareTeamViewModel: ObservableObject {
         members = dto?.members ?? []
         // Fallback: some backends return array directly
         if members.isEmpty {
-            members = (try? await APIClient.shared.get(APIEndpoints.careTeam)) ?? []
+            members = await (try? APIClient.shared.get(APIEndpoints.careTeam)) ?? []
         }
         isLoading = false
     }

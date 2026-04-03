@@ -30,7 +30,9 @@ struct AppointmentDTO: Codable, Identifiable, Hashable {
     let updatedAt: String?
 
     /// Convenience: display name of the doctor/staff
-    var doctorName: String? { staffName }
+    var doctorName: String? {
+        staffName
+    }
 
     /// Formatted time range, e.g. "08:04 – 08:34"
     var timeRange: String? {
@@ -39,15 +41,17 @@ struct AppointmentDTO: Codable, Identifiable, Hashable {
         return "\(fmt(s)) – \(fmt(e))"
     }
 
-    var statusDisplay: String { status?.capitalized ?? "Unknown" }
+    var statusDisplay: String {
+        status?.capitalized ?? "Unknown"
+    }
 
     var statusColor: String {
         switch status?.uppercased() {
-        case "SCHEDULED", "CONFIRMED": return "green"
-        case "PENDING":                return "yellow"
-        case "CANCELLED", "NO_SHOW":   return "red"
-        case "COMPLETED":              return "gray"
-        default:                       return "blue"
+        case "SCHEDULED", "CONFIRMED": "green"
+        case "PENDING": "yellow"
+        case "CANCELLED", "NO_SHOW": "red"
+        case "COMPLETED": "gray"
+        default: "blue"
         }
     }
 }
@@ -78,10 +82,10 @@ struct BookAppointmentRequest: Encodable {
     let staffUsername: String?
     let departmentId: String?
     let departmentName: String?
-    let appointmentDate: String       // yyyy-MM-dd
-    let startTime: String             // HH:mm:ss
-    let endTime: String               // HH:mm:ss
-    let status: String                // "SCHEDULED"
+    let appointmentDate: String // yyyy-MM-dd
+    let startTime: String // HH:mm:ss
+    let endTime: String // HH:mm:ss
+    let status: String // "SCHEDULED"
     let reason: String?
     let notes: String?
 }

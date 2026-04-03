@@ -48,14 +48,14 @@ struct VitalSignDTO: Codable, Identifiable {
     /// Icon for the vital type
     var typeIcon: String {
         switch type?.lowercased() {
-        case "blood_pressure", "blood pressure":  return "waveform.path.ecg"
-        case "heart_rate", "heart rate":           return "heart.fill"
-        case "temperature":                        return "thermometer"
-        case "spo2", "oxygen", "o2":               return "lungs.fill"
-        case "weight":                             return "scalemass.fill"
-        case "respiratory_rate", "respiratory rate": return "wind"
-        case "blood_glucose", "glucose":           return "drop.fill"
-        default:                                   return "heart.text.square"
+        case "blood_pressure", "blood pressure": "waveform.path.ecg"
+        case "heart_rate", "heart rate": "heart.fill"
+        case "temperature": "thermometer"
+        case "spo2", "oxygen", "o2": "lungs.fill"
+        case "weight": "scalemass.fill"
+        case "respiratory_rate", "respiratory rate": "wind"
+        case "blood_glucose", "glucose": "drop.fill"
+        default: "heart.text.square"
         }
     }
 

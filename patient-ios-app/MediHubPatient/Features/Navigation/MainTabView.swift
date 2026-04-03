@@ -135,10 +135,10 @@ struct SideMenuView: View {
 
     private var menuItems: [(titleKey: String, icon: String, tab: MainTabView.Tab)] {
         [
-            ("tab_dashboard",    "house.fill",               .dashboard),
-            ("tab_appointments", "calendar",                  .appointments),
-            ("tab_messages",     "message.fill",              .messages),
-            ("tab_profile",      "person.crop.circle.fill",   .profile),
+            ("tab_dashboard", "house.fill", .dashboard),
+            ("tab_appointments", "calendar", .appointments),
+            ("tab_messages", "message.fill", .messages),
+            ("tab_profile", "person.crop.circle.fill", .profile),
         ]
     }
 

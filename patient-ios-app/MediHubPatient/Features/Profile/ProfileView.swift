@@ -1,5 +1,5 @@
-import SwiftUI
 import PhotosUI
+import SwiftUI
 
 struct ProfileView: View {
     @StateObject private var vm = ProfileViewModel()
@@ -15,7 +15,7 @@ struct ProfileView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if vm.isLoading && vm.profile == nil {
+                if vm.isLoading, vm.profile == nil {
                     VStack(spacing: 12) {
                         ProgressView().controlSize(.large)
                         Text("loading".localized)
@@ -98,7 +98,7 @@ struct ProfileView: View {
                                     Label("language".localized, systemImage: "globe")
                                         .foregroundStyle(.primary)
                                     Spacer()
-                                    Text(localization.supportedLanguages.first { $0.code == localization.currentLanguage }?.name ?? localization.currentLanguage)
+                                    Text(LocalizationManager.supportedLanguages.first { $0.code == localization.currentLanguage }?.name ?? localization.currentLanguage)
                                         .foregroundStyle(.secondary)
                                     Image(systemName: "chevron.right")
                                         .font(.system(size: 12, weight: .semibold))
@@ -135,8 +135,8 @@ struct ProfileView: View {
                     .listStyle(.insetGrouped)
                 } else {
                     ContentUnavailableView("profile_unavailable".localized,
-                        systemImage: "person.crop.circle.badge.exclamationmark",
-                        description: Text("profile_load_error".localized))
+                                           systemImage: "person.crop.circle.badge.exclamationmark",
+                                           description: Text("profile_load_error".localized))
                 }
             }
             .navigationTitle("tab_profile".localized)
@@ -291,7 +291,7 @@ struct LanguagePickerSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                ForEach(localization.supportedLanguages, id: \.code) { lang in
+                ForEach(LocalizationManager.supportedLanguages, id: \.code) { lang in
                     Button {
                         localization.setLanguage(lang.code)
                         dismiss()
@@ -429,7 +429,8 @@ final class ProfileViewModel: ObservableObject {
     func uploadPhoto(data: Data) async {
         // Convert to JPEG
         guard let image = UIImage(data: data),
-              let jpegData = image.jpegData(compressionQuality: 0.8) else {
+              let jpegData = image.jpegData(compressionQuality: 0.8)
+        else {
             errorMessage = "Could not process the selected image."
             return
         }

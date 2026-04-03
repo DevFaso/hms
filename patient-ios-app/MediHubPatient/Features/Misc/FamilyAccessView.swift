@@ -50,11 +50,12 @@ struct FamilyAccessView: View {
     }
 
     // MARK: Granted by Me
+
     private var grantedByMeTab: some View {
         Group {
             if vm.grantedByMe.isEmpty {
                 ContentUnavailableView("No Proxies Granted", systemImage: "person.2.slash",
-                    description: Text("You haven't granted access to anyone. Tap + to add."))
+                                       description: Text("You haven't granted access to anyone. Tap + to add."))
             } else {
                 List {
                     ForEach(vm.grantedByMe) { proxy in
@@ -75,11 +76,12 @@ struct FamilyAccessView: View {
     }
 
     // MARK: Access I Have
+
     private var accessIHaveTab: some View {
         Group {
             if vm.accessIHave.isEmpty {
                 ContentUnavailableView("No Access Granted to You", systemImage: "person.crop.circle.badge.xmark",
-                    description: Text("No one has granted you proxy access."))
+                                       description: Text("No one has granted you proxy access."))
             } else {
                 List(vm.accessIHave) { proxy in
                     NavigationLink(destination: ProxyDetailView(
@@ -277,7 +279,7 @@ struct GrantProxySheet: View {
             isPresented = false
         } catch let apiError as APIError {
             switch apiError {
-            case .httpError(let code, let msg):
+            case let .httpError(code, msg):
                 if code == 404 {
                     errorMsg = "User '\(username)' not found. Please check the username and try again."
                 } else if code == 400 {
@@ -307,10 +309,10 @@ final class FamilyAccessViewModel: ObservableObject {
         isLoading = true
         await withTaskGroup(of: Void.self) { group in
             group.addTask { @MainActor in
-                self.grantedByMe = (try? await APIClient.shared.get(APIEndpoints.proxies)) ?? []
+                self.grantedByMe = await (try? APIClient.shared.get(APIEndpoints.proxies)) ?? []
             }
             group.addTask { @MainActor in
-                self.accessIHave = (try? await APIClient.shared.get(APIEndpoints.proxyAccess)) ?? []
+                self.accessIHave = await (try? APIClient.shared.get(APIEndpoints.proxyAccess)) ?? []
             }
         }
         isLoading = false

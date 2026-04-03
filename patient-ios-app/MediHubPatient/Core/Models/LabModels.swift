@@ -21,15 +21,20 @@ struct LabResultDTO: Codable, Identifiable {
     let critical: Bool?
     let notes: String?
 
-    var abnormal: Bool { isAbnormal ?? false }
-    var isCritical: Bool { critical ?? false }
+    var abnormal: Bool {
+        isAbnormal ?? false
+    }
+
+    var isCritical: Bool {
+        critical ?? false
+    }
 
     var statusDisplay: String {
         switch status?.uppercased() {
-        case "FINAL":     return "Final"
-        case "PENDING":   return "Pending"
-        case "CANCELLED": return "Cancelled"
-        default:          return status?.capitalized ?? "Unknown"
+        case "FINAL": "Final"
+        case "PENDING": "Pending"
+        case "CANCELLED": "Cancelled"
+        default: status?.capitalized ?? "Unknown"
         }
     }
 }

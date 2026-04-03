@@ -6,12 +6,12 @@ struct MessagesView: View {
     var body: some View {
         NavigationStack {
             Group {
-                if vm.isLoading && vm.threads.isEmpty {
+                if vm.isLoading, vm.threads.isEmpty {
                     ProgressView("loading".localized)
                 } else if vm.threads.isEmpty {
                     ContentUnavailableView("no_messages".localized,
-                        systemImage: "message",
-                        description: Text("no_messages_desc".localized))
+                                           systemImage: "message",
+                                           description: Text("no_messages_desc".localized))
                 } else {
                     List(vm.threads) { thread in
                         NavigationLink(value: thread) {
@@ -71,7 +71,7 @@ final class MessagesViewModel: ObservableObject {
 
     func load() async {
         isLoading = true
-        threads = (try? await APIClient.shared.get(APIEndpoints.chatThreads)) ?? []
+        threads = await (try? APIClient.shared.get(APIEndpoints.chatThreads)) ?? []
         isLoading = false
     }
 }
@@ -148,11 +148,13 @@ final class MessageThreadViewModel: ObservableObject {
     let threadId: String
     let currentUserId: String? = nil // set from AuthManager if needed
 
-    init(threadId: String) { self.threadId = threadId }
+    init(threadId: String) {
+        self.threadId = threadId
+    }
 
     func load() async {
         isLoading = true
-        messages = (try? await APIClient.shared.get(
+        messages = await (try? APIClient.shared.get(
             APIEndpoints.chatMessages(threadId: threadId)
         )) ?? []
         isLoading = false

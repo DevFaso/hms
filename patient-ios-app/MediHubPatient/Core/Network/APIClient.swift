@@ -3,10 +3,10 @@ import Foundation
 // MARK: - Environment
 
 enum AppEnvironment {
-    // Available environments
+    /// Available environments
     enum Environment: String, CaseIterable {
-        case dev  = "https://api.hms.dev.bitnesttechs.com/api"
-        case uat  = "https://api.hms.uat.bitnesttechs.com/api"
+        case dev = "https://api.hms.dev.bitnesttechs.com/api"
+        case uat = "https://api.hms.uat.bitnesttechs.com/api"
         case prod = "https://api.hms.bitnesttechs.com/api"
         case local = "http://localhost:8081/api"
     }
@@ -35,12 +35,12 @@ enum APIError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidURL:            return "Invalid URL"
-        case .unauthorized:          return "Session expired. Please log in again."
-        case .httpError(let code, let msg): return msg ?? "Server error (\(code))"
-        case .decodingError(let e):  return "Data error: \(e.localizedDescription)"
-        case .networkError(let e):   return e.localizedDescription
-        case .unknown:               return "An unknown error occurred"
+        case .invalidURL: "Invalid URL"
+        case .unauthorized: "Session expired. Please log in again."
+        case let .httpError(code, msg): msg ?? "Server error (\(code))"
+        case let .decodingError(e): "Data error: \(e.localizedDescription)"
+        case let .networkError(e): e.localizedDescription
+        case .unknown: "An unknown error occurred"
         }
     }
 }
@@ -87,14 +87,14 @@ final class APIClient {
                 "yyyy-MM-dd'T'HH:mm:ss.SSSZ",
                 "yyyy-MM-dd'T'HH:mm:ssZ",
                 "yyyy-MM-dd'T'HH:mm:ss",
-                "yyyy-MM-dd"
+                "yyyy-MM-dd",
             ]
             for fmt in formats {
                 formatter.dateFormat = fmt
                 if let date = formatter.date(from: str) { return date }
             }
             throw DecodingError.dataCorruptedError(in: container,
-                debugDescription: "Cannot decode date: \(str)")
+                                                   debugDescription: "Cannot decode date: \(str)")
         }
         return d
     }()
@@ -110,7 +110,7 @@ final class APIClient {
     ) async throws -> T {
         // Build URL
         var components = URLComponents(string: AppEnvironment.baseURL + path)
-        if let queryItems = queryItems { components?.queryItems = queryItems }
+        if let queryItems { components?.queryItems = queryItems }
         guard let url = components?.url else { throw APIError.invalidURL }
 
         var request = URLRequest(url: url)
@@ -126,7 +126,7 @@ final class APIClient {
         }
 
         // Encode body
-        if let body = body {
+        if let body {
             request.httpBody = try JSONEncoder().encode(body)
         }
 
@@ -135,7 +135,7 @@ final class APIClient {
         guard let http = response as? HTTPURLResponse else { throw APIError.unknown }
 
         // Handle 401 — attempt token refresh once
-        if http.statusCode == 401 && requiresAuth {
+        if http.statusCode == 401, requiresAuth {
             try await AuthManager.shared.refreshTokens()
             // Retry with new token
             if let token = KeychainHelper.shared.accessToken {
@@ -156,7 +156,7 @@ final class APIClient {
     // MARK: - Decode helper
 
     private func decodeResponse<T: Decodable>(_ data: Data, statusCode: Int) throws -> T {
-        guard (200..<300).contains(statusCode) else {
+        guard (200 ..< 300).contains(statusCode) else {
             // Try to extract error message from response body
             var msg: String?
 
@@ -253,4 +253,5 @@ final class APIClient {
 }
 
 // MARK: - Empty placeholder for decode errors
+
 private struct EmptyData: Decodable {}

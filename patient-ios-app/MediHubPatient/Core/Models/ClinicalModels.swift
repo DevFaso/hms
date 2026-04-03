@@ -12,12 +12,26 @@ struct EncounterDTO: Codable, Identifiable, Hashable {
     let diagnosisSummary: String?
     let status: String?
 
-    // Legacy compat aliases
-    var encounterDate: String? { date }
-    var doctorName: String? { providerName }
-    var departmentName: String? { department }
-    var reason: String? { chiefComplaint }
-    var diagnosis: String? { diagnosisSummary }
+    /// Legacy compat aliases
+    var encounterDate: String? {
+        date
+    }
+
+    var doctorName: String? {
+        providerName
+    }
+
+    var departmentName: String? {
+        department
+    }
+
+    var reason: String? {
+        chiefComplaint
+    }
+
+    var diagnosis: String? {
+        diagnosisSummary
+    }
 }
 
 // MARK: - After Visit Summary
@@ -43,7 +57,9 @@ struct CareTeamDTO: Codable {
 }
 
 struct CareTeamMemberDTO: Codable, Identifiable {
-    var id: String? { name }   // use name as stable id
+    var id: String? {
+        name
+    } // use name as stable id
     let name: String?
     let role: String?
     let specialty: String?
@@ -77,7 +93,9 @@ struct NotificationDTO: Codable, Identifiable {
     let createdAt: String?
     let actionUrl: String?
 
-    var isRead: Bool { read ?? false }
+    var isRead: Bool {
+        read ?? false
+    }
 }
 
 // MARK: - Chat / Message Models
@@ -205,7 +223,7 @@ struct ProxyResponse: Codable, Identifiable {
 struct ProxyGrantRequest: Encodable {
     let proxyUsername: String
     let relationship: String
-    let permissions: String          // comma-separated: "VIEW_RECORDS,VIEW_APPOINTMENTS"
+    let permissions: String // comma-separated: "VIEW_RECORDS,VIEW_APPOINTMENTS"
     let expiresAt: String?
     let notes: String?
 }

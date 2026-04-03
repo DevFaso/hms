@@ -1,14 +1,17 @@
-import Foundation
 import Combine
+import Foundation
 
 // MARK: - AuthManager
+
 // Single source of truth for authentication state.
 // Published as @EnvironmentObject throughout the app.
 
 @MainActor
 final class AuthManager: ObservableObject {
     static let shared = AuthManager()
-    private init() { restoreSession() }
+    private init() {
+        restoreSession()
+    }
 
     // MARK: - Published state
 
@@ -30,7 +33,7 @@ final class AuthManager: ObservableObject {
             body: request,
             requiresAuth: false
         )
-        KeychainHelper.shared.accessToken  = response.accessToken ?? response.token
+        KeychainHelper.shared.accessToken = response.accessToken ?? response.token
         KeychainHelper.shared.refreshToken = response.refreshToken
         KeychainHelper.shared.savedUsername = username
         KeychainHelper.shared.savedPassword = password
@@ -39,11 +42,13 @@ final class AuthManager: ObservableObject {
     }
 
     // MARK: - Biometric login
+
     // Retrieves stored credentials from Keychain and re-authenticates.
 
     func biometricLogin() async throws {
         guard let username = KeychainHelper.shared.savedUsername,
-              let password = KeychainHelper.shared.savedPassword else {
+              let password = KeychainHelper.shared.savedPassword
+        else {
             throw AuthError.noSavedCredentials
         }
         try await login(username: username, password: password)
@@ -55,13 +60,14 @@ final class AuthManager: ObservableObject {
         Task {
             try? await APIClient.shared.post(APIEndpoints.logout, body: EmptyBody()) as EmptyResponse
         }
-        KeychainHelper.shared.accessToken  = nil
+        KeychainHelper.shared.accessToken = nil
         KeychainHelper.shared.refreshToken = nil
         currentUser = nil
         isAuthenticated = false
     }
 
     // MARK: - Token refresh
+
     // Called automatically by APIClient on 401.
 
     func refreshTokens() async throws {
@@ -75,7 +81,7 @@ final class AuthManager: ObservableObject {
             body: body,
             requiresAuth: false
         )
-        KeychainHelper.shared.accessToken  = response.accessToken ?? response.token
+        KeychainHelper.shared.accessToken = response.accessToken ?? response.token
         if let newRefresh = response.refreshToken {
             KeychainHelper.shared.refreshToken = newRefresh
         }
@@ -90,8 +96,8 @@ enum AuthError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .noSavedCredentials: return "No saved credentials. Please log in with username first."
-        case .biometricFailed:    return "Biometric authentication failed."
+        case .noSavedCredentials: "No saved credentials. Please log in with username first."
+        case .biometricFailed: "Biometric authentication failed."
         }
     }
 }
@@ -110,7 +116,7 @@ struct RefreshTokenRequest: Encodable {
 struct LoginResponse: Decodable {
     // Token fields
     let accessToken: String?
-    let token: String?          // fallback field name some backends use
+    let token: String? // fallback field name some backends use
     let refreshToken: String?
 
     // User fields (flat — not nested under "user")
