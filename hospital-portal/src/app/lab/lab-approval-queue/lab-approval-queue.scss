@@ -1,0 +1,322 @@
+@use '../../shared/styles/page-common';
+
+.approval-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.3rem 0.7rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.15s;
+
+  .material-symbols-outlined {
+    font-size: 1rem;
+  }
+
+  &:hover {
+    opacity: 0.82;
+  }
+}
+
+.btn-submit {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.btn-review {
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.btn-approve {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.btn-reject {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.confirm-description {
+  margin-bottom: 1rem;
+  color: #374151;
+}
+
+.modal-footer {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e5e7eb;
+}
+
+.btn-view {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+// ── Definition detail panel ────────────────────────────────────────────────
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 1.5rem 0 0.75rem;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 1.25rem;
+
+  h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #111827;
+  }
+}
+
+.code-badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  background: #f3f4f6;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+  margin-left: 0.5rem;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+
+  .full-width {
+    grid-column: 1 / -1;
+  }
+}
+
+.field-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.2rem;
+}
+
+.field-value {
+  color: #111827;
+  font-size: 0.9rem;
+
+  &.rejection {
+    color: #b91c1c;
+    font-style: italic;
+  }
+}
+
+// ── Validation study cards ─────────────────────────────────────────────────
+.study-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.study-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.study-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+
+  .study-type {
+    flex: 1;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #1d4ed8;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+}
+
+.study-card-body {
+  padding: 0.75rem 1rem;
+}
+
+.study-meta {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 0.82rem;
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+
+.study-summary {
+  margin: 0.25rem 0 0;
+  font-size: 0.87rem;
+  color: #374151;
+}
+
+.study-notes {
+  margin: 0.25rem 0 0;
+  font-size: 0.82rem;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.2rem;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+
+  &:hover {
+    color: #b91c1c;
+  }
+
+  .material-symbols-outlined {
+    font-size: 1rem;
+  }
+}
+
+.delete-btn {
+  margin-left: auto;
+}
+
+// ── Compact loading / empty states ─────────────────────────────────────────
+.loading-state.compact,
+.empty-state.compact {
+  padding: 1.5rem;
+  text-align: center;
+  color: #9ca3af;
+  font-size: 0.9rem;
+
+  .spinner {
+    width: 28px;
+    height: 28px;
+    margin: 0 auto 0.5rem;
+  }
+
+  .empty-icon {
+    font-size: 2rem;
+  }
+}
+
+// ── Add-study form ─────────────────────────────────────────────────────────
+.radio-group {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 0.4rem;
+}
+
+.field-group-label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 0.25rem;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 0.7s linear infinite;
+}
+
+// ── QC Levey-Jennings chart ──────────────────────────────────────────
+
+.qc-chart-group {
+  margin-bottom: 1.25rem;
+}
+
+.qc-chart-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.qc-level-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  background: #e0f2fe;
+  color: #0369a1;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.qc-stats {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.qc-svg-wrap {
+  width: 100%;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.lj-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.lj-point {
+  fill-opacity: 0.9;
+
+  &-ok {
+    fill: #22c55e;
+    stroke: #15803d;
+  }
+
+  &-warn {
+    fill: #f59e0b;
+    stroke: #d97706;
+  }
+
+  &-fail {
+    fill: #ef4444;
+    stroke: #dc2626;
+  }
+}
+
+.lj-axis-label {
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+}

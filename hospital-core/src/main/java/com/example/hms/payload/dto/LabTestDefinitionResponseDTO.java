@@ -37,6 +37,13 @@ public class LabTestDefinitionResponseDTO {
     @JsonProperty("isActive")
     private boolean active;
 
+    private String approvalStatus;
+    private UUID approvedById;
+    private LocalDateTime approvedAt;
+    private UUID reviewedById;
+    private LocalDateTime reviewedAt;
+    private String rejectionReason;
+
     @Default
     private List<LabTestReferenceRangeDTO> referenceRanges = Collections.emptyList();
     private LocalDateTime createdAt;

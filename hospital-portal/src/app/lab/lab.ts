@@ -8,6 +8,7 @@ import {
   LabOrderResponse,
   LabOrderRequest,
   LabTestDefinition,
+  LabTestDefinitionApprovalRequest,
 } from '../services/lab.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
@@ -355,6 +356,68 @@ export class LabComponent implements OnInit {
       case 'ORDERED':
         return 'status-badge status-pending';
       case 'CANCELLED':
+        return 'status-badge status-cancelled';
+      default:
+        return 'status-badge';
+    }
+  }
+
+  // ── Lab Test Definition Approval Workflow ────────────────────────────
+
+  showApprovalModal = signal(false);
+  approvalTarget = signal<LabTestDefinition | null>(null);
+  approvalAction = signal<LabTestDefinitionApprovalRequest['action'] | ''>('');
+  approvalRejectionReason = signal('');
+  processingApproval = signal(false);
+
+  openApprovalModal(def: LabTestDefinition): void {
+    this.approvalTarget.set(def);
+    this.approvalAction.set('');
+    this.approvalRejectionReason.set('');
+    this.showApprovalModal.set(true);
+  }
+
+  closeApprovalModal(): void {
+    this.showApprovalModal.set(false);
+    this.approvalTarget.set(null);
+  }
+
+  submitApprovalAction(): void {
+    const def = this.approvalTarget();
+    const action = this.approvalAction();
+    if (!def || !action) return;
+
+    const req: LabTestDefinitionApprovalRequest = {
+      action: action as LabTestDefinitionApprovalRequest['action'],
+    };
+    if (action === 'REJECT') {
+      req.rejectionReason = this.approvalRejectionReason();
+    }
+
+    this.processingApproval.set(true);
+    this.labService.submitApprovalAction(def.id, req).subscribe({
+      next: (updated) => {
+        this.toast.success(`Definition ${updated.approvalStatus.toLowerCase().replace(/_/g, ' ')}`);
+        this.labService.listTestDefinitions().subscribe((defs) => this.labTestDefs.set(defs));
+        this.closeApprovalModal();
+        this.processingApproval.set(false);
+      },
+      error: () => {
+        this.toast.error('Approval action failed');
+        this.processingApproval.set(false);
+      },
+    });
+  }
+
+  getApprovalStatusClass(status: string): string {
+    switch (status) {
+      case 'ACTIVE':
+        return 'status-badge status-completed';
+      case 'APPROVED':
+        return 'status-badge status-collected';
+      case 'DRAFT':
+        return 'status-badge status-pending';
+      case 'REJECTED':
         return 'status-badge status-cancelled';
       default:
         return 'status-badge';

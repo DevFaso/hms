@@ -1,0 +1,676 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">Lab Test Definition Approval Queue</h1>
+      <p class="page-subtitle">Review and approve lab test definitions for clinical use</p>
+    </div>
+  </div>
+
+  <!-- Status filter tabs -->
+  <div class="tabs">
+    <button
+      class="tab"
+      [class.active]="activeStatusFilter() === 'ALL'"
+      (click)="setStatusFilter('ALL')"
+    >
+      All ({{ definitions().length }})
+    </button>
+    <button
+      class="tab"
+      [class.active]="activeStatusFilter() === 'DRAFT'"
+      (click)="setStatusFilter('DRAFT')"
+    >
+      Draft ({{ countByStatus('DRAFT') }})
+    </button>
+    <button
+      class="tab"
+      [class.active]="activeStatusFilter() === 'PENDING_QA_REVIEW'"
+      (click)="setStatusFilter('PENDING_QA_REVIEW')"
+    >
+      Pending QA Review ({{ countByStatus('PENDING_QA_REVIEW') }})
+    </button>
+    <button
+      class="tab"
+      [class.active]="activeStatusFilter() === 'PENDING_DIRECTOR_APPROVAL'"
+      (click)="setStatusFilter('PENDING_DIRECTOR_APPROVAL')"
+    >
+      Pending Director Approval ({{ countByStatus('PENDING_DIRECTOR_APPROVAL') }})
+    </button>
+  </div>
+
+  <div class="search-box">
+    <span class="material-symbols-outlined">search</span>
+    <input
+      type="text"
+      placeholder="Search by name, code or category…"
+      [(ngModel)]="searchTerm"
+      (input)="applyFilter()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>Loading queue…</p>
+    </div>
+  }
+
+  @if (!loading() && filtered().length > 0) {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">Code</th>
+            <th scope="col">Name</th>
+            <th scope="col">Category</th>
+            <th scope="col">Sample Type</th>
+            <th scope="col">Status</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (def of filtered(); track def.id) {
+            <tr class="data-row">
+              <td class="order-code">{{ def.testCode }}</td>
+              <td>
+                <div class="cell-primary">{{ def.testName }}</div>
+                @if (def.description) {
+                  <div class="cell-secondary">{{ def.description }}</div>
+                }
+              </td>
+              <td>{{ def.category || '—' }}</td>
+              <td>{{ def.sampleType || '—' }}</td>
+              <td>
+                <span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
+                  {{ def.approvalStatus | titlecase }}
+                </span>
+              </td>
+              <td>
+                <div class="action-group approval-actions">
+                  <!-- View definition detail + validation studies -->
+                  <button
+                    class="btn-action btn-view"
+                    title="View definition & validation studies"
+                    (click)="viewDefinition(def)"
+                  >
+                    <span class="material-symbols-outlined">visibility</span>
+                  </button>
+
+                  <!-- DRAFT → submit for QA -->
+                  @if (def.approvalStatus === 'DRAFT') {
+                    <button
+                      class="btn-action btn-submit"
+                      title="Submit for QA Review"
+                      (click)="openApprovalModal(def, 'SUBMIT_FOR_QA')"
+                    >
+                      <span class="material-symbols-outlined">send</span> Submit
+                    </button>
+                  }
+
+                  <!-- PENDING_QA_REVIEW → complete QA (QUALITY_MANAGER or LAB_DIRECTOR) -->
+                  @if (
+                    def.approvalStatus === 'PENDING_QA_REVIEW' &&
+                    (isQualityManager || isLabDirector || isSuperAdmin)
+                  ) {
+                    <button
+                      class="btn-action btn-review"
+                      title="Complete QA Review"
+                      (click)="openApprovalModal(def, 'COMPLETE_QA_REVIEW')"
+                    >
+                      <span class="material-symbols-outlined">fact_check</span> QA Pass
+                    </button>
+                    <button
+                      class="btn-action btn-reject"
+                      title="Reject"
+                      (click)="openApprovalModal(def, 'REJECT')"
+                    >
+                      <span class="material-symbols-outlined">cancel</span> Reject
+                    </button>
+                  }
+
+                  <!-- PENDING_DIRECTOR_APPROVAL → approve / reject (LAB_DIRECTOR only) -->
+                  @if (
+                    def.approvalStatus === 'PENDING_DIRECTOR_APPROVAL' &&
+                    (isLabDirector || isSuperAdmin)
+                  ) {
+                    <button
+                      class="btn-action btn-approve"
+                      title="Approve"
+                      (click)="openApprovalModal(def, 'APPROVE')"
+                    >
+                      <span class="material-symbols-outlined">verified</span> Approve
+                    </button>
+                    <button
+                      class="btn-action btn-reject"
+                      title="Reject"
+                      (click)="openApprovalModal(def, 'REJECT')"
+                    >
+                      <span class="material-symbols-outlined">cancel</span> Reject
+                    </button>
+                  }
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">task_alt</span>
+      <h3>Queue is clear</h3>
+      <p>
+        {{
+          searchTerm
+            ? 'No definitions match your search.'
+            : 'No definitions awaiting review or approval.'
+        }}
+      </p>
+    </div>
+  }
+</div>
+
+<!-- ══ Definition Detail Panel ════════════════════════════════════════ -->
+@if (selectedDefinition(); as def) {
+  <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
+    <div class="detail-panel">
+      <div class="panel-header">
+        <h2>
+          {{ def.testName }} <span class="code-badge">{{ def.testCode }}</span>
+        </h2>
+        <button class="close-btn" title="Close" (click)="closeDetail()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="panel-body">
+        <!-- Definition meta -->
+        <div class="detail-grid">
+          <div class="detail-field">
+            <span class="field-label">Category</span>
+            <span class="field-value">{{ def.category || '—' }}</span>
+          </div>
+          <div class="detail-field">
+            <span class="field-label">Sample Type</span>
+            <span class="field-value">{{ def.sampleType || '—' }}</span>
+          </div>
+          <div class="detail-field">
+            <span class="field-label">Approval Status</span>
+            <span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
+              {{ def.approvalStatus | titlecase }}
+            </span>
+          </div>
+          @if (def.rejectionReason) {
+            <div class="detail-field full-width">
+              <span class="field-label">Rejection Reason</span>
+              <span class="field-value rejection">{{ def.rejectionReason }}</span>
+            </div>
+          }
+        </div>
+
+        <!-- Validation studies section -->
+        <div class="section-header">
+          <h3>Validation Studies</h3>
+          <button class="btn-action btn-submit" (click)="openStudyModal()">
+            <span class="material-symbols-outlined">add</span> Add Study
+          </button>
+        </div>
+
+        @if (loadingStudies()) {
+          <div class="loading-state compact">
+            <div class="spinner"></div>
+            <p>Loading studies…</p>
+          </div>
+        }
+
+        @if (!loadingStudies() && validationStudies().length === 0) {
+          <div class="empty-state compact">
+            <span class="material-symbols-outlined empty-icon">science</span>
+            <p>No validation studies recorded yet.</p>
+          </div>
+        }
+
+        @if (!loadingStudies() && validationStudies().length > 0) {
+          <div class="study-list">
+            @for (study of validationStudies(); track study.id) {
+              <div class="study-card">
+                <div class="study-card-header">
+                  <span class="study-type">{{ study.studyType }}</span>
+                  <span class="status-badge" [class]="studyPassedClass(study.passed)">
+                    {{ study.passed ? 'Passed' : 'Failed' }}
+                  </span>
+                  <button
+                    class="btn-icon delete-btn"
+                    title="Delete study"
+                    (click)="deleteStudy(study)"
+                  >
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+                <div class="study-card-body">
+                  <div class="study-meta">
+                    <span><strong>Date:</strong> {{ study.studyDate }}</span>
+                    @if (study.performedByDisplay) {
+                      <span><strong>By:</strong> {{ study.performedByDisplay }}</span>
+                    }
+                  </div>
+                  @if (study.summary) {
+                    <p class="study-summary">{{ study.summary }}</p>
+                  }
+                  @if (study.notes) {
+                    <p class="study-notes">{{ study.notes }}</p>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+
+        <!-- QC Control Chart section -->
+        <div class="section-header">
+          <h3>QC Control Chart (Levey-Jennings)</h3>
+        </div>
+
+        @if (loadingQc()) {
+          <div class="loading-state compact">
+            <div class="spinner"></div>
+            <p>Loading QC data…</p>
+          </div>
+        } @else if (!loadingQc() && qcChartGroups().length === 0) {
+          <div class="empty-state compact">
+            <span class="material-symbols-outlined empty-icon">show_chart</span>
+            <p>No QC events recorded for this test.</p>
+          </div>
+        } @else {
+          @for (group of qcChartGroups(); track group.level) {
+            <div class="qc-chart-group">
+              <div class="qc-chart-title">
+                <span class="qc-level-badge">
+                  {{ group.level === 'LOW_CONTROL' ? 'Low Control' : 'High Control' }}
+                </span>
+                @if (!group.insufficient) {
+                  <span class="qc-stats">
+                    Mean: {{ group.mean | number: '1.3-3' }} &nbsp;&middot;&nbsp; SD:
+                    {{ group.sd | number: '1.3-3' }}
+                  </span>
+                }
+              </div>
+
+              @if (group.insufficient) {
+                <div class="empty-state compact">
+                  <p>At least 3 QC events required to render chart.</p>
+                </div>
+              } @else {
+                <div class="qc-svg-wrap">
+                  <svg
+                    class="lj-chart"
+                    [attr.viewBox]="'0 0 520 200'"
+                    xmlns="http://www.w3.org/2000/svg"
+                    role="img"
+                    aria-label="Levey-Jennings QC control chart"
+                  >
+                    <!-- Zone background bands -->
+                    @for (rect of group.zoneRects; track $index) {
+                      <rect
+                        x="58"
+                        [attr.y]="rect.y"
+                        width="450"
+                        [attr.height]="rect.height"
+                        [attr.fill]="rect.fill"
+                      />
+                    }
+
+                    <!-- Chart border -->
+                    <rect
+                      x="58"
+                      y="15"
+                      width="450"
+                      height="143"
+                      fill="none"
+                      stroke="#d1d5db"
+                      stroke-width="1"
+                    />
+
+                    <!-- Reference lines -->
+                    <line
+                      x1="58"
+                      [attr.x2]="520 - 12"
+                      [attr.y1]="group.meanY"
+                      [attr.y2]="group.meanY"
+                      stroke="#374151"
+                      stroke-width="1.5"
+                      stroke-dasharray="6,3"
+                    />
+                    <line
+                      x1="58"
+                      [attr.x2]="520 - 12"
+                      [attr.y1]="group.p1sY"
+                      [attr.y2]="group.p1sY"
+                      stroke="#6b7280"
+                      stroke-width="0.8"
+                      stroke-dasharray="4,3"
+                    />
+                    <line
+                      x1="58"
+                      [attr.x2]="520 - 12"
+                      [attr.y1]="group.m1sY"
+                      [attr.y2]="group.m1sY"
+                      stroke="#6b7280"
+                      stroke-width="0.8"
+                      stroke-dasharray="4,3"
+                    />
+                    <line
+                      x1="58"
+                      [attr.x2]="520 - 12"
+                      [attr.y1]="group.p2sY"
+                      [attr.y2]="group.p2sY"
+                      stroke="#d97706"
+                      stroke-width="0.8"
+                      stroke-dasharray="4,3"
+                    />
+                    <line
+                      x1="58"
+                      [attr.x2]="520 - 12"
+                      [attr.y1]="group.m2sY"
+                      [attr.y2]="group.m2sY"
+                      stroke="#d97706"
+                      stroke-width="0.8"
+                      stroke-dasharray="4,3"
+                    />
+                    <line
+                      x1="58"
+                      [attr.x2]="520 - 12"
+                      [attr.y1]="group.p3sY"
+                      [attr.y2]="group.p3sY"
+                      stroke="#dc2626"
+                      stroke-width="0.8"
+                      stroke-dasharray="4,3"
+                    />
+                    <line
+                      x1="58"
+                      [attr.x2]="520 - 12"
+                      [attr.y1]="group.m3sY"
+                      [attr.y2]="group.m3sY"
+                      stroke="#dc2626"
+                      stroke-width="0.8"
+                      stroke-dasharray="4,3"
+                    />
+
+                    <!-- Y-axis labels -->
+                    @for (lbl of group.yAxisLabels; track lbl.label) {
+                      <text
+                        x="54"
+                        [attr.y]="lbl.y + 3.5"
+                        class="lj-axis-label"
+                        text-anchor="end"
+                        font-size="8"
+                        fill="#6b7280"
+                      >
+                        {{ lbl.label }}
+                      </text>
+                    }
+
+                    <!-- X-axis labels -->
+                    @for (lbl of group.xAxisLabels; track lbl.label) {
+                      <text
+                        [attr.x]="lbl.x"
+                        y="195"
+                        class="lj-axis-label"
+                        text-anchor="middle"
+                        font-size="8"
+                        fill="#6b7280"
+                      >
+                        {{ lbl.label }}
+                      </text>
+                    }
+
+                    <!-- Connecting polyline -->
+                    @if (group.points.length > 1) {
+                      <polyline
+                        [attr.points]="group.polyline"
+                        fill="none"
+                        stroke="#9ca3af"
+                        stroke-width="1"
+                        stroke-linejoin="round"
+                      />
+                    }
+
+                    <!-- Data points -->
+                    @for (pt of group.points; track $index) {
+                      <circle
+                        [attr.cx]="pt.x"
+                        [attr.cy]="pt.y"
+                        r="4"
+                        [class]="'lj-point lj-point-' + pt.zone"
+                        stroke-width="1.5"
+                      >
+                        <title>{{ pt.title }}</title>
+                      </circle>
+                    }
+
+                    <!-- Legend -->
+                    <circle cx="70" cy="12" r="4" class="lj-point lj-point-ok" stroke-width="1.5" />
+                    <text x="78" y="15.5" font-size="7" fill="#374151">Within ±1s</text>
+                    <circle
+                      cx="130"
+                      cy="12"
+                      r="4"
+                      class="lj-point lj-point-warn"
+                      stroke-width="1.5"
+                    />
+                    <text x="138" y="15.5" font-size="7" fill="#374151">±1s–2s warning</text>
+                    <circle
+                      cx="210"
+                      cy="12"
+                      r="4"
+                      class="lj-point lj-point-fail"
+                      stroke-width="1.5"
+                    />
+                    <text x="218" y="15.5" font-size="7" fill="#374151">Outside ±2s</text>
+                  </svg>
+                </div>
+              }
+            </div>
+          }
+        }
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Add Validation Study Modal ════════════════════════════════════ -->
+@if (showStudyModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeStudyModal()"
+    (keydown.escape)="closeStudyModal()"
+  >
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>Record Validation Study</h2>
+        <button class="modal-close" (click)="closeStudyModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="field">
+            <label for="study-type">Study Type *</label>
+            <select id="study-type" [(ngModel)]="studyForm.studyType" required>
+              @for (t of studyTypes; track t) {
+                <option [value]="t">{{ t | titlecase }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="study-date">Study Date *</label>
+            <input id="study-date" type="date" [(ngModel)]="studyForm.studyDate" required />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="performed-by">Performed By</label>
+            <input
+              id="performed-by"
+              type="text"
+              [(ngModel)]="studyForm.performedByDisplay"
+              placeholder="Name of person who performed the study"
+              maxlength="255"
+            />
+          </div>
+          <div class="field">
+            <span class="field-group-label">Result</span>
+            <div class="radio-group">
+              <label class="radio-label" for="study-passed-true">
+                <input
+                  id="study-passed-true"
+                  type="radio"
+                  name="passed"
+                  [value]="true"
+                  [(ngModel)]="studyForm.passed"
+                />
+                Passed
+              </label>
+              <label class="radio-label" for="study-passed-false">
+                <input
+                  id="study-passed-false"
+                  type="radio"
+                  name="passed"
+                  [value]="false"
+                  [(ngModel)]="studyForm.passed"
+                />
+                Failed
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="study-summary">Summary</label>
+          <textarea
+            id="study-summary"
+            rows="3"
+            [(ngModel)]="studyForm.summary"
+            placeholder="Outcome / conclusion of the study (e.g. Meets CLSI EP05-A3 criteria)"
+            maxlength="2048"
+          ></textarea>
+        </div>
+
+        <div class="field">
+          <label for="study-notes">Notes</label>
+          <textarea
+            id="study-notes"
+            rows="2"
+            [(ngModel)]="studyForm.notes"
+            placeholder="Additional notes or observations"
+            maxlength="2048"
+          ></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-secondary" (click)="closeStudyModal()">Cancel</button>
+        <button
+          class="btn-primary"
+          [disabled]="savingStudy() || !studyForm.studyType || !studyForm.studyDate"
+          (click)="saveStudy()"
+        >
+          @if (savingStudy()) {
+            <span class="material-symbols-outlined spin">progress_activity</span>
+          }
+          Save Study
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ══ Approval Action Modal ══════════════════════════════════════════ -->
+@if (showApprovalModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeApprovalModal()"
+    (keydown.escape)="closeApprovalModal()"
+  >
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          @switch (approvalAction()) {
+            @case ('SUBMIT_FOR_QA') {
+              Submit for QA Review
+            }
+            @case ('COMPLETE_QA_REVIEW') {
+              Complete QA Review
+            }
+            @case ('APPROVE') {
+              Director Approval
+            }
+            @case ('REJECT') {
+              Reject Definition
+            }
+            @default {
+              Approval Action
+            }
+          }
+        </h2>
+        <button class="modal-close" (click)="closeApprovalModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+        @if (approvalTarget(); as def) {
+          <p class="confirm-description">
+            Definition: <strong>{{ def.testName }} ({{ def.testCode }})</strong>
+          </p>
+
+          @if (approvalAction() === 'REJECT') {
+            <div class="field">
+              <label for="rejection-reason">Rejection Reason *</label>
+              <textarea
+                id="rejection-reason"
+                rows="4"
+                [ngModel]="approvalRejectionReason()"
+                (ngModelChange)="approvalRejectionReason.set($event)"
+                placeholder="Explain the reason for rejection…"
+                maxlength="2048"
+              ></textarea>
+            </div>
+          }
+        }
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-secondary" (click)="closeApprovalModal()">Cancel</button>
+        <button
+          class="btn-primary"
+          [disabled]="
+            processingApproval() || (approvalAction() === 'REJECT' && !approvalRejectionReason())
+          "
+          (click)="submitApprovalAction()"
+        >
+          @if (processingApproval()) {
+            <span class="material-symbols-outlined spin">progress_activity</span>
+          }
+          Confirm
+        </button>
+      </div>
+    </div>
+  </div>
+}

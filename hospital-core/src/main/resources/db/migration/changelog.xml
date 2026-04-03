@@ -365,4 +365,35 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V30: Lab Director Approval Workflow
+         - Seeds ROLE_LAB_DIRECTOR and ROLE_QUALITY_MANAGER
+         - Adds approval_status, approved_by_id, approved_at,
+           reviewed_by_id, reviewed_at, rejection_reason to
+           lab.lab_test_definitions
+         - Status lifecycle: DRAFT → PENDING_QA_REVIEW →
+           PENDING_DIRECTOR_APPROVAL → APPROVED → ACTIVE → RETIRED
+         - Grandfathers existing active definitions as APPROVED
+         ================================================================= -->
+    <changeSet id="V30-lab-director-approval-workflow" author="hms-team" runOnChange="false">
+        <sqlFile path="V30__lab_director_approval_workflow.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V31: Lab Test Validation Studies (CLIA/CLSI)
+         - Creates lab.lab_test_validation_studies table
+         - Records formal validation study events per test definition
+           (precision, accuracy, reference range, method comparison, etc.)
+         - FK to lab.lab_test_definitions
+         ================================================================= -->
+    <changeSet id="V31-lab-test-validation-studies" author="hms-team" runOnChange="false">
+        <sqlFile path="V31__lab_test_validation_studies.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

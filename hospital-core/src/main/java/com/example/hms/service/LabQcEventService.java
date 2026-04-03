@@ -18,4 +18,7 @@ public interface LabQcEventService {
 
     /** Paginated list of QC events scoped to the caller's hospital. */
     Page<LabQcEventResponseDTO> getQcEventsByHospital(UUID hospitalId, Pageable pageable, Locale locale);
+
+    /** Paginated list of QC events for a specific test definition (for Levey-Jennings charts). */
+    Page<LabQcEventResponseDTO> getQcEventsByDefinition(UUID testDefinitionId, Pageable pageable, Locale locale);
 }

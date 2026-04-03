@@ -1,6 +1,8 @@
 package com.example.hms.controller;
 
+import com.example.hms.enums.LabTestDefinitionApprovalStatus;
 import com.example.hms.payload.dto.ApiResponseWrapper;
+import com.example.hms.payload.dto.LabTestDefinitionApprovalRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
 import com.example.hms.service.LabTestDefinitionService;
@@ -33,8 +35,13 @@ import java.util.UUID;
 public class LabTestDefinitionController {
 
     private final LabTestDefinitionService service;
+
+    // LAB_SCIENTIST and LAB_MANAGER may draft definitions; LAB_DIRECTOR/SUPER_ADMIN/HOSPITAL_ADMIN manage all
     private static final String MANAGE_ROLES = "hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'SUPER_ADMIN')";
-    private static final String VIEW_ROLES = "hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'SUPER_ADMIN', 'DOCTOR', 'NURSE', 'MIDWIFE')";
+    private static final String VIEW_ROLES = "hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'SUPER_ADMIN', 'DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_DIRECTOR', 'QUALITY_MANAGER')";
+    // Gate-level check: all roles that may initiate any approval transition.
+    // Per-action role enforcement is performed inside LabTestDefinitionServiceImpl.
+    private static final String APPROVAL_ROLES = "hasAnyRole('LAB_DIRECTOR', 'LAB_MANAGER', 'LAB_SCIENTIST', 'QUALITY_MANAGER', 'SUPER_ADMIN')";
 
     // Only ADMIN/LAB_MANAGER/SCIENTIST/SUPER_ADMIN can create lab tests
     @PostMapping("/batch")
@@ -81,14 +88,15 @@ public class LabTestDefinitionController {
 
     @GetMapping("/search")
     @PreAuthorize(VIEW_ROLES)
-    @Operation(summary = "Search Lab Test Definitions by keyword and unit with pagination")
+    @Operation(summary = "Search Lab Test Definitions by keyword, unit, category, status and approval status")
     public ResponseEntity<ApiResponseWrapper<Page<LabTestDefinitionResponseDTO>>> search(
         @RequestParam(required = false) String keyword,
         @RequestParam(required = false) String unit,
         @RequestParam(required = false) String category,
         @RequestParam(name = "isActive", required = false) Boolean isActive,
+        @RequestParam(required = false) LabTestDefinitionApprovalStatus approvalStatus,
         @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(ApiResponseWrapper.success(service.search(keyword, unit, category, isActive, pageable)));
+        return ResponseEntity.ok(ApiResponseWrapper.success(service.search(keyword, unit, category, isActive, approvalStatus, pageable)));
     }
 
     // Only ADMIN/LAB_MANAGER/SCIENTIST can update lab tests
@@ -108,6 +116,20 @@ public class LabTestDefinitionController {
     public ResponseEntity<ApiResponseWrapper<String>> delete(@PathVariable UUID id) {
         service.delete(id);
         return ResponseEntity.ok(ApiResponseWrapper.success("Deleted successfully."));
+    }
+
+    /**
+     * Approval workflow endpoint.
+     * Actions: SUBMIT_FOR_QA, COMPLETE_QA_REVIEW, APPROVE, ACTIVATE, REJECT, RETIRE.
+     * Role requirements are enforced in the service layer per action.
+     */
+    @PostMapping("/{id}/approval")
+    @PreAuthorize(APPROVAL_ROLES)
+    @Operation(summary = "Process an approval action on a Lab Test Definition")
+    public ResponseEntity<ApiResponseWrapper<LabTestDefinitionResponseDTO>> processApproval(
+        @PathVariable UUID id,
+        @Valid @RequestBody LabTestDefinitionApprovalRequestDTO dto) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(service.processApprovalAction(id, dto)));
     }
 }
 

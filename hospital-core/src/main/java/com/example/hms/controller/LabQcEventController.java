@@ -63,14 +63,17 @@ public class LabQcEventController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
-    @Operation(summary = "List QC Events", description = "Paginated list of QC events. Scoped to the caller's hospital; SUPER_ADMIN sees all.")
+    @Operation(summary = "List QC Events", description = "Paginated list of QC events. Filter by testDefinitionId for per-test charts. Scoped to the caller's hospital; SUPER_ADMIN sees all.")
     @ApiResponse(responseCode = "200", description = "QC events retrieved")
     public ResponseEntity<ApiResponseWrapper<Page<LabQcEventResponseDTO>>> listQcEvents(
         @RequestParam(required = false) UUID hospitalId,
+        @RequestParam(required = false) UUID testDefinitionId,
         @PageableDefault(size = 20, sort = "recordedAt") Pageable pageable,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
-        Page<LabQcEventResponseDTO> page = labQcEventService.getQcEventsByHospital(hospitalId, pageable, locale);
+        Page<LabQcEventResponseDTO> page = testDefinitionId != null
+            ? labQcEventService.getQcEventsByDefinition(testDefinitionId, pageable, locale)
+            : labQcEventService.getQcEventsByHospital(hospitalId, pageable, locale);
         return ResponseEntity.ok(ApiResponseWrapper.success(page));
     }
 }

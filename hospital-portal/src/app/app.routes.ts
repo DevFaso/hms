@@ -302,9 +302,28 @@ export const routes: Routes = [
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_QUALITY_MANAGER',
           ],
         },
         loadComponent: () => import('./lab/lab').then((m) => m.LabComponent),
+      },
+      {
+        path: 'lab-approval-queue',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_QUALITY_MANAGER',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-approval-queue/lab-approval-queue').then(
+            (m) => m.LabApprovalQueueComponent,
+          ),
       },
 
       // Profile (all authenticated users)

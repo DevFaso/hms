@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.LabTestDefinitionApprovalStatus;
 import com.example.hms.mapper.LabTestDefinitionMapper;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.LabTestDefinition;
@@ -7,6 +8,7 @@ import com.example.hms.model.Role;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRole;
 import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.payload.dto.LabTestDefinitionApprovalRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
 import com.example.hms.repository.LabTestDefinitionRepository;
@@ -427,21 +429,21 @@ class LabTestDefinitionServiceImplTest {
     void search_success() {
         Pageable pageable = PageRequest.of(0, 10);
         Page<LabTestDefinition> page = new PageImpl<>(List.of(definition));
-        when(repository.search("CBC", null, null, null, pageable)).thenReturn(page);
+        when(repository.search("CBC", null, null, null, null, pageable)).thenReturn(page);
         when(mapper.toDto(definition)).thenReturn(responseDTO);
 
-        Page<LabTestDefinitionResponseDTO> result = service.search("CBC", null, null, null, pageable);
+        Page<LabTestDefinitionResponseDTO> result = service.search("CBC", null, null, null, null, pageable);
 
         assertThat(result.getContent()).hasSize(1);
     }
 
     @Test
     void search_withNullPageable_usesUnpaged() {
-        when(repository.search(eq("CBC"), isNull(), isNull(), isNull(), eq(Pageable.unpaged())))
+        when(repository.search(eq("CBC"), isNull(), isNull(), isNull(), isNull(), eq(Pageable.unpaged())))
                 .thenReturn(new PageImpl<>(List.of(definition)));
         when(mapper.toDto(definition)).thenReturn(responseDTO);
 
-        Page<LabTestDefinitionResponseDTO> result = service.search("CBC", null, null, null, null);
+        Page<LabTestDefinitionResponseDTO> result = service.search("CBC", null, null, null, null, null);
 
         assertThat(result.getContent()).hasSize(1);
     }
@@ -530,6 +532,376 @@ class LabTestDefinitionServiceImplTest {
 
             LabTestDefinitionResponseDTO result = service.update(defId, requestDTO);
             assertThat(result).isNotNull();
+        }
+    }
+
+    // ═══ processApprovalAction ═══════════════════════════════════════════════
+
+    private User userWithRole(String roleCode) {
+        Role role = Role.builder().code(roleCode).name(roleCode).build();
+        UserRole ur = UserRole.builder().role(role).build();
+        User u = new User();
+        u.setId(UUID.randomUUID());
+        u.setUsername("tester");
+        u.getUserRoles().add(ur);
+        return u;
+    }
+
+    private LabTestDefinitionApprovalRequestDTO approvalReq(String action) {
+        return approvalReq(action, null);
+    }
+
+    private LabTestDefinitionApprovalRequestDTO approvalReq(String action, String reason) {
+        LabTestDefinitionApprovalRequestDTO dto = new LabTestDefinitionApprovalRequestDTO();
+        dto.setAction(action);
+        dto.setRejectionReason(reason);
+        return dto;
+    }
+
+    // ── SUBMIT_FOR_QA ────────────────────────────────────────────────────
+
+    @Test
+    void processApproval_submitForQa_fromDraft_success() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        User scientist = userWithRole("ROLE_LAB_SCIENTIST");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(scientist));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("SUBMIT_FOR_QA"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+            verify(repository).save(definition);
+        }
+    }
+
+    @Test
+    void processApproval_submitForQa_fromRejected_success() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.REJECTED);
+        definition.setRejectionReason("Missing reference range");
+        User manager = userWithRole("ROLE_LAB_MANAGER");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(manager));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("SUBMIT_FOR_QA"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+            assertThat(definition.getRejectionReason()).isNull();
+        }
+    }
+
+    @Test
+    void processApproval_submitForQa_wrongStatus_throwsIllegalState() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        User scientist = userWithRole("ROLE_LAB_SCIENTIST");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(scientist));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("SUBMIT_FOR_QA");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("Action not allowed from status");
+        }
+    }
+
+    @Test
+    void processApproval_submitForQa_insufficientRole_throwsAccessDenied() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        // ROLE_NURSE has no right to submit
+        User nurse = userWithRole("ROLE_NURSE");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(nurse));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("SUBMIT_FOR_QA");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                    .isInstanceOf(AccessDeniedException.class)
+                    .hasMessageContaining("Insufficient role");
+        }
+    }
+
+    // ── COMPLETE_QA_REVIEW ───────────────────────────────────────────────
+
+    @Test
+    void processApproval_completeQaReview_success() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        User qm = userWithRole("ROLE_QUALITY_MANAGER");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(qm));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("COMPLETE_QA_REVIEW"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+            assertThat(definition.getReviewedById()).isEqualTo(qm.getId());
+            assertThat(definition.getReviewedAt()).isNotNull();
+        }
+    }
+
+    @Test
+    void processApproval_completeQaReview_wrongStatus_throwsIllegalState() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        User qm = userWithRole("ROLE_QUALITY_MANAGER");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(qm));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("COMPLETE_QA_REVIEW");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                    .isInstanceOf(IllegalStateException.class);
+        }
+    }
+
+    // ── APPROVE ──────────────────────────────────────────────────────────
+
+    @Test
+    void processApproval_approve_success() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("APPROVE"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.APPROVED);
+            assertThat(definition.getApprovedById()).isEqualTo(director.getId());
+            assertThat(definition.getApprovedAt()).isNotNull();
+        }
+    }
+
+    @Test
+    void processApproval_approve_insufficientRole_throwsAccessDenied() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        // QUALITY_MANAGER cannot APPROVE
+        User qm = userWithRole("ROLE_QUALITY_MANAGER");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(qm));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("APPROVE");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                    .isInstanceOf(AccessDeniedException.class);
+        }
+    }
+
+    // ── ACTIVATE ─────────────────────────────────────────────────────────
+
+    @Test
+    void processApproval_activate_success() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("ACTIVATE"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.ACTIVE);
+            assertThat(definition.isActive()).isTrue();
+        }
+    }
+
+    @Test
+    void processApproval_activate_wrongStatus_throwsIllegalState() {
+        // Must be APPROVED; PENDING_DIRECTOR_APPROVAL is wrong
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("ACTIVATE");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                    .isInstanceOf(IllegalStateException.class);
+        }
+    }
+
+    // ── REJECT ───────────────────────────────────────────────────────────
+
+    @Test
+    void processApproval_reject_fromPendingQa_success() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("REJECT", "Missing CLSI validation"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.REJECTED);
+            assertThat(definition.getRejectionReason()).isEqualTo("Missing CLSI validation");
+            assertThat(definition.isActive()).isFalse();
+        }
+    }
+
+    @Test
+    void processApproval_reject_noReason_throwsIllegalArgument() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("REJECT");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("rejection reason");
+        }
+    }
+
+    @Test
+    void processApproval_reject_blankReason_throwsIllegalArgument() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("REJECT", "   ");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                    .isInstanceOf(IllegalArgumentException.class);
+        }
+    }
+
+    @Test
+    void processApproval_reject_fromDraft_throwsIllegalState() {
+        // REJECT is only allowed from PENDING_* states
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("REJECT", "reason");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                    .isInstanceOf(IllegalStateException.class);
+        }
+    }
+
+    // ── RETIRE ───────────────────────────────────────────────────────────
+
+    @Test
+    void processApproval_retire_fromActive_success() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        definition.setActive(true);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("RETIRE"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.RETIRED);
+            assertThat(definition.isActive()).isFalse();
+        }
+    }
+
+    @Test
+    void processApproval_retire_wrongStatus_throwsIllegalState() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("RETIRE");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                    .isInstanceOf(IllegalStateException.class);
+        }
+    }
+
+    // ── Unknown action / error cases ─────────────────────────────────────
+
+    @Test
+    void processApproval_unknownAction_throwsIllegalArgument() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("MAGIC_SPELL");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("Unknown approval action");
+        }
+    }
+
+    @Test
+    void processApproval_definitionNotFound_throwsEntityNotFound() {
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.empty());
+
+            var req = approvalReq("SUBMIT_FOR_QA");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                    .isInstanceOf(EntityNotFoundException.class);
+        }
+    }
+
+    @Test
+    void processApproval_unauthenticated_throwsAccessDenied() {
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn(null);
+
+            var req = approvalReq("SUBMIT_FOR_QA");
+        assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                    .isInstanceOf(AccessDeniedException.class)
+                    .hasMessageContaining("Unauthenticated");
         }
     }
 }

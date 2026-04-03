@@ -1,10 +1,14 @@
 package com.example.hms.service;
 
+import static com.example.hms.config.SecurityConstants.*;
+
+import com.example.hms.enums.LabTestDefinitionApprovalStatus;
 import com.example.hms.mapper.LabTestDefinitionMapper;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRole;
 import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.payload.dto.LabTestDefinitionApprovalRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
 import com.example.hms.repository.LabTestDefinitionRepository;
@@ -18,7 +22,10 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
+import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -152,9 +159,9 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     }
 
     @Override
-    public Page<LabTestDefinitionResponseDTO> search(String keyword, String unit, String category, Boolean active, Pageable pageable) {
+    public Page<LabTestDefinitionResponseDTO> search(String keyword, String unit, String category, Boolean active, LabTestDefinitionApprovalStatus approvalStatus, Pageable pageable) {
         Pageable normalizedPageable = normalizePageable(pageable);
-        return repository.search(keyword, unit, category, active, normalizedPageable)
+        return repository.search(keyword, unit, category, active, approvalStatus, normalizedPageable)
                 .map(mapper::toDto);
     }
 
@@ -219,7 +226,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         boolean hasElevatedRole = assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
             currentUser.getId(),
             assignment.getHospital().getId(),
-            Set.of("ROLE_HOSPITAL_ADMIN", "ROLE_LAB_MANAGER", "ROLE_SUPER_ADMIN", "ROLE_LAB_SCIENTIST")
+            Set.of(ROLE_HOSPITAL_ADMIN, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN, ROLE_LAB_SCIENTIST)
         );
 
         if (!hasElevatedRole) {
@@ -228,7 +235,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
     }
 
     private void assertUserCanManageGlobal(User currentUser) {
-        if (!hasAnyRole(currentUser, Set.of("ROLE_SUPER_ADMIN", "SUPER_ADMIN"))) {
+        if (!hasAnyRole(currentUser, Set.of(ROLE_SUPER_ADMIN, "SUPER_ADMIN"))) {
             throw new AccessDeniedException("Only Super Admins may manage global lab test definitions.");
         }
     }
@@ -254,5 +261,84 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
     private boolean isGlobalDefinition(LabTestDefinition definition) {
         return definition == null || definition.getHospital() == null;
+    }
+
+    @Override
+    public LabTestDefinitionResponseDTO processApprovalAction(UUID id, LabTestDefinitionApprovalRequestDTO dto) {
+        String username = SecurityUtils.getCurrentUsername();
+        if (username == null) {
+            throw new AccessDeniedException("Unauthenticated access to approval action");
+        }
+        User currentUser = userRepository.findByUsername(username)
+            .orElseThrow(() -> new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR));
+
+        LabTestDefinition definition = repository.findById(id)
+            .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+
+        String action = dto.getAction() == null ? "" : dto.getAction().trim().toUpperCase(Locale.ROOT);
+
+        switch (action) {
+            case "SUBMIT_FOR_QA" -> {
+                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+                assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.DRAFT, LabTestDefinitionApprovalStatus.REJECTED));
+                definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+                definition.setRejectionReason(null);
+            }
+            case "COMPLETE_QA_REVIEW" -> {
+                assertHasAnyRole(currentUser, Set.of(ROLE_QUALITY_MANAGER, ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+                assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW));
+                definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL);
+                definition.setReviewedById(currentUser.getId());
+                definition.setReviewedAt(LocalDateTime.now());
+            }
+            case "APPROVE" -> {
+                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+                assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
+                definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+                definition.setApprovedById(currentUser.getId());
+                definition.setApprovedAt(LocalDateTime.now());
+            }
+            case "ACTIVATE" -> {
+                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN));
+                assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.APPROVED));
+                definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+                definition.setActive(true);
+            }
+            case "REJECT" -> {
+                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_SUPER_ADMIN));
+                assertInStatus(definition, EnumSet.of(
+                    LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW,
+                    LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL));
+                if (dto.getRejectionReason() == null || dto.getRejectionReason().isBlank()) {
+                    throw new IllegalArgumentException("A rejection reason is required.");
+                }
+                definition.setApprovalStatus(LabTestDefinitionApprovalStatus.REJECTED);
+                definition.setRejectionReason(dto.getRejectionReason());
+                definition.setActive(false);
+            }
+            case "RETIRE" -> {
+                assertHasAnyRole(currentUser, Set.of(ROLE_LAB_DIRECTOR, ROLE_SUPER_ADMIN));
+                assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.ACTIVE, LabTestDefinitionApprovalStatus.APPROVED));
+                definition.setApprovalStatus(LabTestDefinitionApprovalStatus.RETIRED);
+                definition.setActive(false);
+            }
+            default -> throw new IllegalArgumentException("Unknown approval action: " + dto.getAction());
+        }
+
+        return mapper.toDto(repository.save(definition));
+    }
+
+    private void assertHasAnyRole(User user, Set<String> roles) {
+        if (!hasAnyRole(user, roles)) {
+            throw new AccessDeniedException("Insufficient role to perform this approval action.");
+        }
+    }
+
+    private void assertInStatus(LabTestDefinition definition, EnumSet<LabTestDefinitionApprovalStatus> allowed) {
+        if (!allowed.contains(definition.getApprovalStatus())) {
+            throw new IllegalStateException(
+                "Action not allowed from status: " + definition.getApprovalStatus()
+                + ". Allowed: " + allowed);
+        }
     }
 }
