@@ -101,7 +101,8 @@ class LabTestValidationStudyServiceImplTest {
     void create_definitionNotFound_throwsEntityNotFound() {
         when(definitionRepository.findById(DEF_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.create(DEF_ID, requestDto()))
+        var req = requestDto();
+        assertThatThrownBy(() -> service.create(DEF_ID, req))
                 .isInstanceOf(EntityNotFoundException.class)
                 .hasMessageContaining("Lab Test Definition not found");
 
@@ -202,7 +203,8 @@ class LabTestValidationStudyServiceImplTest {
     void update_notFound_throwsEntityNotFound() {
         when(repository.findById(STUDY_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.update(STUDY_ID, requestDto()))
+        var req = requestDto();
+        assertThatThrownBy(() -> service.update(STUDY_ID, req))
                 .isInstanceOf(EntityNotFoundException.class)
                 .hasMessageContaining("Validation study not found");
     }

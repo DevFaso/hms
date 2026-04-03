@@ -71,7 +71,8 @@ class LabTestValidationStudyControllerTest {
         when(service.create(eq(DEF_ID), any()))
                 .thenThrow(new EntityNotFoundException("Lab Test Definition not found"));
 
-        assertThatThrownBy(() -> controller.create(DEF_ID, requestDto()))
+        var req = requestDto();
+        assertThatThrownBy(() -> controller.create(DEF_ID, req))
                 .isInstanceOf(EntityNotFoundException.class);
     }
 
@@ -132,7 +133,8 @@ class LabTestValidationStudyControllerTest {
         when(service.update(eq(STUDY_ID), any()))
                 .thenThrow(new EntityNotFoundException("Validation study not found"));
 
-        assertThatThrownBy(() -> controller.update(STUDY_ID, requestDto()))
+        var req = requestDto();
+        assertThatThrownBy(() -> controller.update(STUDY_ID, req))
                 .isInstanceOf(EntityNotFoundException.class);
     }
 
