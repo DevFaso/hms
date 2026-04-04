@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 export interface AuditEventLog {
+  id?: string;
   userName: string;
   hospitalName: string;
   roleName: string;
@@ -33,14 +34,17 @@ export class AuditLogService {
     eventType?: string;
     fromDate?: string;
     toDate?: string;
-  }): Observable<{ content: AuditEventLog[] }> {
+  }): Observable<{ content: AuditEventLog[]; totalElements: number; totalPages: number }> {
     let httpParams = new HttpParams();
     if (params?.page != null) httpParams = httpParams.set('page', params.page);
     if (params?.size) httpParams = httpParams.set('size', params.size);
     if (params?.eventType) httpParams = httpParams.set('eventType', params.eventType);
     if (params?.fromDate) httpParams = httpParams.set('fromDate', params.fromDate);
     if (params?.toDate) httpParams = httpParams.set('toDate', params.toDate);
-    return this.http.get<{ content: AuditEventLog[] }>(this.baseUrl, { params: httpParams });
+    return this.http.get<{ content: AuditEventLog[]; totalElements: number; totalPages: number }>(
+      this.baseUrl,
+      { params: httpParams },
+    );
   }
 
   getByUser(
@@ -65,5 +69,18 @@ export class AuditLogService {
     details?: string;
   }): Observable<AuditEventLog> {
     return this.http.post<AuditEventLog>(this.baseUrl, event);
+  }
+
+  getByHospital(
+    hospitalId: string,
+    params?: { page?: number; size?: number },
+  ): Observable<{ content: AuditEventLog[]; totalElements: number; totalPages: number }> {
+    let httpParams = new HttpParams();
+    if (params?.page != null) httpParams = httpParams.set('page', params.page);
+    if (params?.size) httpParams = httpParams.set('size', params.size);
+    return this.http.get<{ content: AuditEventLog[]; totalElements: number; totalPages: number }>(
+      `${this.baseUrl}/hospital/${hospitalId}`,
+      { params: httpParams },
+    );
   }
 }

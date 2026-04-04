@@ -7,6 +7,7 @@ import com.example.hms.payload.dto.AuditEventRequestDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 public interface AuditEventLogService {
@@ -18,4 +19,8 @@ public interface AuditEventLogService {
     AuditEventLogResponseDTO logEvent(AuditEventRequestDTO requestDTO);
 
     Page<AuditEventLogResponseDTO> getAuditLogsByEventTypeAndStatus(AuditEventType parsedType, AuditStatus parsedStatus, Pageable pageable);
+
+    Page<AuditEventLogResponseDTO> getAuditLogsByDateRange(LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable);
+
+    Page<AuditEventLogResponseDTO> getAuditLogsByHospital(UUID hospitalId, Pageable pageable);
 }

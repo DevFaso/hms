@@ -76,15 +76,7 @@ public class PatientConsentServiceImpl implements PatientConsentService {
 
         Hibernate.initialize(patient.getHospitalRegistrations());
 
-        PatientConsent consent = consentRepository
-            .findByPatientIdAndFromHospitalIdAndToHospitalId(patientId, fromHospitalId, toHospitalId)
-            .orElseGet(() -> consentMapper.toEntity(requestDTO, patient, fromHospital, toHospital));
-
-        consent.setConsentGiven(true);
-        consent.setConsentExpiration(requestDTO.getConsentExpiration());
-        consent.setPurpose(requestDTO.getPurpose());
-
-        PatientConsent savedConsent = consentRepository.save(consent);
+        PatientConsent savedConsent = persistConsent(patientId, fromHospitalId, toHospitalId, requestDTO, patient, fromHospital, toHospital);
 
         try {
             auditRepository.save(AuditEventLog.builder()
@@ -177,15 +169,7 @@ public class PatientConsentServiceImpl implements PatientConsentService {
 
         Hibernate.initialize(patient.getHospitalRegistrations());
 
-        PatientConsent consent = consentRepository
-            .findByPatientIdAndFromHospitalIdAndToHospitalId(patientId, fromHospitalId, toHospitalId)
-            .orElseGet(() -> consentMapper.toEntity(requestDTO, patient, fromHospital, toHospital));
-
-        consent.setConsentGiven(true);
-        consent.setConsentExpiration(requestDTO.getConsentExpiration());
-        consent.setPurpose(requestDTO.getPurpose());
-
-        PatientConsent savedConsent = consentRepository.save(consent);
+        PatientConsent savedConsent = persistConsent(patientId, fromHospitalId, toHospitalId, requestDTO, patient, fromHospital, toHospital);
 
         try {
             auditRepository.save(AuditEventLog.builder()
@@ -202,6 +186,21 @@ public class PatientConsentServiceImpl implements PatientConsentService {
         }
 
         return consentMapper.toDto(savedConsent, patientDTO, fromHospitalDTO, toHospitalDTO);
+    }
+
+    private PatientConsent persistConsent(UUID patientId, UUID fromHospitalId, UUID toHospitalId,
+            PatientConsentRequestDTO requestDTO, Patient patient, Hospital fromHospital, Hospital toHospital) {
+        PatientConsent consent = consentRepository
+            .findByPatientIdAndFromHospitalIdAndToHospitalId(patientId, fromHospitalId, toHospitalId)
+            .orElseGet(() -> consentMapper.toEntity(requestDTO, patient, fromHospital, toHospital));
+        consent.setConsentGiven(true);
+        consent.setConsentExpiration(requestDTO.getConsentExpiration());
+        consent.setPurpose(requestDTO.getPurpose());
+        if (requestDTO.getConsentType() != null) {
+            consent.setConsentType(requestDTO.getConsentType());
+        }
+        consent.setScope(requestDTO.getScope());
+        return consentRepository.save(consent);
     }
 
     private PatientConsentResponseDTO mapWithDetails(PatientConsent consent) {

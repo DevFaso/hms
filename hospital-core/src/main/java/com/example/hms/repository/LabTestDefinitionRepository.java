@@ -74,4 +74,12 @@ public interface LabTestDefinitionRepository extends JpaRepository<LabTestDefini
     List<LabTestDefinition> findActiveByIdentifier(@Param("identifier") String identifier);
 
     Optional<LabTestDefinition> findByNameIgnoreCase(String name);
+
+    // ── Dashboard count queries ──────────────────────────────────────────────
+
+    /** Count definitions by approval status within a specific hospital. */
+    long countByApprovalStatusAndHospital_Id(LabTestDefinitionApprovalStatus approvalStatus, UUID hospitalId);
+
+    /** Count active definitions within a specific hospital. */
+    long countByActiveTrueAndHospital_Id(UUID hospitalId);
 }

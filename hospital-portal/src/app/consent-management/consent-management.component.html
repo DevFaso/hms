@@ -1,0 +1,257 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'CONSENT.MANAGEMENT.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'CONSENT.MANAGEMENT.SUBTITLE' | translate }}</p>
+    </div>
+    <button class="btn btn-primary" (click)="openGrantForm()">
+      <span class="material-symbols-outlined">add</span>
+      {{ 'CONSENT.MANAGEMENT.GRANT_CONSENT' | translate }}
+    </button>
+  </div>
+
+  <!-- Summary -->
+  <div class="summary-cards">
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon total">handshake</span>
+      <div class="card-info">
+        <span class="card-value">{{ totalElements() }}</span>
+        <span class="card-label">{{ 'CONSENT.MANAGEMENT.TOTAL_CONSENTS' | translate }}</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon active">verified</span>
+      <div class="card-info">
+        <span class="card-value">{{ filteredConsents().length }}</span>
+        <span class="card-label">{{ 'CONSENT.MANAGEMENT.SHOWING' | translate }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <select
+      class="filter-select"
+      [ngModel]="filterActive()"
+      (ngModelChange)="filterActive.set($event)"
+      aria-label="Filter by status"
+    >
+      <option value="">{{ 'CONSENT.MANAGEMENT.ALL_STATUSES' | translate }}</option>
+      <option value="true">{{ 'CONSENT.MANAGEMENT.ACTIVE_ONLY' | translate }}</option>
+      <option value="false">{{ 'CONSENT.MANAGEMENT.REVOKED_ONLY' | translate }}</option>
+    </select>
+  </div>
+
+  <!-- Grant consent modal -->
+  @if (showGrantForm()) {
+    <div class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="grant-modal-title">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h2 id="grant-modal-title">{{ 'CONSENT.MANAGEMENT.GRANT_CONSENT' | translate }}</h2>
+          <button class="btn-icon" (click)="cancelGrant()" aria-label="Close">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="form-row">
+            <label class="form-label" for="patientId">
+              {{ 'CONSENT.MANAGEMENT.PATIENT_ID' | translate }} *
+            </label>
+            <input
+              id="patientId"
+              class="form-input"
+              type="text"
+              [(ngModel)]="grantForm.patientId"
+              [placeholder]="'CONSENT.MANAGEMENT.UUID_PLACEHOLDER' | translate"
+            />
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="fromHospital">
+              {{ 'CONSENT.MANAGEMENT.FROM_HOSPITAL' | translate }} *
+            </label>
+            <input
+              id="fromHospital"
+              class="form-input"
+              type="text"
+              [(ngModel)]="grantForm.fromHospitalId"
+              [placeholder]="'CONSENT.MANAGEMENT.UUID_PLACEHOLDER' | translate"
+            />
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="toHospital">
+              {{ 'CONSENT.MANAGEMENT.TO_HOSPITAL' | translate }} *
+            </label>
+            <input
+              id="toHospital"
+              class="form-input"
+              type="text"
+              [(ngModel)]="grantForm.toHospitalId"
+              [placeholder]="'CONSENT.MANAGEMENT.UUID_PLACEHOLDER' | translate"
+            />
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="consentType">
+              {{ 'CONSENT.MANAGEMENT.CONSENT_TYPE' | translate }}
+            </label>
+            <select id="consentType" class="form-select" [(ngModel)]="grantForm.consentType">
+              @for (ct of consentTypes; track ct) {
+                <option [value]="ct">{{ 'CONSENT.TYPE.' + ct | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="purpose">
+              {{ 'CONSENT.MANAGEMENT.PURPOSE' | translate }}
+            </label>
+            <input
+              id="purpose"
+              class="form-input"
+              type="text"
+              [(ngModel)]="grantForm.purpose"
+              maxlength="1024"
+            />
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="scope">
+              {{ 'CONSENT.MANAGEMENT.SCOPE' | translate }}
+            </label>
+            <input
+              id="scope"
+              class="form-input"
+              type="text"
+              [(ngModel)]="grantForm.scope"
+              [placeholder]="'CONSENT.MANAGEMENT.SCOPE_PLACEHOLDER' | translate"
+              maxlength="500"
+            />
+            <span class="form-hint">{{ 'CONSENT.MANAGEMENT.SCOPE_HINT' | translate }}</span>
+          </div>
+          <div class="form-row">
+            <label class="form-label" for="expiration">
+              {{ 'CONSENT.MANAGEMENT.EXPIRATION' | translate }}
+            </label>
+            <input
+              id="expiration"
+              class="form-input"
+              type="datetime-local"
+              [(ngModel)]="grantForm.consentExpiration"
+            />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" (click)="cancelGrant()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button class="btn btn-primary" (click)="submitGrant()" [disabled]="submitting()">
+            @if (submitting()) {
+              <span class="btn-spinner"></span>
+            }
+            {{ 'CONSENT.MANAGEMENT.GRANT_CONSENT' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'COMMON.LOADING' | translate }}</p>
+    </div>
+  }
+
+  <!-- Empty -->
+  @if (!loading() && filteredConsents().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">handshake</span>
+      <h3>{{ 'CONSENT.MANAGEMENT.NO_CONSENTS' | translate }}</h3>
+      <p>{{ 'CONSENT.MANAGEMENT.NO_CONSENTS_HINT' | translate }}</p>
+    </div>
+  }
+
+  <!-- Table -->
+  @if (!loading() && filteredConsents().length > 0) {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'CONSENT.MANAGEMENT.PATIENT' | translate }}</th>
+            <th scope="col">{{ 'CONSENT.MANAGEMENT.FROM_HOSPITAL' | translate }}</th>
+            <th scope="col">{{ 'CONSENT.MANAGEMENT.TO_HOSPITAL' | translate }}</th>
+            <th scope="col">{{ 'CONSENT.MANAGEMENT.CONSENT_TYPE' | translate }}</th>
+            <th scope="col">{{ 'CONSENT.MANAGEMENT.SCOPE' | translate }}</th>
+            <th scope="col">{{ 'CONSENT.MANAGEMENT.EXPIRATION' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (c of filteredConsents(); track c.id) {
+            <tr class="data-row">
+              <td>
+                <div class="cell-primary">{{ c.patient?.firstName }} {{ c.patient?.lastName }}</div>
+                <div class="cell-secondary small">{{ c.patient?.id }}</div>
+              </td>
+              <td>{{ c.fromHospital?.name || '--' }}</td>
+              <td>{{ c.toHospital?.name || '--' }}</td>
+              <td>
+                <span class="type-badge type-{{ (c.consentType || 'TREATMENT').toLowerCase() }}">
+                  {{ 'CONSENT.TYPE.' + (c.consentType || 'TREATMENT') | translate }}
+                </span>
+              </td>
+              <td class="scope-cell">{{ c.scope || '--' }}</td>
+              <td>
+                {{
+                  c.consentExpiration
+                    ? (c.consentExpiration | date: 'mediumDate')
+                    : ('CONSENT.MANAGEMENT.NO_EXPIRY' | translate)
+                }}
+              </td>
+              <td>
+                @if (isActive(c)) {
+                  <span class="status-badge status-success">{{
+                    'CONSENT.MANAGEMENT.ACTIVE' | translate
+                  }}</span>
+                } @else {
+                  <span class="status-badge status-failure">{{
+                    'CONSENT.MANAGEMENT.REVOKED' | translate
+                  }}</span>
+                }
+              </td>
+              <td>
+                @if (isActive(c)) {
+                  <button class="btn btn-danger btn-sm" (click)="revoke(c)">
+                    {{ 'CONSENT.MANAGEMENT.REVOKE' | translate }}
+                  </button>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination-bar">
+      <button
+        class="btn btn-secondary btn-sm"
+        [disabled]="currentPage() === 0"
+        (click)="prevPage()"
+      >
+        {{ 'AUDIT.PREV' | translate }}
+      </button>
+      <span class="pagination-info">
+        {{ 'AUDIT.PAGE_OF' | translate: { current: currentPage() + 1, total: totalPages() } }}
+        &nbsp;({{ totalElements() }}
+        {{ 'CONSENT.MANAGEMENT.TOTAL_CONSENTS' | translate | lowercase }})
+      </span>
+      <button
+        class="btn btn-secondary btn-sm"
+        [disabled]="currentPage() >= totalPages() - 1"
+        (click)="nextPage()"
+      >
+        {{ 'AUDIT.NEXT' | translate }}
+      </button>
+    </div>
+  }
+</div>

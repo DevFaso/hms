@@ -1,7 +1,10 @@
 package com.example.hms.model;
 
+import com.example.hms.enums.ConsentType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Index;
@@ -70,6 +73,16 @@ public class PatientConsent extends BaseEntity {
     @Size(max = 1024)
     @Column(length = 1024)
     private String purpose;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "consent_type", length = 50, nullable = false)
+    @Builder.Default
+    private ConsentType consentType = ConsentType.TREATMENT;
+
+    /** Comma-separated record domains in scope, e.g. "PRESCRIPTIONS,LAB_RESULTS". Null = all domains. */
+    @Size(max = 500)
+    @Column(length = 500)
+    private String scope;
 
     public boolean isConsentActive() {
         return consentGiven && (consentExpiration == null || consentExpiration.isAfter(LocalDateTime.now()));

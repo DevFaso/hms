@@ -65,4 +65,18 @@ public interface AuditEventLogRepository extends JpaRepository<AuditEventLog, UU
            "ORDER BY function('date', a.eventTimestamp)")
     List<Object[]> countDailyByHospital(@Param("hospitalId") UUID hospitalId,
                                         @Param("from") LocalDateTime from);
+
+    /**
+     * Date-range query with optional from/to bounds. Both params are nullable —
+     * if null the respective bound is ignored, returning all records in the other direction.
+     * passDistinctThrough=false avoids SQL DISTINCT breaking pagination COUNT(*).
+     */
+    @Query("SELECT DISTINCT a FROM AuditEventLog a WHERE " +
+           "(:fromDate IS NULL OR a.eventTimestamp >= :fromDate) AND " +
+           "(:toDate IS NULL OR a.eventTimestamp <= :toDate) " +
+           "ORDER BY a.eventTimestamp DESC")
+    @QueryHints(@QueryHint(name = "hibernate.query.passDistinctThrough", value = "false"))
+    Page<AuditEventLog> findByDateRange(@Param("fromDate") LocalDateTime fromDate,
+                                        @Param("toDate") LocalDateTime toDate,
+                                        Pageable pageable);
 }

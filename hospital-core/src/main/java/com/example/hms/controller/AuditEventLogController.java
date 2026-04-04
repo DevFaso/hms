@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
@@ -29,6 +30,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -56,13 +58,32 @@ public class AuditEventLogController {
     }
 
     @GetMapping
-    @Operation(summary = "Get All Audit Logs", description = "Retrieve all audit logs with pagination.")
+    @Operation(summary = "Get All Audit Logs", description = "Retrieve all audit logs with pagination. Optionally filter by date range.")
     @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
     public ResponseEntity<Page<AuditEventLogResponseDTO>> getAllAuditLogs(
+        @Parameter(description = "Start of date range (ISO 8601), e.g. 2024-01-01T00:00:00")
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime fromDate,
+        @Parameter(description = "End of date range (ISO 8601), e.g. 2024-12-31T23:59:59")
+        @RequestParam(required = false)
+        @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime toDate,
         @PageableDefault(size = 20) Pageable pageable
     ) {
+        if (fromDate != null || toDate != null) {
+            return ResponseEntity.ok(auditService.getAuditLogsByDateRange(fromDate, toDate, pageable));
+        }
         Page<AuditEventLog> page = auditRepository.findAll(pageable);
         return ResponseEntity.ok(page.map(auditMapper::toDto));
+    }
+
+    @GetMapping("/hospital/{hospitalId}")
+    @Operation(summary = "Get Audit Logs by Hospital", description = "Retrieve audit logs scoped to a specific hospital, ordered by timestamp descending.")
+    @ApiResponse(responseCode = "200", description = "Audit logs retrieved successfully")
+    public ResponseEntity<Page<AuditEventLogResponseDTO>> getLogsByHospital(
+        @Parameter(description = "UUID of the hospital", required = true)
+        @PathVariable UUID hospitalId,
+        @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(auditService.getAuditLogsByHospital(hospitalId, pageable));
     }
 
     @GetMapping("/user/{userId}")

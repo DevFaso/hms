@@ -1,0 +1,159 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">folder_open</span>
+      {{ 'PORTAL.DOCUMENTS.TITLE' | translate }}
+    </h1>
+    <button class="btn-primary" (click)="showUploadForm.set(!showUploadForm())">
+      <span class="material-symbols-outlined">upload_file</span>
+      {{
+        showUploadForm()
+          ? ('PORTAL.DOCUMENTS.CANCEL' | translate)
+          : ('PORTAL.DOCUMENTS.UPLOAD' | translate)
+      }}
+    </button>
+  </div>
+
+  <!-- Upload Form -->
+  @if (showUploadForm()) {
+    <div class="portal-card upload-form">
+      <h3>{{ 'PORTAL.DOCUMENTS.UPLOAD' | translate }}</h3>
+      <div class="form-grid">
+        <label class="file-label">
+          {{ 'PORTAL.DOCUMENTS.SELECT_FILE' | translate }}
+          <input
+            type="file"
+            (change)="onFileSelected($event)"
+            accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.txt,.rtf,.doc,.docx"
+          />
+          @if (selectedFile()) {
+            <span class="file-name">{{ selectedFile()!.name }}</span>
+          }
+        </label>
+        <label>
+          {{ 'PORTAL.DOCUMENTS.DOCUMENT_TYPE' | translate }}
+          <select
+            [value]="selectedDocumentType()"
+            (change)="selectedDocumentType.set($any($event.target).value)"
+          >
+            @for (dt of documentTypes; track dt.value) {
+              <option [value]="dt.value">{{ dt.labelKey | translate }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          {{ 'PORTAL.DOCUMENTS.COLLECTION_DATE' | translate }}
+          <input
+            type="date"
+            [value]="collectionDate()"
+            (change)="collectionDate.set($any($event.target).value)"
+          />
+        </label>
+        <label>
+          {{ 'PORTAL.DOCUMENTS.NOTES' | translate }}
+          <input
+            type="text"
+            [value]="notes()"
+            (input)="notes.set($any($event.target).value)"
+            [placeholder]="'PORTAL.DOCUMENTS.NOTES_PLACEHOLDER' | translate"
+          />
+        </label>
+      </div>
+      <button
+        class="btn-primary"
+        (click)="uploadDocument()"
+        [disabled]="uploading() || !selectedFile()"
+      >
+        {{
+          uploading()
+            ? ('PORTAL.DOCUMENTS.UPLOADING' | translate)
+            : ('PORTAL.DOCUMENTS.UPLOAD' | translate)
+        }}
+      </button>
+    </div>
+  }
+
+  <!-- Filter -->
+  <div class="filter-bar">
+    <label>
+      {{ 'PORTAL.DOCUMENTS.FILTER_TYPE' | translate }}
+      <select
+        [value]="filterType()"
+        (change)="filterType.set($any($event.target).value); onFilterChange()"
+      >
+        <option value="">{{ 'PORTAL.DOCUMENTS.FILTER_ALL' | translate }}</option>
+        @for (dt of documentTypes; track dt.value) {
+          <option [value]="dt.value">{{ dt.labelKey | translate }}</option>
+        }
+      </select>
+    </label>
+  </div>
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <span>{{ 'PORTAL.DOCUMENTS.LOADING' | translate }}</span>
+    </div>
+  } @else if (!documents().length) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined empty-icon">folder_open</span>
+      <p>{{ 'PORTAL.DOCUMENTS.NO_DOCUMENTS' | translate }}</p>
+      <small>{{ 'PORTAL.DOCUMENTS.NO_DOCUMENTS_DESC' | translate }}</small>
+    </div>
+  } @else {
+    <div class="documents-grid">
+      @for (doc of documents(); track doc.id) {
+        <div class="portal-card doc-card">
+          <div class="doc-header">
+            <span class="material-symbols-outlined doc-icon">description</span>
+            <div class="doc-meta">
+              <strong class="doc-name">{{ doc.displayName }}</strong>
+              <span class="badge doc-type">{{ doc.documentType }}</span>
+            </div>
+          </div>
+          <div class="doc-details">
+            @if (doc.collectionDate) {
+              <span>
+                <span class="material-symbols-outlined detail-icon">calendar_today</span>
+                {{ doc.collectionDate | date: 'mediumDate' }}
+              </span>
+            }
+            <span>
+              <span class="material-symbols-outlined detail-icon">storage</span>
+              {{ fileSizeKb(doc.fileSizeBytes) }} KB
+            </span>
+            @if (doc.uploadedByDisplayName) {
+              <span>
+                <span class="material-symbols-outlined detail-icon">person</span>
+                {{ 'PORTAL.DOCUMENTS.UPLOADED_BY' | translate }}: {{ doc.uploadedByDisplayName }}
+              </span>
+            }
+          </div>
+          @if (doc.notes) {
+            <p class="doc-notes">{{ doc.notes }}</p>
+          }
+          <div class="doc-actions">
+            <a
+              [href]="doc.fileUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn-secondary-sm"
+            >
+              <span class="material-symbols-outlined">download</span>
+              {{ 'PORTAL.DOCUMENTS.DOWNLOAD' | translate }}
+            </a>
+            <button
+              class="btn-danger-sm"
+              (click)="deleteDocument(doc.id)"
+              [disabled]="deleting() === doc.id"
+            >
+              <span class="material-symbols-outlined">delete</span>
+              {{ 'PORTAL.DOCUMENTS.DELETE' | translate }}
+            </button>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

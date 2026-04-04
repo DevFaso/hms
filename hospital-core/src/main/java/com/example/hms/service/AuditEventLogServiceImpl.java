@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import com.example.hms.enums.AuditStatus;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Slf4j
@@ -69,6 +70,21 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     public Page<AuditEventLogResponseDTO> getAuditLogsByTarget(String entityType, String resourceId, Pageable pageable) {
         return auditRepository
             .findByEntityTypeIgnoreCaseAndResourceId(entityType.trim(), resourceId.trim(), pageable)
+            .map(auditMapper::toDto);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AuditEventLogResponseDTO> getAuditLogsByDateRange(LocalDateTime fromDate, LocalDateTime toDate, Pageable pageable) {
+        return auditRepository.findByDateRange(fromDate, toDate, pageable)
+            .map(auditMapper::toDto);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AuditEventLogResponseDTO> getAuditLogsByHospital(UUID hospitalId, Pageable pageable) {
+        return auditRepository
+            .findByAssignment_Hospital_IdOrderByEventTimestampDesc(hospitalId, pageable)
             .map(auditMapper::toDto);
     }
 

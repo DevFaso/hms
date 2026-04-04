@@ -1,7 +1,9 @@
 package com.example.hms.payload.dto;
 
+import com.example.hms.enums.ConsentType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -38,4 +40,13 @@ public class PatientConsentRequestDTO {
     @Schema(description = "Purpose of the consent. E.g., Treatment, Research, Billing.",
             example = "Treatment")
     private String purpose;
+
+    @Schema(description = "Type of consent. Defaults to TREATMENT if not specified.",
+            example = "TREATMENT")
+    private ConsentType consentType;
+
+    @Size(max = 500)
+    @Schema(description = "Comma-separated record domains in scope, e.g. PRESCRIPTIONS,LAB_RESULTS. Null means all domains.",
+            example = "PRESCRIPTIONS,LAB_RESULTS,ENCOUNTERS")
+    private String scope;
 }

@@ -144,6 +144,24 @@ export const routes: Routes = [
             (m) => m.MySummariesComponent,
           ),
       },
+      {
+        path: 'my-documents',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-documents/my-documents.component').then(
+            (m) => m.MyDocumentsComponent,
+          ),
+      },
+      {
+        path: 'my-notifications',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-notifications/my-notifications.component').then(
+            (m) => m.MyNotificationsComponent,
+          ),
+      },
 
       // Patients
       {
@@ -554,6 +572,17 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
         loadComponent: () => import('./audit-logs/audit-logs').then((m) => m.AuditLogsComponent),
+      },
+
+      // Consent Management
+      {
+        path: 'consent-management',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'] },
+        loadComponent: () =>
+          import('./consent-management/consent-management.component').then(
+            (m) => m.ConsentManagementComponent,
+          ),
       },
 
       // Reception / Front Desk Cockpit

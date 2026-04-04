@@ -9,7 +9,7 @@
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon total">receipt_long</span>
       <div class="card-info">
-        <span class="card-value">{{ logs().length }}</span
+        <span class="card-value">{{ totalElements() }}</span
         ><span class="card-label">{{ 'AUDIT.TOTAL_EVENTS' | translate }}</span>
       </div>
     </div>
@@ -34,6 +34,28 @@
           <option [value]="et.eventType">{{ et.eventType }} ({{ et.count }})</option>
         }
       </select>
+      <input
+        type="datetime-local"
+        [(ngModel)]="fromDate"
+        class="filter-input"
+        [attr.aria-label]="'AUDIT.DATE_FROM' | translate"
+        [title]="'AUDIT.DATE_FROM' | translate"
+      />
+      <input
+        type="datetime-local"
+        [(ngModel)]="toDate"
+        class="filter-input"
+        [attr.aria-label]="'AUDIT.DATE_TO' | translate"
+        [title]="'AUDIT.DATE_TO' | translate"
+      />
+      <button class="btn btn-primary btn-sm" (click)="applyDateFilter()">
+        {{ 'AUDIT.APPLY_FILTER' | translate }}
+      </button>
+      @if (fromDate || toDate) {
+        <button class="btn btn-secondary btn-sm" (click)="clearDateFilter()">
+          {{ 'COMMON.CLEAR' | translate }}
+        </button>
+      }
     </div>
     <div class="search-box">
       <span class="material-symbols-outlined">search</span
@@ -41,7 +63,7 @@
         type="text"
         [placeholder]="'AUDIT.SEARCH' | translate"
         [(ngModel)]="searchTerm"
-        (input)="applyFilter()"
+        (input)="onEventTypeChange()"
       />
     </div>
   </div>
@@ -76,25 +98,45 @@
           @for (l of filtered(); track l.eventTimestamp + l.userName) {
             <tr class="data-row">
               <td class="time-cell">
-                {{ l.eventTimestamp ? (l.eventTimestamp | date: 'medium') : '—' }}
+                {{ l.eventTimestamp ? (l.eventTimestamp | date: 'medium') : '--' }}
               </td>
               <td>
-                <div class="cell-primary">{{ l.userName || '—' }}</div>
+                <div class="cell-primary">{{ l.userName || '--' }}</div>
                 <div class="cell-secondary">{{ l.roleName || '' }}</div>
               </td>
               <td>
                 <span class="event-type-badge">{{ l.eventType }}</span>
               </td>
-              <td class="desc-cell">{{ l.eventDescription || '—' }}</td>
-              <td>{{ l.entityType || '—' }}</td>
+              <td class="desc-cell">{{ l.eventDescription || '--' }}</td>
+              <td>{{ l.entityType || '--' }}</td>
               <td>
                 <span class="status-badge {{ getStatusClass(l.status) }}">{{ l.status }}</span>
               </td>
-              <td class="ip-cell">{{ l.ipAddress || '—' }}</td>
+              <td class="ip-cell">{{ l.ipAddress || '--' }}</td>
             </tr>
           }
         </tbody>
       </table>
+    </div>
+    <div class="pagination-bar">
+      <button
+        class="btn btn-secondary btn-sm"
+        [disabled]="currentPage() === 0"
+        (click)="prevPage()"
+      >
+        {{ 'AUDIT.PREV' | translate }}
+      </button>
+      <span class="pagination-info">
+        {{ 'AUDIT.PAGE_OF' | translate: { current: currentPage() + 1, total: totalPages() } }}
+        &nbsp;({{ totalElements() }} {{ 'AUDIT.TOTAL_EVENTS' | translate | lowercase }})
+      </span>
+      <button
+        class="btn btn-secondary btn-sm"
+        [disabled]="currentPage() >= totalPages() - 1"
+        (click)="nextPage()"
+      >
+        {{ 'AUDIT.NEXT' | translate }}
+      </button>
     </div>
   }
 </div>

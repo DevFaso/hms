@@ -43,6 +43,8 @@ import {
   WriteOffSummary,
   BedOccupancy,
   WardOccupancyRow,
+  LabDirectorDashboard,
+  QualityManagerDashboard,
 } from '../services/dashboard.service';
 import {
   PatientPortalService,
@@ -158,6 +160,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
   isMidwife = signal(false);
   isReceptionist = signal(false);
   isLabScientist = signal(false);
+  isLabDirector = signal(false);
+  isQualityManager = signal(false);
   isPharmacist = signal(false);
   isRadiologist = signal(false);
   isPatient = signal(false);
@@ -176,6 +180,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // ── Hospital-Admin data ────────────────────────────────────
   hospitalAdminSummary = signal<HospitalAdminSummary | null>(null);
+
+  // ── Lab Director data ─────────────────────────────────────
+  labDirectorDashboard = signal<LabDirectorDashboard | null>(null);
+
+  // ── Quality Manager data ──────────────────────────────────
+  qualityManagerDashboard = signal<QualityManagerDashboard | null>(null);
 
   // ── Clinical Dashboard data ───────────────────────────────────
   kpis = signal<DashboardKPI[]>([]);
@@ -326,6 +336,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.isDoctor()) return 'hero-gradient-doctor';
     if (this.isNurse() || this.isMidwife()) return 'hero-gradient-nurse';
     if (this.isReceptionist()) return 'hero-gradient-receptionist';
+    if (this.isLabDirector()) return 'hero-gradient-lab-director';
+    if (this.isQualityManager()) return 'hero-gradient-quality-manager';
     if (this.isLabScientist()) return 'hero-gradient-lab';
     if (this.isPharmacist()) return 'hero-gradient-pharmacist';
     if (this.isRadiologist()) return 'hero-gradient-radiologist';
@@ -343,6 +355,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     | 'doctor'
     | 'nurse'
     | 'receptionist'
+    | 'lab-director'
+    | 'quality-manager'
     | 'lab'
     | 'pharmacist'
     | 'radiologist'
@@ -355,6 +369,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.isDoctor()) return 'doctor';
     if (this.isNurse() || this.isMidwife()) return 'nurse';
     if (this.isReceptionist()) return 'receptionist';
+    if (this.isLabDirector()) return 'lab-director';
+    if (this.isQualityManager()) return 'quality-manager';
     if (this.isLabScientist()) return 'lab';
     if (this.isPharmacist()) return 'pharmacist';
     if (this.isRadiologist()) return 'radiologist';
@@ -370,6 +386,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     if (this.isMidwife()) return 'Midwife';
     if (this.isNurse()) return 'Nurse';
     if (this.isReceptionist()) return 'Front Desk';
+    if (this.isLabDirector()) return 'Lab Director';
+    if (this.isQualityManager()) return 'Quality Manager';
     if (this.isLabScientist()) return 'Lab Scientist';
     if (this.isPharmacist()) return 'Pharmacist';
     if (this.isRadiologist()) return 'Radiologist';
@@ -1201,6 +1219,221 @@ export class DashboardComponent implements OnInit, OnDestroy {
     { icon: 'analytics', label: 'Reports', route: '/lab', color: '#ea580c', bg: '#fff7ed' },
   ]);
 
+  // ── Lab Director stat cards ───────────────────────────────────
+  labDirectorStatCards = computed<StatCard[]>(() => {
+    const d = this.labDirectorDashboard();
+    if (!d) return [];
+    const tatValue: number | string =
+      d.avgTurnaroundMinutesToday != null ? Math.round(d.avgTurnaroundMinutesToday) : 'N/A';
+    return [
+      {
+        key: 'pending_director',
+        label: 'Pending Your Approval',
+        value: d.pendingDirectorApproval,
+        icon: 'approval',
+        color: d.pendingDirectorApproval > 0 ? '#dc2626' : '#64748b',
+        bgColor: d.pendingDirectorApproval > 0 ? '#fee2e2' : '#f1f5f9',
+        route: '/lab',
+      },
+      {
+        key: 'pending_qa',
+        label: 'Pending QA Review',
+        value: d.pendingQaReview,
+        icon: 'fact_check',
+        color: d.pendingQaReview > 0 ? '#d97706' : '#64748b',
+        bgColor: d.pendingQaReview > 0 ? '#fef3c7' : '#f1f5f9',
+        route: '/lab',
+      },
+      {
+        key: 'active_definitions',
+        label: 'Active Test Definitions',
+        value: d.activeDefinitions,
+        icon: 'science',
+        color: '#059669',
+        bgColor: '#d1fae5',
+        route: '/lab',
+      },
+      {
+        key: 'orders_today',
+        label: 'Orders Today',
+        value: d.ordersToday,
+        icon: 'assignment',
+        color: '#2563eb',
+        bgColor: '#dbeafe',
+        route: '/lab',
+      },
+      {
+        key: 'avg_tat',
+        label: 'Avg Turnaround (min)',
+        value: tatValue,
+        icon: 'timer',
+        color: '#7c3aed',
+        bgColor: '#ede9fe',
+      },
+    ];
+  });
+
+  // ── Lab Director workflow tiles ───────────────────────────────
+  labDirectorNavTiles = computed<NavTile[]>(() => {
+    const d = this.labDirectorDashboard();
+    return [
+      {
+        icon: 'approval',
+        label: 'Approval Queue',
+        route: '/lab',
+        color: '#dc2626',
+        bg: '#fee2e2',
+        count: d?.pendingDirectorApproval,
+      },
+      {
+        icon: 'fact_check',
+        label: 'QA Reviews',
+        route: '/lab',
+        color: '#d97706',
+        bg: '#fef3c7',
+        count: d?.pendingQaReview,
+      },
+      { icon: 'science', label: 'Lab Orders', route: '/lab', color: '#0d9488', bg: '#ccfbf1' },
+      {
+        icon: 'biotech',
+        label: 'Test Definitions',
+        route: '/lab',
+        color: '#7c3aed',
+        bg: '#ede9fe',
+      },
+      {
+        icon: 'analytics',
+        label: 'Validation Studies',
+        route: '/lab',
+        color: '#2563eb',
+        bg: '#dbeafe',
+      },
+      { icon: 'people', label: 'Patients', route: '/patients', color: '#0891b2', bg: '#cffafe' },
+      {
+        icon: 'history',
+        label: 'Audit Trail',
+        route: '/audit-logs',
+        color: '#4f46e5',
+        bg: '#eef2ff',
+      },
+      { icon: 'bar_chart', label: 'Reports', route: '/lab', color: '#ea580c', bg: '#fff7ed' },
+    ];
+  });
+
+  // ── Quality Manager stat cards ────────────────────────────────
+  qualityManagerStatCards = computed<StatCard[]>(() => {
+    const d = this.qualityManagerDashboard();
+    if (!d) return [];
+    const passRateDisplay: string =
+      d.qualityPassRate != null ? d.qualityPassRate.toFixed(1) + '%' : 'N/A';
+    return [
+      {
+        key: 'pending_qa',
+        label: 'Pending QA Review',
+        value: d.pendingQaReview,
+        icon: 'fact_check',
+        color: d.pendingQaReview > 0 ? '#dc2626' : '#64748b',
+        bgColor: d.pendingQaReview > 0 ? '#fee2e2' : '#f1f5f9',
+        route: '/lab',
+      },
+      {
+        key: 'total_studies',
+        label: 'Validation Studies',
+        value: d.totalValidationStudies,
+        icon: 'biotech',
+        color: '#7c3aed',
+        bgColor: '#ede9fe',
+        route: '/lab',
+      },
+      {
+        key: 'pass_rate',
+        label: 'Quality Pass Rate',
+        value: passRateDisplay,
+        icon: 'verified',
+        color: '#059669',
+        bgColor: '#d1fae5',
+      },
+      {
+        key: 'active_definitions',
+        label: 'Active Test Definitions',
+        value: d.activeDefinitions,
+        icon: 'science',
+        color: '#2563eb',
+        bgColor: '#dbeafe',
+        route: '/lab',
+      },
+      {
+        key: 'studies_30d',
+        label: 'Studies (Last 30d)',
+        value: d.validationStudiesLast30Days,
+        icon: 'calendar_month',
+        color: '#0891b2',
+        bgColor: '#cffafe',
+        route: '/lab',
+      },
+    ];
+  });
+
+  // ── Quality Manager workflow tiles ────────────────────────────
+  qualityManagerNavTiles = computed<NavTile[]>(() => {
+    const d = this.qualityManagerDashboard();
+    return [
+      {
+        icon: 'fact_check',
+        label: 'QA Reviews',
+        route: '/lab',
+        color: '#dc2626',
+        bg: '#fee2e2',
+        count: d?.pendingQaReview,
+      },
+      {
+        icon: 'biotech',
+        label: 'Validation Studies',
+        route: '/lab',
+        color: '#7c3aed',
+        bg: '#ede9fe',
+      },
+      {
+        icon: 'science',
+        label: 'Test Definitions',
+        route: '/lab',
+        color: '#0d9488',
+        bg: '#ccfbf1',
+      },
+      { icon: 'verified', label: 'Approved Tests', route: '/lab', color: '#059669', bg: '#d1fae5' },
+      {
+        icon: 'analytics',
+        label: 'Quality Reports',
+        route: '/lab',
+        color: '#2563eb',
+        bg: '#dbeafe',
+      },
+      {
+        icon: 'warning',
+        label: 'Failed Studies',
+        route: '/lab',
+        color: '#d97706',
+        bg: '#fef3c7',
+        count: d?.failedValidationStudies,
+      },
+      {
+        icon: 'history',
+        label: 'Audit Trail',
+        route: '/audit-logs',
+        color: '#4f46e5',
+        bg: '#eef2ff',
+      },
+      {
+        icon: 'pending_actions',
+        label: 'Director Pending',
+        route: '/lab',
+        color: '#ea580c',
+        bg: '#fff7ed',
+        count: d?.pendingDirectorApproval,
+      },
+    ];
+  });
+
   // ── Pharmacist workflow tiles ────────────────────────────────
   pharmacistWorkflowTiles = computed<NavTile[]>(() => [
     {
@@ -1390,6 +1623,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.isMidwife.set(this.auth.hasAnyRole(['ROLE_MIDWIFE']));
     this.isReceptionist.set(this.auth.hasAnyRole(['ROLE_RECEPTIONIST']));
     this.isLabScientist.set(this.auth.hasAnyRole(['ROLE_LAB_SCIENTIST']));
+    this.isLabDirector.set(this.auth.hasAnyRole(['ROLE_LAB_DIRECTOR']));
+    this.isQualityManager.set(this.auth.hasAnyRole(['ROLE_QUALITY_MANAGER']));
     this.isPharmacist.set(this.auth.hasAnyRole(['ROLE_PHARMACIST']));
     this.isRadiologist.set(this.auth.hasAnyRole(['ROLE_RADIOLOGIST']));
     this.isPatient.set(this.auth.hasAnyRole(['ROLE_PATIENT']));
@@ -1457,6 +1692,30 @@ export class DashboardComponent implements OnInit, OnDestroy {
       this.dashboardService.getHospitalAdminSummary(today).subscribe({
         next: (s) => {
           this.hospitalAdminSummary.set(s);
+          done();
+        },
+        error: () => done(),
+      });
+    }
+
+    // Lab Director summary
+    if (this.isLabDirector()) {
+      pending++;
+      this.dashboardService.getLabDirectorSummary().subscribe({
+        next: (d) => {
+          this.labDirectorDashboard.set(d);
+          done();
+        },
+        error: () => done(),
+      });
+    }
+
+    // Quality Manager summary
+    if (this.isQualityManager()) {
+      pending++;
+      this.dashboardService.getQualityManagerSummary().subscribe({
+        next: (d) => {
+          this.qualityManagerDashboard.set(d);
           done();
         },
         error: () => done(),

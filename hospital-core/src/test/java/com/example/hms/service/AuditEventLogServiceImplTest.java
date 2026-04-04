@@ -23,6 +23,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 import java.util.UUID;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
@@ -180,5 +187,60 @@ class AuditEventLogServiceImplTest {
 
         assertThat(result).isSameAs(expectedDto);
         verify(auditRepository).save(any());
+    }
+
+    // --- date-range filter ---
+
+    @Test
+    @DisplayName("getAuditLogsByDateRange delegates to repository with correct params")
+    void getAuditLogsByDateRange_delegatesToRepository() {
+        LocalDateTime from = LocalDateTime.of(2024, 1, 1, 0, 0);
+        LocalDateTime to = LocalDateTime.of(2024, 12, 31, 23, 59);
+        PageRequest pageable = PageRequest.of(0, 20);
+        AuditEventLog log = AuditEventLog.builder()
+            .eventType(AuditEventType.ROLE_ASSIGNED).eventDescription("test").build();
+        Page<AuditEventLog> page = new PageImpl<>(List.of(log));
+        AuditEventLogResponseDTO dto = new AuditEventLogResponseDTO();
+
+        when(auditRepository.findByDateRange(from, to, pageable)).thenReturn(page);
+        when(auditMapper.toDto(log)).thenReturn(dto);
+
+        Page<AuditEventLogResponseDTO> result = auditService.getAuditLogsByDateRange(from, to, pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0)).isSameAs(dto);
+        verify(auditRepository).findByDateRange(from, to, pageable);
+    }
+
+    @Test
+    @DisplayName("getAuditLogsByDateRange accepts null bounds (open-ended)")
+    void getAuditLogsByDateRange_nullBounds_returnsAllLogs() {
+        PageRequest pageable = PageRequest.of(0, 20);
+        Page<AuditEventLog> empty = Page.empty();
+
+        when(auditRepository.findByDateRange(null, null, pageable)).thenReturn(empty);
+
+        Page<AuditEventLogResponseDTO> result = auditService.getAuditLogsByDateRange(null, null, pageable);
+
+        assertThat(result.getContent()).isEmpty();
+        verify(auditRepository).findByDateRange(null, null, pageable);
+    }
+
+    // --- hospital-scoped audit ---
+
+    @Test
+    @DisplayName("getAuditLogsByHospital delegates to repository with hospitalId")
+    void getAuditLogsByHospital_delegatesToRepository() {
+        UUID hospitalId = UUID.randomUUID();
+        PageRequest pageable = PageRequest.of(0, 20);
+        Page<AuditEventLog> empty = Page.empty();
+
+        when(auditRepository.findByAssignment_Hospital_IdOrderByEventTimestampDesc(hospitalId, pageable))
+            .thenReturn(empty);
+
+        Page<AuditEventLogResponseDTO> result = auditService.getAuditLogsByHospital(hospitalId, pageable);
+
+        assertThat(result).isNotNull();
+        verify(auditRepository).findByAssignment_Hospital_IdOrderByEventTimestampDesc(hospitalId, pageable);
     }
 }
