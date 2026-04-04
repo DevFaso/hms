@@ -422,4 +422,16 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V34: Fix Patient Uploaded Documents - Correct schema reference
+         - Fixes V32 which referenced public.users instead of security.users
+         - Drops and recreates clinical.patient_uploaded_documents with correct FK
+         ================================================================= -->
+    <changeSet id="V34-fix-patient-uploaded-documents-schema" author="hms-team" runOnChange="false">
+        <sqlFile path="V34__fix_patient_uploaded_documents_schema.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

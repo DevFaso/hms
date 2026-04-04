@@ -1,15 +1,19 @@
 -- =============================================================================
--- V32: Patient Uploaded Documents
+-- V34: Fix Patient Uploaded Documents - Correct schema reference
 --
--- Allows patients (and authorised proxies) to upload their own medical documents
--- (external lab results, imaging reports, invoices, etc.) to the portal.
--- Files are stored on the server filesystem; this table tracks metadata only.
+-- V32 failed in Railway dev because it referenced public.users instead of
+-- security.users. This migration drops the partially created table (if any)
+-- and recreates it with the correct schema reference.
 --
 -- Rollback:
 --   DROP TABLE IF EXISTS clinical.patient_uploaded_documents;
 -- =============================================================================
 
-CREATE TABLE IF NOT EXISTS clinical.patient_uploaded_documents (
+-- Drop the table if it was partially created by the failed V32 run
+DROP TABLE IF EXISTS clinical.patient_uploaded_documents;
+
+-- Recreate with correct schema reference: security.users instead of public.users
+CREATE TABLE clinical.patient_uploaded_documents (
     id                  UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
     patient_id          UUID          NOT NULL
         CONSTRAINT fk_pat_doc_patient
@@ -31,13 +35,13 @@ CREATE TABLE IF NOT EXISTS clinical.patient_uploaded_documents (
     updated_at          TIMESTAMP     NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_pat_doc_patient
+CREATE INDEX idx_pat_doc_patient
     ON clinical.patient_uploaded_documents(patient_id)
     WHERE deleted_at IS NULL;
 
-CREATE INDEX IF NOT EXISTS idx_pat_doc_type
+CREATE INDEX idx_pat_doc_type
     ON clinical.patient_uploaded_documents(patient_id, document_type)
     WHERE deleted_at IS NULL;
 
-CREATE INDEX IF NOT EXISTS idx_pat_doc_uploaded_by
+CREATE INDEX idx_pat_doc_uploaded_by
     ON clinical.patient_uploaded_documents(uploaded_by_user_id);
