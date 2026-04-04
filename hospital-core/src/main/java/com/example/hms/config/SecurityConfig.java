@@ -282,7 +282,9 @@ public class SecurityConfig {
 
                 // -------------------- Patients --------------------
                 .requestMatchers(HttpMethod.GET, API_PATIENTS, API_PATIENTS_PATTERN)
-                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_SUPER_ADMIN)
+                .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE,
+                        ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_SUPER_ADMIN)
 
                 .requestMatchers(HttpMethod.POST, API_PATIENTS)
                 .hasAnyAuthority(ROLE_HOSPITAL_ADMIN, ROLE_RECEPTIONIST, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE)
@@ -420,7 +422,10 @@ public class SecurityConfig {
 
                 // -------------------- Chat / Notifications --------------------
                 .requestMatchers("/chat/**")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST, ROLE_STAFF, ROLE_PATIENT)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST,
+                        ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
+                        ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
+                        ROLE_STAFF, ROLE_PATIENT)
 
                 // WebSocket endpoints should NOT be public in an HMS; require authentication.
                 .requestMatchers("/ws-chat/**").authenticated()
