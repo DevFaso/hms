@@ -106,7 +106,7 @@
 | # | Task | Layer | Status |
 |---|---|---|---|
 | 1 | `GET /lab-qc-events/summary` — aggregate QC stats per test def | Repo → Service → DTO → Controller | ⏳ |
-| 2 | `GET /lab-validation-studies/summary` — pending studies aggregate | Service → DTO → Controller | ⏳ |
+| 2 | `GET /lab-test-validation-studies/summary` — pending studies aggregate | Service → DTO → Controller | ⏳ |
 | 3 | `LabQcDashboardComponent` — QC + validation tables | Frontend Component + Service + Route | ⏳ |
 | 4 | Levey-Jennings chart drill-down on row click | Frontend Charts (chart.js) | ⏳ |
 | 5 | Backend tests — JUnit + MockMvc for QC/validation summary | Tests | ⏳ |

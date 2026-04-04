@@ -122,7 +122,9 @@ export interface LabQcSummary {
   testDefinitionId: string;
   testName: string;
   totalEvents: number;
+  passedEvents: number;
   failedEvents: number;
+  passRate: number;
   lastEventDate: string | null;
 }
 

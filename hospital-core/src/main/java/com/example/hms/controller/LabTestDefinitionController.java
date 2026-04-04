@@ -139,7 +139,8 @@ public class LabTestDefinitionController {
     @PreAuthorize(VIEW_ROLES)
     @Operation(summary = "Export all Lab Test Definitions as CSV")
     public void exportCsv(HttpServletResponse response) throws IOException {
-        response.setContentType("text/csv");
+        response.setContentType("text/csv; charset=UTF-8");
+        response.setCharacterEncoding("UTF-8");
         response.setHeader("Content-Disposition", "attachment; filename=\"lab-test-definitions.csv\"");
         PrintWriter writer = response.getWriter();
         writer.println("Test Code,Test Name,Category,Unit,Sample Type,Active,Approval Status,Turnaround Time (min)");
@@ -159,6 +160,10 @@ public class LabTestDefinitionController {
 
     private static String escapeCsv(String val) {
         if (val == null) return "";
+        // Neutralize CSV formula injection (values starting with =, +, -, @, tab, CR)
+        if (!val.isEmpty() && "=+-@\t\r".indexOf(val.charAt(0)) >= 0) {
+            val = "'" + val;
+        }
         if (val.contains(",") || val.contains("\"") || val.contains("\n")) {
             return "\"" + val.replace("\"", "\"\"") + "\"";
         }

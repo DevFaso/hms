@@ -6,8 +6,10 @@ import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.LabTestValidationStudy;
 import com.example.hms.payload.dto.LabTestValidationStudyRequestDTO;
 import com.example.hms.payload.dto.LabTestValidationStudyResponseDTO;
+import com.example.hms.payload.dto.LabValidationSummaryDTO;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.LabTestValidationStudyRepository;
+import com.example.hms.utility.RoleValidator;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +35,7 @@ class LabTestValidationStudyServiceImplTest {
     @Mock private LabTestValidationStudyRepository repository;
     @Mock private LabTestDefinitionRepository definitionRepository;
     @Mock private LabTestValidationStudyMapper mapper;
+    @Mock private RoleValidator roleValidator;
 
     @InjectMocks private LabTestValidationStudyServiceImpl service;
 
@@ -229,5 +232,77 @@ class LabTestValidationStudyServiceImplTest {
                 .hasMessageContaining("Validation study not found");
 
         verify(repository, never()).deleteById(any());
+    }
+
+    // ── getValidationSummary ─────────────────────────────────────────────────
+
+    @Test
+    void getValidationSummary_hospitalScoped_usesHospitalQuery() {
+        UUID hospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        Object[] row = new Object[] {
+            DEF_ID, "CBC", "CBC01", 10L, 8L, 2L, LocalDate.of(2026, 4, 1)
+        };
+        when(repository.findValidationSummaryByHospitalId(hospitalId))
+                .thenReturn(List.<Object[]>of(row));
+
+        List<LabValidationSummaryDTO> result = service.getValidationSummary();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getTestName()).isEqualTo("CBC");
+        assertThat(result.get(0).getTotalStudies()).isEqualTo(10);
+        assertThat(result.get(0).getPassedStudies()).isEqualTo(8);
+        assertThat(result.get(0).getFailedStudies()).isEqualTo(2);
+        assertThat(result.get(0).getPassRate()).isCloseTo(80.0, org.assertj.core.data.Offset.offset(0.01));
+        verify(repository).findValidationSummaryByHospitalId(hospitalId);
+        verify(repository, never()).findValidationSummaryAll();
+    }
+
+    @Test
+    void getValidationSummary_superAdmin_usesAllQuery() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+
+        Object[] row = new Object[] {
+            DEF_ID, "HbA1c", "HBA1C", 5L, 5L, 0L, LocalDate.of(2026, 3, 15)
+        };
+        when(repository.findValidationSummaryAll())
+                .thenReturn(List.<Object[]>of(row));
+
+        List<LabValidationSummaryDTO> result = service.getValidationSummary();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getPassRate()).isCloseTo(100.0, org.assertj.core.data.Offset.offset(0.01));
+        verify(repository).findValidationSummaryAll();
+        verify(repository, never()).findValidationSummaryByHospitalId(any());
+    }
+
+    @Test
+    void getValidationSummary_emptyResults_returnsEmptyList() {
+        UUID hospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(repository.findValidationSummaryByHospitalId(hospitalId))
+                .thenReturn(List.of());
+
+        List<LabValidationSummaryDTO> result = service.getValidationSummary();
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getValidationSummary_zeroTotal_passRateIsZero() {
+        UUID hospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        Object[] row = new Object[] {
+            DEF_ID, "TSH", "TSH01", 0L, 0L, 0L, null
+        };
+        when(repository.findValidationSummaryByHospitalId(hospitalId))
+                .thenReturn(List.<Object[]>of(row));
+
+        List<LabValidationSummaryDTO> result = service.getValidationSummary();
+
+        assertThat(result.get(0).getPassRate()).isEqualTo(0.0);
+        assertThat(result.get(0).getLastStudyDate()).isNull();
     }
 }

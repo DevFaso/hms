@@ -355,11 +355,11 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: {
           roles: [
-            'ROLE_LAB_SCIENTIST',
             'ROLE_LAB_MANAGER',
             'ROLE_LAB_DIRECTOR',
             'ROLE_QUALITY_MANAGER',
             'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
         },
