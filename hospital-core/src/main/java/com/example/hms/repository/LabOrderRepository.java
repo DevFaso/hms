@@ -44,4 +44,43 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
 
     // Count lab orders placed by a specific ordering staff with a given status
     long countByOrderingStaff_IdAndStatus(UUID staffId, LabOrderStatus status);
+
+    // ── Dashboard count queries ──────────────────────────────────────────────
+
+    /** Orders in a hospital within a datetime window. */
+    long countByHospital_IdAndOrderDatetimeBetween(UUID hospitalId,
+                                                    LocalDateTime from,
+                                                    LocalDateTime to);
+
+    /** Orders with a specific status in a hospital within a datetime window. */
+    long countByHospital_IdAndStatusAndOrderDatetimeBetween(UUID hospitalId,
+                                                             LabOrderStatus status,
+                                                             LocalDateTime from,
+                                                             LocalDateTime to);
+
+    /** Orders matching any of the given statuses in a hospital. */
+    @Query("""
+        SELECT COUNT(o) FROM LabOrder o
+        WHERE o.hospital.id = :hospitalId
+          AND o.status IN :statuses
+    """)
+    long countByHospitalIdAndStatusIn(@Param("hospitalId") UUID hospitalId,
+                                      @Param("statuses") java.util.List<LabOrderStatus> statuses);
+
+    /**
+     * Average turnaround time in minutes for COMPLETED orders in a hospital completed today.
+     * TAT = updatedAt - orderDatetime (updatedAt is the completion timestamp for COMPLETED orders).
+     * Returns null when no completed orders exist in the window.
+     */
+    @Query(value = """
+        SELECT AVG(EXTRACT(EPOCH FROM (o.updated_at - o.order_datetime)) / 60.0)
+        FROM lab.lab_orders o
+        WHERE o.hospital_id = :hospitalId
+          AND o.status = 'COMPLETED'
+          AND o.updated_at >= :from
+          AND o.updated_at <= :to
+    """, nativeQuery = true)
+    Double avgTurnaroundMinutes(@Param("hospitalId") UUID hospitalId,
+                                @Param("from") LocalDateTime from,
+                                @Param("to") LocalDateTime to);
 }

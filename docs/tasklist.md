@@ -36,7 +36,7 @@
 | Add `ROLE_LAB_DIRECTOR` + `ROLE_QUALITY_MANAGER` to `lab` route | Frontend routing | Also registered new `lab-approval-queue` route |
 | Backend compile check | CI | `BUILD SUCCESSFUL` — warnings only (pre-existing) |
 | Frontend format
-| Frontend playwright check | CI | Zero ESLint errors
+| Frontend playwright check |passed successfully
 | Frontend lint check | CI | Zero ESLint errors |
 | Backend unit tests — `LabTestDefinitionServiceImpl.processApprovalAction()` | Tests | 18 tests; all state transitions, role checks, edge cases |
 | Controller unit tests — `LabTestDefinitionController` approval + search | Tests | 13 tests; direct invocation; all pass |
@@ -71,6 +71,41 @@
 | **Patient Portal Phase 3** | Notifications, family access delegation, document upload | Medium |
 | **Consent & Record Sharing enhancement** | Cross-org RBAC, audit trail UI | Medium |
 | **Dashboard enrichment** | Physician cockpit, nurse station metrics | Low |
+
+---
+
+---
+
+## Epic: Lab Director & Quality Manager Dashboards
+
+**Branch:** `develop`  
+**Goal:** Full role-specific dashboards for `ROLE_LAB_DIRECTOR` and `ROLE_QUALITY_MANAGER` — operational KPIs, approval queues, validation study pipelines, and quick-action tiles, matching Epic Beaker LIS patterns.
+
+### Tasks ⏳
+
+| # | Task | Layer | Status |
+|---|---|---|---|
+| 1 | `LabDirectorDashboardDTO` record | DTO | ✅ |
+| 2 | `QualityManagerDashboardDTO` record | DTO | ✅ |
+| 3 | Count queries — `LabTestDefinitionRepository` | Repository | ✅ |
+| 4 | Count queries — `LabTestValidationStudyRepository` | Repository | ✅ |
+| 5 | TAT + count queries — `LabOrderRepository` | Repository | ✅ |
+| 6 | `LabDirectorDashboardService` interface + impl | Service | ✅ |
+| 7 | `QualityManagerDashboardService` interface + impl | Service | ✅ |
+| 8 | New endpoints in `DashboardController` | Controller | ✅ |
+| 9 | `LabDirectorDashboardServiceImplTest` | Backend Test | ✅ |
+| 10 | `DashboardControllerTest` — new endpoints | Backend Test | ✅ |
+| 11 | DTOs + HTTP methods in `dashboard.service.ts` | Frontend service | ✅ |
+| 12 | `isLabDirector` / `isQualityManager` signals, `activeView`, `roleLabel` | Frontend component | ✅ |
+| 13 | `labDirectorStatCards`, `labDirectorNavTiles` computed | Frontend component | ✅ |
+| 14 | `qualityManagerStatCards`, `qualityManagerNavTiles` computed | Frontend component | ✅ |
+| 15 | `ngOnInit` data fetch for both roles | Frontend component | ✅ |
+| 16 | Lab Director HTML dashboard section | Frontend UI | ✅ |
+| 17 | Quality Manager HTML dashboard section | Frontend UI | ✅ |
+| 18 | Hero gradient SCSS for both roles | Frontend SCSS | ✅ |
+| 19 | i18n keys — `en.json`, `fr.json`, `es.json` | i18n | ✅ |
+| 20 | `dashboard.spec.ts` — role tests for both | Frontend Test | ✅ |
+| 21 | Format + Lint + Commit + Push | CI | ✅ |
 
 ---
 

@@ -1556,6 +1556,26 @@ $shadow-md:
   color: $text;
   text-align: center;
   line-height: 1.2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.tile-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1887,6 +1907,16 @@ $shadow-md:
 .hero-gradient-receptionist {
   background: linear-gradient(135deg, #3b0764 0%, #7c3aed 60%, #a78bfa 100%);
   box-shadow: 0 8px 32px rgba(124, 58, 237, 0.38);
+}
+
+.hero-gradient-lab-director {
+  background: linear-gradient(135deg, #134e4a 0%, #0d9488 60%, #2dd4bf 100%);
+  box-shadow: 0 8px 32px rgba(13, 148, 136, 0.38);
+}
+
+.hero-gradient-quality-manager {
+  background: linear-gradient(135deg, #14532d 0%, #15803d 60%, #4ade80 100%);
+  box-shadow: 0 8px 32px rgba(21, 128, 61, 0.38);
 }
 
 .hero-gradient-lab {
