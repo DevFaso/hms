@@ -8,6 +8,7 @@ import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
 import com.example.hms.service.LabTestDefinitionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -25,6 +26,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.List;
 import java.util.UUID;
 
@@ -130,6 +133,36 @@ public class LabTestDefinitionController {
         @PathVariable UUID id,
         @Valid @RequestBody LabTestDefinitionApprovalRequestDTO dto) {
         return ResponseEntity.ok(ApiResponseWrapper.success(service.processApprovalAction(id, dto)));
+    }
+
+    @GetMapping("/export")
+    @PreAuthorize(VIEW_ROLES)
+    @Operation(summary = "Export all Lab Test Definitions as CSV")
+    public void exportCsv(HttpServletResponse response) throws IOException {
+        response.setContentType("text/csv");
+        response.setHeader("Content-Disposition", "attachment; filename=\"lab-test-definitions.csv\"");
+        PrintWriter writer = response.getWriter();
+        writer.println("Test Code,Test Name,Category,Unit,Sample Type,Active,Approval Status,Turnaround Time (min)");
+        for (LabTestDefinitionResponseDTO dto : service.getAll()) {
+            writer.printf("%s,%s,%s,%s,%s,%s,%s,%s%n",
+                    escapeCsv(dto.getTestCode()),
+                    escapeCsv(dto.getName()),
+                    escapeCsv(dto.getCategory()),
+                    escapeCsv(dto.getUnit()),
+                    escapeCsv(dto.getSampleType()),
+                    dto.isActive(),
+                    escapeCsv(dto.getApprovalStatus()),
+                    dto.getTurnaroundTime() != null ? dto.getTurnaroundTime() : "");
+        }
+        writer.flush();
+    }
+
+    private static String escapeCsv(String val) {
+        if (val == null) return "";
+        if (val.contains(",") || val.contains("\"") || val.contains("\n")) {
+            return "\"" + val.replace("\"", "\"\"") + "\"";
+        }
+        return val;
     }
 }
 

@@ -1304,7 +1304,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         icon: 'analytics',
         label: 'Validation Studies',
-        route: '/lab',
+        route: '/lab-qc-dashboard',
         color: '#2563eb',
         bg: '#dbeafe',
       },
@@ -1316,7 +1316,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
         color: '#4f46e5',
         bg: '#eef2ff',
       },
-      { icon: 'bar_chart', label: 'Reports', route: '/lab', color: '#ea580c', bg: '#fff7ed' },
+      {
+        icon: 'bar_chart',
+        label: 'QC Dashboard',
+        route: '/lab-qc-dashboard',
+        color: '#ea580c',
+        bg: '#fff7ed',
+      },
     ];
   });
 
@@ -1389,7 +1395,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         icon: 'biotech',
         label: 'Validation Studies',
-        route: '/lab',
+        route: '/lab-qc-dashboard',
         color: '#7c3aed',
         bg: '#ede9fe',
       },
@@ -1404,7 +1410,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         icon: 'analytics',
         label: 'Quality Reports',
-        route: '/lab',
+        route: '/lab-qc-dashboard',
         color: '#2563eb',
         bg: '#dbeafe',
       },

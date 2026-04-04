@@ -3,6 +3,7 @@ package com.example.hms.controller;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabTestValidationStudyRequestDTO;
 import com.example.hms.payload.dto.LabTestValidationStudyResponseDTO;
+import com.example.hms.payload.dto.LabValidationSummaryDTO;
 import com.example.hms.service.LabTestValidationStudyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -54,6 +55,13 @@ public class LabTestValidationStudyController {
     }
 
     // ── Individual resource ──────────────────────────────────────────────────
+
+    @GetMapping("/lab-test-validation-studies/summary")
+    @PreAuthorize(LAB_ROLES)
+    @Operation(summary = "Aggregated validation study statistics per test definition")
+    public ResponseEntity<ApiResponseWrapper<List<LabValidationSummaryDTO>>> getSummary() {
+        return ResponseEntity.ok(ApiResponseWrapper.success(service.getValidationSummary()));
+    }
 
     @GetMapping("/lab-test-validation-studies/{id}")
     @PreAuthorize(LAB_ROLES)

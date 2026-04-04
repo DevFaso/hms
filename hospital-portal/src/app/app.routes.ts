@@ -236,7 +236,14 @@ export const routes: Routes = [
         path: 'staff',
         canActivate: [RoleGuard],
         data: {
-          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_RECEPTIONIST'],
+          roles: [
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+            'ROLE_RECEPTIONIST',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+          ],
         },
         children: [
           {
@@ -342,6 +349,22 @@ export const routes: Routes = [
           import('./lab/lab-approval-queue/lab-approval-queue').then(
             (m) => m.LabApprovalQueueComponent,
           ),
+      },
+      {
+        path: 'lab-qc-dashboard',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_QUALITY_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-qc-dashboard/lab-qc-dashboard').then((m) => m.LabQcDashboardComponent),
       },
 
       // Profile (all authenticated users)

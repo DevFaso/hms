@@ -1,0 +1,148 @@
+<section class="page-header">
+  <span class="material-symbols-rounded">monitoring</span>
+  <div>
+    <h1>Quality Control Dashboard</h1>
+    <p>QC event trends and validation study results across all test definitions</p>
+  </div>
+</section>
+
+@if (loading()) {
+  <div class="loading-spinner">
+    <span class="material-symbols-rounded">progress_activity</span> Loading…
+  </div>
+} @else {
+  <!-- ── Summary cards ──────────────────────────────────────── -->
+  <div class="summary-cards">
+    <div class="summary-card">
+      <div class="icon-box bg-purple">
+        <span class="material-symbols-rounded">science</span>
+      </div>
+      <div>
+        <div class="value">{{ totalQcEvents() }}</div>
+        <div class="label">Total QC Events</div>
+      </div>
+    </div>
+
+    <div class="summary-card">
+      <div class="icon-box bg-red">
+        <span class="material-symbols-rounded">warning</span>
+      </div>
+      <div>
+        <div class="value">{{ totalQcFailures() }}</div>
+        <div class="label">Failed QC Events</div>
+      </div>
+    </div>
+
+    <div class="summary-card">
+      <div class="icon-box bg-teal">
+        <span class="material-symbols-rounded">biotech</span>
+      </div>
+      <div>
+        <div class="value">{{ totalValidationStudies() }}</div>
+        <div class="label">Validation Studies</div>
+      </div>
+    </div>
+
+    <div class="summary-card">
+      <div
+        class="icon-box"
+        [class.bg-green]="overallPassRate() >= 90"
+        [class.bg-amber]="overallPassRate() < 90"
+      >
+        <span class="material-symbols-rounded">verified</span>
+      </div>
+      <div>
+        <div class="value">{{ overallPassRate() | number: '1.1-1' }}%</div>
+        <div class="label">Validation Pass Rate</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── QC Summary table ────────────────────────────────── -->
+  <h2 class="section-title">QC Events by Test Definition</h2>
+  @if (qcSummary().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-rounded">monitoring</span>
+      <p>No QC events recorded yet.</p>
+    </div>
+  } @else {
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Test Name</th>
+          <th>Total Events</th>
+          <th>Failed</th>
+          <th>Failure Rate</th>
+          <th>Last Event</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of qcSummary(); track row.testDefinitionId) {
+          <tr>
+            <td>{{ row.testName }}</td>
+            <td>{{ row.totalEvents }}</td>
+            <td>{{ row.failedEvents }}</td>
+            <td>
+              <span
+                class="badge"
+                [class.pass]="row.failedEvents === 0"
+                [class.fail]="row.failedEvents > 0"
+              >
+                {{
+                  row.totalEvents > 0
+                    ? ((row.failedEvents / row.totalEvents) * 100 | number: '1.1-1')
+                    : '0.0'
+                }}%
+              </span>
+            </td>
+            <td>{{ row.lastEventDate ? (row.lastEventDate | date: 'mediumDate') : '—' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+
+  <!-- ── Validation Summary table ────────────────────────── -->
+  <h2 class="section-title">Validation Studies by Test Definition</h2>
+  @if (validationSummary().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-rounded">biotech</span>
+      <p>No validation studies recorded yet.</p>
+    </div>
+  } @else {
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Test Name</th>
+          <th>Code</th>
+          <th>Total</th>
+          <th>Passed</th>
+          <th>Failed</th>
+          <th>Pass Rate</th>
+          <th>Last Study</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of validationSummary(); track row.testDefinitionId) {
+          <tr>
+            <td>{{ row.testName }}</td>
+            <td>{{ row.testCode }}</td>
+            <td>{{ row.totalStudies }}</td>
+            <td>{{ row.passedStudies }}</td>
+            <td>{{ row.failedStudies }}</td>
+            <td>
+              <span
+                class="badge"
+                [class.pass]="row.passRate >= 90"
+                [class.fail]="row.passRate < 90"
+              >
+                {{ row.passRate | number: '1.1-1' }}%
+              </span>
+            </td>
+            <td>{{ row.lastStudyDate ? (row.lastStudyDate | date: 'mediumDate') : '—' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+}

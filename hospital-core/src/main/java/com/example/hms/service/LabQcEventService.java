@@ -2,9 +2,11 @@ package com.example.hms.service;
 
 import com.example.hms.payload.dto.LabQcEventRequestDTO;
 import com.example.hms.payload.dto.LabQcEventResponseDTO;
+import com.example.hms.payload.dto.LabQcSummaryDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -21,4 +23,7 @@ public interface LabQcEventService {
 
     /** Paginated list of QC events for a specific test definition (for Levey-Jennings charts). */
     Page<LabQcEventResponseDTO> getQcEventsByDefinition(UUID testDefinitionId, Pageable pageable, Locale locale);
+
+    /** Aggregated QC summary per test definition, scoped to caller's hospital. */
+    List<LabQcSummaryDTO> getQcSummary(Locale locale);
 }

@@ -118,6 +118,25 @@ export interface LabQcEvent {
   createdAt: string;
 }
 
+export interface LabQcSummary {
+  testDefinitionId: string;
+  testName: string;
+  totalEvents: number;
+  failedEvents: number;
+  lastEventDate: string | null;
+}
+
+export interface LabValidationSummary {
+  testDefinitionId: string;
+  testName: string;
+  testCode: string;
+  totalStudies: number;
+  passedStudies: number;
+  failedStudies: number;
+  passRate: number;
+  lastStudyDate: string | null;
+}
+
 export interface LabOrderRequest {
   patientId: string;
   hospitalId: string;
@@ -289,5 +308,21 @@ export class LabService {
     return this.http
       .get<ApiWrapper<PageResponse<LabQcEvent>>>('/lab-qc-events', { params })
       .pipe(map((res) => res?.data?.content ?? []));
+  }
+
+  getQcSummary(): Observable<LabQcSummary[]> {
+    return this.http
+      .get<ApiWrapper<LabQcSummary[]>>('/lab-qc-events/summary')
+      .pipe(map((res) => res?.data ?? []));
+  }
+
+  getValidationSummary(): Observable<LabValidationSummary[]> {
+    return this.http
+      .get<ApiWrapper<LabValidationSummary[]>>('/lab-test-validation-studies/summary')
+      .pipe(map((res) => res?.data ?? []));
+  }
+
+  exportTestDefinitionsCsv(): Observable<Blob> {
+    return this.http.get('/lab-test-definitions/export', { responseType: 'blob' });
   }
 }

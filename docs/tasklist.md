@@ -95,6 +95,69 @@
 
 ---
 
+## Epic: Lab Director MVP — Gap Analysis Implementation
+
+**Branch:** `develop`  
+**Source:** `docs/gap.md`  
+**Goal:** Implement 5 MVPs to close Lab Director functionality gaps: QC/QA Dashboard, Lab Ops Dashboard, Staff Management, Instrument/Inventory Control, Enhanced Test Config & Reporting.
+
+### MVP 1 — QC/QA Dashboard (HIGH, 6 pts)
+
+| # | Task | Layer | Status |
+|---|---|---|---|
+| 1 | `GET /lab-qc-events/summary` — aggregate QC stats per test def | Repo → Service → DTO → Controller | ⏳ |
+| 2 | `GET /lab-validation-studies/summary` — pending studies aggregate | Service → DTO → Controller | ⏳ |
+| 3 | `LabQcDashboardComponent` — QC + validation tables | Frontend Component + Service + Route | ⏳ |
+| 4 | Levey-Jennings chart drill-down on row click | Frontend Charts (chart.js) | ⏳ |
+| 5 | Backend tests — JUnit + MockMvc for QC/validation summary | Tests | ⏳ |
+| 6 | Frontend tests — Karma/Jasmine for QC Dashboard | Tests | ⏳ |
+
+### MVP 2 — Lab Operations Dashboard (HIGH, 10 pts)
+
+| # | Task | Layer | Status |
+|---|---|---|---|
+| 7 | `GET /lab/metrics/summary` — totals, avg TAT, date filters | Repo → Service → DTO → Controller | ⏳ |
+| 8 | `GET /lab/metrics/orders?status=PENDING` — orders with age | Repo → DTO → Controller | ⏳ |
+| 9 | `LabOpsDashboardComponent` — KPI cards, charts, pending table | Frontend Component + Service + Route | ⏳ |
+| 10 | Backend tests — JUnit + MockMvc for metrics endpoints | Tests | ⏳ |
+| 11 | Frontend tests — Karma/Jasmine for Ops Dashboard | Tests | ⏳ |
+
+### MVP 3 — Staff & Role Management (MEDIUM, 6 pts)
+
+| # | Task | Layer | Status |
+|---|---|---|---|
+| 12 | `LabStaffListComponent` — table + role edit form | Frontend Component + Route | ⏳ |
+| 13 | Verify/add `PUT /staff/{id}/assignments` + LAB_DIRECTOR auth | Service → Controller → SecurityConfig | ⏳ |
+| 14 | Frontend tests — Karma/Jasmine for Staff List | Tests | ⏳ |
+
+### MVP 4 — Instrument & Inventory Control (MEDIUM, 10 pts)
+
+| # | Task | Layer | Status |
+|---|---|---|---|
+| 15 | V35 migration — `lab.instruments` + `lab.inventory_items` | Migration | ⏳ |
+| 16 | `Instrument` + `InventoryItem` entities + repositories | Entity → Repository | ⏳ |
+| 17 | Services + DTOs + `@Component` mappers | Service → DTO → Mapper | ⏳ |
+| 18 | Controllers + SecurityConfig entries | Controller → SecurityConfig | ⏳ |
+| 19 | `LabInstrumentsComponent` + `LabInventoryComponent` | Frontend Components + Routes | ⏳ |
+| 20 | Backend + Frontend tests | Tests | ⏳ |
+
+### MVP 5 — Enhanced Test Config & Reporting (LOW-MEDIUM, 4 pts)
+
+| # | Task | Layer | Status |
+|---|---|---|---|
+| 21 | Reference range edit — verify PUT + frontend modal | Controller → Frontend | ⏳ |
+| 22 | `GET /lab-test-definitions/export?format=csv` + download UI | Service → Controller → Frontend | ⏳ |
+| 23 | Backend + Frontend tests for export | Tests | ⏳ |
+
+### Cross-Cutting
+
+| # | Task | Status |
+|---|---|---|
+| 24 | i18n — en.json, fr.json, es.json for all new components | ⏳ |
+| 25 | Merge develop → uat → main + Railway deploy | ⏳ |
+
+---
+
 ## Done — Previous Branches
 
 | Branch | Feature | Merged |
