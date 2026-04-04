@@ -80,10 +80,12 @@ public class LabTestValidationStudyServiceImpl implements LabTestValidationStudy
     @Override
     public List<LabValidationSummaryDTO> getValidationSummary() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        List<Object[]> rows = repository.findValidationSummaryByHospitalId(hospitalId);
+        List<Object[]> rows = hospitalId == null
+                ? repository.findValidationSummaryAll()
+                : repository.findValidationSummaryByHospitalId(hospitalId);
         return rows.stream().map(r -> {
-            long total = (long) r[3];
-            long passed = (long) r[4];
+            long total = ((Number) r[3]).longValue();
+            long passed = ((Number) r[4]).longValue();
             double passRate = total > 0 ? (double) passed / total * 100.0 : 0.0;
             return LabValidationSummaryDTO.builder()
                     .testDefinitionId((UUID) r[0])
@@ -91,7 +93,7 @@ public class LabTestValidationStudyServiceImpl implements LabTestValidationStudy
                     .testCode((String) r[2])
                     .totalStudies(total)
                     .passedStudies(passed)
-                    .failedStudies((long) r[5])
+                    .failedStudies(((Number) r[5]).longValue())
                     .passRate(passRate)
                     .lastStudyDate(r[6] != null ? (LocalDate) r[6] : null)
                     .build();

@@ -80,7 +80,7 @@ public class LabQcEventController {
     }
 
     @GetMapping("/summary")
-    @PreAuthorize("hasAnyRole('LAB_DIRECTOR', 'QUALITY_MANAGER', 'LAB_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('LAB_DIRECTOR', 'QUALITY_MANAGER', 'LAB_MANAGER', 'HOSPITAL_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "QC Summary", description = "Aggregated QC stats per test definition for the Lab Director QC Dashboard. Returns total, passed, failed events and pass rate per test.")
     @ApiResponse(responseCode = "200", description = "QC summary retrieved")
     public ResponseEntity<ApiResponseWrapper<List<LabQcSummaryDTO>>> getQcSummary(

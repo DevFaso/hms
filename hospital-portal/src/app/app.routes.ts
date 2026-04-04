@@ -355,16 +355,34 @@ export const routes: Routes = [
         canActivate: [RoleGuard],
         data: {
           roles: [
-            'ROLE_LAB_SCIENTIST',
             'ROLE_LAB_MANAGER',
             'ROLE_LAB_DIRECTOR',
             'ROLE_QUALITY_MANAGER',
             'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
           ],
         },
         loadComponent: () =>
           import('./lab/lab-qc-dashboard/lab-qc-dashboard').then((m) => m.LabQcDashboardComponent),
+      },
+      {
+        path: 'lab-ops-dashboard',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+            'ROLE_QUALITY_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-ops-dashboard/lab-ops-dashboard').then(
+            (m) => m.LabOpsDashboardComponent,
+          ),
       },
 
       // Profile (all authenticated users)

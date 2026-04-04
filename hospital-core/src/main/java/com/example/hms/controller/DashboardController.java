@@ -3,12 +3,14 @@ package com.example.hms.controller;
 import com.example.hms.payload.dto.dashboard.DashboardConfigResponseDTO;
 import com.example.hms.payload.dto.dashboard.HospitalAdminSummaryDTO;
 import com.example.hms.payload.dto.dashboard.LabDirectorDashboardDTO;
+import com.example.hms.payload.dto.dashboard.LabOpsSummaryDTO;
 import com.example.hms.payload.dto.dashboard.QualityManagerDashboardDTO;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.DashboardConfigurationService;
 import com.example.hms.service.HospitalAdminDashboardService;
 import com.example.hms.service.LabDirectorDashboardService;
+import com.example.hms.service.LabOpsDashboardService;
 import com.example.hms.service.QualityManagerDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -35,6 +37,7 @@ public class DashboardController {
     private final DashboardConfigurationService dashboardConfigurationService;
     private final HospitalAdminDashboardService hospitalAdminDashboardService;
     private final LabDirectorDashboardService labDirectorDashboardService;
+    private final LabOpsDashboardService labOpsDashboardService;
     private final QualityManagerDashboardService qualityManagerDashboardService;
 
     @GetMapping("/me")
@@ -81,5 +84,16 @@ public class DashboardController {
                 .orElseThrow(() -> new IllegalStateException(NO_HOSPITAL_CONTEXT));
 
         return ResponseEntity.ok(qualityManagerDashboardService.getSummary(hospitalId));
+    }
+
+    @GetMapping("/lab-ops/summary")
+    @PreAuthorize("hasAnyRole('LAB_DIRECTOR', 'LAB_MANAGER', 'QUALITY_MANAGER', 'HOSPITAL_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Get Lab Operations dashboard summary")
+    public ResponseEntity<LabOpsSummaryDTO> getLabOpsSummary() {
+        UUID hospitalId = HospitalContextHolder.getContext()
+                .map(HospitalContext::getActiveHospitalId)
+                .orElseThrow(() -> new IllegalStateException(NO_HOSPITAL_CONTEXT));
+
+        return ResponseEntity.ok(labOpsDashboardService.getSummary(hospitalId));
     }
 }

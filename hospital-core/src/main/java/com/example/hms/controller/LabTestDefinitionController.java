@@ -5,6 +5,8 @@ import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabTestDefinitionApprovalRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.LabTestDefinitionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -137,13 +139,22 @@ public class LabTestDefinitionController {
 
     @GetMapping("/export")
     @PreAuthorize(VIEW_ROLES)
-    @Operation(summary = "Export all Lab Test Definitions as CSV")
+    @Operation(summary = "Export Lab Test Definitions as CSV (hospital-scoped: global + hospital-specific)")
     public void exportCsv(HttpServletResponse response) throws IOException {
-        response.setContentType("text/csv");
+        UUID hospitalId = HospitalContextHolder.getContext()
+                .map(HospitalContext::getActiveHospitalId)
+                .orElse(null);
+
+        List<LabTestDefinitionResponseDTO> definitions = hospitalId != null
+                ? service.getActiveByHospital(hospitalId)
+                : service.getAll();
+
+        response.setContentType("text/csv; charset=UTF-8");
+        response.setCharacterEncoding("UTF-8");
         response.setHeader("Content-Disposition", "attachment; filename=\"lab-test-definitions.csv\"");
         PrintWriter writer = response.getWriter();
         writer.println("Test Code,Test Name,Category,Unit,Sample Type,Active,Approval Status,Turnaround Time (min)");
-        for (LabTestDefinitionResponseDTO dto : service.getAll()) {
+        for (LabTestDefinitionResponseDTO dto : definitions) {
             writer.printf("%s,%s,%s,%s,%s,%s,%s,%s%n",
                     escapeCsv(dto.getTestCode()),
                     escapeCsv(dto.getName()),
@@ -159,6 +170,10 @@ public class LabTestDefinitionController {
 
     private static String escapeCsv(String val) {
         if (val == null) return "";
+        // Neutralize CSV formula injection (values starting with =, +, -, @, tab, CR)
+        if (!val.isEmpty() && "=+-@\t\r".indexOf(val.charAt(0)) >= 0) {
+            val = "'" + val;
+        }
         if (val.contains(",") || val.contains("\"") || val.contains("\n")) {
             return "\"" + val.replace("\"", "\"\"") + "\"";
         }

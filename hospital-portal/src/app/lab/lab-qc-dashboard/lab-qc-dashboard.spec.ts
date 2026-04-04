@@ -20,14 +20,18 @@ describe('LabQcDashboardComponent', () => {
       testDefinitionId: 'def-1',
       testName: 'CBC',
       totalEvents: 50,
+      passedEvents: 48,
       failedEvents: 2,
+      passRate: 96,
       lastEventDate: '2026-04-01T10:00:00',
     },
     {
       testDefinitionId: 'def-2',
       testName: 'BMP',
       totalEvents: 30,
+      passedEvents: 30,
       failedEvents: 0,
+      passRate: 100,
       lastEventDate: '2026-03-28T09:00:00',
     },
   ];
