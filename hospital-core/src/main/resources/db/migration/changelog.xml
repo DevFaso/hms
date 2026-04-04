@@ -397,6 +397,19 @@
     </changeSet>
 
     <!-- =================================================================
+         V32: Patient Uploaded Documents
+         - Creates clinical.patient_uploaded_documents table
+         - Allows patients/proxies to upload medical documents via portal
+         - Stores metadata only; files live on server filesystem
+         ================================================================= -->
+    <changeSet id="V32-patient-uploaded-documents" author="hms-team" runOnChange="false">
+        <sqlFile path="V32__patient_uploaded_documents.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
          V33: Consent type/scope columns + audit performance indexes
          - Adds consent_type column to clinical.patient_consents
          - Adds scope column to clinical.patient_consents
