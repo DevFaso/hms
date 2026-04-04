@@ -83,6 +83,10 @@ public class PatientConsentServiceImpl implements PatientConsentService {
         consent.setConsentGiven(true);
         consent.setConsentExpiration(requestDTO.getConsentExpiration());
         consent.setPurpose(requestDTO.getPurpose());
+        if (requestDTO.getConsentType() != null) {
+            consent.setConsentType(requestDTO.getConsentType());
+        }
+        consent.setScope(requestDTO.getScope());
 
         PatientConsent savedConsent = consentRepository.save(consent);
 
@@ -184,6 +188,10 @@ public class PatientConsentServiceImpl implements PatientConsentService {
         consent.setConsentGiven(true);
         consent.setConsentExpiration(requestDTO.getConsentExpiration());
         consent.setPurpose(requestDTO.getPurpose());
+        if (requestDTO.getConsentType() != null) {
+            consent.setConsentType(requestDTO.getConsentType());
+        }
+        consent.setScope(requestDTO.getScope());
 
         PatientConsent savedConsent = consentRepository.save(consent);
 

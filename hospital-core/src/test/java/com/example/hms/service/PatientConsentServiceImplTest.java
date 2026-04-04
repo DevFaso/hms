@@ -644,4 +644,57 @@ class PatientConsentServiceImplTest {
             request, patientDTO, fromHospDTO, toHospDTO))
             .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    // ---------- consentType + scope propagation ----------
+
+    @Test
+    void grantConsent_propagatesConsentTypeAndScope() {
+        UUID patientId = UUID.randomUUID();
+        UUID fromHospId = UUID.randomUUID();
+        UUID toHospId = UUID.randomUUID();
+
+        PatientConsentRequestDTO request = new PatientConsentRequestDTO();
+        request.setPatientId(patientId);
+        request.setFromHospitalId(fromHospId);
+        request.setToHospitalId(toHospId);
+        request.setPurpose("Research");
+        request.setConsentType(com.example.hms.enums.ConsentType.RESEARCH);
+        request.setScope("LAB_RESULTS,ENCOUNTERS");
+
+        Patient patient = Patient.builder().build();
+        patient.setId(patientId);
+        patient.setHospitalRegistrations(new HashSet<>());
+        Hospital fromHosp = Hospital.builder().name("From").build();
+        fromHosp.setId(fromHospId);
+        Hospital toHosp = Hospital.builder().name("To").build();
+        toHosp.setId(toHospId);
+
+        PatientConsent newConsent = PatientConsent.builder()
+            .patient(patient).fromHospital(fromHosp).toHospital(toHosp).build();
+        newConsent.setId(UUID.randomUUID());
+
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(fromHospId)).thenReturn(Optional.of(fromHosp));
+        when(hospitalRepository.findById(toHospId)).thenReturn(Optional.of(toHosp));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, fromHospId)).thenReturn(true);
+        when(consentRepository.findByPatientIdAndFromHospitalIdAndToHospitalId(patientId, fromHospId, toHospId))
+            .thenReturn(Optional.empty());
+        when(consentMapper.toEntity(request, patient, fromHosp, toHosp)).thenReturn(newConsent);
+        when(consentRepository.save(any(PatientConsent.class))).thenReturn(newConsent);
+        when(patientMapper.toPatientDTO(patient, fromHospId, true, true)).thenReturn(new PatientResponseDTO());
+        when(hospitalMapper.toHospitalDTO(fromHosp)).thenReturn(HospitalResponseDTO.builder().build());
+        when(hospitalMapper.toHospitalDTO(toHosp)).thenReturn(HospitalResponseDTO.builder().build());
+        when(consentMapper.toDto(any(PatientConsent.class), any(), any(), any()))
+            .thenReturn(PatientConsentResponseDTO.builder()
+                .consentType(com.example.hms.enums.ConsentType.RESEARCH)
+                .scope("LAB_RESULTS,ENCOUNTERS")
+                .build());
+
+        PatientConsentResponseDTO result = service.grantConsent(request);
+
+        assertThat(result).isNotNull();
+        assertThat(result.getConsentType()).isEqualTo(com.example.hms.enums.ConsentType.RESEARCH);
+        assertThat(result.getScope()).isEqualTo("LAB_RESULTS,ENCOUNTERS");
+        verify(consentRepository).save(any(PatientConsent.class));
+    }
 }

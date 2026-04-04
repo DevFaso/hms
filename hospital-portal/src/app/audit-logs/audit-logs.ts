@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import {
@@ -20,40 +20,21 @@ export class AuditLogsComponent implements OnInit {
   private readonly auditService = inject(AuditLogService);
   private readonly toast = inject(ToastService);
 
+  readonly pageSize = 20;
+
   logs = signal<AuditEventLog[]>([]);
-  filtered = signal<AuditEventLog[]>([]);
   eventTypes = signal<AuditEventTypeStatus[]>([]);
   loading = signal(true);
+  currentPage = signal(0);
+  totalElements = signal(0);
+  totalPages = signal(0);
+
   searchTerm = '';
   selectedEventType = '';
+  fromDate = '';
+  toDate = '';
 
-  ngOnInit(): void {
-    this.load();
-  }
-
-  load(): void {
-    this.loading.set(true);
-    this.auditService.list({ size: 200 }).subscribe({
-      next: (res) => {
-        const list = res?.content ?? [];
-        this.logs.set(list);
-        this.applyFilter();
-        this.loading.set(false);
-      },
-      error: () => {
-        this.toast.error('Failed to load audit logs');
-        this.loading.set(false);
-      },
-    });
-    this.auditService.getEventTypeStatus().subscribe({
-      next: (types) => this.eventTypes.set(Array.isArray(types) ? types : []),
-      error: () => {
-        /* event types optional */
-      },
-    });
-  }
-
-  applyFilter(): void {
+  filtered = computed(() => {
     let list = this.logs();
     if (this.selectedEventType) {
       list = list.filter((l) => l.eventType === this.selectedEventType);
@@ -68,11 +49,70 @@ export class AuditLogsComponent implements OnInit {
           (l.resourceName ?? '').toLowerCase().includes(term),
       );
     }
-    this.filtered.set(list);
+    return list;
+  });
+
+  ngOnInit(): void {
+    this.load();
+  }
+
+  load(): void {
+    this.loading.set(true);
+    this.auditService
+      .list({
+        page: this.currentPage(),
+        size: this.pageSize,
+        fromDate: this.fromDate || undefined,
+        toDate: this.toDate || undefined,
+      })
+      .subscribe({
+        next: (res) => {
+          this.logs.set(res?.content ?? []);
+          this.totalElements.set(res?.totalElements ?? 0);
+          this.totalPages.set(res?.totalPages ?? 0);
+          this.loading.set(false);
+        },
+        error: () => {
+          this.toast.error('Failed to load audit logs');
+          this.loading.set(false);
+        },
+      });
+    this.auditService.getEventTypeStatus().subscribe({
+      next: (types) => this.eventTypes.set(Array.isArray(types) ? types : []),
+      error: () => {
+        /* event types optional */
+      },
+    });
+  }
+
+  applyDateFilter(): void {
+    this.currentPage.set(0);
+    this.load();
+  }
+
+  clearDateFilter(): void {
+    this.fromDate = '';
+    this.toDate = '';
+    this.currentPage.set(0);
+    this.load();
   }
 
   onEventTypeChange(): void {
-    this.applyFilter();
+    // event type filter stays client-side within the current page
+  }
+
+  prevPage(): void {
+    if (this.currentPage() > 0) {
+      this.currentPage.update((p) => p - 1);
+      this.load();
+    }
+  }
+
+  nextPage(): void {
+    if (this.currentPage() < this.totalPages() - 1) {
+      this.currentPage.update((p) => p + 1);
+      this.load();
+    }
   }
 
   getStatusClass(status: string): string {

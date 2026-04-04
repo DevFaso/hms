@@ -78,6 +78,8 @@ export interface ConsentGrantRequest {
   toHospitalId: string;
   purpose?: string;
   consentExpiration?: string; // ISO-8601 datetime
+  consentType?: 'TREATMENT' | 'RESEARCH' | 'BILLING' | 'EMERGENCY' | 'REFERRAL' | 'ALL_PURPOSES';
+  scope?: string; // e.g. 'PRESCRIPTIONS,LAB_RESULTS,ENCOUNTERS'
 }
 
 export interface PatientConsentResponse {
@@ -89,6 +91,15 @@ export interface PatientConsentResponse {
   consentTimestamp: string;
   consentExpiration: string | null;
   purpose: string | null;
+  consentType:
+    | 'TREATMENT'
+    | 'RESEARCH'
+    | 'BILLING'
+    | 'EMERGENCY'
+    | 'REFERRAL'
+    | 'ALL_PURPOSES'
+    | null;
+  scope: string | null;
 }
 
 // ── Service ──────────────────────────────────────────────────────────────────
@@ -157,5 +168,22 @@ export class RecordSharingService {
       .set('toHospitalId', toHospitalId)
       .set('format', format);
     return this.http.get('/records/export', { params, responseType: 'blob' });
+  }
+
+  /**
+   * List all consents (admin/staff view), paginated.
+   */
+  listConsents(params?: {
+    page?: number;
+    size?: number;
+  }): Observable<{ content: PatientConsentResponse[]; totalElements: number; totalPages: number }> {
+    let httpParams = new HttpParams();
+    if (params?.page != null) httpParams = httpParams.set('page', params.page);
+    if (params?.size) httpParams = httpParams.set('size', params.size);
+    return this.http.get<{
+      content: PatientConsentResponse[];
+      totalElements: number;
+      totalPages: number;
+    }>('/patient-consents', { params: httpParams });
   }
 }
