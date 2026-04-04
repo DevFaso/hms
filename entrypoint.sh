@@ -1,5 +1,5 @@
 #!/bin/sh
-# Entrypoint script for the HMS backend container.
+# Entrypoint script for the HMS backend container (v2).
 #
 # Problem: When Railway (or Docker) mounts a persistent volume at /app/uploads,
 # the mount overlays the directory created during the image build, and the
