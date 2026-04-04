@@ -153,8 +153,8 @@ describe('LabOpsDashboardComponent', () => {
     fixture.detectChanges();
 
     expect(component.loading()).toBeFalse();
-    // catchError in DashboardService returns {} as LabOpsSummary
-    expect(component.summary()).toBeTruthy();
+    // Error propagates to component — summary stays null
+    expect(component.summary()).toBeNull();
   });
 
   it('should highlight aging card in red when > 0', () => {
