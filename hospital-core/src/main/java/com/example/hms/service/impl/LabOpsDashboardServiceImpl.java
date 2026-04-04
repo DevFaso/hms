@@ -12,7 +12,10 @@ import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -68,29 +71,27 @@ public class LabOpsDashboardServiceImpl implements LabOpsDashboardService {
         long ordersThisMonth = orderRepository
                 .countByHospital_IdAndOrderDatetimeBetween(hospitalId, monthStartDt, todayEnd);
 
-        // ── Status breakdown (current active) ───────────────────────────────
-        long statusOrdered = orderRepository
-                .countByHospitalIdAndStatusIn(hospitalId, List.of(LabOrderStatus.ORDERED));
-        long statusPending = orderRepository
-                .countByHospitalIdAndStatusIn(hospitalId, List.of(LabOrderStatus.PENDING));
-        long statusCollected = orderRepository
-                .countByHospitalIdAndStatusIn(hospitalId, List.of(LabOrderStatus.COLLECTED));
-        long statusReceived = orderRepository
-                .countByHospitalIdAndStatusIn(hospitalId, List.of(LabOrderStatus.RECEIVED));
-        long statusInProgress = orderRepository
-                .countByHospitalIdAndStatusIn(hospitalId, List.of(LabOrderStatus.IN_PROGRESS));
-        long statusResulted = orderRepository
-                .countByHospitalIdAndStatusIn(hospitalId, List.of(LabOrderStatus.RESULTED));
-        long statusVerified = orderRepository
-                .countByHospitalIdAndStatusIn(hospitalId, List.of(LabOrderStatus.VERIFIED));
+        // ── Status breakdown (single GROUP BY instead of 7 queries) ────────
+        Map<LabOrderStatus, Long> statusCounts = new EnumMap<>(LabOrderStatus.class);
+        for (Object[] row : orderRepository.countGroupedByStatus(hospitalId, ACTIVE_STATUSES)) {
+            statusCounts.put((LabOrderStatus) row[0], ((Number) row[1]).longValue());
+        }
+        long statusOrdered = statusCounts.getOrDefault(LabOrderStatus.ORDERED, 0L);
+        long statusPending = statusCounts.getOrDefault(LabOrderStatus.PENDING, 0L);
+        long statusCollected = statusCounts.getOrDefault(LabOrderStatus.COLLECTED, 0L);
+        long statusReceived = statusCounts.getOrDefault(LabOrderStatus.RECEIVED, 0L);
+        long statusInProgress = statusCounts.getOrDefault(LabOrderStatus.IN_PROGRESS, 0L);
+        long statusResulted = statusCounts.getOrDefault(LabOrderStatus.RESULTED, 0L);
+        long statusVerified = statusCounts.getOrDefault(LabOrderStatus.VERIFIED, 0L);
 
-        // ── Priority breakdown (active orders only) ─────────────────────────
-        long priorityRoutine = orderRepository
-                .countByHospitalIdAndPriorityAndStatusIn(hospitalId, "ROUTINE", ACTIVE_STATUSES);
-        long priorityUrgent = orderRepository
-                .countByHospitalIdAndPriorityAndStatusIn(hospitalId, "URGENT", ACTIVE_STATUSES);
-        long priorityStat = orderRepository
-                .countByHospitalIdAndPriorityAndStatusIn(hospitalId, "STAT", ACTIVE_STATUSES);
+        // ── Priority breakdown (single GROUP BY instead of 3 queries) ───────
+        Map<String, Long> priorityCounts = new HashMap<>();
+        for (Object[] row : orderRepository.countGroupedByPriority(hospitalId, ACTIVE_STATUSES)) {
+            priorityCounts.put((String) row[0], ((Number) row[1]).longValue());
+        }
+        long priorityRoutine = priorityCounts.getOrDefault("ROUTINE", 0L);
+        long priorityUrgent = priorityCounts.getOrDefault("URGENT", 0L);
+        long priorityStat = priorityCounts.getOrDefault("STAT", 0L);
 
         // ── Turnaround time ─────────────────────────────────────────────────
         Double avgTatToday = orderRepository.avgTurnaroundMinutes(hospitalId, todayStart, todayEnd);

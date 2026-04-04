@@ -21,7 +21,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
@@ -47,29 +46,23 @@ class LabOpsDashboardServiceImplTest {
         when(orderRepository.countByHospital_IdAndStatusAndOrderDatetimeBetween(
                 eq(HOSPITAL_ID), eq(LabOrderStatus.CANCELLED), any(), any())).thenReturn(5L);
 
-        // Status breakdown (single-status queries via countByHospitalIdAndStatusIn)
-        when(orderRepository.countByHospitalIdAndStatusIn(eq(HOSPITAL_ID),
-                eq(List.of(LabOrderStatus.ORDERED)))).thenReturn(10L);
-        when(orderRepository.countByHospitalIdAndStatusIn(eq(HOSPITAL_ID),
-                eq(List.of(LabOrderStatus.PENDING)))).thenReturn(8L);
-        when(orderRepository.countByHospitalIdAndStatusIn(eq(HOSPITAL_ID),
-                eq(List.of(LabOrderStatus.COLLECTED)))).thenReturn(12L);
-        when(orderRepository.countByHospitalIdAndStatusIn(eq(HOSPITAL_ID),
-                eq(List.of(LabOrderStatus.RECEIVED)))).thenReturn(15L);
-        when(orderRepository.countByHospitalIdAndStatusIn(eq(HOSPITAL_ID),
-                eq(List.of(LabOrderStatus.IN_PROGRESS)))).thenReturn(20L);
-        when(orderRepository.countByHospitalIdAndStatusIn(eq(HOSPITAL_ID),
-                eq(List.of(LabOrderStatus.RESULTED)))).thenReturn(7L);
-        when(orderRepository.countByHospitalIdAndStatusIn(eq(HOSPITAL_ID),
-                eq(List.of(LabOrderStatus.VERIFIED)))).thenReturn(3L);
+        // Status breakdown (GROUP BY query)
+        when(orderRepository.countGroupedByStatus(eq(HOSPITAL_ID), anyList())).thenReturn(List.of(
+                new Object[]{LabOrderStatus.ORDERED, 10L},
+                new Object[]{LabOrderStatus.PENDING, 8L},
+                new Object[]{LabOrderStatus.COLLECTED, 12L},
+                new Object[]{LabOrderStatus.RECEIVED, 15L},
+                new Object[]{LabOrderStatus.IN_PROGRESS, 20L},
+                new Object[]{LabOrderStatus.RESULTED, 7L},
+                new Object[]{LabOrderStatus.VERIFIED, 3L}
+        ));
 
-        // Priority breakdown
-        when(orderRepository.countByHospitalIdAndPriorityAndStatusIn(
-                eq(HOSPITAL_ID), eq("ROUTINE"), anyList())).thenReturn(50L);
-        when(orderRepository.countByHospitalIdAndPriorityAndStatusIn(
-                eq(HOSPITAL_ID), eq("URGENT"), anyList())).thenReturn(18L);
-        when(orderRepository.countByHospitalIdAndPriorityAndStatusIn(
-                eq(HOSPITAL_ID), eq("STAT"), anyList())).thenReturn(7L);
+        // Priority breakdown (GROUP BY query)
+        when(orderRepository.countGroupedByPriority(eq(HOSPITAL_ID), anyList())).thenReturn(List.of(
+                new Object[]{"ROUTINE", 50L},
+                new Object[]{"URGENT", 18L},
+                new Object[]{"STAT", 7L}
+        ));
 
         // TAT
         when(orderRepository.avgTurnaroundMinutes(eq(HOSPITAL_ID), any(), any())).thenReturn(32.5);
@@ -159,9 +152,8 @@ class LabOpsDashboardServiceImplTest {
                 eq(HOSPITAL_ID), eq(LabOrderStatus.COMPLETED), any(), any())).thenReturn(0L);
         when(orderRepository.countByHospital_IdAndStatusAndOrderDatetimeBetween(
                 eq(HOSPITAL_ID), eq(LabOrderStatus.CANCELLED), any(), any())).thenReturn(0L);
-        when(orderRepository.countByHospitalIdAndStatusIn(eq(HOSPITAL_ID), anyList())).thenReturn(0L);
-        when(orderRepository.countByHospitalIdAndPriorityAndStatusIn(
-                eq(HOSPITAL_ID), anyString(), anyList())).thenReturn(0L);
+        when(orderRepository.countGroupedByStatus(eq(HOSPITAL_ID), anyList())).thenReturn(List.of());
+        when(orderRepository.countGroupedByPriority(eq(HOSPITAL_ID), anyList())).thenReturn(List.of());
         when(orderRepository.avgTurnaroundMinutes(eq(HOSPITAL_ID), any(), any())).thenReturn(null);
         when(orderRepository.countByHospitalIdAndStatusInAndOrderDatetimeBefore(
                 eq(HOSPITAL_ID), anyList(), any())).thenReturn(0L);

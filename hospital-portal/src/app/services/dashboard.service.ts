@@ -611,9 +611,7 @@ export class DashboardService {
   /* ── Lab Ops Summary ── */
 
   getLabOpsSummary(): Observable<LabOpsSummary> {
-    return this.http
-      .get<LabOpsSummary>('/api/dashboard/lab-ops/summary')
-      .pipe(catchError(() => of({} as LabOpsSummary)));
+    return this.http.get<LabOpsSummary>('/api/dashboard/lab-ops/summary');
   }
 
   /* ── Quality Manager Summary ── */
