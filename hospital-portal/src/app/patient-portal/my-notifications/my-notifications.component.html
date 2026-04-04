@@ -19,19 +19,11 @@
 
   <!-- Tabs -->
   <div class="rec-tabs">
-    <button
-      class="rec-tab"
-      [class.active]="activeTab() === 'all'"
-      (click)="switchTab('all')"
-    >
+    <button class="rec-tab" [class.active]="activeTab() === 'all'" (click)="switchTab('all')">
       <span class="material-symbols-outlined">inbox</span>
       {{ 'PORTAL.NOTIFICATIONS.ALL' | translate }}
     </button>
-    <button
-      class="rec-tab"
-      [class.active]="activeTab() === 'unread'"
-      (click)="switchTab('unread')"
-    >
+    <button class="rec-tab" [class.active]="activeTab() === 'unread'" (click)="switchTab('unread')">
       <span class="material-symbols-outlined">mark_email_unread</span>
       {{ 'PORTAL.NOTIFICATIONS.UNREAD' | translate }}
       @if (unreadCount() > 0) {
@@ -61,12 +53,16 @@
           (click)="markRead(n)"
           role="button"
           tabindex="0"
-          (keyup.enter)="markRead(n)"
+          (keydown.enter)="markRead(n)"
+          (keydown.space)="$event.preventDefault(); markRead(n)"
         >
           <div class="notif-content">
             <div class="notif-header">
               @if (!n.read) {
-                <span class="unread-dot" title="Unread"></span>
+                <span
+                  class="unread-dot"
+                  [attr.title]="'PORTAL.NOTIFICATIONS.UNREAD' | translate"
+                ></span>
               }
               <span class="notif-type badge">{{ n.type }}</span>
               <span class="notif-date text-muted">{{ n.createdAt | date: 'medium' }}</span>

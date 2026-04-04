@@ -578,8 +578,7 @@ public class PatientPortalController {
     @PreAuthorize("hasAuthority('ROLE_PATIENT')")
     public ResponseEntity<ApiResponseWrapper<Map<String, Long>>> getUnreadCount(Authentication auth) {
         String username = auth.getName();
-        long count = notificationService.getNotificationsForUser(username, false, null,
-                org.springframework.data.domain.PageRequest.of(0, 1)).getTotalElements();
+        long count = notificationService.countUnreadForUser(username);
         return ResponseEntity.ok(ApiResponseWrapper.success(Map.of("unreadCount", count)));
     }
 
@@ -588,7 +587,7 @@ public class PatientPortalController {
     @PreAuthorize("hasAuthority('ROLE_PATIENT')")
     public ResponseEntity<ApiResponseWrapper<Void>> markNotificationRead(
             Authentication auth, @PathVariable UUID notificationId) {
-        notificationService.markAsRead(notificationId);
+        notificationService.markAsRead(notificationId, auth.getName());
         return ResponseEntity.ok(ApiResponseWrapper.success(null));
     }
 

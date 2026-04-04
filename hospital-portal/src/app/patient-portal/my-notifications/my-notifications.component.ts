@@ -1,10 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
-import {
-  PatientPortalService,
-  PortalNotification,
-} from '../../services/patient-portal.service';
+import { PatientPortalService, PortalNotification } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 
 @Component({

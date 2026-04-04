@@ -600,10 +600,7 @@ export class PatientPortalService {
     if (notes) formData.append('notes', notes);
     return this.http
       .post<ApiWrapper<PatientDocumentResponse>>(`${this.base}/documents`, formData)
-      .pipe(
-        map((r) => r.data),
-        catchError(() => of(null as unknown as PatientDocumentResponse)),
-      );
+      .pipe(map((r) => r.data));
   }
 
   listDocuments(
@@ -613,12 +610,10 @@ export class PatientPortalService {
   ): Observable<{ content: PatientDocumentResponse[]; totalElements: number }> {
     let url = `${this.base}/documents?page=${page}&size=${size}&sort=createdAt,desc`;
     if (documentType) url += `&documentType=${documentType}`;
-    return this.http
-      .get<ApiWrapper<PageWrapper<PatientDocumentResponse>>>(url)
-      .pipe(
-        map((r) => ({ content: r.data?.content ?? [], totalElements: r.data?.totalElements ?? 0 })),
-        catchError(() => of({ content: [], totalElements: 0 })),
-      );
+    return this.http.get<ApiWrapper<PageWrapper<PatientDocumentResponse>>>(url).pipe(
+      map((r) => ({ content: r.data?.content ?? [], totalElements: r.data?.totalElements ?? 0 })),
+      catchError(() => of({ content: [], totalElements: 0 })),
+    );
   }
 
   getDocument(documentId: string): Observable<PatientDocumentResponse> {
@@ -649,7 +644,6 @@ export class PatientPortalService {
       .get<ApiWrapper<PageWrapper<PortalNotification>>>(url)
       .pipe(
         map((r) => ({ content: r.data?.content ?? [], totalElements: r.data?.totalElements ?? 0 })),
-        catchError(() => of({ content: [], totalElements: 0 })),
       );
   }
 
@@ -686,7 +680,9 @@ export class PatientPortalService {
       );
   }
 
-  updateNotificationPreferences(updates: NotificationPreferenceUpdate[]): Observable<NotificationPreference[]> {
+  updateNotificationPreferences(
+    updates: NotificationPreferenceUpdate[],
+  ): Observable<NotificationPreference[]> {
     return this.http
       .put<ApiWrapper<NotificationPreference[]>>(`${this.base}/notification-preferences`, updates)
       .pipe(

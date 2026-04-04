@@ -377,7 +377,7 @@ public class FileUploadService {
 
         String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
         if (!ALLOWED_ATTACHMENT_EXTENSIONS.contains(extension)) {
-            throw new IllegalArgumentException("Unsupported document type. Allowed: PDF, JPG, PNG, TIFF, DOC, DOCX");
+            throw new IllegalArgumentException("Unsupported document type. Allowed: PDF, JPG, JPEG, PNG, GIF, BMP, TIFF, TXT, RTF, DOC, DOCX");
         }
     }
 

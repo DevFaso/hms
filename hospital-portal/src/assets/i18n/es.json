@@ -1429,6 +1429,18 @@
       "LOAD_FAILED": "Error al cargar las notificaciones",
       "MARK_READ_FAILED": "Error al marcar la notificación como leída",
       "MARK_ALL_SUCCESS": "Todas las notificaciones marcadas como leídas"
+    },
+    "ENUM": {
+      "ROLE": {
+        "DOCTOR": "Doctor",
+        "NURSE": "Enfermero(a)",
+        "ADMIN": "Administrador(a)",
+        "PHARMACIST": "Farmacéutico(a)",
+        "LAB_TECHNICIAN": "Técnico(a) de Laboratorio",
+        "LAB_DIRECTOR": "Director(a) de Laboratorio",
+        "QUALITY_MANAGER": "Gestor(a) de Calidad",
+        "RECEPTIONIST": "Recepcionista"
+      }
     }
   },
   "PLATFORM": {

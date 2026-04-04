@@ -30,7 +30,10 @@ describe('MyNotificationsComponent', () => {
     toastService = jasmine.createSpyObj('ToastService', ['success', 'error']);
 
     portalService.getMyNotifications.and.returnValue(
-      of({ content: [makeNotification('n1', false), makeNotification('n2', true)], totalElements: 2 }),
+      of({
+        content: [makeNotification('n1', false), makeNotification('n2', true)],
+        totalElements: 2,
+      }),
     );
     portalService.getUnreadNotificationCount.and.returnValue(of(1));
     portalService.markNotificationRead.and.returnValue(of(void 0));
@@ -100,10 +103,7 @@ describe('MyNotificationsComponent', () => {
   });
 
   it('should mark all as read and reset unread count', () => {
-    component.notifications.set([
-      makeNotification('n1', false),
-      makeNotification('n2', false),
-    ]);
+    component.notifications.set([makeNotification('n1', false), makeNotification('n2', false)]);
     component.unreadCount.set(2);
 
     component.markAllRead();

@@ -21,14 +21,21 @@
       <div class="form-grid">
         <label class="file-label">
           {{ 'PORTAL.DOCUMENTS.SELECT_FILE' | translate }}
-          <input type="file" (change)="onFileSelected($event)" accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.txt,.rtf,.doc,.docx" />
+          <input
+            type="file"
+            (change)="onFileSelected($event)"
+            accept=".pdf,.jpg,.jpeg,.png,.gif,.bmp,.tiff,.txt,.rtf,.doc,.docx"
+          />
           @if (selectedFile()) {
             <span class="file-name">{{ selectedFile()!.name }}</span>
           }
         </label>
         <label>
           {{ 'PORTAL.DOCUMENTS.DOCUMENT_TYPE' | translate }}
-          <select [value]="selectedDocumentType()" (change)="selectedDocumentType.set($any($event.target).value)">
+          <select
+            [value]="selectedDocumentType()"
+            (change)="selectedDocumentType.set($any($event.target).value)"
+          >
             @for (dt of documentTypes; track dt.value) {
               <option [value]="dt.value">{{ dt.labelKey | translate }}</option>
             }
@@ -36,14 +43,27 @@
         </label>
         <label>
           {{ 'PORTAL.DOCUMENTS.COLLECTION_DATE' | translate }}
-          <input type="date" [value]="collectionDate()" (change)="collectionDate.set($any($event.target).value)" />
+          <input
+            type="date"
+            [value]="collectionDate()"
+            (change)="collectionDate.set($any($event.target).value)"
+          />
         </label>
         <label>
           {{ 'PORTAL.DOCUMENTS.NOTES' | translate }}
-          <input type="text" [value]="notes()" (input)="notes.set($any($event.target).value)" [placeholder]="'PORTAL.DOCUMENTS.NOTES_PLACEHOLDER' | translate" />
+          <input
+            type="text"
+            [value]="notes()"
+            (input)="notes.set($any($event.target).value)"
+            [placeholder]="'PORTAL.DOCUMENTS.NOTES_PLACEHOLDER' | translate"
+          />
         </label>
       </div>
-      <button class="btn-primary" (click)="uploadDocument()" [disabled]="uploading() || !selectedFile()">
+      <button
+        class="btn-primary"
+        (click)="uploadDocument()"
+        [disabled]="uploading() || !selectedFile()"
+      >
         {{
           uploading()
             ? ('PORTAL.DOCUMENTS.UPLOADING' | translate)
@@ -57,7 +77,10 @@
   <div class="filter-bar">
     <label>
       {{ 'PORTAL.DOCUMENTS.FILTER_TYPE' | translate }}
-      <select [value]="filterType()" (change)="filterType.set($any($event.target).value); onFilterChange()">
+      <select
+        [value]="filterType()"
+        (change)="filterType.set($any($event.target).value); onFilterChange()"
+      >
         <option value="">{{ 'PORTAL.DOCUMENTS.FILTER_ALL' | translate }}</option>
         @for (dt of documentTypes; track dt.value) {
           <option [value]="dt.value">{{ dt.labelKey | translate }}</option>
@@ -111,7 +134,12 @@
             <p class="doc-notes">{{ doc.notes }}</p>
           }
           <div class="doc-actions">
-            <a [href]="doc.fileUrl" target="_blank" rel="noopener noreferrer" class="btn-secondary-sm">
+            <a
+              [href]="doc.fileUrl"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="btn-secondary-sm"
+            >
               <span class="material-symbols-outlined">download</span>
               {{ 'PORTAL.DOCUMENTS.DOWNLOAD' | translate }}
             </a>

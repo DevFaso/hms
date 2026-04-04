@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   PatientPortalService,
   PatientDocumentResponse,
@@ -31,6 +31,7 @@ const DOCUMENT_TYPES: { value: PatientDocumentType; labelKey: string }[] = [
 export class MyDocumentsComponent implements OnInit {
   private readonly portalService = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   readonly documentTypes = DOCUMENT_TYPES;
 
@@ -92,10 +93,8 @@ export class MyDocumentsComponent implements OnInit {
       )
       .subscribe({
         next: (doc) => {
-          if (doc) {
-            this.documents.update((list) => [doc, ...list]);
-            this.totalElements.update((n) => n + 1);
-          }
+          this.documents.update((list) => [doc, ...list]);
+          this.totalElements.update((n) => n + 1);
           this.resetForm();
           this.uploading.set(false);
           this.toast.success('PORTAL.DOCUMENTS.UPLOAD_SUCCESS');
@@ -108,7 +107,7 @@ export class MyDocumentsComponent implements OnInit {
   }
 
   deleteDocument(docId: string): void {
-    if (!confirm('PORTAL.DOCUMENTS.DELETE_CONFIRM')) return;
+    if (!confirm(this.translate.instant('PORTAL.DOCUMENTS.DELETE_CONFIRM'))) return;
     this.deleting.set(docId);
     this.portalService.deleteDocument(docId).subscribe({
       next: () => {

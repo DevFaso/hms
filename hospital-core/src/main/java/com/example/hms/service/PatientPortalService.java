@@ -26,6 +26,8 @@ import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
 import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
 import com.example.hms.payload.dto.discharge.DischargeSummaryResponseDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
@@ -168,9 +170,9 @@ public interface PatientPortalService {
     // ══════════════════════════════════════════════════════════════════════
 
     /** Get notification preferences for the authenticated patient. */
-    List<com.example.hms.payload.dto.portal.NotificationPreferenceDTO> getMyNotificationPreferences(Authentication auth);
+    List<NotificationPreferenceDTO> getMyNotificationPreferences(Authentication auth);
 
     /** Update notification preferences for the authenticated patient. */
-    List<com.example.hms.payload.dto.portal.NotificationPreferenceDTO> updateMyNotificationPreferences(
-            Authentication auth, List<com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO> updates);
+    List<NotificationPreferenceDTO> updateMyNotificationPreferences(
+            Authentication auth, List<NotificationPreferenceUpdateDTO> updates);
 }
