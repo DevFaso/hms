@@ -320,6 +320,43 @@ class LabQcEventServiceImplTest {
         verify(qcEventRepository).findAll(pageable);
     }
 
+    // ── getQcEventsByDefinition ───────────────────────────────────────────────
+
+    @Test
+    void getQcEventsByDefinition_withHospital_scopesByHospitalAndDefinition() {
+        Pageable pageable = PageRequest.of(0, 10);
+        LabQcEvent event = new LabQcEvent();
+        Page<LabQcEvent> page = new PageImpl<>(List.of(event));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(qcEventRepository.findByTestDefinitionIdAndHospitalId(testDefId, hospitalId, pageable))
+            .thenReturn(page);
+        when(qcEventMapper.toResponseDTO(event)).thenReturn(responseDTO);
+
+        Page<LabQcEventResponseDTO> result =
+            service.getQcEventsByDefinition(testDefId, pageable, Locale.ENGLISH);
+
+        assertThat(result.getContent()).containsExactly(responseDTO);
+        verify(qcEventRepository).findByTestDefinitionIdAndHospitalId(testDefId, hospitalId, pageable);
+    }
+
+    @Test
+    void getQcEventsByDefinition_superAdmin_returnsAcrossAllHospitals() {
+        Pageable pageable = PageRequest.of(0, 10);
+        LabQcEvent event = new LabQcEvent();
+        Page<LabQcEvent> page = new PageImpl<>(List.of(event));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(qcEventRepository.findByTestDefinitionId(testDefId, pageable)).thenReturn(page);
+        when(qcEventMapper.toResponseDTO(event)).thenReturn(responseDTO);
+
+        Page<LabQcEventResponseDTO> result =
+            service.getQcEventsByDefinition(testDefId, pageable, Locale.ENGLISH);
+
+        assertThat(result.getContent()).containsExactly(responseDTO);
+        verify(qcEventRepository).findByTestDefinitionId(testDefId, pageable);
+    }
+
     // ── getQcSummary ──────────────────────────────────────────────────────────
 
     @Test
