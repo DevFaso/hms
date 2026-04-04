@@ -31,5 +31,7 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     long countByReadFalse();
 
+    long countByRecipientUsernameAndReadFalse(String recipientUsername);
+
     long countByReadFalseAndCreatedAtBefore(LocalDateTime timestamp);
 }

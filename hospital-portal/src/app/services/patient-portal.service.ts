@@ -280,6 +280,56 @@ export interface ProxyGrantRequest {
   notes?: string;
 }
 
+export type PatientDocumentType =
+  | 'LAB_RESULT'
+  | 'IMAGING_REPORT'
+  | 'DISCHARGE_SUMMARY'
+  | 'REFERRAL_LETTER'
+  | 'PRESCRIPTION'
+  | 'INSURANCE_DOCUMENT'
+  | 'INVOICE'
+  | 'IMMUNIZATION_RECORD'
+  | 'OTHER';
+
+export interface PatientDocumentResponse {
+  id: string;
+  patientId: string;
+  uploadedByUserId: string;
+  uploadedByDisplayName: string;
+  documentType: PatientDocumentType;
+  displayName: string;
+  fileUrl: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  checksumSha256: string | null;
+  collectionDate: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface PortalNotification {
+  id: string;
+  message: string;
+  type: string | null;
+  read: boolean;
+  recipientUsername: string;
+  createdAt: string;
+}
+
+export interface NotificationPreference {
+  id: string;
+  userId: string;
+  notificationType: string;
+  channel: string;
+  enabled: boolean;
+}
+
+export interface NotificationPreferenceUpdate {
+  notificationType: string;
+  channel: string;
+  enabled: boolean;
+}
+
 interface ApiWrapper<T> {
   data: T;
   success: boolean;
@@ -533,5 +583,111 @@ export class PatientPortalService {
       map((r) => r.data ?? []),
       catchError(() => of([])),
     );
+  }
+
+  // ── Documents (Phase 3) ────────────────────────────────────────────────
+
+  uploadDocument(
+    file: File,
+    documentType: PatientDocumentType,
+    collectionDate?: string,
+    notes?: string,
+  ): Observable<PatientDocumentResponse> {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('documentType', documentType);
+    if (collectionDate) formData.append('collectionDate', collectionDate);
+    if (notes) formData.append('notes', notes);
+    return this.http
+      .post<ApiWrapper<PatientDocumentResponse>>(`${this.base}/documents`, formData)
+      .pipe(map((r) => r.data));
+  }
+
+  listDocuments(
+    documentType?: PatientDocumentType,
+    page = 0,
+    size = 20,
+  ): Observable<{ content: PatientDocumentResponse[]; totalElements: number }> {
+    let url = `${this.base}/documents?page=${page}&size=${size}&sort=createdAt,desc`;
+    if (documentType) url += `&documentType=${documentType}`;
+    return this.http.get<ApiWrapper<PageWrapper<PatientDocumentResponse>>>(url).pipe(
+      map((r) => ({ content: r.data?.content ?? [], totalElements: r.data?.totalElements ?? 0 })),
+      catchError(() => of({ content: [], totalElements: 0 })),
+    );
+  }
+
+  getDocument(documentId: string): Observable<PatientDocumentResponse> {
+    return this.http
+      .get<ApiWrapper<PatientDocumentResponse>>(`${this.base}/documents/${documentId}`)
+      .pipe(
+        map((r) => r.data),
+        catchError(() => of(null as unknown as PatientDocumentResponse)),
+      );
+  }
+
+  deleteDocument(documentId: string): Observable<void> {
+    return this.http
+      .delete<ApiWrapper<void>>(`${this.base}/documents/${documentId}`)
+      .pipe(map(() => void 0));
+  }
+
+  // ── Notifications (Phase 3) ───────────────────────────────────────────
+
+  getMyNotifications(
+    read?: boolean,
+    page = 0,
+    size = 20,
+  ): Observable<{ content: PortalNotification[]; totalElements: number }> {
+    let url = `${this.base}/notifications?page=${page}&size=${size}`;
+    if (read !== undefined) url += `&read=${read}`;
+    return this.http
+      .get<ApiWrapper<PageWrapper<PortalNotification>>>(url)
+      .pipe(
+        map((r) => ({ content: r.data?.content ?? [], totalElements: r.data?.totalElements ?? 0 })),
+      );
+  }
+
+  getUnreadNotificationCount(): Observable<number> {
+    return this.http
+      .get<ApiWrapper<{ unreadCount: number }>>(`${this.base}/notifications/unread-count`)
+      .pipe(
+        map((r) => r.data?.unreadCount ?? 0),
+        catchError(() => of(0)),
+      );
+  }
+
+  markNotificationRead(notificationId: string): Observable<void> {
+    return this.http
+      .put<ApiWrapper<void>>(`${this.base}/notifications/${notificationId}/read`, {})
+      .pipe(map(() => void 0));
+  }
+
+  markAllNotificationsRead(): Observable<number> {
+    return this.http
+      .put<ApiWrapper<{ updated: number }>>(`${this.base}/notifications/read-all`, {})
+      .pipe(
+        map((r) => r.data?.updated ?? 0),
+        catchError(() => of(0)),
+      );
+  }
+
+  getNotificationPreferences(): Observable<NotificationPreference[]> {
+    return this.http
+      .get<ApiWrapper<NotificationPreference[]>>(`${this.base}/notification-preferences`)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  updateNotificationPreferences(
+    updates: NotificationPreferenceUpdate[],
+  ): Observable<NotificationPreference[]> {
+    return this.http
+      .put<ApiWrapper<NotificationPreference[]>>(`${this.base}/notification-preferences`, updates)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
   }
 }

@@ -144,6 +144,24 @@ export const routes: Routes = [
             (m) => m.MySummariesComponent,
           ),
       },
+      {
+        path: 'my-documents',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-documents/my-documents.component').then(
+            (m) => m.MyDocumentsComponent,
+          ),
+      },
+      {
+        path: 'my-notifications',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-notifications/my-notifications.component').then(
+            (m) => m.MyNotificationsComponent,
+          ),
+      },
 
       // Patients
       {
