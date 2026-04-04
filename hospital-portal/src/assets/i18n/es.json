@@ -976,6 +976,7 @@
     "FRONT_DESK": "Recepción",
     "HOSPITALS": "Hospitales",
     "IMAGING": "Imagenología",
+    "LAB_APPROVAL_QUEUE": "Cola de Aprobación de Laboratorio",
     "LABORATORY": "Laboratorio",
     "MEDICATIONS": "Medicamentos",
     "MESSAGES": "Mensajes",

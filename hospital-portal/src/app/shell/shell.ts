@@ -333,6 +333,22 @@ export class ShellComponent implements OnInit, OnDestroy {
         route: '/consent-management',
       });
     }
+    if (this.auth.hasAnyRole(['ROLE_LAB_DIRECTOR', 'ROLE_QUALITY_MANAGER'])) {
+      if (!items.some((i) => i.route === '/consent-management')) {
+        items.push({
+          icon: 'handshake',
+          label: 'Consent Management',
+          translationKey: 'NAV.CONSENT_MANAGEMENT',
+          route: '/consent-management',
+        });
+      }
+      items.push({
+        icon: 'approval',
+        label: 'Lab Approval Queue',
+        translationKey: 'NAV.LAB_APPROVAL_QUEUE',
+        route: '/lab-approval-queue',
+      });
+    }
     if (
       this.auth.hasAnyRole([
         'ROLE_RECEPTIONIST',
