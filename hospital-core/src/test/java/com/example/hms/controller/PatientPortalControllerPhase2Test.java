@@ -12,6 +12,8 @@ import com.example.hms.payload.dto.portal.MedicationRefillRequestDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
+import com.example.hms.service.NotificationService;
+import com.example.hms.service.PatientDocumentService;
 import com.example.hms.service.PatientPortalService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -80,6 +82,16 @@ class PatientPortalControllerPhase2Test {
         @Bean
         public PatientPortalService patientPortalService() {
             return mock(PatientPortalService.class);
+        }
+
+        @Bean
+        public PatientDocumentService patientDocumentService() {
+            return mock(PatientDocumentService.class);
+        }
+
+        @Bean
+        public NotificationService notificationService() {
+            return mock(NotificationService.class);
         }
     }
 
