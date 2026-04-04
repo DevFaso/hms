@@ -37,7 +37,7 @@ public class LabQcEventController {
     private final LabQcEventService labQcEventService;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Record QC Event", description = "Records a new QC calibration event for an analyzer run. Pass/fail is computed automatically (±10% tolerance).")
     @ApiResponse(responseCode = "201", description = "QC event recorded")
     public ResponseEntity<ApiResponseWrapper<LabQcEventResponseDTO>> recordQcEvent(
@@ -49,7 +49,7 @@ public class LabQcEventController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Get QC Event by ID")
     @ApiResponse(responseCode = "200", description = "QC event retrieved")
     @ApiResponse(responseCode = "404", description = "QC event not found")
@@ -62,7 +62,7 @@ public class LabQcEventController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "List QC Events", description = "Paginated list of QC events. Filter by testDefinitionId for per-test charts. Scoped to the caller's hospital; SUPER_ADMIN sees all.")
     @ApiResponse(responseCode = "200", description = "QC events retrieved")
     public ResponseEntity<ApiResponseWrapper<Page<LabQcEventResponseDTO>>> listQcEvents(

@@ -2,24 +2,9 @@ name: "Backend Quality Gates & Comprehensive Test Suite"
 
 on:
   workflow_call:
-  push:
-    branches: [main, develop, uat]
-    paths:
-      - 'hospital-core/**'
-      - 'build.gradle'
-      - 'settings.gradle'
-  pull_request:
-    paths:
-      - 'hospital-core/**'
-      - 'build.gradle'
-      - 'settings.gradle'
 
 permissions:
   contents: read
-
-concurrency:
-  group: backend-ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build-and-test:

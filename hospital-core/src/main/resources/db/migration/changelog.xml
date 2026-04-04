@@ -397,6 +397,19 @@
     </changeSet>
 
     <!-- =================================================================
+         V32: Patient Uploaded Documents
+         - Creates clinical.patient_uploaded_documents table
+         - Allows patients/proxies to upload medical documents via portal
+         - Stores metadata only; files live on server filesystem
+         ================================================================= -->
+    <changeSet id="V32-patient-uploaded-documents" author="hms-team" runOnChange="false">
+        <sqlFile path="V32__patient_uploaded_documents.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
          V33: Consent type/scope columns + audit performance indexes
          - Adds consent_type column to clinical.patient_consents
          - Adds scope column to clinical.patient_consents
@@ -404,6 +417,18 @@
          ================================================================= -->
     <changeSet id="V33-consent-type-scope-audit-indexes" author="hms-team" runOnChange="false">
         <sqlFile path="V33__consent_type_scope_and_audit_indexes.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V34: Fix Patient Uploaded Documents - Correct schema reference
+         - Fixes V32 which referenced public.users instead of security.users
+         - Drops and recreates clinical.patient_uploaded_documents with correct FK
+         ================================================================= -->
+    <changeSet id="V34-fix-patient-uploaded-documents-schema" author="hms-team" runOnChange="false">
+        <sqlFile path="V34__fix_patient_uploaded_documents_schema.sql"
                  relativeToChangelogFile="true"
                  splitStatements="true"
                  stripComments="true"/>
