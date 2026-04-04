@@ -6,8 +6,10 @@ import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.LabTestValidationStudy;
 import com.example.hms.payload.dto.LabTestValidationStudyRequestDTO;
 import com.example.hms.payload.dto.LabTestValidationStudyResponseDTO;
+import com.example.hms.payload.dto.LabValidationSummaryDTO;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.LabTestValidationStudyRepository;
+import com.example.hms.utility.RoleValidator;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,6 +35,7 @@ class LabTestValidationStudyServiceImplTest {
     @Mock private LabTestValidationStudyRepository repository;
     @Mock private LabTestDefinitionRepository definitionRepository;
     @Mock private LabTestValidationStudyMapper mapper;
+    @Mock private RoleValidator roleValidator;
 
     @InjectMocks private LabTestValidationStudyServiceImpl service;
 
@@ -229,5 +232,60 @@ class LabTestValidationStudyServiceImplTest {
                 .hasMessageContaining("Validation study not found");
 
         verify(repository, never()).deleteById(any());
+    }
+
+    // ── getValidationSummary ──────────────────────────────────────────────────
+
+    @Test
+    void getValidationSummary_returnsMappedSummary() {
+        UUID defId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        LocalDate lastDate = LocalDate.of(2026, 4, 15);
+        Object[] row = {defId, "HbA1c", "HBA1C", 20L, 18L, 2L, lastDate};
+        List<Object[]> rows = new java.util.ArrayList<>();
+        rows.add(row);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(repository.findValidationSummaryByHospitalId(hospitalId)).thenReturn(rows);
+
+        List<LabValidationSummaryDTO> result = service.getValidationSummary();
+
+        assertThat(result).hasSize(1);
+        LabValidationSummaryDTO dto = result.get(0);
+        assertThat(dto.getTestDefinitionId()).isEqualTo(defId);
+        assertThat(dto.getTestName()).isEqualTo("HbA1c");
+        assertThat(dto.getTestCode()).isEqualTo("HBA1C");
+        assertThat(dto.getTotalStudies()).isEqualTo(20L);
+        assertThat(dto.getPassedStudies()).isEqualTo(18L);
+        assertThat(dto.getFailedStudies()).isEqualTo(2L);
+        assertThat(dto.getPassRate()).isEqualTo(90.0);
+        assertThat(dto.getLastStudyDate()).isEqualTo(lastDate);
+    }
+
+    @Test
+    void getValidationSummary_emptyRows_returnsEmptyList() {
+        UUID hospitalId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(repository.findValidationSummaryByHospitalId(hospitalId)).thenReturn(List.of());
+
+        List<LabValidationSummaryDTO> result = service.getValidationSummary();
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getValidationSummary_zeroTotalStudies_passRateIsZero() {
+        UUID defId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Object[] row = {defId, "RFT", "RFT", 0L, 0L, 0L, null};
+        List<Object[]> rows = new java.util.ArrayList<>();
+        rows.add(row);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(repository.findValidationSummaryByHospitalId(hospitalId)).thenReturn(rows);
+
+        List<LabValidationSummaryDTO> result = service.getValidationSummary();
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getPassRate()).isZero();
+        assertThat(result.get(0).getLastStudyDate()).isNull();
     }
 }

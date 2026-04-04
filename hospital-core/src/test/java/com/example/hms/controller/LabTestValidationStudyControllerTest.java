@@ -3,6 +3,7 @@ package com.example.hms.controller;
 import com.example.hms.enums.ValidationStudyType;
 import com.example.hms.payload.dto.LabTestValidationStudyRequestDTO;
 import com.example.hms.payload.dto.LabTestValidationStudyResponseDTO;
+import com.example.hms.payload.dto.LabValidationSummaryDTO;
 import com.example.hms.service.LabTestValidationStudyService;
 import jakarta.persistence.EntityNotFoundException;
 import org.junit.jupiter.api.Test;
@@ -157,5 +158,34 @@ class LabTestValidationStudyControllerTest {
 
         assertThatThrownBy(() -> controller.delete(STUDY_ID))
                 .isInstanceOf(EntityNotFoundException.class);
+    }
+
+    // ── getSummary ────────────────────────────────────────────────────────────
+
+    @Test
+    void getSummary_returns200WithData() {
+        LabValidationSummaryDTO summary = LabValidationSummaryDTO.builder()
+                .testDefinitionId(DEF_ID)
+                .testName("HbA1c")
+                .testCode("HBA1C")
+                .totalStudies(10L)
+                .passedStudies(9L)
+                .failedStudies(1L)
+                .passRate(90.0)
+                .build();
+        when(service.getValidationSummary()).thenReturn(List.of(summary));
+
+        ResponseEntity<?> result = controller.getSummary();
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void getSummary_emptyList_returns200() {
+        when(service.getValidationSummary()).thenReturn(List.of());
+
+        ResponseEntity<?> result = controller.getSummary();
+
+        assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 }

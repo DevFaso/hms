@@ -60,15 +60,17 @@
 
   <!-- ── QC Summary table ────────────────────────────────── -->
   <h2 class="section-title">QC Events by Test Definition</h2>
+  <p class="section-hint">Click a row to view Levey-Jennings control charts</p>
   @if (qcSummary().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-rounded">monitoring</span>
       <p>No QC events recorded yet.</p>
     </div>
   } @else {
-    <table class="data-table">
+    <table class="data-table clickable-rows">
       <thead>
         <tr>
+          <th></th>
           <th>Test Name</th>
           <th>Total Events</th>
           <th>Failed</th>
@@ -78,7 +80,20 @@
       </thead>
       <tbody>
         @for (row of qcSummary(); track row.testDefinitionId) {
-          <tr>
+          <tr
+            class="qc-row"
+            [class.expanded]="expandedDefinitionId() === row.testDefinitionId"
+            (click)="toggleChart(row.testDefinitionId)"
+            (keydown.enter)="toggleChart(row.testDefinitionId)"
+            tabindex="0"
+          >
+            <td class="chevron-cell">
+              <span class="material-symbols-rounded chevron">
+                {{
+                  expandedDefinitionId() === row.testDefinitionId ? 'expand_less' : 'expand_more'
+                }}
+              </span>
+            </td>
             <td>{{ row.testName }}</td>
             <td>{{ row.totalEvents }}</td>
             <td>{{ row.failedEvents }}</td>
@@ -97,6 +112,224 @@
             </td>
             <td>{{ row.lastEventDate ? (row.lastEventDate | date: 'mediumDate') : '—' }}</td>
           </tr>
+
+          <!-- ── Levey-Jennings chart drill-down ── -->
+          @if (expandedDefinitionId() === row.testDefinitionId) {
+            <tr class="chart-row">
+              <td colspan="6">
+                @if (loadingChart()) {
+                  <div class="loading-state compact">
+                    <span class="material-symbols-rounded spin">progress_activity</span>
+                    Loading QC data…
+                  </div>
+                } @else if (qcChartGroups().length === 0) {
+                  <div class="empty-state compact">
+                    <span class="material-symbols-rounded">show_chart</span>
+                    <p>No QC events recorded for this test.</p>
+                  </div>
+                } @else {
+                  @for (group of qcChartGroups(); track group.level) {
+                    <div class="qc-chart-group">
+                      <div class="qc-chart-title">
+                        <span class="qc-level-badge">
+                          {{ group.level === 'LOW_CONTROL' ? 'Low Control' : 'High Control' }}
+                        </span>
+                        @if (!group.insufficient) {
+                          <span class="qc-stats">
+                            Mean: {{ group.mean | number: '1.3-3' }} &nbsp;&middot;&nbsp; SD:
+                            {{ group.sd | number: '1.3-3' }}
+                          </span>
+                        }
+                      </div>
+
+                      @if (group.insufficient) {
+                        <div class="empty-state compact">
+                          <p>At least 3 QC events required to render chart.</p>
+                        </div>
+                      } @else {
+                        <div class="qc-svg-wrap">
+                          <svg
+                            class="lj-chart"
+                            [attr.viewBox]="'0 0 520 200'"
+                            xmlns="http://www.w3.org/2000/svg"
+                            role="img"
+                            aria-label="Levey-Jennings QC control chart"
+                          >
+                            <!-- Zone background bands -->
+                            @for (rect of group.zoneRects; track $index) {
+                              <rect
+                                x="58"
+                                [attr.y]="rect.y"
+                                width="450"
+                                [attr.height]="rect.height"
+                                [attr.fill]="rect.fill"
+                              />
+                            }
+
+                            <!-- Chart border -->
+                            <rect
+                              x="58"
+                              y="15"
+                              width="450"
+                              height="143"
+                              fill="none"
+                              stroke="#d1d5db"
+                              stroke-width="1"
+                            />
+
+                            <!-- Reference lines -->
+                            <line
+                              x1="58"
+                              [attr.x2]="520 - 12"
+                              [attr.y1]="group.meanY"
+                              [attr.y2]="group.meanY"
+                              stroke="#374151"
+                              stroke-width="1.5"
+                              stroke-dasharray="6,3"
+                            />
+                            <line
+                              x1="58"
+                              [attr.x2]="520 - 12"
+                              [attr.y1]="group.p1sY"
+                              [attr.y2]="group.p1sY"
+                              stroke="#6b7280"
+                              stroke-width="0.8"
+                              stroke-dasharray="4,3"
+                            />
+                            <line
+                              x1="58"
+                              [attr.x2]="520 - 12"
+                              [attr.y1]="group.m1sY"
+                              [attr.y2]="group.m1sY"
+                              stroke="#6b7280"
+                              stroke-width="0.8"
+                              stroke-dasharray="4,3"
+                            />
+                            <line
+                              x1="58"
+                              [attr.x2]="520 - 12"
+                              [attr.y1]="group.p2sY"
+                              [attr.y2]="group.p2sY"
+                              stroke="#d97706"
+                              stroke-width="0.8"
+                              stroke-dasharray="4,3"
+                            />
+                            <line
+                              x1="58"
+                              [attr.x2]="520 - 12"
+                              [attr.y1]="group.m2sY"
+                              [attr.y2]="group.m2sY"
+                              stroke="#d97706"
+                              stroke-width="0.8"
+                              stroke-dasharray="4,3"
+                            />
+                            <line
+                              x1="58"
+                              [attr.x2]="520 - 12"
+                              [attr.y1]="group.p3sY"
+                              [attr.y2]="group.p3sY"
+                              stroke="#dc2626"
+                              stroke-width="0.8"
+                              stroke-dasharray="4,3"
+                            />
+                            <line
+                              x1="58"
+                              [attr.x2]="520 - 12"
+                              [attr.y1]="group.m3sY"
+                              [attr.y2]="group.m3sY"
+                              stroke="#dc2626"
+                              stroke-width="0.8"
+                              stroke-dasharray="4,3"
+                            />
+
+                            <!-- Y-axis labels -->
+                            @for (lbl of group.yAxisLabels; track lbl.label) {
+                              <text
+                                x="54"
+                                [attr.y]="lbl.y + 3.5"
+                                class="lj-axis-label"
+                                text-anchor="end"
+                                font-size="8"
+                                fill="#6b7280"
+                              >
+                                {{ lbl.label }}
+                              </text>
+                            }
+
+                            <!-- X-axis labels -->
+                            @for (lbl of group.xAxisLabels; track lbl.label) {
+                              <text
+                                [attr.x]="lbl.x"
+                                y="195"
+                                class="lj-axis-label"
+                                text-anchor="middle"
+                                font-size="8"
+                                fill="#6b7280"
+                              >
+                                {{ lbl.label }}
+                              </text>
+                            }
+
+                            <!-- Connecting polyline -->
+                            @if (group.points.length > 1) {
+                              <polyline
+                                [attr.points]="group.polyline"
+                                fill="none"
+                                stroke="#9ca3af"
+                                stroke-width="1"
+                                stroke-linejoin="round"
+                              />
+                            }
+
+                            <!-- Data points -->
+                            @for (pt of group.points; track $index) {
+                              <circle
+                                [attr.cx]="pt.x"
+                                [attr.cy]="pt.y"
+                                r="4"
+                                [class]="'lj-point lj-point-' + pt.zone"
+                                stroke-width="1.5"
+                              >
+                                <title>{{ pt.title }}</title>
+                              </circle>
+                            }
+
+                            <!-- Legend -->
+                            <circle
+                              cx="70"
+                              cy="12"
+                              r="4"
+                              class="lj-point lj-point-ok"
+                              stroke-width="1.5"
+                            />
+                            <text x="78" y="15.5" font-size="7" fill="#374151">Within ±1s</text>
+                            <circle
+                              cx="130"
+                              cy="12"
+                              r="4"
+                              class="lj-point lj-point-warn"
+                              stroke-width="1.5"
+                            />
+                            <text x="138" y="15.5" font-size="7" fill="#374151">
+                              ±1s–2s warning
+                            </text>
+                            <circle
+                              cx="210"
+                              cy="12"
+                              r="4"
+                              class="lj-point lj-point-fail"
+                              stroke-width="1.5"
+                            />
+                            <text x="218" y="15.5" font-size="7" fill="#374151">Outside ±2s</text>
+                          </svg>
+                        </div>
+                      }
+                    </div>
+                  }
+                }
+              </td>
+            </tr>
+          }
         }
       </tbody>
     </table>
