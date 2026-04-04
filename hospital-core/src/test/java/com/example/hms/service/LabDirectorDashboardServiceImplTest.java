@@ -18,7 +18,6 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,7 +51,7 @@ class LabDirectorDashboardServiceImplTest {
 
         // Validation study stubs
         when(studyRepository.countStudiesPendingDirectorApproval(HOSPITAL_ID)).thenReturn(1L);
-        when(studyRepository.countByHospitalAndStudyDateAfter(eq(HOSPITAL_ID), any(LocalDate.class))).thenReturn(8L);
+        when(studyRepository.countByHospitalAndStudyDateOnOrAfter(eq(HOSPITAL_ID), any(LocalDate.class))).thenReturn(8L);
 
         // Order stubs
         when(orderRepository.countByHospital_IdAndOrderDatetimeBetween(eq(HOSPITAL_ID), any(), any())).thenReturn(50L);

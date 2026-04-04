@@ -67,7 +67,7 @@ public class QualityManagerDashboardServiceImpl implements QualityManagerDashboa
                 : null;
 
         long studiesLast30Days = studyRepository
-                .countByHospitalAndStudyDateAfter(hospitalId, thirtyDaysAgo);
+                .countByHospitalAndStudyDateOnOrAfter(hospitalId, thirtyDaysAgo);
 
         // ── Non-conformance (cancelled orders) ──────────────────────────────
         long cancelledThisWeek = orderRepository

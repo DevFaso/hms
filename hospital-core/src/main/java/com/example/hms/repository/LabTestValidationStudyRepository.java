@@ -26,14 +26,14 @@ public interface LabTestValidationStudyRepository extends JpaRepository<LabTestV
     /** Failed studies for a hospital. */
     long countByPassedFalseAndLabTestDefinition_Hospital_Id(UUID hospitalId);
 
-    /** Studies recorded since a given date for a hospital. */
+    /** Studies recorded on or after a given date for a hospital (inclusive). */
     @Query("""
         SELECT COUNT(s) FROM LabTestValidationStudy s
         WHERE s.labTestDefinition.hospital.id = :hospitalId
           AND s.studyDate >= :since
     """)
-    long countByHospitalAndStudyDateAfter(@Param("hospitalId") UUID hospitalId,
-                                          @Param("since") LocalDate since);
+    long countByHospitalAndStudyDateOnOrAfter(@Param("hospitalId") UUID hospitalId,
+                                              @Param("since") LocalDate since);
 
     /**
      * Studies whose linked definition is currently in PENDING_DIRECTOR_APPROVAL state.

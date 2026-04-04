@@ -2330,7 +2330,7 @@
             </div>
             <a routerLink="/lab" class="card-link">{{ 'DASHBOARD.OPEN_LAB_MODULE' | translate }}</a>
           </div>
-          @if (labDirectorDashboard()?.pendingDirectorApproval === 0) {
+          @if ((labDirectorDashboard()?.pendingDirectorApproval ?? 0) === 0) {
             <div class="empty-state">
               <span class="material-symbols-outlined empty-icon-lg">check_circle</span>
               <h3>{{ 'DASHBOARD.ALL_APPROVALS_CURRENT' | translate }}</h3>
@@ -2563,7 +2563,7 @@
             </div>
             <a routerLink="/lab" class="card-link">{{ 'DASHBOARD.OPEN_LAB_MODULE' | translate }}</a>
           </div>
-          @if (qualityManagerDashboard()?.pendingQaReview === 0) {
+          @if ((qualityManagerDashboard()?.pendingQaReview ?? 0) === 0) {
             <div class="empty-state">
               <span class="material-symbols-outlined empty-icon-lg">check_circle</span>
               <h3>{{ 'DASHBOARD.ALL_QA_CURRENT' | translate }}</h3>

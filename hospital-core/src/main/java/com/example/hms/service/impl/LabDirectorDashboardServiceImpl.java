@@ -57,7 +57,7 @@ public class LabDirectorDashboardServiceImpl implements LabDirectorDashboardServ
                 .countStudiesPendingDirectorApproval(hospitalId);
 
         long validationStudiesLast30Days = studyRepository
-                .countByHospitalAndStudyDateAfter(hospitalId, thirtyDaysAgo);
+                .countByHospitalAndStudyDateOnOrAfter(hospitalId, thirtyDaysAgo);
 
         // ── Lab Order counts ────────────────────────────────────────────────
         long ordersToday = orderRepository
