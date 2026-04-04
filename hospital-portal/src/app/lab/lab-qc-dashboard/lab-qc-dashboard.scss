@@ -160,3 +160,140 @@
   padding: 3rem;
   color: #94a3b8;
 }
+
+/* ── Hint text ─────────────────────────────────────────── */
+.section-hint {
+  font-size: 0.8125rem;
+  color: #94a3b8;
+  margin: -0.5rem 0 0.75rem;
+}
+
+/* ── Clickable rows ─────────────────────────────────── */
+.clickable-rows {
+  .qc-row {
+    cursor: pointer;
+    transition: background 0.15s;
+
+    &:hover {
+      background: #f8fafc;
+    }
+
+    &.expanded {
+      background: #eff6ff;
+    }
+  }
+
+  .chevron-cell {
+    width: 32px;
+    padding-right: 0;
+  }
+
+  .chevron {
+    font-size: 1.25rem;
+    color: #64748b;
+    vertical-align: middle;
+  }
+}
+
+/* ── Chart expansion row ────────────────────────────── */
+.chart-row td {
+  padding: 1rem 1.25rem 1.5rem;
+  background: #fafbfc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.loading-state.compact {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  color: #64748b;
+  font-size: 0.875rem;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.empty-state.compact {
+  padding: 1.5rem;
+  font-size: 0.875rem;
+}
+
+/* ── Levey-Jennings chart ───────────────────────────── */
+.qc-chart-group {
+  margin-bottom: 1rem;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.qc-chart-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.qc-level-badge {
+  display: inline-block;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.qc-stats {
+  font-size: 0.8125rem;
+  color: #64748b;
+}
+
+.qc-svg-wrap {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0.5rem;
+  overflow-x: auto;
+}
+
+.lj-chart {
+  width: 100%;
+  max-width: 520px;
+  height: auto;
+}
+
+.lj-axis-label {
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.lj-point {
+  transition: r 0.15s;
+
+  &:hover {
+    r: 6;
+  }
+}
+
+.lj-point-ok {
+  fill: #22c55e;
+  stroke: #166534;
+}
+
+.lj-point-warn {
+  fill: #f59e0b;
+  stroke: #92400e;
+}
+
+.lj-point-fail {
+  fill: #ef4444;
+  stroke: #991b1b;
+}
