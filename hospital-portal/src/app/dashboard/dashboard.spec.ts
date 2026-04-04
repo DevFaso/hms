@@ -63,6 +63,8 @@ describe('Dashboard navigation & RBAC', () => {
     c.isLabScientist.set(
       roles.includes('ROLE_LAB_SCIENTIST') || roles.includes('ROLE_LAB_TECHNICIAN'),
     );
+    c.isLabDirector.set(roles.includes('ROLE_LAB_DIRECTOR'));
+    c.isQualityManager.set(roles.includes('ROLE_QUALITY_MANAGER'));
     c.isPharmacist.set(roles.includes('ROLE_PHARMACIST'));
     c.isRadiologist.set(roles.includes('ROLE_RADIOLOGIST'));
     c.isSuperAdmin.set(roles.includes('ROLE_SUPER_ADMIN'));
@@ -168,5 +170,181 @@ describe('Dashboard navigation & RBAC', () => {
   it('activeView should be "nurse" for ROLE_NURSE', () => {
     const nurse = createComponent(['ROLE_NURSE'], []);
     expect(nurse.activeView()).toBe('nurse');
+  });
+
+  // ── Lab Director active view and computed properties ────────
+
+  it('activeView should be "lab-director" for ROLE_LAB_DIRECTOR', () => {
+    const c = createComponent(['ROLE_LAB_DIRECTOR'], []);
+    c.isLabDirector.set(true);
+    expect(c.activeView()).toBe('lab-director');
+  });
+
+  it('roleLabel should be "Lab Director" for ROLE_LAB_DIRECTOR', () => {
+    const c = createComponent(['ROLE_LAB_DIRECTOR'], []);
+    c.isLabDirector.set(true);
+    expect(c.roleLabel()).toBe('Lab Director');
+  });
+
+  it('heroGradientClass should be "hero-gradient-lab-director" for ROLE_LAB_DIRECTOR', () => {
+    const c = createComponent(['ROLE_LAB_DIRECTOR'], []);
+    c.isLabDirector.set(true);
+    expect(c.heroGradientClass()).toBe('hero-gradient-lab-director');
+  });
+
+  it('labDirectorStatCards should return empty array when no data loaded', () => {
+    const c = createComponent(['ROLE_LAB_DIRECTOR'], []);
+    c.isLabDirector.set(true);
+    expect(c.labDirectorStatCards()).toEqual([]);
+  });
+
+  it('labDirectorStatCards should return 5 cards when data is set', () => {
+    const c = createComponent(['ROLE_LAB_DIRECTOR'], []);
+    c.isLabDirector.set(true);
+    c.labDirectorDashboard.set({
+      hospitalId: '00000000-0000-0000-0000-000000000001',
+      asOfDate: '2025-01-01',
+      pendingDirectorApproval: 3,
+      pendingQaReview: 2,
+      draftDefinitions: 1,
+      activeDefinitions: 42,
+      validationStudiesPendingApproval: 1,
+      validationStudiesLast30Days: 10,
+      ordersToday: 100,
+      ordersCompletedToday: 80,
+      ordersInProgress: 15,
+      ordersCancelledThisWeek: 5,
+      avgTurnaroundMinutesToday: 47.3,
+      recentApprovalAudit: [],
+    });
+    expect(c.labDirectorStatCards().length).toBe(5);
+    const approvalCard = c.labDirectorStatCards().find((c) => c.key === 'pending_director');
+    expect(approvalCard?.value).toBe(3);
+  });
+
+  it('labDirectorStatCards TAT should show N/A when avgTurnaroundMinutesToday is null', () => {
+    const c = createComponent(['ROLE_LAB_DIRECTOR'], []);
+    c.isLabDirector.set(true);
+    c.labDirectorDashboard.set({
+      hospitalId: '00000000-0000-0000-0000-000000000001',
+      asOfDate: '2025-01-01',
+      pendingDirectorApproval: 0,
+      pendingQaReview: 0,
+      draftDefinitions: 0,
+      activeDefinitions: 0,
+      validationStudiesPendingApproval: 0,
+      validationStudiesLast30Days: 0,
+      ordersToday: 0,
+      ordersCompletedToday: 0,
+      ordersInProgress: 0,
+      ordersCancelledThisWeek: 0,
+      avgTurnaroundMinutesToday: null,
+      recentApprovalAudit: [],
+    });
+    const tatCard = c.labDirectorStatCards().find((c) => c.key === 'avg_tat');
+    expect(tatCard?.value).toBe('N/A');
+  });
+
+  it('labDirectorNavTiles should return 8 tiles with badges for pending counts', () => {
+    const c = createComponent(['ROLE_LAB_DIRECTOR'], []);
+    c.isLabDirector.set(true);
+    c.labDirectorDashboard.set({
+      hospitalId: 'h1',
+      asOfDate: '2025-01-01',
+      pendingDirectorApproval: 5,
+      pendingQaReview: 3,
+      draftDefinitions: 0,
+      activeDefinitions: 0,
+      validationStudiesPendingApproval: 0,
+      validationStudiesLast30Days: 0,
+      ordersToday: 0,
+      ordersCompletedToday: 0,
+      ordersInProgress: 0,
+      ordersCancelledThisWeek: 0,
+      avgTurnaroundMinutesToday: null,
+      recentApprovalAudit: [],
+    });
+    const tiles = c.labDirectorNavTiles();
+    expect(tiles.length).toBe(8);
+    const approvalTile = tiles.find((t) => t.label === 'Approval Queue');
+    expect(approvalTile?.count).toBe(5);
+  });
+
+  // ── Quality Manager active view and computed properties ─────
+
+  it('activeView should be "quality-manager" for ROLE_QUALITY_MANAGER', () => {
+    const c = createComponent(['ROLE_QUALITY_MANAGER'], []);
+    c.isQualityManager.set(true);
+    expect(c.activeView()).toBe('quality-manager');
+  });
+
+  it('roleLabel should be "Quality Manager" for ROLE_QUALITY_MANAGER', () => {
+    const c = createComponent(['ROLE_QUALITY_MANAGER'], []);
+    c.isQualityManager.set(true);
+    expect(c.roleLabel()).toBe('Quality Manager');
+  });
+
+  it('heroGradientClass should be "hero-gradient-quality-manager" for ROLE_QUALITY_MANAGER', () => {
+    const c = createComponent(['ROLE_QUALITY_MANAGER'], []);
+    c.isQualityManager.set(true);
+    expect(c.heroGradientClass()).toBe('hero-gradient-quality-manager');
+  });
+
+  it('qualityManagerStatCards should return empty array when no data loaded', () => {
+    const c = createComponent(['ROLE_QUALITY_MANAGER'], []);
+    c.isQualityManager.set(true);
+    expect(c.qualityManagerStatCards()).toEqual([]);
+  });
+
+  it('qualityManagerStatCards should return 5 cards with pass rate when data set', () => {
+    const c = createComponent(['ROLE_QUALITY_MANAGER'], []);
+    c.isQualityManager.set(true);
+    c.qualityManagerDashboard.set({
+      hospitalId: 'h1',
+      asOfDate: '2025-01-01',
+      pendingQaReview: 4,
+      draftDefinitions: 2,
+      pendingDirectorApproval: 1,
+      activeDefinitions: 30,
+      totalValidationStudies: 50,
+      passedValidationStudies: 45,
+      failedValidationStudies: 5,
+      qualityPassRate: 90.0,
+      validationStudiesLast30Days: 12,
+      ordersCancelledThisWeek: 3,
+      ordersToday: 80,
+    });
+    expect(c.qualityManagerStatCards().length).toBe(5);
+    const passRateCard = c.qualityManagerStatCards().find((c) => c.key === 'pass_rate');
+    expect(passRateCard?.value).toBe('90.0%');
+  });
+
+  it('qualityManagerStatCards pass rate should show N/A when qualityPassRate is null', () => {
+    const c = createComponent(['ROLE_QUALITY_MANAGER'], []);
+    c.isQualityManager.set(true);
+    c.qualityManagerDashboard.set({
+      hospitalId: 'h1',
+      asOfDate: '2025-01-01',
+      pendingQaReview: 0,
+      draftDefinitions: 0,
+      pendingDirectorApproval: 0,
+      activeDefinitions: 0,
+      totalValidationStudies: 0,
+      passedValidationStudies: 0,
+      failedValidationStudies: 0,
+      qualityPassRate: null,
+      validationStudiesLast30Days: 0,
+      ordersCancelledThisWeek: 0,
+      ordersToday: 0,
+    });
+    const passRateCard = c.qualityManagerStatCards().find((c) => c.key === 'pass_rate');
+    expect(passRateCard?.value).toBe('N/A');
+  });
+
+  it('lab-director should take priority over lab-scientist in activeView', () => {
+    const c = createComponent(['ROLE_LAB_DIRECTOR', 'ROLE_LAB_SCIENTIST'], []);
+    c.isLabDirector.set(true);
+    c.isLabScientist.set(true);
+    expect(c.activeView()).toBe('lab-director');
   });
 });
