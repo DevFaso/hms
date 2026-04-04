@@ -324,6 +324,16 @@ export class ShellComponent implements OnInit, OnDestroy {
       });
     }
     if (
+      this.auth.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'])
+    ) {
+      items.push({
+        icon: 'handshake',
+        label: 'Consent Management',
+        translationKey: 'NAV.CONSENT_MANAGEMENT',
+        route: '/consent-management',
+      });
+    }
+    if (
       this.auth.hasAnyRole([
         'ROLE_RECEPTIONIST',
         'ROLE_HOSPITAL_ADMIN',

@@ -196,6 +196,10 @@ public class PatientConsentServiceImpl implements PatientConsentService {
         consent.setConsentGiven(true);
         consent.setConsentExpiration(requestDTO.getConsentExpiration());
         consent.setPurpose(requestDTO.getPurpose());
+        if (requestDTO.getConsentType() != null) {
+            consent.setConsentType(requestDTO.getConsentType());
+        }
+        consent.setScope(requestDTO.getScope());
         return consentRepository.save(consent);
     }
 

@@ -1,5 +1,6 @@
 package com.example.hms.mapper;
 
+import com.example.hms.enums.ConsentType;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientConsent;
@@ -28,6 +29,8 @@ public class PatientConsentMapper {
                 .consentGiven(true)
                 .consentExpiration(dto.getConsentExpiration())
                 .purpose(dto.getPurpose())
+                .consentType(dto.getConsentType() != null ? dto.getConsentType() : ConsentType.TREATMENT)
+                .scope(dto.getScope())
                 .build();
     }
 
@@ -41,6 +44,8 @@ public class PatientConsentMapper {
                 .consentTimestamp(consent.getCreatedAt())
                 .consentExpiration(consent.getConsentExpiration())
                 .purpose(consent.getPurpose())
+                .consentType(consent.getConsentType())
+                .scope(consent.getScope())
                 .patientId(consent.getPatient().getId())
                 .patient(patientMapper.toPatientDTO(consent.getPatient(), consent.getFromHospital().getId()))
                 .fromHospital(hospitalMapper.toHospitalDTO(consent.getFromHospital()))
@@ -61,6 +66,8 @@ public class PatientConsentMapper {
                 .consentTimestamp(consent.getCreatedAt())
                 .consentExpiration(consent.getConsentExpiration())
                 .purpose(consent.getPurpose())
+                .consentType(consent.getConsentType())
+                .scope(consent.getScope())
                 .patientId(patientDTO != null ? patientDTO.getId() : null)
                 .patient(patientDTO)
                 .fromHospital(fromHospitalDTO)

@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto;
 
+import com.example.hms.enums.ConsentType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,6 +31,13 @@ public class PatientConsentResponseDTO {
 
     @Schema(description = "Purpose for which the consent was given.", example = "Treatment")
     private String purpose;
+
+    @Schema(description = "Type of consent.", example = "TREATMENT")
+    private ConsentType consentType;
+
+    @Schema(description = "Comma-separated record domains in scope. Null = all domains.",
+            example = "PRESCRIPTIONS,LAB_RESULTS,ENCOUNTERS")
+    private String scope;
 
     @Schema(description = "ID of the patient associated with the consent.")
     private UUID patientId;
