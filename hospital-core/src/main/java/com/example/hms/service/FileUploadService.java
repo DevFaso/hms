@@ -320,6 +320,67 @@ public class FileUploadService {
         }
     }
 
+    private static final long MAX_PATIENT_DOCUMENT_SIZE = 20L * 1024 * 1024; // 20 MB
+    private static final String PATIENT_DOCUMENTS_PATH = "patient-documents";
+
+    /**
+     * Upload a document submitted by a patient through the patient portal.
+     * Supports PDF, common image types, and text documents.
+     *
+     * @param file     the uploaded file (multipart)
+     * @param userId   the ID of the uploading user (patient or proxy)
+     * @return {@link StoredFileDescriptor} with storage key, public URL, and checksum
+     * @throws IOException if the file cannot be written to disk
+     */
+    public StoredFileDescriptor uploadPatientDocument(MultipartFile file, UUID userId) throws IOException {
+        validatePatientDocumentFile(file);
+
+        Path uploadPath = Paths.get(uploadDir, PATIENT_DOCUMENTS_PATH);
+        Files.createDirectories(uploadPath);
+
+        String sanitizedBaseName = sanitizeBaseFilename(file.getOriginalFilename());
+        String extension = getFileExtension(file.getOriginalFilename());
+        String filename = buildAttachmentFilename(sanitizedBaseName, extension, userId, "patient_doc");
+
+        Path filePath = uploadPath.resolve(filename).normalize();
+        if (!filePath.startsWith(uploadPath)) {
+            throw new IllegalArgumentException("Invalid file path — path traversal attempt detected");
+        }
+
+        MessageDigest digest = createSha256Digest();
+        try (DigestInputStream digestStream = new DigestInputStream(file.getInputStream(), digest)) {
+            Files.copy(digestStream, filePath, StandardCopyOption.REPLACE_EXISTING);
+        }
+
+        String relativePath = "/uploads/" + PATIENT_DOCUMENTS_PATH + "/" + filename;
+        long sizeBytes = Files.size(filePath);
+        String checksum = HexFormat.of().formatHex(digest.digest());
+
+        return new StoredFileDescriptor(
+                relativePath,
+                buildPublicUrl(relativePath),
+                determineDisplayName(file, filename),
+                file.getContentType(),
+                sizeBytes,
+                checksum
+        );
+    }
+
+    private void validatePatientDocumentFile(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("File cannot be empty");
+        }
+
+        if (file.getSize() > MAX_PATIENT_DOCUMENT_SIZE) {
+            throw new IllegalArgumentException("Document size cannot exceed 20MB");
+        }
+
+        String extension = getFileExtension(file.getOriginalFilename()).toLowerCase();
+        if (!ALLOWED_ATTACHMENT_EXTENSIONS.contains(extension)) {
+            throw new IllegalArgumentException("Unsupported document type. Allowed: PDF, JPG, JPEG, PNG, GIF, BMP, TIFF, TXT, RTF, DOC, DOCX");
+        }
+    }
+
     public record StoredFileDescriptor(
         String storageKey,
         String publicUrl,

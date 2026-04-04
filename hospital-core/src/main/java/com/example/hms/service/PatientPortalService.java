@@ -26,6 +26,8 @@ import com.example.hms.payload.dto.consultation.ConsultationResponseDTO;
 import com.example.hms.payload.dto.clinical.treatment.TreatmentPlanResponseDTO;
 import com.example.hms.payload.dto.GeneralReferralResponseDTO;
 import com.example.hms.payload.dto.discharge.DischargeSummaryResponseDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.Authentication;
@@ -162,4 +164,15 @@ public interface PatientPortalService {
 
     /** View grantor's health records/summary as proxy. */
     HealthSummaryDTO getProxyRecords(Authentication auth, UUID patientId, java.util.Locale locale);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // PHASE 3 — Notifications
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** Get notification preferences for the authenticated patient. */
+    List<NotificationPreferenceDTO> getMyNotificationPreferences(Authentication auth);
+
+    /** Update notification preferences for the authenticated patient. */
+    List<NotificationPreferenceDTO> updateMyNotificationPreferences(
+            Authentication auth, List<NotificationPreferenceUpdateDTO> updates);
 }

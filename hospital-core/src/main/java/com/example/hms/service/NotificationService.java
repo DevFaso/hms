@@ -16,6 +16,8 @@ public interface NotificationService {
     Notification createNotification(String message, String recipientUsername);
     Notification createNotification(String message, String recipientUsername, String type);
     void markAsRead(UUID notificationId);
+    void markAsRead(UUID notificationId, String ownerUsername);
+    long countUnreadForUser(String username);
     int markAllReadForUser(String username);
 
     // ── Notification preferences ─────────────────────────────────────────

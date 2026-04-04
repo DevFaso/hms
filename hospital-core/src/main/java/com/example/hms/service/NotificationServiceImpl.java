@@ -75,6 +75,21 @@ public class NotificationServiceImpl implements NotificationService {
     }
 
     @Override
+    public void markAsRead(UUID notificationId, String ownerUsername) {
+        notificationRepository.findById(notificationId).ifPresent(n -> {
+            if (ownerUsername.equals(n.getRecipientUsername())) {
+                n.setRead(true);
+                notificationRepository.save(n);
+            }
+        });
+    }
+
+    @Override
+    public long countUnreadForUser(String username) {
+        return notificationRepository.countByRecipientUsernameAndReadFalse(username);
+    }
+
+    @Override
     @Transactional
     public int markAllReadForUser(String username) {
         return notificationRepository.markAllReadForUser(username);
