@@ -1323,6 +1323,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
         color: '#ea580c',
         bg: '#fff7ed',
       },
+      {
+        icon: 'monitoring',
+        label: 'Lab Ops Dashboard',
+        route: '/lab-ops-dashboard',
+        color: '#0284c7',
+        bg: '#e0f2fe',
+      },
     ];
   });
 
@@ -1436,6 +1443,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
         color: '#ea580c',
         bg: '#fff7ed',
         count: d?.pendingDirectorApproval,
+      },
+      {
+        icon: 'monitoring',
+        label: 'Lab Ops Dashboard',
+        route: '/lab-ops-dashboard',
+        color: '#0284c7',
+        bg: '#e0f2fe',
       },
     ];
   });

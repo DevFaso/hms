@@ -389,6 +389,32 @@ export interface LabDirectorDashboard {
   recentApprovalAudit: ApprovalAuditSnippet[];
 }
 
+/* ── Lab Operations Dashboard DTOs ── */
+
+export interface LabOpsSummary {
+  hospitalId: string;
+  asOfDate: string;
+  ordersToday: number;
+  completedToday: number;
+  cancelledToday: number;
+  ordersThisWeek: number;
+  completedThisWeek: number;
+  ordersThisMonth: number;
+  statusOrdered: number;
+  statusPending: number;
+  statusCollected: number;
+  statusReceived: number;
+  statusInProgress: number;
+  statusResulted: number;
+  statusVerified: number;
+  priorityRoutine: number;
+  priorityUrgent: number;
+  priorityStat: number;
+  avgTurnaroundMinutesToday: number | null;
+  avgTurnaroundMinutesThisWeek: number | null;
+  ordersOlderThan24h: number;
+}
+
 /* ── Quality Manager Dashboard DTOs ── */
 
 export interface QualityManagerDashboard {
@@ -580,6 +606,14 @@ export class DashboardService {
     return this.http
       .get<LabDirectorDashboard>('/api/dashboard/lab-director/summary')
       .pipe(catchError(() => of({} as LabDirectorDashboard)));
+  }
+
+  /* ── Lab Ops Summary ── */
+
+  getLabOpsSummary(): Observable<LabOpsSummary> {
+    return this.http
+      .get<LabOpsSummary>('/api/dashboard/lab-ops/summary')
+      .pipe(catchError(() => of({} as LabOpsSummary)));
   }
 
   /* ── Quality Manager Summary ── */
