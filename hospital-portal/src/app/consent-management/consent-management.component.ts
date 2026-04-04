@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   RecordSharingService,
   PatientConsentResponse,
@@ -36,6 +36,7 @@ const CONSENT_TYPES: ConsentTypeValue[] = [
 export class ConsentManagementComponent implements OnInit {
   private readonly sharingService = inject(RecordSharingService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   readonly consentTypes = CONSENT_TYPES;
   readonly pageSize = 20;
@@ -130,6 +131,7 @@ export class ConsentManagementComponent implements OnInit {
     this.submitting.set(true);
     const req: ConsentGrantRequest = {
       ...this.grantForm,
+      purpose: this.grantForm.purpose || undefined,
       consentExpiration: this.grantForm.consentExpiration || undefined,
       scope: this.grantForm.scope || undefined,
     };
@@ -149,9 +151,9 @@ export class ConsentManagementComponent implements OnInit {
   }
 
   revoke(consent: PatientConsentResponse): void {
-    if (!confirm('Revoke this consent?')) return;
+    if (!confirm(this.translate.instant('CONSENT.MANAGEMENT.REVOKE_CONFIRM'))) return;
     this.sharingService
-      .revokeConsent(consent.patient?.id, consent.fromHospital?.id, consent.toHospital?.id)
+      .revokeConsent(consent.patient.id, consent.fromHospital.id, consent.toHospital.id)
       .subscribe({
         next: () => {
           this.toast.success('CONSENT.REVOKED');

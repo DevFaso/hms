@@ -30,7 +30,12 @@
 
   <!-- Filter bar -->
   <div class="filter-bar">
-    <select class="filter-select" [(ngModel)]="filterActive" aria-label="Filter by status">
+    <select
+      class="filter-select"
+      [ngModel]="filterActive()"
+      (ngModelChange)="filterActive.set($event)"
+      aria-label="Filter by status"
+    >
       <option value="">{{ 'CONSENT.MANAGEMENT.ALL_STATUSES' | translate }}</option>
       <option value="true">{{ 'CONSENT.MANAGEMENT.ACTIVE_ONLY' | translate }}</option>
       <option value="false">{{ 'CONSENT.MANAGEMENT.REVOKED_ONLY' | translate }}</option>
@@ -190,7 +195,7 @@
               <td>{{ c.fromHospital?.name || '--' }}</td>
               <td>{{ c.toHospital?.name || '--' }}</td>
               <td>
-                <span class="type-badge type-{{ c.consentType?.toLowerCase() }}">
+                <span class="type-badge type-{{ (c.consentType || 'TREATMENT').toLowerCase() }}">
                   {{ 'CONSENT.TYPE.' + (c.consentType || 'TREATMENT') | translate }}
                 </span>
               </td>

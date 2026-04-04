@@ -396,4 +396,17 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V33: Consent type/scope columns + audit performance indexes
+         - Adds consent_type column to clinical.patient_consents
+         - Adds scope column to clinical.patient_consents
+         - Adds performance indexes on audit.audit_event_logs
+         ================================================================= -->
+    <changeSet id="V33-consent-type-scope-audit-indexes" author="hms-team" runOnChange="false">
+        <sqlFile path="V33__consent_type_scope_and_audit_indexes.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

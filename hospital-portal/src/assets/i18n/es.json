@@ -361,7 +361,8 @@
       "REVOKED": "Revocado",
       "REVOKE": "Revocar",
       "NO_CONSENTS": "No se encontraron consentimientos",
-      "NO_CONSENTS_HINT": "Use el botón Otorgar consentimiento para agregar uno nuevo."
+      "NO_CONSENTS_HINT": "Use el botón Otorgar consentimiento para agregar uno nuevo.",
+      "REVOKE_CONFIRM": "¿Está seguro de que desea revocar este consentimiento?"
     }
   },
   "CONSULTATIONS": {

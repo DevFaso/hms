@@ -361,7 +361,8 @@
       "REVOKED": "Revoked",
       "REVOKE": "Revoke",
       "NO_CONSENTS": "No consents found",
-      "NO_CONSENTS_HINT": "Use the Grant Consent button to add a new sharing consent."
+      "NO_CONSENTS_HINT": "Use the Grant Consent button to add a new sharing consent.",
+      "REVOKE_CONFIRM": "Are you sure you want to revoke this consent?"
     }
   },
   "CONSULTATIONS": {
