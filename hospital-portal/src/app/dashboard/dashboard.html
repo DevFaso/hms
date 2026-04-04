@@ -2285,7 +2285,461 @@
   }
 
   <!-- ══════════════════════════════════════════
-       ⑥ LAB SCIENTIST DASHBOARD
+       ⑥ LAB DIRECTOR DASHBOARD
+       ══════════════════════════════════════════ -->
+  @if (!loading() && activeView() === 'lab-director') {
+    <section class="stat-strip">
+      @for (card of labDirectorStatCards(); track card.key) {
+        <a class="stat-card" [routerLink]="card.route ?? null">
+          <div class="stat-icon-wrap" [style.background]="card.bgColor">
+            <span class="material-symbols-outlined stat-icon" [style.color]="card.color">{{
+              card.icon
+            }}</span>
+          </div>
+          <div class="stat-body">
+            <span class="stat-value" [style.color]="card.color">{{ card.value }}</span>
+            <span class="stat-label">{{ card.label }}</span>
+          </div>
+        </a>
+      }
+    </section>
+
+    <section class="nurse-workflow-tiles">
+      @for (tile of labDirectorNavTiles(); track tile.label) {
+        <a class="workflow-tile" [routerLink]="tile.route">
+          <span class="workflow-tile-icon" [style.background]="tile.bg" [style.color]="tile.color">
+            <span class="material-symbols-outlined">{{ tile.icon }}</span>
+          </span>
+          <span class="workflow-tile-label">
+            {{ tile.label }}
+            @if (tile.count && tile.count > 0) {
+              <span class="tile-badge">{{ tile.count }}</span>
+            }
+          </span>
+        </a>
+      }
+    </section>
+
+    <div class="clinical-workspace">
+      <div class="workspace-left">
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">approval</span>
+              <h2 class="card-title">{{ 'DASHBOARD.LAB_APPROVAL_QUEUE' | translate }}</h2>
+            </div>
+            <a routerLink="/lab" class="card-link">{{ 'DASHBOARD.OPEN_LAB_MODULE' | translate }}</a>
+          </div>
+          @if (labDirectorDashboard()?.pendingDirectorApproval === 0) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon-lg">check_circle</span>
+              <h3>{{ 'DASHBOARD.ALL_APPROVALS_CURRENT' | translate }}</h3>
+              <p>{{ 'DASHBOARD.NO_PENDING_APPROVALS_DESC' | translate }}</p>
+            </div>
+          } @else {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon-lg" style="color: #dc2626"
+                >approval</span
+              >
+              <h3>
+                {{ labDirectorDashboard()?.pendingDirectorApproval }}
+                {{ 'DASHBOARD.PENDING_DIRECTOR_APPROVAL' | translate }}
+              </h3>
+              <p>{{ 'DASHBOARD.PENDING_DIRECTOR_APPROVAL_DESC' | translate }}</p>
+              <a routerLink="/lab" class="card-link" style="margin-top: 12px">{{
+                'DASHBOARD.REVIEW_NOW' | translate
+              }}</a>
+            </div>
+          }
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">analytics</span>
+              <h2 class="card-title">{{ 'DASHBOARD.VALIDATION_STUDIES' | translate }}</h2>
+            </div>
+            <a routerLink="/lab" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+          </div>
+          <div class="stat-strip" style="padding: 16px; gap: 12px">
+            <div class="stat-card" style="flex: 1; min-width: 0">
+              <div class="stat-icon-wrap" style="background: #ede9fe">
+                <span class="material-symbols-outlined stat-icon" style="color: #7c3aed"
+                  >biotech</span
+                >
+              </div>
+              <div class="stat-body">
+                <span class="stat-value">{{
+                  labDirectorDashboard()?.validationStudiesPendingApproval ?? 0
+                }}</span>
+                <span class="stat-label">{{
+                  'DASHBOARD.VALIDATION_STUDIES_PENDING' | translate
+                }}</span>
+              </div>
+            </div>
+            <div class="stat-card" style="flex: 1; min-width: 0">
+              <div class="stat-icon-wrap" style="background: #dbeafe">
+                <span class="material-symbols-outlined stat-icon" style="color: #2563eb"
+                  >calendar_month</span
+                >
+              </div>
+              <div class="stat-body">
+                <span class="stat-value">{{
+                  labDirectorDashboard()?.validationStudiesLast30Days ?? 0
+                }}</span>
+                <span class="stat-label">{{ 'DASHBOARD.VALIDATION_STUDIES_30D' | translate }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        @if (quickActions().length > 0) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">bolt</span>
+                <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
+              </div>
+            </div>
+            <div class="qa-grid" style="padding: 16px">
+              @for (action of quickActions(); track action.label) {
+                <a
+                  class="qa-card"
+                  [routerLink]="action.route"
+                  [queryParams]="action.queryParams ?? null"
+                  [style.--qa-color]="action.color"
+                  [style.--qa-bg]="action.bgColor"
+                >
+                  <div class="qa-icon-wrap">
+                    <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
+                  </div>
+                  <span class="qa-label">{{ action.label }}</span>
+                  <span class="qa-desc">{{ action.description }}</span>
+                </a>
+              }
+            </div>
+          </section>
+        }
+      </div>
+
+      <aside class="workspace-right">
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">bar_chart</span>
+              <h2 class="card-title">{{ 'DASHBOARD.LAB_ORDERS_TODAY' | translate }}</h2>
+            </div>
+          </div>
+          <div class="stat-strip" style="padding: 16px; flex-direction: column; gap: 10px">
+            <div
+              class="stat-card"
+              style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
+            >
+              <div class="stat-icon-wrap" style="background: #dbeafe">
+                <span class="material-symbols-outlined stat-icon" style="color: #2563eb"
+                  >assignment</span
+                >
+              </div>
+              <div class="stat-body">
+                <span class="stat-value">{{ labDirectorDashboard()?.ordersToday ?? 0 }}</span>
+                <span class="stat-label">{{ 'DASHBOARD.ORDERS_TODAY' | translate }}</span>
+              </div>
+            </div>
+            <div
+              class="stat-card"
+              style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
+            >
+              <div class="stat-icon-wrap" style="background: #d1fae5">
+                <span class="material-symbols-outlined stat-icon" style="color: #059669"
+                  >task_alt</span
+                >
+              </div>
+              <div class="stat-body">
+                <span class="stat-value">{{
+                  labDirectorDashboard()?.ordersCompletedToday ?? 0
+                }}</span>
+                <span class="stat-label">{{ 'DASHBOARD.COMPLETED_TODAY' | translate }}</span>
+              </div>
+            </div>
+            <div
+              class="stat-card"
+              style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
+            >
+              <div class="stat-icon-wrap" style="background: #fef3c7">
+                <span class="material-symbols-outlined stat-icon" style="color: #d97706"
+                  >hourglass_top</span
+                >
+              </div>
+              <div class="stat-body">
+                <span class="stat-value">{{ labDirectorDashboard()?.ordersInProgress ?? 0 }}</span>
+                <span class="stat-label">{{ 'DASHBOARD.IN_PROGRESS' | translate }}</span>
+              </div>
+            </div>
+            <div
+              class="stat-card"
+              style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
+            >
+              <div class="stat-icon-wrap" style="background: #fee2e2">
+                <span class="material-symbols-outlined stat-icon" style="color: #dc2626"
+                  >cancel</span
+                >
+              </div>
+              <div class="stat-body">
+                <span class="stat-value">{{
+                  labDirectorDashboard()?.ordersCancelledThisWeek ?? 0
+                }}</span>
+                <span class="stat-label">{{ 'DASHBOARD.CANCELLED_THIS_WEEK' | translate }}</span>
+              </div>
+            </div>
+            <div
+              class="stat-card"
+              style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
+            >
+              <div class="stat-icon-wrap" style="background: #ede9fe">
+                <span class="material-symbols-outlined stat-icon" style="color: #7c3aed"
+                  >timer</span
+                >
+              </div>
+              <div class="stat-body">
+                <span class="stat-value">
+                  @if (labDirectorDashboard()?.avgTurnaroundMinutesToday !== null) {
+                    {{ labDirectorDashboard()!.avgTurnaroundMinutesToday! | number: '1.0-0' }}
+                  } @else {
+                    N/A
+                  }
+                </span>
+                <span class="stat-label">{{ 'DASHBOARD.AVG_TURNAROUND' | translate }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  }
+
+  <!-- ══════════════════════════════════════════
+       ⑦ QUALITY MANAGER DASHBOARD
+       ══════════════════════════════════════════ -->
+  @if (!loading() && activeView() === 'quality-manager') {
+    <section class="stat-strip">
+      @for (card of qualityManagerStatCards(); track card.key) {
+        <a class="stat-card" [routerLink]="card.route ?? null">
+          <div class="stat-icon-wrap" [style.background]="card.bgColor">
+            <span class="material-symbols-outlined stat-icon" [style.color]="card.color">{{
+              card.icon
+            }}</span>
+          </div>
+          <div class="stat-body">
+            <span class="stat-value" [style.color]="card.color">{{ card.value }}</span>
+            <span class="stat-label">{{ card.label }}</span>
+          </div>
+        </a>
+      }
+    </section>
+
+    <section class="nurse-workflow-tiles">
+      @for (tile of qualityManagerNavTiles(); track tile.label) {
+        <a class="workflow-tile" [routerLink]="tile.route">
+          <span class="workflow-tile-icon" [style.background]="tile.bg" [style.color]="tile.color">
+            <span class="material-symbols-outlined">{{ tile.icon }}</span>
+          </span>
+          <span class="workflow-tile-label">
+            {{ tile.label }}
+            @if (tile.count && tile.count > 0) {
+              <span class="tile-badge">{{ tile.count }}</span>
+            }
+          </span>
+        </a>
+      }
+    </section>
+
+    <div class="clinical-workspace">
+      <div class="workspace-left">
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">fact_check</span>
+              <h2 class="card-title">{{ 'DASHBOARD.QA_REVIEW_QUEUE' | translate }}</h2>
+            </div>
+            <a routerLink="/lab" class="card-link">{{ 'DASHBOARD.OPEN_LAB_MODULE' | translate }}</a>
+          </div>
+          @if (qualityManagerDashboard()?.pendingQaReview === 0) {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon-lg">check_circle</span>
+              <h3>{{ 'DASHBOARD.ALL_QA_CURRENT' | translate }}</h3>
+              <p>{{ 'DASHBOARD.NO_PENDING_QA_DESC' | translate }}</p>
+            </div>
+          } @else {
+            <div class="empty-state">
+              <span class="material-symbols-outlined empty-icon-lg" style="color: #dc2626"
+                >fact_check</span
+              >
+              <h3>
+                {{ qualityManagerDashboard()?.pendingQaReview }}
+                {{ 'DASHBOARD.PENDING_QA_REVIEW' | translate }}
+              </h3>
+              <p>{{ 'DASHBOARD.PENDING_QA_REVIEW_DESC' | translate }}</p>
+              <a routerLink="/lab" class="card-link" style="margin-top: 12px">{{
+                'DASHBOARD.REVIEW_NOW' | translate
+              }}</a>
+            </div>
+          }
+        </section>
+
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">biotech</span>
+              <h2 class="card-title">{{ 'DASHBOARD.VALIDATION_STUDIES' | translate }}</h2>
+            </div>
+            <a routerLink="/lab" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+          </div>
+          <div class="stat-strip" style="padding: 16px; gap: 12px">
+            <div class="stat-card" style="flex: 1; min-width: 0">
+              <div class="stat-icon-wrap" style="background: #d1fae5">
+                <span class="material-symbols-outlined stat-icon" style="color: #059669"
+                  >thumb_up</span
+                >
+              </div>
+              <div class="stat-body">
+                <span class="stat-value" style="color: #059669">{{
+                  qualityManagerDashboard()?.passedValidationStudies ?? 0
+                }}</span>
+                <span class="stat-label">{{ 'DASHBOARD.PASSED' | translate }}</span>
+              </div>
+            </div>
+            <div class="stat-card" style="flex: 1; min-width: 0">
+              <div class="stat-icon-wrap" style="background: #fee2e2">
+                <span class="material-symbols-outlined stat-icon" style="color: #dc2626"
+                  >thumb_down</span
+                >
+              </div>
+              <div class="stat-body">
+                <span class="stat-value" style="color: #dc2626">{{
+                  qualityManagerDashboard()?.failedValidationStudies ?? 0
+                }}</span>
+                <span class="stat-label">{{ 'DASHBOARD.FAILED' | translate }}</span>
+              </div>
+            </div>
+            <div class="stat-card" style="flex: 1; min-width: 0">
+              <div class="stat-icon-wrap" style="background: #d1fae5">
+                <span class="material-symbols-outlined stat-icon" style="color: #059669"
+                  >verified</span
+                >
+              </div>
+              <div class="stat-body">
+                <span class="stat-value" style="color: #059669">
+                  @if (qualityManagerDashboard()?.qualityPassRate !== null) {
+                    {{ qualityManagerDashboard()!.qualityPassRate! | number: '1.1-1' }}%
+                  } @else {
+                    N/A
+                  }
+                </span>
+                <span class="stat-label">{{ 'DASHBOARD.QUALITY_PASS_RATE' | translate }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        @if (quickActions().length > 0) {
+          <section class="card">
+            <div class="card-head">
+              <div class="card-title-group">
+                <span class="material-symbols-outlined card-title-icon">bolt</span>
+                <h2 class="card-title">{{ 'DASHBOARD.QUICK_ACTIONS' | translate }}</h2>
+              </div>
+            </div>
+            <div class="qa-grid" style="padding: 16px">
+              @for (action of quickActions(); track action.label) {
+                <a
+                  class="qa-card"
+                  [routerLink]="action.route"
+                  [queryParams]="action.queryParams ?? null"
+                  [style.--qa-color]="action.color"
+                  [style.--qa-bg]="action.bgColor"
+                >
+                  <div class="qa-icon-wrap">
+                    <span class="material-symbols-outlined qa-icon">{{ action.icon }}</span>
+                  </div>
+                  <span class="qa-label">{{ action.label }}</span>
+                  <span class="qa-desc">{{ action.description }}</span>
+                </a>
+              }
+            </div>
+          </section>
+        }
+      </div>
+
+      <aside class="workspace-right">
+        <section class="card">
+          <div class="card-head">
+            <div class="card-title-group">
+              <span class="material-symbols-outlined card-title-icon">pending_actions</span>
+              <h2 class="card-title">{{ 'DASHBOARD.DIRECTOR_APPROVAL_STATUS' | translate }}</h2>
+            </div>
+            <a routerLink="/lab" class="card-link">{{ 'COMMON.VIEW_ALL' | translate }}</a>
+          </div>
+          <div class="stat-strip" style="padding: 16px; flex-direction: column; gap: 10px">
+            <div
+              class="stat-card"
+              style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
+            >
+              <div class="stat-icon-wrap" style="background: #fef3c7">
+                <span class="material-symbols-outlined stat-icon" style="color: #d97706"
+                  >pending_actions</span
+                >
+              </div>
+              <div class="stat-body">
+                <span class="stat-value">{{
+                  qualityManagerDashboard()?.pendingDirectorApproval ?? 0
+                }}</span>
+                <span class="stat-label">{{
+                  'DASHBOARD.PENDING_DIRECTOR_APPROVAL' | translate
+                }}</span>
+              </div>
+            </div>
+            <div
+              class="stat-card"
+              style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
+            >
+              <div class="stat-icon-wrap" style="background: #d1fae5">
+                <span class="material-symbols-outlined stat-icon" style="color: #059669"
+                  >science</span
+                >
+              </div>
+              <div class="stat-body">
+                <span class="stat-value">{{
+                  qualityManagerDashboard()?.activeDefinitions ?? 0
+                }}</span>
+                <span class="stat-label">{{
+                  'DASHBOARD.ACTIVE_TEST_DEFINITIONS' | translate
+                }}</span>
+              </div>
+            </div>
+            <div
+              class="stat-card"
+              style="width: 100%; flex-direction: row; align-items: center; gap: 12px"
+            >
+              <div class="stat-icon-wrap" style="background: #fee2e2">
+                <span class="material-symbols-outlined stat-icon" style="color: #dc2626"
+                  >cancel</span
+                >
+              </div>
+              <div class="stat-body">
+                <span class="stat-value">{{
+                  qualityManagerDashboard()?.ordersCancelledThisWeek ?? 0
+                }}</span>
+                <span class="stat-label">{{ 'DASHBOARD.CANCELLED_THIS_WEEK' | translate }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  }
+
+  <!-- ══════════════════════════════════════════
+       ⑧ LAB SCIENTIST DASHBOARD
        ══════════════════════════════════════════ -->
   @if (!loading() && activeView() === 'lab') {
     <section class="stat-strip">

@@ -362,6 +362,51 @@ export interface WardOccupancyRow {
   occupancyRate: number;
 }
 
+/* ── Lab Director Dashboard DTOs ── */
+
+export interface ApprovalAuditSnippet {
+  definitionId: string;
+  testName: string;
+  action: string;
+  performedBy: string;
+  performedAt: string;
+}
+
+export interface LabDirectorDashboard {
+  hospitalId: string;
+  asOfDate: string;
+  pendingDirectorApproval: number;
+  pendingQaReview: number;
+  draftDefinitions: number;
+  activeDefinitions: number;
+  validationStudiesPendingApproval: number;
+  validationStudiesLast30Days: number;
+  ordersToday: number;
+  ordersCompletedToday: number;
+  ordersInProgress: number;
+  ordersCancelledThisWeek: number;
+  avgTurnaroundMinutesToday: number | null;
+  recentApprovalAudit: ApprovalAuditSnippet[];
+}
+
+/* ── Quality Manager Dashboard DTOs ── */
+
+export interface QualityManagerDashboard {
+  hospitalId: string;
+  asOfDate: string;
+  pendingQaReview: number;
+  draftDefinitions: number;
+  pendingDirectorApproval: number;
+  activeDefinitions: number;
+  totalValidationStudies: number;
+  passedValidationStudies: number;
+  failedValidationStudies: number;
+  qualityPassRate: number | null;
+  validationStudiesLast30Days: number;
+  ordersCancelledThisWeek: number;
+  ordersToday: number;
+}
+
 /* ── Platform Analytics DTOs ── */
 
 export interface PlatformAnalytics {
@@ -527,5 +572,21 @@ export class DashboardService {
     return this.http
       .get<HospitalAdminSummary>('/api/dashboard/hospital-admin/summary', { params })
       .pipe(catchError(() => of({} as HospitalAdminSummary)));
+  }
+
+  /* ── Lab Director Summary ── */
+
+  getLabDirectorSummary(): Observable<LabDirectorDashboard> {
+    return this.http
+      .get<LabDirectorDashboard>('/api/dashboard/lab-director/summary')
+      .pipe(catchError(() => of({} as LabDirectorDashboard)));
+  }
+
+  /* ── Quality Manager Summary ── */
+
+  getQualityManagerSummary(): Observable<QualityManagerDashboard> {
+    return this.http
+      .get<QualityManagerDashboard>('/api/dashboard/quality-manager/summary')
+      .pipe(catchError(() => of({} as QualityManagerDashboard)));
   }
 }

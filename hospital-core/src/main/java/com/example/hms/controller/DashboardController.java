@@ -2,10 +2,14 @@ package com.example.hms.controller;
 
 import com.example.hms.payload.dto.dashboard.DashboardConfigResponseDTO;
 import com.example.hms.payload.dto.dashboard.HospitalAdminSummaryDTO;
+import com.example.hms.payload.dto.dashboard.LabDirectorDashboardDTO;
+import com.example.hms.payload.dto.dashboard.QualityManagerDashboardDTO;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.DashboardConfigurationService;
 import com.example.hms.service.HospitalAdminDashboardService;
+import com.example.hms.service.LabDirectorDashboardService;
+import com.example.hms.service.QualityManagerDashboardService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +32,8 @@ public class DashboardController {
 
     private final DashboardConfigurationService dashboardConfigurationService;
     private final HospitalAdminDashboardService hospitalAdminDashboardService;
+    private final LabDirectorDashboardService labDirectorDashboardService;
+    private final QualityManagerDashboardService qualityManagerDashboardService;
 
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
@@ -51,5 +57,27 @@ public class DashboardController {
         LocalDate asOfDate = (date != null) ? date : LocalDate.now();
         HospitalAdminSummaryDTO summary = hospitalAdminDashboardService.getSummary(hospitalId, asOfDate, auditLimit);
         return ResponseEntity.ok(summary);
+    }
+
+    @GetMapping("/lab-director/summary")
+    @PreAuthorize("hasRole('ROLE_LAB_DIRECTOR')")
+    @Operation(summary = "Get Lab Director operational dashboard summary")
+    public ResponseEntity<LabDirectorDashboardDTO> getLabDirectorSummary() {
+        UUID hospitalId = HospitalContextHolder.getContext()
+                .map(HospitalContext::getActiveHospitalId)
+                .orElseThrow(() -> new IllegalStateException("No hospital context available"));
+
+        return ResponseEntity.ok(labDirectorDashboardService.getSummary(hospitalId));
+    }
+
+    @GetMapping("/quality-manager/summary")
+    @PreAuthorize("hasRole('ROLE_QUALITY_MANAGER')")
+    @Operation(summary = "Get Quality Manager dashboard summary")
+    public ResponseEntity<QualityManagerDashboardDTO> getQualityManagerSummary() {
+        UUID hospitalId = HospitalContextHolder.getContext()
+                .map(HospitalContext::getActiveHospitalId)
+                .orElseThrow(() -> new IllegalStateException("No hospital context available"));
+
+        return ResponseEntity.ok(qualityManagerDashboardService.getSummary(hospitalId));
     }
 }
