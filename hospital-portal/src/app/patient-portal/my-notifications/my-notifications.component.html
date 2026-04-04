@@ -1,0 +1,83 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">notifications</span>
+      {{ 'PORTAL.NOTIFICATIONS.TITLE' | translate }}
+      @if (unreadCount() > 0) {
+        <span class="unread-badge">{{ unreadCount() }}</span>
+      }
+    </h1>
+    <button
+      class="btn-secondary"
+      (click)="markAllRead()"
+      [disabled]="markingAll() || unreadCount() === 0"
+    >
+      <span class="material-symbols-outlined">done_all</span>
+      {{ 'PORTAL.NOTIFICATIONS.MARK_ALL_READ' | translate }}
+    </button>
+  </div>
+
+  <!-- Tabs -->
+  <div class="rec-tabs">
+    <button
+      class="rec-tab"
+      [class.active]="activeTab() === 'all'"
+      (click)="switchTab('all')"
+    >
+      <span class="material-symbols-outlined">inbox</span>
+      {{ 'PORTAL.NOTIFICATIONS.ALL' | translate }}
+    </button>
+    <button
+      class="rec-tab"
+      [class.active]="activeTab() === 'unread'"
+      (click)="switchTab('unread')"
+    >
+      <span class="material-symbols-outlined">mark_email_unread</span>
+      {{ 'PORTAL.NOTIFICATIONS.UNREAD' | translate }}
+      @if (unreadCount() > 0) {
+        <span class="tab-count">{{ unreadCount() }}</span>
+      }
+    </button>
+  </div>
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <span>{{ 'PORTAL.NOTIFICATIONS.LOADING' | translate }}</span>
+    </div>
+  } @else if (!notifications().length) {
+    <div class="portal-empty">
+      <span class="material-symbols-outlined empty-icon">notifications_off</span>
+      <p>{{ 'PORTAL.NOTIFICATIONS.NO_NOTIFICATIONS' | translate }}</p>
+      <small>{{ 'PORTAL.NOTIFICATIONS.NO_NOTIFICATIONS_DESC' | translate }}</small>
+    </div>
+  } @else {
+    <div class="notifications-list">
+      @for (n of notifications(); track n.id) {
+        <div
+          class="notification-item portal-card"
+          [class.unread]="!n.read"
+          (click)="markRead(n)"
+          role="button"
+          tabindex="0"
+          (keyup.enter)="markRead(n)"
+        >
+          <div class="notif-content">
+            <div class="notif-header">
+              @if (!n.read) {
+                <span class="unread-dot" title="Unread"></span>
+              }
+              <span class="notif-type badge">{{ n.type }}</span>
+              <span class="notif-date text-muted">{{ n.createdAt | date: 'medium' }}</span>
+            </div>
+            <p class="notif-message">{{ n.message }}</p>
+          </div>
+          @if (!n.read) {
+            <span class="material-symbols-outlined mark-read-hint">circle</span>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

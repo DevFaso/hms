@@ -26,8 +26,16 @@ import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
+import com.example.hms.enums.PatientDocumentType;
+import com.example.hms.model.Notification;
+import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
+import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
+import com.example.hms.payload.dto.portal.PatientDocumentRequestDTO;
+import com.example.hms.payload.dto.portal.PatientDocumentResponseDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyResponseDTO;
+import com.example.hms.service.NotificationService;
+import com.example.hms.service.PatientDocumentService;
 import com.example.hms.service.PatientPortalService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,6 +46,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
@@ -49,10 +58,14 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -69,6 +82,8 @@ import java.util.UUID;
 public class PatientPortalController {
 
     private final PatientPortalService portalService;
+    private final PatientDocumentService documentService;
+    private final NotificationService notificationService;
 
     // ── Profile ──────────────────────────────────────────────────────────
 
@@ -489,5 +504,119 @@ public class PatientPortalController {
         Locale locale = LocaleContextHolder.getLocale();
         HealthSummaryDTO data = portalService.getProxyRecords(auth, patientId, locale);
         return ResponseEntity.ok(ApiResponseWrapper.success(data));
+    }
+
+    // ── Documents (Phase 3) ───────────────────────────────────────────────
+
+    @Operation(summary = "Upload a personal document",
+            description = "Accepts PDF, JPG, PNG, TIFF, DOC, DOCX — max 20 MB")
+    @PostMapping(value = "/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<PatientDocumentResponseDTO>> uploadDocument(
+            Authentication auth,
+            @RequestPart("file") MultipartFile file,
+            @RequestPart("documentType") String documentTypeStr,
+            @RequestParam(required = false) String collectionDate,
+            @RequestParam(required = false) String notes) throws IOException {
+        PatientDocumentType documentType = PatientDocumentType.valueOf(documentTypeStr.toUpperCase());
+        PatientDocumentRequestDTO request = PatientDocumentRequestDTO.builder()
+                .documentType(documentType)
+                .collectionDate(collectionDate != null ? java.time.LocalDate.parse(collectionDate) : null)
+                .notes(notes)
+                .build();
+        PatientDocumentResponseDTO result = documentService.uploadDocument(auth, file, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponseWrapper.success(result));
+    }
+
+    @Operation(summary = "List my uploaded documents")
+    @GetMapping("/documents")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Page<PatientDocumentResponseDTO>>> listDocuments(
+            Authentication auth,
+            @RequestParam(required = false) PatientDocumentType documentType,
+            @PageableDefault(size = 20, sort = "createdAt", direction = org.springframework.data.domain.Sort.Direction.DESC) Pageable pageable) {
+        Page<PatientDocumentResponseDTO> page = documentService.listDocuments(auth, documentType, pageable);
+        return ResponseEntity.ok(ApiResponseWrapper.success(page));
+    }
+
+    @Operation(summary = "Get a single uploaded document")
+    @GetMapping("/documents/{documentId}")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<PatientDocumentResponseDTO>> getDocument(
+            Authentication auth, @PathVariable UUID documentId) {
+        PatientDocumentResponseDTO doc = documentService.getDocument(auth, documentId);
+        return ResponseEntity.ok(ApiResponseWrapper.success(doc));
+    }
+
+    @Operation(summary = "Delete an uploaded document")
+    @DeleteMapping("/documents/{documentId}")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Void>> deleteDocument(
+            Authentication auth, @PathVariable UUID documentId) {
+        documentService.deleteDocument(auth, documentId);
+        return ResponseEntity.ok(ApiResponseWrapper.success(null));
+    }
+
+    // ── Notifications (Phase 3) ───────────────────────────────────────────
+
+    @Operation(summary = "List my notifications",
+            description = "Returns paginated notifications for the authenticated patient. Filter by read status.")
+    @GetMapping("/notifications")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Page<Notification>>> getMyNotifications(
+            Authentication auth,
+            @RequestParam(required = false) Boolean read,
+            @RequestParam(required = false) String search,
+            @PageableDefault(size = 20) Pageable pageable) {
+        String username = auth.getName();
+        Page<Notification> page = notificationService.getNotificationsForUser(username, read, search, pageable);
+        return ResponseEntity.ok(ApiResponseWrapper.success(page));
+    }
+
+    @Operation(summary = "Get unread notification count")
+    @GetMapping("/notifications/unread-count")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Map<String, Long>>> getUnreadCount(Authentication auth) {
+        String username = auth.getName();
+        long count = notificationService.getNotificationsForUser(username, false, null,
+                org.springframework.data.domain.PageRequest.of(0, 1)).getTotalElements();
+        return ResponseEntity.ok(ApiResponseWrapper.success(Map.of("unreadCount", count)));
+    }
+
+    @Operation(summary = "Mark a notification as read")
+    @PutMapping("/notifications/{notificationId}/read")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Void>> markNotificationRead(
+            Authentication auth, @PathVariable UUID notificationId) {
+        notificationService.markAsRead(notificationId);
+        return ResponseEntity.ok(ApiResponseWrapper.success(null));
+    }
+
+    @Operation(summary = "Mark all notifications as read")
+    @PutMapping("/notifications/read-all")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Map<String, Integer>>> markAllNotificationsRead(Authentication auth) {
+        int updated = notificationService.markAllReadForUser(auth.getName());
+        return ResponseEntity.ok(ApiResponseWrapper.success(Map.of("updated", updated)));
+    }
+
+    @Operation(summary = "Get my notification preferences")
+    @GetMapping("/notification-preferences")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<NotificationPreferenceDTO>>> getNotificationPreferences(
+            Authentication auth) {
+        // Resolve userId to fetch preferences
+        List<NotificationPreferenceDTO> prefs = portalService.getMyNotificationPreferences(auth);
+        return ResponseEntity.ok(ApiResponseWrapper.success(prefs));
+    }
+
+    @Operation(summary = "Update my notification preferences")
+    @PutMapping("/notification-preferences")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<NotificationPreferenceDTO>>> updateNotificationPreferences(
+            Authentication auth,
+            @Valid @RequestBody List<NotificationPreferenceUpdateDTO> updates) {
+        List<NotificationPreferenceDTO> prefs = portalService.updateMyNotificationPreferences(auth, updates);
+        return ResponseEntity.ok(ApiResponseWrapper.success(prefs));
     }
 }

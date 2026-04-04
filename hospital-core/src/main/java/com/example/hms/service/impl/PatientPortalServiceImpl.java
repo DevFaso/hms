@@ -124,6 +124,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final HospitalRepository hospitalRepository;
     private final com.example.hms.repository.UserRepository userRepository;
+    private final com.example.hms.service.NotificationService notificationService;
     private final EmailService emailService;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
@@ -948,5 +949,24 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         } catch (Exception e) {
             log.warn("Failed to send reschedule email for appointment {}: {}", appointment.getId(), e.getMessage());
         }
+    }
+
+    // ── Phase 3: Notification preferences ───────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.portal.NotificationPreferenceDTO> getMyNotificationPreferences(Authentication auth) {
+        UUID userId = authUtils.resolveUserId(auth)
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
+        return notificationService.getPreferences(userId);
+    }
+
+    @Override
+    @Transactional
+    public List<com.example.hms.payload.dto.portal.NotificationPreferenceDTO> updateMyNotificationPreferences(
+            Authentication auth, List<com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO> updates) {
+        UUID userId = authUtils.resolveUserId(auth)
+                .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
+        return notificationService.updatePreferences(userId, updates);
     }
 }

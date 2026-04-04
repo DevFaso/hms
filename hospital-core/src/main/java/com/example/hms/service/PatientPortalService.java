@@ -162,4 +162,15 @@ public interface PatientPortalService {
 
     /** View grantor's health records/summary as proxy. */
     HealthSummaryDTO getProxyRecords(Authentication auth, UUID patientId, java.util.Locale locale);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // PHASE 3 — Notifications
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** Get notification preferences for the authenticated patient. */
+    List<com.example.hms.payload.dto.portal.NotificationPreferenceDTO> getMyNotificationPreferences(Authentication auth);
+
+    /** Update notification preferences for the authenticated patient. */
+    List<com.example.hms.payload.dto.portal.NotificationPreferenceDTO> updateMyNotificationPreferences(
+            Authentication auth, List<com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO> updates);
 }

@@ -5,62 +5,49 @@
 
 ---
 
-## Current Branch: `feature/lab-director-approval-workflow`
+## Current Branch: `feature/patient-portal-phase3`
 
-### Epic: Lab Director Approval Workflow (CLIA/CAP/ISO 15189 Compliance)
+### Epic: Patient Portal Phase 3 — Notifications + Document Upload
 
-**Goal:** Enforce regulatory approval lifecycle on lab test definitions —
-`DRAFT → PENDING_QA_REVIEW → PENDING_DIRECTOR_APPROVAL → APPROVED → ACTIVE → RETIRED`
+**Goal:** Allow patients to upload and manage personal health documents, and view/manage their in-app notifications with per-preference controls.
 
 ---
 
 ### Completed ✅
 
-| Task | Layer | Notes |
-|---|---|---|
-| Add `ROLE_LAB_DIRECTOR` + `ROLE_QUALITY_MANAGER` to `SecurityConstants.java` | Security | 2 new clinical authority roles |
-| DB migration V29 — new roles + `approval_status` column | Migration | Grandfathers existing active definitions as `APPROVED` |
-| `LabTestDefinitionApprovalStatus` enum | Entity | 7 states including `REJECTED` and `RETIRED` |
-| Add approval fields to `LabTestDefinition` entity | Entity | `approvalStatus`, `approvedById`, `approvedAt`, `reviewedById`, `reviewedAt`, `rejectionReason` |
-| Update `LabTestDefinitionResponseDTO` with approval fields | DTO | All new fields exposed in API response |
-| Create `LabTestDefinitionApprovalRequestDTO` | DTO | `action` + optional `rejectionReason` |
-| Update `LabTestDefinitionMapper.toDto()` | Mapper | Maps all approval fields; deduplicated `toResponseDTO` |
-| Add `processApprovalAction()` to service interface + impl | Service | Full state machine with per-action role enforcement |
-| Add `POST /lab-test-definitions/{id}/approval` endpoint | Controller | Extended `VIEW_ROLES` to include new roles |
-| Extend `LabTestDefinition` TypeScript interface with approval fields | Frontend model | Typed union for `approvalStatus` |
-| Add `LabTestDefinitionApprovalRequest` interface + `submitApprovalAction()` | Frontend service | Calls the new approval endpoint |
-| Add approval modal signals + methods to `LabComponent` | Frontend UI | `openApprovalModal()`, `submitApprovalAction()`, `getApprovalStatusClass()` |
-| Add `approvalStatus` filter to `GET /lab-test-definitions/search` endpoint | Backend | Repository + Service + Controller all updated; param is optional enum |
-| `LabApprovalQueueComponent` — dedicated approval queue page | Frontend UI | `/lab-approval-queue` route; role-aware action buttons per status; modal for confirm/reject |
-| Add `searchTestDefinitions()` with `approvalStatus` param to `LabService` | Frontend service | Calls paginated search endpoint |
-| Add `ROLE_LAB_DIRECTOR` + `ROLE_QUALITY_MANAGER` to `lab` route | Frontend routing | Also registered new `lab-approval-queue` route |
-| Backend compile check | CI | `BUILD SUCCESSFUL` — warnings only (pre-existing) |
-| Frontend format
-| Frontend playwright check | CI | Zero ESLint errors
-| Frontend lint check | CI | Zero ESLint errors |
-| Backend unit tests — `LabTestDefinitionServiceImpl.processApprovalAction()` | Tests | 18 tests; all state transitions, role checks, edge cases |
-| Controller unit tests — `LabTestDefinitionController` approval + search | Tests | 13 tests; direct invocation; all pass |
-| `LabTestValidationStudy` entity + migration V30 | Entity/Migration | `lab.lab_test_validation_studies` table; 7 study types (CLIA/CLSI) |
-| `ValidationStudyType` enum | Entity | PRECISION, ACCURACY, REFERENCE_RANGE, METHOD_COMPARISON, INTERFERENCE, CARRYOVER, LINEARITY |
-| Validation study CRUD — Repository + Service + Controller | Backend | Nested routes `/lab-test-definitions/{id}/validation-studies`; individual `/lab-test-validation-studies/{id}` |
-| `LabTestValidationStudyRequestDTO` + `LabTestValidationStudyResponseDTO` + Mapper | Backend | Full mapper with `toEntity`, `toDto`, `updateEntityFromDto` |
-| Frontend — `LabTestValidationStudy` + `LabTestValidationStudyRequest` interfaces | Frontend model | Added to `lab.service.ts`; typed `ValidationStudyType` union |
-| Frontend — `getValidationStudies()`, `createValidationStudy()`, `updateValidationStudy()`, `deleteValidationStudy()` | Frontend service | All methods in `LabService` |
-| Validation study service unit tests (13) + controller unit tests (10) | Tests | All 23 pass |
-| Validation study frontend section on test definition detail | Frontend UI | Detail slide-over panel in approval queue; study list; add-study modal (type, date, pass/fail, summary) |
-| QC aggregate summary view per test definition (Levey-Jennings data) | Full-stack | SVG Levey-Jennings chart; `testDefinitionId` filter on `GET /lab-qc-events`; per-level (LOW/HIGH) charts with ±1SD/2SD/3SD zones, Westgard color coding; integrated in definition detail panel |
+| # | Task | Layer | Notes |
+|---|---|---|---|
+| 1 | DB migration V32 — `clinical.patient_uploaded_documents` | Migration | Soft-delete via `deleted_at`; 3 partial indexes |
+| 2 | `PatientDocumentType` enum (9 values) | Entity | LAB_RESULT, IMAGING_REPORT, DISCHARGE_SUMMARY, REFERRAL_LETTER, PRESCRIPTION, INSURANCE_DOCUMENT, INVOICE, IMMUNIZATION_RECORD, OTHER |
+| 3 | `PatientUploadedDocument` entity | Entity | Extends `BaseEntity`; FK to `patients` + `users`; `deletedAt` soft-delete |
+| 4 | `PatientUploadedDocumentRepository` | Repository | `findByPatient_IdAndDeletedAtIsNull` (paged), type-filtered variant, single-doc lookup |
+| 5 | `PatientDocumentRequestDTO` + `PatientDocumentResponseDTO` | DTO | Request: `documentType`, `collectionDate`, `notes`. Response: full metadata incl. `fileUrl`, `checksumSha256` |
+| 6 | `PatientDocumentMapper` | Mapper | `toDto()` with null-safe uploader display name |
+| 7 | `FileUploadService` — `uploadPatientDocument()` | Service | 20 MB limit; same allowed extensions as referral attachments; SHA-256 checksum |
+| 8 | `PatientDocumentService` interface + `PatientDocumentServiceImpl` | Service | `uploadDocument`, `listDocuments`, `getDocument`, `deleteDocument` (soft delete) |
+| 9 | `PatientPortalController` — document endpoints | Controller | `POST /me/patient/documents` (multipart), `GET`, `GET /{id}`, `DELETE /{id}` — all `ROLE_PATIENT` |
+| 10 | `PatientPortalController` — notification endpoints | Controller | `GET /notifications` (paged+filter), `GET /unread-count`, `PUT /{id}/read`, `PUT /read-all`, `GET /notification-preferences`, `PUT /notification-preferences` |
+| 11 | `PatientPortalService` + impl — notification preference methods | Service | Delegates to existing `NotificationService`; `getMyNotificationPreferences()`, `updateMyNotificationPreferences()` |
+| 12 | `PatientDocumentServiceImplTest` — 8 unit tests | Tests | All pass; covers upload, list (all + type-filtered), get, soft-delete, error paths |
+| 13 | `patient-portal.service.ts` — 5 new interfaces + 10 new methods | Frontend service | `PatientDocumentType`, `PatientDocumentResponse`, `PortalNotification`, `NotificationPreference`, `NotificationPreferenceUpdate`; all CRUD + notification methods |
+| 14 | `MyDocumentsComponent` (4 files) | Frontend UI | Upload form, type filter, document grid with download/delete; `my-documents` route |
+| 15 | `MyNotificationsComponent` (4 files) | Frontend UI | All/Unread tabs, mark-read on click, mark-all-read; `my-notifications` route |
+| 16 | `app.routes.ts` — `my-documents` + `my-notifications` routes | Frontend routing | Lazy-loaded, `ROLE_PATIENT` guard |
+| 17 | i18n keys — `PORTAL.DOCUMENTS.*` + `PORTAL.NOTIFICATIONS.*` | i18n | Added to `en.json`, `fr.json`, `es.json` (41 document keys + 10 notification keys) |
+| 18 | Frontend tests — 122/122 pass | Tests | `my-documents.component.spec.ts` (10 tests), `my-notifications.component.spec.ts` (9 tests); full suite passes |
+| 19 | Frontend lint — zero errors | CI | `ng lint` — all files pass linting |
 
 ---
 
 ### In Progress 🔄
 
-*Lab Director Approval Workflow epic complete.*
+*All tasks complete — ready to commit and push.*
 
 ---
 
 ### Remaining — This Epic ⏳
 
-*All tasks complete.*
+*None.*
 
 ---
 
@@ -68,7 +55,6 @@
 
 | Epic | Description | Priority |
 |---|---|---|
-| **Patient Portal Phase 3** | Notifications, family access delegation, document upload | Medium |
 | **Consent & Record Sharing enhancement** | Cross-org RBAC, audit trail UI | Medium |
 | **Dashboard enrichment** | Physician cockpit, nurse station metrics | Low |
 
@@ -78,5 +64,6 @@
 
 | Branch | Feature | Merged |
 |---|---|---|
+| `feature/lab-director-approval-workflow` | Lab Director Approval Workflow — CLIA/CAP/ISO 15189 compliance; approval state machine (7 states); validation studies; QC Levey-Jennings charts; Lab Director + Quality Manager dashboards | 2026-04-03 |
 | `develop` | iOS App Store assets, privacy policy update | 2026-04-03 |
 
