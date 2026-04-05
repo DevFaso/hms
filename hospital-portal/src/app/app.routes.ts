@@ -176,6 +176,11 @@ export const routes: Routes = [
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_QUALITY_MANAGER',
           ],
         },
         children: [
@@ -270,6 +275,11 @@ export const routes: Routes = [
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_QUALITY_MANAGER',
           ],
         },
         loadComponent: () => import('./scheduling/scheduling').then((m) => m.SchedulingComponent),
@@ -280,7 +290,17 @@ export const routes: Routes = [
         path: 'departments',
         canActivate: [RoleGuard],
         data: {
-          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_RECEPTIONIST'],
+          roles: [
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+            'ROLE_RECEPTIONIST',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_QUALITY_MANAGER',
+          ],
         },
         children: [
           {
@@ -671,7 +691,15 @@ export const routes: Routes = [
       {
         path: 'audit-logs',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN'] },
+        data: {
+          roles: [
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_QUALITY_MANAGER',
+          ],
+        },
         loadComponent: () => import('./audit-logs/audit-logs').then((m) => m.AuditLogsComponent),
       },
 
@@ -679,7 +707,16 @@ export const routes: Routes = [
       {
         path: 'consent-management',
         canActivate: [RoleGuard],
-        data: { roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'] },
+        data: {
+          roles: [
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+            'ROLE_DOCTOR',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_QUALITY_MANAGER',
+          ],
+        },
         loadComponent: () =>
           import('./consent-management/consent-management.component').then(
             (m) => m.ConsentManagementComponent,
