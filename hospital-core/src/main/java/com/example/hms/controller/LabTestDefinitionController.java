@@ -5,6 +5,7 @@ import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabTestDefinitionApprovalRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
+import com.example.hms.payload.dto.LabTestReferenceRangeDTO;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.LabTestDefinitionService;
@@ -135,6 +136,27 @@ public class LabTestDefinitionController {
         @PathVariable UUID id,
         @Valid @RequestBody LabTestDefinitionApprovalRequestDTO dto) {
         return ResponseEntity.ok(ApiResponseWrapper.success(service.processApprovalAction(id, dto)));
+    }
+
+    @PutMapping("/{id}/reference-ranges")
+    @PreAuthorize(MANAGE_ROLES)
+    @Operation(summary = "Update reference ranges for a Lab Test Definition")
+    public ResponseEntity<ApiResponseWrapper<LabTestDefinitionResponseDTO>> updateReferenceRanges(
+        @PathVariable UUID id,
+        @Valid @RequestBody java.util.List<LabTestReferenceRangeDTO> ranges) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(service.updateReferenceRanges(id, ranges)));
+    }
+
+    @GetMapping("/export/pdf")
+    @PreAuthorize(VIEW_ROLES)
+    @Operation(summary = "Export Lab Test Definitions as PDF")
+    public void exportPdf(HttpServletResponse response) throws IOException {
+        byte[] pdfBytes = service.exportPdf();
+        response.setContentType("application/pdf");
+        response.setHeader("Content-Disposition", "attachment; filename=\"lab-test-definitions.pdf\"");
+        response.setContentLength(pdfBytes.length);
+        response.getOutputStream().write(pdfBytes);
+        response.getOutputStream().flush();
     }
 
     @GetMapping("/export")

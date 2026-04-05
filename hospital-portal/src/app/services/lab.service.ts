@@ -56,6 +56,18 @@ export interface LabTestDefinition {
   reviewedById: string | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
+  unit: string | null;
+  referenceRanges?: LabTestReferenceRange[];
+}
+
+export interface LabTestReferenceRange {
+  minValue: number | null;
+  maxValue: number | null;
+  unit: string | null;
+  ageMin: number | null;
+  ageMax: number | null;
+  gender: 'ALL' | 'MALE' | 'FEMALE';
+  notes: string | null;
 }
 
 export interface LabTestDefinitionApprovalRequest {
@@ -326,5 +338,18 @@ export class LabService {
 
   exportTestDefinitionsCsv(): Observable<Blob> {
     return this.http.get('/lab-test-definitions/export', { responseType: 'blob' });
+  }
+
+  exportTestDefinitionsPdf(): Observable<Blob> {
+    return this.http.get('/lab-test-definitions/export/pdf', { responseType: 'blob' });
+  }
+
+  updateReferenceRanges(
+    id: string,
+    ranges: LabTestReferenceRange[],
+  ): Observable<LabTestDefinition> {
+    return this.http
+      .put<ApiWrapper<LabTestDefinition>>(`/lab-test-definitions/${id}/reference-ranges`, ranges)
+      .pipe(map((res) => res.data));
   }
 }

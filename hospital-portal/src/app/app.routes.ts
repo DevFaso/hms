@@ -400,6 +400,21 @@ export const routes: Routes = [
           import('./lab/lab-staff-list/lab-staff-list').then((m) => m.LabStaffListComponent),
       },
       {
+        path: 'lab-test-config',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-test-config/lab-test-config').then((m) => m.LabTestConfigComponent),
+      },
+      {
         path: 'lab-instruments',
         canActivate: [RoleGuard],
         data: {
