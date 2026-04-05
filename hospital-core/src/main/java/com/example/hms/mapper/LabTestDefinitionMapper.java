@@ -32,7 +32,7 @@ public class LabTestDefinitionMapper {
             .turnaroundTimeMinutes(dto.getTurnaroundTime())
             .active(dto.getActive() == null || dto.getActive())
             .assignment(assignment)
-            .referenceRanges(mapToEntityRanges(dto.getReferenceRanges()))
+            .referenceRanges(mapRangeDtosToEntities(dto.getReferenceRanges()))
             .build();
 
         entity.setHospital(null);
@@ -83,7 +83,7 @@ public class LabTestDefinitionMapper {
             entity.setActive(dto.getActive());
         }
         if (dto.getReferenceRanges() != null) {
-            entity.setReferenceRanges(mapToEntityRanges(dto.getReferenceRanges()));
+            entity.setReferenceRanges(mapRangeDtosToEntities(dto.getReferenceRanges()));
         }
     }
 
@@ -91,7 +91,7 @@ public class LabTestDefinitionMapper {
         return toDto(labTestDefinition);
     }
 
-    private List<LabTestReferenceRange> mapToEntityRanges(List<LabTestReferenceRangeDTO> ranges) {
+    public List<LabTestReferenceRange> mapRangeDtosToEntities(List<LabTestReferenceRangeDTO> ranges) {
         if (ranges == null || ranges.isEmpty()) {
             return new java.util.ArrayList<>();
         }

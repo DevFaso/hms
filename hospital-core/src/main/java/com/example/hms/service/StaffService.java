@@ -40,4 +40,8 @@ public interface StaffService {
     Page<StaffResponseDTO> getStaffByHospitalIdAndActiveTrue(UUID hospitalId, Pageable pageable);
 
     Optional<StaffResponseDTO> getFirstStaffByUserIdOrderByCreatedAtAsc(UUID userId, Locale locale);
+
+    // ── MVP 3: Lab staff management ─────────────────────────────
+    Page<StaffResponseDTO> getLabStaffByHospitalId(UUID hospitalId, Pageable pageable);
+    StaffResponseDTO updateStaffLabRole(UUID staffId, String newRoleCode, Locale locale);
 }

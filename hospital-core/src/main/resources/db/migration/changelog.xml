@@ -434,4 +434,19 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V35: Lab Instrument & Inventory Management (MVP 4)
+         - Creates lab.lab_instruments table for tracking instruments,
+           calibration schedules, and maintenance windows
+         - Creates lab.lab_inventory_items table for reagents,
+           consumables, and reorder-threshold alerts
+         - Adds unique constraints, FK references, and performance indexes
+         ================================================================= -->
+    <changeSet id="V35-lab-instrument-inventory" author="hms-team" runOnChange="false">
+        <sqlFile path="V35__lab_instrument_inventory.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

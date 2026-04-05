@@ -5,13 +5,16 @@ import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.LabTestValidationStudy;
 import com.example.hms.payload.dto.LabTestValidationStudyRequestDTO;
 import com.example.hms.payload.dto.LabTestValidationStudyResponseDTO;
+import com.example.hms.payload.dto.LabValidationSummaryDTO;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.LabTestValidationStudyRepository;
+import com.example.hms.utility.RoleValidator;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -26,6 +29,7 @@ public class LabTestValidationStudyServiceImpl implements LabTestValidationStudy
     private final LabTestValidationStudyRepository repository;
     private final LabTestDefinitionRepository definitionRepository;
     private final LabTestValidationStudyMapper mapper;
+    private final RoleValidator roleValidator;
 
     @Override
     @Transactional
@@ -71,5 +75,28 @@ public class LabTestValidationStudyServiceImpl implements LabTestValidationStudy
             throw new EntityNotFoundException(STUDY_NOT_FOUND);
         }
         repository.deleteById(id);
+    }
+
+    @Override
+    public List<LabValidationSummaryDTO> getValidationSummary() {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        List<Object[]> rows = hospitalId == null
+                ? repository.findValidationSummaryAll()
+                : repository.findValidationSummaryByHospitalId(hospitalId);
+        return rows.stream().map(r -> {
+            long total = ((Number) r[3]).longValue();
+            long passed = ((Number) r[4]).longValue();
+            double passRate = total > 0 ? (double) passed / total * 100.0 : 0.0;
+            return LabValidationSummaryDTO.builder()
+                    .testDefinitionId((UUID) r[0])
+                    .testName((String) r[1])
+                    .testCode((String) r[2])
+                    .totalStudies(total)
+                    .passedStudies(passed)
+                    .failedStudies(((Number) r[5]).longValue())
+                    .passRate(passRate)
+                    .lastStudyDate(r[6] != null ? (LocalDate) r[6] : null)
+                    .build();
+        }).toList();
     }
 }

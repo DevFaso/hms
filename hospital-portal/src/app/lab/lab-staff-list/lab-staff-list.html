@@ -1,0 +1,133 @@
+<div class="lab-staff-container">
+  <header class="page-header">
+    <div class="header-left">
+      <span class="material-symbols-outlined header-icon">badge</span>
+      <div>
+        <h1 class="page-title">{{ 'LAB_STAFF.TITLE' | translate }}</h1>
+        <p class="page-subtitle">{{ 'LAB_STAFF.SUBTITLE' | translate }}</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="count-badge">{{
+        'LAB_STAFF.STAFF_COUNT' | translate: { count: totalElements() }
+      }}</span>
+      <button class="btn-refresh" (click)="loadLabStaff()" [disabled]="loading()">
+        <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="loading-state">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+      <p>{{ 'LAB_STAFF.LOADING' | translate }}</p>
+    </div>
+  }
+
+  <!-- Error -->
+  @if (error(); as err) {
+    <div class="error-state">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ err }}</p>
+      <button class="btn-primary" (click)="loadLabStaff()">
+        {{ 'LAB_STAFF.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
+  <!-- Empty -->
+  @if (!loading() && !error() && staff().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined">group_off</span>
+      <p>{{ 'LAB_STAFF.NO_STAFF' | translate }}</p>
+    </div>
+  }
+
+  <!-- Staff table -->
+  @if (!loading() && !error() && staff().length > 0) {
+    <div class="table-wrap">
+      <table class="staff-table">
+        <thead>
+          <tr>
+            <th>{{ 'LAB_STAFF.NAME' | translate }}</th>
+            <th>{{ 'LAB_STAFF.EMAIL' | translate }}</th>
+            <th>{{ 'LAB_STAFF.DEPARTMENT' | translate }}</th>
+            <th>{{ 'LAB_STAFF.LICENSE' | translate }}</th>
+            <th>{{ 'LAB_STAFF.ROLE' | translate }}</th>
+            @if (canEditRoles()) {
+              <th class="actions-col">{{ 'LAB_STAFF.ACTIONS' | translate }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (member of staff(); track member.id) {
+            <tr>
+              <td class="name-cell">
+                <span class="material-symbols-outlined avatar-icon">person</span>
+                {{ member.name }}
+              </td>
+              <td>{{ member.email }}</td>
+              <td>{{ member.departmentName ?? '—' }}</td>
+              <td>{{ member.licenseNumber ?? '—' }}</td>
+              <td>
+                @if (editingId() === member.id) {
+                  <select
+                    class="role-select"
+                    title="Select lab role"
+                    [attr.title]="'LAB_STAFF.SELECT_ROLE' | translate"
+                    [ngModel]="editRoleCode()"
+                    (ngModelChange)="editRoleCode.set($event)"
+                    [disabled]="saving()"
+                  >
+                    @for (role of assignableRoles; track role.code) {
+                      <option [value]="role.code">{{ role.labelKey | translate }}</option>
+                    }
+                  </select>
+                } @else {
+                  <span class="role-badge" [ngClass]="roleBadgeClass(member.roleCode)">
+                    {{ member.roleName ?? member.roleCode }}
+                  </span>
+                }
+              </td>
+              @if (canEditRoles()) {
+                <td class="actions-col">
+                  @if (editingId() === member.id) {
+                    <button
+                      class="btn-icon btn-save"
+                      (click)="saveRole(member)"
+                      [disabled]="saving()"
+                      [title]="'LAB_STAFF.SAVE' | translate"
+                    >
+                      <span class="material-symbols-outlined">check</span>
+                    </button>
+                    <button
+                      class="btn-icon btn-cancel"
+                      (click)="cancelEdit()"
+                      [disabled]="saving()"
+                      [title]="'LAB_STAFF.CANCEL' | translate"
+                    >
+                      <span class="material-symbols-outlined">close</span>
+                    </button>
+                  } @else if (isEditable(member)) {
+                    <button
+                      class="btn-icon btn-edit"
+                      (click)="startEdit(member)"
+                      [title]="'LAB_STAFF.CHANGE_ROLE' | translate"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  } @else {
+                    <span class="director-lock" [title]="'LAB_STAFF.DIRECTOR_LOCKED' | translate">
+                      <span class="material-symbols-outlined">lock</span>
+                    </span>
+                  }
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

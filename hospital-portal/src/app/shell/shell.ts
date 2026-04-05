@@ -342,12 +342,20 @@ export class ShellComponent implements OnInit, OnDestroy {
           route: '/consent-management',
         });
       }
-      items.push({
-        icon: 'approval',
-        label: 'Lab Approval Queue',
-        translationKey: 'NAV.LAB_APPROVAL_QUEUE',
-        route: '/lab-approval-queue',
-      });
+      items.push(
+        {
+          icon: 'approval',
+          label: 'Lab Approval Queue',
+          translationKey: 'NAV.LAB_APPROVAL_QUEUE',
+          route: '/lab-approval-queue',
+        },
+        {
+          icon: 'monitoring',
+          label: 'QC Dashboard',
+          translationKey: 'NAV.QC_DASHBOARD',
+          route: '/lab-qc-dashboard',
+        },
+      );
     }
     if (
       this.auth.hasAnyRole([

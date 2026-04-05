@@ -236,7 +236,14 @@ export const routes: Routes = [
         path: 'staff',
         canActivate: [RoleGuard],
         data: {
-          roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_RECEPTIONIST'],
+          roles: [
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+            'ROLE_RECEPTIONIST',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+          ],
         },
         children: [
           {
@@ -342,6 +349,100 @@ export const routes: Routes = [
           import('./lab/lab-approval-queue/lab-approval-queue').then(
             (m) => m.LabApprovalQueueComponent,
           ),
+      },
+      {
+        path: 'lab-qc-dashboard',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_QUALITY_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-qc-dashboard/lab-qc-dashboard').then((m) => m.LabQcDashboardComponent),
+      },
+      {
+        path: 'lab-ops-dashboard',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+            'ROLE_QUALITY_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-ops-dashboard/lab-ops-dashboard').then(
+            (m) => m.LabOpsDashboardComponent,
+          ),
+      },
+      {
+        path: 'lab-staff',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-staff-list/lab-staff-list').then((m) => m.LabStaffListComponent),
+      },
+      {
+        path: 'lab-test-config',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-test-config/lab-test-config').then((m) => m.LabTestConfigComponent),
+      },
+      {
+        path: 'lab-instruments',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-instruments/lab-instruments').then((m) => m.LabInstrumentsComponent),
+      },
+      {
+        path: 'lab-inventory',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-inventory/lab-inventory').then((m) => m.LabInventoryComponent),
       },
 
       // Profile (all authenticated users)

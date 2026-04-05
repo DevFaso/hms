@@ -167,6 +167,14 @@ subprojects {
     tasks.named('test') {
         useJUnitPlatform()
         systemProperty 'spring.profiles.active', 'test'
+
+        // Prevent OOM on CI runners with limited default heap
+        maxHeapSize = '1024m'
+        jvmArgs '-XX:+UseG1GC'
+
+        // Restart test JVM every 250 classes to prevent metaspace/heap accumulation
+        forkEvery = 250
+
         testLogging {
             events 'failed', 'skipped', 'passed'
             exceptionFormat 'full'

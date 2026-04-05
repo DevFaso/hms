@@ -1304,7 +1304,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         icon: 'analytics',
         label: 'Validation Studies',
-        route: '/lab',
+        route: '/lab-qc-dashboard',
         color: '#2563eb',
         bg: '#dbeafe',
       },
@@ -1316,7 +1316,48 @@ export class DashboardComponent implements OnInit, OnDestroy {
         color: '#4f46e5',
         bg: '#eef2ff',
       },
-      { icon: 'bar_chart', label: 'Reports', route: '/lab', color: '#ea580c', bg: '#fff7ed' },
+      {
+        icon: 'bar_chart',
+        label: 'QC Dashboard',
+        route: '/lab-qc-dashboard',
+        color: '#ea580c',
+        bg: '#fff7ed',
+      },
+      {
+        icon: 'monitoring',
+        label: 'Lab Ops Dashboard',
+        route: '/lab-ops-dashboard',
+        color: '#0284c7',
+        bg: '#e0f2fe',
+      },
+      {
+        icon: 'badge',
+        label: 'Lab Staff',
+        route: '/lab-staff',
+        color: '#7c3aed',
+        bg: '#ede9fe',
+      },
+      {
+        icon: 'tune',
+        label: 'Test Config',
+        route: '/lab-test-config',
+        color: '#0369a1',
+        bg: '#e0f2fe',
+      },
+      {
+        icon: 'precision_manufacturing',
+        label: 'Instruments',
+        route: '/lab-instruments',
+        color: '#0284c7',
+        bg: '#e0f2fe',
+      },
+      {
+        icon: 'inventory_2',
+        label: 'Inventory',
+        route: '/lab-inventory',
+        color: '#0891b2',
+        bg: '#cffafe',
+      },
     ];
   });
 
@@ -1389,7 +1430,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         icon: 'biotech',
         label: 'Validation Studies',
-        route: '/lab',
+        route: '/lab-qc-dashboard',
         color: '#7c3aed',
         bg: '#ede9fe',
       },
@@ -1404,7 +1445,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       {
         icon: 'analytics',
         label: 'Quality Reports',
-        route: '/lab',
+        route: '/lab-qc-dashboard',
         color: '#2563eb',
         bg: '#dbeafe',
       },
@@ -1430,6 +1471,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
         color: '#ea580c',
         bg: '#fff7ed',
         count: d?.pendingDirectorApproval,
+      },
+      {
+        icon: 'monitoring',
+        label: 'Lab Ops Dashboard',
+        route: '/lab-ops-dashboard',
+        color: '#0284c7',
+        bg: '#e0f2fe',
       },
     ];
   });

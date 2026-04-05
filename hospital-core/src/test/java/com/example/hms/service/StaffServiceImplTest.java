@@ -41,6 +41,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -933,5 +934,179 @@ class StaffServiceImplTest {
 
         assertThatThrownBy(() -> staffService.createStaff(dto, locale))
                 .isInstanceOf(BusinessRuleException.class);
+    }
+
+    // ── MVP 3: Lab Staff Management Tests ──────────────────────
+
+    @Test
+    void getLabStaffByHospitalId_returnsPagedLabStaff() {
+        Pageable pageable = PageRequest.of(0, 20);
+        Page<Staff> staffPage = new PageImpl<>(List.of(staff), pageable, 1);
+
+        when(staffRepository.findLabStaffByHospitalId(eq(hospitalId), anyCollection(), eq(pageable)))
+            .thenReturn(staffPage);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        Page<StaffResponseDTO> result = staffService.getLabStaffByHospitalId(hospitalId, pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).getId()).isEqualTo(staffId.toString());
+        verify(staffRepository).findLabStaffByHospitalId(eq(hospitalId), anyCollection(), eq(pageable));
+    }
+
+    @Test
+    void getLabStaffByHospitalId_emptyPage() {
+        Pageable pageable = PageRequest.of(0, 20);
+        Page<Staff> emptyPage = new PageImpl<>(List.of(), pageable, 0);
+
+        when(staffRepository.findLabStaffByHospitalId(eq(hospitalId), anyCollection(), eq(pageable)))
+            .thenReturn(emptyPage);
+
+        Page<StaffResponseDTO> result = staffService.getLabStaffByHospitalId(hospitalId, pageable);
+
+        assertThat(result.getContent()).isEmpty();
+        assertThat(result.getTotalElements()).isZero();
+    }
+
+    @Test
+    void updateStaffLabRole_happyPath_changesRole() {
+        // Current role is LAB_TECHNICIAN, changing to LAB_SCIENTIST
+        Role currentRole = new Role();
+        currentRole.setId(UUID.randomUUID());
+        currentRole.setCode("ROLE_LAB_TECHNICIAN");
+        currentRole.setName("Lab Technician");
+
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(currentRole).build();
+        assignment.setId(UUID.randomUUID());
+        staff.setAssignment(assignment);
+
+        Role newRole = new Role();
+        newRole.setId(UUID.randomUUID());
+        newRole.setCode("ROLE_LAB_SCIENTIST");
+        newRole.setName("Lab Scientist");
+
+        StaffResponseDTO updatedDto = new StaffResponseDTO();
+        updatedDto.setId(staffId.toString());
+        updatedDto.setRoleCode("ROLE_LAB_SCIENTIST");
+
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(roleRepository.findByCode("ROLE_LAB_SCIENTIST")).thenReturn(Optional.of(newRole));
+        when(assignmentRepository.save(any(UserRoleHospitalAssignment.class))).thenReturn(assignment);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(updatedDto);
+
+        StaffResponseDTO result = staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale);
+
+        assertThat(result.getRoleCode()).isEqualTo("ROLE_LAB_SCIENTIST");
+        verify(assignmentRepository).save(assignment);
+    }
+
+    @Test
+    void updateStaffLabRole_sameRole_noOp() {
+        Role currentRole = new Role();
+        currentRole.setId(UUID.randomUUID());
+        currentRole.setCode("ROLE_LAB_TECHNICIAN");
+
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(currentRole).build();
+        assignment.setId(UUID.randomUUID());
+        staff.setAssignment(assignment);
+
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        StaffResponseDTO result = staffService.updateStaffLabRole(staffId, "ROLE_LAB_TECHNICIAN", locale);
+
+        assertThat(result).isNotNull();
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    void updateStaffLabRole_invalidRoleCode_throws() {
+        when(messageSource.getMessage(eq("staff.lab.role.invalid"), any(), any(Locale.class)))
+                .thenReturn("roleCode must be one of: ROLE_LAB_TECHNICIAN, ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER");
+
+        assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_DOCTOR", locale))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("roleCode must be one of");
+    }
+
+    @Test
+    void updateStaffLabRole_directorRole_throws() {
+        when(messageSource.getMessage(eq("staff.lab.role.invalid"), any(), any(Locale.class)))
+                .thenReturn("roleCode must be one of: ROLE_LAB_TECHNICIAN, ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER");
+
+        assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_DIRECTOR", locale))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("roleCode must be one of");
+    }
+
+    @Test
+    void updateStaffLabRole_staffNotFound_throws() {
+        when(staffRepository.findById(staffId)).thenReturn(Optional.empty());
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Not found");
+
+        assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void updateStaffLabRole_nonLabStaff_throws() {
+        Role doctorRole = new Role();
+        doctorRole.setId(UUID.randomUUID());
+        doctorRole.setCode("ROLE_DOCTOR");
+
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(doctorRole).build();
+        assignment.setId(UUID.randomUUID());
+        staff.setAssignment(assignment);
+
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(messageSource.getMessage(eq("staff.lab.role.nonLabStaff"), any(), any(Locale.class)))
+                .thenReturn("Cannot change role of non-lab staff member. Current role: ROLE_DOCTOR");
+
+        assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("non-lab staff");
+    }
+
+    @Test
+    void updateStaffLabRole_labDirectorStaff_throws() {
+        Role directorRole = new Role();
+        directorRole.setId(UUID.randomUUID());
+        directorRole.setCode("ROLE_LAB_DIRECTOR");
+
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(directorRole).build();
+        assignment.setId(UUID.randomUUID());
+        staff.setAssignment(assignment);
+
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(messageSource.getMessage(eq("staff.lab.role.directorProtected"), any(), any(Locale.class)))
+                .thenReturn("Cannot change Lab Director role through this endpoint. Contact a Hospital Admin.");
+
+        assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
+                .isInstanceOf(BusinessRuleException.class)
+                .hasMessageContaining("Lab Director");
+    }
+
+    @Test
+    void updateStaffLabRole_roleNotFoundInDb_throws() {
+        Role currentRole = new Role();
+        currentRole.setId(UUID.randomUUID());
+        currentRole.setCode("ROLE_LAB_TECHNICIAN");
+
+        UserRoleHospitalAssignment assignment = UserRoleHospitalAssignment.builder()
+            .user(user).hospital(hospital).role(currentRole).build();
+        assignment.setId(UUID.randomUUID());
+        staff.setAssignment(assignment);
+
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(roleRepository.findByCode("ROLE_LAB_SCIENTIST")).thenReturn(Optional.empty());
+        when(messageSource.getMessage(eq("staff.lab.role.notFound"), any(), any(Locale.class)))
+                .thenReturn("Role not found: ROLE_LAB_SCIENTIST");
+
+        assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 }
