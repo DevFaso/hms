@@ -372,18 +372,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             assertUserCanManageHospital(currentUser, definition.getAssignment());
         }
 
-        List<LabTestReferenceRange> entityRanges = ranges == null ? new ArrayList<>() : ranges.stream()
-            .filter(java.util.Objects::nonNull)
-            .map(r -> LabTestReferenceRange.builder()
-                .minValue(r.getMinValue())
-                .maxValue(r.getMaxValue())
-                .unit(r.getUnit())
-                .ageMin(r.getAgeMin())
-                .ageMax(r.getAgeMax())
-                .gender(r.getGender())
-                .notes(r.getNotes())
-                .build())
-            .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        List<LabTestReferenceRange> entityRanges = mapper.mapRangeDtosToEntities(ranges);
 
         definition.setReferenceRanges(entityRanges);
         return mapper.toDto(repository.save(definition));
@@ -397,7 +386,9 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
         List<LabTestDefinition> definitions = hospitalId != null
             ? repository.findByHospital_IdAndActiveTrue(hospitalId)
-            : repository.findAll();
+            : repository.findAll().stream()
+                .filter(def -> def.isActive())
+                .toList();
 
         // Include global definitions when hospital-scoped
         if (hospitalId != null) {

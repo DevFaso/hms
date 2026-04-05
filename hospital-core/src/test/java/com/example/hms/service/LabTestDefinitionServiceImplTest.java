@@ -923,6 +923,12 @@ class LabTestDefinitionServiceImplTest {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
             when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
             when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(mapper.mapRangeDtosToEntities(List.of(rangeDTO))).thenReturn(
+                new java.util.ArrayList<>(List.of(
+                    com.example.hms.model.LabTestReferenceRange.builder()
+                        .minValue(3.5).maxValue(5.5).unit("g/dL").gender("ALL").build()
+                ))
+            );
             when(repository.save(definition)).thenReturn(definition);
             when(mapper.toDto(definition)).thenReturn(responseDTO);
 
@@ -946,6 +952,7 @@ class LabTestDefinitionServiceImplTest {
             sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
             when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
             when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(mapper.mapRangeDtosToEntities(null)).thenReturn(new java.util.ArrayList<>());
             when(repository.save(definition)).thenReturn(definition);
             when(mapper.toDto(definition)).thenReturn(responseDTO);
 

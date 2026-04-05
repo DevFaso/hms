@@ -56,6 +56,7 @@ export interface LabTestDefinition {
   reviewedById: string | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
+  unit: string | null;
   referenceRanges?: LabTestReferenceRange[];
 }
 

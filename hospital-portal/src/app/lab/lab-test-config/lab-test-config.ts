@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -29,9 +29,6 @@ export class LabTestConfigComponent implements OnInit {
   editingDef = signal<LabTestDefinition | null>(null);
   editRanges = signal<LabTestReferenceRange[]>([]);
   saving = signal(false);
-
-  /** Filtered & paginated results */
-  filteredDefinitions = computed(() => this.definitions());
 
   ngOnInit(): void {
     this.loadDefinitions();
@@ -152,8 +149,12 @@ export class LabTestConfigComponent implements OnInit {
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => {
+      a.remove();
+      URL.revokeObjectURL(url);
+    }, 0);
   }
 
   statusClass(status: string): string {
