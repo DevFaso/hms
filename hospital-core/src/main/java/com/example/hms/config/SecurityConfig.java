@@ -367,10 +367,12 @@ public class SecurityConfig {
 
                 // -------------------- Departments / Roles --------------------
                 .requestMatchers(HttpMethod.GET, "/departments/**")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST,
+                        ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_QUALITY_MANAGER)
 
                 .requestMatchers(HttpMethod.POST, "/departments/filter")
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_RECEPTIONIST,
+                        ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_QUALITY_MANAGER)
 
                 .requestMatchers(HttpMethod.POST, "/departments/**")
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)

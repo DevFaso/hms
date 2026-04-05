@@ -62,7 +62,7 @@ public class PatientConsentController {
 
     @PostMapping("/grant")
     @Operation(summary = "Grant or Update Patient Consent", description = "Grants or updates patient consent for sharing records between hospitals.")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER')")
     public ResponseEntity<PatientConsentResponseDTO> grantConsent(
             @Valid @RequestBody PatientConsentRequestDTO requestDTO
     ) {
@@ -121,7 +121,7 @@ public class PatientConsentController {
 
     @PostMapping("/revoke")
     @Operation(summary = "Revoke Patient Consent", description = "Revokes patient consent for sharing records between specific hospitals.")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER')")
     public ResponseEntity<Void> revokeConsent(
             @RequestParam @NotNull UUID patientId,
             @RequestParam @NotNull UUID fromHospitalId,
@@ -150,7 +150,7 @@ public class PatientConsentController {
     @GetMapping
     @Operation(summary = "List All Patient Consents", description = "Returns a paginated list of all patient consents.")
     @ApiResponse(responseCode = "200", description = "Paginated list of consents.")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER')")
     public ResponseEntity<Page<PatientConsentResponseDTO>> getAllConsents(
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(patientConsentService.getAllConsents(pageable));
@@ -159,7 +159,7 @@ public class PatientConsentController {
     @GetMapping("/patient/{patientId}")
     @Operation(summary = "List Consents by Patient", description = "Returns all consents for the given patient.")
     @ApiResponse(responseCode = "200", description = "List of consents for patient.")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER')")
     public ResponseEntity<Page<PatientConsentResponseDTO>> getConsentsByPatient(
             @PathVariable UUID patientId,
             @PageableDefault(size = 20) Pageable pageable) {
@@ -169,7 +169,7 @@ public class PatientConsentController {
     @GetMapping("/from-hospital/{fromHospitalId}")
     @Operation(summary = "List Consents by Source Hospital", description = "Returns all consents where the given hospital is the source.")
     @ApiResponse(responseCode = "200", description = "List of consents for source hospital.")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER')")
     public ResponseEntity<Page<PatientConsentResponseDTO>> getConsentsByFromHospital(
             @PathVariable UUID fromHospitalId,
             @PageableDefault(size = 20) Pageable pageable) {
@@ -179,7 +179,7 @@ public class PatientConsentController {
     @GetMapping("/to-hospital/{toHospitalId}")
     @Operation(summary = "List Consents by Target Hospital", description = "Returns all consents where the given hospital is the target.")
     @ApiResponse(responseCode = "200", description = "List of consents for target hospital.")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER')")
     public ResponseEntity<Page<PatientConsentResponseDTO>> getConsentsByToHospital(
             @PathVariable UUID toHospitalId,
             @PageableDefault(size = 20) Pageable pageable) {
@@ -189,7 +189,7 @@ public class PatientConsentController {
     @GetMapping("/active")
     @Operation(summary = "Check if Consent is Active", description = "Returns true if there is an active consent between the given patient, source hospital, and target hospital.")
     @ApiResponse(responseCode = "200", description = "Consent status returned.")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_DIRECTOR','ROLE_QUALITY_MANAGER')")
     public ResponseEntity<Boolean> isConsentActive(
             @RequestParam UUID patientId,
             @RequestParam UUID fromHospitalId,
