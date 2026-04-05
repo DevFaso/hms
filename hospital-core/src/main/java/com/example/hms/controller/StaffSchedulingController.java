@@ -82,7 +82,7 @@ public class StaffSchedulingController {
 
     @Operation(summary = "List shifts", description = "Filter by hospital, department, staff, and date range")
     @GetMapping("/shifts")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST','ROLE_ADMINISTRATIVE_STAFF')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST','ROLE_ADMINISTRATIVE_STAFF','ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_QUALITY_MANAGER')")
     public ResponseEntity<List<StaffShiftResponseDTO>> listShifts(
         @RequestParam(required = false) UUID hospitalId,
         @RequestParam(required = false) UUID departmentId,
@@ -149,7 +149,7 @@ public class StaffSchedulingController {
 
     @Operation(summary = "List leave requests", description = "Filter by hospital, department, staff, and date range")
     @GetMapping("/leaves")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST','ROLE_ADMINISTRATIVE_STAFF')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST','ROLE_ADMINISTRATIVE_STAFF','ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_QUALITY_MANAGER')")
     public ResponseEntity<List<StaffLeaveResponseDTO>> listLeaves(
         @RequestParam(required = false) UUID hospitalId,
         @RequestParam(required = false) UUID departmentId,
