@@ -101,9 +101,7 @@ export class LabStaffListComponent implements OnInit {
     this.staffService.updateLabStaffRole(member.id, newCode).subscribe({
       next: (updated) => {
         // Update the local list in-place
-        this.staff.update((list) =>
-          list.map((s) => (s.id === updated.id ? updated : s)),
-        );
+        this.staff.update((list) => list.map((s) => (s.id === updated.id ? updated : s)));
         this.toast.success(`Role updated to ${updated.roleName ?? newCode}`);
         this.saving.set(false);
         this.cancelEdit();
