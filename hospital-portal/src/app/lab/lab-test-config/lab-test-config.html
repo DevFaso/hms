@@ -150,7 +150,9 @@
         (keydown.escape)="closeRangeEditor()"
       >
         <div class="modal-header">
-          <h2 id="rangeEditorTitle">{{ 'LAB_TEST_CONFIG.EDIT_RANGES_FOR' | translate: { name: def.testName } }}</h2>
+          <h2 id="rangeEditorTitle">
+            {{ 'LAB_TEST_CONFIG.EDIT_RANGES_FOR' | translate: { name: def.testName } }}
+          </h2>
           <button class="btn-close" (click)="closeRangeEditor()">
             <span class="material-symbols-outlined">close</span>
           </button>
