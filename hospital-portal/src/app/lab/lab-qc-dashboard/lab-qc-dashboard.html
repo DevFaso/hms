@@ -1,5 +1,5 @@
 <section class="page-header">
-  <span class="material-symbols-rounded">monitoring</span>
+  <span class="material-symbols-outlined">monitoring</span>
   <div>
     <h1>Quality Control Dashboard</h1>
     <p>QC event trends and validation study results across all test definitions</p>
@@ -8,14 +8,14 @@
 
 @if (loading()) {
   <div class="loading-spinner">
-    <span class="material-symbols-rounded">progress_activity</span> Loading…
+    <span class="material-symbols-outlined">progress_activity</span> Loading…
   </div>
 } @else {
   <!-- ── Summary cards ──────────────────────────────────────── -->
   <div class="summary-cards">
     <div class="summary-card">
       <div class="icon-box bg-purple">
-        <span class="material-symbols-rounded">science</span>
+        <span class="material-symbols-outlined">science</span>
       </div>
       <div>
         <div class="value">{{ totalQcEvents() }}</div>
@@ -25,7 +25,7 @@
 
     <div class="summary-card">
       <div class="icon-box bg-red">
-        <span class="material-symbols-rounded">warning</span>
+        <span class="material-symbols-outlined">warning</span>
       </div>
       <div>
         <div class="value">{{ totalQcFailures() }}</div>
@@ -35,7 +35,7 @@
 
     <div class="summary-card">
       <div class="icon-box bg-teal">
-        <span class="material-symbols-rounded">biotech</span>
+        <span class="material-symbols-outlined">biotech</span>
       </div>
       <div>
         <div class="value">{{ totalValidationStudies() }}</div>
@@ -49,7 +49,7 @@
         [class.bg-green]="overallPassRate() >= 90"
         [class.bg-amber]="overallPassRate() < 90"
       >
-        <span class="material-symbols-rounded">verified</span>
+        <span class="material-symbols-outlined">verified</span>
       </div>
       <div>
         <div class="value">{{ overallPassRate() | number: '1.1-1' }}%</div>
@@ -63,7 +63,7 @@
   <p class="section-hint">Click a row to view Levey-Jennings control charts</p>
   @if (qcSummary().length === 0) {
     <div class="empty-state">
-      <span class="material-symbols-rounded">monitoring</span>
+      <span class="material-symbols-outlined">monitoring</span>
       <p>No QC events recorded yet.</p>
     </div>
   } @else {
@@ -88,7 +88,7 @@
             tabindex="0"
           >
             <td class="chevron-cell">
-              <span class="material-symbols-rounded chevron">
+              <span class="material-symbols-outlined chevron">
                 {{
                   expandedDefinitionId() === row.testDefinitionId ? 'expand_less' : 'expand_more'
                 }}
@@ -119,12 +119,12 @@
               <td colspan="6">
                 @if (loadingChart()) {
                   <div class="loading-state compact">
-                    <span class="material-symbols-rounded spin">progress_activity</span>
+                    <span class="material-symbols-outlined spin">progress_activity</span>
                     Loading QC data…
                   </div>
                 } @else if (qcChartGroups().length === 0) {
                   <div class="empty-state compact">
-                    <span class="material-symbols-rounded">show_chart</span>
+                    <span class="material-symbols-outlined">show_chart</span>
                     <p>No QC events recorded for this test.</p>
                   </div>
                 } @else {
@@ -339,7 +339,7 @@
   <h2 class="section-title">Validation Studies by Test Definition</h2>
   @if (validationSummary().length === 0) {
     <div class="empty-state">
-      <span class="material-symbols-rounded">biotech</span>
+      <span class="material-symbols-outlined">biotech</span>
       <p>No validation studies recorded yet.</p>
     </div>
   } @else {
