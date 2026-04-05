@@ -1,0 +1,262 @@
+<div class="lab-test-config-container">
+  <header class="page-header">
+    <div class="header-left">
+      <span class="material-symbols-outlined header-icon">tune</span>
+      <div>
+        <h1 class="page-title">{{ 'LAB_TEST_CONFIG.TITLE' | translate }}</h1>
+        <p class="page-subtitle">{{ 'LAB_TEST_CONFIG.SUBTITLE' | translate }}</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="btn-export" (click)="exportCsv()">
+        <span class="material-symbols-outlined">download</span>
+        {{ 'LAB_TEST_CONFIG.EXPORT_CSV' | translate }}
+      </button>
+      <button class="btn-export btn-pdf" (click)="exportPdf()">
+        <span class="material-symbols-outlined">picture_as_pdf</span>
+        {{ 'LAB_TEST_CONFIG.EXPORT_PDF' | translate }}
+      </button>
+      <button
+        type="button"
+        class="btn-refresh"
+        (click)="loadDefinitions()"
+        [disabled]="loading()"
+        [attr.aria-label]="'LAB_TEST_CONFIG.RETRY' | translate"
+      >
+        <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Search bar -->
+  <div class="search-bar">
+    <span class="material-symbols-outlined search-icon">search</span>
+    <input
+      type="text"
+      [ngModel]="searchKeyword()"
+      (ngModelChange)="searchKeyword.set($event)"
+      (keyup.enter)="onSearch()"
+      [placeholder]="'LAB_TEST_CONFIG.SEARCH_PLACEHOLDER' | translate"
+      class="search-input"
+    />
+    <button class="btn-search" (click)="onSearch()">
+      {{ 'LAB_TEST_CONFIG.SEARCH' | translate }}
+    </button>
+  </div>
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="loading-state">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+      <p>{{ 'LAB_TEST_CONFIG.LOADING' | translate }}</p>
+    </div>
+  }
+
+  <!-- Error -->
+  @if (error(); as err) {
+    <div class="error-state">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ err }}</p>
+      <button class="btn-primary" (click)="loadDefinitions()">
+        {{ 'LAB_TEST_CONFIG.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
+  <!-- Empty -->
+  @if (!loading() && !error() && definitions().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined">science_off</span>
+      <p>{{ 'LAB_TEST_CONFIG.NO_DEFINITIONS' | translate }}</p>
+    </div>
+  }
+
+  <!-- Table -->
+  @if (!loading() && !error() && definitions().length > 0) {
+    <div class="table-wrap">
+      <table class="config-table">
+        <thead>
+          <tr>
+            <th>{{ 'LAB_TEST_CONFIG.TEST_CODE' | translate }}</th>
+            <th>{{ 'LAB_TEST_CONFIG.TEST_NAME' | translate }}</th>
+            <th>{{ 'LAB_TEST_CONFIG.CATEGORY' | translate }}</th>
+            <th>{{ 'LAB_TEST_CONFIG.UNIT' | translate }}</th>
+            <th>{{ 'LAB_TEST_CONFIG.SAMPLE_TYPE' | translate }}</th>
+            <th>{{ 'LAB_TEST_CONFIG.STATUS' | translate }}</th>
+            <th>{{ 'LAB_TEST_CONFIG.RANGES' | translate }}</th>
+            <th class="actions-col">{{ 'LAB_TEST_CONFIG.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (def of definitions(); track def.id) {
+            <tr>
+              <td class="code-cell">{{ def.testCode }}</td>
+              <td>{{ def.testName }}</td>
+              <td>{{ def.category }}</td>
+              <td>{{ def.unit }}</td>
+              <td>{{ def.sampleType }}</td>
+              <td>
+                <span class="status-badge" [ngClass]="statusClass(def.approvalStatus)">
+                  {{ 'LAB_TEST_CONFIG.STATUS_' + def.approvalStatus | translate }}
+                </span>
+              </td>
+              <td class="range-count">
+                {{ def.referenceRanges?.length ?? 0 }}
+              </td>
+              <td>
+                <button
+                  class="btn-icon"
+                  (click)="openRangeEditor(def)"
+                  [title]="'LAB_TEST_CONFIG.EDIT_RANGES' | translate"
+                >
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    <div class="pagination">
+      <button class="btn-page" [disabled]="page() === 0" (click)="prevPage()">
+        <span class="material-symbols-outlined">chevron_left</span>
+      </button>
+      <span class="page-info">
+        {{ 'LAB_TEST_CONFIG.PAGE_INFO' | translate: { current: page() + 1, total: totalPages() } }}
+      </span>
+      <button class="btn-page" [disabled]="page() + 1 >= totalPages()" (click)="nextPage()">
+        <span class="material-symbols-outlined">chevron_right</span>
+      </button>
+    </div>
+  }
+
+  <!-- Reference Range Editor Modal -->
+  @if (editingDef(); as def) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-labelledby]="'rangeEditorTitle'"
+      (click)="closeRangeEditor()"
+      (keydown.escape)="closeRangeEditor()"
+    >
+      <div
+        class="modal-content"
+        role="document"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="closeRangeEditor()"
+      >
+        <div class="modal-header">
+          <h2 id="rangeEditorTitle">
+            {{ 'LAB_TEST_CONFIG.EDIT_RANGES_FOR' | translate: { name: def.testName } }}
+          </h2>
+          <button class="btn-close" (click)="closeRangeEditor()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body">
+          @if (editRanges().length === 0) {
+            <p class="no-ranges">{{ 'LAB_TEST_CONFIG.NO_RANGES' | translate }}</p>
+          }
+
+          @for (range of editRanges(); track $index; let i = $index) {
+            <div class="range-row">
+              <div class="range-field">
+                <label [for]="'min-' + i">{{ 'LAB_TEST_CONFIG.MIN_VALUE' | translate }}</label>
+                <input
+                  type="number"
+                  [id]="'min-' + i"
+                  [ngModel]="range.minValue"
+                  (ngModelChange)="range.minValue = $event"
+                />
+              </div>
+              <div class="range-field">
+                <label [for]="'max-' + i">{{ 'LAB_TEST_CONFIG.MAX_VALUE' | translate }}</label>
+                <input
+                  type="number"
+                  [id]="'max-' + i"
+                  [ngModel]="range.maxValue"
+                  (ngModelChange)="range.maxValue = $event"
+                />
+              </div>
+              <div class="range-field">
+                <label [for]="'unit-' + i">{{ 'LAB_TEST_CONFIG.RANGE_UNIT' | translate }}</label>
+                <input
+                  type="text"
+                  [id]="'unit-' + i"
+                  [ngModel]="range.unit"
+                  (ngModelChange)="range.unit = $event"
+                />
+              </div>
+              <div class="range-field">
+                <label [for]="'gender-' + i">{{ 'LAB_TEST_CONFIG.GENDER' | translate }}</label>
+                <select
+                  [id]="'gender-' + i"
+                  [title]="'Gender'"
+                  [ngModel]="range.gender"
+                  (ngModelChange)="range.gender = $event"
+                >
+                  <option value="ALL">{{ 'LAB_TEST_CONFIG.GENDER_ALL' | translate }}</option>
+                  <option value="MALE">{{ 'LAB_TEST_CONFIG.GENDER_MALE' | translate }}</option>
+                  <option value="FEMALE">{{ 'LAB_TEST_CONFIG.GENDER_FEMALE' | translate }}</option>
+                </select>
+              </div>
+              <div class="range-field">
+                <label [for]="'ageMin-' + i">{{ 'LAB_TEST_CONFIG.AGE_MIN' | translate }}</label>
+                <input
+                  type="number"
+                  [id]="'ageMin-' + i"
+                  [ngModel]="range.ageMin"
+                  (ngModelChange)="range.ageMin = $event"
+                />
+              </div>
+              <div class="range-field">
+                <label [for]="'ageMax-' + i">{{ 'LAB_TEST_CONFIG.AGE_MAX' | translate }}</label>
+                <input
+                  type="number"
+                  [id]="'ageMax-' + i"
+                  [ngModel]="range.ageMax"
+                  (ngModelChange)="range.ageMax = $event"
+                />
+              </div>
+              <div class="range-field notes-field">
+                <label [for]="'notes-' + i">{{ 'LAB_TEST_CONFIG.NOTES' | translate }}</label>
+                <input
+                  type="text"
+                  [id]="'notes-' + i"
+                  [ngModel]="range.notes"
+                  (ngModelChange)="range.notes = $event"
+                />
+              </div>
+              <button class="btn-remove-range" (click)="removeRange(i)">
+                <span class="material-symbols-outlined">delete</span>
+              </button>
+            </div>
+          }
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-secondary" (click)="addRange()">
+            <span class="material-symbols-outlined">add</span>
+            {{ 'LAB_TEST_CONFIG.ADD_RANGE' | translate }}
+          </button>
+          <div class="footer-right">
+            <button class="btn-cancel" (click)="closeRangeEditor()">
+              {{ 'LAB_TEST_CONFIG.CANCEL' | translate }}
+            </button>
+            <button class="btn-primary" (click)="saveRanges()" [disabled]="saving()">
+              @if (saving()) {
+                <span class="material-symbols-outlined spin">progress_activity</span>
+              }
+              {{ 'LAB_TEST_CONFIG.SAVE' | translate }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  }
+</div>

@@ -83,4 +83,52 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     Double avgTurnaroundMinutes(@Param("hospitalId") UUID hospitalId,
                                 @Param("from") LocalDateTime from,
                                 @Param("to") LocalDateTime to);
+
+    // ── Lab Ops Dashboard queries ────────────────────────────────────────────
+
+    /** Count active orders by priority in a hospital (priority stored as string). */
+    @Query("""
+        SELECT COUNT(o) FROM LabOrder o
+        WHERE o.hospital.id = :hospitalId
+          AND o.priority = :priority
+          AND o.status IN :activeStatuses
+    """)
+    long countByHospitalIdAndPriorityAndStatusIn(
+            @Param("hospitalId") UUID hospitalId,
+            @Param("priority") String priority,
+            @Param("activeStatuses") java.util.List<LabOrderStatus> activeStatuses);
+
+    /** Count active orders older than the given cutoff (potential bottlenecks). */
+    @Query("""
+        SELECT COUNT(o) FROM LabOrder o
+        WHERE o.hospital.id = :hospitalId
+          AND o.status IN :activeStatuses
+          AND o.orderDatetime < :cutoff
+    """)
+    long countByHospitalIdAndStatusInAndOrderDatetimeBefore(
+            @Param("hospitalId") UUID hospitalId,
+            @Param("activeStatuses") java.util.List<LabOrderStatus> activeStatuses,
+            @Param("cutoff") LocalDateTime cutoff);
+
+    /** Status breakdown — returns [status, count] rows for a hospital (active statuses). */
+    @Query("""
+        SELECT o.status, COUNT(o) FROM LabOrder o
+        WHERE o.hospital.id = :hospitalId
+          AND o.status IN :statuses
+        GROUP BY o.status
+    """)
+    List<Object[]> countGroupedByStatus(
+            @Param("hospitalId") UUID hospitalId,
+            @Param("statuses") java.util.List<LabOrderStatus> statuses);
+
+    /** Priority breakdown — returns [priority, count] rows for active orders in a hospital. */
+    @Query("""
+        SELECT o.priority, COUNT(o) FROM LabOrder o
+        WHERE o.hospital.id = :hospitalId
+          AND o.status IN :activeStatuses
+        GROUP BY o.priority
+    """)
+    List<Object[]> countGroupedByPriority(
+            @Param("hospitalId") UUID hospitalId,
+            @Param("activeStatuses") java.util.List<LabOrderStatus> activeStatuses);
 }

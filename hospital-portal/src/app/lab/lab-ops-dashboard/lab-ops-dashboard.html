@@ -1,0 +1,94 @@
+<div class="lab-ops-dashboard">
+  <header class="page-header">
+    <h1>
+      <span class="material-symbols-outlined header-icon">monitoring</span>
+      Lab Operations Dashboard
+    </h1>
+    <p class="subtitle" *ngIf="summary()">Hospital snapshot as of {{ summary()!.asOfDate }}</p>
+  </header>
+
+  <!-- Loading -->
+  <div class="loading-overlay" *ngIf="loading()">
+    <div class="spinner"></div>
+    <p>Loading lab operations data&hellip;</p>
+  </div>
+
+  <ng-container *ngIf="!loading()">
+    <!-- ── KPI Stat Cards ── -->
+    <section class="stat-cards">
+      <div
+        class="stat-card"
+        *ngFor="let card of statCards()"
+        [style.--card-color]="card.color"
+        [style.--card-bg]="card.bgColor"
+      >
+        <div class="stat-icon">
+          <span class="material-symbols-outlined">{{ card.icon }}</span>
+        </div>
+        <div class="stat-body">
+          <span class="stat-value">{{ card.value }}</span>
+          <span class="stat-label">{{ card.label }}</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Status Breakdown + Priority ── -->
+    <section class="breakdown-grid">
+      <!-- Status Pipeline -->
+      <div class="breakdown-card">
+        <h2>
+          <span class="material-symbols-outlined">stacked_bar_chart</span>
+          Order Status Pipeline
+        </h2>
+        <div class="bar-rows">
+          <div class="bar-row" *ngFor="let row of statusRows()">
+            <span class="bar-label">{{ row.label }}</span>
+            <div class="bar-track">
+              <div
+                class="bar-fill"
+                [style.width.%]="row.pct"
+                [style.background-color]="row.color"
+              ></div>
+            </div>
+            <span class="bar-count">{{ row.count }}</span>
+            <span class="bar-pct">({{ row.pct }}%)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Priority Split -->
+      <div class="breakdown-card">
+        <h2>
+          <span class="material-symbols-outlined">priority_high</span>
+          Priority Distribution
+        </h2>
+        <div class="bar-rows">
+          <div class="bar-row" *ngFor="let row of priorityRows()">
+            <span class="bar-label">{{ row.label }}</span>
+            <div class="bar-track">
+              <div
+                class="bar-fill"
+                [style.width.%]="row.pct"
+                [style.background-color]="row.color"
+              ></div>
+            </div>
+            <span class="bar-count">{{ row.count }}</span>
+            <span class="bar-pct">({{ row.pct }}%)</span>
+          </div>
+        </div>
+
+        <!-- Throughput mini-stats -->
+        <h2 class="mt-section">
+          <span class="material-symbols-outlined">speed</span>
+          Throughput
+        </h2>
+        <div class="throughput-grid">
+          <div class="throughput-item" *ngFor="let t of throughputCards()">
+            <span class="throughput-value">{{ t.value }}</span>
+            <span class="throughput-label">{{ t.label }}</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </ng-container>
+</div>

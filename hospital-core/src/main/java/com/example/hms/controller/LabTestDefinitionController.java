@@ -5,9 +5,13 @@ import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabTestDefinitionApprovalRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
+import com.example.hms.payload.dto.LabTestReferenceRangeDTO;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.service.LabTestDefinitionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -25,6 +29,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.List;
 import java.util.UUID;
 
@@ -130,6 +136,70 @@ public class LabTestDefinitionController {
         @PathVariable UUID id,
         @Valid @RequestBody LabTestDefinitionApprovalRequestDTO dto) {
         return ResponseEntity.ok(ApiResponseWrapper.success(service.processApprovalAction(id, dto)));
+    }
+
+    @PutMapping("/{id}/reference-ranges")
+    @PreAuthorize(MANAGE_ROLES)
+    @Operation(summary = "Update reference ranges for a Lab Test Definition")
+    public ResponseEntity<ApiResponseWrapper<LabTestDefinitionResponseDTO>> updateReferenceRanges(
+        @PathVariable UUID id,
+        @Valid @RequestBody java.util.List<LabTestReferenceRangeDTO> ranges) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(service.updateReferenceRanges(id, ranges)));
+    }
+
+    @GetMapping("/export/pdf")
+    @PreAuthorize(VIEW_ROLES)
+    @Operation(summary = "Export Lab Test Definitions as PDF")
+    public void exportPdf(HttpServletResponse response) throws IOException {
+        byte[] pdfBytes = service.exportPdf();
+        response.setContentType("application/pdf");
+        response.setHeader("Content-Disposition", "attachment; filename=\"lab-test-definitions.pdf\"");
+        response.setContentLength(pdfBytes.length);
+        response.getOutputStream().write(pdfBytes);
+        response.getOutputStream().flush();
+    }
+
+    @GetMapping("/export")
+    @PreAuthorize(VIEW_ROLES)
+    @Operation(summary = "Export Lab Test Definitions as CSV (hospital-scoped: global + hospital-specific)")
+    public void exportCsv(HttpServletResponse response) throws IOException {
+        UUID hospitalId = HospitalContextHolder.getContext()
+                .map(HospitalContext::getActiveHospitalId)
+                .orElse(null);
+
+        List<LabTestDefinitionResponseDTO> definitions = hospitalId != null
+                ? service.getActiveByHospital(hospitalId)
+                : service.getAll();
+
+        response.setContentType("text/csv; charset=UTF-8");
+        response.setCharacterEncoding("UTF-8");
+        response.setHeader("Content-Disposition", "attachment; filename=\"lab-test-definitions.csv\"");
+        PrintWriter writer = response.getWriter();
+        writer.println("Test Code,Test Name,Category,Unit,Sample Type,Active,Approval Status,Turnaround Time (min)");
+        for (LabTestDefinitionResponseDTO dto : definitions) {
+            writer.printf("%s,%s,%s,%s,%s,%s,%s,%s%n",
+                    escapeCsv(dto.getTestCode()),
+                    escapeCsv(dto.getName()),
+                    escapeCsv(dto.getCategory()),
+                    escapeCsv(dto.getUnit()),
+                    escapeCsv(dto.getSampleType()),
+                    dto.isActive(),
+                    escapeCsv(dto.getApprovalStatus()),
+                    dto.getTurnaroundTime() != null ? dto.getTurnaroundTime() : "");
+        }
+        writer.flush();
+    }
+
+    private static String escapeCsv(String val) {
+        if (val == null) return "";
+        // Neutralize CSV formula injection (values starting with =, +, -, @, tab, CR)
+        if (!val.isEmpty() && "=+-@\t\r".indexOf(val.charAt(0)) >= 0) {
+            val = "'" + val;
+        }
+        if (val.contains(",") || val.contains("\"") || val.contains("\n")) {
+            return "\"" + val.replace("\"", "\"\"") + "\"";
+        }
+        return val;
     }
 }
 

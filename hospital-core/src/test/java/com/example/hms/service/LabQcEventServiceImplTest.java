@@ -8,6 +8,7 @@ import com.example.hms.model.LabQcEvent;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.payload.dto.LabQcEventRequestDTO;
 import com.example.hms.payload.dto.LabQcEventResponseDTO;
+import com.example.hms.payload.dto.LabQcSummaryDTO;
 import com.example.hms.repository.LabQcEventRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.utility.RoleValidator;
@@ -317,5 +318,108 @@ class LabQcEventServiceImplTest {
 
         assertThat(result.getContent()).containsExactly(responseDTO);
         verify(qcEventRepository).findAll(pageable);
+    }
+
+    // ── getQcEventsByDefinition ───────────────────────────────────────────────
+
+    @Test
+    void getQcEventsByDefinition_withHospital_scopesByHospitalAndDefinition() {
+        Pageable pageable = PageRequest.of(0, 10);
+        LabQcEvent event = new LabQcEvent();
+        Page<LabQcEvent> page = new PageImpl<>(List.of(event));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(qcEventRepository.findByTestDefinitionIdAndHospitalId(testDefId, hospitalId, pageable))
+            .thenReturn(page);
+        when(qcEventMapper.toResponseDTO(event)).thenReturn(responseDTO);
+
+        Page<LabQcEventResponseDTO> result =
+            service.getQcEventsByDefinition(testDefId, pageable, Locale.ENGLISH);
+
+        assertThat(result.getContent()).containsExactly(responseDTO);
+        verify(qcEventRepository).findByTestDefinitionIdAndHospitalId(testDefId, hospitalId, pageable);
+    }
+
+    @Test
+    void getQcEventsByDefinition_superAdmin_returnsAcrossAllHospitals() {
+        Pageable pageable = PageRequest.of(0, 10);
+        LabQcEvent event = new LabQcEvent();
+        Page<LabQcEvent> page = new PageImpl<>(List.of(event));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(qcEventRepository.findByTestDefinitionId(testDefId, pageable)).thenReturn(page);
+        when(qcEventMapper.toResponseDTO(event)).thenReturn(responseDTO);
+
+        Page<LabQcEventResponseDTO> result =
+            service.getQcEventsByDefinition(testDefId, pageable, Locale.ENGLISH);
+
+        assertThat(result.getContent()).containsExactly(responseDTO);
+        verify(qcEventRepository).findByTestDefinitionId(testDefId, pageable);
+    }
+
+    // ── getQcSummary ──────────────────────────────────────────────────────────
+
+    @Test
+    void getQcSummary_withHospital_returnsMappedSummary() {
+        UUID defId = UUID.randomUUID();
+        LocalDateTime lastDate = LocalDateTime.of(2026, 4, 1, 10, 0);
+        Object[] row = {defId, "CBC", 100L, 95L, 5L, lastDate};
+        List<Object[]> rows = new java.util.ArrayList<>();
+        rows.add(row);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(qcEventRepository.findQcSummaryByHospitalId(hospitalId)).thenReturn(rows);
+
+        List<LabQcSummaryDTO> result = service.getQcSummary(Locale.ENGLISH);
+
+        assertThat(result).hasSize(1);
+        LabQcSummaryDTO dto = result.get(0);
+        assertThat(dto.getTestDefinitionId()).isEqualTo(defId);
+        assertThat(dto.getTestName()).isEqualTo("CBC");
+        assertThat(dto.getTotalEvents()).isEqualTo(100L);
+        assertThat(dto.getPassedEvents()).isEqualTo(95L);
+        assertThat(dto.getFailedEvents()).isEqualTo(5L);
+        assertThat(dto.getPassRate()).isEqualTo(95.0);
+        assertThat(dto.getLastEventDate()).isEqualTo(lastDate);
+    }
+
+    @Test
+    void getQcSummary_superAdmin_usesAllQuery() {
+        UUID defId = UUID.randomUUID();
+        Object[] row = {defId, "BMP", 10L, 10L, 0L, null};
+        List<Object[]> rows = new java.util.ArrayList<>();
+        rows.add(row);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(null);
+        when(qcEventRepository.findQcSummaryAll()).thenReturn(rows);
+
+        List<LabQcSummaryDTO> result = service.getQcSummary(Locale.ENGLISH);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getPassRate()).isEqualTo(100.0);
+        verify(qcEventRepository).findQcSummaryAll();
+    }
+
+    @Test
+    void getQcSummary_emptyRows_returnsEmptyList() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(qcEventRepository.findQcSummaryByHospitalId(hospitalId)).thenReturn(List.of());
+
+        List<LabQcSummaryDTO> result = service.getQcSummary(Locale.ENGLISH);
+
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    void getQcSummary_zeroTotalEvents_passRateIsZero() {
+        UUID defId = UUID.randomUUID();
+        Object[] row = {defId, "LFT", 0L, 0L, 0L, null};
+        List<Object[]> rows = new java.util.ArrayList<>();
+        rows.add(row);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(qcEventRepository.findQcSummaryByHospitalId(hospitalId)).thenReturn(rows);
+
+        List<LabQcSummaryDTO> result = service.getQcSummary(Locale.ENGLISH);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).getPassRate()).isZero();
     }
 }

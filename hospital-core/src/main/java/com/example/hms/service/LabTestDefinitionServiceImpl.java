@@ -5,16 +5,27 @@ import static com.example.hms.config.SecurityConstants.*;
 import com.example.hms.enums.LabTestDefinitionApprovalStatus;
 import com.example.hms.mapper.LabTestDefinitionMapper;
 import com.example.hms.model.LabTestDefinition;
+import com.example.hms.model.LabTestReferenceRange;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRole;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.LabTestDefinitionApprovalRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
+import com.example.hms.payload.dto.LabTestReferenceRangeDTO;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.SecurityUtils;
+import com.example.hms.security.context.HospitalContext;
+import com.example.hms.security.context.HospitalContextHolder;
+import com.itextpdf.kernel.pdf.PdfDocument;
+import com.itextpdf.kernel.pdf.PdfWriter;
+import com.itextpdf.layout.Document;
+import com.itextpdf.layout.element.Cell;
+import com.itextpdf.layout.element.Paragraph;
+import com.itextpdf.layout.element.Table;
+import com.itextpdf.layout.properties.UnitValue;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -23,6 +34,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -340,5 +352,92 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 "Action not allowed from status: " + definition.getApprovalStatus()
                 + ". Allowed: " + allowed);
         }
+    }
+
+    @Override
+    public LabTestDefinitionResponseDTO updateReferenceRanges(UUID id, List<LabTestReferenceRangeDTO> ranges) {
+        String username = SecurityUtils.getCurrentUsername();
+        if (username == null) {
+            throw new AccessDeniedException("Unauthenticated access to reference range update");
+        }
+        User currentUser = userRepository.findByUsername(username)
+            .orElseThrow(() -> new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR));
+
+        LabTestDefinition definition = repository.findById(id)
+            .orElseThrow(() -> new EntityNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+
+        if (isGlobalDefinition(definition)) {
+            assertUserCanManageGlobal(currentUser);
+        } else {
+            assertUserCanManageHospital(currentUser, definition.getAssignment());
+        }
+
+        List<LabTestReferenceRange> entityRanges = mapper.mapRangeDtosToEntities(ranges);
+
+        definition.setReferenceRanges(entityRanges);
+        return mapper.toDto(repository.save(definition));
+    }
+
+    @Override
+    public byte[] exportPdf() {
+        UUID hospitalId = HospitalContextHolder.getContext()
+            .map(HospitalContext::getActiveHospitalId)
+            .orElse(null);
+
+        List<LabTestDefinition> definitions = hospitalId != null
+            ? repository.findByHospital_IdAndActiveTrue(hospitalId)
+            : repository.findAll().stream()
+                .filter(def -> def.isActive())
+                .toList();
+
+        // Include global definitions when hospital-scoped
+        if (hospitalId != null) {
+            List<LabTestDefinition> globalDefs = repository.findByHospitalIsNullAndActiveTrue();
+            java.util.Map<String, LabTestDefinition> merged = new java.util.LinkedHashMap<>();
+            definitions.forEach(d -> merged.put(d.getTestCode(), d));
+            globalDefs.forEach(d -> merged.putIfAbsent(d.getTestCode(), d));
+            definitions = new ArrayList<>(merged.values());
+        }
+
+        try (java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream()) {
+            PdfWriter writer = new PdfWriter(baos);
+            PdfDocument pdf = new PdfDocument(writer);
+            Document doc = new Document(pdf);
+
+            doc.add(new Paragraph("Lab Test Definitions Report")
+                .setFontSize(18).setBold());
+            doc.add(new Paragraph("Generated: " + java.time.LocalDate.now())
+                .setFontSize(10));
+            doc.add(new Paragraph(" "));
+
+            float[] colWidths = {1, 2, 1.5f, 1, 1, 1, 1};
+            Table table = new Table(UnitValue.createPercentArray(colWidths))
+                .useAllAvailableWidth();
+
+            String[] headers = {"Test Code", "Name", "Category", "Unit", "Sample Type", "Status", "TAT (min)"};
+            for (String h : headers) {
+                table.addHeaderCell(new Cell().add(new Paragraph(h).setBold().setFontSize(9)));
+            }
+
+            for (LabTestDefinition def : definitions) {
+                table.addCell(new Cell().add(new Paragraph(safe(def.getTestCode())).setFontSize(8)));
+                table.addCell(new Cell().add(new Paragraph(safe(def.getName())).setFontSize(8)));
+                table.addCell(new Cell().add(new Paragraph(safe(def.getCategory())).setFontSize(8)));
+                table.addCell(new Cell().add(new Paragraph(safe(def.getUnit())).setFontSize(8)));
+                table.addCell(new Cell().add(new Paragraph(safe(def.getSampleType())).setFontSize(8)));
+                table.addCell(new Cell().add(new Paragraph(def.getApprovalStatus() != null ? def.getApprovalStatus().name() : "").setFontSize(8)));
+                table.addCell(new Cell().add(new Paragraph(def.getTurnaroundTimeMinutes() != null ? String.valueOf(def.getTurnaroundTimeMinutes()) : "").setFontSize(8)));
+            }
+
+            doc.add(table);
+            doc.close();
+            return baos.toByteArray();
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException("Failed to generate PDF export", e);
+        }
+    }
+
+    private static String safe(String val) {
+        return val != null ? val : "";
     }
 }

@@ -73,6 +73,9 @@ class EmpiServiceImplTest {
     private ObjectProvider<KafkaTemplate<String, EmpiEventPayload>> kafkaTemplateProvider;
 
     @Mock
+    private KafkaTemplate<String, EmpiEventPayload> kafkaTemplate;
+
+    @Mock
     private MessageSource messageSource;
 
     private EmpiServiceImpl empiService;
@@ -418,7 +421,6 @@ class EmpiServiceImplTest {
     @Test
     void addAlias_publishesKafkaEventWhenEnabled() {
         kafkaProperties.setEnabled(true);
-        KafkaTemplate<String, EmpiEventPayload> kafkaTemplate = Mockito.mock(KafkaTemplate.class);
         when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
 
         when(kafkaTemplate.send(anyString(), anyString(), any(EmpiEventPayload.class))).thenReturn(null);
@@ -455,7 +457,6 @@ class EmpiServiceImplTest {
     @Test
     void addAlias_logsWarningWhenKafkaSendFails() {
         kafkaProperties.setEnabled(true);
-        KafkaTemplate<String, EmpiEventPayload> kafkaTemplate = Mockito.mock(KafkaTemplate.class);
         when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
         when(kafkaTemplate.send(anyString(), anyString(), any(EmpiEventPayload.class)))
             .thenThrow(new IllegalStateException("send failure"));

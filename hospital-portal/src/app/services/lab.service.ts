@@ -56,6 +56,18 @@ export interface LabTestDefinition {
   reviewedById: string | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
+  unit: string | null;
+  referenceRanges?: LabTestReferenceRange[];
+}
+
+export interface LabTestReferenceRange {
+  minValue: number | null;
+  maxValue: number | null;
+  unit: string | null;
+  ageMin: number | null;
+  ageMax: number | null;
+  gender: 'ALL' | 'MALE' | 'FEMALE';
+  notes: string | null;
 }
 
 export interface LabTestDefinitionApprovalRequest {
@@ -116,6 +128,27 @@ export interface LabQcEvent {
   recordedById: string | null;
   notes: string | null;
   createdAt: string;
+}
+
+export interface LabQcSummary {
+  testDefinitionId: string;
+  testName: string;
+  totalEvents: number;
+  passedEvents: number;
+  failedEvents: number;
+  passRate: number;
+  lastEventDate: string | null;
+}
+
+export interface LabValidationSummary {
+  testDefinitionId: string;
+  testName: string;
+  testCode: string;
+  totalStudies: number;
+  passedStudies: number;
+  failedStudies: number;
+  passRate: number;
+  lastStudyDate: string | null;
 }
 
 export interface LabOrderRequest {
@@ -289,5 +322,34 @@ export class LabService {
     return this.http
       .get<ApiWrapper<PageResponse<LabQcEvent>>>('/lab-qc-events', { params })
       .pipe(map((res) => res?.data?.content ?? []));
+  }
+
+  getQcSummary(): Observable<LabQcSummary[]> {
+    return this.http
+      .get<ApiWrapper<LabQcSummary[]>>('/lab-qc-events/summary')
+      .pipe(map((res) => res?.data ?? []));
+  }
+
+  getValidationSummary(): Observable<LabValidationSummary[]> {
+    return this.http
+      .get<ApiWrapper<LabValidationSummary[]>>('/lab-test-validation-studies/summary')
+      .pipe(map((res) => res?.data ?? []));
+  }
+
+  exportTestDefinitionsCsv(): Observable<Blob> {
+    return this.http.get('/lab-test-definitions/export', { responseType: 'blob' });
+  }
+
+  exportTestDefinitionsPdf(): Observable<Blob> {
+    return this.http.get('/lab-test-definitions/export/pdf', { responseType: 'blob' });
+  }
+
+  updateReferenceRanges(
+    id: string,
+    ranges: LabTestReferenceRange[],
+  ): Observable<LabTestDefinition> {
+    return this.http
+      .put<ApiWrapper<LabTestDefinition>>(`/lab-test-definitions/${id}/reference-ranges`, ranges)
+      .pipe(map((res) => res.data));
   }
 }

@@ -56,7 +56,7 @@ public class LabResultController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Get Lab Result by ID", description = "Fetches a lab result by its ID.")
     public ResponseEntity<LabResultResponseDTO> getLabResultById(
             @PathVariable UUID id,
@@ -65,7 +65,7 @@ public class LabResultController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'DOCTOR', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Get All Lab Results", description = "Retrieves a paginated, hospital-scoped list of lab results.")
     public ResponseEntity<ApiResponseWrapper<Page<LabResultResponseDTO>>> getAllLabResults(
             @PageableDefault(size = 20) Pageable pageable,
@@ -74,7 +74,7 @@ public class LabResultController {
     }
 
     @GetMapping("/pending-review")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Get Lab Results Pending Review", description = "Retrieves a curated list of lab results awaiting clinician review.")
     public ResponseEntity<List<LabResultResponseDTO>> getPendingReview(
             @RequestParam(name = "providerId", required = false) UUID providerId,
@@ -93,7 +93,7 @@ public class LabResultController {
     }
 
     @PostMapping("/{id}/release")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'DOCTOR', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Release Lab Result", description = "Marks the lab result as released and ready for downstream workflows.")
     public ResponseEntity<LabResultResponseDTO> releaseLabResult(
             @PathVariable UUID id,
@@ -112,7 +112,7 @@ public class LabResultController {
     }
 
     @PostMapping("/{id}/acknowledge")
-    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'SUPER_ADMIN')")
     @Operation(summary = "Acknowledge Lab Result", description = "Marks the lab result as acknowledged. Currently idempotent for synthetic dashboard data.")
     public ResponseEntity<Void> acknowledgeLabResult(
             @PathVariable UUID id,
@@ -138,7 +138,7 @@ public class LabResultController {
     // ==================== Enhanced Trending Endpoints (Story #5) ====================
 
     @GetMapping("/{id}/compare")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Compare Lab Result with Previous", description = "Compares current lab result with the previous measurement to identify trends and significant changes.")
     public ResponseEntity<LabResultComparisonDTO> compareLabResult(
             @PathVariable UUID id,
@@ -147,7 +147,7 @@ public class LabResultController {
     }
 
     @GetMapping("/patient/{patientId}/test/{testDefinitionId}/compare-sequential")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Compare Sequential Lab Results", description = "Compares all sequential lab results for a specific test and patient to identify long-term trends.")
     public ResponseEntity<List<LabResultComparisonDTO>> compareSequentialResults(
             @PathVariable UUID patientId,
@@ -157,7 +157,7 @@ public class LabResultController {
     }
 
     @GetMapping("/hospital/{hospitalId}/critical")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN')")
     @Operation(summary = "Get Critical Lab Results", description = "Retrieves all critical lab results for a hospital since a specified time.")
     public ResponseEntity<List<LabResultResponseDTO>> getCriticalResults(
             @PathVariable UUID hospitalId,
@@ -169,7 +169,7 @@ public class LabResultController {
     }
 
     @GetMapping("/hospital/{hospitalId}/critical/unacknowledged")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN')")
     @Operation(summary = "Get Unacknowledged Critical Results", description = "Retrieves critical lab results that require acknowledgment - used for alert dashboards.")
     public ResponseEntity<List<LabResultResponseDTO>> getUnacknowledgedCriticalResults(
             @PathVariable UUID hospitalId,

@@ -1,0 +1,194 @@
+<div class="lab-inventory-container">
+  <header class="page-header">
+    <div class="header-left">
+      <span class="material-symbols-outlined header-icon">inventory_2</span>
+      <div>
+        <h1 class="page-title">{{ 'LAB_INVENTORY.TITLE' | translate }}</h1>
+        <p class="page-subtitle">{{ 'LAB_INVENTORY.SUBTITLE' | translate }}</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="count-badge">{{
+        'LAB_INVENTORY.COUNT' | translate: { count: totalElements() }
+      }}</span>
+      @if (canManage()) {
+        <button class="btn-primary" (click)="openCreate()" [disabled]="loading()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'LAB_INVENTORY.ADD' | translate }}
+        </button>
+      }
+      <button class="btn-refresh" (click)="loadItems()" [disabled]="loading()">
+        <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Form modal -->
+  @if (showForm()) {
+    <div class="form-overlay" (click)="cancelForm()" (keydown.escape)="cancelForm()" tabindex="-1">
+      <div
+        class="form-card"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+        tabindex="-1"
+      >
+        <h2>
+          {{ (editingId() ? 'LAB_INVENTORY.EDIT_TITLE' : 'LAB_INVENTORY.ADD_TITLE') | translate }}
+        </h2>
+        <form (ngSubmit)="save()">
+          <label
+            >{{ 'LAB_INVENTORY.NAME' | translate }} *
+            <input type="text" [(ngModel)]="form.name" name="name" required />
+          </label>
+          <label
+            >{{ 'LAB_INVENTORY.ITEM_CODE' | translate }} *
+            <input type="text" [(ngModel)]="form.itemCode" name="itemCode" required />
+          </label>
+          <label
+            >{{ 'LAB_INVENTORY.CATEGORY' | translate }}
+            <input type="text" [(ngModel)]="form.category" name="category" />
+          </label>
+          <div class="form-row">
+            <label
+              >{{ 'LAB_INVENTORY.QUANTITY' | translate }} *
+              <input type="number" [(ngModel)]="form.quantity" name="quantity" required min="0" />
+            </label>
+            <label
+              >{{ 'LAB_INVENTORY.UNIT' | translate }}
+              <input type="text" [(ngModel)]="form.unit" name="unit" />
+            </label>
+          </div>
+          <label
+            >{{ 'LAB_INVENTORY.REORDER_THRESHOLD' | translate }} *
+            <input
+              type="number"
+              [(ngModel)]="form.reorderThreshold"
+              name="reorderThreshold"
+              required
+              min="0"
+            />
+          </label>
+          <label
+            >{{ 'LAB_INVENTORY.SUPPLIER' | translate }}
+            <input type="text" [(ngModel)]="form.supplier" name="supplier" />
+          </label>
+          <div class="form-row">
+            <label
+              >{{ 'LAB_INVENTORY.LOT_NUMBER' | translate }}
+              <input type="text" [(ngModel)]="form.lotNumber" name="lotNumber" />
+            </label>
+            <label
+              >{{ 'LAB_INVENTORY.EXPIRATION' | translate }}
+              <input type="date" [(ngModel)]="form.expirationDate" name="expirationDate" />
+            </label>
+          </div>
+          <label
+            >{{ 'LAB_INVENTORY.NOTES' | translate }}
+            <textarea [(ngModel)]="form.notes" name="notes" rows="3"></textarea>
+          </label>
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" (click)="cancelForm()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button type="submit" class="btn-primary" [disabled]="saving()">
+              @if (saving()) {
+                <span class="material-symbols-outlined spin">progress_activity</span>
+              }
+              {{ (editingId() ? 'COMMON.UPDATE' : 'COMMON.CREATE') | translate }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="loading-state">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+      <p>{{ 'LAB_INVENTORY.LOADING' | translate }}</p>
+    </div>
+  }
+
+  <!-- Error -->
+  @if (error(); as err) {
+    <div class="error-state">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ err }}</p>
+      <button class="btn-primary" (click)="loadItems()">
+        {{ 'LAB_INVENTORY.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
+  <!-- Empty -->
+  @if (!loading() && !error() && items().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined">inventory</span>
+      <p>{{ 'LAB_INVENTORY.EMPTY' | translate }}</p>
+    </div>
+  }
+
+  <!-- Table -->
+  @if (!loading() && !error() && items().length > 0) {
+    <div class="table-wrap">
+      <table class="inventory-table">
+        <thead>
+          <tr>
+            <th>{{ 'LAB_INVENTORY.NAME' | translate }}</th>
+            <th>{{ 'LAB_INVENTORY.ITEM_CODE' | translate }}</th>
+            <th>{{ 'LAB_INVENTORY.CATEGORY' | translate }}</th>
+            <th>{{ 'LAB_INVENTORY.QUANTITY' | translate }}</th>
+            <th>{{ 'LAB_INVENTORY.EXPIRATION' | translate }}</th>
+            <th>{{ 'LAB_INVENTORY.STOCK_STATUS' | translate }}</th>
+            @if (canManage()) {
+              <th class="actions-col">{{ 'LAB_INVENTORY.ACTIONS' | translate }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of items(); track item.id) {
+            <tr [class.low-stock-row]="item.lowStock" [class.expired-row]="item.expired">
+              <td>{{ item.name }}</td>
+              <td>{{ item.itemCode }}</td>
+              <td>{{ item.category ?? '—' }}</td>
+              <td>{{ item.quantity }} {{ item.unit ?? '' }}</td>
+              <td>{{ item.expirationDate ?? '—' }}</td>
+              <td>
+                @if (item.expired) {
+                  <span class="status-badge expired">{{
+                    'LAB_INVENTORY.EXPIRED' | translate
+                  }}</span>
+                } @else if (item.lowStock) {
+                  <span class="status-badge low-stock">{{
+                    'LAB_INVENTORY.LOW_STOCK' | translate
+                  }}</span>
+                } @else {
+                  <span class="status-badge ok">{{ 'LAB_INVENTORY.IN_STOCK' | translate }}</span>
+                }
+              </td>
+              @if (canManage()) {
+                <td class="actions-col">
+                  <button
+                    class="btn-icon"
+                    (click)="openEdit(item)"
+                    title="{{ 'COMMON.EDIT' | translate }}"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button
+                    class="btn-icon danger"
+                    (click)="deactivate(item)"
+                    title="{{ 'COMMON.DELETE' | translate }}"
+                  >
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

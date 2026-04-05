@@ -42,6 +42,18 @@ export interface StaffUpsertRequest {
   roleName?: string;
 }
 
+export interface LabStaffRoleUpdateRequest {
+  roleCode: string;
+}
+
+export interface PagedResponse<T> {
+  content: T[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
+
 @Injectable({ providedIn: 'root' })
 export class StaffService {
   private readonly http = inject(HttpClient);
@@ -72,5 +84,19 @@ export class StaffService {
 
   deactivate(id: string): Observable<void> {
     return this.http.delete<void>(`/staff/${id}`);
+  }
+
+  // ── MVP 3: Lab Staff Management ─────────────────────────────
+
+  getLabStaff(hospitalId: string, page = 0, size = 20): Observable<PagedResponse<StaffResponse>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<PagedResponse<StaffResponse>>(`/staff/hospital/${hospitalId}/lab`, {
+      params,
+    });
+  }
+
+  updateLabStaffRole(staffId: string, roleCode: string): Observable<StaffResponse> {
+    const body: LabStaffRoleUpdateRequest = { roleCode };
+    return this.http.put<StaffResponse>(`/staff/${staffId}/lab-role`, body);
   }
 }

@@ -11,6 +11,7 @@ import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.LabTestDefinitionApprovalRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionRequestDTO;
 import com.example.hms.payload.dto.LabTestDefinitionResponseDTO;
+import com.example.hms.payload.dto.LabTestReferenceRangeDTO;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -903,5 +904,113 @@ class LabTestDefinitionServiceImplTest {
                     .isInstanceOf(AccessDeniedException.class)
                     .hasMessageContaining("Unauthenticated");
         }
+    }
+
+    // ── updateReferenceRanges ────────────────────────────────────────────
+
+    @Test
+    void updateReferenceRanges_globalDef_superAdmin_success() {
+        definition.setHospital(null);
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+
+        LabTestReferenceRangeDTO rangeDTO = new LabTestReferenceRangeDTO();
+        rangeDTO.setMinValue(3.5);
+        rangeDTO.setMaxValue(5.5);
+        rangeDTO.setUnit("g/dL");
+        rangeDTO.setGender("ALL");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(mapper.mapRangeDtosToEntities(List.of(rangeDTO))).thenReturn(
+                new java.util.ArrayList<>(List.of(
+                    com.example.hms.model.LabTestReferenceRange.builder()
+                        .minValue(3.5).maxValue(5.5).unit("g/dL").gender("ALL").build()
+                ))
+            );
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            LabTestDefinitionResponseDTO result = service.updateReferenceRanges(defId, List.of(rangeDTO));
+
+            assertThat(result).isNotNull();
+            assertThat(definition.getReferenceRanges()).hasSize(1);
+            assertThat(definition.getReferenceRanges().get(0).getUnit()).isEqualTo("g/dL");
+            verify(repository).save(definition);
+        }
+    }
+
+    @Test
+    void updateReferenceRanges_nullRanges_clearsExisting() {
+        definition.setHospital(null);
+        definition.setReferenceRanges(new java.util.ArrayList<>(
+            List.of(com.example.hms.model.LabTestReferenceRange.builder().unit("mg/dL").build())));
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(mapper.mapRangeDtosToEntities(null)).thenReturn(new java.util.ArrayList<>());
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.updateReferenceRanges(defId, null);
+
+            assertThat(definition.getReferenceRanges()).isEmpty();
+        }
+    }
+
+    @Test
+    void updateReferenceRanges_unauthenticated_throwsAccessDenied() {
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn(null);
+
+            assertThatThrownBy(() -> service.updateReferenceRanges(defId, List.of()))
+                    .isInstanceOf(AccessDeniedException.class)
+                    .hasMessageContaining("Unauthenticated");
+        }
+    }
+
+    @Test
+    void updateReferenceRanges_notFound_throwsEntityNotFound() {
+        User admin = userWithRole("ROLE_SUPER_ADMIN");
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(admin));
+            when(repository.findById(defId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.updateReferenceRanges(defId, List.of()))
+                    .isInstanceOf(EntityNotFoundException.class);
+        }
+    }
+
+    // ── exportPdf ────────────────────────────────────────────────────────
+
+    @Test
+    void exportPdf_noHospitalContext_returnsBytes() {
+        when(repository.findAll()).thenReturn(List.of(definition));
+
+        byte[] result = service.exportPdf();
+
+        assertThat(result).isNotNull();
+        assertThat(result).hasSizeGreaterThan(0);
+        // PDF magic bytes: %PDF
+        assertThat(result[0]).isEqualTo((byte) '%');
+        assertThat(result[1]).isEqualTo((byte) 'P');
+        assertThat(result[2]).isEqualTo((byte) 'D');
+        assertThat(result[3]).isEqualTo((byte) 'F');
+    }
+
+    @Test
+    void exportPdf_emptyDefinitions_returnsValidPdf() {
+        when(repository.findAll()).thenReturn(List.of());
+
+        byte[] result = service.exportPdf();
+
+        assertThat(result).isNotNull();
+        assertThat(result).hasSizeGreaterThan(0);
     }
 }

@@ -3,6 +3,7 @@ package com.example.hms.controller;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.LabQcEventRequestDTO;
 import com.example.hms.payload.dto.LabQcEventResponseDTO;
+import com.example.hms.payload.dto.LabQcSummaryDTO;
 import com.example.hms.service.LabQcEventService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -75,5 +77,16 @@ public class LabQcEventController {
             ? labQcEventService.getQcEventsByDefinition(testDefinitionId, pageable, locale)
             : labQcEventService.getQcEventsByHospital(hospitalId, pageable, locale);
         return ResponseEntity.ok(ApiResponseWrapper.success(page));
+    }
+
+    @GetMapping("/summary")
+    @PreAuthorize("hasAnyRole('LAB_DIRECTOR', 'QUALITY_MANAGER', 'LAB_MANAGER', 'HOSPITAL_ADMIN', 'ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "QC Summary", description = "Aggregated QC stats per test definition for the Lab Director QC Dashboard. Returns total, passed, failed events and pass rate per test.")
+    @ApiResponse(responseCode = "200", description = "QC summary retrieved")
+    public ResponseEntity<ApiResponseWrapper<List<LabQcSummaryDTO>>> getQcSummary(
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
+
+        List<LabQcSummaryDTO> summary = labQcEventService.getQcSummary(locale);
+        return ResponseEntity.ok(ApiResponseWrapper.success(summary));
     }
 }

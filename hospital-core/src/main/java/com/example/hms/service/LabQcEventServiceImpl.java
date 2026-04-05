@@ -8,6 +8,7 @@ import com.example.hms.model.LabQcEvent;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.payload.dto.LabQcEventRequestDTO;
 import com.example.hms.payload.dto.LabQcEventResponseDTO;
+import com.example.hms.payload.dto.LabQcSummaryDTO;
 import com.example.hms.repository.LabQcEventRepository;
 import com.example.hms.repository.LabTestDefinitionRepository;
 import com.example.hms.utility.RoleValidator;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -109,5 +111,34 @@ public class LabQcEventServiceImpl implements LabQcEventService {
         }
         return qcEventRepository.findByTestDefinitionIdAndHospitalId(testDefinitionId, scopedHospitalId, pageable)
             .map(qcEventMapper::toResponseDTO);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<LabQcSummaryDTO> getQcSummary(Locale locale) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        List<Object[]> rows = (hospitalId != null)
+            ? qcEventRepository.findQcSummaryByHospitalId(hospitalId)
+            : qcEventRepository.findQcSummaryAll();
+
+        return rows.stream().map(row -> {
+            UUID testDefId   = (UUID) row[0];
+            String testName  = (String) row[1];
+            long total       = ((Number) row[2]).longValue();
+            long passed      = ((Number) row[3]).longValue();
+            long failed      = ((Number) row[4]).longValue();
+            LocalDateTime lastDate = (LocalDateTime) row[5];
+            double passRate  = total > 0 ? (double) passed / total * 100.0 : 0.0;
+
+            return LabQcSummaryDTO.builder()
+                .testDefinitionId(testDefId)
+                .testName(testName)
+                .totalEvents(total)
+                .passedEvents(passed)
+                .failedEvents(failed)
+                .passRate(Math.round(passRate * 100.0) / 100.0)
+                .lastEventDate(lastDate)
+                .build();
+        }).toList();
     }
 }

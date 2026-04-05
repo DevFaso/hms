@@ -38,7 +38,7 @@ public class LabSpecimenController {
      * POST /lab-orders/{id}/specimens
      */
     @PostMapping("/lab-orders/{id}/specimens")
-    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Collect Specimen",
                description = "Creates a new specimen record for the given lab order, generating an accession number and barcode.")
     @ApiResponse(responseCode = "201", description = "Specimen created successfully")
@@ -59,7 +59,7 @@ public class LabSpecimenController {
      * GET /lab-orders/{id}/specimens
      */
     @GetMapping("/lab-orders/{id}/specimens")
-    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "List Specimens for Lab Order",
                description = "Returns all specimen records linked to the given lab order.")
     @ApiResponse(responseCode = "200", description = "Specimens retrieved successfully")
@@ -77,7 +77,7 @@ public class LabSpecimenController {
      * GET /lab-specimens/{id}
      */
     @GetMapping("/lab-specimens/{id}")
-    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'DOCTOR', 'NURSE', 'MIDWIFE', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Get Specimen by ID",
                description = "Fetches a single lab specimen by its UUID.")
     @ApiResponse(responseCode = "200", description = "Specimen retrieved successfully")
@@ -95,7 +95,7 @@ public class LabSpecimenController {
      * POST /lab-specimens/{id}/receive
      */
     @PostMapping("/lab-specimens/{id}/receive")
-    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Receive Specimen at Lab",
                description = "Records the specimen as received at the laboratory, updating status to RECEIVED and capturing receiving user and timestamp.")
     @ApiResponse(responseCode = "200", description = "Specimen received successfully")

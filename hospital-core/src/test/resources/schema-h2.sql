@@ -222,3 +222,43 @@ CREATE INDEX IF NOT EXISTS idx_empi_merge_primary ON empi.merge_events (primary_
 CREATE INDEX IF NOT EXISTS idx_empi_merge_secondary ON empi.merge_events (secondary_identity_id);
 CREATE INDEX IF NOT EXISTS idx_empi_merge_org ON empi.merge_events (organization_id);
 CREATE INDEX IF NOT EXISTS idx_empi_merge_hospital ON empi.merge_events (hospital_id);
+
+-- ── Lab Instruments (MVP 4) ──────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS lab.lab_instruments (
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	name VARCHAR(255) NOT NULL,
+	manufacturer VARCHAR(255),
+	model_number VARCHAR(255),
+	serial_number VARCHAR(100) NOT NULL,
+	hospital_id UUID NOT NULL,
+	department_id UUID,
+	status VARCHAR(30) NOT NULL DEFAULT 'ACTIVE',
+	installation_date DATE,
+	last_calibration_date DATE,
+	next_calibration_date DATE,
+	last_maintenance_date DATE,
+	next_maintenance_date DATE,
+	notes VARCHAR(2048),
+	active BOOLEAN NOT NULL DEFAULT TRUE,
+	createdAt TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updatedAt TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
+
+-- ── Lab Inventory Items (MVP 4) ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS lab.lab_inventory_items (
+	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+	name VARCHAR(255) NOT NULL,
+	item_code VARCHAR(100) NOT NULL,
+	category VARCHAR(100),
+	hospital_id UUID NOT NULL,
+	quantity INTEGER NOT NULL DEFAULT 0,
+	unit VARCHAR(50),
+	reorder_threshold INTEGER NOT NULL DEFAULT 0,
+	supplier VARCHAR(255),
+	lot_number VARCHAR(100),
+	expiration_date DATE,
+	notes VARCHAR(2048),
+	active BOOLEAN NOT NULL DEFAULT TRUE,
+	createdAt TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL,
+	updatedAt TIMESTAMP WITHOUT TIME ZONE DEFAULT CURRENT_TIMESTAMP NOT NULL
+);
