@@ -1330,6 +1330,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
         color: '#0284c7',
         bg: '#e0f2fe',
       },
+      {
+        icon: 'badge',
+        label: 'Lab Staff',
+        route: '/lab-staff',
+        color: '#7c3aed',
+        bg: '#ede9fe',
+      },
     ];
   });
 

@@ -265,7 +265,7 @@ describe('Dashboard navigation & RBAC', () => {
       recentApprovalAudit: [],
     });
     const tiles = c.labDirectorNavTiles();
-    expect(tiles.length).toBe(9);
+    expect(tiles.length).toBe(10);
     const approvalTile = tiles.find((t) => t.label === 'Approval Queue');
     expect(approvalTile?.count).toBe(5);
   });

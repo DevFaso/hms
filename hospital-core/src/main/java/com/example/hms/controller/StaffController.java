@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.payload.dto.LabStaffRoleUpdateRequest;
 import com.example.hms.payload.dto.StaffResponseDTO;
 import com.example.hms.payload.dto.StaffRequestDTO;
 import com.example.hms.service.StaffService;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import java.util.List;
 import java.util.Locale;
@@ -169,6 +171,28 @@ public class StaffController {
         @RequestHeader(name = "Accept-Language", required = false) String lang) {
         Locale locale = parseLocale(lang);
         return ResponseEntity.ok(staffService.getFirstStaffByUserIdOrderByCreatedAtAsc(userId, locale));
+    }
+
+    // ── MVP 3: Lab Staff Management ─────────────────────────────
+
+    @Operation(summary = "Paged lab staff by hospital (active only, lab roles)")
+    @GetMapping("/hospital/{hospitalId}/lab")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER')")
+    public ResponseEntity<Page<StaffResponseDTO>> labStaffByHospital(
+        @PathVariable UUID hospitalId,
+        @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(staffService.getLabStaffByHospitalId(hospitalId, pageable));
+    }
+
+    @Operation(summary = "Update a lab staff member's role")
+    @PutMapping("/{id}/lab-role")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_LAB_DIRECTOR')")
+    public ResponseEntity<StaffResponseDTO> updateLabRole(
+        @PathVariable UUID id,
+        @Valid @RequestBody LabStaffRoleUpdateRequest request,
+        @RequestHeader(name = "Accept-Language", required = false) String lang) {
+        Locale locale = parseLocale(lang);
+        return ResponseEntity.ok(staffService.updateStaffLabRole(id, request.getRoleCode(), locale));
     }
 
     private Locale parseLocale(String header) {

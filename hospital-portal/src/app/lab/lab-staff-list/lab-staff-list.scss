@@ -1,0 +1,284 @@
+.lab-staff-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.header-icon {
+  font-size: 2rem;
+  color: #7c3aed;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.page-subtitle {
+  font-size: 0.875rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.count-badge {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #7c3aed;
+  background: #ede9fe;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+}
+
+.btn-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 0.5rem;
+  padding: 0.4rem;
+  cursor: pointer;
+  color: #64748b;
+  transition: background 0.15s;
+
+  &:hover:not(:disabled) {
+    background: #f1f5f9;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+/* ── States ─────────────────────────────────────────────── */
+.loading-state,
+.error-state,
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3rem 1rem;
+  color: #64748b;
+
+  .material-symbols-outlined {
+    font-size: 2.5rem;
+  }
+}
+
+.error-state {
+  color: #dc2626;
+}
+
+.btn-primary {
+  background: #7c3aed;
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+
+  &:hover {
+    background: #6d28d9;
+  }
+}
+
+/* ── Spin animation ─────────────────────────────────────── */
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Table ──────────────────────────────────────────────── */
+.table-wrap {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  overflow-x: auto;
+}
+
+.staff-table {
+  width: 100%;
+  border-collapse: collapse;
+
+  th,
+  td {
+    padding: 0.75rem 1rem;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  thead {
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+
+    th {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: #64748b;
+    }
+  }
+
+  tbody tr {
+    border-bottom: 1px solid #f1f5f9;
+    transition: background 0.1s;
+
+    &:hover {
+      background: #faf5ff;
+    }
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+}
+
+.name-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.avatar-icon {
+  font-size: 1.25rem;
+  color: #94a3b8;
+}
+
+.actions-col {
+  width: 100px;
+  text-align: center;
+}
+
+/* ── Role badges ────────────────────────────────────────── */
+.role-badge {
+  display: inline-block;
+  padding: 0.2rem 0.625rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-director {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.badge-manager {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-scientist {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.badge-technician {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+/* ── Inline edit ────────────────────────────────────────── */
+.role-select {
+  padding: 0.3rem 0.5rem;
+  border: 1px solid #c4b5fd;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  background: #fff;
+
+  &:focus {
+    outline: 2px solid #7c3aed;
+    outline-offset: 1px;
+  }
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: 0.375rem;
+  transition: background 0.15s;
+
+  .material-symbols-outlined {
+    font-size: 1.125rem;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.btn-save {
+  color: #16a34a;
+
+  &:hover:not(:disabled) {
+    background: #dcfce7;
+  }
+}
+
+.btn-cancel {
+  color: #dc2626;
+
+  &:hover:not(:disabled) {
+    background: #fee2e2;
+  }
+}
+
+.btn-edit {
+  color: #7c3aed;
+
+  &:hover {
+    background: #ede9fe;
+  }
+}
+
+.director-lock {
+  display: inline-flex;
+  align-items: center;
+  color: #94a3b8;
+
+  .material-symbols-outlined {
+    font-size: 1rem;
+  }
+}
