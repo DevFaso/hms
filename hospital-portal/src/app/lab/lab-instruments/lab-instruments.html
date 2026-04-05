@@ -1,0 +1,186 @@
+<div class="lab-instruments-container">
+  <header class="page-header">
+    <div class="header-left">
+      <span class="material-symbols-outlined header-icon">precision_manufacturing</span>
+      <div>
+        <h1 class="page-title">{{ 'LAB_INSTRUMENTS.TITLE' | translate }}</h1>
+        <p class="page-subtitle">{{ 'LAB_INSTRUMENTS.SUBTITLE' | translate }}</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="count-badge">{{
+        'LAB_INSTRUMENTS.COUNT' | translate: { count: totalElements() }
+      }}</span>
+      @if (canManage()) {
+        <button class="btn-primary" (click)="openCreate()" [disabled]="loading()">
+          <span class="material-symbols-outlined">add</span>
+          {{ 'LAB_INSTRUMENTS.ADD' | translate }}
+        </button>
+      }
+      <button class="btn-refresh" (click)="loadInstruments()" [disabled]="loading()">
+        <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Form modal -->
+  @if (showForm()) {
+    <div class="form-overlay" (click)="cancelForm()" (keydown.escape)="cancelForm()" tabindex="-1">
+      <div
+        class="form-card"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+        tabindex="-1"
+      >
+        <h2>
+          {{
+            (editingId() ? 'LAB_INSTRUMENTS.EDIT_TITLE' : 'LAB_INSTRUMENTS.ADD_TITLE') | translate
+          }}
+        </h2>
+        <form (ngSubmit)="save()">
+          <label
+            >{{ 'LAB_INSTRUMENTS.NAME' | translate }} *
+            <input type="text" [(ngModel)]="form.name" name="name" required />
+          </label>
+          <label
+            >{{ 'LAB_INSTRUMENTS.SERIAL' | translate }} *
+            <input type="text" [(ngModel)]="form.serialNumber" name="serialNumber" required />
+          </label>
+          <label
+            >{{ 'LAB_INSTRUMENTS.MANUFACTURER' | translate }}
+            <input type="text" [(ngModel)]="form.manufacturer" name="manufacturer" />
+          </label>
+          <label
+            >{{ 'LAB_INSTRUMENTS.MODEL' | translate }}
+            <input type="text" [(ngModel)]="form.modelNumber" name="modelNumber" />
+          </label>
+          <label
+            >{{ 'LAB_INSTRUMENTS.STATUS' | translate }}
+            <select [(ngModel)]="form.status" name="status">
+              <option value="ACTIVE">{{ 'LAB_INSTRUMENTS.STATUS_ACTIVE' | translate }}</option>
+              <option value="MAINTENANCE">
+                {{ 'LAB_INSTRUMENTS.STATUS_MAINTENANCE' | translate }}
+              </option>
+              <option value="CALIBRATION_DUE">
+                {{ 'LAB_INSTRUMENTS.STATUS_CALIBRATION_DUE' | translate }}
+              </option>
+              <option value="OUT_OF_SERVICE">
+                {{ 'LAB_INSTRUMENTS.STATUS_OUT_OF_SERVICE' | translate }}
+              </option>
+              <option value="RETIRED">{{ 'LAB_INSTRUMENTS.STATUS_RETIRED' | translate }}</option>
+            </select>
+          </label>
+          <label
+            >{{ 'LAB_INSTRUMENTS.NOTES' | translate }}
+            <textarea [(ngModel)]="form.notes" name="notes" rows="3"></textarea>
+          </label>
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" (click)="cancelForm()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button type="submit" class="btn-primary" [disabled]="saving()">
+              @if (saving()) {
+                <span class="material-symbols-outlined spin">progress_activity</span>
+              }
+              {{ (editingId() ? 'COMMON.UPDATE' : 'COMMON.CREATE') | translate }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="loading-state">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+      <p>{{ 'LAB_INSTRUMENTS.LOADING' | translate }}</p>
+    </div>
+  }
+
+  <!-- Error -->
+  @if (error(); as err) {
+    <div class="error-state">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ err }}</p>
+      <button class="btn-primary" (click)="loadInstruments()">
+        {{ 'LAB_INSTRUMENTS.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
+  <!-- Empty -->
+  @if (!loading() && !error() && instruments().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined">science</span>
+      <p>{{ 'LAB_INSTRUMENTS.EMPTY' | translate }}</p>
+    </div>
+  }
+
+  <!-- Table -->
+  @if (!loading() && !error() && instruments().length > 0) {
+    <div class="table-wrap">
+      <table class="instruments-table">
+        <thead>
+          <tr>
+            <th>{{ 'LAB_INSTRUMENTS.NAME' | translate }}</th>
+            <th>{{ 'LAB_INSTRUMENTS.SERIAL' | translate }}</th>
+            <th>{{ 'LAB_INSTRUMENTS.MANUFACTURER' | translate }}</th>
+            <th>{{ 'LAB_INSTRUMENTS.STATUS' | translate }}</th>
+            <th>{{ 'LAB_INSTRUMENTS.CALIBRATION' | translate }}</th>
+            <th>{{ 'LAB_INSTRUMENTS.MAINTENANCE' | translate }}</th>
+            @if (canManage()) {
+              <th class="actions-col">{{ 'LAB_INSTRUMENTS.ACTIONS' | translate }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (instr of instruments(); track instr.id) {
+            <tr>
+              <td>{{ instr.name }}</td>
+              <td>{{ instr.serialNumber }}</td>
+              <td>{{ instr.manufacturer ?? '—' }}</td>
+              <td>
+                <span class="status-badge" [attr.data-status]="instr.status">
+                  {{ 'LAB_INSTRUMENTS.STATUS_' + instr.status | translate }}
+                </span>
+              </td>
+              <td>
+                @if (instr.calibrationOverdue) {
+                  <span class="overdue-badge">{{ 'LAB_INSTRUMENTS.OVERDUE' | translate }}</span>
+                } @else {
+                  {{ instr.nextCalibrationDate ?? '—' }}
+                }
+              </td>
+              <td>
+                @if (instr.maintenanceOverdue) {
+                  <span class="overdue-badge">{{ 'LAB_INSTRUMENTS.OVERDUE' | translate }}</span>
+                } @else {
+                  {{ instr.nextMaintenanceDate ?? '—' }}
+                }
+              </td>
+              @if (canManage()) {
+                <td class="actions-col">
+                  <button
+                    class="btn-icon"
+                    (click)="openEdit(instr)"
+                    title="{{ 'COMMON.EDIT' | translate }}"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button
+                    class="btn-icon danger"
+                    (click)="deactivate(instr)"
+                    title="{{ 'COMMON.DELETE' | translate }}"
+                  >
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>
