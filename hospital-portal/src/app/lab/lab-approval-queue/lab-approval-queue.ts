@@ -287,23 +287,8 @@ export class LabApprovalQueueComponent implements OnInit {
   }
 
   getApprovalStatusClass(status: string): string {
-    switch (status) {
-      case 'ACTIVE':
-        return 'status-badge status-completed';
-      case 'APPROVED':
-        return 'status-badge status-collected';
-      case 'PENDING_QA_REVIEW':
-      case 'PENDING_DIRECTOR_APPROVAL':
-        return 'status-badge status-pending';
-      case 'DRAFT':
-        return 'status-badge status-in_progress';
-      case 'REJECTED':
-        return 'status-badge status-cancelled';
-      case 'RETIRED':
-        return 'status-badge';
-      default:
-        return 'status-badge';
-    }
+    const base = 'status-badge status-' + (status || '').toLowerCase();
+    return base;
   }
 
   // ── Levey-Jennings chart computation ──────────────────────────────
