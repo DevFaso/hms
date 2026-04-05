@@ -40,7 +40,7 @@ public class StaffController {
 
     @Operation(summary = "List all staff")
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_QUALITY_MANAGER')")
     public ResponseEntity<List<StaffResponseDTO>> getAllStaff(
         @RequestHeader(name = "Accept-Language", required = false) String lang) {
         Locale locale = parseLocale(lang);
@@ -146,7 +146,7 @@ public class StaffController {
     // 2.6 Hospital scoped queries (paged)
     @Operation(summary = "Paged staff by hospital")
     @GetMapping("/hospital/{hospitalId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER')")
     public ResponseEntity<Page<StaffResponseDTO>> pageByHospital(
         @PathVariable UUID hospitalId,
         @ParameterObject Pageable pageable) {
@@ -155,7 +155,7 @@ public class StaffController {
 
     @Operation(summary = "Paged staff by hospital (active only)")
     @GetMapping("/hospital/{hospitalId}/active")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_LAB_DIRECTOR','ROLE_LAB_MANAGER','ROLE_LAB_SCIENTIST','ROLE_LAB_TECHNICIAN','ROLE_QUALITY_MANAGER')")
     public ResponseEntity<Page<StaffResponseDTO>> pageByHospitalActive(
         @PathVariable UUID hospitalId,
         @ParameterObject Pageable pageable) {
