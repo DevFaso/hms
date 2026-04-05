@@ -205,7 +205,9 @@ export class PatientFormComponent implements OnInit {
   /** Generate a short username from first + last name (e.g. tou4821) */
   private generateUsername(first: string, last: string): string {
     const base = (first.charAt(0) + last.substring(0, 2)).toLowerCase().replace(/[^a-z]/g, '');
-    const suffix = Math.floor(1000 + Math.random() * 9000);
+    const array = new Uint32Array(1);
+    crypto.getRandomValues(array);
+    const suffix = 1000 + (array[0] % 9000);
     return `${base}${suffix}`;
   }
 }
