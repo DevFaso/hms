@@ -1337,6 +1337,13 @@ export class DashboardComponent implements OnInit, OnDestroy {
         color: '#7c3aed',
         bg: '#ede9fe',
       },
+      {
+        icon: 'tune',
+        label: 'Test Config',
+        route: '/lab-test-config',
+        color: '#0369a1',
+        bg: '#e0f2fe',
+      },
     ];
   });
 

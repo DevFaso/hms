@@ -245,7 +245,7 @@ describe('Dashboard navigation & RBAC', () => {
     expect(tatCard?.value).toBe('N/A');
   });
 
-  it('labDirectorNavTiles should return 9 tiles with badges for pending counts', () => {
+  it('labDirectorNavTiles should return 11 tiles with badges for pending counts', () => {
     const c = createComponent(['ROLE_LAB_DIRECTOR'], []);
     c.isLabDirector.set(true);
     c.labDirectorDashboard.set({
@@ -265,7 +265,7 @@ describe('Dashboard navigation & RBAC', () => {
       recentApprovalAudit: [],
     });
     const tiles = c.labDirectorNavTiles();
-    expect(tiles.length).toBe(10);
+    expect(tiles.length).toBe(11);
     const approvalTile = tiles.find((t) => t.label === 'Approval Queue');
     expect(approvalTile?.count).toBe(5);
   });
