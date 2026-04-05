@@ -1337,6 +1337,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
         color: '#7c3aed',
         bg: '#ede9fe',
       },
+      {
+        icon: 'precision_manufacturing',
+        label: 'Instruments',
+        route: '/lab-instruments',
+        color: '#0284c7',
+        bg: '#e0f2fe',
+      },
+      {
+        icon: 'inventory_2',
+        label: 'Inventory',
+        route: '/lab-inventory',
+        color: '#0891b2',
+        bg: '#cffafe',
+      },
     ];
   });
 

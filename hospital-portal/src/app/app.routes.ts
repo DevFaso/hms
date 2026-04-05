@@ -399,6 +399,36 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./lab/lab-staff-list/lab-staff-list').then((m) => m.LabStaffListComponent),
       },
+      {
+        path: 'lab-instruments',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-instruments/lab-instruments').then((m) => m.LabInstrumentsComponent),
+      },
+      {
+        path: 'lab-inventory',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-inventory/lab-inventory').then((m) => m.LabInventoryComponent),
+      },
 
       // Profile (all authenticated users)
       {
