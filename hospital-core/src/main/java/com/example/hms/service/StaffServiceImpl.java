@@ -530,7 +530,8 @@ public class StaffServiceImpl implements StaffService {
     public StaffResponseDTO updateStaffLabRole(UUID staffId, String newRoleCode, Locale locale) {
         if (!ASSIGNABLE_LAB_ROLES.contains(newRoleCode)) {
             throw new BusinessRuleException(
-                "roleCode must be one of: " + String.join(", ", ASSIGNABLE_LAB_ROLES));
+                getLocalizedMessage("staff.lab.role.invalid",
+                    new Object[]{String.join(", ", ASSIGNABLE_LAB_ROLES)}, locale));
         }
 
         Staff staff = staffRepository.findById(staffId)
@@ -545,13 +546,14 @@ public class StaffServiceImpl implements StaffService {
         String currentCode = assignment.getRole().getCode();
         if (!LAB_ROLE_CODES.contains(currentCode)) {
             throw new BusinessRuleException(
-                "Cannot change role of non-lab staff member. Current role: " + currentCode);
+                getLocalizedMessage("staff.lab.role.nonLabStaff",
+                    new Object[]{currentCode}, locale));
         }
 
         // Don't allow changing LAB_DIRECTOR role via this endpoint
         if ("ROLE_LAB_DIRECTOR".equals(currentCode)) {
             throw new BusinessRuleException(
-                "Cannot change Lab Director role through this endpoint. Contact a Hospital Admin.");
+                getLocalizedMessage("staff.lab.role.directorProtected", null, locale));
         }
 
         if (newRoleCode.equals(currentCode)) {
@@ -560,7 +562,9 @@ public class StaffServiceImpl implements StaffService {
 
         // Look up the new role entity
         Role newRole = roleRepository.findByCode(newRoleCode)
-            .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + newRoleCode));
+            .orElseThrow(() -> new ResourceNotFoundException(
+                getLocalizedMessage("staff.lab.role.notFound",
+                    new Object[]{newRoleCode}, locale)));
 
         // Update the assignment's role
         assignment.setRole(newRole);

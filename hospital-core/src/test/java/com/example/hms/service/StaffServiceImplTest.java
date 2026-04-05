@@ -1023,6 +1023,9 @@ class StaffServiceImplTest {
 
     @Test
     void updateStaffLabRole_invalidRoleCode_throws() {
+        when(messageSource.getMessage(eq("staff.lab.role.invalid"), any(), any(Locale.class)))
+                .thenReturn("roleCode must be one of: ROLE_LAB_TECHNICIAN, ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER");
+
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_DOCTOR", locale))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("roleCode must be one of");
@@ -1030,6 +1033,9 @@ class StaffServiceImplTest {
 
     @Test
     void updateStaffLabRole_directorRole_throws() {
+        when(messageSource.getMessage(eq("staff.lab.role.invalid"), any(), any(Locale.class)))
+                .thenReturn("roleCode must be one of: ROLE_LAB_TECHNICIAN, ROLE_LAB_SCIENTIST, ROLE_LAB_MANAGER");
+
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_DIRECTOR", locale))
                 .isInstanceOf(BusinessRuleException.class)
                 .hasMessageContaining("roleCode must be one of");
@@ -1056,6 +1062,8 @@ class StaffServiceImplTest {
         staff.setAssignment(assignment);
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(messageSource.getMessage(eq("staff.lab.role.nonLabStaff"), any(), any(Locale.class)))
+                .thenReturn("Cannot change role of non-lab staff member. Current role: ROLE_DOCTOR");
 
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
                 .isInstanceOf(BusinessRuleException.class)
@@ -1074,6 +1082,8 @@ class StaffServiceImplTest {
         staff.setAssignment(assignment);
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(messageSource.getMessage(eq("staff.lab.role.directorProtected"), any(), any(Locale.class)))
+                .thenReturn("Cannot change Lab Director role through this endpoint. Contact a Hospital Admin.");
 
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
                 .isInstanceOf(BusinessRuleException.class)
@@ -1093,6 +1103,8 @@ class StaffServiceImplTest {
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(roleRepository.findByCode("ROLE_LAB_SCIENTIST")).thenReturn(Optional.empty());
+        when(messageSource.getMessage(eq("staff.lab.role.notFound"), any(), any(Locale.class)))
+                .thenReturn("Role not found: ROLE_LAB_SCIENTIST");
 
         assertThatThrownBy(() -> staffService.updateStaffLabRole(staffId, "ROLE_LAB_SCIENTIST", locale))
                 .isInstanceOf(ResourceNotFoundException.class);

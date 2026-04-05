@@ -2,6 +2,7 @@ import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
+import { TranslateModule } from '@ngx-translate/core';
 import { LabStaffListComponent } from './lab-staff-list';
 import { AuthService } from '../../auth/auth.service';
 import { PagedResponse, StaffResponse } from '../../services/staff.service';
@@ -61,7 +62,7 @@ describe('LabStaffListComponent', () => {
     authSpy.getHospitalId.and.returnValue('h-1');
 
     TestBed.configureTestingModule({
-      imports: [LabStaffListComponent],
+      imports: [LabStaffListComponent, TranslateModule.forRoot()],
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
@@ -120,7 +121,7 @@ describe('LabStaffListComponent', () => {
     authSpy.getHospitalId.and.returnValue(null);
     component.loadLabStaff();
 
-    expect(component.error()).toContain('No hospital context');
+    expect(component.error()).toContain('LAB_STAFF.NO_HOSPITAL');
     expect(component.loading()).toBeFalse();
   });
 

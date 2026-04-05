@@ -2,21 +2,22 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { StaffService, StaffResponse } from '../../services/staff.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 
 /** Lab roles that can be assigned via the role-update endpoint. */
 const ASSIGNABLE_LAB_ROLES = [
-  { code: 'ROLE_LAB_TECHNICIAN', label: 'Lab Technician' },
-  { code: 'ROLE_LAB_SCIENTIST', label: 'Lab Scientist' },
-  { code: 'ROLE_LAB_MANAGER', label: 'Lab Manager' },
+  { code: 'ROLE_LAB_TECHNICIAN', labelKey: 'LAB_STAFF.LAB_TECHNICIAN' },
+  { code: 'ROLE_LAB_SCIENTIST', labelKey: 'LAB_STAFF.LAB_SCIENTIST' },
+  { code: 'ROLE_LAB_MANAGER', labelKey: 'LAB_STAFF.LAB_MANAGER' },
 ];
 
 @Component({
   selector: 'app-lab-staff-list',
   standalone: true,
-  imports: [CommonModule, RouterModule, FormsModule],
+  imports: [CommonModule, RouterModule, FormsModule, TranslateModule],
   templateUrl: './lab-staff-list.html',
   styleUrl: './lab-staff-list.scss',
 })
@@ -24,6 +25,7 @@ export class LabStaffListComponent implements OnInit {
   private readonly staffService = inject(StaffService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   loading = signal(true);
   error = signal<string | null>(null);
@@ -54,7 +56,7 @@ export class LabStaffListComponent implements OnInit {
   loadLabStaff(): void {
     const hospitalId = this.auth.getHospitalId();
     if (!hospitalId) {
-      this.error.set('No hospital context found. Please select a hospital.');
+      this.error.set(this.translate.instant('LAB_STAFF.NO_HOSPITAL'));
       this.loading.set(false);
       return;
     }
@@ -70,7 +72,7 @@ export class LabStaffListComponent implements OnInit {
       },
       error: (err) => {
         console.error('Failed to load lab staff', err);
-        this.error.set('Failed to load lab staff. Please try again.');
+        this.error.set(this.translate.instant('LAB_STAFF.LOAD_ERROR'));
         this.loading.set(false);
       },
     });
@@ -102,13 +104,17 @@ export class LabStaffListComponent implements OnInit {
       next: (updated) => {
         // Update the local list in-place
         this.staff.update((list) => list.map((s) => (s.id === updated.id ? updated : s)));
-        this.toast.success(`Role updated to ${updated.roleName ?? newCode}`);
+        this.toast.success(
+          this.translate.instant('LAB_STAFF.ROLE_UPDATED', {
+            role: updated.roleName ?? newCode,
+          }),
+        );
         this.saving.set(false);
         this.cancelEdit();
       },
       error: (err) => {
         console.error('Failed to update role', err);
-        this.toast.error(err?.error?.message ?? 'Failed to update role. Please try again.');
+        this.toast.error(err?.error?.message ?? this.translate.instant('LAB_STAFF.UPDATE_ERROR'));
         this.saving.set(false);
       },
     });
