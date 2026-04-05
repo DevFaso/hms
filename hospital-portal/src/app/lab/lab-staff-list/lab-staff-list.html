@@ -1,0 +1,128 @@
+<div class="lab-staff-container">
+  <header class="page-header">
+    <div class="header-left">
+      <span class="material-symbols-outlined header-icon">badge</span>
+      <div>
+        <h1 class="page-title">Lab Staff Management</h1>
+        <p class="page-subtitle">View and manage laboratory staff roles</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <span class="count-badge">{{ totalElements() }} staff</span>
+      <button class="btn-refresh" (click)="loadLabStaff()" [disabled]="loading()">
+        <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="loading-state">
+      <span class="material-symbols-outlined spin">progress_activity</span>
+      <p>Loading lab staff…</p>
+    </div>
+  }
+
+  <!-- Error -->
+  @if (error(); as err) {
+    <div class="error-state">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ err }}</p>
+      <button class="btn-primary" (click)="loadLabStaff()">Retry</button>
+    </div>
+  }
+
+  <!-- Empty -->
+  @if (!loading() && !error() && staff().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined">group_off</span>
+      <p>No lab staff found for this hospital.</p>
+    </div>
+  }
+
+  <!-- Staff table -->
+  @if (!loading() && !error() && staff().length > 0) {
+    <div class="table-wrap">
+      <table class="staff-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>Department</th>
+            <th>License #</th>
+            <th>Role</th>
+            @if (canEditRoles()) {
+              <th class="actions-col">Actions</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (member of staff(); track member.id) {
+            <tr>
+              <td class="name-cell">
+                <span class="material-symbols-outlined avatar-icon">person</span>
+                {{ member.name }}
+              </td>
+              <td>{{ member.email }}</td>
+              <td>{{ member.departmentName ?? '—' }}</td>
+              <td>{{ member.licenseNumber ?? '—' }}</td>
+              <td>
+                @if (editingId() === member.id) {
+                  <select
+                    class="role-select"
+                    title="Select lab role"
+                    [ngModel]="editRoleCode()"
+                    (ngModelChange)="editRoleCode.set($event)"
+                    [disabled]="saving()"
+                  >
+                    @for (role of assignableRoles; track role.code) {
+                      <option [value]="role.code">{{ role.label }}</option>
+                    }
+                  </select>
+                } @else {
+                  <span class="role-badge" [class]="roleBadgeClass(member.roleCode)">
+                    {{ member.roleName ?? member.roleCode }}
+                  </span>
+                }
+              </td>
+              @if (canEditRoles()) {
+                <td class="actions-col">
+                  @if (editingId() === member.id) {
+                    <button
+                      class="btn-icon btn-save"
+                      (click)="saveRole(member)"
+                      [disabled]="saving()"
+                      title="Save"
+                    >
+                      <span class="material-symbols-outlined">check</span>
+                    </button>
+                    <button
+                      class="btn-icon btn-cancel"
+                      (click)="cancelEdit()"
+                      [disabled]="saving()"
+                      title="Cancel"
+                    >
+                      <span class="material-symbols-outlined">close</span>
+                    </button>
+                  } @else if (isEditable(member)) {
+                    <button
+                      class="btn-icon btn-edit"
+                      (click)="startEdit(member)"
+                      title="Change role"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  } @else {
+                    <span class="director-lock" title="Lab Director role cannot be changed here">
+                      <span class="material-symbols-outlined">lock</span>
+                    </span>
+                  }
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</div>

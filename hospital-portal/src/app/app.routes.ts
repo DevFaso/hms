@@ -384,6 +384,21 @@ export const routes: Routes = [
             (m) => m.LabOpsDashboardComponent,
           ),
       },
+      {
+        path: 'lab-staff',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_LAB_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-staff-list/lab-staff-list').then((m) => m.LabStaffListComponent),
+      },
 
       // Profile (all authenticated users)
       {

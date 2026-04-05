@@ -507,4 +507,66 @@ public class StaffServiceImpl implements StaffService {
         return messageSource.getMessage(code, args, locale);
     }
 
+    // ── MVP 3: Lab staff management ─────────────────────────────
+
+    private static final Set<String> LAB_ROLE_CODES = Set.of(
+        "ROLE_LAB_TECHNICIAN", "ROLE_LAB_SCIENTIST", "ROLE_LAB_MANAGER", "ROLE_LAB_DIRECTOR"
+    );
+
+    private static final Set<String> ASSIGNABLE_LAB_ROLES = Set.of(
+        "ROLE_LAB_TECHNICIAN", "ROLE_LAB_SCIENTIST", "ROLE_LAB_MANAGER"
+    );
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<StaffResponseDTO> getLabStaffByHospitalId(UUID hospitalId, Pageable pageable) {
+        requireHospitalScope(hospitalId);
+        return staffRepository.findLabStaffByHospitalId(hospitalId, LAB_ROLE_CODES, pageable)
+            .map(staffMapper::toStaffDTO);
+    }
+
+    @Override
+    @Transactional
+    public StaffResponseDTO updateStaffLabRole(UUID staffId, String newRoleCode, Locale locale) {
+        if (!ASSIGNABLE_LAB_ROLES.contains(newRoleCode)) {
+            throw new BusinessRuleException(
+                "roleCode must be one of: " + String.join(", ", ASSIGNABLE_LAB_ROLES));
+        }
+
+        Staff staff = staffRepository.findById(staffId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                getLocalizedMessage("staff.notFound", new Object[]{staffId}, locale)));
+
+        // Verify the staff belongs to the caller's hospital scope
+        requireHospitalScope(staff.getHospital().getId());
+
+        // Verify current role is a lab role (cannot change non-lab staff)
+        UserRoleHospitalAssignment assignment = staff.getAssignment();
+        String currentCode = assignment.getRole().getCode();
+        if (!LAB_ROLE_CODES.contains(currentCode)) {
+            throw new BusinessRuleException(
+                "Cannot change role of non-lab staff member. Current role: " + currentCode);
+        }
+
+        // Don't allow changing LAB_DIRECTOR role via this endpoint
+        if ("ROLE_LAB_DIRECTOR".equals(currentCode)) {
+            throw new BusinessRuleException(
+                "Cannot change Lab Director role through this endpoint. Contact a Hospital Admin.");
+        }
+
+        if (newRoleCode.equals(currentCode)) {
+            return staffMapper.toStaffDTO(staff);  // no-op
+        }
+
+        // Look up the new role entity
+        Role newRole = roleRepository.findByCode(newRoleCode)
+            .orElseThrow(() -> new ResourceNotFoundException("Role not found: " + newRoleCode));
+
+        // Update the assignment's role
+        assignment.setRole(newRole);
+        assignmentRepository.save(assignment);
+
+        return staffMapper.toStaffDTO(staff);
+    }
+
 }
