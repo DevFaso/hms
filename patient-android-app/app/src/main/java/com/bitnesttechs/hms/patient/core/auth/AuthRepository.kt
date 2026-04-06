@@ -28,6 +28,16 @@ class AuthRepository @Inject constructor(
             val response = api.login(LoginRequest(username, password))
             val body = response.body()
             if (response.isSuccessful && body != null) {
+                // ── Patient-only gate ──────────────────────────────────
+                // The mobile app is exclusively for patients.  Reject
+                // any user who does not hold ROLE_PATIENT.
+                val roles = body.roles.orEmpty().map { it.uppercase() }
+                if (!roles.any { it.contains("PATIENT") }) {
+                    return AuthResult.Error(
+                        "This app is for patients only. Please use the web portal to sign in."
+                    )
+                }
+
                 // Login response is FLAT — token + user fields at top level
                 tokenStorage.accessToken = body.accessToken
                 tokenStorage.refreshToken = body.refreshToken

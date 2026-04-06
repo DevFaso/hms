@@ -52,4 +52,19 @@ public class JwtResponse {
     /** All hospital IDs this user is permitted to access (active assignments). */
     private List<UUID> hospitalIds;
 
+    // ── Multi-role selection ──
+
+    /**
+     * True when the user holds more than one role and must pick which role to
+     * log in as.  When this flag is set the response contains NO tokens — the
+     * client must re-submit the login request with {@code selectedRole} set.
+     */
+    private boolean roleSelectionRequired;
+
+    /**
+     * The roles the user may choose from.  Only populated when
+     * {@link #roleSelectionRequired} is {@code true}.
+     */
+    private List<String> availableRoles;
+
 }

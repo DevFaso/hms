@@ -194,6 +194,30 @@ public class JwtTokenProvider {
             .compact();
     }
 
+    /**
+     * Generate a refresh token for a specific user with an explicit set of roles.
+     * Used when the user selects a single role at login so the refresh token
+     * contains only the chosen role.
+     */
+    public String generateRefreshToken(TokenUserDescriptor descriptor) {
+        Objects.requireNonNull(descriptor, "descriptor is required");
+
+        List<String> roles = descriptor.roles() != null
+                ? descriptor.roles().stream().toList()
+                : List.of();
+
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + refreshTokenExpirationMs);
+
+        return Jwts.builder()
+            .subject(descriptor.username())
+            .claim(ROLES_CLAIM, roles)
+            .issuedAt(now)
+            .expiration(expiryDate)
+            .signWith(secretKey)
+            .compact();
+    }
+
     private Map<String, Object> buildTenantClaims(UUID userId, List<String> roles) {
         Map<String, Object> claims = new HashMap<>();
         boolean isSuperAdmin = roles.stream().anyMatch(ROLE_SUPER_ADMIN::equalsIgnoreCase);

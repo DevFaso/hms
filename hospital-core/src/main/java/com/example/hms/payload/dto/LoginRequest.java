@@ -16,5 +16,12 @@ public class LoginRequest {
 
     @NotBlank
     private String password;
+
+    /**
+     * Optional — when a user holds multiple roles, the frontend sends a second
+     * login request with the role the user picked.  When {@code null} the backend
+     * returns the full role list so the UI can show a role-picker.
+     */
+    private String selectedRole;
 }
 

@@ -33,6 +33,15 @@ final class AuthManager: ObservableObject {
             body: request,
             requiresAuth: false
         )
+
+        // ── Patient-only gate ──────────────────────────────────
+        // The mobile app is exclusively for patients.  Reject any user
+        // who does not hold ROLE_PATIENT.
+        let roles = (response.roles ?? []).map { $0.uppercased() }
+        guard roles.contains(where: { $0.contains("PATIENT") }) else {
+            throw AuthError.notPatient
+        }
+
         KeychainHelper.shared.accessToken = response.accessToken ?? response.token
         KeychainHelper.shared.refreshToken = response.refreshToken
         KeychainHelper.shared.savedUsername = username
@@ -93,11 +102,13 @@ final class AuthManager: ObservableObject {
 enum AuthError: LocalizedError {
     case noSavedCredentials
     case biometricFailed
+    case notPatient
 
     var errorDescription: String? {
         switch self {
         case .noSavedCredentials: "No saved credentials. Please log in with username first."
         case .biometricFailed: "Biometric authentication failed."
+        case .notPatient: "This app is for patients only. Please use the web portal to sign in."
         }
     }
 }

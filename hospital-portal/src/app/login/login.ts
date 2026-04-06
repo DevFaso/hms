@@ -25,6 +25,10 @@ export class Login implements OnInit {
   showBootstrapPassword = false;
   currentYear = new Date().getFullYear();
 
+  /** Multi-role selection state */
+  roleSelectionMode = false;
+  availableRoles: string[] = [];
+
   /** Bootstrap (first-time setup) state */
   bootstrapAllowed = false;
   bootstrapMode = false;
@@ -140,7 +144,7 @@ export class Login implements OnInit {
       });
   }
 
-  submit(): void {
+  submit(selectedRole?: string): void {
     if (!this.isBrowser || this.loading) return;
     this.error = '';
     this.bootstrapSuccess = '';
@@ -149,6 +153,14 @@ export class Login implements OnInit {
       return;
     }
     this.loading = true;
+
+    const payload: Record<string, string> = {
+      username: this.username,
+      password: this.password,
+    };
+    if (selectedRole) {
+      payload['selectedRole'] = selectedRole;
+    }
 
     this.http
       .post<{
@@ -176,12 +188,19 @@ export class Login implements OnInit {
         primaryHospitalId?: string;
         primaryHospitalName?: string;
         hospitalIds?: string[];
-      }>('/auth/login', {
-        username: this.username,
-        password: this.password,
-      })
+        roleSelectionRequired?: boolean;
+        availableRoles?: string[];
+      }>('/auth/login', payload)
       .subscribe({
         next: (res) => {
+          // ── Multi-role gate: ask user to pick a role ──
+          if (res?.roleSelectionRequired && res.availableRoles?.length) {
+            this.availableRoles = res.availableRoles;
+            this.roleSelectionMode = true;
+            this.loading = false;
+            return;
+          }
+
           const token = res?.token ?? res?.accessToken ?? res?.jwt;
           if (!token) {
             this.error = 'Token missing in response.';
@@ -201,6 +220,12 @@ export class Login implements OnInit {
           // on all subsequent requests (including the very first one after redirect).
           const jwtRoles = this.auth.getRoles();
           this.roleContext.setRoles(jwtRoles);
+
+          // For multi-role users the JWT now contains only the chosen role.
+          // For single-role users setRoles() already sets activeRole automatically.
+          if (jwtRoles.length === 1) {
+            this.roleContext.activeRole = jwtRoles[0];
+          }
 
           // Prefer hospital IDs from the response body (authoritative, fresh from DB)
           // over JWT claims (which may be stale if assignment changed since last login).
@@ -254,6 +279,51 @@ export class Login implements OnInit {
             err?.error?.message ?? err?.error?.error ?? 'Login failed. Please try again.';
         },
       });
+  }
+
+  // ─── Multi-Role Selection ─────────────────────────────────────────────────
+
+  /** User picks a role from the role-picker UI → re-submit with that role. */
+  selectRole(role: string): void {
+    this.roleSelectionMode = false;
+    this.submit(role);
+  }
+
+  /** Go back to the credential form. */
+  cancelRoleSelection(): void {
+    this.roleSelectionMode = false;
+    this.availableRoles = [];
+    this.password = '';
+    this.error = '';
+  }
+
+  /** Human-readable role label, e.g. "ROLE_DOCTOR" → "Doctor" */
+  formatRoleName(role: string): string {
+    return this.auth.formatRole(role);
+  }
+
+  /** Material icon for a role — used in the role-picker cards. */
+  roleIcon(role: string): string {
+    const icons: Record<string, string> = {
+      ROLE_SUPER_ADMIN: 'admin_panel_settings',
+      ROLE_HOSPITAL_ADMIN: 'local_hospital',
+      ROLE_ADMIN: 'settings',
+      ROLE_DOCTOR: 'stethoscope',
+      ROLE_NURSE: 'medical_services',
+      ROLE_MIDWIFE: 'pregnant_woman',
+      ROLE_RECEPTIONIST: 'desk',
+      ROLE_LAB_DIRECTOR: 'biotech',
+      ROLE_LAB_MANAGER: 'science',
+      ROLE_LAB_SCIENTIST: 'science',
+      ROLE_LAB_TECHNICIAN: 'biotech',
+      ROLE_QUALITY_MANAGER: 'verified',
+      ROLE_PHARMACIST: 'medication',
+      ROLE_RADIOLOGIST: 'radiology',
+      ROLE_BILLING_OFFICER: 'payments',
+      ROLE_PATIENT: 'person',
+      ROLE_STAFF: 'badge',
+    };
+    return icons[role] ?? 'person';
   }
 
   togglePasswordVisibility(): void {

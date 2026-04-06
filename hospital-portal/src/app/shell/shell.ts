@@ -5,6 +5,7 @@ import { Subscription } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
+import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { IdleService } from '../core/idle.service';
 import { NotificationService, Notification } from '../services/notification.service';
@@ -36,6 +37,7 @@ interface NavItem {
 export class ShellComponent implements OnInit, OnDestroy {
   private readonly auth = inject(AuthService);
   private readonly permissions = inject(PermissionService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly router = inject(Router);
   protected readonly toast = inject(ToastService);
   private readonly notifService = inject(NotificationService);
@@ -71,6 +73,9 @@ export class ShellComponent implements OnInit, OnDestroy {
     return `${u.firstName?.charAt(0) ?? ''}${u.lastName?.charAt(0) ?? ''}`.toUpperCase();
   });
   userRole = computed(() => {
+    // Show the role the user chose at login (or the only role they hold)
+    const active = this.roleContext.activeRole;
+    if (active) return this.auth.formatRole(active);
     const u = this.auth.currentProfile() ?? this.userProfile();
     if (!u || u.roles.length === 0) return '';
     return this.auth.formatRole(u.roles[0]);
@@ -82,8 +87,11 @@ export class ShellComponent implements OnInit, OnDestroy {
 
   /** Base permission-filtered list — source of truth before ordering */
   private readonly baseNavItems = computed<NavItem[]>(() => {
-    // Patient gets a completely different nav — Epic MyChart style
-    if (this.auth.hasAnyRole(['ROLE_PATIENT'])) {
+    // When the user selected "Patient" at login, show the patient MyChart nav.
+    // Previously this used hasAnyRole(['ROLE_PATIENT']) which meant a dual-role
+    // user (e.g. Nurse + Patient) would always get patient nav only.
+    const activeRole = this.roleContext.activeRole;
+    if (activeRole === 'ROLE_PATIENT') {
       return [
         {
           icon: 'dashboard',

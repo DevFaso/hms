@@ -143,12 +143,53 @@ public class AuthController {
             log.debug("🔐 [LOGIN] AuthenticationManager succeeded; building tokens...");
             SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            String accessToken = jwtTokenProvider.generateAccessToken(authentication);
-            String refreshToken = jwtTokenProvider.generateRefreshToken(authentication);
-            log.debug("🔐 [LOGIN] Tokens generated; fetching user entity...");
+            // Collect ALL roles the user holds across assignments
+            var allRoles = authentication.getAuthorities().stream()
+                    .map(auth -> auth.getAuthority())
+                    .distinct()
+                    .toList();
 
+            // ── Multi-role selection gate ──
+            // If the user holds more than one role and has NOT yet chosen, ask them to pick.
+            if (allRoles.size() > 1 && (loginRequest.getSelectedRole() == null || loginRequest.getSelectedRole().isBlank())) {
+                long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+                log.info("🔐 [LOGIN] Multi-role selection required for user='{}' roles={} in {}ms",
+                        loginRequest.getUsername(), allRoles, elapsedMs);
+
+                var body = JwtResponse.builder()
+                        .roleSelectionRequired(true)
+                        .availableRoles(allRoles)
+                        .username(loginRequest.getUsername())
+                        .build();
+                return ResponseEntity.ok(body);
+            }
+
+            // Determine the effective role list for token generation
+            List<String> effectiveRoles;
+            if (loginRequest.getSelectedRole() != null && !loginRequest.getSelectedRole().isBlank()) {
+                String selected = loginRequest.getSelectedRole().trim();
+                // Validate the user actually holds this role
+                if (allRoles.stream().noneMatch(r -> r.equalsIgnoreCase(selected))) {
+                    log.warn("🔐 [LOGIN] User '{}' tried to select role '{}' but holds only {}",
+                            loginRequest.getUsername(), selected, allRoles);
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(new MessageResponse("You do not hold the role: " + selected));
+                }
+                effectiveRoles = List.of(selected);
+            } else {
+                // Single-role user — proceed as before
+                effectiveRoles = allRoles;
+            }
+
+            // Generate tokens scoped to the effective roles
             var user = userRepository.findByUsername(loginRequest.getUsername())
                     .orElseThrow(() -> new RuntimeException("Authenticated user not found"));
+
+            var descriptor = new com.example.hms.security.TokenUserDescriptor(
+                    user.getId(), user.getUsername(), effectiveRoles);
+            String accessToken = jwtTokenProvider.generateAccessToken(descriptor);
+            String refreshToken = jwtTokenProvider.generateRefreshToken(descriptor);
+            log.debug("🔐 [LOGIN] Tokens generated (effectiveRoles={}); fetching profiles...", effectiveRoles);
 
             userCredentialLifecycleService.recordSuccessfulLogin(user.getId());
 
@@ -165,8 +206,7 @@ public class AuthController {
                 profileType = null;
             }
 
-            var roles = jwtTokenProvider.getRolesFromToken(accessToken);
-            String preferredRole = jwtTokenProvider.resolvePreferredRole(roles);
+            String preferredRole = jwtTokenProvider.resolvePreferredRole(effectiveRoles);
 
             // ── Hospital assignment context (source of truth: UserRoleHospitalAssignment) ──
             var hospitalContext = resolveHospitalContext(user.getId());
@@ -183,7 +223,7 @@ public class AuthController {
                     .phoneNumber(user.getPhoneNumber())
                     .dateOfBirth(patient != null ? patient.getDateOfBirth() : null)
                     .gender(patient != null ? patient.getGender() : null)
-                    .roles(roles)
+                    .roles(effectiveRoles)
                     .profileType(profileType)
                     .licenseNumber(staff != null ? staff.getLicenseNumber() : null)
                     .patientId(patient != null ? patient.getId() : null)
@@ -199,7 +239,7 @@ public class AuthController {
                     .build();
 
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
-            log.info("🔐 [LOGIN] Success user='{}' roles={} in {}ms", loginRequest.getUsername(), roles, elapsedMs);
+            log.info("🔐 [LOGIN] Success user='{}' effectiveRoles={} in {}ms", loginRequest.getUsername(), effectiveRoles, elapsedMs);
             return ResponseEntity.ok(body);
 
         } catch (BadCredentialsException ex) {

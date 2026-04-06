@@ -171,7 +171,7 @@ class AuthControllerTest {
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(new UsernamePasswordAuthenticationToken("drjones", null));
 
-        LoginRequest req = new LoginRequest("drjones", "CorrectPass1!");
+        LoginRequest req = new LoginRequest("drjones", "CorrectPass1!", null);
 
         mockMvc.perform(post("/auth/verify-password")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -187,7 +187,7 @@ class AuthControllerTest {
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(new BadCredentialsException("Bad credentials"));
 
-        LoginRequest req = new LoginRequest("drjones", "WrongPassword!");
+        LoginRequest req = new LoginRequest("drjones", "WrongPassword!", null);
 
         mockMvc.perform(post("/auth/verify-password")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -200,7 +200,7 @@ class AuthControllerTest {
     void verifyPassword_usernameMismatch_returns403() throws Exception {
         authenticateAs("drjones");
 
-        LoginRequest req = new LoginRequest("someoneelse", "AnyPassword1!");
+        LoginRequest req = new LoginRequest("someoneelse", "AnyPassword1!", null);
 
         mockMvc.perform(post("/auth/verify-password")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -216,7 +216,7 @@ class AuthControllerTest {
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenThrow(new DisabledException("Account is disabled"));
 
-        LoginRequest req = new LoginRequest("drjones", "CorrectPass1!");
+        LoginRequest req = new LoginRequest("drjones", "CorrectPass1!", null);
 
         mockMvc.perform(post("/auth/verify-password")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -229,7 +229,7 @@ class AuthControllerTest {
     void verifyPassword_blankPassword_returns400() throws Exception {
         authenticateAs("drjones");
 
-        LoginRequest req = new LoginRequest("drjones", "");
+        LoginRequest req = new LoginRequest("drjones", "", null);
 
         mockMvc.perform(post("/auth/verify-password")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -241,7 +241,7 @@ class AuthControllerTest {
     void verifyPassword_blankUsername_returns400() throws Exception {
         authenticateAs("drjones");
 
-        LoginRequest req = new LoginRequest("", "SomePassword1!");
+        LoginRequest req = new LoginRequest("", "SomePassword1!", null);
 
         mockMvc.perform(post("/auth/verify-password")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -289,20 +289,20 @@ class AuthControllerTest {
 
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(auth);
-        when(jwtTokenProvider.generateAccessToken(any(org.springframework.security.core.Authentication.class)))
+        when(jwtTokenProvider.generateAccessToken(any(
+                        com.example.hms.security.TokenUserDescriptor.class)))
                 .thenReturn("mock.access.token");
-        when(jwtTokenProvider.generateRefreshToken(any(org.springframework.security.core.Authentication.class)))
+        when(jwtTokenProvider.generateRefreshToken(any(
+                        com.example.hms.security.TokenUserDescriptor.class)))
                 .thenReturn("mock.refresh.token");
         when(userRepository.findByUsername("admin@hospital-a.com"))
                 .thenReturn(java.util.Optional.of(user));
-        when(jwtTokenProvider.getRolesFromToken("mock.access.token"))
-                .thenReturn(java.util.List.of("ROLE_HOSPITAL_ADMIN"));
         when(jwtTokenProvider.resolvePreferredRole(java.util.List.of("ROLE_HOSPITAL_ADMIN")))
                 .thenReturn("ROLE_HOSPITAL_ADMIN");
         when(assignmentRepository.findAllDetailedByUserId(userId))
                 .thenReturn(java.util.List.of(assignment));
 
-        LoginRequest loginReq = new LoginRequest("admin@hospital-a.com", "Password1!");
+        LoginRequest loginReq = new LoginRequest("admin@hospital-a.com", "Password1!", null);
 
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -331,20 +331,20 @@ class AuthControllerTest {
 
         when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class)))
                 .thenReturn(auth);
-        when(jwtTokenProvider.generateAccessToken(any(org.springframework.security.core.Authentication.class)))
+        when(jwtTokenProvider.generateAccessToken(any(
+                        com.example.hms.security.TokenUserDescriptor.class)))
                 .thenReturn("mock.access.token");
-        when(jwtTokenProvider.generateRefreshToken(any(org.springframework.security.core.Authentication.class)))
+        when(jwtTokenProvider.generateRefreshToken(any(
+                        com.example.hms.security.TokenUserDescriptor.class)))
                 .thenReturn("mock.refresh.token");
         when(userRepository.findByUsername("newuser@example.com"))
                 .thenReturn(java.util.Optional.of(user));
-        when(jwtTokenProvider.getRolesFromToken("mock.access.token"))
-                .thenReturn(java.util.List.of("ROLE_DOCTOR"));
         when(jwtTokenProvider.resolvePreferredRole(java.util.List.of("ROLE_DOCTOR")))
                 .thenReturn("ROLE_DOCTOR");
         when(assignmentRepository.findAllDetailedByUserId(userId))
                 .thenReturn(java.util.List.of());
 
-        LoginRequest loginReq = new LoginRequest("newuser@example.com", "Password1!");
+        LoginRequest loginReq = new LoginRequest("newuser@example.com", "Password1!", null);
 
         mockMvc.perform(post("/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
