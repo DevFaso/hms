@@ -21,6 +21,8 @@ function mockDefinition(overrides: Record<string, unknown> = {}): Record<string,
     reviewedById: null,
     reviewedAt: null,
     rejectionReason: null,
+    preparationInstructions: 'Fasting 12 hours',
+    turnaroundTime: 60,
     referenceRanges: [],
     ...overrides,
   };

@@ -8,7 +8,9 @@ import { LabResultsComponent } from './lab-results';
 function mockResult(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: 'result-1',
+    labOrderId: 'order-1',
     labOrderCode: 'LAB-001',
+    patientId: 'patient-1',
     patientFullName: 'John Doe',
     patientEmail: 'john@example.com',
     hospitalName: 'General Hospital',

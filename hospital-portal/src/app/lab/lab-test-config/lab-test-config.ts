@@ -218,8 +218,8 @@ export class LabTestConfigComponent implements OnInit {
       description: def.description ?? '',
       unit: def.unit ?? '',
       sampleType: def.sampleType ?? '',
-      preparationInstructions: '',
-      turnaroundTime: undefined,
+      preparationInstructions: def.preparationInstructions ?? '',
+      turnaroundTime: def.turnaroundTime ?? undefined,
       isActive: def.isActive,
       assignmentId: this.activeAssignmentId || undefined,
       referenceRanges: def.referenceRanges ? def.referenceRanges.map((r) => ({ ...r })) : [],
@@ -251,7 +251,7 @@ export class LabTestConfigComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('LAB_TEST_CONFIG.SAVE_ERROR'),
+          err?.error?.message ?? this.translate.instant('LAB_TEST_CONFIG.DEF_SAVE_ERROR'),
         );
         this.savingDef.set(false);
       },

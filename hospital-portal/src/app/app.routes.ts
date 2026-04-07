@@ -363,6 +363,7 @@ export const routes: Routes = [
             'ROLE_MIDWIFE',
             'ROLE_LAB_TECHNICIAN',
             'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_MANAGER',
             'ROLE_HOSPITAL_ADMIN',
             'ROLE_ADMIN',
             'ROLE_SUPER_ADMIN',

@@ -1010,6 +1010,7 @@
     "DEF_CREATED": "Définition de test créée avec succès.",
     "DEF_UPDATED": "Définition de test mise à jour avec succès.",
     "DEF_DELETED": "Définition de test supprimée avec succès.",
+    "DEF_SAVE_ERROR": "Échec de l'enregistrement de la définition. Veuillez réessayer.",
     "DELETE_ERROR": "Échec de la suppression. Veuillez réessayer.",
     "CONFIRM_DELETE": "Confirmer la suppression",
     "DELETE_CONFIRM_MSG": "Êtes-vous sûr de vouloir supprimer « {{name}} » ? Cette action est irréversible.",

@@ -1010,6 +1010,7 @@
     "DEF_CREATED": "Test definition created successfully.",
     "DEF_UPDATED": "Test definition updated successfully.",
     "DEF_DELETED": "Test definition deleted successfully.",
+    "DEF_SAVE_ERROR": "Failed to save test definition. Please try again.",
     "DELETE_ERROR": "Failed to delete. Please try again.",
     "CONFIRM_DELETE": "Confirm Delete",
     "DELETE_CONFIRM_MSG": "Are you sure you want to delete \"{{name}}\"? This cannot be undone.",

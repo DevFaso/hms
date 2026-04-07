@@ -1010,6 +1010,7 @@
     "DEF_CREATED": "Definición de prueba creada exitosamente.",
     "DEF_UPDATED": "Definición de prueba actualizada exitosamente.",
     "DEF_DELETED": "Definición de prueba eliminada exitosamente.",
+    "DEF_SAVE_ERROR": "Error al guardar la definición. Intente de nuevo.",
     "DELETE_ERROR": "Error al eliminar. Intente de nuevo.",
     "CONFIRM_DELETE": "Confirmar eliminación",
     "DELETE_CONFIRM_MSG": "¿Está seguro de que desea eliminar \"{{name}}\"? Esta acción no se puede deshacer.",

@@ -5,6 +5,7 @@ import { Observable, map } from 'rxjs';
 export interface LabOrderResponse {
   id: string;
   labOrderCode: string;
+  patientId: string;
   patientFullName: string;
   patientEmail: string;
   hospitalName: string;
@@ -24,7 +25,9 @@ export interface LabOrderResponse {
 
 export interface LabResultResponse {
   id: string;
+  labOrderId: string | null;
   labOrderCode: string;
+  patientId: string | null;
   patientFullName: string;
   patientEmail: string;
   hospitalName: string;
@@ -34,18 +37,18 @@ export interface LabResultResponse {
   resultDate: string;
   notes: string;
   referenceRanges: LabResultReferenceRange[];
-  trendHistory: LabResultTrendPoint[];
-  severityFlag: string;
+  trendHistory?: LabResultTrendPoint[];
+  severityFlag: string | null;
   acknowledged: boolean;
-  acknowledgedAt: string;
-  acknowledgedBy: string;
+  acknowledgedAt: string | null;
+  acknowledgedBy: string | null;
   released: boolean;
-  releasedAt: string;
-  releasedByFullName: string;
-  signedAt: string;
-  signedBy: string;
-  signatureValue: string;
-  signatureNotes: string;
+  releasedAt: string | null;
+  releasedByFullName: string | null;
+  signedAt: string | null;
+  signedBy: string | null;
+  signatureValue: string | null;
+  signatureNotes: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -86,6 +89,8 @@ export interface LabTestDefinition {
   reviewedAt: string | null;
   rejectionReason: string | null;
   unit: string | null;
+  preparationInstructions: string | null;
+  turnaroundTime: number | null;
   referenceRanges?: LabTestReferenceRange[];
 }
 

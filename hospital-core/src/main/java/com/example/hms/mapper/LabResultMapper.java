@@ -46,7 +46,12 @@ public class LabResultMapper {
 
         return LabResultResponseDTO.builder()
             .id(result.getId() != null ? result.getId().toString() : null)
+            .labOrderId(result.getLabOrder() != null && result.getLabOrder().getId() != null
+                ? result.getLabOrder().getId().toString() : null)
             .labOrderCode(context.labOrderCode())
+            .patientId(result.getLabOrder() != null && result.getLabOrder().getPatient() != null
+                && result.getLabOrder().getPatient().getId() != null
+                ? result.getLabOrder().getPatient().getId().toString() : null)
             .patientFullName(context.patientFullName())
             .patientEmail(context.patientEmail())
             .hospitalName(context.hospitalName())

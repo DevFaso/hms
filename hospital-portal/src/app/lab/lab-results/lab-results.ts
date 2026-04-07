@@ -10,7 +10,6 @@ import {
 } from '../../services/lab.service';
 import { ToastService } from '../../core/toast.service';
 import { ProfileService } from '../../services/profile.service';
-import { AuthService } from '../../auth/auth.service';
 
 @Component({
   selector: 'app-lab-results',
@@ -23,7 +22,6 @@ export class LabResultsComponent implements OnInit {
   private readonly labService = inject(LabService);
   private readonly toast = inject(ToastService);
   private readonly profileService = inject(ProfileService);
-  private readonly auth = inject(AuthService);
 
   loading = signal(true);
   results = signal<LabResultResponse[]>([]);
@@ -84,9 +82,9 @@ export class LabResultsComponent implements OnInit {
 
   openEdit(r: LabResultResponse): void {
     this.form = {
-      labOrderId: '',
+      labOrderId: r.labOrderId ?? '',
       assignmentId: this.activeAssignmentId,
-      patientId: '',
+      patientId: r.patientId ?? '',
       resultValue: r.resultValue ?? '',
       resultUnit: r.resultUnit ?? '',
       resultDate: r.resultDate ? r.resultDate.slice(0, 16) : new Date().toISOString().slice(0, 16),
@@ -104,7 +102,7 @@ export class LabResultsComponent implements OnInit {
   onOrderChange(orderId: string): void {
     const order = this.orders().find((o) => o.id === orderId);
     if (order) {
-      this.form.patientId = '';
+      this.form.patientId = order.patientId ?? '';
     }
   }
 
