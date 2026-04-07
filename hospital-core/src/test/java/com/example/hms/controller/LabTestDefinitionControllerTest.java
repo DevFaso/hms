@@ -36,9 +36,15 @@ import org.springframework.security.access.AccessDeniedException;
 
 
 
+import java.lang.reflect.Field;
+
 import java.util.List;
 
 import java.util.UUID;
+
+import java.util.regex.Matcher;
+
+import java.util.regex.Pattern;
 
 
 
@@ -374,6 +380,55 @@ class LabTestDefinitionControllerTest {
 
         assertThat(result.getStatusCode()).isEqualTo(HttpStatus.OK);
 
+    }
+
+
+
+    // ==============================================================================
+    // @PreAuthorize role constant verification — Gap 5 & 6 regression guards
+    // ==============================================================================
+
+    private static List<String> extractRolesFromConstant(String fieldName) throws Exception {
+        Field field = LabTestDefinitionController.class.getDeclaredField(fieldName);
+        field.setAccessible(true);
+        String value = (String) field.get(null);
+        Pattern p = Pattern.compile("'(\\w+)'");
+        Matcher m = p.matcher(value);
+        List<String> roles = new java.util.ArrayList<>();
+        while (m.find()) {
+            roles.add(m.group(1));
+        }
+        return roles;
+    }
+
+    @Test
+    void manageRoles_includesLabDirector() throws Exception {
+        List<String> roles = extractRolesFromConstant("MANAGE_ROLES");
+        assertThat(roles).contains("LAB_DIRECTOR");
+    }
+
+    @Test
+    void manageRoles_includesQualityManager() throws Exception {
+        List<String> roles = extractRolesFromConstant("MANAGE_ROLES");
+        assertThat(roles).contains("QUALITY_MANAGER");
+    }
+
+    @Test
+    void manageRoles_includesOriginalRoles() throws Exception {
+        List<String> roles = extractRolesFromConstant("MANAGE_ROLES");
+        assertThat(roles).contains("HOSPITAL_ADMIN", "LAB_MANAGER", "LAB_SCIENTIST", "SUPER_ADMIN");
+    }
+
+    @Test
+    void viewRoles_includesLabDirectorAndQualityManager() throws Exception {
+        List<String> roles = extractRolesFromConstant("VIEW_ROLES");
+        assertThat(roles).contains("LAB_DIRECTOR", "QUALITY_MANAGER");
+    }
+
+    @Test
+    void approvalRoles_includesLabDirectorAndQualityManager() throws Exception {
+        List<String> roles = extractRolesFromConstant("APPROVAL_ROLES");
+        assertThat(roles).contains("LAB_DIRECTOR", "QUALITY_MANAGER");
     }
 
 }

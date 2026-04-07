@@ -266,6 +266,51 @@ class DashboardConfigServiceTest {
     }
 
     @Test
+    void getDashboardConfig_labTechnicianRole_hasDefaults() {
+        UserRoleHospitalAssignment labTech = buildAssignment(true, "ROLE_LAB_TECHNICIAN", "Lab Technician");
+
+        when(assignmentRepository.findAllDetailedByUserId(userId)).thenReturn(List.of(labTech));
+        when(permissionRepository.findByAssignment_IdIn(any())).thenReturn(Collections.emptyList());
+
+        DashboardConfigResponseDTO result = service.getDashboardConfig(userId);
+
+        assertThat(result.getPrimaryRoleCode()).isEqualTo("ROLE_LAB_TECHNICIAN");
+        assertThat(result.getMergedPermissions())
+                .contains("View Lab Orders", "Create Lab Results", "Update Lab Results",
+                        "Calibrate Equipment", "Perform Quality Control", "Manage Lab Inventory");
+    }
+
+    @Test
+    void getDashboardConfig_labDirectorRole_hasDefaults() {
+        UserRoleHospitalAssignment labDir = buildAssignment(true, "ROLE_LAB_DIRECTOR", "Lab Director");
+
+        when(assignmentRepository.findAllDetailedByUserId(userId)).thenReturn(List.of(labDir));
+        when(permissionRepository.findByAssignment_IdIn(any())).thenReturn(Collections.emptyList());
+
+        DashboardConfigResponseDTO result = service.getDashboardConfig(userId);
+
+        assertThat(result.getPrimaryRoleCode()).isEqualTo("ROLE_LAB_DIRECTOR");
+        assertThat(result.getMergedPermissions())
+                .contains("View Lab Orders", "Approve Lab Results", "Manage Lab Tests",
+                        "Generate Lab Reports", "Verify Critical Results", "View Patient Records");
+    }
+
+    @Test
+    void getDashboardConfig_qualityManagerRole_hasDefaults() {
+        UserRoleHospitalAssignment qm = buildAssignment(true, "ROLE_QUALITY_MANAGER", "Quality Manager");
+
+        when(assignmentRepository.findAllDetailedByUserId(userId)).thenReturn(List.of(qm));
+        when(permissionRepository.findByAssignment_IdIn(any())).thenReturn(Collections.emptyList());
+
+        DashboardConfigResponseDTO result = service.getDashboardConfig(userId);
+
+        assertThat(result.getPrimaryRoleCode()).isEqualTo("ROLE_QUALITY_MANAGER");
+        assertThat(result.getMergedPermissions())
+                .contains("View Lab Orders", "Approve Lab Results", "Perform Quality Control",
+                        "Generate Lab Reports", "Verify Critical Results", "View Patient Records");
+    }
+
+    @Test
     void getDashboardConfig_unknownRole_noDefaultPermissions() {
         UserRoleHospitalAssignment unknown = buildAssignment(true, "ROLE_CUSTOM", "Custom Role");
 
