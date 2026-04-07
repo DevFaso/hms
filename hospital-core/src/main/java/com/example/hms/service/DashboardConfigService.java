@@ -41,6 +41,21 @@ public class DashboardConfigService {
         private static final String PERM_VIEW_LAB_RESULTS = "View Lab Results";
         private static final String PERM_ACCESS_PATIENT_ALLERGIES = "Access Patient Allergies";
         private static final String PERM_VIEW_LAB_ORDERS = "View Lab Orders";
+        private static final String PERM_CREATE_LAB_RESULTS = "Create Lab Results";
+        private static final String PERM_UPDATE_LAB_RESULTS = "Update Lab Results";
+        private static final String PERM_MANAGE_LAB_TESTS = "Manage Lab Tests";
+        private static final String PERM_VIEW_TEST_DEFINITIONS = "View Test Definitions";
+        private static final String PERM_APPROVE_LAB_RESULTS = "Approve Lab Results";
+        private static final String PERM_UPDATE_TEST_STATUS = "Update Test Status";
+        private static final String PERM_CALIBRATE_EQUIPMENT = "Calibrate Equipment";
+        private static final String PERM_PERFORM_QUALITY_CONTROL = "Perform Quality Control";
+        private static final String PERM_DOCUMENT_TEST_PROCEDURES = "Document Test Procedures";
+        private static final String PERM_VERIFY_CRITICAL_RESULTS = "Verify Critical Results";
+        private static final String PERM_MANAGE_LAB_INVENTORY = "Manage Lab Inventory";
+        private static final String PERM_UPDATE_REFERENCE_RANGES = "Update Reference Ranges";
+        private static final String PERM_GENERATE_LAB_REPORTS = "Generate Lab Reports";
+        private static final String PERM_FLAG_ABNORMAL_RESULTS = "Flag Abnormal Results";
+        private static final String PERM_COMMUNICATE_WITH_PHYSICIANS = "Communicate with Physicians";
 
         private static final Map<String, List<String>> ROLE_DEFAULT_PERMISSIONS = createDefaultPermissions();
 
@@ -391,22 +406,22 @@ public class DashboardConfigService {
                 "Handle Billing Disputes"));
         map.put("ROLE_LAB_SCIENTIST", List.of(
                 PERM_VIEW_LAB_ORDERS,
-                "Create Lab Results",
-                "Update Lab Results",
-                "Manage Lab Tests",
-                "View Test Definitions",
-                "Approve Lab Results",
+                PERM_CREATE_LAB_RESULTS,
+                PERM_UPDATE_LAB_RESULTS,
+                PERM_MANAGE_LAB_TESTS,
+                PERM_VIEW_TEST_DEFINITIONS,
+                PERM_APPROVE_LAB_RESULTS,
                 "Request Sample Re-collection",
-                "Update Test Status",
-                "Calibrate Equipment",
-                "Perform Quality Control",
-                "Document Test Procedures",
-                "Verify Critical Results",
-                "Manage Lab Inventory",
-                "Update Reference Ranges",
-                "Generate Lab Reports",
-                "Flag Abnormal Results",
-                "Communicate with Physicians"));
+                PERM_UPDATE_TEST_STATUS,
+                PERM_CALIBRATE_EQUIPMENT,
+                PERM_PERFORM_QUALITY_CONTROL,
+                PERM_DOCUMENT_TEST_PROCEDURES,
+                PERM_VERIFY_CRITICAL_RESULTS,
+                PERM_MANAGE_LAB_INVENTORY,
+                PERM_UPDATE_REFERENCE_RANGES,
+                PERM_GENERATE_LAB_REPORTS,
+                PERM_FLAG_ABNORMAL_RESULTS,
+                PERM_COMMUNICATE_WITH_PHYSICIANS));
         map.put("ROLE_PHYSIOTHERAPIST", List.of(
                 PERM_VIEW_PATIENT_RECORDS,
                 "Create Treatment Plans",
@@ -446,19 +461,60 @@ public class DashboardConfigService {
                 "Consent to Data Sharing"));
         map.put("ROLE_LAB_MANAGER", List.of(
                 PERM_VIEW_LAB_ORDERS,
-                "Approve Lab Results",
-                "Manage Lab Tests",
-                "View Test Definitions",
-                "Update Lab Results",
+                PERM_APPROVE_LAB_RESULTS,
+                PERM_MANAGE_LAB_TESTS,
+                PERM_VIEW_TEST_DEFINITIONS,
+                PERM_UPDATE_LAB_RESULTS,
                 "Assign Lab Tasks",
-                "Manage Lab Inventory",
-                "Generate Lab Reports",
-                "Calibrate Equipment",
-                "Perform Quality Control",
-                "Document Test Procedures",
-                "Update Test Status",
-                "Flag Abnormal Results",
-                "Communicate with Physicians"));
+                PERM_MANAGE_LAB_INVENTORY,
+                PERM_GENERATE_LAB_REPORTS,
+                PERM_CALIBRATE_EQUIPMENT,
+                PERM_PERFORM_QUALITY_CONTROL,
+                PERM_DOCUMENT_TEST_PROCEDURES,
+                PERM_UPDATE_TEST_STATUS,
+                PERM_FLAG_ABNORMAL_RESULTS,
+                PERM_COMMUNICATE_WITH_PHYSICIANS));
+        map.put("ROLE_LAB_TECHNICIAN", List.of(
+                PERM_VIEW_LAB_ORDERS,
+                PERM_CREATE_LAB_RESULTS,
+                PERM_UPDATE_LAB_RESULTS,
+                PERM_VIEW_TEST_DEFINITIONS,
+                PERM_CALIBRATE_EQUIPMENT,
+                PERM_PERFORM_QUALITY_CONTROL,
+                PERM_DOCUMENT_TEST_PROCEDURES,
+                PERM_UPDATE_TEST_STATUS,
+                PERM_MANAGE_LAB_INVENTORY,
+                PERM_FLAG_ABNORMAL_RESULTS));
+        map.put("ROLE_LAB_DIRECTOR", List.of(
+                PERM_VIEW_LAB_ORDERS,
+                PERM_CREATE_LAB_RESULTS,
+                PERM_UPDATE_LAB_RESULTS,
+                PERM_APPROVE_LAB_RESULTS,
+                PERM_MANAGE_LAB_TESTS,
+                PERM_VIEW_TEST_DEFINITIONS,
+                "Assign Lab Tasks",
+                PERM_MANAGE_LAB_INVENTORY,
+                PERM_GENERATE_LAB_REPORTS,
+                PERM_CALIBRATE_EQUIPMENT,
+                PERM_PERFORM_QUALITY_CONTROL,
+                PERM_DOCUMENT_TEST_PROCEDURES,
+                PERM_UPDATE_TEST_STATUS,
+                PERM_VERIFY_CRITICAL_RESULTS,
+                PERM_UPDATE_REFERENCE_RANGES,
+                PERM_FLAG_ABNORMAL_RESULTS,
+                PERM_COMMUNICATE_WITH_PHYSICIANS,
+                PERM_VIEW_PATIENT_RECORDS));
+        map.put("ROLE_QUALITY_MANAGER", List.of(
+                PERM_VIEW_LAB_ORDERS,
+                PERM_APPROVE_LAB_RESULTS,
+                PERM_VIEW_TEST_DEFINITIONS,
+                PERM_PERFORM_QUALITY_CONTROL,
+                PERM_DOCUMENT_TEST_PROCEDURES,
+                PERM_GENERATE_LAB_REPORTS,
+                PERM_VERIFY_CRITICAL_RESULTS,
+                PERM_UPDATE_REFERENCE_RANGES,
+                PERM_FLAG_ABNORMAL_RESULTS,
+                PERM_VIEW_PATIENT_RECORDS));
         return Collections.unmodifiableMap(map);
     }
 }

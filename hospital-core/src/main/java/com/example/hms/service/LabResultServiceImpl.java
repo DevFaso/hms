@@ -81,7 +81,7 @@ public class LabResultServiceImpl implements LabResultService {
         Hospital hospital = extractHospitalFromLabOrder(labOrder);
 
     UUID currentUserId = authService.getCurrentUserId();
-    validateLabScientistOrMidwife(currentUserId, hospital.getId());
+    validateLabResultAuthor(currentUserId, hospital.getId());
 
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
@@ -226,7 +226,7 @@ public class LabResultServiceImpl implements LabResultService {
 
         Hospital hospital = extractHospitalFromLabOrder(labOrder);
     UUID currentUserId = authService.getCurrentUserId();
-    validateLabScientistOrMidwife(currentUserId, hospital.getId());
+    validateLabResultAuthor(currentUserId, hospital.getId());
 
         UserRoleHospitalAssignment assignment = assignmentRepository.findById(request.getAssignmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("assignment.notfound"));
@@ -530,11 +530,17 @@ public class LabResultServiceImpl implements LabResultService {
             child.getId(), reflexDef.getTestCode(), result.getId());
     }
 
-    private void validateLabScientistOrMidwife(UUID userId, UUID hospitalId) {
+    private void validateLabResultAuthor(UUID userId, UUID hospitalId) {
         boolean allowed = roleValidator.hasRole(userId, hospitalId, "ROLE_LAB_SCIENTIST")
-            || roleValidator.isMidwife(userId, hospitalId);
+            || roleValidator.isMidwife(userId, hospitalId)
+            || roleValidator.isDoctor(userId, hospitalId)
+            || roleValidator.isNurse(userId, hospitalId)
+            || roleValidator.isLabTechnician(userId, hospitalId)
+            || roleValidator.isLabManager(userId, hospitalId)
+            || roleValidator.hasRole(userId, hospitalId, "ROLE_LAB_DIRECTOR")
+            || roleValidator.hasRole(userId, hospitalId, "ROLE_QUALITY_MANAGER");
         if (!allowed) {
-            throw new BusinessException("Only lab scientists or midwives can perform this action.");
+            throw new BusinessException("User does not have a lab or clinical role for this hospital.");
         }
     }
 

@@ -46,7 +46,7 @@ public class LabResultController {
     private final MessageSource messageSource;
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Create Lab Result", description = "Creates a new lab result.")
     public ResponseEntity<LabResultResponseDTO> createLabResult(
             @Valid @RequestBody LabResultRequestDTO requestDTO,
@@ -74,7 +74,7 @@ public class LabResultController {
     }
 
     @GetMapping("/pending-review")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Get Lab Results Pending Review", description = "Retrieves a curated list of lab results awaiting clinician review.")
     public ResponseEntity<List<LabResultResponseDTO>> getPendingReview(
             @RequestParam(name = "providerId", required = false) UUID providerId,
@@ -83,7 +83,7 @@ public class LabResultController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'NURSE', 'MIDWIFE')")
+    @PreAuthorize("hasAnyRole('DOCTOR', 'LAB_SCIENTIST', 'LAB_TECHNICIAN', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'NURSE', 'MIDWIFE')")
     @Operation(summary = "Update Lab Result", description = "Updates an existing lab result.")
     public ResponseEntity<LabResultResponseDTO> updateLabResult(
             @PathVariable UUID id,
