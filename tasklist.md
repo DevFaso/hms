@@ -2,7 +2,7 @@
 
 > Generated from code audit against the Feature × Lab Role matrix.  
 > Roles: **LAB_TECHNICIAN**, **LAB_SCIENTIST**, **LAB_MANAGER**, **LAB_DIRECTOR**, **QUALITY_MANAGER**  
-> **Status: ✅ ALL ACTIONABLE GAPS FIXED** — commit `faddcf4` on `fix/lab-role-permission-gaps`
+> **Status: ✅ ALL GAPS FIXED (controller + service layer + i18n)** — branch `fix/lab-role-permission-gaps`
 
 ---
 
@@ -242,4 +242,28 @@ These were investigated and confirmed matching the matrix:
 
 ---
 
-*Last updated: 2026-04-07 — all 8 actionable gaps fixed in commit `faddcf4`*
+## Service-Layer Alignment (PR Review Follow-up)
+
+Copilot PR review identified that controller-level `@PreAuthorize` expansions were ineffective because **service-layer enforcement** was more restrictive. Fixed:
+
+### Fix A — `LabTestDefinitionServiceImpl.assertUserCanManageHospital()`
+
+**Problem:** Role set only included `HOSPITAL_ADMIN`, `LAB_MANAGER`, `SUPER_ADMIN`, `LAB_SCIENTIST`. LAB_DIRECTOR and QUALITY_MANAGER would get `AccessDeniedException` on create/update/delete despite passing the controller gate.
+
+**Fix:** Added `ROLE_LAB_DIRECTOR` and `ROLE_QUALITY_MANAGER` to the `Set.of(...)` in `assertUserCanManageHospital()`.
+
+### Fix B — `LabResultServiceImpl.validateLabScientistOrMidwife()`
+
+**Problem:** Only allowed `ROLE_LAB_SCIENTIST` or midwife. All other roles in the controller `@PreAuthorize` (DOCTOR, LAB_TECHNICIAN, LAB_MANAGER, LAB_DIRECTOR, QUALITY_MANAGER, NURSE) would get `BusinessException` on create/update.
+
+**Fix:** Renamed to `validateLabResultAuthor()` and expanded to all roles from the controller gate: LAB_SCIENTIST, MIDWIFE, DOCTOR, NURSE, LAB_TECHNICIAN, LAB_MANAGER, LAB_DIRECTOR, QUALITY_MANAGER.
+
+### Fix C — Missing i18n key `NAV.OPS_DASHBOARD`
+
+**Problem:** The new Ops Dashboard nav item used `translationKey: 'NAV.OPS_DASHBOARD'` but the key was missing from all locale files, rendering the raw key in the UI.
+
+**Fix:** Added `OPS_DASHBOARD` to `en.json` ("Ops Dashboard"), `fr.json` ("Tableau de Bord Opérationnel"), `es.json` ("Panel de Operaciones").
+
+---
+
+*Last updated: 2026-04-07 — all gaps fixed (controller + service layer + i18n) on `fix/lab-role-permission-gaps`*

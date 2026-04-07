@@ -238,7 +238,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         boolean hasElevatedRole = assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
             currentUser.getId(),
             assignment.getHospital().getId(),
-            Set.of(ROLE_HOSPITAL_ADMIN, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN, ROLE_LAB_SCIENTIST)
+            Set.of(ROLE_HOSPITAL_ADMIN, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN, ROLE_LAB_SCIENTIST, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER)
         );
 
         if (!hasElevatedRole) {

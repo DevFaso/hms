@@ -90,4 +90,51 @@ describe('PermissionService', () => {
     setup(['ROLE_SUPER_ADMIN']);
     expect(service.hasPermission('Access Nurse Station')).toBeTrue();
   });
+
+  // ── Lab Manager RBAC (Gap 1 regression guard) ──────────────────
+
+  it('ROLE_LAB_MANAGER should have View Dashboard', () => {
+    setup(['ROLE_LAB_MANAGER']);
+    expect(service.hasPermission('View Dashboard')).toBeTrue();
+  });
+
+  it('ROLE_LAB_MANAGER should have View Lab', () => {
+    setup(['ROLE_LAB_MANAGER']);
+    expect(service.hasPermission('View Lab')).toBeTrue();
+  });
+
+  it('ROLE_LAB_MANAGER should have Process Lab Tests', () => {
+    setup(['ROLE_LAB_MANAGER']);
+    expect(service.hasPermission('Process Lab Tests')).toBeTrue();
+  });
+
+  it('ROLE_LAB_MANAGER should have View Patient Records', () => {
+    setup(['ROLE_LAB_MANAGER']);
+    expect(service.hasPermission('View Patient Records')).toBeTrue();
+  });
+
+  it('ROLE_LAB_MANAGER should have View Staff', () => {
+    setup(['ROLE_LAB_MANAGER']);
+    expect(service.hasPermission('View Staff')).toBeTrue();
+  });
+
+  it('ROLE_LAB_MANAGER should have View Staff Schedules', () => {
+    setup(['ROLE_LAB_MANAGER']);
+    expect(service.hasPermission('View Staff Schedules')).toBeTrue();
+  });
+
+  it('ROLE_LAB_MANAGER should have View Departments', () => {
+    setup(['ROLE_LAB_MANAGER']);
+    expect(service.hasPermission('View Departments')).toBeTrue();
+  });
+
+  it('ROLE_LAB_MANAGER should have View Notifications', () => {
+    setup(['ROLE_LAB_MANAGER']);
+    expect(service.hasPermission('View Notifications')).toBeTrue();
+  });
+
+  it('ROLE_LAB_MANAGER should NOT have Access Nurse Station', () => {
+    setup(['ROLE_LAB_MANAGER']);
+    expect(service.hasPermission('Access Nurse Station')).toBeFalse();
+  });
 });

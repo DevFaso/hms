@@ -366,13 +366,7 @@ export class ShellComponent implements OnInit, OnDestroy {
         route: '/lab-approval-queue',
       });
     }
-    if (
-      this.auth.hasAnyRole([
-        'ROLE_LAB_MANAGER',
-        'ROLE_LAB_DIRECTOR',
-        'ROLE_QUALITY_MANAGER',
-      ])
-    ) {
+    if (this.auth.hasAnyRole(['ROLE_LAB_MANAGER', 'ROLE_LAB_DIRECTOR', 'ROLE_QUALITY_MANAGER'])) {
       items.push(
         {
           icon: 'monitoring',
