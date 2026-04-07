@@ -2,8 +2,14 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { LabService, LabTestDefinition, LabTestReferenceRange } from '../../services/lab.service';
+import {
+  LabService,
+  LabTestDefinition,
+  LabTestDefinitionRequest,
+  LabTestReferenceRange,
+} from '../../services/lab.service';
 import { ToastService } from '../../core/toast.service';
+import { ProfileService } from '../../services/profile.service';
 
 @Component({
   selector: 'app-lab-test-config',
@@ -16,6 +22,7 @@ export class LabTestConfigComponent implements OnInit {
   private readonly labService = inject(LabService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly profileService = inject(ProfileService);
 
   loading = signal(true);
   error = signal<string | null>(null);
@@ -25,13 +32,49 @@ export class LabTestConfigComponent implements OnInit {
   page = signal(0);
   readonly pageSize = 20;
 
-  /** Modal state */
+  /** Reference-range editor modal state */
   editingDef = signal<LabTestDefinition | null>(null);
   editRanges = signal<LabTestReferenceRange[]>([]);
   saving = signal(false);
 
+  /** CRUD modal state */
+  showDefModal = signal(false);
+  editingDefCrud = signal(false);
+  editingDefId = signal<string | null>(null);
+  savingDef = signal(false);
+  defForm: LabTestDefinitionRequest = this.emptyDefForm();
+
+  /** Delete confirm */
+  showDeleteDefConfirm = signal(false);
+  deletingDef = signal<LabTestDefinition | null>(null);
+  deletingDefInProgress = signal(false);
+
+  private activeAssignmentId = '';
+
   ngOnInit(): void {
     this.loadDefinitions();
+    this.profileService.getAssignments().subscribe({
+      next: (assignments) => {
+        const active = assignments.find((a: { active: boolean }) => a.active);
+        if (active) this.activeAssignmentId = active.id;
+      },
+    });
+  }
+
+  emptyDefForm(): LabTestDefinitionRequest {
+    return {
+      testCode: '',
+      testName: '',
+      category: '',
+      description: '',
+      unit: '',
+      sampleType: '',
+      preparationInstructions: '',
+      turnaroundTime: undefined,
+      isActive: true,
+      assignmentId: this.activeAssignmentId || undefined,
+      referenceRanges: [],
+    };
   }
 
   loadDefinitions(): void {
@@ -155,6 +198,92 @@ export class LabTestConfigComponent implements OnInit {
       a.remove();
       URL.revokeObjectURL(url);
     }, 0);
+  }
+
+  // ── Test Definition CRUD ─────────────────────────────────────────────
+
+  openCreateDef(): void {
+    this.defForm = this.emptyDefForm();
+    this.defForm.assignmentId = this.activeAssignmentId || undefined;
+    this.editingDefCrud.set(false);
+    this.editingDefId.set(null);
+    this.showDefModal.set(true);
+  }
+
+  openEditDef(def: LabTestDefinition): void {
+    this.defForm = {
+      testCode: def.testCode,
+      testName: def.testName,
+      category: def.category ?? '',
+      description: def.description ?? '',
+      unit: def.unit ?? '',
+      sampleType: def.sampleType ?? '',
+      preparationInstructions: def.preparationInstructions ?? '',
+      turnaroundTime: def.turnaroundTime ?? undefined,
+      isActive: def.isActive,
+      assignmentId: this.activeAssignmentId || undefined,
+      referenceRanges: def.referenceRanges ? def.referenceRanges.map((r) => ({ ...r })) : [],
+    };
+    this.editingDefCrud.set(true);
+    this.editingDefId.set(def.id);
+    this.showDefModal.set(true);
+  }
+
+  closeDefModal(): void {
+    this.showDefModal.set(false);
+  }
+
+  submitDefForm(): void {
+    this.savingDef.set(true);
+    const op = this.editingDefCrud()
+      ? this.labService.updateTestDefinition(this.editingDefId()!, this.defForm)
+      : this.labService.createTestDefinition(this.defForm);
+    op.subscribe({
+      next: () => {
+        this.toast.success(
+          this.editingDefCrud()
+            ? this.translate.instant('LAB_TEST_CONFIG.DEF_UPDATED')
+            : this.translate.instant('LAB_TEST_CONFIG.DEF_CREATED'),
+        );
+        this.closeDefModal();
+        this.savingDef.set(false);
+        this.loadDefinitions();
+      },
+      error: (err) => {
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('LAB_TEST_CONFIG.DEF_SAVE_ERROR'),
+        );
+        this.savingDef.set(false);
+      },
+    });
+  }
+
+  confirmDeleteDef(def: LabTestDefinition): void {
+    this.deletingDef.set(def);
+    this.showDeleteDefConfirm.set(true);
+  }
+
+  cancelDeleteDef(): void {
+    this.showDeleteDefConfirm.set(false);
+    this.deletingDef.set(null);
+  }
+
+  executeDeleteDef(): void {
+    this.deletingDefInProgress.set(true);
+    this.labService.deleteTestDefinition(this.deletingDef()!.id).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('LAB_TEST_CONFIG.DEF_DELETED'));
+        this.cancelDeleteDef();
+        this.deletingDefInProgress.set(false);
+        this.loadDefinitions();
+      },
+      error: (err) => {
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('LAB_TEST_CONFIG.DELETE_ERROR'),
+        );
+        this.deletingDefInProgress.set(false);
+      },
+    });
   }
 
   statusClass(status: string): string {

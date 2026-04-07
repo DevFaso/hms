@@ -21,6 +21,8 @@ function mockDefinition(overrides: Record<string, unknown> = {}): Record<string,
     reviewedById: null,
     reviewedAt: null,
     rejectionReason: null,
+    preparationInstructions: 'Fasting 12 hours',
+    turnaroundTime: 60,
     referenceRanges: [],
     ...overrides,
   };
@@ -55,15 +57,28 @@ describe('LabTestConfigComponent', () => {
     req.flush({ data: { content, totalElements, totalPages: 1, number: 0 }, success: true });
   }
 
+  function flushAssignments(): void {
+    const req = httpMock.match((r) => r.url.includes('/assignments'));
+    req.forEach((r) => r.flush([{ id: 'assign-1', active: true }]));
+  }
+
+  function flushInit(
+    content: Record<string, unknown>[] = [mockDefinition()],
+    totalElements = 1,
+  ): void {
+    flushSearch(content, totalElements);
+    flushAssignments();
+  }
+
   it('should create the component', () => {
     expect(component).toBeTruthy();
     fixture.detectChanges();
-    flushSearch();
+    flushInit();
   });
 
   it('should load definitions on init', () => {
     fixture.detectChanges();
-    flushSearch();
+    flushInit();
 
     expect(component.loading()).toBeFalse();
     expect(component.definitions().length).toBe(1);
@@ -74,6 +89,7 @@ describe('LabTestConfigComponent', () => {
     fixture.detectChanges();
     const req = httpMock.expectOne((r) => r.url.includes('/lab-test-definitions/search'));
     req.error(new ProgressEvent('error'));
+    flushAssignments();
 
     expect(component.loading()).toBeFalse();
     expect(component.error()).toBeTruthy();
@@ -81,7 +97,7 @@ describe('LabTestConfigComponent', () => {
 
   it('should search on keyword change', () => {
     fixture.detectChanges();
-    flushSearch();
+    flushInit();
 
     component.searchKeyword.set('CBC');
     component.onSearch();
@@ -93,7 +109,7 @@ describe('LabTestConfigComponent', () => {
 
   it('should open and close range editor', () => {
     fixture.detectChanges();
-    flushSearch();
+    flushInit();
 
     const def = component.definitions()[0];
     component.openRangeEditor(def as never);
@@ -107,7 +123,7 @@ describe('LabTestConfigComponent', () => {
 
   it('should add and remove ranges', () => {
     fixture.detectChanges();
-    flushSearch();
+    flushInit();
 
     const def = component.definitions()[0];
     component.openRangeEditor(def as never);
@@ -124,7 +140,7 @@ describe('LabTestConfigComponent', () => {
 
   it('should save reference ranges', () => {
     fixture.detectChanges();
-    flushSearch();
+    flushInit();
 
     const def = component.definitions()[0];
     component.openRangeEditor(def as never);
@@ -146,7 +162,7 @@ describe('LabTestConfigComponent', () => {
 
   it('should export CSV', () => {
     fixture.detectChanges();
-    flushSearch();
+    flushInit();
 
     component.exportCsv();
 
@@ -159,7 +175,7 @@ describe('LabTestConfigComponent', () => {
 
   it('should export PDF', () => {
     fixture.detectChanges();
-    flushSearch();
+    flushInit();
 
     component.exportPdf();
 
@@ -179,7 +195,7 @@ describe('LabTestConfigComponent', () => {
 
   it('should navigate pages', () => {
     fixture.detectChanges();
-    flushSearch([mockDefinition()], 50);
+    flushInit([mockDefinition()], 50);
 
     expect(component.page()).toBe(0);
 
@@ -199,8 +215,126 @@ describe('LabTestConfigComponent', () => {
 
   it('should calculate totalPages', () => {
     fixture.detectChanges();
-    flushSearch([mockDefinition()], 50);
+    flushInit([mockDefinition()], 50);
 
     expect(component.totalPages()).toBe(3); // ceil(50/20)
+  });
+
+  // ── CRUD Tests ──
+
+  it('should open create definition modal', () => {
+    fixture.detectChanges();
+    flushInit();
+
+    component.openCreateDef();
+    expect(component.showDefModal()).toBeTrue();
+    expect(component.editingDefCrud()).toBeFalse();
+    expect(component.editingDefId()).toBeNull();
+    expect(component.defForm.testCode).toBe('');
+    expect(component.defForm.testName).toBe('');
+  });
+
+  it('should open edit definition modal', () => {
+    fixture.detectChanges();
+    flushInit();
+
+    const def = component.definitions()[0] as never;
+    component.openEditDef(def);
+
+    expect(component.showDefModal()).toBeTrue();
+    expect(component.editingDefCrud()).toBeTrue();
+    expect(component.editingDefId()).toBe('def-1');
+    expect(component.defForm.testCode).toBe('CBC');
+    expect(component.defForm.testName).toBe('Complete Blood Count');
+  });
+
+  it('should close definition modal', () => {
+    fixture.detectChanges();
+    flushInit();
+
+    component.openCreateDef();
+    expect(component.showDefModal()).toBeTrue();
+
+    component.closeDefModal();
+    expect(component.showDefModal()).toBeFalse();
+  });
+
+  it('should submit create definition form', () => {
+    fixture.detectChanges();
+    flushInit();
+
+    component.openCreateDef();
+    component.defForm.testCode = 'HGB';
+    component.defForm.testName = 'Hemoglobin';
+    component.submitDefForm();
+
+    const req = httpMock.expectOne(
+      (r) => r.url.includes('/lab-test-definitions') && r.method === 'POST',
+    );
+    req.flush({
+      data: mockDefinition({ id: 'def-new', testCode: 'HGB', testName: 'Hemoglobin' }),
+      success: true,
+    });
+
+    // Reload triggered
+    flushSearch();
+
+    expect(component.showDefModal()).toBeFalse();
+    expect(component.savingDef()).toBeFalse();
+  });
+
+  it('should submit update definition form', () => {
+    fixture.detectChanges();
+    flushInit();
+
+    const def = component.definitions()[0] as never;
+    component.openEditDef(def);
+    component.defForm.testName = 'Updated CBC';
+    component.submitDefForm();
+
+    const req = httpMock.expectOne(
+      (r) => r.url.includes('/lab-test-definitions/def-1') && r.method === 'PUT',
+    );
+    req.flush({ data: mockDefinition({ testName: 'Updated CBC' }), success: true });
+
+    // Reload triggered
+    flushSearch();
+
+    expect(component.showDefModal()).toBeFalse();
+    expect(component.savingDef()).toBeFalse();
+  });
+
+  it('should confirm and execute delete definition', () => {
+    fixture.detectChanges();
+    flushInit();
+
+    const def = component.definitions()[0] as never;
+    component.confirmDeleteDef(def);
+    expect(component.showDeleteDefConfirm()).toBeTrue();
+
+    component.executeDeleteDef();
+    const req = httpMock.expectOne(
+      (r) => r.url.includes('/lab-test-definitions/def-1') && r.method === 'DELETE',
+    );
+    req.flush({ data: null, success: true });
+
+    // Reload triggered
+    flushSearch();
+
+    expect(component.showDeleteDefConfirm()).toBeFalse();
+    expect(component.deletingDefInProgress()).toBeFalse();
+  });
+
+  it('should cancel delete definition', () => {
+    fixture.detectChanges();
+    flushInit();
+
+    const def = component.definitions()[0] as never;
+    component.confirmDeleteDef(def);
+    expect(component.showDeleteDefConfirm()).toBeTrue();
+
+    component.cancelDeleteDef();
+    expect(component.showDeleteDefConfirm()).toBeFalse();
+    expect(component.deletingDef()).toBeNull();
   });
 });

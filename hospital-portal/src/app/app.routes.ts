@@ -354,6 +354,27 @@ export const routes: Routes = [
         loadComponent: () => import('./lab/lab').then((m) => m.LabComponent),
       },
       {
+        path: 'lab-results',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_DOCTOR',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_LAB_TECHNICIAN',
+            'ROLE_LAB_SCIENTIST',
+            'ROLE_LAB_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_QUALITY_MANAGER',
+          ],
+        },
+        loadComponent: () =>
+          import('./lab/lab-results/lab-results').then((m) => m.LabResultsComponent),
+      },
+      {
         path: 'lab-approval-queue',
         canActivate: [RoleGuard],
         data: {

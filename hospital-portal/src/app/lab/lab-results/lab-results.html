@@ -1,0 +1,407 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'LAB_RESULTS.TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'LAB_RESULTS.SUBTITLE' | translate }}</p>
+    </div>
+    <div class="page-actions">
+      <button class="btn-primary" (click)="openCreate()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'LAB_RESULTS.NEW_RESULT' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <div class="summary-cards">
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon total">biotech</span>
+      <div class="card-info">
+        <span class="card-value">{{ stats().total }}</span>
+        <span class="card-label">{{ 'LAB_RESULTS.TOTAL' | translate }}</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon completed">verified</span>
+      <div class="card-info">
+        <span class="card-value">{{ stats().released }}</span>
+        <span class="card-label">{{ 'LAB_RESULTS.RELEASED' | translate }}</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon pending">pending</span>
+      <div class="card-info">
+        <span class="card-value">{{ stats().pending }}</span>
+        <span class="card-label">{{ 'LAB_RESULTS.PENDING_RELEASE' | translate }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <button
+      class="tab"
+      [class.active]="activeTab() === 'all'"
+      (click)="setTab('all')"
+      [title]="'COMMON.ALL' | translate"
+    >
+      {{ 'COMMON.ALL' | translate }} ({{ results().length }})
+    </button>
+    <button
+      class="tab"
+      [class.active]="activeTab() === 'released'"
+      (click)="setTab('released')"
+      [title]="'LAB_RESULTS.RELEASED' | translate"
+    >
+      {{ 'LAB_RESULTS.RELEASED' | translate }} ({{ stats().released }})
+    </button>
+    <button
+      class="tab"
+      [class.active]="activeTab() === 'pending'"
+      (click)="setTab('pending')"
+      [title]="'LAB_RESULTS.PENDING_RELEASE' | translate"
+    >
+      {{ 'LAB_RESULTS.PENDING_RELEASE' | translate }} ({{ stats().pending }})
+    </button>
+  </div>
+
+  <div class="search-box">
+    <span class="material-symbols-outlined">search</span>
+    <input
+      type="text"
+      [placeholder]="'LAB_RESULTS.SEARCH' | translate"
+      [(ngModel)]="searchTerm"
+      (input)="applyFilter()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'LAB_RESULTS.LOADING' | translate }}</p>
+    </div>
+  }
+
+  @if (!loading() && filtered().length > 0) {
+    <div class="data-table">
+      <table>
+        <thead>
+          <tr>
+            <th scope="col">{{ 'LAB.ORDER_CODE' | translate }}</th>
+            <th scope="col">{{ 'PATIENTS.PATIENT_NAME' | translate }}</th>
+            <th scope="col">{{ 'LAB.TEST' | translate }}</th>
+            <th scope="col">{{ 'LAB_RESULTS.VALUE' | translate }}</th>
+            <th scope="col">{{ 'LAB_RESULTS.SEVERITY' | translate }}</th>
+            <th scope="col">{{ 'LAB_RESULTS.RESULT_DATE' | translate }}</th>
+            <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (r of filtered(); track r.id) {
+            <tr class="data-row">
+              <td class="order-code">{{ r.labOrderCode || '—' }}</td>
+              <td>
+                <div class="cell-primary">{{ r.patientFullName || '—' }}</div>
+                <div class="cell-secondary">{{ r.patientEmail || '' }}</div>
+              </td>
+              <td>{{ r.labTestName || '—' }}</td>
+              <td>
+                <strong>{{ r.resultValue || '—' }}</strong>
+                @if (r.resultUnit) {
+                  <span class="unit-text">{{ r.resultUnit }}</span>
+                }
+              </td>
+              <td>
+                @if (r.severityFlag) {
+                  <span [class]="getSeverityClass(r.severityFlag)">{{ r.severityFlag }}</span>
+                } @else {
+                  <span>—</span>
+                }
+              </td>
+              <td class="date-cell">
+                {{ r.resultDate ? (r.resultDate | date: 'medium') : '—' }}
+              </td>
+              <td>
+                @if (r.released) {
+                  <span class="status-badge status-released">{{
+                    'LAB_RESULTS.RELEASED' | translate
+                  }}</span>
+                } @else {
+                  <span class="status-badge status-pending">{{
+                    'LAB_RESULTS.PENDING_RELEASE' | translate
+                  }}</span>
+                }
+              </td>
+              <td>
+                <div class="action-group">
+                  <button
+                    class="action-link view-link"
+                    [title]="'LAB_RESULTS.VIEW_DETAILS' | translate"
+                    (click)="viewResult(r)"
+                  >
+                    <span class="material-symbols-outlined">visibility</span>
+                  </button>
+                  <button
+                    class="action-link edit-link"
+                    [title]="'COMMON.EDIT' | translate"
+                    (click)="openEdit(r)"
+                  >
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  @if (!r.released) {
+                    <button
+                      class="action-link release-link"
+                      [title]="'LAB_RESULTS.RELEASE' | translate"
+                      (click)="releaseResult(r)"
+                    >
+                      <span class="material-symbols-outlined">verified</span>
+                    </button>
+                  }
+                  <button
+                    class="action-link delete-link"
+                    [title]="'COMMON.DELETE' | translate"
+                    (click)="confirmDelete(r)"
+                  >
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">biotech</span>
+      <h3>{{ 'LAB_RESULTS.NO_RESULTS' | translate }}</h3>
+      <p>
+        {{
+          searchTerm
+            ? ('COMMON.TRY_ADJUSTING' | translate)
+            : ('LAB_RESULTS.NO_RESULTS_YET' | translate)
+        }}
+      </p>
+    </div>
+  }
+
+  <!-- ═══ DETAIL PANEL ═══ -->
+  @if (selectedResult(); as r) {
+    <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
+      <div class="detail-panel">
+        <div class="panel-header">
+          <h2>{{ 'LAB_RESULTS.DETAIL_TITLE' | translate }} — {{ r.labOrderCode }}</h2>
+          <button
+            class="close-btn"
+            [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
+            (click)="closeDetail()"
+          >
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="panel-body">
+          <div class="detail-grid">
+            <div class="detail-field">
+              <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span>
+              <span class="field-value">{{ r.patientFullName }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'LAB.TEST' | translate }}</span>
+              <span class="field-value">{{ r.labTestName }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'LAB_RESULTS.VALUE' | translate }}</span>
+              <span class="field-value">{{ r.resultValue }} {{ r.resultUnit }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'LAB_RESULTS.SEVERITY' | translate }}</span>
+              <span class="field-value">{{ r.severityFlag || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'LAB_RESULTS.RESULT_DATE' | translate }}</span>
+              <span class="field-value">{{ r.resultDate | date: 'long' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span>
+              <span class="field-value">{{ r.hospitalName || '—' }}</span>
+            </div>
+            <div class="detail-field">
+              <span class="field-label">{{ 'LAB_RESULTS.RELEASED' | translate }}</span>
+              <span class="field-value">{{
+                r.released ? ('COMMON.YES' | translate) : ('COMMON.NO' | translate)
+              }}</span>
+            </div>
+            @if (r.releasedAt) {
+              <div class="detail-field">
+                <span class="field-label">{{ 'LAB_RESULTS.RELEASED_AT' | translate }}</span>
+                <span class="field-value"
+                  >{{ r.releasedAt | date: 'long' }} — {{ r.releasedByFullName }}</span
+                >
+              </div>
+            }
+            @if (r.acknowledged) {
+              <div class="detail-field">
+                <span class="field-label">{{ 'LAB_RESULTS.ACKNOWLEDGED' | translate }}</span>
+                <span class="field-value"
+                  >{{ r.acknowledgedAt | date: 'long' }} — {{ r.acknowledgedBy }}</span
+                >
+              </div>
+            }
+          </div>
+          @if (r.notes) {
+            <div class="notes-section">
+              <span class="field-label">{{ 'COMMON.NOTES' | translate }}</span>
+              <p>{{ r.notes }}</p>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>
+
+<!-- ═══ CREATE / EDIT LAB RESULT MODAL ═══ -->
+@if (showModal()) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="closeModal()"
+    >
+      <div class="modal-header">
+        <h2>
+          {{
+            editing()
+              ? ('LAB_RESULTS.EDIT_RESULT' | translate)
+              : ('LAB_RESULTS.NEW_RESULT' | translate)
+          }}
+        </h2>
+        <button class="modal-close" (click)="closeModal()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        @if (!editing()) {
+          <div class="form-row">
+            <div class="field">
+              <label for="lr-orderId">{{ 'LAB.ORDER' | translate }} *</label>
+              <select
+                id="lr-orderId"
+                [(ngModel)]="form.labOrderId"
+                (ngModelChange)="onOrderChange($event)"
+                required
+              >
+                <option value="">{{ 'LAB_RESULTS.SELECT_ORDER' | translate }}</option>
+                @for (o of orders(); track o.id) {
+                  <option [value]="o.id">{{ o.labOrderCode }} — {{ o.labTestName }}</option>
+                }
+              </select>
+            </div>
+          </div>
+        }
+        <div class="form-row">
+          <div class="field">
+            <label for="lr-resultValue">{{ 'LAB_RESULTS.VALUE' | translate }} *</label>
+            <input
+              id="lr-resultValue"
+              type="text"
+              [(ngModel)]="form.resultValue"
+              [placeholder]="'LAB_RESULTS.VALUE_PLACEHOLDER' | translate"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="lr-resultUnit">{{ 'LAB_RESULTS.UNIT' | translate }}</label>
+            <input
+              id="lr-resultUnit"
+              type="text"
+              [(ngModel)]="form.resultUnit"
+              [placeholder]="'LAB_RESULTS.UNIT_PLACEHOLDER' | translate"
+            />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="lr-resultDate">{{ 'LAB_RESULTS.RESULT_DATE' | translate }} *</label>
+            <input
+              id="lr-resultDate"
+              type="datetime-local"
+              [(ngModel)]="form.resultDate"
+              required
+            />
+          </div>
+        </div>
+        <div class="field">
+          <label for="lr-notes">{{ 'COMMON.NOTES' | translate }}</label>
+          <textarea
+            id="lr-notes"
+            [(ngModel)]="form.notes"
+            rows="3"
+            [placeholder]="'COMMON.ADDITIONAL_NOTES' | translate"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          (click)="submitForm()"
+          [disabled]="
+            saving() || (!editing() && !form.labOrderId) || !form.resultValue || !form.resultDate
+          "
+        >
+          {{
+            saving()
+              ? ('COMMON.SAVING' | translate)
+              : editing()
+                ? ('COMMON.UPDATE' | translate)
+                : ('COMMON.CREATE' | translate)
+          }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ DELETE CONFIRM ═══ -->
+@if (showDeleteConfirm()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="cancelDelete()"
+    (keydown.escape)="cancelDelete()"
+  >
+    <div
+      class="modal"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="cancelDelete()"
+    >
+      <div class="modal-header">
+        <h2>{{ 'LAB_RESULTS.DELETE_TITLE' | translate }}</h2>
+        <button class="modal-close" (click)="cancelDelete()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="delete-warning">
+          {{ 'LAB_RESULTS.DELETE_CONFIRM' | translate }}
+          <strong>{{ deletingResult()?.labOrderCode }}</strong>
+          {{ 'COMMON.CANNOT_UNDO' | translate }}
+        </p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelDelete()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
+          {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
+        </button>
+      </div>
+    </div>
+  </div>
+}

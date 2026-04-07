@@ -19,6 +19,7 @@ public class LabOrderResponseDTO {
 
     private String id;
     private String labOrderCode;
+    private String patientId;
     private String patientFullName;
     private String patientEmail;
     private String hospitalName;
