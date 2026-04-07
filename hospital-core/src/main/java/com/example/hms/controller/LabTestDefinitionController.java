@@ -42,8 +42,8 @@ public class LabTestDefinitionController {
 
     private final LabTestDefinitionService service;
 
-    // LAB_SCIENTIST and LAB_MANAGER may draft definitions; LAB_DIRECTOR/SUPER_ADMIN/HOSPITAL_ADMIN manage all
-    private static final String MANAGE_ROLES = "hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'SUPER_ADMIN')";
+    // LAB_SCIENTIST and LAB_MANAGER may draft definitions; LAB_DIRECTOR/QUALITY_MANAGER/SUPER_ADMIN/HOSPITAL_ADMIN manage all
+    private static final String MANAGE_ROLES = "hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'SUPER_ADMIN')";
     private static final String VIEW_ROLES = "hasAnyRole('HOSPITAL_ADMIN', 'LAB_MANAGER', 'LAB_SCIENTIST', 'SUPER_ADMIN', 'DOCTOR', 'NURSE', 'MIDWIFE', 'LAB_DIRECTOR', 'QUALITY_MANAGER')";
     // Gate-level check: all roles that may initiate any approval transition.
     // Per-action role enforcement is performed inside LabTestDefinitionServiceImpl.
