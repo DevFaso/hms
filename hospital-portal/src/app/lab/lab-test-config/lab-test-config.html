@@ -8,6 +8,10 @@
       </div>
     </div>
     <div class="header-right">
+      <button class="btn-primary" (click)="openCreateDef()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'LAB_TEST_CONFIG.CREATE' | translate }}
+      </button>
       <button class="btn-export" (click)="exportCsv()">
         <span class="material-symbols-outlined">download</span>
         {{ 'LAB_TEST_CONFIG.EXPORT_CSV' | translate }}
@@ -106,10 +110,24 @@
               <td>
                 <button
                   class="btn-icon"
+                  (click)="openEditDef(def)"
+                  [title]="'LAB_TEST_CONFIG.EDIT_DEF' | translate"
+                >
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+                <button
+                  class="btn-icon"
                   (click)="openRangeEditor(def)"
                   [title]="'LAB_TEST_CONFIG.EDIT_RANGES' | translate"
                 >
-                  <span class="material-symbols-outlined">edit</span>
+                  <span class="material-symbols-outlined">tune</span>
+                </button>
+                <button
+                  class="btn-icon btn-icon-danger"
+                  (click)="confirmDeleteDef(def)"
+                  [title]="'LAB_TEST_CONFIG.DELETE_DEF' | translate"
+                >
+                  <span class="material-symbols-outlined">delete</span>
                 </button>
               </td>
             </tr>
@@ -255,6 +273,185 @@
               {{ 'LAB_TEST_CONFIG.SAVE' | translate }}
             </button>
           </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Create / Edit Test Definition Modal -->
+  @if (showDefModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeDefModal()"
+      (keydown.escape)="closeDefModal()"
+    >
+      <div
+        class="modal-content modal-lg"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <div class="modal-header">
+          <h2>
+            {{
+              editingDefCrud()
+                ? ('LAB_TEST_CONFIG.EDIT_DEFINITION' | translate)
+                : ('LAB_TEST_CONFIG.CREATE_DEFINITION' | translate)
+            }}
+          </h2>
+          <button class="btn-close" (click)="closeDefModal()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        <div class="modal-body def-form-grid">
+          <div class="form-group">
+            <label for="defTestCode">{{ 'LAB_TEST_CONFIG.TEST_CODE' | translate }}</label>
+            <input
+              id="defTestCode"
+              type="text"
+              [(ngModel)]="defForm.testCode"
+              [placeholder]="'e.g. CBC'"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="defTestName">{{ 'LAB_TEST_CONFIG.TEST_NAME' | translate }}</label>
+            <input
+              id="defTestName"
+              type="text"
+              [(ngModel)]="defForm.testName"
+              [placeholder]="'e.g. Complete Blood Count'"
+              required
+            />
+          </div>
+          <div class="form-group">
+            <label for="defCategory">{{ 'LAB_TEST_CONFIG.CATEGORY' | translate }}</label>
+            <input
+              id="defCategory"
+              type="text"
+              [(ngModel)]="defForm.category"
+              [placeholder]="'e.g. Hematology'"
+            />
+          </div>
+          <div class="form-group">
+            <label for="defUnit">{{ 'LAB_TEST_CONFIG.UNIT' | translate }}</label>
+            <input
+              id="defUnit"
+              type="text"
+              [(ngModel)]="defForm.unit"
+              [placeholder]="'e.g. cells/mcL'"
+            />
+          </div>
+          <div class="form-group">
+            <label for="defSampleType">{{ 'LAB_TEST_CONFIG.SAMPLE_TYPE' | translate }}</label>
+            <input
+              id="defSampleType"
+              type="text"
+              [(ngModel)]="defForm.sampleType"
+              [placeholder]="'e.g. Blood'"
+            />
+          </div>
+          <div class="form-group">
+            <label for="defTurnaround">{{ 'LAB_TEST_CONFIG.TURNAROUND_TIME' | translate }}</label>
+            <input
+              id="defTurnaround"
+              type="number"
+              [(ngModel)]="defForm.turnaroundTime"
+              [placeholder]="'Minutes'"
+              min="1"
+              max="10080"
+            />
+          </div>
+          <div class="form-group form-group-full">
+            <label for="defDescription">{{ 'LAB_TEST_CONFIG.DESCRIPTION' | translate }}</label>
+            <textarea
+              id="defDescription"
+              [(ngModel)]="defForm.description"
+              rows="3"
+              [placeholder]="'LAB_TEST_CONFIG.DESCRIPTION_PLACEHOLDER' | translate"
+            ></textarea>
+          </div>
+          <div class="form-group form-group-full">
+            <label for="defPrepInstructions">{{
+              'LAB_TEST_CONFIG.PREP_INSTRUCTIONS' | translate
+            }}</label>
+            <textarea
+              id="defPrepInstructions"
+              [(ngModel)]="defForm.preparationInstructions"
+              rows="2"
+              [placeholder]="'LAB_TEST_CONFIG.PREP_PLACEHOLDER' | translate"
+            ></textarea>
+          </div>
+          <div class="form-group form-check-group">
+            <label>
+              <input type="checkbox" [(ngModel)]="defForm.isActive" />
+              {{ 'LAB_TEST_CONFIG.IS_ACTIVE' | translate }}
+            </label>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button class="btn-cancel" (click)="closeDefModal()">
+            {{ 'LAB_TEST_CONFIG.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-primary"
+            (click)="submitDefForm()"
+            [disabled]="savingDef() || !defForm.testCode || !defForm.testName"
+          >
+            @if (savingDef()) {
+              <span class="material-symbols-outlined spin">progress_activity</span>
+            }
+            {{ 'LAB_TEST_CONFIG.SAVE' | translate }}
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Delete Confirmation -->
+  @if (showDeleteDefConfirm()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="cancelDeleteDef()"
+      (keydown.escape)="cancelDeleteDef()"
+    >
+      <div
+        class="modal-content modal-sm"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
+      >
+        <div class="modal-header">
+          <h2>{{ 'LAB_TEST_CONFIG.CONFIRM_DELETE' | translate }}</h2>
+          <button class="btn-close" (click)="cancelDeleteDef()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p>
+            {{
+              'LAB_TEST_CONFIG.DELETE_CONFIRM_MSG' | translate: { name: deletingDef()?.testName }
+            }}
+          </p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-cancel" (click)="cancelDeleteDef()">
+            {{ 'LAB_TEST_CONFIG.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-danger"
+            (click)="executeDeleteDef()"
+            [disabled]="deletingDefInProgress()"
+          >
+            @if (deletingDefInProgress()) {
+              <span class="material-symbols-outlined spin">progress_activity</span>
+            }
+            {{ 'LAB_TEST_CONFIG.DELETE' | translate }}
+          </button>
         </div>
       </div>
     </div>
