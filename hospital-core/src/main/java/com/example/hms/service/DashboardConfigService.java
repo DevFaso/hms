@@ -459,6 +459,47 @@ public class DashboardConfigService {
                 "Update Test Status",
                 "Flag Abnormal Results",
                 "Communicate with Physicians"));
+        map.put("ROLE_LAB_TECHNICIAN", List.of(
+                PERM_VIEW_LAB_ORDERS,
+                "Create Lab Results",
+                "Update Lab Results",
+                "View Test Definitions",
+                "Calibrate Equipment",
+                "Perform Quality Control",
+                "Document Test Procedures",
+                "Update Test Status",
+                "Manage Lab Inventory",
+                "Flag Abnormal Results"));
+        map.put("ROLE_LAB_DIRECTOR", List.of(
+                PERM_VIEW_LAB_ORDERS,
+                "Create Lab Results",
+                "Update Lab Results",
+                "Approve Lab Results",
+                "Manage Lab Tests",
+                "View Test Definitions",
+                "Assign Lab Tasks",
+                "Manage Lab Inventory",
+                "Generate Lab Reports",
+                "Calibrate Equipment",
+                "Perform Quality Control",
+                "Document Test Procedures",
+                "Update Test Status",
+                "Verify Critical Results",
+                "Update Reference Ranges",
+                "Flag Abnormal Results",
+                "Communicate with Physicians",
+                PERM_VIEW_PATIENT_RECORDS));
+        map.put("ROLE_QUALITY_MANAGER", List.of(
+                PERM_VIEW_LAB_ORDERS,
+                "Approve Lab Results",
+                "View Test Definitions",
+                "Perform Quality Control",
+                "Document Test Procedures",
+                "Generate Lab Reports",
+                "Verify Critical Results",
+                "Update Reference Ranges",
+                "Flag Abnormal Results",
+                PERM_VIEW_PATIENT_RECORDS));
         return Collections.unmodifiableMap(map);
     }
 }

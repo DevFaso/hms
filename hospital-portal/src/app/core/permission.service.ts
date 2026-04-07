@@ -238,6 +238,16 @@ export class PermissionService {
       'View Patient Records',
       'View Notifications',
     ],
+    ROLE_LAB_MANAGER: [
+      'View Dashboard',
+      'View Lab',
+      'Process Lab Tests',
+      'View Patient Records',
+      'View Staff',
+      'View Staff Schedules',
+      'View Departments',
+      'View Notifications',
+    ],
     ROLE_LAB_DIRECTOR: [
       'View Dashboard',
       'View Lab',
