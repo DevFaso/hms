@@ -268,7 +268,7 @@
       class="modal modal-lg"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeModal()"
     >
       <div class="modal-header">
         <h2>
@@ -379,7 +379,7 @@
       class="modal"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="cancelDelete()"
     >
       <div class="modal-header">
         <h2>{{ 'LAB_RESULTS.DELETE_TITLE' | translate }}</h2>

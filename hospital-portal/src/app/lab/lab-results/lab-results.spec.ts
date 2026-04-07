@@ -4,6 +4,7 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { LabResultsComponent } from './lab-results';
+import { LabOrderResponse } from '../../services/lab.service';
 
 function mockResult(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -168,9 +169,25 @@ describe('LabResultsComponent', () => {
     expect(component.showModal()).toBeFalse();
   });
 
+  it('should block submit when labOrderId is missing', () => {
+    fixture.detectChanges();
+    flushInit();
+
+    component.openCreate();
+    component.form.labOrderId = '';
+    component.form.resultValue = '7.0';
+    component.submitForm();
+
+    // saving should not be set and no HTTP request should be made
+    expect(component.saving()).toBeFalse();
+  });
+
   it('should submit create form', () => {
     fixture.detectChanges();
     flushInit();
+
+    // Populate orders so submitForm guard can derive patientId
+    component.orders.set([{ id: 'order-1', patientId: 'patient-1' } as LabOrderResponse]);
 
     component.openCreate();
     component.form.labOrderId = 'order-1';

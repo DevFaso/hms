@@ -290,7 +290,7 @@
         class="modal-content modal-lg"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeDefModal()"
       >
         <div class="modal-header">
           <h2>
@@ -423,7 +423,7 @@
         class="modal-content modal-sm"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="cancelDeleteDef()"
       >
         <div class="modal-header">
           <h2>{{ 'LAB_TEST_CONFIG.CONFIRM_DELETE' | translate }}</h2>

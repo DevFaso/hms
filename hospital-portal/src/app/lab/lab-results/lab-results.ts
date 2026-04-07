@@ -59,6 +59,12 @@ export class LabResultsComponent implements OnInit {
     });
   }
 
+  /** Format a Date as YYYY-MM-DDTHH:mm in the user's local timezone (for datetime-local inputs). */
+  private toLocalDatetime(d: Date): string {
+    const pad = (n: number): string => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
   emptyForm(): LabResultRequest {
     return {
       labOrderId: '',
@@ -66,7 +72,7 @@ export class LabResultsComponent implements OnInit {
       patientId: '',
       resultValue: '',
       resultUnit: '',
-      resultDate: new Date().toISOString().slice(0, 16),
+      resultDate: this.toLocalDatetime(new Date()),
       notes: '',
     };
   }
@@ -87,7 +93,7 @@ export class LabResultsComponent implements OnInit {
       patientId: r.patientId ?? '',
       resultValue: r.resultValue ?? '',
       resultUnit: r.resultUnit ?? '',
-      resultDate: r.resultDate ? r.resultDate.slice(0, 16) : new Date().toISOString().slice(0, 16),
+      resultDate: r.resultDate ? r.resultDate.slice(0, 16) : this.toLocalDatetime(new Date()),
       notes: r.notes ?? '',
     };
     this.editing.set(true);
@@ -107,8 +113,16 @@ export class LabResultsComponent implements OnInit {
   }
 
   submitForm(): void {
-    this.saving.set(true);
+    const selectedOrder = this.orders().find((o) => o.id === this.form.labOrderId);
     this.form.assignmentId = this.activeAssignmentId;
+    this.form.patientId = selectedOrder?.patientId ?? this.form.patientId ?? '';
+    if (!this.form.labOrderId || !this.form.assignmentId || !this.form.patientId) {
+      this.toast.error(
+        'Select a lab order and wait for the active assignment to load before saving',
+      );
+      return;
+    }
+    this.saving.set(true);
 
     const id = this.editingId();
     const op =
