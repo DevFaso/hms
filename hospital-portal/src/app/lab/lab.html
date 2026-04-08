@@ -5,9 +5,11 @@
       <p class="page-subtitle">{{ 'LAB.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      @if (canCreateOrder()) {
       <button class="btn-primary" (click)="openCreate()">
         <span class="material-symbols-outlined">add</span> {{ 'LAB.NEW_ORDER' | translate }}
       </button>
+      }
     </div>
   </div>
 

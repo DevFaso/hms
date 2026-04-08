@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
@@ -33,6 +33,17 @@ export class LabComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
   private readonly profileService = inject(ProfileService);
+
+  /** Only providers can place lab orders (matches POST /lab-orders @PreAuthorize). */
+  readonly canCreateOrder = computed(() =>
+    this.auth.hasAnyRole([
+      'ROLE_DOCTOR',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_SUPER_ADMIN',
+    ]),
+  );
 
   orders = signal<LabOrderResponse[]>([]);
   filtered = signal<LabOrderResponse[]>([]);
