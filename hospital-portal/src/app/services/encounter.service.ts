@@ -2,7 +2,16 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 
-export type EncounterStatus = 'SCHEDULED' | 'ARRIVED' | 'TRIAGE' | 'WAITING_FOR_PHYSICIAN' | 'IN_PROGRESS' | 'AWAITING_RESULTS' | 'READY_FOR_DISCHARGE' | 'COMPLETED' | 'CANCELLED';
+export type EncounterStatus =
+  | 'SCHEDULED'
+  | 'ARRIVED'
+  | 'TRIAGE'
+  | 'WAITING_FOR_PHYSICIAN'
+  | 'IN_PROGRESS'
+  | 'AWAITING_RESULTS'
+  | 'READY_FOR_DISCHARGE'
+  | 'COMPLETED'
+  | 'CANCELLED';
 export type EncounterType =
   | 'CONSULTATION'
   | 'FOLLOW_UP'
