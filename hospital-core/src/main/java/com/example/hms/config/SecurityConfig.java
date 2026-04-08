@@ -82,6 +82,9 @@ public class SecurityConfig {
     private static final String API_LAB_ORDERS = "/lab-orders";
     private static final String API_LAB_ORDERS_PATTERN = API_LAB_ORDERS + "/**";
 
+    private static final String API_LAB_TEST_DEFINITIONS = "/lab-test-definitions";
+    private static final String API_LAB_TEST_DEFINITIONS_PATTERN = API_LAB_TEST_DEFINITIONS + "/**";
+
     private static final String API_LAB_RESULTS = "/lab-results";
     private static final String API_LAB_RESULTS_PATTERN = API_LAB_RESULTS + "/**";
 
@@ -451,7 +454,7 @@ public class SecurityConfig {
                 .hasAnyAuthority(ROLE_NURSE, ROLE_MIDWIFE, ROLE_DOCTOR, ROLE_SUPER_ADMIN)
 
                 // -------------------- Lab modules --------------------
-                .requestMatchers(HttpMethod.GET, "/lab-test-definitions/**")
+                .requestMatchers(HttpMethod.GET, API_LAB_TEST_DEFINITIONS, API_LAB_TEST_DEFINITIONS_PATTERN)
                 .hasAnyAuthority(ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER,
                         ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
                         ROLE_DOCTOR, ROLE_NURSE, ROLE_MIDWIFE, ROLE_HOSPITAL_ADMIN, ROLE_SUPER_ADMIN)
