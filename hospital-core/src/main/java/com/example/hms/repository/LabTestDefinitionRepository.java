@@ -36,12 +36,12 @@ public interface LabTestDefinitionRepository extends JpaRepository<LabTestDefini
     @Query("""
         SELECT l FROM LabTestDefinition l
         WHERE (:keyword IS NULL OR (
-                 LOWER(l.name) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                 OR LOWER(l.testCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
-                 OR LOWER(COALESCE(l.description, '')) LIKE LOWER(CONCAT('%', :keyword, '%'))
+                 LOWER(CAST(l.name AS string)) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
+                 OR LOWER(CAST(l.testCode AS string)) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
+                 OR LOWER(COALESCE(CAST(l.description AS string), '')) LIKE LOWER(CONCAT('%', CAST(:keyword AS string), '%'))
               ))
-          AND (:unit IS NULL OR LOWER(l.unit) = LOWER(:unit))
-          AND (:category IS NULL OR LOWER(l.category) = LOWER(:category))
+          AND (:unit IS NULL OR LOWER(CAST(l.unit AS string)) = LOWER(CAST(:unit AS string)))
+          AND (:category IS NULL OR LOWER(CAST(l.category AS string)) = LOWER(CAST(:category AS string)))
           AND (:active IS NULL OR l.active = :active)
           AND (:approvalStatus IS NULL OR l.approvalStatus = :approvalStatus)
     """)
