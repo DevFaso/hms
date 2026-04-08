@@ -64,6 +64,30 @@ export class AdmissionsComponent implements OnInit {
   deletingAdm = signal<AdmissionResponse | null>(null);
   deleting = signal(false);
 
+  /* ── Discharge signals ── */
+  showDischargeModal = signal(false);
+  dischargingAdm = signal<AdmissionResponse | null>(null);
+  discharging = signal(false);
+  dischargeForm = {
+    dischargeDisposition: 'HOME' as string,
+    dischargeSummary: '',
+    dischargeInstructions: '',
+    dischargingProviderId: '',
+  };
+  readonly dispositionOptions = [
+    { value: 'HOME', label: 'Home' },
+    { value: 'HOME_WITH_HOME_HEALTH', label: 'Home with Home Health' },
+    { value: 'SKILLED_NURSING_FACILITY', label: 'Skilled Nursing Facility' },
+    { value: 'LONG_TERM_CARE_FACILITY', label: 'Long-term Care Facility' },
+    { value: 'REHABILITATION_FACILITY', label: 'Rehabilitation Facility' },
+    { value: 'HOSPICE_HOME', label: 'Hospice – Home' },
+    { value: 'HOSPICE_FACILITY', label: 'Hospice – Facility' },
+    { value: 'PSYCHIATRIC_FACILITY', label: 'Psychiatric Facility' },
+    { value: 'AGAINST_MEDICAL_ADVICE', label: 'Against Medical Advice' },
+    { value: 'TRANSFERRED_TO_ANOTHER_HOSPITAL', label: 'Transfer to Another Hospital' },
+    { value: 'OTHER', label: 'Other' },
+  ];
+
   admissionTypes: AdmissionType[] = [
     'EMERGENCY',
     'ELECTIVE',
@@ -302,6 +326,47 @@ export class AdmissionsComponent implements OnInit {
         this.deleting.set(false);
       },
     });
+  }
+
+  /* ── Discharge ── */
+  confirmDischarge(a: AdmissionResponse): void {
+    this.dischargingAdm.set(a);
+    this.dischargeForm = {
+      dischargeDisposition: 'HOME',
+      dischargeSummary: '',
+      dischargeInstructions: '',
+      dischargingProviderId: '',
+    };
+    this.showDischargeModal.set(true);
+  }
+
+  cancelDischarge(): void {
+    this.showDischargeModal.set(false);
+    this.dischargingAdm.set(null);
+  }
+
+  executeDischarge(): void {
+    this.discharging.set(true);
+    const adm = this.dischargingAdm()!;
+    this.admissionService
+      .discharge(adm.id, {
+        dischargeDisposition: this.dischargeForm.dischargeDisposition,
+        dischargeSummary: this.dischargeForm.dischargeSummary,
+        dischargeInstructions: this.dischargeForm.dischargeInstructions || undefined,
+        dischargingProviderId: this.dischargeForm.dischargingProviderId,
+      })
+      .subscribe({
+        next: () => {
+          this.toast.success('Patient discharged successfully');
+          this.cancelDischarge();
+          this.discharging.set(false);
+          this.load();
+        },
+        error: () => {
+          this.toast.error('Discharge failed');
+          this.discharging.set(false);
+        },
+      });
   }
 
   load(): void {

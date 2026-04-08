@@ -56,7 +56,7 @@ export class ShellPage {
 
   /** Navigate to a page using the sidebar */
   async navigateTo(label: string): Promise<void> {
-    const navItem = this.page.locator(`.nav-item:has(.nav-label:text("${label}"))`);
+    const navItem = this.page.locator(`.nav-item:has(.nav-label:text-is("${label}"))`);
     // If sidebar is collapsed, expand it first
     const isCollapsed = await this.page.locator('.shell.collapsed').count();
     if (isCollapsed > 0) {
@@ -70,7 +70,7 @@ export class ShellPage {
   /** Get the nav item locator by label text */
   getNavItem(label: string): Locator {
     return this.page.locator(`.nav-item`, {
-      has: this.page.locator(`.nav-label:text("${label}")`),
+      has: this.page.locator(`.nav-label:text-is("${label}")`),
     });
   }
 

@@ -24,14 +24,16 @@ export class DoctorPatientFlowComponent {
   patientSelected = output<string>();
 
   readonly columns: FlowColumn[] = [
+    { key: 'SCHEDULED', label: 'Scheduled', icon: 'event', color: '#6366f1' },
     { key: 'ARRIVED', label: 'Checked In', icon: 'how_to_reg', color: '#0891b2' },
-    { key: 'IN_PROGRESS', label: 'In Encounter', icon: 'stethoscope', color: '#2563eb' },
+    { key: 'TRIAGE', label: 'Triage', icon: 'monitor_heart', color: '#e11d48' },
     {
       key: 'WAITING_FOR_PHYSICIAN',
       label: 'Waiting for MD',
       icon: 'person_search',
       color: '#d97706',
     },
+    { key: 'IN_PROGRESS', label: 'In Encounter', icon: 'stethoscope', color: '#2563eb' },
     {
       key: 'AWAITING_RESULTS',
       label: 'Awaiting Results',

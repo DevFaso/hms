@@ -335,7 +335,14 @@ export class EncountersComponent implements OnInit {
     const tab = this.activeTab();
     if (tab === 'open') {
       list = list.filter(
-        (e) => e.status === 'SCHEDULED' || e.status === 'IN_PROGRESS' || e.status === 'ARRIVED',
+        (e) =>
+          e.status === 'SCHEDULED' ||
+          e.status === 'ARRIVED' ||
+          e.status === 'TRIAGE' ||
+          e.status === 'WAITING_FOR_PHYSICIAN' ||
+          e.status === 'IN_PROGRESS' ||
+          e.status === 'AWAITING_RESULTS' ||
+          e.status === 'READY_FOR_DISCHARGE',
       );
     } else if (tab === 'completed') {
       list = list.filter((e) => e.status === 'COMPLETED');
@@ -382,12 +389,19 @@ export class EncountersComponent implements OnInit {
     switch (status) {
       case 'SCHEDULED':
         return 'status-open';
+      case 'ARRIVED':
+      case 'TRIAGE':
+        return 'status-progress';
+      case 'WAITING_FOR_PHYSICIAN':
+        return 'status-warning';
       case 'IN_PROGRESS':
         return 'status-progress';
+      case 'AWAITING_RESULTS':
+        return 'status-warning';
+      case 'READY_FOR_DISCHARGE':
+        return 'status-ready';
       case 'COMPLETED':
         return 'status-completed';
-      case 'ARRIVED':
-        return 'status-progress';
       case 'CANCELLED':
         return 'status-cancelled';
       default:

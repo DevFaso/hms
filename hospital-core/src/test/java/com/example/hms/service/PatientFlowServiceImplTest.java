@@ -116,6 +116,14 @@ class PatientFlowServiceImplTest {
                 .thenReturn(Collections.emptyList());
         when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
                 .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.TRIAGE)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.WAITING_FOR_PHYSICIAN)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.AWAITING_RESULTS)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.READY_FOR_DISCHARGE)))
+                .thenReturn(Collections.emptyList());
 
         Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
 
@@ -148,6 +156,14 @@ class PatientFlowServiceImplTest {
                 .thenReturn(Collections.emptyList());
         when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
                 .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.TRIAGE)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.WAITING_FOR_PHYSICIAN)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.AWAITING_RESULTS)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.READY_FOR_DISCHARGE)))
+                .thenReturn(Collections.emptyList());
 
         Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
 
@@ -179,6 +195,14 @@ class PatientFlowServiceImplTest {
         when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.CANCELLED)))
                 .thenReturn(Collections.emptyList());
         when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.TRIAGE)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.WAITING_FOR_PHYSICIAN)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.AWAITING_RESULTS)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.READY_FOR_DISCHARGE)))
                 .thenReturn(Collections.emptyList());
 
         Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
@@ -223,6 +247,14 @@ class PatientFlowServiceImplTest {
                 .thenReturn(Collections.emptyList());
         when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
                 .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.TRIAGE)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.WAITING_FOR_PHYSICIAN)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.AWAITING_RESULTS)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.READY_FOR_DISCHARGE)))
+                .thenReturn(Collections.emptyList());
 
         Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
 
@@ -258,6 +290,14 @@ class PatientFlowServiceImplTest {
                 .thenReturn(Collections.emptyList());
         lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
                 .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.TRIAGE)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.WAITING_FOR_PHYSICIAN)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.AWAITING_RESULTS)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.READY_FOR_DISCHARGE)))
+                .thenReturn(Collections.emptyList());
 
         Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
 
@@ -291,6 +331,14 @@ class PatientFlowServiceImplTest {
                 .thenReturn(Collections.emptyList());
         lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
                 .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.TRIAGE)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.WAITING_FOR_PHYSICIAN)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.AWAITING_RESULTS)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.READY_FOR_DISCHARGE)))
+                .thenReturn(Collections.emptyList());
 
         Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);
 
@@ -323,6 +371,14 @@ class PatientFlowServiceImplTest {
         lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.CANCELLED)))
                 .thenReturn(Collections.emptyList());
         lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.SCHEDULED)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.TRIAGE)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.WAITING_FOR_PHYSICIAN)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.AWAITING_RESULTS)))
+                .thenReturn(Collections.emptyList());
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), eq(EncounterStatus.READY_FOR_DISCHARGE)))
                 .thenReturn(Collections.emptyList());
 
         Map<String, List<PatientFlowItemDTO>> result = service.getPatientFlow(userId);

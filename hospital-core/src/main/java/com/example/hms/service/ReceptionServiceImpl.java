@@ -331,7 +331,9 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (encounter == null) return appt.getStatus().name();
         return switch (encounter.getStatus()) {
             case ARRIVED -> STATUS_ARRIVED;
-            case IN_PROGRESS -> STATUS_IN_PROGRESS;
+            case TRIAGE, WAITING_FOR_PHYSICIAN -> STATUS_ARRIVED;
+            case IN_PROGRESS, AWAITING_RESULTS -> STATUS_IN_PROGRESS;
+            case READY_FOR_DISCHARGE -> STATUS_IN_PROGRESS;
             case COMPLETED -> STATUS_COMPLETED;
             case CANCELLED -> "CANCELLED";
             default -> appt.getStatus().name();
@@ -441,7 +443,9 @@ public class ReceptionServiceImpl implements ReceptionService {
     }
 
     private String computeWalkInStatus(Encounter walkIn) {
-        if (walkIn.getStatus() == EncounterStatus.IN_PROGRESS) return STATUS_IN_PROGRESS;
+        if (walkIn.getStatus() == EncounterStatus.IN_PROGRESS
+                || walkIn.getStatus() == EncounterStatus.AWAITING_RESULTS
+                || walkIn.getStatus() == EncounterStatus.READY_FOR_DISCHARGE) return STATUS_IN_PROGRESS;
         if (walkIn.getStatus() == EncounterStatus.COMPLETED) return STATUS_COMPLETED;
         return STATUS_WALK_IN;
     }

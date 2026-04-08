@@ -156,7 +156,9 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
     private void addEncounterItems(UUID staffId, String status, Set<UUID> seenPatients,
                                    List<DoctorWorklistItemDTO> items, Map<UUID, String> patientRoomBed) {
         List<EncounterStatus> encounterStatuses = List.of(
-                EncounterStatus.IN_PROGRESS, EncounterStatus.ARRIVED, EncounterStatus.SCHEDULED);
+                EncounterStatus.IN_PROGRESS, EncounterStatus.ARRIVED, EncounterStatus.SCHEDULED,
+                EncounterStatus.TRIAGE, EncounterStatus.WAITING_FOR_PHYSICIAN,
+                EncounterStatus.AWAITING_RESULTS, EncounterStatus.READY_FOR_DISCHARGE);
         for (EncounterStatus es : encounterStatuses) {
             for (Encounter enc : encounterRepository.findByStaff_IdAndStatus(staffId, es)) {
                 Patient p = enc.getPatient();
@@ -314,6 +316,10 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
             case IN_PROGRESS -> "IN_PROGRESS";
             case ARRIVED -> "CHECKED_IN";
             case SCHEDULED -> "SCHEDULED";
+            case TRIAGE -> "CHECKED_IN";
+            case WAITING_FOR_PHYSICIAN -> "CHECKED_IN";
+            case AWAITING_RESULTS -> "IN_PROGRESS";
+            case READY_FOR_DISCHARGE -> "IN_PROGRESS";
             case COMPLETED -> "COMPLETED";
             case CANCELLED -> "CANCELLED";
         };

@@ -141,6 +141,15 @@
               </td>
               <td>
                 <div class="action-group">
+                  @if (a.status === 'ACTIVE') {
+                    <button
+                      class="action-link discharge-link"
+                      (click)="confirmDischarge(a)"
+                      title="Discharge patient"
+                    >
+                      <span class="material-symbols-outlined">exit_to_app</span>
+                    </button>
+                  }
                   <button class="action-link edit-link" (click)="openEdit(a)">
                     <span class="material-symbols-outlined">edit</span>
                   </button>
@@ -397,6 +406,106 @@
         </button>
         <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
           {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ DISCHARGE MODAL ═══ -->
+@if (showDischargeModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="cancelDischarge()"
+    (keydown.escape)="cancelDischarge()"
+  >
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          <span class="material-symbols-outlined modal-title-icon">exit_to_app</span>
+          Discharge Patient
+        </h2>
+        <button class="modal-close" (click)="cancelDischarge()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="discharge-info">
+          Discharging <strong>{{ dischargingAdm()?.patientName }}</strong> from room
+          <strong>{{ dischargingAdm()?.roomBed || 'N/A' }}</strong>
+        </p>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="discharge-disposition">Discharge Disposition *</label>
+            <select
+              id="discharge-disposition"
+              [(ngModel)]="dischargeForm.dischargeDisposition"
+              class="form-select"
+            >
+              @for (opt of dispositionOptions; track opt.value) {
+                <option [value]="opt.value">{{ opt.label }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="discharge-provider">Discharging Provider *</label>
+            <select
+              id="discharge-provider"
+              [(ngModel)]="dischargeForm.dischargingProviderId"
+              class="form-select"
+            >
+              <option value="">Select provider</option>
+              @for (s of staffMembers(); track s.id) {
+                <option [value]="s.id">{{ s.name || s.email }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="discharge-summary">Discharge Summary *</label>
+          <textarea
+            id="discharge-summary"
+            [(ngModel)]="dischargeForm.dischargeSummary"
+            class="form-textarea"
+            rows="4"
+            placeholder="Brief summary of hospital stay and outcome..."
+          ></textarea>
+        </div>
+
+        <div class="field">
+          <label for="discharge-instructions">Discharge Instructions</label>
+          <textarea
+            id="discharge-instructions"
+            [(ngModel)]="dischargeForm.dischargeInstructions"
+            class="form-textarea"
+            rows="3"
+            placeholder="Follow-up care, medications, activity restrictions..."
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelDischarge()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          (click)="executeDischarge()"
+          [disabled]="
+            discharging() ||
+            !dischargeForm.dischargeDisposition ||
+            !dischargeForm.dischargeSummary ||
+            !dischargeForm.dischargingProviderId
+          "
+        >
+          {{ discharging() ? 'Discharging...' : 'Confirm Discharge' }}
         </button>
       </div>
     </div>

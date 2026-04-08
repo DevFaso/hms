@@ -31,10 +31,11 @@ public class PatientFlowServiceImpl implements PatientFlowService {
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
 
-    /** Column order for the flow board (7 lanes matching frontend). */
+    /** Column order for the flow board (9 lanes matching frontend). */
     private static final List<String> FLOW_COLUMNS = List.of(
-            "ARRIVED", "IN_PROGRESS", "WAITING_FOR_PHYSICIAN",
-            "AWAITING_RESULTS", "READY_FOR_DISCHARGE", "COMPLETED", "CANCELLED"
+            "SCHEDULED", "ARRIVED", "TRIAGE", "WAITING_FOR_PHYSICIAN",
+            "IN_PROGRESS", "AWAITING_RESULTS", "READY_FOR_DISCHARGE",
+            "COMPLETED", "CANCELLED"
     );
 
     @Override
