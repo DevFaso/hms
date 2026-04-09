@@ -68,10 +68,9 @@ public class LabOrderRequestDTO {
     @Schema(description = "Free-text descriptor when orderChannel is OTHER")
     private String orderChannelOther;
 
-    @Schema(description = "Whether identical documentation was shared with the destination laboratory")
-    @Builder.Default
-    @NotNull(message = "Please indicate whether documentation was shared with the lab")
-    private Boolean documentationSharedWithLab = Boolean.FALSE;
+    @Schema(description = "Whether identical documentation was shared with the destination laboratory. "
+            + "When null the service auto-defaults: true for PORTAL/ELECTRONIC, false otherwise.")
+    private Boolean documentationSharedWithLab;
 
     @Schema(description = "Reference or tracking identifier for the documentation shared with the lab")
     private String documentationReference;
