@@ -176,7 +176,8 @@ public class RoleValidator {
     public boolean canOrderLabTests(UUID userId, UUID hospitalId) {
         return isDoctor(userId, hospitalId)
             || isPhysician(userId, hospitalId)
-            || isNursePractitioner(userId, hospitalId);
+            || isNursePractitioner(userId, hospitalId)
+            || isNurse(userId, hospitalId);
     }
 
     public void requireLabScientistOrAdmin(UUID userId, UUID hospitalId, Locale locale, MessageSource messageSource) {

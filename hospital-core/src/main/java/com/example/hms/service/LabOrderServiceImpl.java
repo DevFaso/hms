@@ -127,7 +127,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         boolean authorized = roleValidator.canOrderLabTests(userId, hospitalId);
         if (!authorized) {
             log.warn("User {} is not authorized to place lab orders in hospital {}", userId, hospitalId);
-            throw new BusinessException("Only doctors, physicians, or nurse practitioners can place lab orders.");
+            throw new BusinessException("Only doctors, physicians, nurses, or nurse practitioners can place lab orders.");
         }
 
         LabTestDefinition testDefinition = labTestDefinitionRepository.findById(request.getLabTestDefinitionId())
