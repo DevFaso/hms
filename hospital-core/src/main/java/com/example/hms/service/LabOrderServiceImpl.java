@@ -440,7 +440,10 @@ public class LabOrderServiceImpl implements LabOrderService {
             resolved = existing;
         }
         if (resolved == null) {
-            throw new BusinessException("Ordering providers must have an NPI on record or provided in the request.");
+            // NPI is not universally required — nurses and some allied-health
+            // professionals are authorised to place lab orders but do not carry
+            // an individual NPI.
+            return null;
         }
         if (!resolved.matches("\\d{10}")) {
             throw new BusinessException("NPI must be a 10-digit numeric identifier.");
@@ -532,7 +535,10 @@ public class LabOrderServiceImpl implements LabOrderService {
         if (base != null && base.getDocumentationReference() != null) {
             return base.getDocumentationReference();
         }
-        throw new BusinessException("Documentation reference is required when sharing paperwork with the lab.");
+        // Reference is helpful but not mandatory — the documentation-sharing flag
+        // is often auto-defaulted for PORTAL/ELECTRONIC channels where the system
+        // itself IS the documentation trail.
+        return null;
     }
 
     private boolean resolveStandingOrderFlag(LabOrderRequestDTO request, LabOrder base) {
