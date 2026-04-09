@@ -119,7 +119,7 @@ export class LabComponent implements OnInit {
       primaryDiagnosisCode: '',
       orderChannel: 'PORTAL',
       providerSignature: '',
-      documentationSharedWithLab: false,
+      documentationSharedWithLab: null,
     };
   }
 
@@ -231,7 +231,7 @@ export class LabComponent implements OnInit {
       primaryDiagnosisCode: o.primaryDiagnosisCode ?? '',
       orderChannel: o.orderChannel ?? 'PORTAL',
       providerSignature: '',
-      documentationSharedWithLab: false,
+      documentationSharedWithLab: null,
     };
     this.selectedPatient.set({
       id: '',

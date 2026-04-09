@@ -510,8 +510,13 @@ public class LabOrderServiceImpl implements LabOrderService {
     }
 
     private void enforceDocumentationCompliance(LabOrderChannel channel, boolean documentationShared) {
+        // Medicare documentation-sharing requirement applies only to electronic/portal channels.
+        // Physical channels (walk-in, written, fax, phone) handle paperwork outside the system.
+        if (channel != LabOrderChannel.PORTAL && channel != LabOrderChannel.ELECTRONIC) {
+            return;
+        }
         if (!documentationShared) {
-            String channelName = channel != null ? channel.name().toLowerCase(Locale.ENGLISH) : "the selected";
+            String channelName = channel.name().toLowerCase(Locale.ENGLISH);
             throw new BusinessException("Medicare guidelines require lab orders submitted via " + channelName + " channel to include documentation shared with the performing laboratory.");
         }
     }

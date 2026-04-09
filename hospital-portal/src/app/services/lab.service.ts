@@ -202,7 +202,7 @@ export interface LabOrderRequest {
   primaryDiagnosisCode: string;
   orderChannel: string;
   providerSignature: string;
-  documentationSharedWithLab: boolean;
+  documentationSharedWithLab?: boolean | null;
 }
 
 export interface LabResultRequest {
