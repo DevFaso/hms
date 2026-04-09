@@ -170,7 +170,10 @@ public class RoleValidator {
        Convenience
        ========================================= */
     public boolean canCreatePrescription(UUID userId, UUID hospitalId) {
-        return isDoctor(userId, hospitalId) || isHospitalAdmin(userId, hospitalId);
+        return isDoctor(userId, hospitalId)
+            || isNurse(userId, hospitalId)
+            || isNursePractitioner(userId, hospitalId)
+            || isHospitalAdmin(userId, hospitalId);
     }
 
     public boolean canOrderLabTests(UUID userId, UUID hospitalId) {
