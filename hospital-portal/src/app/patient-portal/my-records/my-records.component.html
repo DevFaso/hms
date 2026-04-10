@@ -234,7 +234,11 @@
                 tabindex="0"
                 role="button"
               >
-                <div class="pli-icon" [class.icon-danger]="l.isAbnormal" [class.icon-success]="!l.isAbnormal">
+                <div
+                  class="pli-icon"
+                  [class.icon-danger]="l.isAbnormal"
+                  [class.icon-success]="!l.isAbnormal"
+                >
                   <span class="material-symbols-outlined">
                     {{ l.isAbnormal ? 'warning' : 'check_circle' }}
                   </span>
@@ -267,7 +271,9 @@
                     </div>
                     <div class="detail-item">
                       <span class="detail-label">Result</span>
-                      <span class="detail-value" [class.text-danger]="l.isAbnormal">{{ l.result }} {{ l.unit }}</span>
+                      <span class="detail-value" [class.text-danger]="l.isAbnormal"
+                        >{{ l.result }} {{ l.unit }}</span
+                      >
                     </div>
                     <div class="detail-item">
                       <span class="detail-label">Reference Range</span>
@@ -468,7 +474,9 @@
                     </div>
                     <div class="detail-item">
                       <span class="detail-label">Date Administered</span>
-                      <span class="detail-value">{{ im.dateAdministered | date: 'mediumDate' }}</span>
+                      <span class="detail-value">{{
+                        im.dateAdministered | date: 'mediumDate'
+                      }}</span>
                     </div>
                     <div class="detail-item">
                       <span class="detail-label">Administered By</span>
@@ -481,7 +489,12 @@
                     @if (im.doseNumber) {
                       <div class="detail-item">
                         <span class="detail-label">Dose</span>
-                        <span class="detail-value">{{ im.doseNumber }}@if (im.totalDosesInSeries) { of {{ im.totalDosesInSeries }}}</span>
+                        <span class="detail-value"
+                          >{{ im.doseNumber }}
+                          @if (im.totalDosesInSeries) {
+                            of {{ im.totalDosesInSeries }}
+                          }
+                        </span>
                       </div>
                     }
                     @if (im.site) {

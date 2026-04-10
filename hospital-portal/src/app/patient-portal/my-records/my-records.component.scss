@@ -125,25 +125,35 @@
 // ── Icon colour classes (replaces inline styles) ──────────────────
 .icon-encounter {
   background: #dbeafe;
-  .material-symbols-outlined { color: #2563eb; }
+  .material-symbols-outlined {
+    color: #2563eb;
+  }
 }
 
 .icon-danger {
   background: #fee2e2;
-  .material-symbols-outlined { color: #dc2626; }
+  .material-symbols-outlined {
+    color: #dc2626;
+  }
 }
 
 .icon-success {
   background: #d1fae5;
-  .material-symbols-outlined { color: #059669; }
+  .material-symbols-outlined {
+    color: #059669;
+  }
 }
 
 .icon-medication {
   background: #fef3c7;
-  .material-symbols-outlined { color: #d97706; }
+  .material-symbols-outlined {
+    color: #d97706;
+  }
 }
 
 .icon-vaccine {
   background: #ede9fe;
-  .material-symbols-outlined { color: #7c3aed; }
+  .material-symbols-outlined {
+    color: #7c3aed;
+  }
 }
