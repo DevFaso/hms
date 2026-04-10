@@ -769,21 +769,21 @@ class PatientPortalServiceImplPhase2Test {
         void getAfterVisitSummaries_success() {
             stubPatientResolution();
             DischargeSummaryResponseDTO summary = new DischargeSummaryResponseDTO();
-            when(dischargeSummaryService.getDischargeSummariesByPatient(patientId, Locale.ENGLISH))
+            when(dischargeSummaryService.getDischargeSummariesForPortalPatient(patientId))
                     .thenReturn(List.of(summary));
 
             List<DischargeSummaryResponseDTO> result =
                     service.getMyAfterVisitSummaries(auth, Locale.ENGLISH);
 
             assertThat(result).hasSize(1);
-            verify(dischargeSummaryService).getDischargeSummariesByPatient(patientId, Locale.ENGLISH);
+            verify(dischargeSummaryService).getDischargeSummariesForPortalPatient(patientId);
         }
 
         @Test
         @DisplayName("should return empty list when no summaries exist")
         void noSummaries_returnsEmpty() {
             stubPatientResolution();
-            when(dischargeSummaryService.getDischargeSummariesByPatient(patientId, Locale.ENGLISH))
+            when(dischargeSummaryService.getDischargeSummariesForPortalPatient(patientId))
                     .thenReturn(List.of());
 
             List<DischargeSummaryResponseDTO> result =

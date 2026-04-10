@@ -527,7 +527,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<DischargeSummaryResponseDTO> getMyAfterVisitSummaries(Authentication auth, Locale locale) {
         UUID patientId = resolvePatientId(auth);
-        return dischargeSummaryService.getDischargeSummariesByPatient(patientId, locale);
+        return dischargeSummaryService.getDischargeSummariesForPortalPatient(patientId);
     }
 
     // ── Care team ────────────────────────────────────────────────────────

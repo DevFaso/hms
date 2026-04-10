@@ -359,4 +359,16 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
             throw new ResourceNotFoundException(DISCHARGE_SUMMARY_TYPE, "id", summaryId.toString());
         }
     }
+
+    // ── Portal-specific: patient-centric, no hospital context required ──
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DischargeSummaryResponseDTO> getDischargeSummariesForPortalPatient(UUID patientId) {
+        log.debug("Portal: fetching discharge summaries for patient {}", patientId);
+        return dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId)
+                .stream()
+                .map(dischargeSummaryMapper::toResponseDTO)
+                .toList();
+    }
 }

@@ -669,17 +669,17 @@ class PatientPortalServiceImplPhase1Test {
     class GetMyAfterVisitSummaries {
 
         @Test
-        @DisplayName("should delegate to dischargeSummaryService with patientId and locale")
+        @DisplayName("should delegate to dischargeSummaryService with patientId")
         void getMyAfterVisitSummaries_delegates() {
             stubPatientResolution();
             List<DischargeSummaryResponseDTO> expected = List.of(new DischargeSummaryResponseDTO());
-            when(dischargeSummaryService.getDischargeSummariesByPatient(patientId, Locale.ENGLISH))
+            when(dischargeSummaryService.getDischargeSummariesForPortalPatient(patientId))
                     .thenReturn(expected);
 
             List<DischargeSummaryResponseDTO> result = service.getMyAfterVisitSummaries(auth, Locale.ENGLISH);
 
             assertThat(result).isEqualTo(expected);
-            verify(dischargeSummaryService).getDischargeSummariesByPatient(patientId, Locale.ENGLISH);
+            verify(dischargeSummaryService).getDischargeSummariesForPortalPatient(patientId);
         }
     }
 

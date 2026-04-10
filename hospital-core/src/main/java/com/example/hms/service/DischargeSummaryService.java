@@ -85,4 +85,12 @@ public interface DischargeSummaryService {
      */
     @Transactional
     void deleteDischargeSummary(UUID summaryId, UUID deletedByProviderId);
+
+    /**
+     * Get all discharge summaries for a patient across every hospital they visited.
+     * Intended for the patient portal — does NOT require hospital context,
+     * because a patient may have been discharged from multiple hospitals.
+     */
+    @Transactional(readOnly = true)
+    List<DischargeSummaryResponseDTO> getDischargeSummariesForPortalPatient(UUID patientId);
 }
