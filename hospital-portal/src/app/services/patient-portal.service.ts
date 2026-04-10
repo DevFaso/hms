@@ -94,8 +94,18 @@ interface HealthSummaryRaw extends Omit<HealthSummaryDTO, 'latestVitals'> {
  * one per non-null reading.
  */
 function flattenVitals(raw: PatientVitalSignRaw[]): VitalSignSummary[] {
-  const fields: { key: keyof PatientVitalSignRaw; type: string; unit: string; format?: (r: PatientVitalSignRaw) => string }[] = [
-    { key: 'systolicBpMmHg', type: 'BLOOD_PRESSURE', unit: 'mmHg', format: (r) => `${r.systolicBpMmHg}/${r.diastolicBpMmHg}` },
+  const fields: {
+    key: keyof PatientVitalSignRaw;
+    type: string;
+    unit: string;
+    format?: (r: PatientVitalSignRaw) => string;
+  }[] = [
+    {
+      key: 'systolicBpMmHg',
+      type: 'BLOOD_PRESSURE',
+      unit: 'mmHg',
+      format: (r) => `${r.systolicBpMmHg}/${r.diastolicBpMmHg}`,
+    },
     { key: 'heartRateBpm', type: 'HEART_RATE', unit: 'bpm' },
     { key: 'temperatureCelsius', type: 'TEMPERATURE', unit: '°C' },
     { key: 'respiratoryRateBpm', type: 'RESPIRATORY_RATE', unit: 'breaths/min' },
@@ -140,6 +150,34 @@ export interface PortalAppointment {
   reason: string;
   status: string;
   location: string;
+}
+
+/** Raw shape returned by backend AppointmentResponseDTO */
+interface AppointmentApiResponse {
+  id: string;
+  appointmentDate: string;
+  startTime: string;
+  endTime: string;
+  staffName: string;
+  departmentName: string;
+  reason: string;
+  status: string;
+  hospitalName: string;
+  hospitalAddress: string;
+  notes: string;
+}
+
+/** Format "HH:mm:ss" or "HH:mm" → "h:mm AM/PM" */
+function formatTime(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const parts = raw.split(':');
+  if (parts.length < 2) return raw;
+  let h = Number.parseInt(parts[0], 10);
+  const m = parts[1];
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  if (h === 0) h = 12;
+  else if (h > 12) h -= 12;
+  return `${h}:${m} ${ampm}`;
 }
 
 export interface PortalEncounter {
@@ -422,19 +460,29 @@ export class PatientPortalService {
   }
 
   getHealthSummary(): Observable<HealthSummaryDTO> {
-    return this.http
-      .get<ApiWrapper<HealthSummaryRaw>>(`${this.base}/health-summary`)
-      .pipe(
-        map((r) => ({
-          ...r.data,
-          latestVitals: flattenVitals(r.data?.latestVitals ?? []),
-        })),
-      );
+    return this.http.get<ApiWrapper<HealthSummaryRaw>>(`${this.base}/health-summary`).pipe(
+      map((r) => ({
+        ...r.data,
+        latestVitals: flattenVitals(r.data?.latestVitals ?? []),
+      })),
+    );
   }
 
   getMyAppointments(): Observable<PortalAppointment[]> {
-    return this.http.get<ApiWrapper<PortalAppointment[]>>(`${this.base}/appointments`).pipe(
-      map((r) => r.data ?? []),
+    return this.http.get<ApiWrapper<AppointmentApiResponse[]>>(`${this.base}/appointments`).pipe(
+      map((r) =>
+        (r.data ?? []).map((a) => ({
+          id: a.id,
+          date: a.appointmentDate ?? '',
+          startTime: formatTime(a.startTime),
+          endTime: formatTime(a.endTime),
+          providerName: a.staffName ?? '',
+          department: a.departmentName ?? '',
+          reason: a.reason ?? '',
+          status: a.status ?? '',
+          location: a.hospitalName ?? '',
+        })),
+      ),
       catchError(() => of([])),
     );
   }
@@ -447,24 +495,22 @@ export class PatientPortalService {
   }
 
   getMyPrescriptions(): Observable<PortalPrescription[]> {
-    return this.http
-      .get<ApiWrapper<PrescriptionApiResponse[]>>(`${this.base}/prescriptions`)
-      .pipe(
-        map((r) =>
-          (r.data ?? []).map((p) => ({
-            id: p.id,
-            medicationName: p.medicationName ?? p.medicationDisplayName ?? '',
-            dosage: p.dosage ?? '',
-            frequency: p.frequency ?? '',
-            duration: p.duration ?? '',
-            notes: p.notes ?? '',
-            prescribedBy: p.staffFullName ?? '',
-            prescribedDate: p.createdAt ?? '',
-            status: p.status ?? '',
-          })),
-        ),
-        catchError(() => of([])),
-      );
+    return this.http.get<ApiWrapper<PrescriptionApiResponse[]>>(`${this.base}/prescriptions`).pipe(
+      map((r) =>
+        (r.data ?? []).map((p) => ({
+          id: p.id,
+          medicationName: p.medicationName ?? p.medicationDisplayName ?? '',
+          dosage: p.dosage ?? '',
+          frequency: p.frequency ?? '',
+          duration: p.duration ?? '',
+          notes: p.notes ?? '',
+          prescribedBy: p.staffFullName ?? '',
+          prescribedDate: p.createdAt ?? '',
+          status: p.status ?? '',
+        })),
+      ),
+      catchError(() => of([])),
+    );
   }
 
   getMyLabResults(limit = 20): Observable<LabResultSummary[]> {

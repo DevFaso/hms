@@ -50,6 +50,7 @@ public class AppointmentResponseDTO {
     private LocalTime endTime;
 
         private UUID departmentId;
+        private String departmentName;
         private AppointmentStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

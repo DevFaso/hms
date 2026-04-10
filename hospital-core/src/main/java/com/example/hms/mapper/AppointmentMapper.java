@@ -34,7 +34,7 @@ public class AppointmentMapper {
 
         if (appointment.getDepartment() != null) {
             dto.setDepartmentId(appointment.getDepartment().getId());
-            // Optionally add department name if DTO supports it
+            dto.setDepartmentName(appointment.getDepartment().getName());
         }
 
         Patient patient = appointment.getPatient();
