@@ -35,7 +35,7 @@
                 <span class="material-symbols-outlined">pill</span>
               </div>
               <div class="pli-body">
-                <span class="pli-title">{{ med.name }}</span>
+                <span class="pli-title">{{ med.medicationName }}</span>
                 <span class="pli-sub">{{ med.dosage }} · {{ med.frequency }}</span>
                 <span class="pli-meta"
                   >{{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}
@@ -54,7 +54,7 @@
                 <div class="detail-grid">
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.MEDICATION' | translate }}</span>
-                    <span class="dv">{{ med.name }}</span>
+                    <span class="dv">{{ med.medicationName }}</span>
                   </div>
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.DOSAGE' | translate }}</span>
@@ -110,10 +110,6 @@
                 <span class="pli-meta">
                   {{ 'PORTAL.MEDICATIONS.PRESCRIBED_BY' | translate }}
                   {{ rx.prescribedBy || ('PORTAL.MEDICATIONS.PROVIDER' | translate) }}
-                  @if (rx.refillsRemaining !== undefined) {
-                    · {{ rx.refillsRemaining }}
-                    {{ 'PORTAL.MEDICATIONS.REFILLS_REMAINING' | translate | lowercase }}
-                  }
                 </span>
               </div>
               <span class="portal-status-chip" [attr.data-status]="rx.status">{{
@@ -146,14 +142,6 @@
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.PRESCRIBED_DATE' | translate }}</span>
                     <span class="dv">{{ rx.prescribedDate | date: 'mediumDate' }}</span>
                   </div>
-                  @if (rx.refillsRemaining !== undefined) {
-                    <div class="detail-item">
-                      <span class="dl">{{
-                        'PORTAL.MEDICATIONS.REFILLS_REMAINING' | translate
-                      }}</span>
-                      <span class="dv">{{ rx.refillsRemaining }}</span>
-                    </div>
-                  }
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.STATUS' | translate }}</span>
                     <span class="dv portal-status-chip" [attr.data-status]="rx.status">{{
@@ -161,7 +149,7 @@
                     }}</span>
                   </div>
                 </div>
-                @if (rx.status === 'ACTIVE' && (rx.refillsRemaining ?? 0) > 0) {
+                @if (rx.status === 'ACTIVE' || rx.status === 'SIGNED') {
                   <div class="refill-action">
                     @if (hasActiveRefill(rx.id)) {
                       <span class="refill-pending">

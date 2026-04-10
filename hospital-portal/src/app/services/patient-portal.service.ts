@@ -52,7 +52,7 @@ export interface LabResultSummary {
 
 export interface MedicationSummary {
   id: string;
-  name: string;
+  medicationName: string;
   dosage: string;
   frequency: string;
   prescribedBy: string;
@@ -198,10 +198,25 @@ export interface PortalPrescription {
   medicationName: string;
   dosage: string;
   frequency: string;
+  duration: string;
+  notes: string;
   prescribedBy: string;
   prescribedDate: string;
-  refillsRemaining: number;
   status: string;
+}
+
+/** Raw shape returned by backend PrescriptionResponseDTO. */
+interface PrescriptionApiResponse {
+  id: string;
+  medicationName: string;
+  medicationDisplayName?: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  notes: string;
+  staffFullName: string;
+  status: string;
+  createdAt: string;
 }
 
 export interface AfterVisitSummary {
@@ -432,10 +447,24 @@ export class PatientPortalService {
   }
 
   getMyPrescriptions(): Observable<PortalPrescription[]> {
-    return this.http.get<ApiWrapper<PortalPrescription[]>>(`${this.base}/prescriptions`).pipe(
-      map((r) => r.data ?? []),
-      catchError(() => of([])),
-    );
+    return this.http
+      .get<ApiWrapper<PrescriptionApiResponse[]>>(`${this.base}/prescriptions`)
+      .pipe(
+        map((r) =>
+          (r.data ?? []).map((p) => ({
+            id: p.id,
+            medicationName: p.medicationName ?? p.medicationDisplayName ?? '',
+            dosage: p.dosage ?? '',
+            frequency: p.frequency ?? '',
+            duration: p.duration ?? '',
+            notes: p.notes ?? '',
+            prescribedBy: p.staffFullName ?? '',
+            prescribedDate: p.createdAt ?? '',
+            status: p.status ?? '',
+          })),
+        ),
+        catchError(() => of([])),
+      );
   }
 
   getMyLabResults(limit = 20): Observable<LabResultSummary[]> {
