@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   LabService,
   LabResultResponse,
@@ -21,6 +21,7 @@ import { ProfileService } from '../../services/profile.service';
 export class LabResultsComponent implements OnInit {
   private readonly labService = inject(LabService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
   private readonly profileService = inject(ProfileService);
 
   loading = signal(true);
@@ -117,9 +118,7 @@ export class LabResultsComponent implements OnInit {
     this.form.assignmentId = this.activeAssignmentId;
     this.form.patientId = selectedOrder?.patientId ?? this.form.patientId ?? '';
     if (!this.form.labOrderId || !this.form.assignmentId || !this.form.patientId) {
-      this.toast.error(
-        'Select a lab order and wait for the active assignment to load before saving',
-      );
+      this.toast.error(this.translate.instant('LAB_RESULTS.SAVE_VALIDATION_ERROR'));
       return;
     }
     this.saving.set(true);
@@ -132,13 +131,15 @@ export class LabResultsComponent implements OnInit {
 
     op.subscribe({
       next: () => {
-        this.toast.success(this.editing() ? 'Lab result updated' : 'Lab result created');
+        this.toast.success(
+          this.translate.instant(this.editing() ? 'LAB_RESULTS.UPDATED' : 'LAB_RESULTS.CREATED'),
+        );
         this.closeModal();
         this.saving.set(false);
         this.loadResults();
       },
       error: () => {
-        this.toast.error('Save failed');
+        this.toast.error(this.translate.instant('LAB_RESULTS.SAVE_ERROR'));
         this.saving.set(false);
       },
     });
@@ -160,13 +161,13 @@ export class LabResultsComponent implements OnInit {
     this.deleting.set(true);
     this.labService.deleteResult(result.id).subscribe({
       next: () => {
-        this.toast.success('Lab result deleted');
+        this.toast.success(this.translate.instant('LAB_RESULTS.DELETED'));
         this.cancelDelete();
         this.deleting.set(false);
         this.loadResults();
       },
       error: () => {
-        this.toast.error('Delete failed');
+        this.toast.error(this.translate.instant('LAB_RESULTS.DELETE_ERROR'));
         this.deleting.set(false);
       },
     });
@@ -175,10 +176,10 @@ export class LabResultsComponent implements OnInit {
   releaseResult(r: LabResultResponse): void {
     this.labService.releaseResult(r.id).subscribe({
       next: () => {
-        this.toast.success('Result released');
+        this.toast.success(this.translate.instant('LAB_RESULTS.RELEASED'));
         this.loadResults();
       },
-      error: () => this.toast.error('Release failed'),
+      error: () => this.toast.error(this.translate.instant('LAB_RESULTS.RELEASE_ERROR')),
     });
   }
 
@@ -194,7 +195,7 @@ export class LabResultsComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
-        this.toast.error('Failed to load lab results');
+        this.toast.error(this.translate.instant('LAB_RESULTS.LOAD_ERROR'));
         this.loading.set(false);
       },
     });

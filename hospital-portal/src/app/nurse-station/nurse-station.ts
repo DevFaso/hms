@@ -1,5 +1,6 @@
 import {
   Component,
+  computed,
   inject,
   OnInit,
   OnDestroy,
@@ -12,7 +13,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
-import { forkJoin, Observable, of, Subscription, interval } from 'rxjs';
+import { defer, forkJoin, Observable, of, Subscription, interval } from 'rxjs';
 import { catchError, exhaustMap, tap, finalize } from 'rxjs/operators';
 import {
   NurseTaskService,
@@ -59,6 +60,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private refreshSub?: Subscription;
+  private slowRefreshSub?: Subscription;
 
   @ViewChild('reasonDialog') reasonDialogRef?: ElementRef<HTMLElement>;
   private dialogFocused = false;
@@ -71,7 +73,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   handoffs = signal<NurseHandoff[]>([]);
   announcements = signal<NurseAnnouncement[]>([]);
   summary = signal<NurseDashboardSummary | null>(null);
-  loading = signal(true);
+  private pendingLoads = signal(0);
+  loading = computed(() => this.pendingLoads() > 0);
   filterMode = signal<FilterMode>('me');
   lastRefreshed = signal<Date | null>(null);
 
@@ -105,7 +108,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   reasonPrompt = signal<{ taskId: string; action: string } | null>(null);
   reasonText = signal('');
 
-  private static readonly REFRESH_INTERVAL_MS = 60_000;
+  private static readonly FAST_REFRESH_MS = 60_000;
+  private static readonly SLOW_REFRESH_MS = 300_000;
 
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
@@ -129,106 +133,123 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   /* ── Lifecycle ──────────────────────────────────────────── */
 
   ngOnInit(): void {
-    this.loadAll$().subscribe();
-    this.refreshSub = interval(NurseStationComponent.REFRESH_INTERVAL_MS)
-      .pipe(exhaustMap(() => this.loadAll$()))
+    this.loadFast$().subscribe();
+    this.loadSlow$().subscribe();
+    this.refreshSub = interval(NurseStationComponent.FAST_REFRESH_MS)
+      .pipe(exhaustMap(() => this.loadFast$()))
+      .subscribe();
+    this.slowRefreshSub = interval(NurseStationComponent.SLOW_REFRESH_MS)
+      .pipe(exhaustMap(() => this.loadSlow$()))
       .subscribe();
   }
 
   ngOnDestroy(): void {
     this.refreshSub?.unsubscribe();
+    this.slowRefreshSub?.unsubscribe();
   }
 
   /* ── Data loading ──────────────────────────────────────── */
 
-  loadAll$(): Observable<void> {
-    this.loading.set(true);
+  /** Fast tier (60 s): time-critical data that nurses need up-to-the-minute. */
+  loadFast$(): Observable<void> {
     const mode = this.filterMode();
     const assignee = mode === 'me' ? 'me' : 'all';
     const params = { assignee } as { assignee?: string };
 
-    return forkJoin({
-      vitals: this.nurseService.getVitalsDue(params).pipe(
-        catchError(() => {
-          this.toast.error('Failed to load vitals');
-          return of([] as NurseVitalTask[]);
-        }),
-      ),
-      medications: this.nurseService.getMedicationMAR(params).pipe(
-        catchError(() => {
-          this.toast.error('Failed to load medications');
-          return of([] as NurseMedicationTask[]);
-        }),
-      ),
-      orders: this.nurseService.getOrders(params).pipe(
-        catchError(() => {
-          this.toast.error('Failed to load orders');
-          return of([] as NurseOrderTask[]);
-        }),
-      ),
-      handoffs: this.nurseService.getHandoffs(params).pipe(
-        catchError(() => {
-          this.toast.error('Failed to load handoffs');
-          return of([] as NurseHandoff[]);
-        }),
-      ),
-      announcements: this.nurseService
-        .getAnnouncements()
-        .pipe(catchError(() => of([] as NurseAnnouncement[]))),
-      summary: this.nurseService
-        .getDashboardSummary(params)
-        .pipe(catchError(() => of(null as NurseDashboardSummary | null))),
-      workboard: this.nurseService
-        .getWorkboard(params)
-        .pipe(catchError(() => of([] as NurseWorkboardPatient[]))),
-      flowBoard: this.nurseService
-        .getPatientFlow()
-        .pipe(catchError(() => of(null as NurseFlowBoard | null))),
-      pendingAdmissions: this.nurseService
-        .getPendingAdmissions()
-        .pipe(catchError(() => of([] as NurseAdmissionSummary[]))),
-      nursingTasks: this.nurseService
-        .getNursingTasks()
-        .pipe(catchError(() => of([] as NurseTaskItem[]))),
-      inboxItems: this.nurseService
-        .getNurseInbox({ limit: 20 })
-        .pipe(catchError(() => of([] as NurseInboxItem[]))),
-    }).pipe(
-      tap(
-        (results: {
-          vitals: NurseVitalTask[];
-          medications: NurseMedicationTask[];
-          orders: NurseOrderTask[];
-          handoffs: NurseHandoff[];
-          announcements: NurseAnnouncement[];
-          summary: NurseDashboardSummary | null;
-          workboard: NurseWorkboardPatient[];
-          flowBoard: NurseFlowBoard | null;
-          pendingAdmissions: NurseAdmissionSummary[];
-          nursingTasks: NurseTaskItem[];
-          inboxItems: NurseInboxItem[];
-        }) => {
+    return this.trackLoading(
+      forkJoin({
+        vitals: this.nurseService.getVitalsDue(params).pipe(
+          catchError(() => {
+            this.toast.error('Failed to load vitals');
+            return of([] as NurseVitalTask[]);
+          }),
+        ),
+        medications: this.nurseService.getMedicationMAR(params).pipe(
+          catchError(() => {
+            this.toast.error('Failed to load medications');
+            return of([] as NurseMedicationTask[]);
+          }),
+        ),
+        summary: this.nurseService
+          .getDashboardSummary(params)
+          .pipe(catchError(() => of(null as NurseDashboardSummary | null))),
+        nursingTasks: this.nurseService
+          .getNursingTasks()
+          .pipe(catchError(() => of([] as NurseTaskItem[]))),
+        inboxItems: this.nurseService
+          .getNurseInbox({ limit: 20 })
+          .pipe(catchError(() => of([] as NurseInboxItem[]))),
+      }).pipe(
+        tap((results) => {
           this.vitals.set(results.vitals ?? []);
           this.medications.set(results.medications ?? []);
-          this.orders.set(results.orders ?? []);
-          this.handoffs.set(results.handoffs ?? []);
-          this.announcements.set(Array.isArray(results.announcements) ? results.announcements : []);
           this.summary.set(results.summary);
-          this.workboard.set(results.workboard ?? []);
-          this.flowBoard.set(results.flowBoard);
-          this.pendingAdmissions.set(results.pendingAdmissions ?? []);
           this.nursingTasks.set(results.nursingTasks ?? []);
           this.inboxItems.set(results.inboxItems ?? []);
           this.inboxUnreadCount.set((results.inboxItems ?? []).filter((i) => !i.read).length);
           this.lastRefreshed.set(new Date());
-        },
+        }),
       ),
-      finalize(() => this.loading.set(false)),
     ) as unknown as Observable<void>;
   }
 
+  /** Slow tier (300 s): less time-critical data that can tolerate a longer poll period. */
+  loadSlow$(): Observable<void> {
+    const mode = this.filterMode();
+    const assignee = mode === 'me' ? 'me' : 'all';
+    const params = { assignee } as { assignee?: string };
+
+    return this.trackLoading(
+      forkJoin({
+        orders: this.nurseService.getOrders(params).pipe(
+          catchError(() => {
+            this.toast.error('Failed to load orders');
+            return of([] as NurseOrderTask[]);
+          }),
+        ),
+        handoffs: this.nurseService.getHandoffs(params).pipe(
+          catchError(() => {
+            this.toast.error('Failed to load handoffs');
+            return of([] as NurseHandoff[]);
+          }),
+        ),
+        announcements: this.nurseService
+          .getAnnouncements()
+          .pipe(catchError(() => of([] as NurseAnnouncement[]))),
+        workboard: this.nurseService
+          .getWorkboard(params)
+          .pipe(catchError(() => of([] as NurseWorkboardPatient[]))),
+        flowBoard: this.nurseService
+          .getPatientFlow()
+          .pipe(catchError(() => of(null as NurseFlowBoard | null))),
+        pendingAdmissions: this.nurseService
+          .getPendingAdmissions()
+          .pipe(catchError(() => of([] as NurseAdmissionSummary[]))),
+      }).pipe(
+        tap((results) => {
+          this.orders.set(results.orders ?? []);
+          this.handoffs.set(results.handoffs ?? []);
+          this.announcements.set(Array.isArray(results.announcements) ? results.announcements : []);
+          this.workboard.set(results.workboard ?? []);
+          this.flowBoard.set(results.flowBoard);
+          this.pendingAdmissions.set(results.pendingAdmissions ?? []);
+        }),
+      ),
+    ) as unknown as Observable<void>;
+  }
+
+  private trackLoading<T>(source$: Observable<T>): Observable<T> {
+    return defer(() => {
+      this.pendingLoads.update((count) => count + 1);
+      return source$.pipe(
+        finalize(() => this.pendingLoads.update((count) => Math.max(0, count - 1))),
+      );
+    });
+  }
+
   loadAll(): void {
-    this.loadAll$().subscribe();
+    this.loadFast$().subscribe();
+    this.loadSlow$().subscribe();
   }
 
   /* ── Filter ────────────────────────────────────────────── */

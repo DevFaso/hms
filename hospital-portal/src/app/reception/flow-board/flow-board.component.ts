@@ -1,8 +1,17 @@
-import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
+import {
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+  OnChanges,
+  SimpleChanges,
+  inject,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { CdkDragDrop, DragDropModule, transferArrayItem } from '@angular/cdk/drag-drop';
 import { FlowBoard, ReceptionQueueItem } from '../reception.service';
+import { ToastService } from '../../core/toast.service';
 
 export interface FlowBoardStatusChange {
   encounterId: string;
@@ -22,6 +31,8 @@ export class FlowBoardComponent implements OnChanges {
   @Input() board: FlowBoard | null = null;
   @Output() patientClicked = new EventEmitter<string>();
   @Output() statusChanged = new EventEmitter<FlowBoardStatusChange>();
+
+  private readonly toast = inject(ToastService);
 
   readonly columns: { key: ColKey; labelKey: string; colorClass: string }[] = [
     { key: 'scheduled', labelKey: 'RECEPTION.SCHEDULED', colorClass: 'col-scheduled' },
@@ -64,6 +75,14 @@ export class FlowBoardComponent implements OnChanges {
   drop(event: CdkDragDrop<ReceptionQueueItem[]>, targetKey: ColKey): void {
     if (event.previousContainer === event.container) return;
 
+    const draggedItem = event.previousContainer.data[event.previousIndex];
+    const newStatus = this.colStatusMap[targetKey];
+
+    if (!newStatus || !draggedItem?.encounterId) {
+      this.toast.info('Cannot move this card — check the patient in first.');
+      return;
+    }
+
     transferArrayItem(
       event.previousContainer.data,
       event.container.data,
@@ -71,12 +90,7 @@ export class FlowBoardComponent implements OnChanges {
       event.currentIndex,
     );
 
-    const item = event.container.data[event.currentIndex];
-    const newStatus = this.colStatusMap[targetKey];
-
-    if (newStatus && item.encounterId) {
-      this.statusChanged.emit({ encounterId: item.encounterId, newStatus });
-    }
+    this.statusChanged.emit({ encounterId: draggedItem.encounterId, newStatus });
   }
 
   listId(key: ColKey): string {

@@ -4,6 +4,8 @@ import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.InvoiceStatus;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.model.Role;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.AppointmentWaitlist;
 import com.example.hms.model.BillingInvoice;
@@ -33,6 +35,7 @@ import com.example.hms.repository.PatientInsuranceRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.security.access.AccessDeniedException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -77,6 +80,7 @@ class ReceptionServiceImplTest {
     @Mock private HospitalRepository hospitalRepo;
     @Mock private DepartmentRepository departmentRepo;
     @Mock private StaffRepository staffRepo;
+    @Mock private AuditEventLogService auditEventLogService;
 
     @InjectMocks
     private ReceptionServiceImpl service;
@@ -150,6 +154,7 @@ class ReceptionServiceImplTest {
                 .thenReturn(Collections.emptyList());
         lenient().when(invoiceRepo.findByPatient_IdAndHospital_Id(any(), eq(hospitalId), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(Collections.emptyList()));
+        lenient().when(invoiceRepo.existsOutstandingBalance(any(), any())).thenReturn(false);
     }
 
     // ── getDashboardSummary ──────────────────────────────────────────────────
@@ -157,6 +162,64 @@ class ReceptionServiceImplTest {
     @Nested
     @DisplayName("getDashboardSummary()")
     class GetDashboardSummary {
+
+        @Test
+        @DisplayName("waitingCount is arrivedCount minus inProgressCount (never negative)")
+        void waitingCountIsArrivedMinusInProgress() {
+            Appointment appt1 = makeAppointment(AppointmentStatus.SCHEDULED);
+            Appointment appt2 = makeAppointment(AppointmentStatus.SCHEDULED);
+            Encounter arrived1 = makeEncounter(EncounterStatus.ARRIVED, appt1);
+            Encounter arrived2 = makeEncounter(EncounterStatus.ARRIVED, appt2);
+            Encounter inProgress = makeEncounter(EncounterStatus.IN_PROGRESS, appt1);
+
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(List.of(appt1, appt2));
+            when(encounterRepo.findByAppointmentIdIn(any()))
+                    .thenReturn(List.of(arrived1, arrived2, inProgress));
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+
+            ReceptionDashboardSummaryDTO result = service.getDashboardSummary(today, hospitalId);
+
+            // 2 arrived, 1 in-progress → waitingCount = max(0, 2-1) = 1
+            assertThat(result.getWaitingCount()).isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("waitingCount is 0 when inProgressCount exceeds arrivedCount")
+        void waitingCountIsNonNegative() {
+            Appointment appt = makeAppointment(AppointmentStatus.SCHEDULED);
+            Encounter inProgress = makeEncounter(EncounterStatus.IN_PROGRESS, appt);
+
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(List.of(appt));
+            when(encounterRepo.findByAppointmentIdIn(any())).thenReturn(List.of(inProgress));
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+
+            ReceptionDashboardSummaryDTO result = service.getDashboardSummary(today, hospitalId);
+
+            assertThat(result.getWaitingCount()).isGreaterThanOrEqualTo(0);
+        }
+
+        @Test
+        @DisplayName("completedCount counts linked encounters and walk-ins but not appointments")
+        void completedCountExcludesRawAppointments() {
+            Appointment completed = makeAppointment(AppointmentStatus.COMPLETED);
+            Encounter linkedCompleted = makeEncounter(EncounterStatus.COMPLETED, completed);
+            Encounter walkInCompleted = makeWalkInEncounter(EncounterStatus.COMPLETED);
+
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(List.of(completed));
+            when(encounterRepo.findByAppointmentIdIn(any())).thenReturn(List.of(linkedCompleted));
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(List.of(walkInCompleted));
+
+            ReceptionDashboardSummaryDTO result = service.getDashboardSummary(today, hospitalId);
+
+            // 1 linked encounter + 1 walk-in = 2 (appointment status COMPLETED not counted separately)
+            assertThat(result.getCompletedCount()).isEqualTo(2);
+        }
 
         @Test
         @DisplayName("returns counts for scheduled, arrived, in-progress, no-show, completed, walk-ins")
@@ -178,7 +241,7 @@ class ReceptionServiceImplTest {
             assertThat(result.getDate()).isEqualTo(today);
             assertThat(result.getHospitalId()).isEqualTo(hospitalId);
             assertThat(result.getNoShowCount()).isEqualTo(1);
-            assertThat(result.getCompletedCount()).isEqualTo(1);
+            assertThat(result.getCompletedCount()).isZero(); // no linked encounter or walk-in with COMPLETED
             assertThat(result.getWalkInCount()).isEqualTo(1);
             assertThat(result.getScheduledToday()).isEqualTo(1); // only 'scheduled' qualifies
         }
@@ -288,6 +351,7 @@ class ReceptionServiceImplTest {
             when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
                     .thenReturn(Collections.emptyList());
             Encounter walkIn = makeWalkInEncounter(EncounterStatus.ARRIVED);
+            lenient().when(walkIn.getHospital()).thenReturn(hospital);
             when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
                     .thenReturn(List.of(walkIn));
             stubEmptyInsuranceAndInvoices();
@@ -296,6 +360,50 @@ class ReceptionServiceImplTest {
 
             assertThat(result).hasSize(1);
             assertThat(result.get(0).getAppointmentReason()).isEqualTo("Walk-in");
+        }
+
+        @Test
+        @DisplayName("walk-in hasInsuranceIssue is true when patient has no insurance")
+        void walkInInsuranceFlagSet() {
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(Collections.emptyList());
+            Encounter walkIn = makeWalkInEncounter(EncounterStatus.ARRIVED);
+            lenient().when(walkIn.getHospital()).thenReturn(hospital);
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(List.of(walkIn));
+            // No insurance → detectInsuranceIssue returns true
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
+                    .thenReturn(Collections.emptyList());
+            when(invoiceRepo.existsOutstandingBalance(patientId, hospitalId)).thenReturn(false);
+
+            List<ReceptionQueueItemDTO> result = service.getQueue(today, hospitalId, null, null, null);
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).isHasInsuranceIssue()).isTrue();
+            assertThat(result.get(0).isHasOutstandingBalance()).isFalse();
+        }
+
+        @Test
+        @DisplayName("walk-in hasOutstandingBalance is true when existsOutstandingBalance returns true")
+        void walkInOutstandingBalanceFlagSet() {
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today))
+                    .thenReturn(Collections.emptyList());
+            Encounter walkIn = makeWalkInEncounter(EncounterStatus.ARRIVED);
+            lenient().when(walkIn.getHospital()).thenReturn(hospital);
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(List.of(walkIn));
+            PatientInsurance activeIns = mock(PatientInsurance.class);
+            lenient().when(activeIns.isPrimary()).thenReturn(true);
+            lenient().when(activeIns.getExpirationDate()).thenReturn(null);
+            when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(patientId, hospitalId))
+                    .thenReturn(List.of(activeIns));
+            when(invoiceRepo.existsOutstandingBalance(patientId, hospitalId)).thenReturn(true);
+
+            List<ReceptionQueueItemDTO> result = service.getQueue(today, hospitalId, null, null, null);
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).isHasInsuranceIssue()).isFalse();
+            assertThat(result.get(0).isHasOutstandingBalance()).isTrue();
         }
 
         @Test
@@ -560,12 +668,7 @@ class ReceptionServiceImplTest {
             when(insuranceRepo.findByPatient_IdAndAssignment_Hospital_Id(any(), eq(hospitalId)))
                     .thenReturn(Collections.emptyList());
 
-            BillingInvoice inv = mock(BillingInvoice.class);
-            when(inv.getStatus()).thenReturn(InvoiceStatus.SENT);
-            when(inv.getTotalAmount()).thenReturn(new BigDecimal("50.00"));
-            when(inv.getAmountPaid()).thenReturn(BigDecimal.ZERO);
-            when(invoiceRepo.findByPatient_IdAndHospital_Id(any(), eq(hospitalId), any()))
-                    .thenReturn(new PageImpl<>(List.of(inv)));
+            when(invoiceRepo.existsOutstandingBalance(any(), eq(hospitalId))).thenReturn(true);
 
             List<ReceptionQueueItemDTO> result = service.getPaymentsPending(today, hospitalId);
 
@@ -845,14 +948,24 @@ class ReceptionServiceImplTest {
     class UpdateEncounterStatus {
 
         @Test
-        @DisplayName("updates encounter status")
-        void updatesStatus() {
+        @DisplayName("admin can update any encounter status")
+        void adminUpdatesStatus() {
             UUID encounterId = UUID.randomUUID();
             Encounter encounter = mock(Encounter.class);
+            lenient().when(encounter.getStatus()).thenReturn(EncounterStatus.ARRIVED);
             when(encounterRepo.findByIdAndHospital_Id(encounterId, hospitalId))
                     .thenReturn(Optional.of(encounter));
 
-            service.updateEncounterStatus(encounterId, EncounterStatus.COMPLETED, hospitalId);
+            Role receptionistRole = mock(Role.class);
+            when(receptionistRole.getCode()).thenReturn("ROLE_RECEPTIONIST");
+            UserRoleHospitalAssignment assignment = mock(UserRoleHospitalAssignment.class);
+            when(assignment.getRole()).thenReturn(receptionistRole);
+            Staff adminStaff = mock(Staff.class);
+            when(adminStaff.getAssignment()).thenReturn(assignment);
+            when(staffRepo.findByUsernameOrLicenseOrRoleCode("receptionist1"))
+                    .thenReturn(Optional.of(adminStaff));
+
+            service.updateEncounterStatus(encounterId, EncounterStatus.COMPLETED, hospitalId, "receptionist1");
 
             verify(encounter).setStatus(EncounterStatus.COMPLETED);
             verify(encounterRepo).save(encounter);
@@ -864,8 +977,40 @@ class ReceptionServiceImplTest {
             UUID encounterId = UUID.randomUUID();
             when(encounterRepo.findByIdAndHospital_Id(encounterId, hospitalId)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.updateEncounterStatus(encounterId, EncounterStatus.COMPLETED, hospitalId))
+            assertThatThrownBy(() -> service.updateEncounterStatus(encounterId, EncounterStatus.COMPLETED, hospitalId, "any"))
                     .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("throws AccessDeniedException when caller is not assigned to encounter")
+        void throwsWhenCallerNotOwner() {
+            UUID encounterId = UUID.randomUUID();
+            UUID ownerStaffId = UUID.randomUUID();
+            UUID callerStaffId = UUID.randomUUID();
+
+            Staff ownerStaff = mock(Staff.class);
+            when(ownerStaff.getId()).thenReturn(ownerStaffId);
+
+            Encounter encounter = mock(Encounter.class);
+            lenient().when(encounter.getStatus()).thenReturn(EncounterStatus.ARRIVED);
+            when(encounter.getStaff()).thenReturn(ownerStaff);
+            when(encounterRepo.findByIdAndHospital_Id(encounterId, hospitalId))
+                    .thenReturn(Optional.of(encounter));
+
+            // caller is a doctor (not admin/receptionist) — role not privileged
+            Role doctorRole = mock(Role.class);
+            when(doctorRole.getCode()).thenReturn("ROLE_DOCTOR");
+            UserRoleHospitalAssignment callerAssignment = mock(UserRoleHospitalAssignment.class);
+            when(callerAssignment.getRole()).thenReturn(doctorRole);
+            Staff callerStaff = mock(Staff.class);
+            when(callerStaff.getId()).thenReturn(callerStaffId);
+            when(callerStaff.getAssignment()).thenReturn(callerAssignment);
+            when(staffRepo.findByUsernameOrLicenseOrRoleCode("doctor1"))
+                    .thenReturn(Optional.of(callerStaff));
+
+            assertThatThrownBy(() ->
+                    service.updateEncounterStatus(encounterId, EncounterStatus.COMPLETED, hospitalId, "doctor1")
+            ).isInstanceOf(AccessDeniedException.class);
         }
     }
 }

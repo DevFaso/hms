@@ -59,8 +59,16 @@ export class DoctorPatientFlowComponent {
     return this.flowData()[key] ?? [];
   }
 
+  getTrackKey(item: PatientFlowItem): string {
+    return item.encounterId || item.admissionId || item.patientId;
+  }
+
   selectPatient(patientId: string): void {
     this.patientSelected.emit(patientId);
+  }
+
+  getSourceLabel(item: PatientFlowItem): string {
+    return item.flowSource === 'ADMISSION' ? 'Inpatient' : 'Outpatient';
   }
 
   getElapsedClass(minutes: number): string {

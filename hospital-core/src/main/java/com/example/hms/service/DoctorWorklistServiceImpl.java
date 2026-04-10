@@ -49,6 +49,8 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class DoctorWorklistServiceImpl implements DoctorWorklistService {
 
+    private static final String STATUS_CHECKED_IN = "CHECKED_IN";
+
     private final StaffRepository staffRepository;
     private final EncounterRepository encounterRepository;
     private final AppointmentRepository appointmentRepository;
@@ -203,7 +205,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
                 items.add(buildConsultWorklistItem(p, consult));
             }
         } catch (Exception e) {
-            log.debug("Consultation worklist query unavailable: {}", e.getMessage());
+            log.warn("Consultation worklist query unavailable: {}", e.getMessage());
         }
     }
 
@@ -213,10 +215,11 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
     }
 
     private DoctorWorklistItemDTO buildAppointmentWorklistItem(Patient p, Appointment appt, String mappedStatus) {
+        UUID apptHospitalId = appt.getHospital() != null ? appt.getHospital().getId() : null;
         return DoctorWorklistItemDTO.builder()
                 .patientId(p.getId())
                 .patientName(p.getFirstName() + " " + p.getLastName())
-                .mrn(p.getId().toString())
+                .mrn(p.getMrnForHospital(apptHospitalId))
                 .age(computeAge(p))
                 .sex(p.getGender())
                 .chiefComplaint(appt.getReason())
@@ -229,10 +232,11 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
 
     private DoctorWorklistItemDTO buildConsultWorklistItem(Patient p, com.example.hms.model.Consultation consult) {
         String consultUrgency = consult.getUrgency() != null ? consult.getUrgency().name() : "ROUTINE";
+        UUID consultHospitalId = consult.getHospital() != null ? consult.getHospital().getId() : null;
         return DoctorWorklistItemDTO.builder()
                 .patientId(p.getId())
                 .patientName(p.getFirstName() + " " + p.getLastName())
-                .mrn(p.getId().toString())
+                .mrn(p.getMrnForHospital(consultHospitalId))
                 .age(computeAge(p))
                 .sex(p.getGender())
                 .chiefComplaint(consult.getReasonForConsult())
@@ -257,11 +261,12 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         String[] roomBed = parseRoomBed(patientRoomBed.get(p.getId()));
         String latestVitalsSummary = fetchVitalsSummary(p.getId());
 
+        UUID encHospitalId = enc.getHospital() != null ? enc.getHospital().getId() : null;
         return DoctorWorklistItemDTO.builder()
                 .patientId(p.getId())
                 .encounterId(enc.getId())
                 .patientName(p.getFirstName() + " " + p.getLastName())
-                .mrn(p.getId().toString())
+                .mrn(p.getMrnForHospital(encHospitalId))
                 .age(age)
                 .sex(p.getGender())
                 .room(roomBed[0])
@@ -314,10 +319,10 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
     private String mapEncounterStatus(EncounterStatus es) {
         return switch (es) {
             case IN_PROGRESS -> "IN_PROGRESS";
-            case ARRIVED -> "CHECKED_IN";
+            case ARRIVED -> STATUS_CHECKED_IN;
             case SCHEDULED -> "SCHEDULED";
-            case TRIAGE -> "CHECKED_IN";
-            case WAITING_FOR_PHYSICIAN -> "CHECKED_IN";
+            case TRIAGE -> STATUS_CHECKED_IN;
+            case WAITING_FOR_PHYSICIAN -> STATUS_CHECKED_IN;
             case AWAITING_RESULTS -> "IN_PROGRESS";
             case READY_FOR_DISCHARGE -> "IN_PROGRESS";
             case COMPLETED -> "COMPLETED";
@@ -327,7 +332,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
 
     private String mapAppointmentStatus(String apptStatus) {
         return switch (apptStatus) {
-            case "CONFIRMED", "SCHEDULED" -> "CHECKED_IN";
+            case "CONFIRMED", "SCHEDULED" -> STATUS_CHECKED_IN;
             case "IN_PROGRESS" -> "IN_PROGRESS";
             case "COMPLETED" -> "COMPLETED";
             default -> "SCHEDULED";
