@@ -138,7 +138,7 @@ export interface DoctorWorklistItem {
 
 export interface PatientFlowItem {
   patientId: string;
-  encounterId: string;
+  encounterId?: string;
   admissionId?: string;
   patientName: string;
   room?: string;

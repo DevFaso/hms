@@ -14,7 +14,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { defer, forkJoin, Observable, of, Subscription, interval } from 'rxjs';
-import { catchError, exhaustMap, tap, finalize } from 'rxjs/operators';
+import { catchError, exhaustMap, tap, finalize, map } from 'rxjs/operators';
 import {
   NurseTaskService,
   NurseVitalTask,
@@ -190,7 +190,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.lastRefreshed.set(new Date());
         }),
       ),
-    ) as unknown as Observable<void>;
+    ).pipe(map(() => void 0));
   }
 
   /** Slow tier (300 s): less time-critical data that can tolerate a longer poll period. */
@@ -235,7 +235,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.pendingAdmissions.set(results.pendingAdmissions ?? []);
         }),
       ),
-    ) as unknown as Observable<void>;
+    ).pipe(map(() => void 0));
   }
 
   private trackLoading<T>(source$: Observable<T>): Observable<T> {

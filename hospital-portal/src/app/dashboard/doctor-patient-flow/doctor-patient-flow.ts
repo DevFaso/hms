@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PatientFlowItem } from '../../services/dashboard.service';
 
 interface FlowColumn {
@@ -20,6 +20,7 @@ interface FlowColumn {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DoctorPatientFlowComponent {
+  private readonly translate = inject(TranslateService);
   flowData = input<Record<string, PatientFlowItem[]>>({});
   patientSelected = output<string>();
 
@@ -68,7 +69,9 @@ export class DoctorPatientFlowComponent {
   }
 
   getSourceLabel(item: PatientFlowItem): string {
-    return item.flowSource === 'ADMISSION' ? 'Inpatient' : 'Outpatient';
+    return item.flowSource === 'ADMISSION'
+      ? this.translate.instant('DASHBOARD.PATIENT_FLOW_INPATIENT')
+      : this.translate.instant('DASHBOARD.PATIENT_FLOW_OUTPATIENT');
   }
 
   getElapsedClass(minutes: number): string {

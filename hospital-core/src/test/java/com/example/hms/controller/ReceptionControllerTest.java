@@ -97,10 +97,10 @@ class ReceptionControllerTest {
             .when(receptionService)
             .updateEncounterStatus(eq(ENCOUNTER_ID), any(), eq(HOSPITAL_ID), eq(DOCTOR_USERNAME));
 
+        Map<String, String> statusBody = Map.of("status", "IN_PROGRESS");
+
         assertThatThrownBy(() -> controller.updateEncounterStatus(
-                ENCOUNTER_ID,
-                Map.of("status", "IN_PROGRESS"),
-                doctorPrincipal
+                ENCOUNTER_ID, statusBody, doctorPrincipal
             ))
             .isInstanceOf(AccessDeniedException.class)
             .hasMessageContaining("own patients");
@@ -112,10 +112,10 @@ class ReceptionControllerTest {
             .when(receptionService)
             .updateEncounterStatus(eq(ENCOUNTER_ID), any(), eq(HOSPITAL_ID), eq(RECEPTIONIST_USERNAME));
 
+        Map<String, String> statusBody = Map.of("status", "ARRIVED");
+
         assertThatThrownBy(() -> controller.updateEncounterStatus(
-                ENCOUNTER_ID,
-                Map.of("status", "ARRIVED"),
-                receptionistPrincipal
+                ENCOUNTER_ID, statusBody, receptionistPrincipal
             ))
             .isInstanceOf(ResourceNotFoundException.class)
             .hasMessageContaining("not found");

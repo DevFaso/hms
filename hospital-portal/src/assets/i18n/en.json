@@ -573,6 +573,8 @@
     "OVERDUE": "overdue",
     "PATIENTS_TODAY": "Patients Today",
     "PATIENT_FLOW": "Patient Flow",
+    "PATIENT_FLOW_INPATIENT": "Inpatient",
+    "PATIENT_FLOW_OUTPATIENT": "Outpatient",
     "PATIENT_LOOKUP": "Patient Lookup",
     "PATIENT_SCHEDULE": "Patient Schedule",
     "PAYMENT_METHODS_30D": "Payment Methods (30d)",
