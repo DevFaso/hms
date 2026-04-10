@@ -49,5 +49,5 @@ public interface ReceptionService {
                            EligibilityAttestationRequestDTO request);
 
     // ── MVP 11: Flow board ────────────────────────────────────────────────────
-    void updateEncounterStatus(UUID encounterId, EncounterStatus status, UUID hospitalId);
+    void updateEncounterStatus(UUID encounterId, EncounterStatus status, UUID hospitalId, String callerUsername);
 }

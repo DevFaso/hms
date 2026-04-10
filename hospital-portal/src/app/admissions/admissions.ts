@@ -16,7 +16,7 @@ import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-admissions',
@@ -33,6 +33,7 @@ export class AdmissionsComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
+  private readonly translate = inject(TranslateService);
 
   admissions = signal<AdmissionResponse[]>([]);
   filtered = signal<AdmissionResponse[]>([]);
@@ -75,17 +76,29 @@ export class AdmissionsComponent implements OnInit {
     dischargingProviderId: '',
   };
   readonly dispositionOptions = [
-    { value: 'HOME', label: 'Home' },
-    { value: 'HOME_WITH_HOME_HEALTH', label: 'Home with Home Health' },
-    { value: 'SKILLED_NURSING_FACILITY', label: 'Skilled Nursing Facility' },
-    { value: 'LONG_TERM_CARE_FACILITY', label: 'Long-term Care Facility' },
-    { value: 'REHABILITATION_FACILITY', label: 'Rehabilitation Facility' },
-    { value: 'HOSPICE_HOME', label: 'Hospice – Home' },
-    { value: 'HOSPICE_FACILITY', label: 'Hospice – Facility' },
-    { value: 'PSYCHIATRIC_FACILITY', label: 'Psychiatric Facility' },
-    { value: 'AGAINST_MEDICAL_ADVICE', label: 'Against Medical Advice' },
-    { value: 'TRANSFERRED_TO_ANOTHER_HOSPITAL', label: 'Transfer to Another Hospital' },
-    { value: 'OTHER', label: 'Other' },
+    { value: 'HOME', labelKey: 'ADMISSIONS.DISPOSITION_HOME' },
+    { value: 'HOME_WITH_HOME_HEALTH', labelKey: 'ADMISSIONS.DISPOSITION_HOME_WITH_HOME_HEALTH' },
+    {
+      value: 'SKILLED_NURSING_FACILITY',
+      labelKey: 'ADMISSIONS.DISPOSITION_SKILLED_NURSING_FACILITY',
+    },
+    {
+      value: 'LONG_TERM_CARE_FACILITY',
+      labelKey: 'ADMISSIONS.DISPOSITION_LONG_TERM_CARE_FACILITY',
+    },
+    {
+      value: 'REHABILITATION_FACILITY',
+      labelKey: 'ADMISSIONS.DISPOSITION_REHABILITATION_FACILITY',
+    },
+    { value: 'HOSPICE_HOME', labelKey: 'ADMISSIONS.DISPOSITION_HOSPICE_HOME' },
+    { value: 'HOSPICE_FACILITY', labelKey: 'ADMISSIONS.DISPOSITION_HOSPICE_FACILITY' },
+    { value: 'PSYCHIATRIC_FACILITY', labelKey: 'ADMISSIONS.DISPOSITION_PSYCHIATRIC_FACILITY' },
+    { value: 'AGAINST_MEDICAL_ADVICE', labelKey: 'ADMISSIONS.DISPOSITION_AGAINST_MEDICAL_ADVICE' },
+    {
+      value: 'TRANSFERRED_TO_ANOTHER_HOSPITAL',
+      labelKey: 'ADMISSIONS.DISPOSITION_TRANSFERRED_TO_ANOTHER_HOSPITAL',
+    },
+    { value: 'OTHER', labelKey: 'ADMISSIONS.DISPOSITION_OTHER' },
   ];
 
   admissionTypes: AdmissionType[] = [
@@ -357,13 +370,13 @@ export class AdmissionsComponent implements OnInit {
       })
       .subscribe({
         next: () => {
-          this.toast.success('Patient discharged successfully');
+          this.toast.success(this.translate.instant('ADMISSIONS.DISCHARGE_SUCCESS'));
           this.cancelDischarge();
           this.discharging.set(false);
           this.load();
         },
         error: () => {
-          this.toast.error('Discharge failed');
+          this.toast.error(this.translate.instant('ADMISSIONS.DISCHARGE_ERROR'));
           this.discharging.set(false);
         },
       });

@@ -1,9 +1,12 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.AppointmentStatus;
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.InvoiceStatus;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.AppointmentWaitlist;
 import com.example.hms.model.BillingInvoice;
@@ -35,13 +38,13 @@ import com.example.hms.repository.StaffRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -73,6 +76,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     private final HospitalRepository hospitalRepo;
     private final DepartmentRepository departmentRepo;
     private final StaffRepository staffRepo;
+    private final AuditEventLogService auditEventLogService;
 
     // ── MVP 9: Dashboard Summary ─────────────────────────────────────────────
 
@@ -99,9 +103,9 @@ public class ReceptionServiceImpl implements ReceptionService {
                 + countByStatus(walkIns, EncounterStatus.IN_PROGRESS);
         long noShowCount = appointments.stream()
                 .filter(a -> a.getStatus() == AppointmentStatus.NO_SHOW).count();
-        long completedCount = appointments.stream()
-                .filter(a -> a.getStatus() == AppointmentStatus.COMPLETED).count()
-                + countByStatus(linkedEncounters, EncounterStatus.COMPLETED)
+        // completedCount: only encounter-side completions to avoid double-counting
+        // a scheduled appointment whose encounter is COMPLETED would otherwise add 2.
+        long completedCount = countByStatus(linkedEncounters, EncounterStatus.COMPLETED)
                 + countByStatus(walkIns, EncounterStatus.COMPLETED);
         // "Scheduled" = appointments with no linked encounter yet, not no-show, not completed
         long scheduledCount = appointments.stream()
@@ -110,13 +114,15 @@ public class ReceptionServiceImpl implements ReceptionService {
                         && a.getStatus() != AppointmentStatus.COMPLETED
                         && a.getStatus() != AppointmentStatus.CANCELLED)
                 .count();
+        // waitingCount: arrived but not yet seen (i.e. not IN_PROGRESS), floored at 0
+        long waitingCount = Math.max(0, arrivedCount - inProgressCount);
 
         return ReceptionDashboardSummaryDTO.builder()
                 .date(date)
                 .hospitalId(hospitalId)
                 .scheduledToday(scheduledCount)
                 .arrivedCount(arrivedCount)
-                .waitingCount(arrivedCount) // waiting = arrived but not yet IN_PROGRESS
+                .waitingCount(waitingCount)
                 .inProgressCount(inProgressCount)
                 .noShowCount(noShowCount)
                 .completedCount(completedCount)
@@ -365,8 +371,11 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     private ReceptionQueueItemDTO buildWalkInQueueItem(Encounter walkIn, String computedStatus) {
         Patient p = walkIn.getPatient();
+        UUID walkInHospitalId = walkIn.getHospital() != null ? walkIn.getHospital().getId() : null;
         int waitMins = 0;
-        if (walkIn.getStatus() == EncounterStatus.ARRIVED) {
+        if (walkIn.getStatus() == EncounterStatus.ARRIVED
+                || walkIn.getStatus() == EncounterStatus.TRIAGE
+                || walkIn.getStatus() == EncounterStatus.WAITING_FOR_PHYSICIAN) {
             waitMins = (int) ChronoUnit.MINUTES.between(walkIn.getEncounterDate(), LocalDateTime.now());
         }
         return ReceptionQueueItemDTO.builder()
@@ -385,8 +394,8 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .status(computedStatus)
                 .waitMinutes(waitMins)
                 .encounterId(walkIn.getId())
-                .hasInsuranceIssue(false)
-                .hasOutstandingBalance(false)
+                .hasInsuranceIssue(walkInHospitalId != null && detectInsuranceIssue(p.getId(), walkInHospitalId))
+                .hasOutstandingBalance(walkInHospitalId != null && detectOutstandingBalance(p.getId(), walkInHospitalId))
                 .build();
     }
 
@@ -443,11 +452,12 @@ public class ReceptionServiceImpl implements ReceptionService {
     }
 
     private String computeWalkInStatus(Encounter walkIn) {
-        if (walkIn.getStatus() == EncounterStatus.IN_PROGRESS
-                || walkIn.getStatus() == EncounterStatus.AWAITING_RESULTS
-                || walkIn.getStatus() == EncounterStatus.READY_FOR_DISCHARGE) return STATUS_IN_PROGRESS;
-        if (walkIn.getStatus() == EncounterStatus.COMPLETED) return STATUS_COMPLETED;
-        return STATUS_WALK_IN;
+        return switch (walkIn.getStatus()) {
+            case ARRIVED, TRIAGE, WAITING_FOR_PHYSICIAN -> STATUS_ARRIVED;
+            case IN_PROGRESS, AWAITING_RESULTS, READY_FOR_DISCHARGE -> STATUS_IN_PROGRESS;
+            case COMPLETED -> STATUS_COMPLETED;
+            default -> STATUS_WALK_IN;
+        };
     }
 
     private boolean detectInsuranceIssue(UUID patientId, UUID hospitalId) {
@@ -461,12 +471,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     }
 
     private boolean detectOutstandingBalance(UUID patientId, UUID hospitalId) {
-        return invoiceRepo.findByPatient_IdAndHospital_Id(patientId, hospitalId, PageRequest.of(0, 5))
-                .getContent().stream()
-                .filter(inv -> inv.getStatus() != InvoiceStatus.PAID
-                        && inv.getStatus() != InvoiceStatus.CANCELLED
-                        && inv.getStatus() != InvoiceStatus.DRAFT)
-                .anyMatch(inv -> balanceDue(inv).compareTo(BigDecimal.ZERO) > 0);
+        return invoiceRepo.existsOutstandingBalance(patientId, hospitalId);
     }
 
     private int computeWaitMinutes(Encounter encounter) {
@@ -620,11 +625,58 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     @Override
     @Transactional
-    public void updateEncounterStatus(UUID encounterId, EncounterStatus status, UUID hospitalId) {
+    public void updateEncounterStatus(UUID encounterId, EncounterStatus status, UUID hospitalId, String callerUsername) {
         Encounter encounter = encounterRepo.findByIdAndHospital_Id(encounterId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("Encounter not found"));
+
+        // Ownership check: RECEPTIONIST and admin roles may move any encounter.
+        // DOCTOR / NURSE / MIDWIFE may only move encounters assigned to them.
+        boolean isAdminActor = isAdminOrReceptionist(callerUsername);
+        if (!isAdminActor) {
+            Staff callerStaff = staffRepo.findByUsernameOrLicenseOrRoleCode(callerUsername)
+                    .orElse(null);
+            UUID encStaffId = encounter.getStaff() != null ? encounter.getStaff().getId() : null;
+            if (callerStaff == null || !callerStaff.getId().equals(encStaffId)) {
+                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                        .userName(callerUsername)
+                        .eventType(AuditEventType.DATA_UPDATE)
+                        .eventDescription("Encounter status update DENIED — encounter not assigned to caller")
+                        .resourceId(encounterId.toString())
+                        .entityType("ENCOUNTER")
+                        .status(AuditStatus.FAILURE)
+                        .build());
+                throw new AccessDeniedException("You may only update encounter status for your own patients.");
+            }
+        }
+
+        EncounterStatus previousStatus = encounter.getStatus();
         encounter.setStatus(status);
         encounterRepo.save(encounter);
+
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userName(callerUsername)
+                .eventType(AuditEventType.DATA_UPDATE)
+                .eventDescription("Encounter status updated from " + previousStatus + " to " + status)
+                .resourceId(encounterId.toString())
+                .entityType("ENCOUNTER")
+                .status(AuditStatus.SUCCESS)
+                .build());
+    }
+
+    private boolean isAdminOrReceptionist(String username) {
+        if (username == null) return false;
+        return staffRepo.findByUsernameOrLicenseOrRoleCode(username)
+                .map(s -> s.getAssignment() != null && s.getAssignment().getRole() != null
+                        && isPrivilegedRoleCode(s.getAssignment().getRole().getCode()))
+                .orElse(false);
+    }
+
+    private boolean isPrivilegedRoleCode(String roleCode) {
+        if (roleCode == null) return false;
+        return switch (roleCode) {
+            case "ROLE_SUPER_ADMIN", "ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN", "ROLE_RECEPTIONIST" -> true;
+            default -> false;
+        };
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

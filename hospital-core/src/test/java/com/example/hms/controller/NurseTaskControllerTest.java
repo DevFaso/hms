@@ -469,14 +469,10 @@ class NurseTaskControllerTest {
     }
 
     @Test
-    void resolveAssigneeUnknownValueReturnsNull() {
-        when(nurseTaskService.getDueVitals(eq(null), eq(HOSPITAL_ID), any(Duration.class)))
-            .thenReturn(List.of());
-
-        // Random string — not "me" or "all" or blank → returns null
-        ResponseEntity<List<NurseVitalTaskResponseDTO>> response =
-            controller.getDueVitals(null, "nurse123", null, auth);
-
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    void resolveAssigneeUnknownValueThrows() {
+        // Random string — not "me", "all", or blank → throws BusinessException
+        assertThatThrownBy(() -> controller.getDueVitals(null, "nurse123", null, auth))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("Invalid assignee value");
     }
 }
