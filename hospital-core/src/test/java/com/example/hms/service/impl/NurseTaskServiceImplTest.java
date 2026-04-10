@@ -3,6 +3,7 @@ package com.example.hms.service.impl;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -1420,10 +1421,10 @@ class NurseTaskServiceImplTest {
         dischargeAdm.setStatus(AdmissionStatus.AWAITING_DISCHARGE);
         dischargeAdm.setAdmissionDateTime(LocalDateTime.now().minusDays(3));
 
-        when(admissionRepository.findActiveAdmissionsByHospital(hospitalId))
-            .thenReturn(List.of(criticalAdm, activeAdm));
-        when(admissionRepository.findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(hospitalId, AdmissionStatus.AWAITING_DISCHARGE))
-            .thenReturn(List.of(dischargeAdm));
+        when(admissionRepository.findFlowBoardAdmissions(
+                eq(hospitalId),
+                argThat(l -> l.containsAll(List.of(AdmissionStatus.ACTIVE, AdmissionStatus.ON_LEAVE, AdmissionStatus.AWAITING_DISCHARGE)))))
+            .thenReturn(List.of(criticalAdm, activeAdm, dischargeAdm));
 
         NurseFlowBoardDTO board = service.getPatientFlow(hospitalId, null);
 
@@ -1452,8 +1453,6 @@ class NurseTaskServiceImplTest {
 
         when(admissionRepository.findByDepartmentIdAndStatusOrderByAdmissionDateTimeDesc(deptId, AdmissionStatus.ACTIVE))
             .thenReturn(List.of(adm));
-        when(admissionRepository.findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(hospitalId, AdmissionStatus.AWAITING_DISCHARGE))
-            .thenReturn(List.of());
 
         NurseFlowBoardDTO board = service.getPatientFlow(hospitalId, deptId);
 

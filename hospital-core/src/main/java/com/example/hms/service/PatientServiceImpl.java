@@ -67,6 +67,7 @@ import com.example.hms.repository.PatientAllergyRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProblemHistoryRepository;
 import com.example.hms.repository.PatientProblemRepository;
+import com.example.hms.repository.PatientProxyRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientSurgicalHistoryRepository;
 import com.example.hms.repository.PrescriptionRepository;
@@ -207,6 +208,7 @@ public class PatientServiceImpl implements PatientService {
     private final NursingNoteRepository nursingNoteRepository;
     private final NursingNoteMapper nursingNoteMapper;
     private final StaffRepository staffRepository;
+    private final PatientProxyRepository patientProxyRepository;
     private final ObjectMapper objectMapper;
     private final RoleValidator roleValidator;
 
@@ -395,6 +397,8 @@ public class PatientServiceImpl implements PatientService {
                 messageSource.getMessage(MSG_PATIENT_NOT_FOUND, new Object[]{id}, locale)
             );
         }
+        // Remove non-cascaded child records before deleting the patient
+        patientProxyRepository.deleteByGrantorPatient_Id(id);
         patientRepository.deleteById(id);
     }
 

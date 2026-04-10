@@ -34,6 +34,8 @@ public class LabOrderMapper {
     return LabOrderResponseDTO.builder()
         .id(labOrder.getId() != null ? labOrder.getId().toString() : null)
         .labOrderCode(labOrderCode)
+        .patientId(labOrder.getPatient() != null && labOrder.getPatient().getId() != null
+            ? labOrder.getPatient().getId().toString() : null)
         .patientFullName(patientFullName)
         .patientEmail(patientEmail)
         .hospitalName(hospitalName)

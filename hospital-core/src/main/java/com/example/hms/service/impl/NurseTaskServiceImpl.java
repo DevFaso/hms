@@ -728,6 +728,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (hospitalId == null) return List.of(createSyntheticPatient());
         List<PatientResponseDTO> patients = nurseDashboardService.getPatientsForNurse(nurseUserId, hospitalId, null);
         if (patients.isEmpty()) {
+            log.warn("No assigned patients found for nurse {}, falling back to all-hospital patient list for hospital {}",
+                    nurseUserId, hospitalId);
             patients = nurseDashboardService.getPatientsForNurse(null, hospitalId, null);
         }
         if (patients.isEmpty()) patients = List.of(createSyntheticPatient());
@@ -880,34 +882,37 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 .build();
         }
 
-        List<Admission> all = departmentId != null
-            ? admissionRepository.findByDepartmentIdAndStatusOrderByAdmissionDateTimeDesc(
-                departmentId, AdmissionStatus.ACTIVE)
-            : admissionRepository.findActiveAdmissionsByHospital(hospitalId);
+        List<Admission> all;
+        if (departmentId != null) {
+            // Department-scoped: only ACTIVE, no AWAITING_DISCHARGE cross-filter needed
+            all = admissionRepository.findByDepartmentIdAndStatusOrderByAdmissionDateTimeDesc(
+                departmentId, AdmissionStatus.ACTIVE);
+        } else {
+            // Hospital-wide: single query fetching ACTIVE, ON_LEAVE, and AWAITING_DISCHARGE
+            // with JOIN FETCH to avoid N+1 on patient.hospitalRegistrations
+            all = admissionRepository.findFlowBoardAdmissions(
+                hospitalId,
+                List.of(AdmissionStatus.ACTIVE, AdmissionStatus.ON_LEAVE, AdmissionStatus.AWAITING_DISCHARGE));
+        }
 
         List<NurseFlowPatientCardDTO> pending = new ArrayList<>();
         List<NurseFlowPatientCardDTO> active = new ArrayList<>();
         List<NurseFlowPatientCardDTO> critical = new ArrayList<>();
         List<NurseFlowPatientCardDTO> awaitingDischarge = new ArrayList<>();
 
-        // Also load AWAITING_DISCHARGE patients
-        List<Admission> awaitingList = admissionRepository
-            .findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(hospitalId, AdmissionStatus.AWAITING_DISCHARGE);
-
         LocalDateTime now = LocalDateTime.now();
         for (Admission a : all) {
             NurseFlowPatientCardDTO card = toFlowCard(a, now);
             AcuityLevel acuity = a.getAcuityLevel();
-            if (acuity == AcuityLevel.LEVEL_4_SEVERE || acuity == AcuityLevel.LEVEL_5_CRITICAL) {
+            if (a.getStatus() == AdmissionStatus.AWAITING_DISCHARGE) {
+                awaitingDischarge.add(card);
+            } else if (acuity == AcuityLevel.LEVEL_4_SEVERE || acuity == AcuityLevel.LEVEL_5_CRITICAL) {
                 critical.add(card);
             } else if (a.getStatus() == AdmissionStatus.PENDING) {
                 pending.add(card);
             } else {
                 active.add(card);
             }
-        }
-        for (Admission a : awaitingList) {
-            awaitingDischarge.add(toFlowCard(a, now));
         }
 
         return NurseFlowBoardDTO.builder()

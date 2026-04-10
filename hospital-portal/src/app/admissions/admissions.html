@@ -84,8 +84,10 @@
     <div class="search-box">
       <span class="material-symbols-outlined">search</span
       ><input
+        [attr.aria-label]="'ADMISSIONS.SEARCH' | translate"
         type="text"
         [placeholder]="'ADMISSIONS.SEARCH' | translate"
+        [title]="'ADMISSIONS.SEARCH' | translate"
         [(ngModel)]="searchTerm"
         (input)="applyFilter()"
       />
@@ -141,6 +143,15 @@
               </td>
               <td>
                 <div class="action-group">
+                  @if (a.status === 'ACTIVE') {
+                    <button
+                      class="action-link discharge-link"
+                      (click)="confirmDischarge(a)"
+                      [attr.title]="'ADMISSIONS.DISCHARGE' | translate"
+                    >
+                      <span class="material-symbols-outlined">exit_to_app</span>
+                    </button>
+                  }
                   <button class="action-link edit-link" (click)="openEdit(a)">
                     <span class="material-symbols-outlined">edit</span>
                   </button>
@@ -211,9 +222,14 @@
                   <div class="picker-spinner"></div>
                 }
                 @if (patientDropdownOpen()) {
-                  <ul class="picker-dropdown" aria-label="Patient suggestions">
+                  <div class="picker-dropdown" role="listbox" aria-label="Patient suggestions">
                     @for (p of patientSuggestions(); track p.id) {
-                      <li class="picker-option" (mousedown)="selectPatient(p)">
+                      <div
+                        class="picker-option"
+                        role="option"
+                        [attr.aria-selected]="selectedPatient()?.id === p.id"
+                        (mousedown)="selectPatient(p)"
+                      >
                         <div class="opt-avatar">{{ patientInitials(p) }}</div>
                         <div class="opt-info">
                           <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
@@ -221,9 +237,9 @@
                             >{{ p.email }}{{ p.mrn ? ' · MRN ' + p.mrn : '' }}</span
                           >
                         </div>
-                      </li>
+                      </div>
                     }
-                  </ul>
+                  </div>
                 }
               </div>
             }
@@ -397,6 +413,118 @@
         </button>
         <button class="btn-danger" (click)="executeDelete()" [disabled]="deleting()">
           {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ DISCHARGE MODAL ═══ -->
+@if (showDischargeModal()) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="cancelDischarge()"
+    (keydown.escape)="cancelDischarge()"
+  >
+    <div
+      class="modal modal-lg"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2>
+          <span class="material-symbols-outlined modal-title-icon">exit_to_app</span>
+          {{ 'ADMISSIONS.DISCHARGE_MODAL_TITLE' | translate }}
+        </h2>
+        <button class="modal-close" (click)="cancelDischarge()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="discharge-info">
+          {{ 'ADMISSIONS.DISCHARGING' | translate }}
+          <strong>{{ dischargingAdm()?.patientName }}</strong>
+          {{ 'ADMISSIONS.FROM_ROOM' | translate }}
+          <strong>{{ dischargingAdm()?.roomBed || 'N/A' }}</strong>
+        </p>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="discharge-disposition"
+              >{{ 'ADMISSIONS.DISCHARGE_DISPOSITION' | translate }} *</label
+            >
+            <select
+              id="discharge-disposition"
+              [(ngModel)]="dischargeForm.dischargeDisposition"
+              class="form-select"
+            >
+              @for (opt of dispositionOptions; track opt.value) {
+                <option [value]="opt.value">{{ opt.labelKey | translate }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="discharge-provider"
+              >{{ 'ADMISSIONS.DISCHARGING_PROVIDER' | translate }} *</label
+            >
+            <select
+              id="discharge-provider"
+              [(ngModel)]="dischargeForm.dischargingProviderId"
+              class="form-select"
+            >
+              <option value="">{{ 'ADMISSIONS.SELECT_PROVIDER' | translate }}</option>
+              @for (s of staffMembers(); track s.id) {
+                <option [value]="s.id">{{ s.name || s.email }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="discharge-summary">{{ 'ADMISSIONS.DISCHARGE_SUMMARY' | translate }} *</label>
+          <textarea
+            id="discharge-summary"
+            [(ngModel)]="dischargeForm.dischargeSummary"
+            class="form-textarea"
+            rows="4"
+            [placeholder]="'ADMISSIONS.DISCHARGE_SUMMARY_PLACEHOLDER' | translate"
+          ></textarea>
+        </div>
+
+        <div class="field">
+          <label for="discharge-instructions">{{
+            'ADMISSIONS.DISCHARGE_INSTRUCTIONS' | translate
+          }}</label>
+          <textarea
+            id="discharge-instructions"
+            [(ngModel)]="dischargeForm.dischargeInstructions"
+            class="form-textarea"
+            rows="3"
+            [placeholder]="'ADMISSIONS.DISCHARGE_INSTRUCTIONS_PLACEHOLDER' | translate"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="cancelDischarge()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          (click)="executeDischarge()"
+          [disabled]="
+            discharging() ||
+            !dischargeForm.dischargeDisposition ||
+            !dischargeForm.dischargeSummary ||
+            !dischargeForm.dischargingProviderId
+          "
+        >
+          {{
+            discharging()
+              ? ('ADMISSIONS.DISCHARGING_BTN' | translate)
+              : ('ADMISSIONS.CONFIRM_DISCHARGE' | translate)
+          }}
         </button>
       </div>
     </div>

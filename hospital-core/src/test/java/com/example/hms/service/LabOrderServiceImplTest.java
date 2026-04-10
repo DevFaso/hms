@@ -137,18 +137,26 @@ class LabOrderServiceImplTest {
     }
 
     @Test
-    void createLabOrderRequiresDocumentationReferenceWhenShared() {
+    void createLabOrderSucceedsWithoutDocumentationReferenceWhenShared() {
         mockCommonLookups();
         LabOrderRequestDTO request = baseRequestBuilder()
             .documentationSharedWithLab(true)
             .documentationReference(null)
             .build();
 
-        assertThatThrownBy(() -> labOrderService.createLabOrder(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Documentation reference is required");
+        when(labOrderRepository.save(any(LabOrder.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        LabOrderResponseDTO responseDTO = LabOrderResponseDTO.builder().id(UUID.randomUUID().toString()).build();
+        when(labOrderMapper.toLabOrderResponseDTO(any(LabOrder.class))).thenReturn(responseDTO);
 
-        verify(labOrderRepository, never()).save(any());
+        LabOrderResponseDTO result = labOrderService.createLabOrder(request, Locale.ENGLISH);
+
+        ArgumentCaptor<LabOrder> captor = ArgumentCaptor.forClass(LabOrder.class);
+        verify(labOrderRepository).save(captor.capture());
+        LabOrder saved = captor.getValue();
+
+        assertThat(saved.isDocumentationSharedWithLab()).isTrue();
+        assertThat(saved.getDocumentationReference()).isNull();
+        assertThat(result).isSameAs(responseDTO);
     }
 
     @Test

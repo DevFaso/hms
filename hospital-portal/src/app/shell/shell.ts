@@ -280,6 +280,13 @@ export class ShellComponent implements OnInit, OnDestroy {
         permission: 'View Lab',
       },
       {
+        icon: 'biotech',
+        label: 'Lab Results',
+        translationKey: 'NAV.LAB_RESULTS',
+        route: '/lab-results',
+        permission: 'View Lab',
+      },
+      {
         icon: 'notifications',
         label: 'Notifications',
         translationKey: 'NAV.NOTIFICATIONS',
@@ -357,6 +364,7 @@ export class ShellComponent implements OnInit, OnDestroy {
         'ROLE_LAB_MANAGER',
         'ROLE_LAB_DIRECTOR',
         'ROLE_QUALITY_MANAGER',
+        'ROLE_SUPER_ADMIN',
       ])
     ) {
       items.push({
@@ -366,7 +374,16 @@ export class ShellComponent implements OnInit, OnDestroy {
         route: '/lab-approval-queue',
       });
     }
-    if (this.auth.hasAnyRole(['ROLE_LAB_MANAGER', 'ROLE_LAB_DIRECTOR', 'ROLE_QUALITY_MANAGER'])) {
+    if (
+      this.auth.hasAnyRole([
+        'ROLE_LAB_MANAGER',
+        'ROLE_LAB_DIRECTOR',
+        'ROLE_QUALITY_MANAGER',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
       items.push(
         {
           icon: 'monitoring',
@@ -381,6 +398,23 @@ export class ShellComponent implements OnInit, OnDestroy {
           route: '/lab-ops-dashboard',
         },
       );
+    }
+    if (
+      this.auth.hasAnyRole([
+        'ROLE_LAB_MANAGER',
+        'ROLE_LAB_SCIENTIST',
+        'ROLE_LAB_DIRECTOR',
+        'ROLE_QUALITY_MANAGER',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push({
+        icon: 'tune',
+        label: 'Lab Test Config',
+        translationKey: 'NAV.LAB_TEST_CONFIG',
+        route: '/lab-test-config',
+      });
     }
     if (
       this.auth.hasAnyRole([

@@ -1,167 +1,192 @@
-# HMS — Active Task List
+Summary
+Fixing 15 remaining confirmed findings across the receptionist → nurse → doctor workflow (2 already fixed in develop@6ffb30a). No new features — targeted, surgical fixes to 6 backend files, 3 frontend files. Every fix requires a corresponding test before it is marked done.
 
-> **Branch convention:** one feature branch per epic. Update this file on every commit.
-> **Statuses:** `✅ Done` | `🔄 In Progress` | `⏳ Not Started` | `⚠️ Blocked`
+Last synced: develop@6ffb30a (pulled 2026-04-09)
+Branch: feature/WF-enhancement @ edce5a0d (pushed 2026-04-09)
+PR review fixes committed (outside this tasklist scope): JPQL CAST removal, computeWalkInStatus TRIAGE gap, i18n toasts (lab-results + admissions), NurseTaskServiceImplTest stub alignment, yamllint CI exclusions.
 
----
+Impacted Files
+File	Findings addressed
+DoctorWorklistServiceImpl.java	#1 (MRN), #15 (catch-block)
+ReceptionServiceImpl.java	#2 (waitingCount), #3 (audit), #10 (completedCount), #14 (walk-in flags), #18 (invoice cap)
+ReceptionController.java	#3 (ownership check), #11 (hasAnyRole)
+NurseTaskController.java	#4 (resolveAssignee), #11 (hasAnyAuthority)
+NurseTaskServiceImpl.java	#7 (fallback log), #9 (N+1 / two queries)
+PatientFlowServiceImpl.java	#13 (log.info) — #5 already fixed upstream
+EncounterStatus.java	✅ DONE — fixed in develop@6ffb30a (9 values now present)
+EncounterController.java	#12 (walk-in guard documentation)
+flow-board.component.ts	#8 (ghost drag)
+nurse-station.ts	#16 (two-tier poll)
+New Files Required
+File	Purpose
+~~V33__add_encounter_status_clinical_lanes.sql~~	✅ NOT NEEDED — EncounterStatus already extended upstream; no migration required
+ReceptionServiceImplTest.java (extend existing)	Tests for #2, #10, #14, #18
+DoctorWorklistServiceImplTest.java (extend existing)	Tests for #1, #15
+NurseTaskControllerTest.java (extend existing)	Tests for #4
+ReceptionControllerTest.java (extend existing)	Tests for #3
+flow-board.component.spec.ts (extend existing)	Tests for #8
+nurse-station.spec.ts (extend existing)	Tests for #16
+Risk Flags
+⚠️ #1 — PHI DoctorWorklistServiceImpl exposes patient UUID as MRN to the doctor UI. Wrong-patient risk. Peer review required.
+⚠️ #3 — Auth + Audit Encounter status mutation has no ownership guard and no audit trail. Any doctor in the hospital can set any patient to any status including rolling back COMPLETED. Peer review required before merge.
+✅ #5 — DB Migration RESOLVED upstream (develop@6ffb30a). EncounterStatus now has 9 values including TRIAGE, WAITING_FOR_PHYSICIAN, AWAITING_RESULTS, READY_FOR_DISCHARGE. No migration file needed.
+⚠️ #6 — Architectural Doctor and nurse flow boards source from different entities (Encounter vs Admission). Reconciliation is a design decision, not a one-line fix — this is the most complex task and requires a shared state decision before implementation.
+Task List (ordered by dependency)
+Phase 1 — DB ✅ DONE (fixed in develop@6ffb30a)
+Task 1 [Migration] ✅ DONE — No migration file needed
 
-## Current Branch: `feature/patient-portal-phase3`
+EncounterStatus values were added as Java enum values (not a PG ENUM type — TEXT column). No DB-level constraint change required.
+Fixed in: develop@6ffb30a
 
-### Epic: Patient Portal Phase 3 — Notifications + Document Upload
+Phase 2 — Backend: Enum + Entity ✅ DONE (fixed in develop@6ffb30a)
+Task 2 [Entity/Enum] ✅ DONE — EncounterStatus.java now has 9 values
 
-**Goal:** Allow patients to upload and manage personal health documents, and view/manage their in-app notifications with per-preference controls.
+SCHEDULED, ARRIVED, TRIAGE, WAITING_FOR_PHYSICIAN, IN_PROGRESS, AWAITING_RESULTS, READY_FOR_DISCHARGE, COMPLETED, CANCELLED
+PatientFlowServiceImpl.FLOW_COLUMNS also updated to match all 9 lanes.
+Fixed in: develop@6ffb30a
+Phase 3 — Backend: Service fixes (no new interfaces, existing impls only)
+Task 3 [Service] ⚠️ PHI / Peer review — Fix MRN in DoctorWorklistServiceImpl
 
----
+In buildWorklistItem() and buildAppointmentWorklistItem(), replace .mrn(p.getId().toString()) with the same hospitalRegistrations stream lookup used in ReceptionServiceImpl.toWaitlistResponse().
+buildWorklistItem() already has staffId → can derive hospitalId from admission map or pass it through.
+buildAppointmentWorklistItem() has appt.getHospital() available — use that hospital's ID.
+Files: DoctorWorklistServiceImpl.java
+Task 4 [Service] — Fix waitingCount in ReceptionServiceImpl.getDashboardSummary()
 
-### Completed ✅
+Compute waitingCount as: ARRIVED encounters not in IN_PROGRESS — i.e. arrivedCount - inProgressCount floored at 0, or a dedicated stream: linkedEncounters.stream().filter(e -> e.getStatus() == ARRIVED).count() + walkIns.stream().filter(...).
+Remove the comment // waiting = arrived but not yet IN_PROGRESS and replace with correct logic.
+Files: ReceptionServiceImpl.java
+Task 5 [Service] — Fix completedCount double-count in ReceptionServiceImpl.getDashboardSummary()
 
-| # | Task | Layer | Notes |
-|---|---|---|---|
-| 1 | DB migration V32 — `clinical.patient_uploaded_documents` | Migration | Soft-delete via `deleted_at`; 3 partial indexes |
-| 2 | `PatientDocumentType` enum (9 values) | Entity | LAB_RESULT, IMAGING_REPORT, DISCHARGE_SUMMARY, REFERRAL_LETTER, PRESCRIPTION, INSURANCE_DOCUMENT, INVOICE, IMMUNIZATION_RECORD, OTHER |
-| 3 | `PatientUploadedDocument` entity | Entity | Extends `BaseEntity`; FK to `patients` + `users`; `deletedAt` soft-delete |
-| 4 | `PatientUploadedDocumentRepository` | Repository | `findByPatient_IdAndDeletedAtIsNull` (paged), type-filtered variant, single-doc lookup |
-| 5 | `PatientDocumentRequestDTO` + `PatientDocumentResponseDTO` | DTO | Request: `documentType`, `collectionDate`, `notes`. Response: full metadata incl. `fileUrl`, `checksumSha256` |
-| 6 | `PatientDocumentMapper` | Mapper | `toDto()` with null-safe uploader display name |
-| 7 | `FileUploadService` — `uploadPatientDocument()` | Service | 20 MB limit; same allowed extensions as referral attachments; SHA-256 checksum |
-| 8 | `PatientDocumentService` interface + `PatientDocumentServiceImpl` | Service | `uploadDocument`, `listDocuments`, `getDocument`, `deleteDocument` (soft delete) |
-| 9 | `PatientPortalController` — document endpoints | Controller | `POST /me/patient/documents` (multipart), `GET`, `GET /{id}`, `DELETE /{id}` — all `ROLE_PATIENT` |
-| 10 | `PatientPortalController` — notification endpoints | Controller | `GET /notifications` (paged+filter), `GET /unread-count`, `PUT /{id}/read`, `PUT /read-all`, `GET /notification-preferences`, `PUT /notification-preferences` |
-| 11 | `PatientPortalService` + impl — notification preference methods | Service | Delegates to existing `NotificationService`; `getMyNotificationPreferences()`, `updateMyNotificationPreferences()` |
-| 12 | `PatientDocumentServiceImplTest` — 8 unit tests | Tests | All pass; covers upload, list (all + type-filtered), get, soft-delete, error paths |
-| 13 | `patient-portal.service.ts` — 5 new interfaces + 10 new methods | Frontend service | `PatientDocumentType`, `PatientDocumentResponse`, `PortalNotification`, `NotificationPreference`, `NotificationPreferenceUpdate`; all CRUD + notification methods |
-| 14 | `MyDocumentsComponent` (4 files) | Frontend UI | Upload form, type filter, document grid with download/delete; `my-documents` route |
-| 15 | `MyNotificationsComponent` (4 files) | Frontend UI | All/Unread tabs, mark-read on click, mark-all-read; `my-notifications` route |
-| 16 | `app.routes.ts` — `my-documents` + `my-notifications` routes | Frontend routing | Lazy-loaded, `ROLE_PATIENT` guard |
-| 17 | i18n keys — `PORTAL.DOCUMENTS.*` + `PORTAL.NOTIFICATIONS.*` | i18n | Added to `en.json`, `fr.json`, `es.json` (41 document keys + 10 notification keys) |
-| 18 | Frontend tests — 122/122 pass | Tests | `my-documents.component.spec.ts` (10 tests), `my-notifications.component.spec.ts` (9 tests); full suite passes |
-| 19 | Frontend lint — zero errors | CI | `ng lint` — all files pass linting |
+completedCount should be: countByStatus(linkedEncounters, COMPLETED) + countByStatus(walkIns, COMPLETED) only. Remove the appointments.COMPLETED term — a completed appointment's count is already represented by its linked completed encounter.
+Files: ReceptionServiceImpl.java
+Task 6 [Service] ⚠️ Auth + Audit / Peer review — Add encounter ownership check + audit to ReceptionServiceImpl.updateEncounterStatus()
 
----
+After findByIdAndHospital_Id, check that the caller's staffId matches encounter.getStaff().getId() OR caller has ROLE_RECEPTIONIST / ROLE_HOSPITAL_ADMIN (admin override). Doctors/nurses may only move their own encounters.
+Publish an AuditEventLog entry (look at existing AuditEventLogService usage pattern in the codebase).
+The updateEncounterStatus signature needs String callerUsername or UUID callerUserId passed down from the controller.
+Files: ReceptionServiceImpl.java, ReceptionController.java
+Task 7 [Service] — Fix PatientFlowServiceImpl: downgrade log level
 
-### In Progress 🔄
+FLOW_COLUMNS and EncounterStatus.values() are now in sync (both 9 lanes) — the dead-column issue is resolved upstream.
+Remaining: Change log.info → log.debug on the hot @Transactional(readOnly=true) path (line 43).
+Files: PatientFlowServiceImpl.java
+Task 8 [Service] — Fix walk-in hasInsuranceIssue / hasOutstandingBalance in ReceptionServiceImpl.buildWalkInQueueItem()
 
-*All tasks complete — ready to commit and push.*
+Call the existing detectInsuranceIssue(pid, hospitalId) and detectOutstandingBalance(pid, hospitalId) helpers — same code path used for scheduled appointments.
+Files: ReceptionServiceImpl.java
+Task 9 [Service] — Fix detectOutstandingBalance() invoice page cap
 
----
+Replace PageRequest.of(0, 5) with a invoiceRepo.existsByPatient_IdAndHospital_IdAndStatusNotInAndBalanceDueGreaterThan(...) count/exists query, or PageRequest.of(0, 100) as an interim fix.
+Files: ReceptionServiceImpl.java
+Task 10 [Service] — Log nurse patient-list fallback in NurseTaskServiceImpl.resolvePatients()
 
-### Remaining — This Epic ⏳
+Change the silent fallback to nurseUserId=null so it emits log.warn("No assigned patients found for nurse {}, falling back to all-hospital patient list for hospital {}", nurseUserId, hospitalId).
+Files: NurseTaskServiceImpl.java
+Task 11 [Service] — Fix N+1 in NurseTaskServiceImpl.getPatientFlow()
 
-*None.*
+Merge the two admissionRepository calls into one query that retrieves both ACTIVE and AWAITING_DISCHARGE statuses in a single query (add a findByHospitalIdAndStatusIn(UUID hospitalId, List<AdmissionStatus> statuses) method to AdmissionRepository).
+Ensure patient.hospitalRegistrations is fetched eagerly in that query with JOIN FETCH to avoid per-card lazy load in getMrnForHospital().
+Files: NurseTaskServiceImpl.java, AdmissionRepository.java
+Task 12 [Service] — Promote addConsultItems exception catch to log.warn
 
----
+Change log.debug("Consultation worklist query unavailable: ...") → log.warn(...) so infrastructure failures are visible in production logs.
+Files: DoctorWorklistServiceImpl.java
+Task 13 [Major-6] ⚠️ Architecture / Peer review — Design decision: shared patient-flow state machine
 
-## Backlog — Future Epics
+Option A (implemented): PatientFlowServiceImpl now reads from AdmissionRepository for admitted patients and EncounterRepository for outpatient encounters. PatientFlowItemDTO now exposes flowSource (ENCOUNTER / ADMISSION) so the UI can label cards appropriately.
+Option B: Expose a single unified /me/patient-flow endpoint that merges both, and deprecate /nurse/patient-flow mirroring it.
+Decision recorded 2026-04-09: Proceed with Option A. Doctor patient-flow now surfaces both encounter-backed outpatient cards and admission-backed inpatient cards through the existing /me/patient-flow endpoint.
+Files: PatientFlowServiceImpl.java, PatientFlowItemDTO.java, AdmissionRepository.java, dashboard.service.ts, doctor-patient-flow.ts, doctor-patient-flow.html
+Phase 4 — Backend: Controller fixes
+Task 14 [Controller] ⚠️ Auth — Harden NurseTaskController.resolveAssignee() — reject raw UUIDs
 
-| Epic | Description | Priority |
-|---|---|---|
-| **Consent & Record Sharing enhancement** | Cross-org RBAC, audit trail UI | Medium |
-| **Dashboard enrichment** | Physician cockpit, nurse station metrics | Low |
+Throw BusinessException("Invalid assignee value. Use 'me' or 'all'.") for any value that is neither "me" nor "all" nor null/blank.
+Files: NurseTaskController.java
+Task 15 [Controller] — Standardise hasAnyRole → hasAnyAuthority across all nurse + reception endpoints
 
----
+Pick one convention (prefer hasAnyAuthority('ROLE_X') — it's explicit and works as-is).
+Update all NurseTaskController annotations from hasAnyAuthority to the chosen form, OR update ReceptionController to match NurseTaskController — be consistent.
+Files: NurseTaskController.java, ReceptionController.java
+Task 16 [Controller] — Document walk-in creation path in EncounterController POST /encounters
 
----
+Add @Operation(summary = "...") Swagger note that this is the correct endpoint for receptionist walk-in check-in, and that ROLE_RECEPTIONIST cannot override hospitalId (enforced in code).
+No auth change needed — existing guard is correct per Task 16 code verification.
+Files: EncounterController.java
+Phase 5 — Frontend fixes
+Task 17 [Frontend Component] — Fix ghost drag in FlowBoardComponent
 
-## Epic: Lab Director & Quality Manager Dashboards
+Move transferArrayItem() to after the guard: only splice arrays when newStatus && item.encounterId are both truthy. If the guard fails, show a toast "Cannot move scheduled appointments — check in first".
+Files: flow-board.component.ts
+Task 18 [Frontend Component] — Split NurseStationComponent into two-tier poll
 
-**Branch:** `develop`  
-**Goal:** Full role-specific dashboards for `ROLE_LAB_DIRECTOR` and `ROLE_QUALITY_MANAGER` — operational KPIs, approval queues, validation study pipelines, and quick-action tiles, matching Epic Beaker LIS patterns.
+Fast poll (60s): vitals, medications, summary, nursingTasks, inboxItems.
+Slow poll (300s): orders, handoffs, workboard, flowBoard, pendingAdmissions, announcements.
+Use two separate interval() subscriptions, both cancelled in ngOnDestroy.
+Files: nurse-station.ts
+Phase 6 — Tests (no task marked done until test exists)
+Task 19 [Backend Tests] ⚠️ PHI — DoctorWorklistServiceImplTest — add/extend tests for MRN fix
 
-### Tasks ⏳
+Mock PatientHospitalRegistration returning a real MRN string; assert .getMrn() on worklist item is not a UUID string.
+Files: hospital-core/src/test/.../DoctorWorklistServiceImplTest.java
+Task 20 [Backend Tests] — ReceptionServiceImplTest — tests for #2, #5, #8, #9, #10
 
-| # | Task | Layer | Status |
-|---|---|---|---|
-| 1 | `LabDirectorDashboardDTO` record | DTO | ✅ |
-| 2 | `QualityManagerDashboardDTO` record | DTO | ✅ |
-| 3 | Count queries — `LabTestDefinitionRepository` | Repository | ✅ |
-| 4 | Count queries — `LabTestValidationStudyRepository` | Repository | ✅ |
-| 5 | TAT + count queries — `LabOrderRepository` | Repository | ✅ |
-| 6 | `LabDirectorDashboardService` interface + impl | Service | ✅ |
-| 7 | `QualityManagerDashboardService` interface + impl | Service | ✅ |
-| 8 | New endpoints in `DashboardController` | Controller | ✅ |
-| 9 | `LabDirectorDashboardServiceImplTest` | Backend Test | ✅ |
-| 10 | `DashboardControllerTest` — new endpoints | Backend Test | ✅ |
-| 11 | DTOs + HTTP methods in `dashboard.service.ts` | Frontend service | ✅ |
-| 12 | `isLabDirector` / `isQualityManager` signals, `activeView`, `roleLabel` | Frontend component | ✅ |
-| 13 | `labDirectorStatCards`, `labDirectorNavTiles` computed | Frontend component | ✅ |
-| 14 | `qualityManagerStatCards`, `qualityManagerNavTiles` computed | Frontend component | ✅ |
-| 15 | `ngOnInit` data fetch for both roles | Frontend component | ✅ |
-| 16 | Lab Director HTML dashboard section | Frontend UI | ✅ |
-| 17 | Quality Manager HTML dashboard section | Frontend UI | ✅ |
-| 18 | Hero gradient SCSS for both roles | Frontend SCSS | ✅ |
-| 19 | i18n keys — `en.json`, `fr.json`, `es.json` | i18n | ✅ |
-| 20 | `dashboard.spec.ts` — role tests for both | Frontend Test | ✅ |
-| 21 | Format + Lint + Commit + Push | CI | ✅ |
+waitingCount < arrivedCount when some arrived patients are IN_PROGRESS.
+completedCount does not double-count a patient whose appointment and encounter are both COMPLETED.
+Walk-in item builds correct insurance/balance flags.
+detectOutstandingBalance returns true when 6th invoice is unpaid.
+Files: hospital-core/src/test/.../ReceptionServiceImplTest.java
+Task 21 [Backend Tests] ⚠️ Auth — ReceptionControllerTest — updateEncounterStatus
 
----
+204 success for RECEPTIONIST.
+403 when doctor attempts to update encounter not assigned to them.
+404 when encounter doesn't exist in the hospital.
+Files: hospital-core/src/test/.../ReceptionControllerTest.java
+Task 22 [Backend Tests] ⚠️ Auth — NurseTaskControllerTest — resolveAssignee hardening
 
-## Epic: Lab Director MVP — Gap Analysis Implementation
+400 when assignee=<uuid> is passed.
+200 when assignee=me.
+200 when assignee=all.
+Files: hospital-core/src/test/.../NurseTaskControllerTest.java
+Task 23 [Frontend Tests] — flow-board.component.spec.ts — ghost drag prevention
 
-**Branch:** `develop`  
-**Source:** `docs/gap.md`  
-**Goal:** Implement 5 MVPs to close Lab Director functionality gaps: QC/QA Dashboard, Lab Ops Dashboard, Staff Management, Instrument/Inventory Control, Enhanced Test Config & Reporting.
+Test: dropping a card with encounterId = null does NOT mutate localBoard and shows the toast.
+Test: dropping a card with a valid encounterId emits statusChanged.
+Files: flow-board.component.spec.ts
+Task 24 [Frontend Tests] — nurse-station.spec.ts — two-tier poll
 
-### MVP 1 — QC/QA Dashboard (HIGH, 6 pts)
+Test: fast poll fires on 60s interval; slow poll fires on 300s interval.
+Test: both subscriptions are unsubscribed on ngOnDestroy.
+Files: hospital-portal/src/app/nurse-station/nurse-station.spec.ts
+Phase 7 — Verify
+Task 25 [CI] — Compile backend, run frontend lint, confirm all tests pass
 
-| # | Task | Layer | Status |
-|---|---|---|---|
-| 1 | `GET /lab-qc-events/summary` — aggregate QC stats per test def | Repo → Service → DTO → Controller | ⏳ |
-| 2 | `GET /lab-test-validation-studies/summary` — pending studies aggregate | Service → DTO → Controller | ⏳ |
-| 3 | `LabQcDashboardComponent` — QC + validation tables | Frontend Component + Service + Route | ⏳ |
-| 4 | Levey-Jennings chart drill-down on row click | Frontend Charts (chart.js) | ⏳ |
-| 5 | Backend tests — JUnit + MockMvc for QC/validation summary | Tests | ⏳ |
-| 6 | Frontend tests — Karma/Jasmine for QC Dashboard | Tests | ⏳ |
+./gradlew :hospital-core:compileJava
+./gradlew :hospital-core:test
+npm run lint (from hospital-portal)
+npm run test:headless (from hospital-portal)
+Task Summary
+#	Task	Layer	Status	Risk
+1	V33 migration — 3 new EncounterStatus values	Migration	✅ DONE (upstream)	—
+2	Extend EncounterStatus enum	Enum	✅ DONE (upstream)	—
+3	Fix MRN in DoctorWorklistServiceImpl	Service	✅ DONE	⚠️ PHI
+4	Fix waitingCount	Service	✅ DONE	—
+5	Fix completedCount	Service	✅ DONE	—
+6	Add ownership check + audit to encounter status update	Service + Controller	✅ DONE	⚠️ Auth
+7	Fix PatientFlowServiceImpl log level	Service	✅ DONE	—
+8	Fix walk-in insurance/balance flags	Service	✅ DONE	—
+9	Fix invoice page cap	Service	✅ DONE	—
+10	Log nurse patient-list fallback	Service	✅ DONE	—
+11	Fix N+1 in nurse getPatientFlow()	Service + Repository	✅ DONE	—
+12	Promote consult catch to log.warn	Service	✅ DONE	—
+13	Design: unified patient-flow state machine	Architecture	✅ DONE	⚠️ Peer-reviewed change
+14	Harden resolveAssignee	Controller	✅ DONE	⚠️ Auth
+15	Standardise hasAnyRole / hasAnyAuthority	Controllers	✅ DONE	—
+16	Document walk-in endpoint	Controller	✅ DONE	—
+17	Fix ghost drag in FlowBoardComponent	Frontend	✅ DONE	—
+18	Two-tier poll in NurseStationComponent	Frontend	✅ DONE	—
+19–24	Backend + frontend tests for all above	Tests	✅ DONE	—
+25	Compile + lint + test verification	CI	✅ DONE	—
+Total tasks: 25 | Fixed upstream: 2 (Tasks 1–2) | Completed: 23 (Tasks 3–25) | Blocked: 0
 
-### MVP 2 — Lab Operations Dashboard (HIGH, 10 pts)
-
-| # | Task | Layer | Status |
-|---|---|---|---|
-| 7 | `GET /lab/metrics/summary` — totals, avg TAT, date filters | Repo → Service → DTO → Controller | ⏳ |
-| 8 | `GET /lab/metrics/orders?status=PENDING` — orders with age | Repo → DTO → Controller | ⏳ |
-| 9 | `LabOpsDashboardComponent` — KPI cards, charts, pending table | Frontend Component + Service + Route | ⏳ |
-| 10 | Backend tests — JUnit + MockMvc for metrics endpoints | Tests | ⏳ |
-| 11 | Frontend tests — Karma/Jasmine for Ops Dashboard | Tests | ⏳ |
-
-### MVP 3 — Staff & Role Management (MEDIUM, 6 pts)
-
-| # | Task | Layer | Status |
-|---|---|---|---|
-| 12 | `LabStaffListComponent` — table + role edit form | Frontend Component + Route | ⏳ |
-| 13 | Verify/add `PUT /staff/{id}/assignments` + LAB_DIRECTOR auth | Service → Controller → SecurityConfig | ⏳ |
-| 14 | Frontend tests — Karma/Jasmine for Staff List | Tests | ⏳ |
-
-### MVP 4 — Instrument & Inventory Control (MEDIUM, 10 pts)
-
-| # | Task | Layer | Status |
-|---|---|---|---|
-| 15 | V35 migration — `lab.instruments` + `lab.inventory_items` | Migration | ⏳ |
-| 16 | `Instrument` + `InventoryItem` entities + repositories | Entity → Repository | ⏳ |
-| 17 | Services + DTOs + `@Component` mappers | Service → DTO → Mapper | ⏳ |
-| 18 | Controllers + SecurityConfig entries | Controller → SecurityConfig | ⏳ |
-| 19 | `LabInstrumentsComponent` + `LabInventoryComponent` | Frontend Components + Routes | ⏳ |
-| 20 | Backend + Frontend tests | Tests | ⏳ |
-
-### MVP 5 — Enhanced Test Config & Reporting (LOW-MEDIUM, 4 pts)
-
-| # | Task | Layer | Status |
-|---|---|---|---|
-| 21 | Reference range edit — verify PUT + frontend modal | Controller → Frontend | ⏳ |
-| 22 | `GET /lab-test-definitions/export?format=csv` + download UI | Service → Controller → Frontend | ⏳ |
-| 23 | Backend + Frontend tests for export | Tests | ⏳ |
-
-### Cross-Cutting
-
-| # | Task | Status |
-|---|---|---|
-| 24 | i18n — en.json, fr.json, es.json for all new components | ⏳ |
-| 25 | Merge develop → uat → main + Railway deploy | ⏳ |
-
----
-
-## Done — Previous Branches
-
-| Branch | Feature | Merged |
-|---|---|---|
-| `feature/lab-director-approval-workflow` | Lab Director Approval Workflow — CLIA/CAP/ISO 15189 compliance; approval state machine (7 states); validation studies; QC Levey-Jennings charts; Lab Director + Quality Manager dashboards | 2026-04-03 |
-| `develop` | iOS App Store assets, privacy policy update | 2026-04-03 |
-
+Task 13 is complete using Option A. The doctor board now merges encounter-backed outpatient flow items with admission-backed inpatient flow items while preserving a flowSource label for UI disambiguation.

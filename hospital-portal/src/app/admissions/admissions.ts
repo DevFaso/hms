@@ -16,7 +16,7 @@ import { StaffService, StaffResponse } from '../services/staff.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 @Component({
   selector: 'app-admissions',
@@ -33,6 +33,7 @@ export class AdmissionsComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
+  private readonly translate = inject(TranslateService);
 
   admissions = signal<AdmissionResponse[]>([]);
   filtered = signal<AdmissionResponse[]>([]);
@@ -63,6 +64,42 @@ export class AdmissionsComponent implements OnInit {
   showDeleteConfirm = signal(false);
   deletingAdm = signal<AdmissionResponse | null>(null);
   deleting = signal(false);
+
+  /* ── Discharge signals ── */
+  showDischargeModal = signal(false);
+  dischargingAdm = signal<AdmissionResponse | null>(null);
+  discharging = signal(false);
+  dischargeForm = {
+    dischargeDisposition: 'HOME' as string,
+    dischargeSummary: '',
+    dischargeInstructions: '',
+    dischargingProviderId: '',
+  };
+  readonly dispositionOptions = [
+    { value: 'HOME', labelKey: 'ADMISSIONS.DISPOSITION_HOME' },
+    { value: 'HOME_WITH_HOME_HEALTH', labelKey: 'ADMISSIONS.DISPOSITION_HOME_WITH_HOME_HEALTH' },
+    {
+      value: 'SKILLED_NURSING_FACILITY',
+      labelKey: 'ADMISSIONS.DISPOSITION_SKILLED_NURSING_FACILITY',
+    },
+    {
+      value: 'LONG_TERM_CARE_FACILITY',
+      labelKey: 'ADMISSIONS.DISPOSITION_LONG_TERM_CARE_FACILITY',
+    },
+    {
+      value: 'REHABILITATION_FACILITY',
+      labelKey: 'ADMISSIONS.DISPOSITION_REHABILITATION_FACILITY',
+    },
+    { value: 'HOSPICE_HOME', labelKey: 'ADMISSIONS.DISPOSITION_HOSPICE_HOME' },
+    { value: 'HOSPICE_FACILITY', labelKey: 'ADMISSIONS.DISPOSITION_HOSPICE_FACILITY' },
+    { value: 'PSYCHIATRIC_FACILITY', labelKey: 'ADMISSIONS.DISPOSITION_PSYCHIATRIC_FACILITY' },
+    { value: 'AGAINST_MEDICAL_ADVICE', labelKey: 'ADMISSIONS.DISPOSITION_AGAINST_MEDICAL_ADVICE' },
+    {
+      value: 'TRANSFERRED_TO_ANOTHER_HOSPITAL',
+      labelKey: 'ADMISSIONS.DISPOSITION_TRANSFERRED_TO_ANOTHER_HOSPITAL',
+    },
+    { value: 'OTHER', labelKey: 'ADMISSIONS.DISPOSITION_OTHER' },
+  ];
 
   admissionTypes: AdmissionType[] = [
     'EMERGENCY',
@@ -302,6 +339,47 @@ export class AdmissionsComponent implements OnInit {
         this.deleting.set(false);
       },
     });
+  }
+
+  /* ── Discharge ── */
+  confirmDischarge(a: AdmissionResponse): void {
+    this.dischargingAdm.set(a);
+    this.dischargeForm = {
+      dischargeDisposition: 'HOME',
+      dischargeSummary: '',
+      dischargeInstructions: '',
+      dischargingProviderId: '',
+    };
+    this.showDischargeModal.set(true);
+  }
+
+  cancelDischarge(): void {
+    this.showDischargeModal.set(false);
+    this.dischargingAdm.set(null);
+  }
+
+  executeDischarge(): void {
+    this.discharging.set(true);
+    const adm = this.dischargingAdm()!;
+    this.admissionService
+      .discharge(adm.id, {
+        dischargeDisposition: this.dischargeForm.dischargeDisposition,
+        dischargeSummary: this.dischargeForm.dischargeSummary,
+        dischargeInstructions: this.dischargeForm.dischargeInstructions || undefined,
+        dischargingProviderId: this.dischargeForm.dischargingProviderId,
+      })
+      .subscribe({
+        next: () => {
+          this.toast.success(this.translate.instant('ADMISSIONS.DISCHARGE_SUCCESS'));
+          this.cancelDischarge();
+          this.discharging.set(false);
+          this.load();
+        },
+        error: () => {
+          this.toast.error(this.translate.instant('ADMISSIONS.DISCHARGE_ERROR'));
+          this.discharging.set(false);
+        },
+      });
   }
 
   load(): void {

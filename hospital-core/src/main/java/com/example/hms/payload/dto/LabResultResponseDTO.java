@@ -17,7 +17,9 @@ import java.util.List;
 public class LabResultResponseDTO {
 
     private String id;
+    private String labOrderId;
     private String labOrderCode;
+    private String patientId;
     private String patientFullName;
     private String patientEmail;
     private String hospitalName;

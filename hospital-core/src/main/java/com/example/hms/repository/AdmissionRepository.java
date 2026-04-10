@@ -41,6 +41,17 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
     List<Admission> findByAdmittingProviderIdOrderByAdmissionDateTimeDesc(UUID admittingProviderId);
 
     /**
+     * Find active/awaiting-discharge admissions for a given admitting provider (doctor patient-flow board).
+     * Eagerly fetches patient to avoid N+1 in buildFlowItem().
+     */
+    @Query("SELECT a FROM Admission a " +
+           "JOIN FETCH a.patient p " +
+           "WHERE a.admittingProvider.id = :staffId " +
+           "AND a.status IN ('ACTIVE', 'AWAITING_DISCHARGE', 'ON_LEAVE') " +
+           "ORDER BY a.admissionDateTime DESC")
+    List<Admission> findActiveByAdmittingProvider(@Param("staffId") UUID staffId);
+
+    /**
      * Find admissions by department/ward
      */
     List<Admission> findByDepartmentIdAndStatusOrderByAdmissionDateTimeDesc(UUID departmentId, AdmissionStatus status);
@@ -54,6 +65,21 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
      * Find admissions by hospital and status
      */
     List<Admission> findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(UUID hospitalId, AdmissionStatus status);
+
+    /**
+     * Find admissions for the flow board — fetches both statuses in one query
+     * and eagerly loads patient + hospitalRegistrations to avoid N+1.
+     */
+    @Query("SELECT DISTINCT a FROM Admission a " +
+           "JOIN FETCH a.patient p " +
+           "LEFT JOIN FETCH p.hospitalRegistrations " +
+           "WHERE a.hospital.id = :hospitalId " +
+           "AND a.status IN :statuses " +
+           "ORDER BY a.admissionDateTime DESC")
+    List<Admission> findFlowBoardAdmissions(
+        @Param("hospitalId") UUID hospitalId,
+        @Param("statuses") List<AdmissionStatus> statuses
+    );
 
     /**
      * Find admissions by admission type and date range

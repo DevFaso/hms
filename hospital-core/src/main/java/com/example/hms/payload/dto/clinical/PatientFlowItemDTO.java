@@ -18,11 +18,13 @@ public class PatientFlowItemDTO {
 
     private UUID patientId;
     private UUID encounterId;
+    private UUID admissionId;
     private String patientName;
     private String room;
     private long elapsedMinutes;
     private String nurseAssigned;
     private String blockerTag;
-    private String urgency;    // LOW, ROUTINE, URGENT, EMERGENT
-    private String state;      // encounter/flow state label
+    private String urgency;      // LOW, ROUTINE, URGENT, EMERGENT
+    private String state;        // encounter/flow state label
+    private String flowSource;   // "ENCOUNTER" or "ADMISSION"
 }

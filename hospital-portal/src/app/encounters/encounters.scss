@@ -38,6 +38,10 @@
     color: #3730a3;
     background: #e0e7ff;
   }
+  &.warning {
+    color: #9a3412;
+    background: #fff7ed;
+  }
 }
 
 .card-info {
@@ -194,6 +198,14 @@
   &.status-cancelled {
     background: #fee2e2;
     color: #991b1b;
+  }
+  &.status-warning {
+    background: #fff7ed;
+    color: #9a3412;
+  }
+  &.status-ready {
+    background: #ecfdf5;
+    color: #047857;
   }
 }
 

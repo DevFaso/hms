@@ -41,8 +41,8 @@ public class PrescriptionController {
     private final MessageSource messageSource;
 
     @PostMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN')")
-    @Operation(summary = "Create Prescription", description = "Creates a new prescription (doctor or hospital admin).")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_NURSE_PRACTITIONER','ROLE_HOSPITAL_ADMIN')")
+    @Operation(summary = "Create Prescription", description = "Creates a new prescription (doctor, nurse, nurse practitioner, or hospital admin).")
     public ResponseEntity<PrescriptionResponseDTO> create(
         @Valid @RequestBody PrescriptionRequestDTO request,
         Locale locale) {
@@ -74,7 +74,7 @@ public class PrescriptionController {
     }
 
     @PutMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN')")
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_NURSE_PRACTITIONER','ROLE_HOSPITAL_ADMIN')")
     @Operation(summary = "Update Prescription", description = "Updates an existing prescription.")
     public ResponseEntity<PrescriptionResponseDTO> update(
         @PathVariable UUID id,

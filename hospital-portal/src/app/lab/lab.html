@@ -5,9 +5,11 @@
       <p class="page-subtitle">{{ 'LAB.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
-      <button class="btn-primary" (click)="openCreate()">
-        <span class="material-symbols-outlined">add</span> {{ 'LAB.NEW_ORDER' | translate }}
-      </button>
+      @if (canCreateOrder()) {
+        <button class="btn-primary" (click)="openCreate()">
+          <span class="material-symbols-outlined">add</span> {{ 'LAB.NEW_ORDER' | translate }}
+        </button>
+      }
     </div>
   </div>
 
@@ -403,6 +405,7 @@
               [placeholder]="'LAB.DIAGNOSIS_CODE_PLACEHOLDER' | translate"
               required
             />
+            <small class="field-hint">{{ 'LAB.DIAGNOSIS_CODE_HINT' | translate }}</small>
           </div>
           <div class="field">
             <label for="lab-orderChannel">{{ 'LAB.ORDER_CHANNEL' | translate }} *</label>

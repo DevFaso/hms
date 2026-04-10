@@ -59,7 +59,15 @@ public class EncounterController {
     // ----------------------------------------------------------
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
-    @Operation(summary = "Create a new encounter (super-admin, receptionist, doctor, nurse, midwife, hospital-admin)")
+    @Operation(
+        summary = "Create a new encounter",
+        description = "Creates a new patient encounter. " +
+            "Receptionists use this as the walk-in check-in endpoint: the hospitalId is always " +
+            "taken from the JWT (cannot be overridden) and the initial status defaults to ARRIVED. " +
+            "For receptionist walk-ins, omit appointmentId; supply patientId and chiefComplaint. " +
+            "Doctors, nurses, and midwives may also create encounters; their hospitalId defaults " +
+            "to the JWT value but can be overridden in the request body."
+    )
     public ResponseEntity<EncounterResponseDTO> create(
         @Valid @RequestBody EncounterRequestDTO dto,
         Locale locale,

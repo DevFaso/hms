@@ -42,13 +42,15 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class ReceptionController {
 
+    private static final String SYSTEM_ACTOR = "system";
+
     private final ReceptionService receptionService;
     private final RoleValidator roleValidator;
 
     // ── MVP 9: Summary Strip ─────────────────────────────────────────────────
 
     @GetMapping("/dashboard/summary")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Today's front-desk summary counts")
     public ResponseEntity<ReceptionDashboardSummaryDTO> getDashboardSummary(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
@@ -60,7 +62,7 @@ public class ReceptionController {
     // ── MVP 9: Queue ─────────────────────────────────────────────────────────
 
     @GetMapping("/queue")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Today's appointment queue with computed front-desk status")
     public ResponseEntity<List<ReceptionQueueItemDTO>> getQueue(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -75,7 +77,7 @@ public class ReceptionController {
     // ── MVP 9: Patient Snapshot ───────────────────────────────────────────────
 
     @GetMapping("/patients/{patientId}/snapshot")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Front-desk patient snapshot: demographics, insurance, billing alerts")
     public ResponseEntity<FrontDeskPatientSnapshotDTO> getPatientSnapshot(@PathVariable UUID patientId) {
         UUID hospitalId = resolveHospitalId();
@@ -85,7 +87,7 @@ public class ReceptionController {
     // ── MVP 10: Insurance Issues ──────────────────────────────────────────────
 
     @GetMapping("/insurance/issues")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Patients with appointment today who have missing/expired/no-primary insurance")
     public ResponseEntity<List<InsuranceIssueDTO>> getInsuranceIssues(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
@@ -97,7 +99,7 @@ public class ReceptionController {
     // ── MVP 10: Payments Pending ──────────────────────────────────────────────
 
     @GetMapping("/payments/pending")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','RECEPTIONIST','BILLING_SPECIALIST','ACCOUNTANT')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
     @Operation(summary = "Patients with appointment today who have outstanding invoice balances")
     public ResponseEntity<List<ReceptionQueueItemDTO>> getPaymentsPending(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
@@ -109,7 +111,7 @@ public class ReceptionController {
     // ── MVP 10: Flow Board ────────────────────────────────────────────────────
 
     @GetMapping("/flow-board")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Kanban-style patient flow board grouped by front-desk status")
     public ResponseEntity<FlowBoardDTO> getFlowBoard(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
@@ -122,7 +124,7 @@ public class ReceptionController {
     // ── MVP 11: Duplicate candidate detection ────────────────────────────────
 
     @GetMapping("/patients/duplicate-candidates")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Return possible duplicate patient records ranked by confidence score")
     public ResponseEntity<List<DuplicateCandidateDTO>> getDuplicateCandidates(
             @RequestParam(required = false) String name,
@@ -135,19 +137,19 @@ public class ReceptionController {
     // ── MVP 11: Waitlist ──────────────────────────────────────────────────────
 
     @PostMapping("/waitlist")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Add a patient to the appointment waitlist")
     public ResponseEntity<WaitlistEntryResponseDTO> addToWaitlist(
             @RequestBody WaitlistEntryRequestDTO request,
             @AuthenticationPrincipal UserDetails principal) {
         UUID hospitalId = resolveHospitalId();
-        String actor = principal != null ? principal.getUsername() : "system";
+        String actor = principal != null ? principal.getUsername() : SYSTEM_ACTOR;
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(receptionService.addToWaitlist(request, hospitalId, actor));
     }
 
     @GetMapping("/waitlist")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "List waitlist entries, optionally filtered by department and status")
     public ResponseEntity<List<WaitlistEntryResponseDTO>> getWaitlist(
             @RequestParam(required = false) UUID departmentId,
@@ -157,7 +159,7 @@ public class ReceptionController {
     }
 
     @PostMapping("/waitlist/{id}/offer")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Mark a waitlist entry as Offered (receptionist is scheduling a slot)")
     public ResponseEntity<WaitlistEntryResponseDTO> offerWaitlistSlot(@PathVariable UUID id) {
         UUID hospitalId = resolveHospitalId();
@@ -165,7 +167,7 @@ public class ReceptionController {
     }
 
     @PostMapping("/waitlist/{id}/close")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Close / remove a waitlist entry")
     public ResponseEntity<Void> closeWaitlistEntry(@PathVariable UUID id) {
         UUID hospitalId = resolveHospitalId();
@@ -176,14 +178,14 @@ public class ReceptionController {
     // ── MVP 11: Insurance eligibility attestation ─────────────────────────────
 
     @PostMapping("/insurance/{insuranceId}/attest-eligibility")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Record manual eligibility verification for an insurance record")
     public ResponseEntity<Void> attestEligibility(
             @PathVariable UUID insuranceId,
             @RequestBody EligibilityAttestationRequestDTO request,
             @AuthenticationPrincipal UserDetails principal) {
         UUID hospitalId = resolveHospitalId();
-        String actor = principal != null ? principal.getUsername() : "system";
+        String actor = principal != null ? principal.getUsername() : SYSTEM_ACTOR;
         receptionService.attestEligibility(insuranceId, hospitalId, actor, request);
         return ResponseEntity.noContent().build();
     }
@@ -191,11 +193,12 @@ public class ReceptionController {
     // ── MVP 11: Flow board – encounter status update (drag-and-drop) ──────────
 
     @PatchMapping("/encounters/{encounterId}/status")
-    @PreAuthorize("hasAnyRole('SUPER_ADMIN','HOSPITAL_ADMIN','ADMIN','RECEPTIONIST','DOCTOR','NURSE','MIDWIFE')")
-    @Operation(summary = "Update encounter status (used by flow board drag-and-drop)")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @Operation(summary = "Update encounter status (used by flow board drag-and-drop). Doctors/Nurses/Midwives may only update their own patients' encounters.")
     public ResponseEntity<Void> updateEncounterStatus(
             @PathVariable UUID encounterId,
-            @RequestBody java.util.Map<String, String> body) {
+            @RequestBody java.util.Map<String, String> body,
+            @AuthenticationPrincipal UserDetails principal) {
         UUID hospitalId = resolveHospitalId();
         String statusStr = body.get("status");
         if (statusStr == null || statusStr.isBlank()) {
@@ -207,7 +210,8 @@ public class ReceptionController {
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().build();
         }
-        receptionService.updateEncounterStatus(encounterId, status, hospitalId);
+        String callerUsername = principal != null ? principal.getUsername() : SYSTEM_ACTOR;
+        receptionService.updateEncounterStatus(encounterId, status, hospitalId, callerUsername);
         return ResponseEntity.noContent().build();
     }
 

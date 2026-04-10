@@ -5,6 +5,7 @@ import { Observable, map } from 'rxjs';
 export interface LabOrderResponse {
   id: string;
   labOrderCode: string;
+  patientId: string;
   patientFullName: string;
   patientEmail: string;
   hospitalName: string;
@@ -24,15 +25,46 @@ export interface LabOrderResponse {
 
 export interface LabResultResponse {
   id: string;
-  labOrderId: string;
+  labOrderId: string | null;
+  labOrderCode: string;
+  patientId: string | null;
+  patientFullName: string;
+  patientEmail: string;
+  hospitalName: string;
+  labTestName: string;
   resultValue: string;
   resultUnit: string;
-  referenceRange: string;
-  abnormalFlag: string;
-  status: string;
-  performedAt: string;
-  verifiedAt: string;
+  resultDate: string;
   notes: string;
+  referenceRanges: LabResultReferenceRange[];
+  trendHistory?: LabResultTrendPoint[];
+  severityFlag: string | null;
+  acknowledged: boolean;
+  acknowledgedAt: string | null;
+  acknowledgedBy: string | null;
+  released: boolean;
+  releasedAt: string | null;
+  releasedByFullName: string | null;
+  signedAt: string | null;
+  signedBy: string | null;
+  signatureValue: string | null;
+  signatureNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LabResultReferenceRange {
+  minValue: number | null;
+  maxValue: number | null;
+  unit: string | null;
+  gender: string | null;
+  notes: string | null;
+}
+
+export interface LabResultTrendPoint {
+  resultDate: string;
+  resultValue: string;
+  resultUnit: string;
 }
 
 export interface LabTestDefinition {
@@ -57,6 +89,8 @@ export interface LabTestDefinition {
   reviewedAt: string | null;
   rejectionReason: string | null;
   unit: string | null;
+  preparationInstructions: string | null;
+  turnaroundTime: number | null;
   referenceRanges?: LabTestReferenceRange[];
 }
 
@@ -168,7 +202,31 @@ export interface LabOrderRequest {
   primaryDiagnosisCode: string;
   orderChannel: string;
   providerSignature: string;
-  documentationSharedWithLab: boolean;
+  documentationSharedWithLab?: boolean | null;
+}
+
+export interface LabResultRequest {
+  labOrderId: string;
+  assignmentId: string;
+  patientId: string;
+  resultValue: string;
+  resultUnit?: string;
+  resultDate: string;
+  notes?: string;
+}
+
+export interface LabTestDefinitionRequest {
+  testCode: string;
+  testName: string;
+  category?: string;
+  description?: string;
+  unit?: string;
+  sampleType?: string;
+  preparationInstructions?: string;
+  turnaroundTime?: number;
+  isActive?: boolean;
+  assignmentId?: string;
+  referenceRanges?: LabTestReferenceRange[];
 }
 
 interface ApiWrapper<T> {
@@ -271,6 +329,44 @@ export class LabService {
 
   deleteOrder(id: string): Observable<void> {
     return this.http.delete<void>(`/lab-orders/${id}`);
+  }
+
+  // ── Lab Result CRUD ──────────────────────────────────────────────────
+
+  createResult(req: LabResultRequest): Observable<LabResultResponse> {
+    return this.http.post<LabResultResponse>('/lab-results', req);
+  }
+
+  updateResult(id: string, req: LabResultRequest): Observable<LabResultResponse> {
+    return this.http.put<LabResultResponse>(`/lab-results/${id}`, req);
+  }
+
+  deleteResult(id: string): Observable<string> {
+    return this.http.delete('/lab-results/' + id, { responseType: 'text' });
+  }
+
+  releaseResult(id: string): Observable<LabResultResponse> {
+    return this.http.post<LabResultResponse>(`/lab-results/${id}/release`, {});
+  }
+
+  // ── Lab Test Definition CRUD ─────────────────────────────────────────
+
+  createTestDefinition(req: LabTestDefinitionRequest): Observable<LabTestDefinition> {
+    return this.http
+      .post<ApiWrapper<LabTestDefinition>>('/lab-test-definitions', req)
+      .pipe(map((res) => res.data));
+  }
+
+  updateTestDefinition(id: string, req: LabTestDefinitionRequest): Observable<LabTestDefinition> {
+    return this.http
+      .put<ApiWrapper<LabTestDefinition>>(`/lab-test-definitions/${id}`, req)
+      .pipe(map((res) => res.data));
+  }
+
+  deleteTestDefinition(id: string): Observable<string> {
+    return this.http
+      .delete<ApiWrapper<string>>(`/lab-test-definitions/${id}`)
+      .pipe(map((res) => res.data));
   }
 
   submitApprovalAction(

@@ -13,6 +13,8 @@ import com.example.hms.model.Admission;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Consultation;
 import com.example.hms.model.Department;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientVitalSign;
@@ -37,12 +39,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -1176,5 +1181,63 @@ class DoctorWorklistServiceImplTest {
         List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);
 
         assertEquals(1, result.size());
+    }
+
+    // ========== MRN tests ==========
+
+    @Test
+    void getWorklist_mrnIsResolvedFromHospitalRegistration_notPatientId() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        UUID hospitalId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+
+        // Real Patient so getMrnForHospital() works
+        Hospital hospital = mock(Hospital.class);
+        when(hospital.getId()).thenReturn(hospitalId);
+
+        PatientHospitalRegistration reg = mock(PatientHospitalRegistration.class);
+        when(reg.getHospital()).thenReturn(hospital);
+        when(reg.getMrn()).thenReturn("MRN-TEST-001");
+
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        patient.setFirstName("Alice");
+        patient.setLastName("Wong");
+        patient.setDateOfBirth(LocalDate.of(1985, 6, 15));
+        patient.setGender("F");
+        patient.setHospitalRegistrations(new HashSet<>(Set.of(reg)));
+
+        Encounter enc = mock(Encounter.class);
+        lenient().when(enc.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(enc.getPatient()).thenReturn(patient);
+        lenient().when(enc.getEncounterDate()).thenReturn(LocalDateTime.now().minusMinutes(10));
+        lenient().when(enc.getNotes()).thenReturn("headache");
+        // Provide hospital so encHospitalId is resolved
+        when(enc.getHospital()).thenReturn(hospital);
+
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(List.of(enc));
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.SCHEDULED))
+                .thenReturn(Collections.emptyList());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("MRN-TEST-001", result.get(0).getMrn(),
+                "MRN should come from hospital registration, not patient ID");
+        assertNotNull(result.get(0).getMrn());
+        // Ensure it's NOT the patient UUID string
+        assertNotEquals(patientId.toString(), result.get(0).getMrn(),
+                "MRN must not equal patient ID string");
     }
 }

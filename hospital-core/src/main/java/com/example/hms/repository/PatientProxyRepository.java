@@ -27,4 +27,7 @@ public interface PatientProxyRepository extends JpaRepository<PatientProxy, UUID
     /** Check for duplicate active proxy */
     Optional<PatientProxy> findByGrantorPatient_IdAndProxyUser_IdAndStatus(
             UUID grantorPatientId, UUID proxyUserId, ProxyStatus status);
+
+    /** Delete all proxies granted BY a patient (used during patient deletion) */
+    void deleteByGrantorPatient_Id(UUID grantorPatientId);
 }

@@ -1,7 +1,7 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { PatientFlowItem } from '../../services/dashboard.service';
 
 interface FlowColumn {
@@ -20,18 +20,21 @@ interface FlowColumn {
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class DoctorPatientFlowComponent {
+  private readonly translate = inject(TranslateService);
   flowData = input<Record<string, PatientFlowItem[]>>({});
   patientSelected = output<string>();
 
   readonly columns: FlowColumn[] = [
+    { key: 'SCHEDULED', label: 'Scheduled', icon: 'event', color: '#6366f1' },
     { key: 'ARRIVED', label: 'Checked In', icon: 'how_to_reg', color: '#0891b2' },
-    { key: 'IN_PROGRESS', label: 'In Encounter', icon: 'stethoscope', color: '#2563eb' },
+    { key: 'TRIAGE', label: 'Triage', icon: 'monitor_heart', color: '#e11d48' },
     {
       key: 'WAITING_FOR_PHYSICIAN',
       label: 'Waiting for MD',
       icon: 'person_search',
       color: '#d97706',
     },
+    { key: 'IN_PROGRESS', label: 'In Encounter', icon: 'stethoscope', color: '#2563eb' },
     {
       key: 'AWAITING_RESULTS',
       label: 'Awaiting Results',
@@ -57,8 +60,18 @@ export class DoctorPatientFlowComponent {
     return this.flowData()[key] ?? [];
   }
 
+  getTrackKey(item: PatientFlowItem): string {
+    return item.encounterId || item.admissionId || item.patientId;
+  }
+
   selectPatient(patientId: string): void {
     this.patientSelected.emit(patientId);
+  }
+
+  getSourceLabel(item: PatientFlowItem): string {
+    return item.flowSource === 'ADMISSION'
+      ? this.translate.instant('DASHBOARD.PATIENT_FLOW_INPATIENT')
+      : this.translate.instant('DASHBOARD.PATIENT_FLOW_OUTPATIENT');
   }
 
   getElapsedClass(minutes: number): string {
