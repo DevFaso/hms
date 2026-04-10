@@ -69,6 +69,59 @@ export interface VitalSignSummary {
   source: string;
 }
 
+/** Raw shape returned by the backend PatientVitalSignResponseDTO. */
+interface PatientVitalSignRaw {
+  id: string;
+  source: string;
+  recordedAt: string;
+  temperatureCelsius?: number | null;
+  heartRateBpm?: number | null;
+  respiratoryRateBpm?: number | null;
+  systolicBpMmHg?: number | null;
+  diastolicBpMmHg?: number | null;
+  spo2Percent?: number | null;
+  bloodGlucoseMgDl?: number | null;
+  weightKg?: number | null;
+}
+
+/** Backend health-summary shape before vitals are flattened. */
+interface HealthSummaryRaw extends Omit<HealthSummaryDTO, 'latestVitals'> {
+  latestVitals: PatientVitalSignRaw[];
+}
+
+/**
+ * Expand one composite vitals record into individual VitalSignSummary rows —
+ * one per non-null reading.
+ */
+function flattenVitals(raw: PatientVitalSignRaw[]): VitalSignSummary[] {
+  const fields: { key: keyof PatientVitalSignRaw; type: string; unit: string; format?: (r: PatientVitalSignRaw) => string }[] = [
+    { key: 'systolicBpMmHg', type: 'BLOOD_PRESSURE', unit: 'mmHg', format: (r) => `${r.systolicBpMmHg}/${r.diastolicBpMmHg}` },
+    { key: 'heartRateBpm', type: 'HEART_RATE', unit: 'bpm' },
+    { key: 'temperatureCelsius', type: 'TEMPERATURE', unit: '°C' },
+    { key: 'respiratoryRateBpm', type: 'RESPIRATORY_RATE', unit: 'breaths/min' },
+    { key: 'spo2Percent', type: 'OXYGEN_SATURATION', unit: '%' },
+    { key: 'bloodGlucoseMgDl', type: 'BLOOD_GLUCOSE', unit: 'mg/dL' },
+    { key: 'weightKg', type: 'WEIGHT', unit: 'kg' },
+  ];
+
+  const entries: VitalSignSummary[] = [];
+  for (const r of raw) {
+    const base = { recordedAt: r.recordedAt, source: r.source ?? 'Nurse Station' };
+    for (const f of fields) {
+      if (r[f.key] != null) {
+        entries.push({
+          id: `${r.id}-${f.type.toLowerCase()}`,
+          type: f.type,
+          value: f.format ? f.format(r) : `${r[f.key]}`,
+          unit: f.unit,
+          ...base,
+        });
+      }
+    }
+  }
+  return entries;
+}
+
 export interface ImmunizationSummary {
   id: string;
   vaccineName: string;
@@ -355,8 +408,13 @@ export class PatientPortalService {
 
   getHealthSummary(): Observable<HealthSummaryDTO> {
     return this.http
-      .get<ApiWrapper<HealthSummaryDTO>>(`${this.base}/health-summary`)
-      .pipe(map((r) => r.data));
+      .get<ApiWrapper<HealthSummaryRaw>>(`${this.base}/health-summary`)
+      .pipe(
+        map((r) => ({
+          ...r.data,
+          latestVitals: flattenVitals(r.data?.latestVitals ?? []),
+        })),
+      );
   }
 
   getMyAppointments(): Observable<PortalAppointment[]> {
@@ -391,9 +449,9 @@ export class PatientPortalService {
 
   getMyVitals(limit = 10): Observable<VitalSignSummary[]> {
     return this.http
-      .get<ApiWrapper<VitalSignSummary[]>>(`${this.base}/vitals`, { params: { limit } })
+      .get<ApiWrapper<PatientVitalSignRaw[]>>(`${this.base}/vitals`, { params: { limit } })
       .pipe(
-        map((r) => r.data ?? []),
+        map((r) => flattenVitals(r.data ?? [])),
         catchError(() => of([])),
       );
   }
