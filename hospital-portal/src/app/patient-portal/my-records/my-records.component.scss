@@ -50,3 +50,100 @@
 .item-abnormal {
   border-left: 3px solid #dc2626;
 }
+
+// ── Expandable list items ─────────────────────────────────────────
+.expandable {
+  cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+
+  &.expanded {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-bottom-color: transparent;
+  }
+}
+
+.pli-end {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.expand-arrow {
+  font-size: 20px;
+  color: #94a3b8;
+  transition: transform 0.2s;
+}
+
+// ── Detail Panel (expand) ─────────────────────────────────────────
+.detail-panel {
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  padding: 16px 20px;
+  margin-bottom: 2px;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px 24px;
+}
+
+.detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.detail-item.detail-full {
+  grid-column: 1 / -1;
+}
+
+.detail-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.detail-value {
+  font-size: 14px;
+  color: #1e293b;
+  line-height: 1.5;
+}
+
+.text-danger {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+// ── Icon colour classes (replaces inline styles) ──────────────────
+.icon-encounter {
+  background: #dbeafe;
+  .material-symbols-outlined { color: #2563eb; }
+}
+
+.icon-danger {
+  background: #fee2e2;
+  .material-symbols-outlined { color: #dc2626; }
+}
+
+.icon-success {
+  background: #d1fae5;
+  .material-symbols-outlined { color: #059669; }
+}
+
+.icon-medication {
+  background: #fef3c7;
+  .material-symbols-outlined { color: #d97706; }
+}
+
+.icon-vaccine {
+  background: #ede9fe;
+  .material-symbols-outlined { color: #7c3aed; }
+}

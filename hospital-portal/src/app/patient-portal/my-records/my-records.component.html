@@ -116,9 +116,16 @@
         } @else {
           <div class="portal-list">
             @for (e of encounters(); track e.id) {
-              <div class="portal-list-item">
-                <div class="pli-icon" style="background: #dbeafe">
-                  <span class="material-symbols-outlined" style="color: #2563eb">stethoscope</span>
+              <div
+                class="portal-list-item expandable"
+                [class.expanded]="expandedId() === e.id"
+                (click)="toggleExpand(e.id)"
+                (keydown.enter)="toggleExpand(e.id)"
+                tabindex="0"
+                role="button"
+              >
+                <div class="pli-icon icon-encounter">
+                  <span class="material-symbols-outlined">stethoscope</span>
                 </div>
                 <div class="pli-body">
                   <span class="pli-title"
@@ -135,10 +142,71 @@
                     >{{ e.date | date: 'mediumDate' }} · {{ e.department }}</span
                   >
                 </div>
-                <span class="portal-status-chip" [attr.data-status]="e.status">{{
-                  e.status | enumLabel: 'status'
-                }}</span>
+                <div class="pli-end">
+                  <span class="portal-status-chip" [attr.data-status]="e.status">{{
+                    e.status | enumLabel: 'status'
+                  }}</span>
+                  <span class="material-symbols-outlined expand-arrow">{{
+                    expandedId() === e.id ? 'expand_less' : 'expand_more'
+                  }}</span>
+                </div>
               </div>
+              @if (expandedId() === e.id) {
+                <div class="detail-panel">
+                  <div class="detail-grid">
+                    @if (e.hospitalName) {
+                      <div class="detail-item">
+                        <span class="detail-label">Hospital</span>
+                        <span class="detail-value">{{ e.hospitalName }}</span>
+                      </div>
+                    }
+                    <div class="detail-item">
+                      <span class="detail-label">Department</span>
+                      <span class="detail-value">{{ e.department || '—' }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Provider</span>
+                      <span class="detail-value">{{ e.providerName }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Visit Type</span>
+                      <span class="detail-value">{{ e.type | enumLabel: 'encounterType' }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Date</span>
+                      <span class="detail-value">{{ e.date | date: 'mediumDate' }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Status</span>
+                      <span class="detail-value">{{ e.status | enumLabel: 'status' }}</span>
+                    </div>
+                    @if (e.chiefComplaint) {
+                      <div class="detail-item detail-full">
+                        <span class="detail-label">Chief Complaint</span>
+                        <span class="detail-value">{{ e.chiefComplaint }}</span>
+                      </div>
+                    }
+                    @if (e.diagnosisSummary) {
+                      <div class="detail-item detail-full">
+                        <span class="detail-label">Assessment / Diagnosis</span>
+                        <span class="detail-value">{{ e.diagnosisSummary }}</span>
+                      </div>
+                    }
+                    @if (e.appointmentReason) {
+                      <div class="detail-item detail-full">
+                        <span class="detail-label">Reason for Visit</span>
+                        <span class="detail-value">{{ e.appointmentReason }}</span>
+                      </div>
+                    }
+                    @if (e.notes) {
+                      <div class="detail-item detail-full">
+                        <span class="detail-label">Notes</span>
+                        <span class="detail-value">{{ e.notes }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
             }
           </div>
         }
@@ -157,29 +225,95 @@
         } @else {
           <div class="portal-list">
             @for (l of labs(); track l.id) {
-              <div class="portal-list-item" [class.item-abnormal]="l.isAbnormal">
-                <div class="pli-icon" [style.background]="l.isAbnormal ? '#fee2e2' : '#d1fae5'">
-                  <span
-                    class="material-symbols-outlined"
-                    [style.color]="l.isAbnormal ? '#dc2626' : '#059669'"
-                  >
+              <div
+                class="portal-list-item expandable"
+                [class.item-abnormal]="l.isAbnormal"
+                [class.expanded]="expandedId() === l.id"
+                (click)="toggleExpand(l.id)"
+                (keydown.enter)="toggleExpand(l.id)"
+                tabindex="0"
+                role="button"
+              >
+                <div class="pli-icon" [class.icon-danger]="l.isAbnormal" [class.icon-success]="!l.isAbnormal">
+                  <span class="material-symbols-outlined">
                     {{ l.isAbnormal ? 'warning' : 'check_circle' }}
                   </span>
                 </div>
                 <div class="pli-body">
                   <span class="pli-title">{{ l.testName }}</span>
                   <span class="pli-sub"
-                    >{{ 'PORTAL.RECORDS.RESULT_PREFIX' | translate }} {{ l.result }}
+                    >{{ 'PORTAL.RECORDS.RESULT_PREFIX' | translate }} {{ l.result }} {{ l.unit }}
                     <span class="rec-muted"
                       >({{ 'PORTAL.RECORDS.REF_PREFIX' | translate }} {{ l.referenceRange }})</span
                     >
                   </span>
                   <span class="pli-meta">{{ l.collectedDate | date: 'mediumDate' }}</span>
                 </div>
-                <span class="portal-status-chip" [attr.data-status]="l.status">{{
-                  l.status | enumLabel: 'status'
-                }}</span>
+                <div class="pli-end">
+                  <span class="portal-status-chip" [attr.data-status]="l.status">{{
+                    l.status | enumLabel: 'status'
+                  }}</span>
+                  <span class="material-symbols-outlined expand-arrow">{{
+                    expandedId() === l.id ? 'expand_less' : 'expand_more'
+                  }}</span>
+                </div>
               </div>
+              @if (expandedId() === l.id) {
+                <div class="detail-panel">
+                  <div class="detail-grid">
+                    <div class="detail-item">
+                      <span class="detail-label">Test Name</span>
+                      <span class="detail-value">{{ l.testName }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Result</span>
+                      <span class="detail-value" [class.text-danger]="l.isAbnormal">{{ l.result }} {{ l.unit }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Reference Range</span>
+                      <span class="detail-value">{{ l.referenceRange || '—' }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Status</span>
+                      <span class="detail-value">{{ l.status | enumLabel: 'status' }}</span>
+                    </div>
+                    @if (l.category) {
+                      <div class="detail-item">
+                        <span class="detail-label">Category</span>
+                        <span class="detail-value">{{ l.category }}</span>
+                      </div>
+                    }
+                    <div class="detail-item">
+                      <span class="detail-label">Collected</span>
+                      <span class="detail-value">{{ l.collectedDate | date: 'medium' }}</span>
+                    </div>
+                    @if (l.resultedAt) {
+                      <div class="detail-item">
+                        <span class="detail-label">Resulted</span>
+                        <span class="detail-value">{{ l.resultedAt | date: 'medium' }}</span>
+                      </div>
+                    }
+                    @if (l.orderedBy) {
+                      <div class="detail-item">
+                        <span class="detail-label">Ordered By</span>
+                        <span class="detail-value">{{ l.orderedBy }}</span>
+                      </div>
+                    }
+                    @if (l.performedBy) {
+                      <div class="detail-item">
+                        <span class="detail-label">Performed By</span>
+                        <span class="detail-value">{{ l.performedBy }}</span>
+                      </div>
+                    }
+                    @if (l.notes) {
+                      <div class="detail-item detail-full">
+                        <span class="detail-label">Notes</span>
+                        <span class="detail-value">{{ l.notes }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
             }
           </div>
         }
@@ -198,9 +332,16 @@
         } @else {
           <div class="portal-list">
             @for (m of medications(); track m.id) {
-              <div class="portal-list-item">
-                <div class="pli-icon" style="background: #fef3c7">
-                  <span class="material-symbols-outlined" style="color: #d97706">medication</span>
+              <div
+                class="portal-list-item expandable"
+                [class.expanded]="expandedId() === m.id"
+                (click)="toggleExpand(m.id)"
+                (keydown.enter)="toggleExpand(m.id)"
+                tabindex="0"
+                role="button"
+              >
+                <div class="pli-icon icon-medication">
+                  <span class="material-symbols-outlined">medication</span>
                 </div>
                 <div class="pli-body">
                   <span class="pli-title">{{ m.medicationName }}</span>
@@ -210,10 +351,69 @@
                     {{ m.startDate | date: 'mediumDate' }}</span
                   >
                 </div>
-                <span class="portal-status-chip" [attr.data-status]="m.status">{{
-                  m.status | enumLabel: 'status'
-                }}</span>
+                <div class="pli-end">
+                  <span class="portal-status-chip" [attr.data-status]="m.status">{{
+                    m.status | enumLabel: 'status'
+                  }}</span>
+                  <span class="material-symbols-outlined expand-arrow">{{
+                    expandedId() === m.id ? 'expand_less' : 'expand_more'
+                  }}</span>
+                </div>
               </div>
+              @if (expandedId() === m.id) {
+                <div class="detail-panel">
+                  <div class="detail-grid">
+                    <div class="detail-item">
+                      <span class="detail-label">Medication</span>
+                      <span class="detail-value">{{ m.medicationName }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Dosage</span>
+                      <span class="detail-value">{{ m.dosage || '—' }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Frequency</span>
+                      <span class="detail-value">{{ m.frequency || '—' }}</span>
+                    </div>
+                    @if (m.route) {
+                      <div class="detail-item">
+                        <span class="detail-label">Route</span>
+                        <span class="detail-value">{{ m.route }}</span>
+                      </div>
+                    }
+                    <div class="detail-item">
+                      <span class="detail-label">Prescribed By</span>
+                      <span class="detail-value">{{ m.prescribedBy || '—' }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Start Date</span>
+                      <span class="detail-value">{{ m.startDate | date: 'mediumDate' }}</span>
+                    </div>
+                    @if (m.endDate) {
+                      <div class="detail-item">
+                        <span class="detail-label">End Date</span>
+                        <span class="detail-value">{{ m.endDate | date: 'mediumDate' }}</span>
+                      </div>
+                    }
+                    <div class="detail-item">
+                      <span class="detail-label">Status</span>
+                      <span class="detail-value">{{ m.status | enumLabel: 'status' }}</span>
+                    </div>
+                    @if (m.indication) {
+                      <div class="detail-item detail-full">
+                        <span class="detail-label">Indication</span>
+                        <span class="detail-value">{{ m.indication }}</span>
+                      </div>
+                    }
+                    @if (m.instructions) {
+                      <div class="detail-item detail-full">
+                        <span class="detail-label">Instructions</span>
+                        <span class="detail-value">{{ m.instructions }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
             }
           </div>
         }
@@ -232,9 +432,16 @@
         } @else {
           <div class="portal-list">
             @for (im of immunizations(); track im.id) {
-              <div class="portal-list-item">
-                <div class="pli-icon" style="background: #ede9fe">
-                  <span class="material-symbols-outlined" style="color: #7c3aed">vaccines</span>
+              <div
+                class="portal-list-item expandable"
+                [class.expanded]="expandedId() === im.id"
+                (click)="toggleExpand(im.id)"
+                (keydown.enter)="toggleExpand(im.id)"
+                tabindex="0"
+                role="button"
+              >
+                <div class="pli-icon icon-vaccine">
+                  <span class="material-symbols-outlined">vaccines</span>
                 </div>
                 <div class="pli-body">
                   <span class="pli-title">{{ im.vaccineName }}</span>
@@ -243,10 +450,67 @@
                   >
                   <span class="pli-meta">{{ im.dateAdministered | date: 'mediumDate' }}</span>
                 </div>
-                <span class="portal-status-chip" [attr.data-status]="im.status">{{
-                  im.status | enumLabel: 'status'
-                }}</span>
+                <div class="pli-end">
+                  <span class="portal-status-chip" [attr.data-status]="im.status">{{
+                    im.status | enumLabel: 'status'
+                  }}</span>
+                  <span class="material-symbols-outlined expand-arrow">{{
+                    expandedId() === im.id ? 'expand_less' : 'expand_more'
+                  }}</span>
+                </div>
               </div>
+              @if (expandedId() === im.id) {
+                <div class="detail-panel">
+                  <div class="detail-grid">
+                    <div class="detail-item">
+                      <span class="detail-label">Vaccine</span>
+                      <span class="detail-value">{{ im.vaccineName }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Date Administered</span>
+                      <span class="detail-value">{{ im.dateAdministered | date: 'mediumDate' }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Administered By</span>
+                      <span class="detail-value">{{ im.provider || '—' }}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Status</span>
+                      <span class="detail-value">{{ im.status | enumLabel: 'status' }}</span>
+                    </div>
+                    @if (im.doseNumber) {
+                      <div class="detail-item">
+                        <span class="detail-label">Dose</span>
+                        <span class="detail-value">{{ im.doseNumber }}@if (im.totalDosesInSeries) { of {{ im.totalDosesInSeries }}}</span>
+                      </div>
+                    }
+                    @if (im.site) {
+                      <div class="detail-item">
+                        <span class="detail-label">Site</span>
+                        <span class="detail-value">{{ im.site }}</span>
+                      </div>
+                    }
+                    @if (im.route) {
+                      <div class="detail-item">
+                        <span class="detail-label">Route</span>
+                        <span class="detail-value">{{ im.route }}</span>
+                      </div>
+                    }
+                    @if (im.manufacturer) {
+                      <div class="detail-item">
+                        <span class="detail-label">Manufacturer</span>
+                        <span class="detail-value">{{ im.manufacturer }}</span>
+                      </div>
+                    }
+                    @if (im.lotNumber) {
+                      <div class="detail-item">
+                        <span class="detail-label">Lot Number</span>
+                        <span class="detail-value">{{ im.lotNumber }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
             }
           </div>
         }

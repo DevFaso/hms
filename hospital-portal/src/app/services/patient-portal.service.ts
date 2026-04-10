@@ -48,6 +48,12 @@ export interface LabResultSummary {
   status: string;
   collectedDate: string;
   isAbnormal: boolean;
+  unit: string;
+  orderedBy: string;
+  performedBy: string;
+  category: string;
+  notes: string;
+  resultedAt: string;
 }
 
 /** Raw shape returned by backend PatientLabResultResponseDTO */
@@ -74,6 +80,10 @@ export interface MedicationSummary {
   prescribedBy: string;
   startDate: string;
   status: string;
+  route: string;
+  endDate: string;
+  indication: string;
+  instructions: string;
 }
 
 export interface VitalSignSummary {
@@ -161,6 +171,12 @@ export interface ImmunizationSummary {
   dateAdministered: string;
   provider: string;
   status: string;
+  site: string;
+  route: string;
+  lotNumber: string;
+  manufacturer: string;
+  doseNumber: number | null;
+  totalDosesInSeries: number | null;
 }
 
 /** Raw shape returned by backend ImmunizationResponseDTO */
@@ -246,6 +262,9 @@ export interface PortalEncounter {
   chiefComplaint: string;
   diagnosisSummary: string;
   status: string;
+  notes: string;
+  hospitalName: string;
+  appointmentReason: string;
 }
 
 /** Raw shape returned by the backend EncounterResponseDTO */
@@ -256,6 +275,9 @@ interface EncounterApiResponse {
   staffName: string;
   staffFullName: string;
   departmentName: string;
+  hospitalName: string;
+  appointmentReason: string;
+  notes: string;
   status: string;
   note?: {
     chiefComplaint?: string;
@@ -557,6 +579,12 @@ export class PatientPortalService {
             status: l.status ?? '',
             collectedDate: l.collectedAt ?? '',
             isAbnormal: isLabResultAbnormal(l.value, l.referenceRange),
+            unit: l.unit ?? '',
+            orderedBy: l.orderedBy ?? '',
+            performedBy: l.performedBy ?? '',
+            category: l.category ?? '',
+            notes: l.notes ?? '',
+            resultedAt: l.resultedAt ?? '',
           })),
           currentMedications: d?.currentMedications ?? [],
           immunizations: (d?.immunizations ?? []).map((im) => ({
@@ -565,6 +593,12 @@ export class PatientPortalService {
             dateAdministered: im.administrationDate ?? '',
             provider: im.administeredByName ?? '',
             status: im.status ?? '',
+            site: im.site ?? '',
+            route: im.route ?? '',
+            lotNumber: im.lotNumber ?? '',
+            manufacturer: im.manufacturer ?? '',
+            doseNumber: im.doseNumber ?? null,
+            totalDosesInSeries: im.totalDosesInSeries ?? null,
           })),
           allergies: d?.allergies ?? [],
           activeDiagnoses: d?.activeDiagnoses ?? d?.chronicConditions ?? [],
@@ -631,6 +665,12 @@ export class PatientPortalService {
             status: l.status ?? '',
             collectedDate: l.collectedAt ?? '',
             isAbnormal: isLabResultAbnormal(l.value, l.referenceRange),
+            unit: l.unit ?? '',
+            orderedBy: l.orderedBy ?? '',
+            performedBy: l.performedBy ?? '',
+            category: l.category ?? '',
+            notes: l.notes ?? '',
+            resultedAt: l.resultedAt ?? '',
           })),
         ),
         catchError(() => of([])),
@@ -658,6 +698,9 @@ export class PatientPortalService {
           chiefComplaint: e.note?.chiefComplaint ?? '',
           diagnosisSummary: e.note?.assessment ?? '',
           status: e.status ?? '',
+          notes: e.notes ?? '',
+          hospitalName: e.hospitalName ?? '',
+          appointmentReason: e.appointmentReason ?? '',
         })),
       ),
       catchError(() => of([])),
@@ -695,6 +738,12 @@ export class PatientPortalService {
           dateAdministered: im.administrationDate ?? '',
           provider: im.administeredByName ?? '',
           status: im.status ?? '',
+          site: im.site ?? '',
+          route: im.route ?? '',
+          lotNumber: im.lotNumber ?? '',
+          manufacturer: im.manufacturer ?? '',
+          doseNumber: im.doseNumber ?? null,
+          totalDosesInSeries: im.totalDosesInSeries ?? null,
         })),
       ),
       catchError(() => of([])),

@@ -28,6 +28,7 @@ export class MyRecordsComponent implements OnInit {
   medications = signal<MedicationSummary[]>([]);
   immunizations = signal<ImmunizationSummary[]>([]);
   activeTab = signal<string>('overview');
+  expandedId = signal<string | null>(null);
 
   tabs = [
     { key: 'overview', labelKey: 'PORTAL.RECORDS.OVERVIEW', icon: 'person' },
@@ -65,5 +66,9 @@ export class MyRecordsComponent implements OnInit {
 
   printRecords(): void {
     window.print();
+  }
+
+  toggleExpand(id: string): void {
+    this.expandedId.set(this.expandedId() === id ? null : id);
   }
 }
