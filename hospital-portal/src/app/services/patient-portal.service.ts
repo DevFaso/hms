@@ -50,6 +50,22 @@ export interface LabResultSummary {
   isAbnormal: boolean;
 }
 
+/** Raw shape returned by backend PatientLabResultResponseDTO */
+interface LabResultApiResponse {
+  id: string;
+  testName: string;
+  value: string;
+  unit: string;
+  referenceRange: string;
+  status: string;
+  collectedAt: string;
+  resultedAt: string;
+  orderedBy: string;
+  performedBy: string;
+  category: string;
+  notes: string;
+}
+
 export interface MedicationSummary {
   id: string;
   medicationName: string;
@@ -84,9 +100,16 @@ interface PatientVitalSignRaw {
   weightKg?: number | null;
 }
 
-/** Backend health-summary shape before vitals are flattened. */
-interface HealthSummaryRaw extends Omit<HealthSummaryDTO, 'latestVitals'> {
-  latestVitals: PatientVitalSignRaw[];
+/** Backend health-summary shape before fields are mapped. */
+interface HealthSummaryRaw {
+  profile: PatientProfileDTO;
+  recentLabResults: LabResultApiResponse[];
+  currentMedications: MedicationSummary[];
+  recentVitals: PatientVitalSignRaw[];
+  immunizations: ImmunizationApiResponse[];
+  allergies: string[];
+  activeDiagnoses: string[];
+  chronicConditions: string[];
 }
 
 /**
@@ -140,6 +163,22 @@ export interface ImmunizationSummary {
   status: string;
 }
 
+/** Raw shape returned by backend ImmunizationResponseDTO */
+interface ImmunizationApiResponse {
+  id: string;
+  vaccineDisplay: string;
+  vaccineType: string;
+  administrationDate: string;
+  administeredByName: string;
+  status: string;
+  doseNumber: number;
+  totalDosesInSeries: number;
+  manufacturer: string;
+  lotNumber: string;
+  site: string;
+  route: string;
+}
+
 export interface PortalAppointment {
   id: string;
   date: string;
@@ -178,6 +217,24 @@ function formatTime(raw: string | null | undefined): string {
   if (h === 0) h = 12;
   else if (h > 12) h -= 12;
   return `${h}:${m} ${ampm}`;
+}
+
+/**
+ * Determine if a lab result is abnormal by comparing to the reference range.
+ * Reference ranges are typically formatted as "low-high" (e.g., "70-100").
+ */
+function isLabResultAbnormal(
+  value: string | null | undefined,
+  refRange: string | null | undefined,
+): boolean {
+  if (!value || !refRange) return false;
+  const num = Number.parseFloat(value);
+  if (Number.isNaN(num)) return false;
+  const match = /([\d.]+)\s*[-–]\s*([\d.]+)/.exec(refRange);
+  if (!match) return false;
+  const low = Number.parseFloat(match[1]);
+  const high = Number.parseFloat(match[2]);
+  return num < low || num > high;
 }
 
 export interface PortalEncounter {
@@ -269,6 +326,32 @@ export interface AfterVisitSummary {
   followUpDate: string | null;
   medications: string[];
   status: string;
+}
+
+/** Raw shape returned by backend DischargeSummaryResponseDTO */
+interface DischargeSummaryApiResponse {
+  id: string;
+  encounterId: string;
+  encounterType: string;
+  patientName: string;
+  hospitalName: string;
+  dischargingProviderName: string;
+  dischargeDate: string;
+  dischargeTime: string;
+  disposition: string;
+  dischargeDiagnosis: string;
+  hospitalCourse: string;
+  dischargeCondition: string;
+  activityRestrictions: string;
+  dietInstructions: string;
+  woundCareInstructions: string;
+  followUpInstructions: string;
+  warningSigns: string;
+  patientEducationProvided: string;
+  medicationReconciliation: { medicationName: string; dosage: string; frequency: string }[];
+  followUpAppointments: { department: string; scheduledDate: string }[];
+  isFinalized: boolean;
+  additionalNotes: string;
 }
 
 export interface PatientConsent {
@@ -461,10 +544,32 @@ export class PatientPortalService {
 
   getHealthSummary(): Observable<HealthSummaryDTO> {
     return this.http.get<ApiWrapper<HealthSummaryRaw>>(`${this.base}/health-summary`).pipe(
-      map((r) => ({
-        ...r.data,
-        latestVitals: flattenVitals(r.data?.latestVitals ?? []),
-      })),
+      map((r) => {
+        const d = r.data;
+        return {
+          profile: d?.profile ?? ({} as PatientProfileDTO),
+          latestVitals: flattenVitals(d?.recentVitals ?? []),
+          recentLabResults: (d?.recentLabResults ?? []).map((l) => ({
+            id: l.id,
+            testName: l.testName ?? '',
+            result: l.value ?? '',
+            referenceRange: l.referenceRange ?? '',
+            status: l.status ?? '',
+            collectedDate: l.collectedAt ?? '',
+            isAbnormal: isLabResultAbnormal(l.value, l.referenceRange),
+          })),
+          currentMedications: d?.currentMedications ?? [],
+          immunizations: (d?.immunizations ?? []).map((im) => ({
+            id: im.id,
+            vaccineName: im.vaccineDisplay ?? im.vaccineType ?? '',
+            dateAdministered: im.administrationDate ?? '',
+            provider: im.administeredByName ?? '',
+            status: im.status ?? '',
+          })),
+          allergies: d?.allergies ?? [],
+          activeDiagnoses: d?.activeDiagnoses ?? d?.chronicConditions ?? [],
+        };
+      }),
     );
   }
 
@@ -515,9 +620,19 @@ export class PatientPortalService {
 
   getMyLabResults(limit = 20): Observable<LabResultSummary[]> {
     return this.http
-      .get<ApiWrapper<LabResultSummary[]>>(`${this.base}/lab-results`, { params: { limit } })
+      .get<ApiWrapper<LabResultApiResponse[]>>(`${this.base}/lab-results`, { params: { limit } })
       .pipe(
-        map((r) => r.data ?? []),
+        map((r) =>
+          (r.data ?? []).map((l) => ({
+            id: l.id,
+            testName: l.testName ?? '',
+            result: l.value ?? '',
+            referenceRange: l.referenceRange ?? '',
+            status: l.status ?? '',
+            collectedDate: l.collectedAt ?? '',
+            isAbnormal: isLabResultAbnormal(l.value, l.referenceRange),
+          })),
+        ),
         catchError(() => of([])),
       );
   }
@@ -572,8 +687,16 @@ export class PatientPortalService {
   }
 
   getMyImmunizations(): Observable<ImmunizationSummary[]> {
-    return this.http.get<ApiWrapper<ImmunizationSummary[]>>(`${this.base}/immunizations`).pipe(
-      map((r) => r.data ?? []),
+    return this.http.get<ApiWrapper<ImmunizationApiResponse[]>>(`${this.base}/immunizations`).pipe(
+      map((r) =>
+        (r.data ?? []).map((im) => ({
+          id: im.id,
+          vaccineName: im.vaccineDisplay ?? im.vaccineType ?? '',
+          dateAdministered: im.administrationDate ?? '',
+          provider: im.administeredByName ?? '',
+          status: im.status ?? '',
+        })),
+      ),
       catchError(() => of([])),
     );
   }
@@ -582,9 +705,33 @@ export class PatientPortalService {
 
   getAfterVisitSummaries(): Observable<AfterVisitSummary[]> {
     return this.http
-      .get<ApiWrapper<AfterVisitSummary[]>>(`${this.base}/after-visit-summaries`)
+      .get<ApiWrapper<DischargeSummaryApiResponse[]>>(`${this.base}/after-visit-summaries`)
       .pipe(
-        map((r) => r.data ?? []),
+        map((r) =>
+          (r.data ?? []).map((d) => ({
+            id: d.id,
+            encounterDate: d.dischargeDate ?? '',
+            providerName: d.dischargingProviderName ?? '',
+            department: d.hospitalName ?? '',
+            chiefComplaint: d.dischargeDiagnosis ?? '',
+            diagnoses: d.dischargeDiagnosis ? [d.dischargeDiagnosis] : [],
+            treatmentSummary: d.hospitalCourse ?? '',
+            instructions: [
+              d.followUpInstructions,
+              d.activityRestrictions,
+              d.dietInstructions,
+              d.woundCareInstructions,
+              d.warningSigns,
+            ]
+              .filter(Boolean)
+              .join('\n'),
+            followUpDate: d.followUpAppointments?.[0]?.scheduledDate ?? null,
+            medications: (d.medicationReconciliation ?? []).map(
+              (m) => `${m.medicationName} ${m.dosage} – ${m.frequency}`,
+            ),
+            status: d.isFinalized ? 'FINALIZED' : 'DRAFT',
+          })),
+        ),
         catchError(() => of([])),
       );
   }
