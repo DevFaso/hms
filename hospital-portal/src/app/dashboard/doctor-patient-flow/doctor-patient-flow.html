@@ -19,7 +19,7 @@
           @if (getColumnItems(col.key).length === 0) {
             <div class="flow-empty">—</div>
           } @else {
-            @for (item of getColumnItems(col.key); track item.encounterId) {
+            @for (item of getColumnItems(col.key); track getTrackKey(item)) {
               <div
                 class="flow-card"
                 role="button"
@@ -37,6 +37,7 @@
                     ></span>
                   }
                 </div>
+                <span class="flow-card-room">{{ getSourceLabel(item) }}</span>
                 @if (item.room) {
                   <span class="flow-card-room">
                     <span class="material-symbols-outlined">meeting_room</span>{{ item.room }}

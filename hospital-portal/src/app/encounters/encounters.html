@@ -19,6 +19,27 @@
       </div>
     </div>
     <div class="summary-card">
+      <span class="material-symbols-outlined card-icon progress">how_to_reg</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByStatus('ARRIVED') }}</span>
+        <span class="card-label">{{ 'ENCOUNTERS.ARRIVED' | translate }}</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon progress">monitor_heart</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByStatus('TRIAGE') }}</span>
+        <span class="card-label">{{ 'ENCOUNTERS.TRIAGE' | translate }}</span>
+      </div>
+    </div>
+    <div class="summary-card">
+      <span class="material-symbols-outlined card-icon warning">person_search</span>
+      <div class="card-info">
+        <span class="card-value">{{ countByStatus('WAITING_FOR_PHYSICIAN') }}</span>
+        <span class="card-label">{{ 'ENCOUNTERS.WAITING_FOR_MD' | translate }}</span>
+      </div>
+    </div>
+    <div class="summary-card">
       <span class="material-symbols-outlined card-icon progress">pending</span>
       <div class="card-info">
         <span class="card-value">{{ countByStatus('IN_PROGRESS') }}</span>

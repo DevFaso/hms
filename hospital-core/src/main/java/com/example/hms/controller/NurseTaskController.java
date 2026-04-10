@@ -381,7 +381,7 @@ public class NurseTaskController {
             return authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException("Unable to resolve user identity for 'me' filter."));
         }
-        return null;
+        throw new BusinessException("Invalid assignee value '" + assignee + "'. Use 'me' or 'all'.");
     }
 
     private Duration parseWindow(String raw) {

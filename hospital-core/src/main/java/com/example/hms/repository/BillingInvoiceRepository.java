@@ -77,6 +77,24 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
 
     Optional<BillingInvoice> findWithAllById(java.util.UUID id);
 
+    /**
+     * Returns true if the patient has at least one unpaid invoice (not PAID, CANCELLED, or DRAFT)
+     * with a positive balance due, scoped to the given hospital.
+     * Used by the reception dashboard — one EXISTS query instead of fetching all rows.
+     */
+    @Query("""
+           SELECT CASE WHEN COUNT(bi) > 0 THEN TRUE ELSE FALSE END
+           FROM BillingInvoice bi
+           WHERE bi.patient.id = :patientId
+             AND bi.hospital.id = :hospitalId
+             AND bi.status NOT IN ('PAID', 'CANCELLED', 'DRAFT')
+             AND bi.totalAmount > bi.amountPaid
+           """)
+    boolean existsOutstandingBalance(
+        @Param("patientId") UUID patientId,
+        @Param("hospitalId") UUID hospitalId
+    );
+
     @Query("""
            SELECT bi FROM BillingInvoice bi
            LEFT JOIN FETCH bi.patient p

@@ -138,7 +138,8 @@ export interface DoctorWorklistItem {
 
 export interface PatientFlowItem {
   patientId: string;
-  encounterId: string;
+  encounterId?: string;
+  admissionId?: string;
   patientName: string;
   room?: string;
   elapsedMinutes: number;
@@ -146,6 +147,7 @@ export interface PatientFlowItem {
   blockerTag?: string;
   urgency: string;
   state: string;
+  flowSource: 'ENCOUNTER' | 'ADMISSION';
 }
 
 export interface ClinicalInboxItem {

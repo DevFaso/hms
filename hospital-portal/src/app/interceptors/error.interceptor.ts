@@ -27,6 +27,10 @@ const SILENT_403_PATTERNS = [
   /\/staff(\?|$|\/)/,
   /\/roles(\?|$|\/)/,
   /\/notifications(\?|$|\/)/,
+  /\/lab-test-definitions(\?|$|\/)/,
+  /\/lab-orders(\?|$|\/)/,
+  /\/lab-results(\?|$|\/)/,
+  /\/lab-specimens(\?|$|\/)/,
 ];
 
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];
