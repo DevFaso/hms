@@ -110,6 +110,21 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
         @Param("hospitalId") UUID hospitalId,
         @Param("cutoff") LocalDate cutoff);
 
+    // ── Portal: active providers by hospital + department (for patient booking) ──
+    @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
+    @Query("""
+        SELECT s FROM Staff s
+        WHERE s.hospital.id = :hospitalId
+          AND s.department.id = :departmentId
+          AND s.active = true
+          AND s.user.isDeleted = false
+          AND UPPER(s.assignment.role.code) IN ('ROLE_DOCTOR','ROLE_NURSE','ROLE_SPECIALIST')
+        ORDER BY s.name ASC
+    """)
+    List<Staff> findActiveProvidersByHospitalAndDepartment(
+        @Param("hospitalId") UUID hospitalId,
+        @Param("departmentId") UUID departmentId);
+
     // ── MVP 3: Lab staff filtered by lab roles ──────────────────
     @EntityGraph(attributePaths = {"user","department","assignment","assignment.role","hospital"})
     @Query("""

@@ -4,6 +4,7 @@ import com.example.hms.payload.dto.portal.HealthSummaryDTO;
 import com.example.hms.payload.dto.portal.PatientProfileDTO;
 import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
 import com.example.hms.payload.dto.portal.CancelAppointmentRequestDTO;
+import com.example.hms.payload.dto.portal.PortalBookAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.HomeVitalReadingDTO;
@@ -34,6 +35,7 @@ import org.springframework.security.core.Authentication;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -98,6 +100,19 @@ public interface PatientPortalService {
     // ══════════════════════════════════════════════════════════════════════
     // PHASE 2 — Write / action endpoints ("Close the Functional Gaps")
     // ══════════════════════════════════════════════════════════════════════
+
+    // ── Schedule own appointment ─────────────────────────────────────────
+    AppointmentResponseDTO scheduleMyAppointment(Authentication auth, PortalBookAppointmentRequestDTO dto, Locale locale);
+
+    // ── Booking-form lookups (hospitals, departments, providers) ─────────
+    /** Return hospitals where the patient has an active registration. */
+    List<Map<String, Object>> getMyHospitals(Authentication auth);
+
+    /** Return departments for a given hospital. */
+    List<Map<String, Object>> getDepartmentsForHospital(UUID hospitalId);
+
+    /** Return active providers (doctors/nurses) in a given hospital + department. */
+    List<Map<String, Object>> getProvidersForDepartment(UUID hospitalId, UUID departmentId);
 
     // ── Cancel own appointment ───────────────────────────────────────────
     AppointmentResponseDTO cancelMyAppointment(Authentication auth, CancelAppointmentRequestDTO dto, Locale locale);

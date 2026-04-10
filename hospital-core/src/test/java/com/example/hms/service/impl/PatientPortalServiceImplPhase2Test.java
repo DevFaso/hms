@@ -27,6 +27,17 @@ import com.example.hms.payload.dto.portal.MedicationRefillRequestDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
+import com.example.hms.payload.dto.portal.PortalBookAppointmentRequestDTO;
+import com.example.hms.model.Department;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.PatientHospitalRegistration;
+import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.model.Role;
+import com.example.hms.repository.DepartmentRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.service.StaffAvailabilityService;
 import com.example.hms.repository.AppointmentRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
@@ -109,6 +120,15 @@ class PatientPortalServiceImplPhase2Test {
     @Mock private PatientPrimaryCareService primaryCareService;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
+    @Mock private com.example.hms.repository.HospitalRepository hospitalRepository;
+    @Mock private DepartmentRepository departmentRepository;
+    @Mock private StaffRepository staffRepository;
+    @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock private StaffAvailabilityService staffAvailabilityService;
+    @Mock private com.example.hms.repository.PatientProxyRepository patientProxyRepository;
+    @Mock private com.example.hms.repository.UserRepository userRepository;
+    @Mock private com.example.hms.service.NotificationService notificationService;
+    @Mock private com.example.hms.service.EmailService emailService;
 
     @InjectMocks
     private PatientPortalServiceImpl service;
@@ -942,6 +962,443 @@ class PatientPortalServiceImplPhase2Test {
             assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(ResourceNotFoundException.class)
                     .hasMessageContaining("No patient record linked");
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Schedule Own Appointment (Self-Booking)
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("scheduleMyAppointment")
+    class ScheduleMyAppointment {
+
+        private UUID hospitalId;
+        private UUID departmentId;
+        private UUID staffId;
+        private Hospital hospital;
+        private Department department;
+        private Staff staff;
+        private UserRoleHospitalAssignment assignment;
+
+        @BeforeEach
+        void setUpScheduling() {
+            hospitalId = UUID.randomUUID();
+            departmentId = UUID.randomUUID();
+            staffId = UUID.randomUUID();
+
+            hospital = new Hospital();
+            hospital.setId(hospitalId);
+            hospital.setName("City General");
+            hospital.setAddress("123 Main St");
+
+            department = new Department();
+            department.setId(departmentId);
+            department.setName("Cardiology");
+            department.setHospital(hospital);
+
+            User staffUser = new User();
+            staffUser.setId(UUID.randomUUID());
+            staffUser.setFirstName("John");
+            staffUser.setLastName("Smith");
+
+            Role role = new Role();
+            role.setCode("ROLE_DOCTOR");
+            role.setName("Doctor");
+
+            assignment = new UserRoleHospitalAssignment();
+            assignment.setId(UUID.randomUUID());
+            assignment.setRole(role);
+
+            staff = new Staff();
+            staff.setId(staffId);
+            staff.setActive(true);
+            staff.setHospital(hospital);
+            staff.setDepartment(department);
+            staff.setUser(staffUser);
+            staff.setAssignment(assignment);
+        }
+
+        private void stubSchedulingBasics() {
+            stubPatientResolution();
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+                    .thenReturn(Optional.of(new PatientHospitalRegistration()));
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+            when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(department));
+        }
+
+        @Test
+        @DisplayName("should schedule appointment with explicit staff pick")
+        void scheduleWithExplicitStaff_success() {
+            stubSchedulingBasics();
+            when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+            when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
+            when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any()))
+                    .thenReturn(List.of());
+            when(assignmentRepository.findByUserIdAndHospitalId(staff.getUser().getId(), hospitalId))
+                    .thenReturn(Optional.of(assignment));
+            when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
+                Appointment a = inv.getArgument(0);
+                a.setId(UUID.randomUUID());
+                return a;
+            });
+            AppointmentResponseDTO expectedDto = AppointmentResponseDTO.builder()
+                    .id(UUID.randomUUID()).build();
+            when(appointmentMapper.toAppointmentResponseDTO(any())).thenReturn(expectedDto);
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId)
+                    .departmentId(departmentId)
+                    .staffId(staffId)
+                    .date(LocalDate.of(2026, 6, 15))
+                    .startTime(LocalTime.of(10, 0))
+                    .reason("Annual checkup")
+                    .notes("First visit")
+                    .build();
+
+            AppointmentResponseDTO result = service.scheduleMyAppointment(auth, dto, Locale.ENGLISH);
+
+            assertThat(result).isNotNull();
+            verify(appointmentRepository).save(any(Appointment.class));
+        }
+
+        @Test
+        @DisplayName("should schedule appointment with auto-assigned provider when staffId is null")
+        void scheduleWithAutoAssign_success() {
+            stubSchedulingBasics();
+            when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId))
+                    .thenReturn(List.of(staff));
+            when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
+            when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any()))
+                    .thenReturn(List.of());
+            when(assignmentRepository.findByUserIdAndHospitalId(staff.getUser().getId(), hospitalId))
+                    .thenReturn(Optional.of(assignment));
+            when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
+                Appointment a = inv.getArgument(0);
+                a.setId(UUID.randomUUID());
+                return a;
+            });
+            when(appointmentMapper.toAppointmentResponseDTO(any()))
+                    .thenReturn(AppointmentResponseDTO.builder().id(UUID.randomUUID()).build());
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId)
+                    .departmentId(departmentId)
+                    .staffId(null)
+                    .date(LocalDate.of(2026, 6, 15))
+                    .startTime(LocalTime.of(10, 0))
+                    .build();
+
+            AppointmentResponseDTO result = service.scheduleMyAppointment(auth, dto, Locale.ENGLISH);
+
+            assertThat(result).isNotNull();
+            verify(staffRepository).findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId);
+        }
+
+        @Test
+        @DisplayName("should default endTime to startTime + 30 min when omitted")
+        void scheduleDefaultEndTime() {
+            stubSchedulingBasics();
+            when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+            when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
+            when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any()))
+                    .thenReturn(List.of());
+            when(assignmentRepository.findByUserIdAndHospitalId(staff.getUser().getId(), hospitalId))
+                    .thenReturn(Optional.of(assignment));
+            when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any()))
+                    .thenReturn(AppointmentResponseDTO.builder().build());
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId)
+                    .departmentId(departmentId)
+                    .staffId(staffId)
+                    .date(LocalDate.of(2026, 6, 15))
+                    .startTime(LocalTime.of(14, 0))
+                    .endTime(null) // should default to 14:30
+                    .build();
+
+            service.scheduleMyAppointment(auth, dto, Locale.ENGLISH);
+
+            ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+            verify(appointmentRepository).save(captor.capture());
+            assertThat(captor.getValue().getEndTime()).isEqualTo(LocalTime.of(14, 30));
+        }
+
+        @Test
+        @DisplayName("should throw when patient is not registered at hospital")
+        void notRegistered_throws() {
+            stubPatientResolution();
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+                    .thenReturn(Optional.empty());
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId)
+                    .departmentId(departmentId)
+                    .staffId(staffId)
+                    .date(LocalDate.of(2026, 6, 15))
+                    .startTime(LocalTime.of(10, 0))
+                    .build();
+
+            assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("not registered");
+        }
+
+        @Test
+        @DisplayName("should throw when department does not belong to hospital")
+        void departmentWrongHospital_throws() {
+            stubSchedulingBasics();
+            Hospital otherHospital = new Hospital();
+            otherHospital.setId(UUID.randomUUID());
+            department.setHospital(otherHospital); // mismatch
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId)
+                    .departmentId(departmentId)
+                    .staffId(staffId)
+                    .date(LocalDate.of(2026, 6, 15))
+                    .startTime(LocalTime.of(10, 0))
+                    .build();
+
+            assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("Department does not belong");
+        }
+
+        @Test
+        @DisplayName("should throw when provider does not belong to hospital")
+        void staffWrongHospital_throws() {
+            stubSchedulingBasics();
+            Hospital otherHospital = new Hospital();
+            otherHospital.setId(UUID.randomUUID());
+            staff.setHospital(otherHospital); // mismatch
+
+            when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId)
+                    .departmentId(departmentId)
+                    .staffId(staffId)
+                    .date(LocalDate.of(2026, 6, 15))
+                    .startTime(LocalTime.of(10, 0))
+                    .build();
+
+            assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("Provider does not belong");
+        }
+
+        @Test
+        @DisplayName("should throw when provider is not available")
+        void staffNotAvailable_throws() {
+            stubSchedulingBasics();
+            when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+            when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(false);
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId)
+                    .departmentId(departmentId)
+                    .staffId(staffId)
+                    .date(LocalDate.of(2026, 6, 15))
+                    .startTime(LocalTime.of(10, 0))
+                    .build();
+
+            assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("not available");
+        }
+
+        @Test
+        @DisplayName("should throw when time slot has overlap with existing appointment")
+        void timeConflict_throws() {
+            stubSchedulingBasics();
+            when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+            when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
+
+            // Create existing appointment at 10:00-10:30 that overlaps the request
+            Appointment existing = new Appointment();
+            existing.setAppointmentDate(LocalDate.of(2026, 6, 15));
+            existing.setStartTime(LocalTime.of(10, 0));
+            existing.setEndTime(LocalTime.of(10, 30));
+            when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any()))
+                    .thenReturn(List.of(existing));
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId)
+                    .departmentId(departmentId)
+                    .staffId(staffId)
+                    .date(LocalDate.of(2026, 6, 15))
+                    .startTime(LocalTime.of(10, 15))
+                    .build();
+
+            assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("already has an appointment");
+        }
+
+        @Test
+        @DisplayName("should throw when no providers available in department for auto-assign")
+        void noProviders_throws() {
+            stubSchedulingBasics();
+            when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId))
+                    .thenReturn(List.of());
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId)
+                    .departmentId(departmentId)
+                    .staffId(null)
+                    .date(LocalDate.of(2026, 6, 15))
+                    .startTime(LocalTime.of(10, 0))
+                    .build();
+
+            assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("No providers available");
+        }
+
+        @Test
+        @DisplayName("should throw when end time is not after start time")
+        void endTimeNotAfterStart_throws() {
+            stubSchedulingBasics();
+            when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId)
+                    .departmentId(departmentId)
+                    .staffId(staffId)
+                    .date(LocalDate.of(2026, 6, 15))
+                    .startTime(LocalTime.of(10, 0))
+                    .endTime(LocalTime.of(10, 0)) // same as start — invalid
+                    .build();
+
+            assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("end time must be after start time");
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Scheduling Lookups (hospitals, departments, providers)
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("scheduling lookup endpoints")
+    class SchedulingLookups {
+
+        @Test
+        @DisplayName("getMyHospitals — should return only active registrations")
+        void getMyHospitals_returnsActiveRegistrations() {
+            stubPatientResolution();
+
+            Hospital h1 = new Hospital();
+            h1.setId(UUID.randomUUID());
+            h1.setName("City General");
+            h1.setAddress("123 Main St");
+
+            PatientHospitalRegistration reg = new PatientHospitalRegistration();
+            reg.setHospital(h1);
+            reg.setActive(true);
+
+            PatientHospitalRegistration inactiveReg = new PatientHospitalRegistration();
+            inactiveReg.setActive(false);
+            Hospital h2 = new Hospital();
+            h2.setId(UUID.randomUUID());
+            h2.setName("Old Hospital");
+            inactiveReg.setHospital(h2);
+
+            when(registrationRepository.findByPatientId(patientId))
+                    .thenReturn(List.of(reg, inactiveReg));
+
+            List<java.util.Map<String, Object>> result = service.getMyHospitals(auth);
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).get("name")).isEqualTo("City General");
+        }
+
+        @Test
+        @DisplayName("getMyHospitals — empty when no registrations")
+        void getMyHospitals_emptyWhenNoRegistrations() {
+            stubPatientResolution();
+            when(registrationRepository.findByPatientId(patientId))
+                    .thenReturn(List.of());
+
+            List<java.util.Map<String, Object>> result = service.getMyHospitals(auth);
+
+            assertThat(result).isEmpty();
+        }
+
+        @Test
+        @DisplayName("getDepartmentsForHospital — should map department fields correctly")
+        void getDepartments_mapsDepartmentFields() {
+            UUID hospId = UUID.randomUUID();
+            Department d1 = new Department();
+            d1.setId(UUID.randomUUID());
+            d1.setName("Cardiology");
+
+            Department d2 = new Department();
+            d2.setId(UUID.randomUUID());
+            d2.setName("Radiology");
+
+            when(departmentRepository.findByHospitalId(hospId)).thenReturn(List.of(d1, d2));
+
+            List<java.util.Map<String, Object>> result =
+                    service.getDepartmentsForHospital(hospId);
+
+            assertThat(result).hasSize(2);
+            assertThat(result.get(0).get("name")).isEqualTo("Cardiology");
+            assertThat(result.get(1).get("name")).isEqualTo("Radiology");
+        }
+
+        @Test
+        @DisplayName("getProvidersForDepartment — should map provider fields with fullName and role")
+        void getProviders_mapsProviderFields() {
+            UUID hospId = UUID.randomUUID();
+            UUID deptId = UUID.randomUUID();
+
+            User staffUser = new User();
+            staffUser.setFirstName("Jane");
+            staffUser.setLastName("Doe");
+
+            Role role = new Role();
+            role.setName("Doctor");
+
+            UserRoleHospitalAssignment assign = new UserRoleHospitalAssignment();
+            assign.setRole(role);
+
+            Staff s = new Staff();
+            s.setId(UUID.randomUUID());
+            s.setName("Dr. Doe");
+            s.setUser(staffUser);
+            s.setAssignment(assign);
+
+            when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospId, deptId))
+                    .thenReturn(List.of(s));
+
+            List<java.util.Map<String, Object>> result =
+                    service.getProvidersForDepartment(hospId, deptId);
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).get("id")).isEqualTo(s.getId());
+            assertThat(result.get(0).get("name")).isEqualTo("Dr. Doe");
+            assertThat(result.get(0).get("fullName")).isEqualTo("Jane Doe");
+            assertThat(result.get(0).get("role")).isEqualTo("Doctor");
+        }
+
+        @Test
+        @DisplayName("getProvidersForDepartment — empty when no active staff")
+        void getProviders_emptyWhenNone() {
+            UUID hospId = UUID.randomUUID();
+            UUID deptId = UUID.randomUUID();
+            when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospId, deptId))
+                    .thenReturn(List.of());
+
+            List<java.util.Map<String, Object>> result =
+                    service.getProvidersForDepartment(hospId, deptId);
+
+            assertThat(result).isEmpty();
         }
     }
 }

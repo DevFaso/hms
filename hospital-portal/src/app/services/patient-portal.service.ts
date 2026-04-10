@@ -460,6 +460,37 @@ export interface RescheduleAppointmentRequest {
   reason: string;
 }
 
+// ── Self-Scheduling Interfaces ─────────────────────────────────────
+
+export interface BookAppointmentRequest {
+  hospitalId: string;
+  departmentId: string;
+  staffId?: string;
+  date: string; // yyyy-MM-dd
+  startTime: string; // HH:mm
+  endTime?: string; // HH:mm — defaults to startTime + 30 min
+  reason?: string;
+  notes?: string;
+}
+
+export interface SchedulingHospital {
+  id: string;
+  name: string;
+  address: string;
+}
+
+export interface SchedulingDepartment {
+  id: string;
+  name: string;
+}
+
+export interface SchedulingProvider {
+  id: string;
+  name: string;
+  fullName?: string;
+  role?: string;
+}
+
 export interface PatientPaymentRequest {
   amount: number;
   paymentMethod: string;
@@ -851,6 +882,61 @@ export class PatientPortalService {
     return this.http
       .put<ApiWrapper<unknown>>(`${this.base}/appointments/reschedule`, dto)
       .pipe(map((r) => r.data));
+  }
+
+  // ── Self-Scheduling ────────────────────────────────────────────────
+
+  bookAppointment(dto: BookAppointmentRequest): Observable<PortalAppointment> {
+    return this.http
+      .post<ApiWrapper<AppointmentApiResponse>>(`${this.base}/appointments`, dto)
+      .pipe(
+        map((r) => {
+          const a = r.data;
+          return {
+            id: a.id,
+            date: a.appointmentDate ?? '',
+            startTime: formatTime(a.startTime),
+            endTime: formatTime(a.endTime),
+            providerName: a.staffName ?? '',
+            department: a.departmentName ?? '',
+            reason: a.reason ?? '',
+            status: a.status ?? '',
+            location: a.hospitalName ?? '',
+          };
+        }),
+      );
+  }
+
+  getSchedulingHospitals(): Observable<SchedulingHospital[]> {
+    return this.http.get<ApiWrapper<SchedulingHospital[]>>(`${this.base}/booking/hospitals`).pipe(
+      map((r) => r.data ?? []),
+      catchError(() => of([])),
+    );
+  }
+
+  getSchedulingDepartments(hospitalId: string): Observable<SchedulingDepartment[]> {
+    return this.http
+      .get<
+        ApiWrapper<SchedulingDepartment[]>
+      >(`${this.base}/booking/hospitals/${hospitalId}/departments`)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  getSchedulingProviders(
+    hospitalId: string,
+    departmentId: string,
+  ): Observable<SchedulingProvider[]> {
+    return this.http
+      .get<
+        ApiWrapper<SchedulingProvider[]>
+      >(`${this.base}/booking/hospitals/${hospitalId}/departments/${departmentId}/providers`)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
   }
 
   // ── Home Vitals ────────────────────────────────────────────────────

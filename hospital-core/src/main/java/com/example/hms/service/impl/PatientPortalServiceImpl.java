@@ -6,13 +6,16 @@ import com.example.hms.enums.RefillStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Appointment;
+import com.example.hms.model.Department;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
+import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.PatientProxy;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.RefillRequest;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.AppointmentResponseDTO;
 import com.example.hms.payload.dto.AuditEventLogResponseDTO;
 import com.example.hms.payload.dto.BillingInvoiceResponseDTO;
@@ -39,17 +42,21 @@ import com.example.hms.payload.dto.portal.MedicationRefillRequestDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
 import com.example.hms.payload.dto.portal.PatientProfileDTO;
 import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
+import com.example.hms.payload.dto.portal.PortalBookAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyResponseDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.repository.AppointmentRepository;
+import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientProxyRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.service.AppointmentService;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.BillingInvoiceService;
@@ -65,6 +72,7 @@ import com.example.hms.service.PatientPortalService;
 import com.example.hms.service.PatientPrimaryCareService;
 import com.example.hms.service.PatientVitalSignService;
 import com.example.hms.service.PrescriptionService;
+import com.example.hms.service.StaffAvailabilityService;
 import com.example.hms.service.TreatmentPlanService;
 import com.example.hms.service.EmailService;
 import com.example.hms.controller.support.ControllerAuthUtils;
@@ -82,6 +90,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -123,6 +132,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final AuditEventLogService auditEventLogService;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final HospitalRepository hospitalRepository;
+    private final DepartmentRepository departmentRepository;
+    private final StaffRepository staffRepository;
+    private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final StaffAvailabilityService staffAvailabilityService;
     private final com.example.hms.repository.UserRepository userRepository;
     private final com.example.hms.service.NotificationService notificationService;
     private final EmailService emailService;
@@ -323,6 +336,156 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     // ══════════════════════════════════════════════════════════════════════
     // PHASE 2 — Write / action endpoints ("Close the Functional Gaps")
     // ══════════════════════════════════════════════════════════════════════
+
+    // ── Schedule own appointment ─────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public AppointmentResponseDTO scheduleMyAppointment(Authentication auth,
+                                                        PortalBookAppointmentRequestDTO dto,
+                                                        Locale locale) {
+        UUID patientId = resolvePatientId(auth);
+        Patient patientEntity = patientRepository.findById(patientId)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+
+        // Verify patient is registered at this hospital
+        requireHospitalRegistration(patientId, dto.getHospitalId());
+
+        Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
+                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));
+
+        Department department = departmentRepository.findById(dto.getDepartmentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Department not found"));
+        if (!department.getHospital().getId().equals(dto.getHospitalId())) {
+            throw new BusinessException("Department does not belong to the selected hospital");
+        }
+
+        // Resolve staff — explicit pick or first available in department
+        Staff staff;
+        if (dto.getStaffId() != null) {
+            staff = staffRepository.findByIdAndActiveTrue(dto.getStaffId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Provider not found"));
+            if (!staff.getHospital().getId().equals(dto.getHospitalId())) {
+                throw new BusinessException("Provider does not belong to the selected hospital");
+            }
+        } else {
+            List<Staff> available = staffRepository.findActiveProvidersByHospitalAndDepartment(
+                    dto.getHospitalId(), dto.getDepartmentId());
+            if (available.isEmpty()) {
+                throw new BusinessException("No providers available in the selected department");
+            }
+            staff = available.get(0); // assign first available
+        }
+
+        // Time defaults — endTime = startTime + 30 min if omitted
+        java.time.LocalTime endTime = dto.getEndTime() != null
+                ? dto.getEndTime()
+                : dto.getStartTime().plusMinutes(30);
+        java.time.LocalDateTime requestedStart = java.time.LocalDateTime.of(dto.getDate(), dto.getStartTime());
+        java.time.LocalDateTime requestedEnd = java.time.LocalDateTime.of(dto.getDate(), endTime);
+        if (!requestedEnd.isAfter(requestedStart)) {
+            throw new BusinessException("Appointment end time must be after start time");
+        }
+
+        // Staff availability check
+        if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
+            throw new BusinessException("The selected provider is not available at the requested time");
+        }
+
+        // Overlap check
+        boolean hasConflict = appointmentRepository
+                .findByStaff_IdAndAppointmentDate(staff.getId(), dto.getDate())
+                .stream()
+                .anyMatch(existing -> {
+                    java.time.LocalDateTime es = java.time.LocalDateTime.of(existing.getAppointmentDate(), existing.getStartTime());
+                    java.time.LocalDateTime ee = java.time.LocalDateTime.of(existing.getAppointmentDate(), existing.getEndTime());
+                    return requestedStart.isBefore(ee) && es.isBefore(requestedEnd);
+                });
+        if (hasConflict) {
+            throw new BusinessException("The selected provider already has an appointment at the requested time");
+        }
+
+        // Resolve the staff's role assignment for this hospital
+        UserRoleHospitalAssignment assignment = assignmentRepository
+                .findByUserIdAndHospitalId(staff.getUser().getId(), hospital.getId())
+                .orElseThrow(() -> new BusinessException("Staff role assignment not found"));
+
+        // Create the appointment
+        Appointment appointment = new Appointment();
+        appointment.setPatient(patientEntity);
+        appointment.setStaff(staff);
+        appointment.setHospital(hospital);
+        appointment.setDepartment(department);
+        appointment.setAppointmentDate(dto.getDate());
+        appointment.setStartTime(dto.getStartTime());
+        appointment.setEndTime(endTime);
+        appointment.setStatus(AppointmentStatus.SCHEDULED);
+        appointment.setNotes(dto.getNotes());
+        appointment.setCreatedBy(patientEntity.getUser());
+        appointment.setAssignment(assignment);
+
+        Appointment saved = appointmentRepository.save(appointment);
+        log.info("Patient {} self-scheduled appointment {} at hospital {} department {}",
+                patientId, saved.getId(), hospital.getName(), department.getName());
+
+        return appointmentMapper.toAppointmentResponseDTO(saved);
+    }
+
+    // ── Booking-form lookups ─────────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getMyHospitals(Authentication auth) {
+        UUID patientId = resolvePatientId(auth);
+        List<PatientHospitalRegistration> registrations =
+                registrationRepository.findByPatientId(patientId).stream()
+                        .filter(PatientHospitalRegistration::isActive)
+                        .toList();
+        return registrations.stream()
+                .map(r -> {
+                    Hospital h = r.getHospital();
+                    Map<String, Object> m = new java.util.LinkedHashMap<>();
+                    m.put("id", h.getId());
+                    m.put("name", h.getName());
+                    m.put("address", h.getAddress());
+                    return m;
+                })
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getDepartmentsForHospital(UUID hospitalId) {
+        return departmentRepository.findByHospitalId(hospitalId).stream()
+                .map(d -> {
+                    Map<String, Object> m = new java.util.LinkedHashMap<>();
+                    m.put("id", d.getId());
+                    m.put("name", d.getName());
+                    return m;
+                })
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getProvidersForDepartment(UUID hospitalId, UUID departmentId) {
+        return staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId).stream()
+                .map(s -> {
+                    Map<String, Object> m = new java.util.LinkedHashMap<>();
+                    m.put("id", s.getId());
+                    m.put("name", s.getName());
+                    if (s.getUser() != null) {
+                        String fullName = (s.getUser().getFirstName() != null ? s.getUser().getFirstName() : "")
+                                + " " + (s.getUser().getLastName() != null ? s.getUser().getLastName() : "");
+                        m.put("fullName", fullName.trim());
+                    }
+                    if (s.getAssignment() != null && s.getAssignment().getRole() != null) {
+                        m.put("role", s.getAssignment().getRole().getName());
+                    }
+                    return m;
+                })
+                .toList();
+    }
 
     // ── Cancel own appointment ───────────────────────────────────────────
 

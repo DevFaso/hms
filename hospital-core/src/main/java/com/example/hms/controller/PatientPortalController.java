@@ -23,6 +23,7 @@ import com.example.hms.payload.dto.portal.MedicationRefillRequestDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
 import com.example.hms.payload.dto.portal.PatientProfileDTO;
 import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
+import com.example.hms.payload.dto.portal.PortalBookAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PatientPaymentRequestDTO;
@@ -276,6 +277,50 @@ public class PatientPortalController {
     // ══════════════════════════════════════════════════════════════════════
     // PHASE 2 — Write / action endpoints ("Close the Functional Gaps")
     // ══════════════════════════════════════════════════════════════════════
+
+    // ── Schedule own appointment ─────────────────────────────────────────
+
+    @Operation(summary = "Schedule a new appointment",
+            description = "Patients can self-schedule an appointment at a hospital they are registered with")
+    @PostMapping("/appointments")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<AppointmentResponseDTO>> scheduleMyAppointment(
+            Authentication auth, @Valid @RequestBody PortalBookAppointmentRequestDTO dto) {
+        Locale locale = LocaleContextHolder.getLocale();
+        AppointmentResponseDTO result = portalService.scheduleMyAppointment(auth, dto, locale);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponseWrapper.success(result));
+    }
+
+    // ── Booking-form lookups ─────────────────────────────────────────────
+
+    @Operation(summary = "List my hospitals",
+            description = "Returns hospitals where the patient has an active registration (for booking form)")
+    @GetMapping("/booking/hospitals")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<Map<String, Object>>>> getMyHospitals(
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMyHospitals(auth)));
+    }
+
+    @Operation(summary = "List departments for a hospital",
+            description = "Returns departments at the specified hospital (for booking form)")
+    @GetMapping("/booking/hospitals/{hospitalId}/departments")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<Map<String, Object>>>> getDepartments(
+            @PathVariable UUID hospitalId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getDepartmentsForHospital(hospitalId)));
+    }
+
+    @Operation(summary = "List providers for a department",
+            description = "Returns active providers (doctors/nurses) in a specific hospital department (for booking form)")
+    @GetMapping("/booking/hospitals/{hospitalId}/departments/{departmentId}/providers")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<Map<String, Object>>>> getProviders(
+            @PathVariable UUID hospitalId, @PathVariable UUID departmentId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getProvidersForDepartment(hospitalId, departmentId)));
+    }
 
     // ── Cancel own appointment ───────────────────────────────────────────
 

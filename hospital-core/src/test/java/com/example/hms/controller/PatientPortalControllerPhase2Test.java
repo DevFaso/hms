@@ -10,6 +10,7 @@ import com.example.hms.payload.dto.portal.CareTeamDTO;
 import com.example.hms.payload.dto.portal.HomeVitalReadingDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillRequestDTO;
 import com.example.hms.payload.dto.portal.MedicationRefillResponseDTO;
+import com.example.hms.payload.dto.portal.PortalBookAppointmentRequestDTO;
 import com.example.hms.payload.dto.portal.PortalConsentRequestDTO;
 import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.service.NotificationService;
@@ -43,6 +44,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
@@ -557,6 +559,167 @@ class PatientPortalControllerPhase2Test {
                             .principal(auth))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.data.content", hasSize(0)));
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Schedule Own Appointment (Self-Booking)
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("POST /me/patient/appointments")
+    class ScheduleAppointment {
+
+        @Test
+        @DisplayName("should return 201 when appointment is created")
+        void scheduleAppointment_success() throws Exception {
+            UUID apptId = UUID.randomUUID();
+            AppointmentResponseDTO response = AppointmentResponseDTO.builder()
+                    .id(apptId).build();
+
+            when(portalService.scheduleMyAppointment(any(Authentication.class),
+                    any(PortalBookAppointmentRequestDTO.class), any(Locale.class)))
+                    .thenReturn(response);
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(UUID.randomUUID())
+                    .departmentId(UUID.randomUUID())
+                    .staffId(UUID.randomUUID())
+                    .date(LocalDate.of(2026, 6, 15))
+                    .startTime(LocalTime.of(10, 0))
+                    .reason("Annual checkup")
+                    .build();
+
+            mockMvc.perform(post("/me/patient/appointments")
+                            .principal(auth)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(dto)))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.data.id").value(apptId.toString()));
+        }
+
+        @Test
+        @DisplayName("should return 400 when required fields are missing")
+        void scheduleAppointment_missingFields() throws Exception {
+            // Empty DTO — missing hospitalId, departmentId, date, startTime
+            mockMvc.perform(post("/me/patient/appointments")
+                            .principal(auth)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{}"))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Booking Lookup: My Hospitals
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("GET /me/patient/booking/hospitals")
+    class GetMyHospitals {
+
+        @Test
+        @DisplayName("should return 200 with list of hospitals")
+        void getMyHospitals_success() throws Exception {
+            UUID hospitalId = UUID.randomUUID();
+            Map<String, Object> hospital = Map.of(
+                    "id", hospitalId,
+                    "name", "City General",
+                    "address", "123 Main St"
+            );
+            when(portalService.getMyHospitals(any(Authentication.class)))
+                    .thenReturn(List.of(hospital));
+
+            mockMvc.perform(get("/me/patient/booking/hospitals")
+                            .principal(auth))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data", hasSize(1)))
+                    .andExpect(jsonPath("$.data[0].name").value("City General"));
+        }
+
+        @Test
+        @DisplayName("should return 200 with empty list when no registrations")
+        void getMyHospitals_empty() throws Exception {
+            when(portalService.getMyHospitals(any(Authentication.class)))
+                    .thenReturn(List.of());
+
+            mockMvc.perform(get("/me/patient/booking/hospitals")
+                            .principal(auth))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data", hasSize(0)));
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Booking Lookup: Departments
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("GET /me/patient/booking/hospitals/{hospitalId}/departments")
+    class GetDepartments {
+
+        @Test
+        @DisplayName("should return 200 with list of departments")
+        void getDepartments_success() throws Exception {
+            UUID hospitalId = UUID.randomUUID();
+            UUID deptId = UUID.randomUUID();
+            Map<String, Object> dept = Map.of("id", deptId, "name", "Cardiology");
+            when(portalService.getDepartmentsForHospital(eq(hospitalId)))
+                    .thenReturn(List.of(dept));
+
+            mockMvc.perform(get("/me/patient/booking/hospitals/" + hospitalId + "/departments")
+                            .principal(auth))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data", hasSize(1)))
+                    .andExpect(jsonPath("$.data[0].name").value("Cardiology"));
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Booking Lookup: Providers
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("GET /me/patient/booking/hospitals/{hospitalId}/departments/{departmentId}/providers")
+    class GetProviders {
+
+        @Test
+        @DisplayName("should return 200 with list of providers")
+        void getProviders_success() throws Exception {
+            UUID hospitalId = UUID.randomUUID();
+            UUID deptId = UUID.randomUUID();
+            UUID staffId = UUID.randomUUID();
+            Map<String, Object> provider = Map.of(
+                    "id", staffId,
+                    "name", "Dr. Doe",
+                    "fullName", "Jane Doe",
+                    "role", "Doctor"
+            );
+            when(portalService.getProvidersForDepartment(eq(hospitalId), eq(deptId)))
+                    .thenReturn(List.of(provider));
+
+            mockMvc.perform(get("/me/patient/booking/hospitals/" + hospitalId
+                            + "/departments/" + deptId + "/providers")
+                            .principal(auth))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data", hasSize(1)))
+                    .andExpect(jsonPath("$.data[0].name").value("Dr. Doe"))
+                    .andExpect(jsonPath("$.data[0].role").value("Doctor"));
+        }
+
+        @Test
+        @DisplayName("should return 200 with empty list when no providers")
+        void getProviders_empty() throws Exception {
+            UUID hospitalId = UUID.randomUUID();
+            UUID deptId = UUID.randomUUID();
+            when(portalService.getProvidersForDepartment(eq(hospitalId), eq(deptId)))
+                    .thenReturn(List.of());
+
+            mockMvc.perform(get("/me/patient/booking/hospitals/" + hospitalId
+                            + "/departments/" + deptId + "/providers")
+                            .principal(auth))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data", hasSize(0)));
         }
     }
 }

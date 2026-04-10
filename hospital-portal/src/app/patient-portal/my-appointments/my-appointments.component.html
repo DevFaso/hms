@@ -4,7 +4,148 @@
       <span class="material-symbols-outlined">calendar_month</span>
       {{ 'PORTAL.APPOINTMENTS.TITLE' | translate }}
     </h1>
+    <button class="booking-btn" (click)="openBookingForm()" [disabled]="showBookingForm()">
+      <span class="material-symbols-outlined">add_circle</span>
+      Schedule Appointment
+    </button>
   </div>
+
+  <!-- Booking Form Overlay -->
+  @if (showBookingForm()) {
+    <div
+      class="booking-overlay"
+      (click)="closeBookingForm()"
+      (keydown.escape)="closeBookingForm()"
+      tabindex="-1"
+    >
+      <div
+        class="booking-form-card"
+        tabindex="-1"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+      >
+        <div class="booking-header">
+          <h2>
+            <span class="material-symbols-outlined">event_available</span>
+            Schedule a New Appointment
+          </h2>
+          <button class="booking-close" (click)="closeBookingForm()" aria-label="Close">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+
+        @if (bookingSuccess()) {
+          <div class="booking-success">
+            <span class="material-symbols-outlined">check_circle</span>
+            <p>Appointment scheduled successfully!</p>
+          </div>
+        } @else {
+          <div class="booking-body">
+            @if (bookingError()) {
+              <div class="booking-error">
+                <span class="material-symbols-outlined">error</span>
+                {{ bookingError() }}
+              </div>
+            }
+
+            <div class="booking-field">
+              <label for="hospital">Hospital <span class="required">*</span></label>
+              <select
+                id="hospital"
+                [(ngModel)]="selectedHospitalId"
+                (ngModelChange)="onHospitalChange()"
+              >
+                <option value="">Select a hospital</option>
+                @for (h of hospitals(); track h.id) {
+                  <option [value]="h.id">{{ h.name }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="booking-field">
+              <label for="department">Department <span class="required">*</span></label>
+              <select
+                id="department"
+                [(ngModel)]="selectedDepartmentId"
+                (ngModelChange)="onDepartmentChange()"
+                [disabled]="!selectedHospitalId"
+              >
+                <option value="">Select a department</option>
+                @for (d of departments(); track d.id) {
+                  <option [value]="d.id">{{ d.name }}</option>
+                }
+              </select>
+            </div>
+
+            <div class="booking-field">
+              <label for="provider">Provider (optional)</label>
+              <select
+                id="provider"
+                [(ngModel)]="selectedProviderId"
+                [disabled]="!selectedDepartmentId"
+              >
+                <option value="">Any available provider</option>
+                @for (p of providers(); track p.id) {
+                  <option [value]="p.id">
+                    {{ p.fullName || p.name }}{{ p.role ? ' — ' + p.role : '' }}
+                  </option>
+                }
+              </select>
+            </div>
+
+            <div class="booking-row">
+              <div class="booking-field">
+                <label for="apptDate">Date <span class="required">*</span></label>
+                <input type="date" id="apptDate" [(ngModel)]="selectedDate" [min]="todayDate" />
+              </div>
+              <div class="booking-field">
+                <label for="apptTime">Time <span class="required">*</span></label>
+                <input type="time" id="apptTime" [(ngModel)]="selectedTime" />
+              </div>
+            </div>
+
+            <div class="booking-field">
+              <label for="reason">Reason for visit</label>
+              <input
+                type="text"
+                id="reason"
+                [(ngModel)]="appointmentReason"
+                placeholder="e.g., Annual checkup"
+                maxlength="500"
+              />
+            </div>
+
+            <div class="booking-field">
+              <label for="notes">Additional notes</label>
+              <textarea
+                id="notes"
+                [(ngModel)]="appointmentNotes"
+                placeholder="Any additional information for the provider"
+                maxlength="1000"
+                rows="3"
+              ></textarea>
+            </div>
+
+            <div class="booking-actions">
+              <button class="booking-cancel-btn" (click)="closeBookingForm()">Cancel</button>
+              <button
+                class="booking-submit-btn"
+                (click)="submitBooking()"
+                [disabled]="bookingLoading()"
+              >
+                @if (bookingLoading()) {
+                  <span class="btn-spinner"></span>
+                  Scheduling...
+                } @else {
+                  Schedule Appointment
+                }
+              </button>
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  }
 
   @if (loading()) {
     <div class="portal-loading">
