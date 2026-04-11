@@ -18,6 +18,7 @@ interface NavItem {
   translationKey?: string;
   route: string;
   permission?: string;
+  roles?: string[];
 }
 
 @Component({
@@ -250,6 +251,13 @@ export class ShellComponent implements OnInit, OnDestroy {
         translationKey: 'NAV.IN_BASKET',
         route: '/in-basket',
         permission: 'View Patient Records',
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
       },
       {
         icon: 'radiology',
@@ -455,6 +463,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     return items.filter(
       (item) =>
         (!item.permission || this.permissions.hasPermission(item.permission)) &&
+        (!item.roles || this.auth.hasAnyRole(item.roles)) &&
         !doctorHiddenRoutes.has(item.route),
     );
   });
