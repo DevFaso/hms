@@ -527,4 +527,17 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V42: Repair — ensure clinical.questionnaire_responses has the
+         "responses" column.  The table may have been pre-created by
+         V1/Hibernate before V39 ran, so CREATE TABLE IF NOT EXISTS
+         silently skipped the column.
+         ================================================================= -->
+    <changeSet id="V42-repair-questionnaire-responses-column" author="hms-team" runOnChange="false">
+        <sqlFile path="V42__repair_questionnaire_responses_column.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
