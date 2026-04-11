@@ -57,6 +57,8 @@ export interface LabResultReferenceRange {
   minValue: number | null;
   maxValue: number | null;
   unit: string | null;
+  ageMin: number | null;
+  ageMax: number | null;
   gender: string | null;
   notes: string | null;
 }

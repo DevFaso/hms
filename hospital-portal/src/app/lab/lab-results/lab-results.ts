@@ -5,6 +5,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   LabService,
   LabResultResponse,
+  LabResultTrendPoint,
   LabResultRequest,
   LabOrderResponse,
 } from '../../services/lab.service';
@@ -241,6 +242,57 @@ export class LabResultsComponent implements OnInit {
 
   closeDetail(): void {
     this.selectedResult.set(null);
+  }
+
+  getReleasedByDisplay(r: LabResultResponse): string {
+    const actor = (r.releasedByFullName ?? '').trim();
+    return actor || 'Autoverification';
+  }
+
+  sortedTrendHistory(r: LabResultResponse): LabResultTrendPoint[] {
+    const history = r.trendHistory ?? [];
+    return [...history].sort(
+      (a, b) => new Date(b.resultDate).getTime() - new Date(a.resultDate).getTime(),
+    );
+  }
+
+  formatReferenceRange(range: {
+    minValue: number | null;
+    maxValue: number | null;
+    unit: string | null;
+  }): string {
+    const min = range.minValue;
+    const max = range.maxValue;
+    const unit = range.unit ? ` ${range.unit}` : '';
+
+    if (min != null && max != null) {
+      return `${min} – ${max}${unit}`;
+    }
+    if (min != null) {
+      return `≥ ${min}${unit}`;
+    }
+    if (max != null) {
+      return `≤ ${max}${unit}`;
+    }
+    return '—';
+  }
+
+  formatReferenceRangeAge(range: { ageMin?: number | null; ageMax?: number | null }): string {
+    const ageMin = range.ageMin;
+    const ageMax = range.ageMax;
+    if (ageMin != null && ageMax != null) return `${ageMin}–${ageMax}`;
+    if (ageMin != null) return `${ageMin}+`;
+    if (ageMax != null) return `0–${ageMax}`;
+    return 'All ages';
+  }
+
+  formatTrendDelta(sortedHistory: LabResultTrendPoint[], index: number): string {
+    const current = Number(sortedHistory[index]?.resultValue);
+    const previous = Number(sortedHistory[index + 1]?.resultValue);
+    if (!Number.isFinite(current) || !Number.isFinite(previous)) return '—';
+    const delta = current - previous;
+    const sign = delta > 0 ? '+' : '';
+    return `${sign}${delta.toFixed(2)}`;
   }
 
   getSeverityClass(flag: string): string {

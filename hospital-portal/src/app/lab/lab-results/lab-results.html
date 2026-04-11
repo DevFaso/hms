@@ -212,7 +212,10 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB_RESULTS.VALUE' | translate }}</span>
-              <span class="field-value">{{ r.resultValue }} {{ r.resultUnit }}</span>
+              <span class="field-value"
+                >{{ r.resultValue }}
+                {{ r.resultUnit || ('LAB_RESULTS.UNIT_UNKNOWN' | translate) }}</span
+              >
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB_RESULTS.SEVERITY' | translate }}</span>
@@ -236,7 +239,7 @@
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.RELEASED_AT' | translate }}</span>
                 <span class="field-value"
-                  >{{ r.releasedAt | date: 'long' }} — {{ r.releasedByFullName }}</span
+                  >{{ r.releasedAt | date: 'long' }} — {{ getReleasedByDisplay(r) }}</span
                 >
               </div>
             }
@@ -248,7 +251,74 @@
                 >
               </div>
             }
+            @if (r.signedAt || r.signedBy) {
+              <div class="detail-field">
+                <span class="field-label">{{ 'LAB_RESULTS.SIGNED' | translate }}</span>
+                <span class="field-value"
+                  >{{ r.signedAt ? (r.signedAt | date: 'long') : '—' }} —
+                  {{ r.signedBy || '—' }}</span
+                >
+              </div>
+            }
           </div>
+
+          @if (r.referenceRanges.length) {
+            <div class="detail-section">
+              <span class="field-label">{{ 'LAB_RESULTS.REFERENCE_RANGES' | translate }}</span>
+              <div class="detail-list">
+                @for (rr of r.referenceRanges; track $index) {
+                  <div class="detail-list-item">
+                    <div class="range-main">{{ formatReferenceRange(rr) }}</div>
+                    <div class="range-meta">
+                      <span>{{ 'LAB_RESULTS.GENDER' | translate }}: {{ rr.gender || 'ALL' }}</span>
+                      <span
+                        >{{ 'LAB_RESULTS.AGE_RANGE' | translate }}:
+                        {{ formatReferenceRangeAge(rr) }}</span
+                      >
+                    </div>
+                    @if (rr.notes) {
+                      <div class="range-notes">{{ rr.notes }}</div>
+                    }
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
+          @if (sortedTrendHistory(r).length) {
+            <div class="detail-section">
+              <span class="field-label">{{ 'LAB_RESULTS.TREND_HISTORY' | translate }}</span>
+              <div class="trend-table">
+                <div class="trend-row trend-header">
+                  <span>{{ 'LAB_RESULTS.RESULT_DATE' | translate }}</span>
+                  <span>{{ 'LAB_RESULTS.VALUE' | translate }}</span>
+                  <span>{{ 'LAB_RESULTS.DELTA' | translate }}</span>
+                </div>
+                @for (tp of sortedTrendHistory(r); track $index) {
+                  <div class="trend-row">
+                    <span>{{ tp.resultDate | date: 'medium' }}</span>
+                    <span>{{ tp.resultValue }} {{ tp.resultUnit || '' }}</span>
+                    <span>{{ formatTrendDelta(sortedTrendHistory(r), $index) }}</span>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
+          @if (r.signatureValue || r.signatureNotes) {
+            <div class="detail-section">
+              <span class="field-label">{{ 'LAB_RESULTS.SIGNATURE' | translate }}</span>
+              <div class="detail-list-item">
+                @if (r.signatureValue) {
+                  <div class="range-main">{{ r.signatureValue }}</div>
+                }
+                @if (r.signatureNotes) {
+                  <div class="range-notes">{{ r.signatureNotes }}</div>
+                }
+              </div>
+            </div>
+          }
+
           @if (r.notes) {
             <div class="notes-section">
               <span class="field-label">{{ 'COMMON.NOTES' | translate }}</span>
