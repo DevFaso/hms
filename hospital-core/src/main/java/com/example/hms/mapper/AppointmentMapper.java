@@ -29,6 +29,9 @@ public class AppointmentMapper {
         dto.setStatus(appointment.getStatus());
         dto.setReason(appointment.getReason());
         dto.setNotes(appointment.getNotes());
+        dto.setCheckedInAt(appointment.getCheckedInAt());
+        dto.setPreCheckedIn(appointment.getPreCheckedIn());
+        dto.setPreCheckinTimestamp(appointment.getPreCheckinTimestamp());
         dto.setCreatedAt(appointment.getCreatedAt());
         dto.setUpdatedAt(appointment.getUpdatedAt());
 

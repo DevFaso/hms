@@ -61,6 +61,7 @@ import { DoctorWorklistComponent } from './doctor-worklist/doctor-worklist';
 import { DoctorPatientFlowComponent } from './doctor-patient-flow/doctor-patient-flow';
 import { DoctorResultsPanelComponent } from './doctor-results-panel/doctor-results-panel';
 import { PatientSnapshotDrawerComponent } from './patient-snapshot-drawer/patient-snapshot-drawer';
+import { InBasketPanelComponent } from './in-basket-panel/in-basket-panel';
 
 // ── Local interfaces ────────────────────────────────────────────────────────
 
@@ -120,6 +121,7 @@ interface NavTile {
     DoctorPatientFlowComponent,
     DoctorResultsPanelComponent,
     PatientSnapshotDrawerComponent,
+    InBasketPanelComponent,
   ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',

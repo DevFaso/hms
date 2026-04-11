@@ -94,4 +94,25 @@ public interface EncounterRepository
 
     @Query("SELECT e FROM Encounter e WHERE e.hospital.id = :hospitalId AND e.appointment IS NULL AND e.encounterDate >= :from AND e.encounterDate < :to")
     List<Encounter> findWalkInsForHospitalAndPeriod(@Param("hospitalId") UUID hospitalId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /**
+     * Fetch all encounters for a hospital within a date range, eagerly loading
+     * patient, staff (with user), department, and appointment to avoid N+1 (MVP 5 tracker board).
+     */
+    @Query("""
+        SELECT DISTINCT e FROM Encounter e
+        JOIN FETCH e.patient p
+        LEFT JOIN FETCH p.hospitalRegistrations
+        JOIN FETCH e.staff s
+        JOIN FETCH s.user
+        LEFT JOIN FETCH e.department d
+        LEFT JOIN FETCH e.appointment a
+        WHERE e.hospital.id = :hospitalId
+          AND e.encounterDate >= :from
+          AND e.encounterDate < :to
+    """)
+    List<Encounter> findAllByHospitalAndDateRange(
+            @Param("hospitalId") UUID hospitalId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to);
 }

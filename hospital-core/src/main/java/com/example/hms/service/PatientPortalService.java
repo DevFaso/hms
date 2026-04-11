@@ -1,5 +1,8 @@
 package com.example.hms.service;
 
+import com.example.hms.payload.dto.portal.QuestionnaireDTO;
+import com.example.hms.payload.dto.portal.PreCheckInRequestDTO;
+import com.example.hms.payload.dto.portal.PreCheckInResponseDTO;
 import com.example.hms.payload.dto.portal.HealthSummaryDTO;
 import com.example.hms.payload.dto.portal.PatientProfileDTO;
 import com.example.hms.payload.dto.portal.PatientProfileUpdateDTO;
@@ -190,4 +193,14 @@ public interface PatientPortalService {
     /** Update notification preferences for the authenticated patient. */
     List<NotificationPreferenceDTO> updateMyNotificationPreferences(
             Authentication auth, List<NotificationPreferenceUpdateDTO> updates);
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MVP 4 — Pre-Visit Questionnaires & Pre-Check-In
+    // ══════════════════════════════════════════════════════════════════════
+
+    /** Get active questionnaires assigned to an upcoming appointment's department/hospital. */
+    List<QuestionnaireDTO> getQuestionnairesForAppointment(Authentication auth, UUID appointmentId);
+
+    /** Submit pre-check-in: demographics, insurance, questionnaire responses. */
+    PreCheckInResponseDTO submitPreCheckIn(Authentication auth, PreCheckInRequestDTO dto);
 }

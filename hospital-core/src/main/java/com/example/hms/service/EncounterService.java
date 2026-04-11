@@ -8,6 +8,12 @@ import com.example.hms.payload.dto.EncounterNoteRequestDTO;
 import com.example.hms.payload.dto.EncounterNoteResponseDTO;
 import com.example.hms.payload.dto.EncounterRequestDTO;
 import com.example.hms.payload.dto.EncounterResponseDTO;
+import com.example.hms.payload.dto.NursingIntakeRequestDTO;
+import com.example.hms.payload.dto.NursingIntakeResponseDTO;
+import com.example.hms.payload.dto.TriageSubmissionRequestDTO;
+import com.example.hms.payload.dto.TriageSubmissionResponseDTO;
+import com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO;
+import com.example.hms.payload.dto.clinical.CheckOutRequestDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -49,4 +55,35 @@ public interface EncounterService {
                                                               Locale locale);
 
     java.util.List<EncounterNoteHistoryResponseDTO> getEncounterNoteHistory(UUID encounterId, Locale locale);
+
+    /**
+     * MVP 2 — Atomic triage submission: records vitals, chief complaint, acuity,
+     * room assignment, and transitions encounter ARRIVED → WAITING_FOR_PHYSICIAN.
+     */
+    TriageSubmissionResponseDTO submitTriage(UUID encounterId,
+                                             TriageSubmissionRequestDTO request,
+                                             String actorUsername);
+
+    /**
+     * MVP 3 — Nursing intake flowsheet: bulk-updates allergies, records medication
+     * reconciliation, stores nursing assessment note, and timestamps intake completion.
+     */
+    NursingIntakeResponseDTO submitNursingIntake(UUID encounterId,
+                                                  NursingIntakeRequestDTO request,
+                                                  String actorUsername);
+
+    /**
+     * MVP 6 — Check-Out & After-Visit Summary: atomically transitions encounter →
+     * COMPLETED, appointment → COMPLETED, records checkout timestamp, stores discharge
+     * diagnoses and follow-up instructions, and returns a comprehensive AVS.
+     */
+    AfterVisitSummaryDTO checkOut(UUID encounterId,
+                                  CheckOutRequestDTO request,
+                                  String actorUsername);
+
+    /**
+     * MVP 6 — Retrieve the After-Visit Summary for a completed (checked-out) encounter.
+     * Loads the encounter entity and delegates to CheckOutMapper for full AVS construction.
+     */
+    AfterVisitSummaryDTO getAfterVisitSummary(UUID encounterId);
 }

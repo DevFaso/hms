@@ -57,6 +57,52 @@
   }
 }
 
+// ── Pre-Check-In action styles ─────────────────────────────────
+
+.appt-detail-actions {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  gap: 12px;
+}
+
+.precheckin-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  background: #2563eb;
+  color: #f0f0f0;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #1d4ed8;
+  }
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+}
+
+.precheckin-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #16a34a;
+  font-size: 14px;
+  font-weight: 500;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+}
+
 // ── Schedule Appointment Button ──────────────────────────────────
 
 .portal-page-header {

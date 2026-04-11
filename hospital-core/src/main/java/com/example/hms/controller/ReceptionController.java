@@ -1,6 +1,8 @@
 package com.example.hms.controller;
 
 import com.example.hms.enums.EncounterStatus;
+import com.example.hms.payload.dto.CheckInRequestDTO;
+import com.example.hms.payload.dto.CheckInResponseDTO;
 import com.example.hms.payload.dto.DuplicateCandidateDTO;
 import com.example.hms.payload.dto.EligibilityAttestationRequestDTO;
 import com.example.hms.payload.dto.FlowBoardDTO;
@@ -48,6 +50,20 @@ public class ReceptionController {
     private final RoleValidator roleValidator;
 
     // ── MVP 9: Summary Strip ─────────────────────────────────────────────────
+
+    // ── MVP 1: Patient Check-In ───────────────────────────────────────────────
+
+    @PostMapping("/check-in")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
+    @Operation(summary = "Check in a patient for their scheduled appointment. Creates an ARRIVED encounter.")
+    public ResponseEntity<CheckInResponseDTO> checkInPatient(
+            @RequestBody CheckInRequestDTO request,
+            @AuthenticationPrincipal UserDetails principal) {
+        UUID hospitalId = resolveHospitalId();
+        String actor = principal != null ? principal.getUsername() : SYSTEM_ACTOR;
+        CheckInResponseDTO response = receptionService.checkInPatient(request, hospitalId, actor);
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
 
     @GetMapping("/dashboard/summary")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")

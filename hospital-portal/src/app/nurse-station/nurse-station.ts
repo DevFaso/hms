@@ -35,6 +35,9 @@ import {
 } from '../services/nurse-task.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule } from '@ngx-translate/core';
+import { EncounterService, EncounterResponse } from '../services/encounter.service';
+import { TriageFormComponent } from './triage-form/triage-form.component';
+import { NursingIntakeFormComponent } from './nursing-intake-form/nursing-intake-form.component';
 
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
@@ -51,7 +54,14 @@ type SectionType =
 @Component({
   selector: 'app-nurse-station',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    TriageFormComponent,
+    NursingIntakeFormComponent,
+  ],
   templateUrl: './nurse-station.html',
   styleUrl: './nurse-station.scss',
 })
@@ -59,6 +69,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   private readonly nurseService = inject(NurseTaskService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
+  private readonly encounterService = inject(EncounterService);
   private refreshSub?: Subscription;
   private slowRefreshSub?: Subscription;
 
@@ -108,12 +119,21 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   reasonPrompt = signal<{ taskId: string; action: string } | null>(null);
   reasonText = signal('');
 
+  /* Triage & Nursing-Intake dialog state (MVP 2 + MVP 3) */
+  triageEncounter = signal<EncounterResponse | null>(null);
+  intakeEncounter = signal<EncounterResponse | null>(null);
+  encounterLookupInProgress = signal(false);
+
   private static readonly FAST_REFRESH_MS = 60_000;
   private static readonly SLOW_REFRESH_MS = 300_000;
 
   @HostListener('document:keydown.escape')
   onEscapeKey(): void {
-    if (this.reasonPrompt()) {
+    if (this.triageEncounter()) {
+      this.triageEncounter.set(null);
+    } else if (this.intakeEncounter()) {
+      this.intakeEncounter.set(null);
+    } else if (this.reasonPrompt()) {
       this.cancelHoldRefuse();
     } else if (this.vitalsCaptureFor()) {
       this.closeVitalsDialog();
@@ -557,6 +577,57 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       error: () => {
         this.toast.error('Failed to save care note');
         this.careNoteCreating.set(false);
+      },
+    });
+  }
+
+  /* ── MVP 2 + 3: Triage & Nursing-Intake dialogs ────────────── */
+
+  /**
+   * Look up the most recent non-completed encounter for a patient and open the triage dialog.
+   */
+  openTriage(patientId: string): void {
+    this.lookupActiveEncounter(patientId, (enc) => this.triageEncounter.set(enc));
+  }
+
+  onTriageCompleted(): void {
+    this.triageEncounter.set(null);
+    this.loadAll();
+  }
+
+  /**
+   * Look up the most recent non-completed encounter for a patient and open the intake dialog.
+   */
+  openIntake(patientId: string): void {
+    this.lookupActiveEncounter(patientId, (enc) => this.intakeEncounter.set(enc));
+  }
+
+  onIntakeCompleted(): void {
+    this.intakeEncounter.set(null);
+    this.loadAll();
+  }
+
+  /**
+   * Shared helper: find an active encounter for a patient, then invoke a callback.
+   */
+  private lookupActiveEncounter(
+    patientId: string,
+    callback: (enc: EncounterResponse) => void,
+  ): void {
+    this.encounterLookupInProgress.set(true);
+    this.encounterService.list({ patientId }).subscribe({
+      next: (encounters) => {
+        this.encounterLookupInProgress.set(false);
+        const active = encounters.find((e) => e.status !== 'COMPLETED' && e.status !== 'CANCELLED');
+        if (active) {
+          callback(active);
+        } else {
+          this.toast.error('No active encounter found for this patient.');
+        }
+      },
+      error: () => {
+        this.encounterLookupInProgress.set(false);
+        this.toast.error('Failed to look up encounter.');
       },
     });
   }

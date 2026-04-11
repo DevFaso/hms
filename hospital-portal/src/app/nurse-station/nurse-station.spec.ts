@@ -5,12 +5,14 @@ import { of, Subject, Subscription } from 'rxjs';
 import { NurseStationComponent } from './nurse-station';
 import { NurseTaskService } from '../services/nurse-task.service';
 import { ToastService } from '../core/toast.service';
+import { EncounterService } from '../services/encounter.service';
 
 describe('NurseStationComponent — two-tier polling', () => {
   let component: NurseStationComponent;
   let nurseServiceSpy: jasmine.SpyObj<NurseTaskService>;
   let toastSpy: jasmine.SpyObj<ToastService>;
   let routerSpy: jasmine.SpyObj<Router>;
+  let encounterSpy: jasmine.SpyObj<EncounterService>;
 
   beforeEach(async () => {
     nurseServiceSpy = jasmine.createSpyObj('NurseTaskService', [
@@ -28,6 +30,10 @@ describe('NurseStationComponent — two-tier polling', () => {
     ]);
     toastSpy = jasmine.createSpyObj('ToastService', ['info', 'success', 'error', 'warn']);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
+    encounterSpy = jasmine.createSpyObj('EncounterService', ['list']);
+    encounterSpy.list.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 } as any),
+    );
 
     // All service methods return empty observables by default
     nurseServiceSpy.getVitalsDue.and.returnValue(of([]));
@@ -48,6 +54,7 @@ describe('NurseStationComponent — two-tier polling', () => {
         { provide: NurseTaskService, useValue: nurseServiceSpy },
         { provide: ToastService, useValue: toastSpy },
         { provide: Router, useValue: routerSpy },
+        { provide: EncounterService, useValue: encounterSpy },
       ],
     }).compileComponents();
 

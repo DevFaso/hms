@@ -24,6 +24,7 @@ import lombok.ToString;
 import lombok.EqualsAndHashCode;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.Objects;
 
@@ -101,6 +102,19 @@ public class Appointment extends BaseEntity {
 
     @Column(name = "notes", length = 2048)
     private String notes;
+
+    /** Timestamp when the patient was checked in by the receptionist (MVP 1). */
+    @Column(name = "checked_in_at")
+    private LocalDateTime checkedInAt;
+
+    /** Whether the patient completed pre-check-in via the patient portal (MVP 4). */
+    @Column(name = "pre_checked_in", nullable = false)
+    @Builder.Default
+    private Boolean preCheckedIn = false;
+
+    /** Timestamp when the patient submitted pre-check-in (MVP 4). */
+    @Column(name = "pre_checkin_timestamp")
+    private LocalDateTime preCheckinTimestamp;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by",

@@ -33,6 +33,9 @@ import com.example.hms.payload.dto.portal.NotificationPreferenceDTO;
 import com.example.hms.payload.dto.portal.NotificationPreferenceUpdateDTO;
 import com.example.hms.payload.dto.portal.PatientDocumentRequestDTO;
 import com.example.hms.payload.dto.portal.PatientDocumentResponseDTO;
+import com.example.hms.payload.dto.portal.PreCheckInRequestDTO;
+import com.example.hms.payload.dto.portal.PreCheckInResponseDTO;
+import com.example.hms.payload.dto.portal.QuestionnaireDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyResponseDTO;
 import com.example.hms.service.NotificationService;
@@ -662,5 +665,33 @@ public class PatientPortalController {
             @Valid @RequestBody List<NotificationPreferenceUpdateDTO> updates) {
         List<NotificationPreferenceDTO> prefs = portalService.updateMyNotificationPreferences(auth, updates);
         return ResponseEntity.ok(ApiResponseWrapper.success(prefs));
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MVP 4 — Pre-Visit Questionnaires & Pre-Check-In
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Operation(summary = "Get questionnaires for an upcoming appointment",
+            description = "Returns active questionnaires assigned to the appointment's hospital and department")
+    @GetMapping("/appointments/{appointmentId}/questionnaires")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<QuestionnaireDTO>>> getQuestionnaires(
+            Authentication auth, @PathVariable UUID appointmentId) {
+        List<QuestionnaireDTO> questionnaires = portalService.getQuestionnairesForAppointment(auth, appointmentId);
+        return ResponseEntity.ok(ApiResponseWrapper.success(questionnaires));
+    }
+
+    @Operation(summary = "Submit pre-check-in",
+            description = "Patient submits demographics updates, questionnaire responses, and consent before their visit")
+    @PostMapping("/appointments/{appointmentId}/pre-checkin")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<PreCheckInResponseDTO>> submitPreCheckIn(
+            Authentication auth,
+            @PathVariable UUID appointmentId,
+            @Valid @RequestBody PreCheckInRequestDTO dto) {
+        // Ensure the path variable and body match
+        dto.setAppointmentId(appointmentId);
+        PreCheckInResponseDTO result = portalService.submitPreCheckIn(auth, dto);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponseWrapper.success(result));
     }
 }

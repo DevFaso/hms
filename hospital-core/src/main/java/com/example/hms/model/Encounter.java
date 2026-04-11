@@ -107,6 +107,46 @@ public class Encounter extends BaseEntity {
     @Column(name = "notes", length = 2048)
     private String notes;
 
+    /** Timestamp when the patient physically arrived / was checked in (MVP 1). */
+    @Column(name = "arrival_timestamp")
+    private LocalDateTime arrivalTimestamp;
+
+    /** Chief complaint captured at check-in or triage (MVP 1). */
+    @Column(name = "chief_complaint", length = 2048)
+    private String chiefComplaint;
+
+    /** ESI acuity score (1-5) assigned at triage (MVP 2). */
+    @Column(name = "esi_score")
+    private Integer esiScore;
+
+    /** Exam room assignment recorded at triage/rooming (MVP 2). */
+    @Column(name = "room_assignment", length = 100)
+    private String roomAssignment;
+
+    /** Timestamp when triage was completed (MVP 2). */
+    @Column(name = "triage_timestamp")
+    private LocalDateTime triageTimestamp;
+
+    /** Timestamp when patient was roomed (MVP 2). */
+    @Column(name = "roomed_timestamp")
+    private LocalDateTime roomedTimestamp;
+
+    /** Timestamp when nursing intake was completed (MVP 3). */
+    @Column(name = "nursing_intake_timestamp")
+    private LocalDateTime nursingIntakeTimestamp;
+
+    /** Timestamp when the patient was formally checked out (MVP 6). */
+    @Column(name = "checkout_timestamp")
+    private LocalDateTime checkoutTimestamp;
+
+    /** Follow-up / discharge instructions given at checkout (MVP 6). */
+    @Column(name = "follow_up_instructions", columnDefinition = "TEXT")
+    private String followUpInstructions;
+
+    /** Discharge diagnoses stored as JSON array text (MVP 6). */
+    @Column(name = "discharge_diagnoses", columnDefinition = "TEXT")
+    private String dischargeDiagnoses;
+
     @Column(name = "code", nullable = false, unique = true, length = 50)
     private String code;
     

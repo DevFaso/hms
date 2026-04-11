@@ -4,9 +4,12 @@ import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.EncounterStatus;
+import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.InvoiceStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.payload.dto.CheckInRequestDTO;
+import com.example.hms.payload.dto.CheckInResponseDTO;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.AppointmentWaitlist;
 import com.example.hms.model.BillingInvoice;
@@ -66,6 +69,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     private static final String STATUS_WALK_IN = "WALK_IN";
     private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
     private static final String STATUS_COMPLETED = "COMPLETED";
+    private static final String ENTITY_TYPE_ENCOUNTER = "ENCOUNTER";
 
     private final AppointmentRepository appointmentRepo;
     private final EncounterRepository encounterRepo;
@@ -642,7 +646,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                         .eventType(AuditEventType.DATA_UPDATE)
                         .eventDescription("Encounter status update DENIED — encounter not assigned to caller")
                         .resourceId(encounterId.toString())
-                        .entityType("ENCOUNTER")
+                        .entityType(ENTITY_TYPE_ENCOUNTER)
                         .status(AuditStatus.FAILURE)
                         .build());
                 throw new AccessDeniedException("You may only update encounter status for your own patients.");
@@ -658,7 +662,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .eventType(AuditEventType.DATA_UPDATE)
                 .eventDescription("Encounter status updated from " + previousStatus + " to " + status)
                 .resourceId(encounterId.toString())
-                .entityType("ENCOUNTER")
+                .entityType(ENTITY_TYPE_ENCOUNTER)
                 .status(AuditStatus.SUCCESS)
                 .build());
     }
@@ -669,6 +673,99 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .map(s -> s.getAssignment() != null && s.getAssignment().getRole() != null
                         && isPrivilegedRoleCode(s.getAssignment().getRole().getCode()))
                 .orElse(false);
+    }
+
+    // ── MVP 1: Patient Check-In ──────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public CheckInResponseDTO checkInPatient(CheckInRequestDTO request, UUID hospitalId, String actorUsername) {
+        LocalDateTime now = LocalDateTime.now();
+
+        // 1. Resolve appointment (required — walk-in handled by separate endpoint)
+        if (request.getAppointmentId() == null) {
+            throw new IllegalArgumentException("appointmentId is required for check-in");
+        }
+
+        Appointment appointment = appointmentRepo.findById(request.getAppointmentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Appointment not found"));
+
+        // Validate hospital scope
+        if (hospitalId != null && !hospitalId.equals(appointment.getHospital().getId())) {
+            throw new AccessDeniedException("Appointment does not belong to this hospital");
+        }
+
+        // Validate appointment is in a check-in-eligible status
+        AppointmentStatus currentStatus = appointment.getStatus();
+        if (currentStatus != AppointmentStatus.SCHEDULED && currentStatus != AppointmentStatus.CONFIRMED) {
+            throw new IllegalStateException(
+                    "Cannot check in — appointment status is " + currentStatus
+                    + ". Only SCHEDULED or CONFIRMED appointments can be checked in.");
+        }
+
+        // 2. Transition appointment to CHECKED_IN
+        appointment.setStatus(AppointmentStatus.CHECKED_IN);
+        appointment.setCheckedInAt(now);
+        appointmentRepo.save(appointment);
+
+        // 3. Create Encounter with status ARRIVED
+        Patient patient = appointment.getPatient();
+        Staff staff = appointment.getStaff();
+        Hospital hospital = appointment.getHospital();
+
+        Encounter encounter = new Encounter();
+        encounter.setPatient(patient);
+        encounter.setStaff(staff);
+        encounter.setHospital(hospital);
+        encounter.setAppointment(appointment);
+        encounter.setDepartment(appointment.getDepartment());
+        encounter.setAssignment(appointment.getAssignment());
+        encounter.setEncounterType(EncounterType.CONSULTATION);
+        encounter.setEncounterDate(now);
+        encounter.setStatus(EncounterStatus.ARRIVED);
+        encounter.setArrivalTimestamp(now);
+        encounter.setCode(encounter.generateEncounterCode());
+        encounter.setCreatedBy(actorUsername);
+
+        if (request.getChiefComplaint() != null && !request.getChiefComplaint().isBlank()) {
+            encounter.setChiefComplaint(request.getChiefComplaint());
+        }
+        if (request.getNotes() != null && !request.getNotes().isBlank()) {
+            encounter.setNotes(request.getNotes());
+        }
+
+        encounterRepo.save(encounter);
+
+        // 4. Audit trail
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .userName(actorUsername)
+                .eventType(AuditEventType.DATA_UPDATE)
+                .eventDescription("Patient checked in for appointment " + appointment.getId()
+                        + ". Encounter " + encounter.getCode() + " created with status ARRIVED."
+                        + (request.isIdentityConfirmed() ? " Identity confirmed." : "")
+                        + (request.isInsuranceVerified() ? " Insurance verified." : ""))
+                .resourceId(encounter.getId().toString())
+                .entityType(ENTITY_TYPE_ENCOUNTER)
+                .status(AuditStatus.SUCCESS)
+                .build());
+
+        log.info("Patient {} checked in for appointment {}. Encounter {} created [actor={}]",
+                patient.getId(), appointment.getId(), encounter.getCode(), actorUsername);
+
+        // 5. Build response
+        String patientName = patient.getFirstName() + " " + patient.getLastName();
+        return CheckInResponseDTO.builder()
+                .appointmentId(appointment.getId())
+                .appointmentStatus(appointment.getStatus())
+                .encounterId(encounter.getId())
+                .encounterCode(encounter.getCode())
+                .encounterStatus(encounter.getStatus())
+                .patientId(patient.getId())
+                .patientName(patientName)
+                .arrivalTimestamp(encounter.getArrivalTimestamp())
+                .chiefComplaint(encounter.getChiefComplaint())
+                .message("Patient " + patientName + " successfully checked in")
+                .build();
     }
 
     private boolean isPrivilegedRoleCode(String roleCode) {

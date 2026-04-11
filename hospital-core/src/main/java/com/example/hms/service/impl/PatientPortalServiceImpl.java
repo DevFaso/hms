@@ -57,8 +57,17 @@ import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.RefillRequestRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.repository.QuestionnaireRepository;
+import com.example.hms.repository.QuestionnaireResponseRepository;
 import com.example.hms.service.AppointmentService;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.mapper.QuestionnaireMapper;
+import com.example.hms.model.Questionnaire;
+import com.example.hms.model.QuestionnaireResponse;
+import com.example.hms.payload.dto.portal.QuestionnaireDTO;
+import com.example.hms.payload.dto.portal.QuestionnaireSubmissionDTO;
+import com.example.hms.payload.dto.portal.PreCheckInRequestDTO;
+import com.example.hms.payload.dto.portal.PreCheckInResponseDTO;
 import com.example.hms.service.BillingInvoiceService;
 import com.example.hms.service.ConsultationService;
 import com.example.hms.service.DischargeSummaryService;
@@ -139,6 +148,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.repository.UserRepository userRepository;
     private final com.example.hms.service.NotificationService notificationService;
     private final EmailService emailService;
+
+    // MVP 4 additions
+    private final QuestionnaireRepository questionnaireRepository;
+    private final QuestionnaireResponseRepository questionnaireResponseRepository;
+    private final QuestionnaireMapper questionnaireMapper;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -1131,5 +1145,164 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         UUID userId = authUtils.resolveUserId(auth)
                 .orElseThrow(() -> new BusinessException(MSG_UNABLE_RESOLVE_USER));
         return notificationService.updatePreferences(userId, updates);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // MVP 4 — Pre-Visit Questionnaires & Pre-Check-In
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<QuestionnaireDTO> getQuestionnairesForAppointment(Authentication auth, UUID appointmentId) {
+        UUID patientId = resolvePatientId(auth);
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("appointment.notfound", appointmentId));
+
+        // Ownership check — patient can only see their own appointment's questionnaires
+        if (!appointment.getPatient().getId().equals(patientId)) {
+            throw new BusinessException("You do not have access to this appointment.");
+        }
+
+        // Find active questionnaires for the appointment's hospital + department
+        List<Questionnaire> questionnaires;
+        if (appointment.getDepartment() != null) {
+            questionnaires = questionnaireRepository
+                    .findByHospital_IdAndDepartment_IdAndActiveTrue(
+                            appointment.getHospital().getId(),
+                            appointment.getDepartment().getId());
+        } else {
+            questionnaires = questionnaireRepository
+                    .findByHospital_IdAndActiveTrue(appointment.getHospital().getId());
+        }
+
+        // Also include hospital-wide questionnaires (department_id IS NULL)
+        if (appointment.getDepartment() != null) {
+            List<Questionnaire> hospitalWide = questionnaireRepository
+                    .findByHospital_IdAndActiveTrue(appointment.getHospital().getId())
+                    .stream()
+                    .filter(q -> q.getDepartment() == null)
+                    .toList();
+            // Merge, avoiding duplicates
+            java.util.Set<UUID> ids = questionnaires.stream()
+                    .map(Questionnaire::getId)
+                    .collect(java.util.stream.Collectors.toSet());
+            List<Questionnaire> combined = new java.util.ArrayList<>(questionnaires);
+            for (Questionnaire q : hospitalWide) {
+                if (!ids.contains(q.getId())) {
+                    combined.add(q);
+                }
+            }
+            questionnaires = combined;
+        }
+
+        return questionnaires.stream()
+                .map(questionnaireMapper::toDto)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public PreCheckInResponseDTO submitPreCheckIn(Authentication auth, PreCheckInRequestDTO dto) {
+        UUID patientId = resolvePatientId(auth);
+        Patient patient = patientRepository.findById(patientId)
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", patientId));
+
+        Appointment appointment = appointmentRepository.findById(dto.getAppointmentId())
+                .orElseThrow(() -> new ResourceNotFoundException("appointment.notfound", dto.getAppointmentId()));
+
+        // Ownership check
+        if (!appointment.getPatient().getId().equals(patientId)) {
+            throw new BusinessException("You do not have access to this appointment.");
+        }
+
+        // Only allow pre-check-in for upcoming SCHEDULED/CONFIRMED appointments
+        if (appointment.getStatus() != com.example.hms.enums.AppointmentStatus.SCHEDULED
+                && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CONFIRMED) {
+            throw new IllegalStateException(
+                    "Pre-check-in is only available for SCHEDULED or CONFIRMED appointments. Current: "
+                            + appointment.getStatus());
+        }
+
+        // Validate timing: 1-7 days before appointment
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.time.LocalDate apptDate = appointment.getAppointmentDate();
+        long daysUntil = java.time.temporal.ChronoUnit.DAYS.between(today, apptDate);
+        if (daysUntil < 0 || daysUntil > 7) {
+            throw new BusinessException("Pre-check-in is available 1–7 days before your appointment.");
+        }
+
+        // 1) Update demographics if provided
+        boolean demographicsUpdated = updatePatientDemographics(patient, dto);
+
+        // 2) Process questionnaire responses
+        int qrCount = 0;
+        if (dto.getQuestionnaireResponses() != null) {
+            for (QuestionnaireSubmissionDTO sub : dto.getQuestionnaireResponses()) {
+                Questionnaire questionnaire = questionnaireRepository.findById(sub.getQuestionnaireId())
+                        .orElseThrow(() -> new ResourceNotFoundException(
+                                "questionnaire.notfound", sub.getQuestionnaireId()));
+
+                // Idempotency: skip if already submitted
+                if (!questionnaireResponseRepository.existsByQuestionnaire_IdAndAppointment_Id(
+                        questionnaire.getId(), appointment.getId())) {
+                    QuestionnaireResponse qr = QuestionnaireResponse.builder()
+                            .questionnaire(questionnaire)
+                            .patient(patient)
+                            .appointment(appointment)
+                            .responses(sub.getResponses())
+                            .submittedAt(java.time.LocalDateTime.now())
+                            .build();
+                    questionnaireResponseRepository.save(qr);
+                    qrCount++;
+                }
+            }
+        }
+
+        // 3) Mark appointment as pre-checked-in
+        appointment.setPreCheckedIn(true);
+        appointment.setPreCheckinTimestamp(java.time.LocalDateTime.now());
+        appointmentRepository.save(appointment);
+
+        log.info("Patient {} completed pre-check-in for appointment {}", patientId, appointment.getId());
+
+        return PreCheckInResponseDTO.builder()
+                .appointmentId(appointment.getId())
+                .appointmentStatus(appointment.getStatus().name())
+                .preCheckedIn(true)
+                .preCheckinTimestamp(appointment.getPreCheckinTimestamp())
+                .questionnaireResponsesSubmitted(qrCount)
+                .demographicsUpdated(demographicsUpdated)
+                .build();
+    }
+
+    /**
+     * Apply optional demographics updates from the pre-check-in form to the patient record.
+     */
+    private boolean updatePatientDemographics(Patient patient, PreCheckInRequestDTO dto) {
+        boolean changed = false;
+
+        if (dto.getPhoneNumber() != null && !dto.getPhoneNumber().isBlank()) {
+            patient.setPhoneNumberPrimary(dto.getPhoneNumber());
+            changed = true;
+        }
+        if (dto.getEmail() != null && !dto.getEmail().isBlank()) {
+            patient.setEmail(dto.getEmail());
+            changed = true;
+        }
+        if (dto.getAddressLine1() != null) { patient.setAddressLine1(dto.getAddressLine1()); changed = true; }
+        if (dto.getAddressLine2() != null) { patient.setAddressLine2(dto.getAddressLine2()); changed = true; }
+        if (dto.getCity() != null) { patient.setCity(dto.getCity()); changed = true; }
+        if (dto.getState() != null) { patient.setState(dto.getState()); changed = true; }
+        if (dto.getZipCode() != null) { patient.setZipCode(dto.getZipCode()); changed = true; }
+        if (dto.getCountry() != null) { patient.setCountry(dto.getCountry()); changed = true; }
+
+        if (dto.getEmergencyContactName() != null) { patient.setEmergencyContactName(dto.getEmergencyContactName()); changed = true; }
+        if (dto.getEmergencyContactPhone() != null) { patient.setEmergencyContactPhone(dto.getEmergencyContactPhone()); changed = true; }
+        if (dto.getEmergencyContactRelationship() != null) { patient.setEmergencyContactRelationship(dto.getEmergencyContactRelationship()); changed = true; }
+
+        if (changed) {
+            patientRepository.save(patient);
+        }
+        return changed;
     }
 }

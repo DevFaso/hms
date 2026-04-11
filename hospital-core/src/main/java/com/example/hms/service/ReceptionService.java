@@ -1,6 +1,8 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.EncounterStatus;
+import com.example.hms.payload.dto.CheckInRequestDTO;
+import com.example.hms.payload.dto.CheckInResponseDTO;
 import com.example.hms.payload.dto.DuplicateCandidateDTO;
 import com.example.hms.payload.dto.EligibilityAttestationRequestDTO;
 import com.example.hms.payload.dto.FlowBoardDTO;
@@ -50,4 +52,7 @@ public interface ReceptionService {
 
     // ── MVP 11: Flow board ────────────────────────────────────────────────────
     void updateEncounterStatus(UUID encounterId, EncounterStatus status, UUID hospitalId, String callerUsername);
+
+    // ── MVP 1: Patient Check-In ───────────────────────────────────────────────
+    CheckInResponseDTO checkInPatient(CheckInRequestDTO request, UUID hospitalId, String actorUsername);
 }

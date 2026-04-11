@@ -664,7 +664,7 @@ class PatientPortalControllerPhase2Test {
             UUID hospitalId = UUID.randomUUID();
             UUID deptId = UUID.randomUUID();
             Map<String, Object> dept = Map.of("id", deptId, "name", "Cardiology");
-            when(portalService.getDepartmentsForHospital(eq(hospitalId)))
+            when(portalService.getDepartmentsForHospital(hospitalId))
                     .thenReturn(List.of(dept));
 
             mockMvc.perform(get("/me/patient/booking/hospitals/" + hospitalId + "/departments")
@@ -695,7 +695,7 @@ class PatientPortalControllerPhase2Test {
                     "fullName", "Jane Doe",
                     "role", "Doctor"
             );
-            when(portalService.getProvidersForDepartment(eq(hospitalId), eq(deptId)))
+            when(portalService.getProvidersForDepartment(hospitalId, deptId))
                     .thenReturn(List.of(provider));
 
             mockMvc.perform(get("/me/patient/booking/hospitals/" + hospitalId
@@ -712,7 +712,7 @@ class PatientPortalControllerPhase2Test {
         void getProviders_empty() throws Exception {
             UUID hospitalId = UUID.randomUUID();
             UUID deptId = UUID.randomUUID();
-            when(portalService.getProvidersForDepartment(eq(hospitalId), eq(deptId)))
+            when(portalService.getProvidersForDepartment(hospitalId, deptId))
                     .thenReturn(List.of());
 
             mockMvc.perform(get("/me/patient/booking/hospitals/" + hospitalId

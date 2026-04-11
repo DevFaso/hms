@@ -52,6 +52,16 @@ public class AppointmentResponseDTO {
         private UUID departmentId;
         private String departmentName;
         private AppointmentStatus status;
+
+    /** Timestamp when the patient was checked in (MVP 1). */
+    private LocalDateTime checkedInAt;
+
+    /** Whether the patient completed pre-check-in via the patient portal (MVP 4). */
+    private Boolean preCheckedIn;
+
+    /** Timestamp when the patient submitted pre-check-in (MVP 4). */
+    private LocalDateTime preCheckinTimestamp;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -1,6 +1,22 @@
 Summary
 Fixing 15 remaining confirmed findings across the receptionist → nurse → doctor workflow (2 already fixed in develop@6ffb30a). No new features — targeted, surgical fixes to 6 backend files, 3 frontend files. Every fix requires a corresponding test before it is marked done.
 
+## MVP Implementation Progress
+
+| MVP | Title | Status | Date | Notes |
+|---|---|---|---|---|
+| 1 | Patient Check-In & Arrival | ✅ Complete | 2026-04-11 | V36 migration, 7 new files, 13 modified files, 7 backend + 3 frontend tests |
+| 2 | Triage & Rooming | ✅ Complete | 2026-04-11 | V37 migration, 6 new files, 10 modified files, 5 backend + 7 frontend tests |
+| 3 | Nursing Intake Flowsheet | ✅ Complete | 2026-04-10 | V38 migration, 4 new files, 14 modified files, 6 backend + 9 frontend tests, dialog integration into nurse-station |
+| 4 | Pre-Visit Questionnaire | ✅ Complete | 2026-04-11 | V39 migration, 8 new files, 12 modified files, 15 backend + 12 frontend tests, pre-checkin wizard in patient portal |
+| 5 | Patient Tracker Board | ✅ Complete | 2026-04-12 | No migration (aggregation only), 8 new files, 2 modified files, 10 backend + 14 frontend tests |
+| 6 | Check-Out & AVS | ✅ Complete | 2026-04-13 | V40 migration, 5 new files, 12 modified files, 21 backend + 21 frontend tests, checkout dialog on patient tracker |
+| 7 | In-Basket & Results | ✅ Complete | 2026-04-14 | V41 migration, 10 new files, 4 modified files, 15 backend + 23 frontend tests, in-basket panel on doctor dashboard |
+
+---
+
+## Workflow Enhancement Tasks (Prior Sprint)
+
 Last synced: develop@6ffb30a (pulled 2026-04-09)
 Branch: feature/WF-enhancement @ edce5a0d (pushed 2026-04-09)
 PR review fixes committed (outside this tasklist scope): JPQL CAST removal, computeWalkInStatus TRIAGE gap, i18n toasts (lab-results + admissions), NurseTaskServiceImplTest stub alignment, yamllint CI exclusions.

@@ -238,6 +238,20 @@ export class ShellComponent implements OnInit, OnDestroy {
         permission: 'Access Nurse Station',
       },
       {
+        icon: 'view_kanban',
+        label: 'Patient Tracker',
+        translationKey: 'NAV.PATIENT_TRACKER',
+        route: '/patient-tracker',
+        permission: 'View Patient Records',
+      },
+      {
+        icon: 'inbox',
+        label: 'In-Basket',
+        translationKey: 'NAV.IN_BASKET',
+        route: '/in-basket',
+        permission: 'View Patient Records',
+      },
+      {
         icon: 'radiology',
         label: 'Imaging',
         translationKey: 'NAV.IMAGING',

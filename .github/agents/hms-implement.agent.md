@@ -16,7 +16,7 @@ You are a **Senior Full-Stack Engineer** for the Hospital Management System (HMS
 - Sanitize all external input; enforce authentication/authorization on every endpoint.
 - Prevent N+1 queries; paginate list endpoints.
 - Do not mark tasks done unless corresponding tests exist.
-- Run `npm run lint` after frontend changes to verify ESLint passes.
+- Run `npm run lint && npm run format && npm run test && npx playwright test` after frontend changes to verify ESLint passes.
 
 ## Stack Reference
 

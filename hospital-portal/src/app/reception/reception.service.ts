@@ -17,6 +17,7 @@ export interface ReceptionDashboardSummary {
 export type QueueStatus =
   | 'SCHEDULED'
   | 'CONFIRMED'
+  | 'CHECKED_IN'
   | 'ARRIVED'
   | 'IN_PROGRESS'
   | 'NO_SHOW'
@@ -144,6 +145,31 @@ export interface WaitlistEntryResponse {
   createdBy: string | null;
 }
 
+// ── MVP 1: Check-In types ───────────────────────────────────────────────────
+
+export interface CheckInRequest {
+  appointmentId: string;
+  patientId?: string | null;
+  chiefComplaint?: string | null;
+  copayAmount?: number | null;
+  identityConfirmed?: boolean;
+  insuranceVerified?: boolean;
+  notes?: string | null;
+}
+
+export interface CheckInResponse {
+  appointmentId: string;
+  appointmentStatus: string;
+  encounterId: string;
+  encounterCode: string;
+  encounterStatus: string;
+  patientId: string;
+  patientName: string;
+  arrivalTimestamp: string;
+  chiefComplaint: string | null;
+  message: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class ReceptionService {
   private readonly http = inject(HttpClient);
@@ -248,5 +274,11 @@ export class ReceptionService {
 
   updateEncounterStatus(encounterId: string, status: string): Observable<void> {
     return this.http.patch<void>(`${this.base}/encounters/${encounterId}/status`, { status });
+  }
+
+  // ── MVP 1: Patient Check-In ──────────────────────────────────────────────
+
+  checkInPatient(request: CheckInRequest): Observable<CheckInResponse> {
+    return this.http.post<CheckInResponse>(`${this.base}/check-in`, request);
   }
 }

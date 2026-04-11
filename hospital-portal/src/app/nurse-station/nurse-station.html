@@ -474,6 +474,24 @@
                     <span class="material-symbols-outlined">edit_note</span>
                     {{ 'NURSE.VITALS' | translate }}
                   </button>
+                  <button
+                    class="action-btn action-triage"
+                    (click)="openTriage(p.patientId)"
+                    [disabled]="encounterLookupInProgress()"
+                    [title]="'TRIAGE.TITLE' | translate"
+                  >
+                    <span class="material-symbols-outlined">emergency</span>
+                    {{ 'TRIAGE.TITLE' | translate }}
+                  </button>
+                  <button
+                    class="action-btn action-intake"
+                    (click)="openIntake(p.patientId)"
+                    [disabled]="encounterLookupInProgress()"
+                    [title]="'INTAKE.TITLE' | translate"
+                  >
+                    <span class="material-symbols-outlined">clinical_notes</span>
+                    {{ 'INTAKE.TITLE' | translate }}
+                  </button>
                   @if (p.patientId) {
                     <a
                       class="action-btn action-view"
@@ -1376,4 +1394,22 @@
       </div>
     </div>
   </div>
+}
+
+<!-- ═══════════ TRIAGE DIALOG (MVP 2) ═══════════ -->
+@if (triageEncounter()) {
+  <app-triage-form
+    [encounter]="triageEncounter()!"
+    (dismissed)="triageEncounter.set(null)"
+    (triageCompleted)="onTriageCompleted()"
+  ></app-triage-form>
+}
+
+<!-- ═══════════ NURSING INTAKE DIALOG (MVP 3) ═══════════ -->
+@if (intakeEncounter()) {
+  <app-nursing-intake-form
+    [encounter]="intakeEncounter()!"
+    (dismissed)="intakeEncounter.set(null)"
+    (intakeCompleted)="onIntakeCompleted()"
+  ></app-nursing-intake-form>
 }

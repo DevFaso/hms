@@ -1,0 +1,214 @@
+<div
+  class="intake-overlay"
+  (click)="dismissed.emit()"
+  (keydown.escape)="dismissed.emit()"
+  tabindex="-1"
+>
+  <div
+    class="intake-dialog"
+    (click)="$event.stopPropagation()"
+    (keydown)="$event.stopPropagation()"
+    tabindex="-1"
+  >
+    <header class="intake-dialog__header">
+      <h3>{{ 'INTAKE.TITLE' | translate }}</h3>
+      <button class="btn-close" (click)="dismissed.emit()" aria-label="Close">&times;</button>
+    </header>
+
+    <!-- Patient summary -->
+    <div class="intake-dialog__patient-info" *ngIf="encounter">
+      <div class="info-row">
+        <span class="label">{{ 'INTAKE.PATIENT' | translate }}:</span>
+        <span class="value">{{ encounter.patientFullName || encounter.patientName }}</span>
+      </div>
+      <div class="info-row">
+        <span class="label">{{ 'INTAKE.ENCOUNTER' | translate }}:</span>
+        <span class="value">{{ encounter.id | slice: 0 : 8 }}</span>
+      </div>
+    </div>
+
+    <!-- Intake form -->
+    <form class="intake-dialog__form" (ngSubmit)="submit()">
+      <!-- Chief complaint -->
+      <fieldset class="form-section">
+        <legend>{{ 'INTAKE.CHIEF_COMPLAINT' | translate }}</legend>
+        <div class="form-group">
+          <textarea
+            id="chiefComplaint"
+            rows="2"
+            [ngModel]="chiefComplaint()"
+            (ngModelChange)="chiefComplaint.set($event)"
+            name="chiefComplaint"
+            placeholder="Detail the reason for visit..."
+          ></textarea>
+        </div>
+      </fieldset>
+
+      <!-- Allergy reconciliation -->
+      <fieldset class="form-section">
+        <legend>{{ 'INTAKE.ALLERGIES' | translate }}</legend>
+        <div class="allergy-list">
+          <div
+            class="allergy-row"
+            *ngFor="let allergy of allergies(); let i = index; trackBy: trackByIndex"
+          >
+            <input
+              type="text"
+              [ngModel]="allergy.allergenDisplay"
+              (ngModelChange)="allergy.allergenDisplay = $event"
+              [name]="'allergen_' + i"
+              placeholder="Allergen name *"
+            />
+            <input
+              type="text"
+              [ngModel]="allergy.category"
+              (ngModelChange)="allergy.category = $event"
+              [name]="'allergyCategory_' + i"
+              placeholder="Category"
+            />
+            <select
+              [ngModel]="allergy.severity"
+              (ngModelChange)="allergy.severity = $event"
+              [name]="'allergySeverity_' + i"
+              [attr.aria-label]="'Allergy severity for row ' + (i + 1)"
+            >
+              <option value="">Severity</option>
+              <option value="MILD">Mild</option>
+              <option value="MODERATE">Moderate</option>
+              <option value="SEVERE">Severe</option>
+            </select>
+            <input
+              type="text"
+              [ngModel]="allergy.reaction"
+              (ngModelChange)="allergy.reaction = $event"
+              [name]="'allergyReaction_' + i"
+              placeholder="Reaction"
+            />
+            <button
+              type="button"
+              class="btn-remove"
+              (click)="removeAllergy(i)"
+              aria-label="Remove allergy"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+        <button type="button" class="btn-add" (click)="addAllergy()">
+          + {{ 'INTAKE.ADD_ALLERGY' | translate }}
+        </button>
+      </fieldset>
+
+      <!-- Medication reconciliation -->
+      <fieldset class="form-section">
+        <legend>{{ 'INTAKE.MEDICATIONS' | translate }}</legend>
+        <div class="medication-list">
+          <div
+            class="medication-row"
+            *ngFor="let med of medications(); let i = index; trackBy: trackByIndex"
+          >
+            <input
+              type="text"
+              [ngModel]="med.medicationName"
+              (ngModelChange)="med.medicationName = $event"
+              [name]="'medName_' + i"
+              placeholder="Medication name *"
+            />
+            <input
+              type="text"
+              [ngModel]="med.dosage"
+              (ngModelChange)="med.dosage = $event"
+              [name]="'medDosage_' + i"
+              placeholder="Dosage"
+            />
+            <input
+              type="text"
+              [ngModel]="med.frequency"
+              (ngModelChange)="med.frequency = $event"
+              [name]="'medFrequency_' + i"
+              placeholder="Frequency"
+            />
+            <input
+              type="text"
+              [ngModel]="med.route"
+              (ngModelChange)="med.route = $event"
+              [name]="'medRoute_' + i"
+              placeholder="Route"
+            />
+            <label class="checkbox-label">
+              <input
+                type="checkbox"
+                [ngModel]="med.stillTaking"
+                (ngModelChange)="med.stillTaking = $event"
+                [name]="'medStillTaking_' + i"
+              />
+              Still taking
+            </label>
+            <button
+              type="button"
+              class="btn-remove"
+              (click)="removeMedication(i)"
+              aria-label="Remove medication"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+        <button type="button" class="btn-add" (click)="addMedication()">
+          + {{ 'INTAKE.ADD_MEDICATION' | translate }}
+        </button>
+      </fieldset>
+
+      <!-- Nursing assessment -->
+      <fieldset class="form-section">
+        <legend>{{ 'INTAKE.NURSING_ASSESSMENT' | translate }}</legend>
+        <div class="form-group">
+          <label for="nursingNotes">{{ 'INTAKE.ASSESSMENT_NOTES' | translate }}</label>
+          <textarea
+            id="nursingNotes"
+            rows="3"
+            [ngModel]="nursingAssessmentNotes()"
+            (ngModelChange)="nursingAssessmentNotes.set($event)"
+            name="nursingAssessmentNotes"
+            placeholder="Nursing assessment notes..."
+          ></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="painAssessment">{{ 'INTAKE.PAIN_ASSESSMENT' | translate }}</label>
+          <textarea
+            id="painAssessment"
+            rows="2"
+            [ngModel]="painAssessment()"
+            (ngModelChange)="painAssessment.set($event)"
+            name="painAssessment"
+            placeholder="Pain scale, location, quality..."
+          ></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="fallRisk">{{ 'INTAKE.FALL_RISK' | translate }}</label>
+          <textarea
+            id="fallRisk"
+            rows="2"
+            [ngModel]="fallRiskDetail()"
+            (ngModelChange)="fallRiskDetail.set($event)"
+            name="fallRiskDetail"
+            placeholder="Morse Fall Scale result, risk level..."
+          ></textarea>
+        </div>
+      </fieldset>
+
+      <!-- Actions -->
+      <footer class="intake-dialog__actions">
+        <button type="button" class="btn btn-secondary" (click)="dismissed.emit()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
+          <span *ngIf="saving()">{{ 'COMMON.SAVING' | translate }}...</span>
+          <span *ngIf="!saving()">{{ 'INTAKE.SUBMIT' | translate }}</span>
+        </button>
+      </footer>
+    </form>
+  </div>
+</div>

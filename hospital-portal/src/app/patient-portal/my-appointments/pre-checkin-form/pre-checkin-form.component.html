@@ -1,0 +1,354 @@
+<div class="pre-checkin-overlay" (click)="close()" (keydown.escape)="close()" tabindex="-1">
+  <div
+    class="pre-checkin-panel"
+    tabindex="-1"
+    (click)="$event.stopPropagation()"
+    (keydown)="$event.stopPropagation()"
+  >
+    <!-- Header -->
+    <div class="panel-header">
+      <h3>{{ 'PRE_CHECKIN.TITLE' | translate }}</h3>
+      <button
+        class="close-btn"
+        (click)="close()"
+        [attr.aria-label]="'PRE_CHECKIN.CLOSE' | translate"
+      >
+        &times;
+      </button>
+    </div>
+
+    <!-- Success message -->
+    @if (successMessage()) {
+      <output class="success-banner"> <span class="icon">✓</span> {{ successMessage() }} </output>
+    }
+
+    <!-- Error message -->
+    @if (errorMessage()) {
+      <div class="error-banner" role="alert"><span class="icon">⚠</span> {{ errorMessage() }}</div>
+    }
+
+    <!-- Step indicators -->
+    <div class="steps-indicator" role="tablist" aria-label="Pre-check-in steps">
+      <button
+        type="button"
+        class="step-btn"
+        [class.active]="step() === 'demographics'"
+        (click)="goToStep('demographics')"
+        role="tab"
+        [attr.aria-selected]="step() === 'demographics'"
+      >
+        <span class="dot">1</span>
+        <span class="label">{{ 'PRE_CHECKIN.STEP_DEMOGRAPHICS' | translate }}</span>
+      </button>
+      <div class="step-line" aria-hidden="true"></div>
+      <button
+        type="button"
+        class="step-btn"
+        [class.active]="step() === 'questionnaires'"
+        (click)="goToStep('questionnaires')"
+        role="tab"
+        [attr.aria-selected]="step() === 'questionnaires'"
+      >
+        <span class="dot">2</span>
+        <span class="label">{{ 'PRE_CHECKIN.STEP_QUESTIONNAIRES' | translate }}</span>
+      </button>
+      <div class="step-line" aria-hidden="true"></div>
+      <button
+        type="button"
+        class="step-btn"
+        [class.active]="step() === 'review'"
+        (click)="goToStep('review')"
+        role="tab"
+        [attr.aria-selected]="step() === 'review'"
+      >
+        <span class="dot">3</span>
+        <span class="label">{{ 'PRE_CHECKIN.STEP_REVIEW' | translate }}</span>
+      </button>
+    </div>
+
+    <!-- Step 1: Demographics -->
+    @if (step() === 'demographics') {
+      <div class="step-content">
+        <p class="step-description">{{ 'PRE_CHECKIN.STEP_DESCRIPTION' | translate }}</p>
+
+        <div class="form-section">
+          <h4>{{ 'PRE_CHECKIN.CONTACT_INFO' | translate }}</h4>
+          <div class="form-row">
+            <label for="phone">{{ 'PRE_CHECKIN.PHONE' | translate }}</label>
+            <input
+              id="phone"
+              type="tel"
+              [(ngModel)]="phoneNumber"
+              placeholder="e.g. (555) 123-4567"
+            />
+          </div>
+          <div class="form-row">
+            <label for="email">{{ 'PRE_CHECKIN.EMAIL' | translate }}</label>
+            <input
+              id="email"
+              type="email"
+              [(ngModel)]="email"
+              placeholder="e.g. patient@example.com"
+            />
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h4>{{ 'PRE_CHECKIN.ADDRESS' | translate }}</h4>
+          <div class="form-row">
+            <label for="address">{{ 'PRE_CHECKIN.ADDRESS_LINE1' | translate }}</label>
+            <input
+              id="address"
+              type="text"
+              [(ngModel)]="addressLine1"
+              placeholder="Street address"
+            />
+          </div>
+          <div class="form-grid-3">
+            <div class="form-row">
+              <label for="city">{{ 'PRE_CHECKIN.CITY' | translate }}</label>
+              <input id="city" type="text" [(ngModel)]="city" />
+            </div>
+            <div class="form-row">
+              <label for="state">{{ 'PRE_CHECKIN.STATE' | translate }}</label>
+              <input id="state" type="text" [(ngModel)]="state" />
+            </div>
+            <div class="form-row">
+              <label for="zip">{{ 'PRE_CHECKIN.ZIP' | translate }}</label>
+              <input id="zip" type="text" [(ngModel)]="zipCode" />
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h4>{{ 'PRE_CHECKIN.EMERGENCY_CONTACT' | translate }}</h4>
+          <div class="form-row">
+            <label for="ecName">{{ 'PRE_CHECKIN.EC_NAME' | translate }}</label>
+            <input id="ecName" type="text" [(ngModel)]="emergencyContactName" />
+          </div>
+          <div class="form-grid-2">
+            <div class="form-row">
+              <label for="ecPhone">{{ 'PRE_CHECKIN.EC_PHONE' | translate }}</label>
+              <input id="ecPhone" type="tel" [(ngModel)]="emergencyContactPhone" />
+            </div>
+            <div class="form-row">
+              <label for="ecRelation">{{ 'PRE_CHECKIN.EC_RELATIONSHIP' | translate }}</label>
+              <input id="ecRelation" type="text" [(ngModel)]="emergencyContactRelationship" />
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h4>{{ 'PRE_CHECKIN.INSURANCE' | translate }}</h4>
+          <div class="form-row">
+            <label for="insProvider">{{ 'PRE_CHECKIN.INS_PROVIDER' | translate }}</label>
+            <input id="insProvider" type="text" [(ngModel)]="insuranceProvider" />
+          </div>
+          <div class="form-grid-2">
+            <div class="form-row">
+              <label for="insMember">{{ 'PRE_CHECKIN.INS_MEMBER_ID' | translate }}</label>
+              <input id="insMember" type="text" [(ngModel)]="insuranceMemberId" />
+            </div>
+            <div class="form-row">
+              <label for="insPlan">{{ 'PRE_CHECKIN.INS_PLAN' | translate }}</label>
+              <input id="insPlan" type="text" [(ngModel)]="insurancePlan" />
+            </div>
+          </div>
+        </div>
+
+        <div class="step-actions">
+          <button class="btn-secondary" (click)="close()">
+            {{ 'PRE_CHECKIN.CANCEL' | translate }}
+          </button>
+          <button class="btn-primary" (click)="goToStep('questionnaires')">
+            {{ 'PRE_CHECKIN.NEXT' | translate }}
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- Step 2: Questionnaires -->
+    @if (step() === 'questionnaires') {
+      <div class="step-content">
+        @if (questionnaires().length === 0) {
+          <p class="no-data">{{ 'PRE_CHECKIN.NO_QUESTIONNAIRES' | translate }}</p>
+        } @else {
+          @for (q of questionnaires(); track q.id) {
+            <div class="questionnaire-card">
+              <h4>{{ q.title }}</h4>
+              @if (q.description) {
+                <p class="q-description">{{ q.description }}</p>
+              }
+              @for (question of parsedQuestions().get(q.id) ?? []; track question.id) {
+                <div class="question-row">
+                  <span class="q-label">
+                    {{ question.text }}
+                    @if (question.required) {
+                      <span class="required">*</span>
+                    }
+                  </span>
+
+                  @switch (question.type) {
+                    @case ('YES_NO') {
+                      <div class="yesno-toggle">
+                        <label>
+                          <input
+                            type="radio"
+                            title="Yes"
+                            [name]="q.id + '-' + question.id"
+                            [checked]="answers().get(q.id)?.[question.id] === true"
+                            (change)="onAnswerChange(q.id, question.id, true)"
+                          />
+                          {{ 'PRE_CHECKIN.YES' | translate }}
+                        </label>
+                        <label>
+                          <input
+                            type="radio"
+                            title="No"
+                            [name]="q.id + '-' + question.id"
+                            [checked]="answers().get(q.id)?.[question.id] === false"
+                            (change)="onAnswerChange(q.id, question.id, false)"
+                          />
+                          {{ 'PRE_CHECKIN.NO' | translate }}
+                        </label>
+                      </div>
+                    }
+                    @case ('TEXT') {
+                      <label class="sr-only" [attr.for]="q.id + '-text-' + question.id">{{
+                        question.text
+                      }}</label>
+                      <input
+                        type="text"
+                        [id]="q.id + '-text-' + question.id"
+                        [attr.placeholder]="question.text"
+                        [title]="question.text"
+                        [value]="answers().get(q.id)?.[question.id] ?? ''"
+                        (input)="onAnswerChange(q.id, question.id, $any($event.target).value)"
+                      />
+                    }
+                    @case ('NUMBER') {
+                      <label class="sr-only" [attr.for]="q.id + '-num-' + question.id">{{
+                        question.text
+                      }}</label>
+                      <input
+                        type="number"
+                        [id]="q.id + '-num-' + question.id"
+                        [attr.placeholder]="question.text"
+                        title="Numeric answer"
+                        [value]="answers().get(q.id)?.[question.id] ?? ''"
+                        (input)="onAnswerChange(q.id, question.id, +$any($event.target).value)"
+                      />
+                    }
+                    @default {
+                      <label class="sr-only" [attr.for]="q.id + '-def-' + question.id">{{
+                        question.text
+                      }}</label>
+                      <input
+                        type="text"
+                        [id]="q.id + '-def-' + question.id"
+                        [attr.placeholder]="question.text"
+                        [title]="question.text"
+                        [value]="answers().get(q.id)?.[question.id] ?? ''"
+                        (input)="onAnswerChange(q.id, question.id, $any($event.target).value)"
+                      />
+                    }
+                  }
+                </div>
+              }
+            </div>
+          }
+        }
+
+        <div class="step-actions">
+          <button class="btn-secondary" (click)="goToStep('demographics')">
+            {{ 'PRE_CHECKIN.BACK' | translate }}
+          </button>
+          <button class="btn-primary" (click)="goToStep('review')">
+            {{ 'PRE_CHECKIN.NEXT' | translate }}
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- Step 3: Review & Submit -->
+    @if (step() === 'review') {
+      <div class="step-content">
+        <div class="review-section">
+          <h4>{{ 'PRE_CHECKIN.APPOINTMENT_SECTION' | translate }}</h4>
+          <p>
+            {{ appointment?.department }} — {{ appointment?.date | date: 'fullDate' }} at
+            {{ appointment?.startTime }}
+          </p>
+        </div>
+
+        @if (phoneNumber || email || addressLine1) {
+          <div class="review-section">
+            <h4>{{ 'PRE_CHECKIN.UPDATED_DEMOGRAPHICS' | translate }}</h4>
+            @if (phoneNumber) {
+              <p>
+                <strong>{{ 'PRE_CHECKIN.PHONE_LABEL' | translate }}:</strong> {{ phoneNumber }}
+              </p>
+            }
+            @if (email) {
+              <p>
+                <strong>{{ 'PRE_CHECKIN.EMAIL_LABEL' | translate }}:</strong> {{ email }}
+              </p>
+            }
+            @if (addressLine1) {
+              <p>
+                <strong>{{ 'PRE_CHECKIN.ADDRESS_LABEL' | translate }}:</strong> {{ addressLine1 }},
+                {{ city }} {{ state }} {{ zipCode }}
+              </p>
+            }
+            @if (emergencyContactName) {
+              <p>
+                <strong>{{ 'PRE_CHECKIN.EMERGENCY_CONTACT_LABEL' | translate }}:</strong>
+                {{ emergencyContactName }} ({{ emergencyContactRelationship }}) —
+                {{ emergencyContactPhone }}
+              </p>
+            }
+            @if (insuranceProvider) {
+              <p>
+                <strong>{{ 'PRE_CHECKIN.INSURANCE_LABEL' | translate }}:</strong>
+                {{ insuranceProvider }} — {{ insurancePlan }}
+              </p>
+            }
+          </div>
+        }
+
+        @if (questionnaires().length > 0) {
+          <div class="review-section">
+            <h4>{{ 'PRE_CHECKIN.QUESTIONNAIRES_COMPLETED' | translate }}</h4>
+            @for (q of questionnaires(); track q.id) {
+              <p>✓ {{ q.title }}</p>
+            }
+          </div>
+        }
+
+        <div class="consent-row">
+          <label>
+            <input
+              type="checkbox"
+              [(ngModel)]="consentAcknowledged"
+              title="Consent acknowledgement"
+            />
+            {{ 'PRE_CHECKIN.CONSENT' | translate }}
+          </label>
+        </div>
+
+        <div class="step-actions">
+          <button class="btn-secondary" (click)="goToStep('questionnaires')">
+            {{ 'PRE_CHECKIN.BACK' | translate }}
+          </button>
+          <button class="btn-primary" [disabled]="!canSubmit" (click)="submit()">
+            @if (saving()) {
+              {{ 'PRE_CHECKIN.SUBMITTING' | translate }}
+            } @else {
+              {{ 'PRE_CHECKIN.SUBMIT' | translate }}
+            }
+          </button>
+        </div>
+      </div>
+    }
+  </div>
+</div>

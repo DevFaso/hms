@@ -22,7 +22,7 @@
         class="booking-form-card"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown)="$event.stopPropagation()"
+        (keydown.escape)="closeBookingForm()"
       >
         <div class="booking-header">
           <h2>
@@ -237,6 +237,28 @@
                   }}</span>
                 </div>
               </div>
+              <!-- Pre-Check-In action -->
+              @if (
+                (appt.status === 'SCHEDULED' || appt.status === 'CONFIRMED') && !appt.preCheckedIn
+              ) {
+                <div class="appt-detail-actions">
+                  <button
+                    class="precheckin-btn"
+                    (click)="openPreCheckIn(appt); $event.stopPropagation()"
+                  >
+                    <span class="material-symbols-outlined">fact_check</span>
+                    Pre-Check-In Online
+                  </button>
+                </div>
+              }
+              @if (appt.preCheckedIn) {
+                <div class="appt-detail-actions">
+                  <span class="precheckin-done">
+                    <span class="material-symbols-outlined">check_circle</span>
+                    Pre-check-in completed
+                  </span>
+                </div>
+              }
             </div>
           }
         }
@@ -323,5 +345,14 @@
         }
       </section>
     }
+  }
+
+  <!-- Pre-Check-In Overlay -->
+  @if (showPreCheckIn()) {
+    <app-pre-checkin-form
+      [appointment]="preCheckInAppointment()"
+      (dismissed)="closePreCheckIn()"
+      (preCheckinCompleted)="onPreCheckInCompleted()"
+    />
   }
 </div>
