@@ -11,11 +11,19 @@ import {
   SchedulingProvider,
 } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { PreCheckinFormComponent } from './pre-checkin-form/pre-checkin-form.component';
 
 @Component({
   selector: 'app-my-appointments',
   standalone: true,
-  imports: [CommonModule, DatePipe, EnumLabelPipe, TranslateModule, FormsModule],
+  imports: [
+    CommonModule,
+    DatePipe,
+    EnumLabelPipe,
+    TranslateModule,
+    FormsModule,
+    PreCheckinFormComponent,
+  ],
   templateUrl: './my-appointments.component.html',
   styleUrls: ['./my-appointments.component.scss', '../patient-portal-pages.scss'],
 })
@@ -33,6 +41,10 @@ export class MyAppointmentsComponent implements OnInit {
   bookingLoading = signal(false);
   bookingError = signal<string | null>(null);
   bookingSuccess = signal(false);
+
+  // ── Pre-check-in state ──────────────────────────────────────────
+  showPreCheckIn = signal(false);
+  preCheckInAppointment = signal<PortalAppointment | null>(null);
 
   hospitals = signal<SchedulingHospital[]>([]);
   departments = signal<SchedulingDepartment[]>([]);
@@ -66,6 +78,23 @@ export class MyAppointmentsComponent implements OnInit {
 
   toggleExpand(id: string): void {
     this.expandedId.set(this.expandedId() === id ? null : id);
+  }
+
+  // ── Pre-check-in actions ──────────────────────────────────────────
+
+  openPreCheckIn(appt: PortalAppointment): void {
+    this.preCheckInAppointment.set(appt);
+    this.showPreCheckIn.set(true);
+  }
+
+  closePreCheckIn(): void {
+    this.showPreCheckIn.set(false);
+    this.preCheckInAppointment.set(null);
+  }
+
+  onPreCheckInCompleted(): void {
+    this.closePreCheckIn();
+    this.loadAppointments();
   }
 
   // ── Booking form actions ─────────────────────────────────────────

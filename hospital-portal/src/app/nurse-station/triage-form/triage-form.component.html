@@ -1,0 +1,254 @@
+<div
+  class="triage-overlay"
+  (click)="dismissed.emit()"
+  (keydown.escape)="dismissed.emit()"
+  tabindex="-1"
+>
+  <div
+    class="triage-dialog"
+    (click)="$event.stopPropagation()"
+    (keydown)="$event.stopPropagation()"
+    tabindex="-1"
+  >
+    <header class="triage-dialog__header">
+      <h3>{{ 'TRIAGE.TITLE' | translate }}</h3>
+      <button class="btn-close" (click)="dismissed.emit()" aria-label="Close">&times;</button>
+    </header>
+
+    <!-- Patient summary -->
+    <div class="triage-dialog__patient-info" *ngIf="encounter">
+      <div class="info-row">
+        <span class="label">{{ 'TRIAGE.PATIENT' | translate }}:</span>
+        <span class="value">{{ encounter.patientFullName || encounter.patientName }}</span>
+      </div>
+      <div class="info-row">
+        <span class="label">{{ 'TRIAGE.ENCOUNTER' | translate }}:</span>
+        <span class="value">{{ encounter.id | slice: 0 : 8 }}</span>
+      </div>
+      <div class="info-row" *ngIf="encounter.chiefComplaint">
+        <span class="label">{{ 'TRIAGE.CHIEF_COMPLAINT_CURRENT' | translate }}:</span>
+        <span class="value">{{ encounter.chiefComplaint }}</span>
+      </div>
+    </div>
+
+    <!-- Triage form -->
+    <form class="triage-dialog__form" (ngSubmit)="submit()">
+      <!-- ESI Score (required) -->
+      <fieldset class="form-section">
+        <legend>{{ 'TRIAGE.ACUITY' | translate }}</legend>
+        <div class="form-group">
+          <label for="esiScore">{{ 'TRIAGE.ESI_SCORE' | translate }} *</label>
+          <select
+            id="esiScore"
+            [ngModel]="esiScore()"
+            (ngModelChange)="esiScore.set($event)"
+            name="esiScore"
+            required
+          >
+            <option *ngFor="let opt of esiOptions" [ngValue]="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
+        </div>
+      </fieldset>
+
+      <!-- Chief complaint -->
+      <fieldset class="form-section">
+        <legend>{{ 'TRIAGE.ASSESSMENT' | translate }}</legend>
+        <div class="form-group">
+          <label for="chiefComplaint">{{ 'TRIAGE.CHIEF_COMPLAINT' | translate }}</label>
+          <textarea
+            id="chiefComplaint"
+            rows="2"
+            [ngModel]="chiefComplaint()"
+            (ngModelChange)="chiefComplaint.set($event)"
+            name="chiefComplaint"
+            placeholder="Reason for visit..."
+          ></textarea>
+        </div>
+      </fieldset>
+
+      <!-- Vital signs -->
+      <fieldset class="form-section">
+        <legend>{{ 'TRIAGE.VITAL_SIGNS' | translate }}</legend>
+
+        <div class="vitals-grid">
+          <div class="form-group">
+            <label for="temperature">{{ 'TRIAGE.TEMPERATURE' | translate }} (°C)</label>
+            <input
+              id="temperature"
+              type="number"
+              step="0.1"
+              min="30"
+              max="45"
+              [ngModel]="temperatureCelsius()"
+              (ngModelChange)="temperatureCelsius.set($event)"
+              name="temperatureCelsius"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="heartRate">{{ 'TRIAGE.HEART_RATE' | translate }} (bpm)</label>
+            <input
+              id="heartRate"
+              type="number"
+              min="20"
+              max="300"
+              [ngModel]="heartRateBpm()"
+              (ngModelChange)="heartRateBpm.set($event)"
+              name="heartRateBpm"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="respiratoryRate">{{ 'TRIAGE.RESPIRATORY_RATE' | translate }} (bpm)</label>
+            <input
+              id="respiratoryRate"
+              type="number"
+              min="4"
+              max="60"
+              [ngModel]="respiratoryRateBpm()"
+              (ngModelChange)="respiratoryRateBpm.set($event)"
+              name="respiratoryRateBpm"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="systolicBp">{{ 'TRIAGE.SYSTOLIC_BP' | translate }} (mmHg)</label>
+            <input
+              id="systolicBp"
+              type="number"
+              min="40"
+              max="300"
+              [ngModel]="systolicBpMmHg()"
+              (ngModelChange)="systolicBpMmHg.set($event)"
+              name="systolicBpMmHg"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="diastolicBp">{{ 'TRIAGE.DIASTOLIC_BP' | translate }} (mmHg)</label>
+            <input
+              id="diastolicBp"
+              type="number"
+              min="20"
+              max="200"
+              [ngModel]="diastolicBpMmHg()"
+              (ngModelChange)="diastolicBpMmHg.set($event)"
+              name="diastolicBpMmHg"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="spo2">{{ 'TRIAGE.SPO2' | translate }} (%)</label>
+            <input
+              id="spo2"
+              type="number"
+              min="50"
+              max="100"
+              [ngModel]="spo2Percent()"
+              (ngModelChange)="spo2Percent.set($event)"
+              name="spo2Percent"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="weight">{{ 'TRIAGE.WEIGHT' | translate }} (kg)</label>
+            <input
+              id="weight"
+              type="number"
+              step="0.1"
+              min="0.5"
+              max="500"
+              [ngModel]="weightKg()"
+              (ngModelChange)="weightKg.set($event)"
+              name="weightKg"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="height">{{ 'TRIAGE.HEIGHT' | translate }} (cm)</label>
+            <input
+              id="height"
+              type="number"
+              step="0.1"
+              min="20"
+              max="300"
+              [ngModel]="heightCm()"
+              (ngModelChange)="heightCm.set($event)"
+              name="heightCm"
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="painScale">{{ 'TRIAGE.PAIN_SCALE' | translate }} (0-10)</label>
+            <input
+              id="painScale"
+              type="number"
+              min="0"
+              max="10"
+              [ngModel]="painScale()"
+              (ngModelChange)="painScale.set($event)"
+              name="painScale"
+            />
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Fall risk -->
+      <fieldset class="form-section">
+        <legend>{{ 'TRIAGE.FALL_RISK' | translate }}</legend>
+        <div class="form-group checkbox-group">
+          <label>
+            <input
+              type="checkbox"
+              [checked]="fallRisk()"
+              (change)="fallRisk.set($any($event.target).checked)"
+            />
+            {{ 'TRIAGE.FALL_RISK_FLAG' | translate }}
+          </label>
+        </div>
+        <div class="form-group" *ngIf="fallRisk()">
+          <label for="fallRiskScore">{{ 'TRIAGE.FALL_RISK_SCORE' | translate }}</label>
+          <input
+            id="fallRiskScore"
+            type="number"
+            min="0"
+            max="100"
+            [ngModel]="fallRiskScore()"
+            (ngModelChange)="fallRiskScore.set($event)"
+            name="fallRiskScore"
+          />
+        </div>
+      </fieldset>
+
+      <!-- Room assignment -->
+      <fieldset class="form-section">
+        <legend>{{ 'TRIAGE.ROOMING' | translate }}</legend>
+        <div class="form-group">
+          <label for="roomAssignment">{{ 'TRIAGE.ROOM_ASSIGNMENT' | translate }}</label>
+          <input
+            id="roomAssignment"
+            type="text"
+            maxlength="100"
+            [ngModel]="roomAssignment()"
+            (ngModelChange)="roomAssignment.set($event)"
+            name="roomAssignment"
+            placeholder="e.g., ER-Bay-3"
+          />
+        </div>
+      </fieldset>
+
+      <!-- Actions -->
+      <div class="triage-dialog__actions">
+        <button type="button" class="btn btn-secondary" (click)="dismissed.emit()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
+          <span *ngIf="saving()">{{ 'COMMON.SAVING' | translate }}...</span>
+          <span *ngIf="!saving()">{{ 'TRIAGE.SUBMIT' | translate }}</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

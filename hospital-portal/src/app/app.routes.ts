@@ -642,6 +642,44 @@ export const routes: Routes = [
           import('./nurse-station/nurse-station').then((m) => m.NurseStationComponent),
       },
 
+      // Patient Tracker Board (MVP 5)
+      {
+        path: 'patient-tracker',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_DOCTOR',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_RECEPTIONIST',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./patient-tracker/patient-tracker.component').then(
+            (m) => m.PatientTrackerComponent,
+          ),
+      },
+
+      // Provider In-Basket (MVP 7)
+      {
+        path: 'in-basket',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_DOCTOR',
+            'ROLE_NURSE',
+            'ROLE_MIDWIFE',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./in-basket/in-basket-page').then((m) => m.InBasketPageComponent),
+      },
+
       // Imaging
       {
         path: 'imaging',

@@ -249,6 +249,10 @@ public class EncounterServiceImpl implements EncounterService {
     private final ObgynReferralRepository obgynReferralRepository;
     private final UserRepository userRepository;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final com.example.hms.repository.PatientVitalSignRepository patientVitalSignRepository;
+    private final com.example.hms.mapper.PatientVitalSignMapper patientVitalSignMapper;
+    private final com.example.hms.mapper.CheckOutMapper checkOutMapper;
+    private final com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
 
         private void recordHistory(Encounter encounter, String changeType, String changedBy, String previousValuesJson) {
             EncounterHistory history = EncounterHistory.builder()
@@ -1151,6 +1155,351 @@ public class EncounterServiceImpl implements EncounterService {
             }
         }
         throw new BusinessException("Provide " + label + ".");
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // MVP 2 — Atomic triage submission
+    // ──────────────────────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public com.example.hms.payload.dto.TriageSubmissionResponseDTO submitTriage(
+            UUID encounterId,
+            com.example.hms.payload.dto.TriageSubmissionRequestDTO request,
+            String actorUsername) {
+
+        Encounter encounter = encounterRepository.findById(encounterId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
+                                org.springframework.context.i18n.LocaleContextHolder.getLocale())));
+
+        // Guard: only ARRIVED or TRIAGE encounters may receive triage
+        EncounterStatus current = encounter.getStatus();
+        if (current != EncounterStatus.ARRIVED && current != EncounterStatus.TRIAGE) {
+            throw new BusinessException(
+                    "Cannot submit triage for encounter in status " + current
+                            + ". Expected ARRIVED or TRIAGE.");
+        }
+
+        // (a) Record vital signs as PatientVitalSign
+        com.example.hms.model.PatientVitalSign vital = buildVitalSign(encounter, request, actorUsername);
+        com.example.hms.model.PatientVitalSign savedVital = patientVitalSignRepository.save(vital);
+
+        // (b) Update chief complaint on encounter (override with triage value if provided)
+        if (request.getChiefComplaint() != null && !request.getChiefComplaint().isBlank()) {
+            encounter.setChiefComplaint(request.getChiefComplaint().trim());
+        }
+
+        // (c) Set ESI score and map to EncounterUrgency
+        if (request.getEsiScore() != null) {
+            encounter.setEsiScore(request.getEsiScore());
+            encounter.setUrgency(mapEsiToUrgency(request.getEsiScore()));
+        }
+
+        // (d) Room assignment
+        if (request.getRoomAssignment() != null && !request.getRoomAssignment().isBlank()) {
+            encounter.setRoomAssignment(request.getRoomAssignment().trim());
+            encounter.setRoomedTimestamp(LocalDateTime.now());
+        }
+
+        // (e) Transition ARRIVED → TRIAGE → WAITING_FOR_PHYSICIAN
+        LocalDateTime now = LocalDateTime.now();
+        encounter.setTriageTimestamp(now);
+        encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
+
+        Encounter saved = encounterRepository.save(encounter);
+
+        return com.example.hms.payload.dto.TriageSubmissionResponseDTO.builder()
+                .encounterId(saved.getId())
+                .encounterStatus(saved.getStatus().name())
+                .esiScore(saved.getEsiScore())
+                .urgency(saved.getUrgency() != null ? saved.getUrgency().name() : null)
+                .roomAssignment(saved.getRoomAssignment())
+                .triageTimestamp(saved.getTriageTimestamp())
+                .roomedTimestamp(saved.getRoomedTimestamp())
+                .chiefComplaint(saved.getChiefComplaint())
+                .vitalSignId(savedVital.getId())
+                .build();
+    }
+
+    /**
+     * Maps ESI 1-5 to EncounterUrgency.
+     */
+    private com.example.hms.enums.EncounterUrgency mapEsiToUrgency(int esiScore) {
+        return switch (esiScore) {
+            case 1 -> com.example.hms.enums.EncounterUrgency.EMERGENT;
+            case 2 -> com.example.hms.enums.EncounterUrgency.URGENT;
+            case 3 -> com.example.hms.enums.EncounterUrgency.ROUTINE;
+            default -> com.example.hms.enums.EncounterUrgency.LOW; // ESI 4-5
+        };
+    }
+
+    /**
+     * Build a PatientVitalSign entity from the triage request.
+     */
+    private com.example.hms.model.PatientVitalSign buildVitalSign(
+            Encounter encounter,
+            com.example.hms.payload.dto.TriageSubmissionRequestDTO req,
+            String actorUsername) {
+
+        // Resolve recorder staff from username
+        Staff staff = null;
+        UserRoleHospitalAssignment assignment = null;
+        if (actorUsername != null) {
+            User user = userRepository.findByUsername(actorUsername).orElse(null);
+            if (user != null && encounter.getHospital() != null) {
+                staff = staffRepository.findByUserIdAndHospitalId(user.getId(), encounter.getHospital().getId())
+                        .orElse(null);
+                if (staff != null) {
+                    assignment = assignmentRepository
+                            .findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), encounter.getHospital().getId())
+                            .orElse(null);
+                }
+            }
+        }
+
+        return com.example.hms.model.PatientVitalSign.builder()
+                .patient(encounter.getPatient())
+                .hospital(encounter.getHospital())
+                .recordedByStaff(staff)
+                .recordedByAssignment(assignment)
+                .recordedAt(LocalDateTime.now())
+                .source("TRIAGE")
+                .temperatureCelsius(req.getTemperatureCelsius())
+                .heartRateBpm(req.getHeartRateBpm())
+                .respiratoryRateBpm(req.getRespiratoryRateBpm())
+                .systolicBpMmHg(req.getSystolicBpMmHg())
+                .diastolicBpMmHg(req.getDiastolicBpMmHg())
+                .spo2Percent(req.getSpo2Percent())
+                .weightKg(req.getWeightKg())
+                .notes(req.getPainScale() != null ? "Pain scale: " + req.getPainScale() : null)
+                .build();
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // MVP 3 — Nursing Intake Flowsheet
+    // ──────────────────────────────────────────────────────────────
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public com.example.hms.payload.dto.NursingIntakeResponseDTO submitNursingIntake(
+            UUID encounterId,
+            com.example.hms.payload.dto.NursingIntakeRequestDTO request,
+            String actorUsername) {
+
+        Encounter encounter = encounterRepository.findById(encounterId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
+                                org.springframework.context.i18n.LocaleContextHolder.getLocale())));
+
+        // Guard: intake is allowed for encounters that have been triaged or are waiting
+        EncounterStatus current = encounter.getStatus();
+        if (current != EncounterStatus.WAITING_FOR_PHYSICIAN
+                && current != EncounterStatus.TRIAGE
+                && current != EncounterStatus.IN_PROGRESS) {
+            throw new BusinessException(
+                    "Cannot submit nursing intake for encounter in status " + current
+                            + ". Expected WAITING_FOR_PHYSICIAN, TRIAGE, or IN_PROGRESS.");
+        }
+
+        // Resolve recorder staff
+        Staff recorderStaff = resolveStaffFromUsername(actorUsername, encounter.getHospital());
+
+        // (a) Bulk-add/update patient allergies
+        int allergyCount = processAllergies(request, encounter, recorderStaff);
+
+        // (b) Record medication reconciliation entries as a nursing note on the encounter
+        int medicationCount = 0;
+        if (request.getMedications() != null) {
+            medicationCount = request.getMedications().size();
+        }
+
+        // (c) Build a combined nursing assessment note text
+        boolean nursingNoteRecorded = recordNursingNote(request, encounter, medicationCount);
+
+        // (d) Update chief complaint if provided
+        if (request.getChiefComplaint() != null && !request.getChiefComplaint().isBlank()) {
+            encounter.setChiefComplaint(request.getChiefComplaint().trim());
+        }
+
+        // (e) Timestamp intake completion
+        LocalDateTime now = LocalDateTime.now();
+        encounter.setNursingIntakeTimestamp(now);
+
+        encounterRepository.save(encounter);
+
+        return com.example.hms.payload.dto.NursingIntakeResponseDTO.builder()
+                .encounterId(encounter.getId())
+                .encounterStatus(encounter.getStatus().name())
+                .intakeTimestamp(now)
+                .allergyCount(allergyCount)
+                .medicationCount(medicationCount)
+                .nursingNoteRecorded(nursingNoteRecorded)
+                .build();
+    }
+
+    /**
+     * Process allergy entries from the nursing intake request.
+     * Creates new PatientAllergy records for each entry provided.
+     */
+    private int processAllergies(
+            com.example.hms.payload.dto.NursingIntakeRequestDTO request,
+            Encounter encounter,
+            Staff recorderStaff) {
+
+        if (request.getAllergies() == null || request.getAllergies().isEmpty()) {
+            return 0;
+        }
+
+        int count = 0;
+        for (com.example.hms.payload.dto.PatientAllergyRequestDTO allergyReq : request.getAllergies()) {
+            com.example.hms.model.PatientAllergy allergy = com.example.hms.model.PatientAllergy.builder()
+                    .patient(encounter.getPatient())
+                    .hospital(encounter.getHospital())
+                    .recordedBy(recorderStaff)
+                    .allergenDisplay(allergyReq.getAllergenDisplay())
+                    .allergenCode(allergyReq.getAllergenCode())
+                    .category(allergyReq.getCategory())
+                    .severity(allergyReq.getSeverity())
+                    .verificationStatus(allergyReq.getVerificationStatus())
+                    .reaction(allergyReq.getReaction())
+                    .reactionNotes(allergyReq.getReactionNotes())
+                    .onsetDate(allergyReq.getOnsetDate())
+                    .lastOccurrenceDate(allergyReq.getLastOccurrenceDate())
+                    .recordedDate(allergyReq.getRecordedDate() != null
+                            ? allergyReq.getRecordedDate()
+                            : java.time.LocalDate.now())
+                    .sourceSystem("NURSING_INTAKE")
+                    .active(allergyReq.getActive() != null ? allergyReq.getActive() : true)
+                    .build();
+            patientAllergyRepository.save(allergy);
+            count++;
+        }
+        return count;
+    }
+
+    /**
+     * Build and persist a nursing assessment note on the encounter.
+     * Combines nursingAssessmentNotes, painAssessment, fallRiskDetail, and medication
+     * reconciliation into the encounter's notes field.
+     */
+    private boolean recordNursingNote(
+            com.example.hms.payload.dto.NursingIntakeRequestDTO request,
+            Encounter encounter,
+            int medicationCount) {
+
+        StringBuilder noteBuilder = new StringBuilder();
+
+        if (request.getNursingAssessmentNotes() != null && !request.getNursingAssessmentNotes().isBlank()) {
+            noteBuilder.append("[Nursing Assessment]\n").append(request.getNursingAssessmentNotes().trim()).append("\n\n");
+        }
+
+        if (request.getPainAssessment() != null && !request.getPainAssessment().isBlank()) {
+            noteBuilder.append("[Pain Assessment]\n").append(request.getPainAssessment().trim()).append("\n\n");
+        }
+
+        if (request.getFallRiskDetail() != null && !request.getFallRiskDetail().isBlank()) {
+            noteBuilder.append("[Fall Risk]\n").append(request.getFallRiskDetail().trim()).append("\n\n");
+        }
+
+        if (request.getMedications() != null && !request.getMedications().isEmpty()) {
+            noteBuilder.append("[Medication Reconciliation] ").append(medicationCount).append(" medication(s) reported:\n");
+            for (com.example.hms.payload.dto.NursingIntakeRequestDTO.MedicationReconciliationEntry med
+                    : request.getMedications()) {
+                noteBuilder.append("- ").append(med.getMedicationName() != null ? med.getMedicationName() : "Unknown");
+                if (med.getDosage() != null) noteBuilder.append(" ").append(med.getDosage());
+                if (med.getFrequency() != null) noteBuilder.append(" ").append(med.getFrequency());
+                if (!med.isStillTaking()) noteBuilder.append(" (DISCONTINUED)");
+                if (med.getNotes() != null) noteBuilder.append(" — ").append(med.getNotes());
+                noteBuilder.append("\n");
+            }
+            noteBuilder.append("\n");
+        }
+
+        if (noteBuilder.isEmpty()) {
+            return false;
+        }
+
+        // Append to existing notes rather than overwriting
+        String existingNotes = encounter.getNotes() != null ? encounter.getNotes() : "";
+        String combined = existingNotes.isBlank()
+                ? noteBuilder.toString().trim()
+                : existingNotes + "\n\n--- Nursing Intake ---\n" + noteBuilder.toString().trim();
+
+        // Truncate to column limit if needed
+        if (combined.length() > 2048) {
+            combined = combined.substring(0, 2048);
+        }
+        encounter.setNotes(combined);
+
+        return true;
+    }
+
+    /**
+     * MVP 6 — Check-Out & After-Visit Summary.
+     * Atomically: (a) transitions encounter → COMPLETED, (b) transitions linked appointment → COMPLETED,
+     * (c) records checkout timestamp + discharge data, (d) returns AVS.
+     */
+    @Override
+    @Transactional
+    public com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO checkOut(
+            UUID encounterId,
+            com.example.hms.payload.dto.clinical.CheckOutRequestDTO request,
+            String actorUsername) {
+
+        Encounter encounter = encounterRepository.findById(encounterId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, Locale.getDefault())));
+
+        // Guard: only non-terminal encounters may be checked out
+        EncounterStatus current = encounter.getStatus();
+        if (current == EncounterStatus.COMPLETED || current == EncounterStatus.CANCELLED) {
+            throw new BusinessException("Encounter is already " + current.name()
+                + " and cannot be checked out.");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+
+        // (a) Transition encounter → COMPLETED
+        encounter.setStatus(EncounterStatus.COMPLETED);
+        encounter.setCheckoutTimestamp(now);
+
+        // (b) Store discharge data
+        if (request != null) {
+            encounter.setFollowUpInstructions(request.getFollowUpInstructions());
+            if (request.getDischargeDiagnoses() != null && !request.getDischargeDiagnoses().isEmpty()) {
+                encounter.setDischargeDiagnoses(checkOutMapper.serializeDiagnoses(request.getDischargeDiagnoses()));
+            }
+        }
+
+        encounterRepository.save(encounter);
+
+        // (c) Transition linked appointment → COMPLETED
+        Appointment appointment = encounter.getAppointment();
+        if (appointment != null
+                && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.COMPLETED
+                && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CANCELLED) {
+            appointment.setStatus(com.example.hms.enums.AppointmentStatus.COMPLETED);
+            appointmentRepository.save(appointment);
+        }
+
+        // (d) Build and return AVS
+        return checkOutMapper.toAfterVisitSummary(encounter, request, null);
+    }
+
+    /**
+     * Resolve Staff entity from a username and hospital context.
+     */
+    private Staff resolveStaffFromUsername(String username, Hospital hospital) {
+        if (username == null || hospital == null) {
+            return null;
+        }
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) {
+            return null;
+        }
+        return staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId())
+                .orElse(null);
     }
 
 

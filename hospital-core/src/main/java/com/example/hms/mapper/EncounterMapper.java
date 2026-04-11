@@ -38,6 +38,17 @@ public class EncounterMapper {
         dto.setEncounterDate(e.getEncounterDate());
     dto.setStatus(e.getStatus());
         dto.setNotes(nullSafe(e.getNotes()));
+        dto.setArrivalTimestamp(e.getArrivalTimestamp());
+        dto.setChiefComplaint(nullSafe(e.getChiefComplaint()));
+        dto.setEsiScore(e.getEsiScore());
+        dto.setRoomAssignment(nullSafe(e.getRoomAssignment()));
+        dto.setTriageTimestamp(e.getTriageTimestamp());
+        dto.setRoomedTimestamp(e.getRoomedTimestamp());
+        dto.setUrgency(e.getUrgency() != null ? e.getUrgency().name() : null);
+        dto.setNursingIntakeTimestamp(e.getNursingIntakeTimestamp());
+        dto.setCheckoutTimestamp(e.getCheckoutTimestamp());
+        dto.setFollowUpInstructions(nullSafe(e.getFollowUpInstructions()));
+        dto.setDischargeDiagnoses(nullSafe(e.getDischargeDiagnoses()));
         dto.setCreatedAt(e.getCreatedAt());
         dto.setUpdatedAt(e.getUpdatedAt());
 

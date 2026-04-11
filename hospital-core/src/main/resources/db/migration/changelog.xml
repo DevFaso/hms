@@ -449,4 +449,82 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V36: MVP 1 — Patient Check-In & Arrival Workflow
+         - Adds checked_in_at TIMESTAMP to clinical.appointments
+         - Adds arrival_timestamp TIMESTAMP to clinical.encounters
+         - Adds chief_complaint VARCHAR(2048) to clinical.encounters
+         ================================================================= -->
+    <changeSet id="V36-mvp1-checkin-columns" author="hms-team" runOnChange="false">
+        <sqlFile path="V36__mvp1_checkin_columns.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V37: MVP 2 — Triage & Rooming Workflow
+         - Adds esi_score INTEGER to clinical.encounters (CHECK 1-5)
+         - Adds room_assignment VARCHAR(100) to clinical.encounters
+         - Adds triage_timestamp TIMESTAMP to clinical.encounters
+         - Adds roomed_timestamp TIMESTAMP to clinical.encounters
+         - Adds partial indexes on room_assignment and triage_timestamp
+         ================================================================= -->
+    <changeSet id="V37-mvp2-triage-columns" author="hms-team" runOnChange="false">
+        <sqlFile path="V37__mvp2_triage_columns.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V38: MVP 3 — Nursing Intake Flowsheet
+         - Adds nursing_intake_timestamp TIMESTAMP to clinical.encounters
+         - Partial index on nursing_intake_timestamp
+         ================================================================= -->
+    <changeSet id="V38-mvp3-nursing-intake-column" author="hms-team" runOnChange="false">
+        <sqlFile path="V38__mvp3_nursing_intake_column.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V39: MVP 4 — Pre-Visit Questionnaires & Pre-Check-In
+         - New questionnaires table (admin-managed templates)
+         - New questionnaire_responses table (patient-submitted)
+         - Adds pre_checked_in, pre_checkin_timestamp to appointments
+         ================================================================= -->
+    <changeSet id="V39-mvp4-questionnaires-precheckin" author="hms-team" runOnChange="false">
+        <sqlFile path="V39__mvp4_questionnaires_and_precheckin.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V40: MVP 6 — Check-Out & After-Visit Summary (AVS)
+         - Adds checkout_timestamp to encounters
+         - Adds follow_up_instructions (free-text)
+         - Adds discharge_diagnoses (JSON text)
+         ================================================================= -->
+    <changeSet id="V40-mvp6-checkout-avs" author="hms-team" runOnChange="false">
+        <sqlFile path="V40__mvp6_checkout_avs.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V41: MVP 7 — Provider In-Basket & Result Notification
+         - Creates clinical.in_basket_items table
+         - Indexes for recipient, status, priority, reference lookups
+         ================================================================= -->
+    <changeSet id="V41-mvp7-in-basket-items" author="hms-team" runOnChange="false">
+        <sqlFile path="V41__mvp7_in_basket_items.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

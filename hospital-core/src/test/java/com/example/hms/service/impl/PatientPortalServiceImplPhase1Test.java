@@ -110,6 +110,18 @@ class PatientPortalServiceImplPhase1Test {
     @Mock private PatientPrimaryCareService primaryCareService;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private PatientHospitalRegistrationRepository registrationRepository;
+    @Mock private com.example.hms.repository.HospitalRepository hospitalRepository;
+    @Mock private com.example.hms.repository.DepartmentRepository departmentRepository;
+    @Mock private com.example.hms.repository.StaffRepository staffRepository;
+    @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
+    @Mock private com.example.hms.service.StaffAvailabilityService staffAvailabilityService;
+    @Mock private com.example.hms.repository.PatientProxyRepository patientProxyRepository;
+    @Mock private com.example.hms.repository.UserRepository userRepository;
+    @Mock private com.example.hms.service.NotificationService notificationService;
+    @Mock private com.example.hms.service.EmailService emailService;
+    @Mock private com.example.hms.repository.QuestionnaireRepository questionnaireRepository;
+    @Mock private com.example.hms.repository.QuestionnaireResponseRepository questionnaireResponseRepository;
+    @Mock private com.example.hms.mapper.QuestionnaireMapper questionnaireMapper;
 
     @InjectMocks
     private PatientPortalServiceImpl service;

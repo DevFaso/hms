@@ -10,6 +10,12 @@ import com.example.hms.payload.dto.EncounterNoteResponseDTO;
 import com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO;
 import com.example.hms.payload.dto.EncounterNoteAddendumResponseDTO;
 import com.example.hms.payload.dto.EncounterNoteHistoryResponseDTO;
+import com.example.hms.payload.dto.NursingIntakeRequestDTO;
+import com.example.hms.payload.dto.NursingIntakeResponseDTO;
+import com.example.hms.payload.dto.TriageSubmissionRequestDTO;
+import com.example.hms.payload.dto.TriageSubmissionResponseDTO;
+import com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO;
+import com.example.hms.payload.dto.clinical.CheckOutRequestDTO;
 import com.example.hms.service.EncounterService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -214,8 +220,108 @@ public class EncounterController {
     }
 
     // ----------------------------------------------------------
+    // MVP 2 — Triage Submission
+    // ----------------------------------------------------------
+    @PostMapping(value = "/{encounterId}/triage", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_DOCTOR')")
+    @Operation(
+        summary = "Submit triage data for an encounter (MVP 2)",
+        description = "Atomically records vitals, chief complaint, ESI acuity, room assignment, "
+            + "and transitions the encounter from ARRIVED → WAITING_FOR_PHYSICIAN."
+    )
+    public ResponseEntity<TriageSubmissionResponseDTO> submitTriage(
+        @PathVariable UUID encounterId,
+        @Valid @RequestBody TriageSubmissionRequestDTO request,
+        Authentication auth
+    ) {
+        String username = auth.getName();
+        TriageSubmissionResponseDTO response = encounterService.submitTriage(encounterId, request, username);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
+    }
+
+    // ----------------------------------------------------------
+    // MVP 3 — Nursing Intake Flowsheet
+    // ----------------------------------------------------------
+    @PostMapping(value = "/{encounterId}/nursing-intake", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_DOCTOR')")
+    @Operation(
+        summary = "Submit nursing intake data for an encounter (MVP 3)",
+        description = "Atomically records allergy reconciliation, medication reconciliation, "
+            + "nursing assessment notes, pain assessment, and fall risk detail."
+    )
+    public ResponseEntity<NursingIntakeResponseDTO> submitNursingIntake(
+        @PathVariable UUID encounterId,
+        @Valid @RequestBody NursingIntakeRequestDTO request,
+        Authentication auth
+    ) {
+        String username = auth.getName();
+        NursingIntakeResponseDTO response = encounterService.submitNursingIntake(encounterId, request, username);
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
+    }
+
+    // ----------------------------------------------------------
     // Encounter Notes Management
     // ----------------------------------------------------------
+
+    // ----------------------------------------------------------
+    // MVP 6 — Check-Out & After-Visit Summary
+    // ----------------------------------------------------------
+    @PostMapping(value = "/{encounterId}/checkout", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST')")
+    @Operation(
+        summary = "Check out a patient and generate After-Visit Summary (MVP 6)",
+        description = "Atomically transitions encounter → COMPLETED, linked appointment → COMPLETED, "
+            + "records checkout timestamp, discharge diagnoses, follow-up instructions, "
+            + "and returns a comprehensive After-Visit Summary."
+    )
+    public ResponseEntity<AfterVisitSummaryDTO> checkOut(
+        @PathVariable UUID encounterId,
+        @Valid @RequestBody CheckOutRequestDTO request,
+        Authentication auth
+    ) {
+        String username = auth.getName();
+        AfterVisitSummaryDTO avs = encounterService.checkOut(encounterId, request, username);
+        return ResponseEntity.ok(avs);
+    }
+
+    // ----------------------------------------------------------
+    // MVP 6 — Retrieve After-Visit Summary for a completed encounter
+    // ----------------------------------------------------------
+    @GetMapping(value = "/{encounterId}/avs", consumes = MediaType.ALL_VALUE)
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN','ROLE_RECEPTIONIST','ROLE_PATIENT')")
+    @Operation(
+        summary = "Get After-Visit Summary for a completed encounter (MVP 6)",
+        description = "Returns the AVS for a previously checked-out encounter. "
+            + "Patients may access their own encounter's AVS."
+    )
+    public ResponseEntity<AfterVisitSummaryDTO> getAfterVisitSummary(
+        @PathVariable UUID encounterId,
+        Locale locale
+    ) {
+        // Re-use the encounter service to load the encounter and build AVS
+        EncounterResponseDTO enc = encounterService.getEncounterById(encounterId, locale);
+        if (enc.getCheckoutTimestamp() == null) {
+            throw new BusinessException("Encounter has not been checked out yet.");
+        }
+
+        AfterVisitSummaryDTO avs = AfterVisitSummaryDTO.builder()
+            .encounterId(enc.getId())
+            .appointmentId(enc.getAppointmentId())
+            .visitDate(enc.getEncounterDate())
+            .providerName(enc.getStaffName())
+            .departmentName(enc.getDepartmentName())
+            .hospitalName(enc.getHospitalName())
+            .patientId(enc.getPatientId())
+            .patientName(enc.getPatientName())
+            .chiefComplaint(enc.getChiefComplaint())
+            .followUpInstructions(enc.getFollowUpInstructions())
+            .encounterStatus(enc.getStatus() != null ? enc.getStatus().name() : null)
+            .appointmentStatus(enc.getAppointmentStatus())
+            .checkoutTimestamp(enc.getCheckoutTimestamp())
+            .build();
+
+        return ResponseEntity.ok(avs);
+    }
     @PostMapping(value = "/{encounterId}/notes", consumes = MediaType.APPLICATION_JSON_VALUE)
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_HOSPITAL_ADMIN')")
     @Operation(summary = "Create or update encounter note (super-admin, doctor, nurse, midwife, hospital-admin)", 

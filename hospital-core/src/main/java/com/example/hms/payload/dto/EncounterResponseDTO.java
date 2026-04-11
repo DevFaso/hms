@@ -53,6 +53,40 @@ public class EncounterResponseDTO {
     private EncounterStatus status;
     private LocalDateTime encounterDate;
     private String notes;
+
+    /** Timestamp when the patient physically arrived / was checked in (MVP 1). */
+    private LocalDateTime arrivalTimestamp;
+
+    /** Chief complaint captured at check-in or triage (MVP 1). */
+    private String chiefComplaint;
+
+    /** ESI acuity score 1-5 (MVP 2). */
+    private Integer esiScore;
+
+    /** Exam room assignment (MVP 2). */
+    private String roomAssignment;
+
+    /** When triage was completed (MVP 2). */
+    private LocalDateTime triageTimestamp;
+
+    /** When patient was roomed (MVP 2). */
+    private LocalDateTime roomedTimestamp;
+
+    /** Encounter urgency derived from ESI score (MVP 2). */
+    private String urgency;
+
+    /** When nursing intake was completed (MVP 3). */
+    private LocalDateTime nursingIntakeTimestamp;
+
+    /** When the patient was formally checked out (MVP 6). */
+    private LocalDateTime checkoutTimestamp;
+
+    /** Follow-up / discharge instructions (MVP 6). */
+    private String followUpInstructions;
+
+    /** Discharge diagnoses as JSON array text (MVP 6). */
+    private String dischargeDiagnoses;
+
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     

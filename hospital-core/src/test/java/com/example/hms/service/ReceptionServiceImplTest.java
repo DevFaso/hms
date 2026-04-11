@@ -16,6 +16,8 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.PatientInsurance;
 import com.example.hms.model.Staff;
+import com.example.hms.payload.dto.CheckInRequestDTO;
+import com.example.hms.payload.dto.CheckInResponseDTO;
 import com.example.hms.payload.dto.DuplicateCandidateDTO;
 import com.example.hms.payload.dto.EligibilityAttestationRequestDTO;
 import com.example.hms.payload.dto.FlowBoardDTO;
@@ -1011,6 +1013,204 @@ class ReceptionServiceImplTest {
             assertThatThrownBy(() ->
                     service.updateEncounterStatus(encounterId, EncounterStatus.COMPLETED, hospitalId, "doctor1")
             ).isInstanceOf(AccessDeniedException.class);
+        }
+    }
+
+    // ── MVP 1: Patient Check-In Tests ─────────────────────────────────────────
+
+    @Nested
+    @DisplayName("MVP 1 — checkInPatient")
+    class CheckInPatientTests {
+
+        @Test
+        @DisplayName("successfully checks in a SCHEDULED appointment → creates ARRIVED encounter")
+        void checkInScheduledAppointment() {
+            UUID appointmentId = UUID.randomUUID();
+            UUID staffId = UUID.randomUUID();
+
+            Staff staff = mock(Staff.class);
+            lenient().when(staff.getId()).thenReturn(staffId);
+            lenient().when(staff.getHospital()).thenReturn(hospital);
+
+            UserRoleHospitalAssignment assignment = mock(UserRoleHospitalAssignment.class);
+            lenient().when(assignment.getHospital()).thenReturn(hospital);
+
+            Appointment appointment = new Appointment();
+            appointment.setId(appointmentId);
+            appointment.setStatus(AppointmentStatus.SCHEDULED);
+            appointment.setPatient(patient);
+            appointment.setStaff(staff);
+            appointment.setHospital(hospital);
+            appointment.setDepartment(department);
+            appointment.setAssignment(assignment);
+            appointment.setAppointmentDate(today);
+            appointment.setStartTime(LocalTime.of(9, 0));
+            appointment.setEndTime(LocalTime.of(9, 30));
+
+            when(appointmentRepo.findById(appointmentId)).thenReturn(Optional.of(appointment));
+            when(encounterRepo.save(any(Encounter.class))).thenAnswer(inv -> {
+                Encounter e = inv.getArgument(0);
+                e.setId(UUID.randomUUID());
+                return e;
+            });
+            when(appointmentRepo.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointmentId)
+                    .chiefComplaint("Headache for 3 days")
+                    .identityConfirmed(true)
+                    .insuranceVerified(true)
+                    .build();
+
+            CheckInResponseDTO response = service.checkInPatient(request, hospitalId, "receptionist1");
+
+            assertThat(response).isNotNull();
+            assertThat(response.getAppointmentId()).isEqualTo(appointmentId);
+            assertThat(response.getAppointmentStatus()).isEqualTo(AppointmentStatus.CHECKED_IN);
+            assertThat(response.getEncounterStatus()).isEqualTo(EncounterStatus.ARRIVED);
+            assertThat(response.getPatientName()).isEqualTo("John Doe");
+            assertThat(response.getArrivalTimestamp()).isNotNull();
+            assertThat(response.getChiefComplaint()).isEqualTo("Headache for 3 days");
+
+            verify(appointmentRepo).save(any(Appointment.class));
+            verify(encounterRepo).save(any(Encounter.class));
+            verify(auditEventLogService).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("successfully checks in a CONFIRMED appointment")
+        void checkInConfirmedAppointment() {
+            UUID appointmentId = UUID.randomUUID();
+            UUID staffId = UUID.randomUUID();
+
+            Staff staff = mock(Staff.class);
+            lenient().when(staff.getId()).thenReturn(staffId);
+            lenient().when(staff.getHospital()).thenReturn(hospital);
+
+            UserRoleHospitalAssignment assignment = mock(UserRoleHospitalAssignment.class);
+            lenient().when(assignment.getHospital()).thenReturn(hospital);
+
+            Appointment appointment = new Appointment();
+            appointment.setId(appointmentId);
+            appointment.setStatus(AppointmentStatus.CONFIRMED);
+            appointment.setPatient(patient);
+            appointment.setStaff(staff);
+            appointment.setHospital(hospital);
+            appointment.setDepartment(department);
+            appointment.setAssignment(assignment);
+            appointment.setAppointmentDate(today);
+            appointment.setStartTime(LocalTime.of(10, 0));
+            appointment.setEndTime(LocalTime.of(10, 30));
+
+            when(appointmentRepo.findById(appointmentId)).thenReturn(Optional.of(appointment));
+            when(encounterRepo.save(any(Encounter.class))).thenAnswer(inv -> {
+                Encounter e = inv.getArgument(0);
+                e.setId(UUID.randomUUID());
+                return e;
+            });
+            when(appointmentRepo.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointmentId)
+                    .identityConfirmed(true)
+                    .build();
+
+            CheckInResponseDTO response = service.checkInPatient(request, hospitalId, "receptionist1");
+
+            assertThat(response.getAppointmentStatus()).isEqualTo(AppointmentStatus.CHECKED_IN);
+            assertThat(response.getEncounterStatus()).isEqualTo(EncounterStatus.ARRIVED);
+        }
+
+        @Test
+        @DisplayName("throws when appointment not found")
+        void throwsWhenAppointmentNotFound() {
+            UUID appointmentId = UUID.randomUUID();
+            when(appointmentRepo.findById(appointmentId)).thenReturn(Optional.empty());
+
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointmentId)
+                    .identityConfirmed(true)
+                    .build();
+
+            assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("throws when appointment is already COMPLETED")
+        void throwsWhenAppointmentAlreadyCompleted() {
+            UUID appointmentId = UUID.randomUUID();
+
+            Appointment appointment = mock(Appointment.class);
+            when(appointment.getId()).thenReturn(appointmentId);
+            when(appointment.getStatus()).thenReturn(AppointmentStatus.COMPLETED);
+            when(appointment.getHospital()).thenReturn(hospital);
+            when(appointmentRepo.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointmentId)
+                    .identityConfirmed(true)
+                    .build();
+
+            assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("COMPLETED");
+        }
+
+        @Test
+        @DisplayName("throws when appointment is already CHECKED_IN")
+        void throwsWhenAppointmentAlreadyCheckedIn() {
+            UUID appointmentId = UUID.randomUUID();
+
+            Appointment appointment = mock(Appointment.class);
+            when(appointment.getId()).thenReturn(appointmentId);
+            when(appointment.getStatus()).thenReturn(AppointmentStatus.CHECKED_IN);
+            when(appointment.getHospital()).thenReturn(hospital);
+            when(appointmentRepo.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointmentId)
+                    .identityConfirmed(true)
+                    .build();
+
+            assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
+                    .isInstanceOf(IllegalStateException.class)
+                    .hasMessageContaining("CHECKED_IN");
+        }
+
+        @Test
+        @DisplayName("throws when appointmentId is null")
+        void throwsWhenAppointmentIdNull() {
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .identityConfirmed(true)
+                    .build();
+
+            assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining("appointmentId");
+        }
+
+        @Test
+        @DisplayName("throws AccessDeniedException when appointment belongs to different hospital")
+        void throwsWhenAppointmentBelongsToDifferentHospital() {
+            UUID appointmentId = UUID.randomUUID();
+            UUID otherHospitalId = UUID.randomUUID();
+            Hospital otherHospital = mock(Hospital.class);
+            when(otherHospital.getId()).thenReturn(otherHospitalId);
+
+            Appointment appointment = mock(Appointment.class);
+            when(appointment.getId()).thenReturn(appointmentId);
+            when(appointment.getStatus()).thenReturn(AppointmentStatus.SCHEDULED);
+            when(appointment.getHospital()).thenReturn(otherHospital);
+            when(appointmentRepo.findById(appointmentId)).thenReturn(Optional.of(appointment));
+
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointmentId)
+                    .identityConfirmed(true)
+                    .build();
+
+            assertThatThrownBy(() -> service.checkInPatient(request, hospitalId, "receptionist1"))
+                    .isInstanceOf(AccessDeniedException.class);
         }
     }
 }

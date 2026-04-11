@@ -1,0 +1,129 @@
+<section class="in-basket-panel">
+  <!-- Header with badge -->
+  <header class="panel-header">
+    <h3 class="panel-title">
+      <span>{{ 'inBasket.title' | translate }}</span>
+      @if (badgeCount() > 0) {
+        <span class="badge" aria-label="Unread count">{{ badgeCount() }}</span>
+      }
+    </h3>
+    <button
+      class="btn-refresh"
+      (click)="refresh()"
+      [attr.aria-label]="'inBasket.refresh' | translate"
+    >
+      ↻
+    </button>
+  </header>
+
+  <!-- Filter tabs -->
+  <nav class="filter-tabs" aria-label="In-basket filters">
+    <button class="filter-tab" [class.active]="activeFilter() === null" (click)="setFilter(null)">
+      {{ 'inBasket.all' | translate }}
+      <span class="tab-count">{{ summary().totalUnread }}</span>
+    </button>
+    <button
+      class="filter-tab"
+      [class.active]="activeFilter() === 'RESULT'"
+      (click)="setFilter('RESULT')"
+    >
+      🧪 {{ 'inBasket.results' | translate }}
+      <span class="tab-count">{{ summary().resultUnread }}</span>
+    </button>
+    <button
+      class="filter-tab"
+      [class.active]="activeFilter() === 'ORDER'"
+      (click)="setFilter('ORDER')"
+    >
+      📋 {{ 'inBasket.orders' | translate }}
+      <span class="tab-count">{{ summary().orderUnread }}</span>
+    </button>
+    <button
+      class="filter-tab"
+      [class.active]="activeFilter() === 'MESSAGE'"
+      (click)="setFilter('MESSAGE')"
+    >
+      ✉️ {{ 'inBasket.messages' | translate }}
+      <span class="tab-count">{{ summary().messageUnread }}</span>
+    </button>
+    <button
+      class="filter-tab"
+      [class.active]="activeFilter() === 'TASK'"
+      (click)="setFilter('TASK')"
+    >
+      ✅ {{ 'inBasket.tasks' | translate }}
+      <span class="tab-count">{{ summary().taskUnread }}</span>
+    </button>
+  </nav>
+
+  <!-- Loading -->
+  @if (loading()) {
+    <div class="loading-spinner" aria-live="polite">
+      <span class="spinner"></span>
+      <span>{{ 'common.loading' | translate }}</span>
+    </div>
+  }
+
+  <!-- Empty state -->
+  @if (!loading() && filteredItems().length === 0) {
+    <p class="empty-state">{{ 'inBasket.empty' | translate }}</p>
+  }
+
+  <!-- Items list -->
+  @if (!loading() && filteredItems().length > 0) {
+    <ul class="item-list">
+      @for (item of filteredItems(); track trackById($index, item)) {
+        <li
+          class="basket-item"
+          [class.unread]="item.status === 'UNREAD'"
+          [class.acknowledged]="item.status === 'ACKNOWLEDGED'"
+          [ngClass]="priorityClass(item.priority)"
+        >
+          <button class="item-button" (click)="markRead(item)">
+            <span class="item-icon">{{ typeIcon(item.itemType) }}</span>
+            <span class="item-content">
+              <span class="item-header">
+                <span class="item-title">{{ item.title }}</span>
+                @if (item.priority === 'CRITICAL') {
+                  <span class="priority-badge critical">{{ 'inBasket.critical' | translate }}</span>
+                }
+                @if (item.priority === 'URGENT') {
+                  <span class="priority-badge urgent">{{ 'inBasket.urgent' | translate }}</span>
+                }
+              </span>
+              @if (item.body) {
+                <span class="item-body">{{ item.body }}</span>
+              }
+              <span class="item-meta">
+                @if (item.patientName) {
+                  <span class="meta-patient">{{ item.patientName }}</span>
+                }
+                @if (item.orderingProviderName) {
+                  <span class="meta-provider">{{ item.orderingProviderName }}</span>
+                }
+                <span class="meta-time">{{ formatDate(item.createdAt) }}</span>
+              </span>
+            </span>
+          </button>
+          <span class="item-actions">
+            @if (item.status !== 'ACKNOWLEDGED') {
+              <button
+                class="btn-acknowledge"
+                (click)="acknowledgeItem(item)"
+                [attr.aria-label]="'inBasket.acknowledge' | translate"
+              >
+                ✓
+              </button>
+            } @else {
+              <span
+                class="acknowledged-badge"
+                [attr.aria-label]="'inBasket.alreadyAcknowledged' | translate"
+                >✓</span
+              >
+            }
+          </span>
+        </li>
+      }
+    </ul>
+  }
+</section>

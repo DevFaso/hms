@@ -29,6 +29,8 @@ export interface EncounterNoteResponse {
   createdAt: string;
 }
 
+export type EncounterUrgency = 'EMERGENT' | 'URGENT' | 'ROUTINE' | 'LOW';
+
 export interface EncounterResponse {
   id: string;
   patientId: string;
@@ -52,6 +54,13 @@ export interface EncounterResponse {
   status: EncounterStatus;
   encounterDate: string;
   notes: string;
+  arrivalTimestamp: string;
+  chiefComplaint: string;
+  esiScore: number | null;
+  roomAssignment: string;
+  triageTimestamp: string;
+  roomedTimestamp: string;
+  urgency: EncounterUrgency | null;
   createdAt: string;
   updatedAt: string;
   createdBy: string;
@@ -59,6 +68,111 @@ export interface EncounterResponse {
   note: EncounterNoteResponse;
   patientFullName: string;
   staffFullName: string;
+  nursingIntakeTimestamp: string;
+}
+
+export interface TriageSubmissionRequest {
+  temperatureCelsius?: number;
+  heartRateBpm?: number;
+  respiratoryRateBpm?: number;
+  systolicBpMmHg?: number;
+  diastolicBpMmHg?: number;
+  spo2Percent?: number;
+  weightKg?: number;
+  heightCm?: number;
+  painScale?: number;
+  chiefComplaint?: string;
+  esiScore: number;
+  fallRisk?: boolean;
+  fallRiskScore?: number;
+  roomAssignment?: string;
+}
+
+export interface TriageSubmissionResponse {
+  encounterId: string;
+  encounterStatus: EncounterStatus;
+  esiScore: number;
+  urgency: EncounterUrgency;
+  roomAssignment: string;
+  triageTimestamp: string;
+  roomedTimestamp: string;
+  chiefComplaint: string;
+  vitalSignId: string;
+}
+
+export interface MedicationReconciliationEntry {
+  medicationName?: string;
+  dosage?: string;
+  frequency?: string;
+  route?: string;
+  stillTaking?: boolean;
+  notes?: string;
+}
+
+export interface NursingIntakeRequest {
+  allergies?: AllergyEntry[];
+  medications?: MedicationReconciliationEntry[];
+  nursingAssessmentNotes?: string;
+  chiefComplaint?: string;
+  painAssessment?: string;
+  fallRiskDetail?: string;
+}
+
+export interface AllergyEntry {
+  allergenDisplay: string;
+  allergenCode?: string;
+  category?: string;
+  severity?: string;
+  reaction?: string;
+  reactionNotes?: string;
+}
+
+export interface NursingIntakeResponse {
+  encounterId: string;
+  encounterStatus: EncounterStatus;
+  intakeTimestamp: string;
+  allergyCount: number;
+  medicationCount: number;
+  nursingNoteRecorded: boolean;
+}
+
+/* ── MVP 6: Check-Out & AVS ─────────────────────────────────────── */
+
+export interface FollowUpAppointmentRequest {
+  reason: string;
+  preferredDate?: string;
+  notes?: string;
+}
+
+export interface CheckOutRequest {
+  followUpInstructions?: string;
+  dischargeDiagnoses?: string[];
+  prescriptionSummary?: string;
+  referralSummary?: string;
+  patientEducationMaterials?: string;
+  followUpAppointment?: FollowUpAppointmentRequest;
+}
+
+export interface AfterVisitSummary {
+  encounterId: string;
+  appointmentId?: string;
+  visitDate: string;
+  providerName: string;
+  departmentName: string;
+  hospitalName: string;
+  patientId?: string;
+  patientName?: string;
+  chiefComplaint?: string;
+  dischargeDiagnoses: string[];
+  prescriptionSummary?: string;
+  referralSummary?: string;
+  followUpInstructions?: string;
+  patientEducationMaterials?: string;
+  encounterStatus: string;
+  appointmentStatus?: string;
+  checkoutTimestamp: string;
+  followUpAppointmentId?: string;
+  followUpAppointmentDate?: string;
 }
 
 export interface EncounterRequest {
@@ -139,5 +253,28 @@ export class EncounterService {
 
   getNoteHistory(encounterId: string): Observable<EncounterNoteResponse[]> {
     return this.http.get<EncounterNoteResponse[]>(`${this.baseUrl}/${encounterId}/notes/history`);
+  }
+
+  submitTriage(
+    encounterId: string,
+    req: TriageSubmissionRequest,
+  ): Observable<TriageSubmissionResponse> {
+    return this.http.post<TriageSubmissionResponse>(`${this.baseUrl}/${encounterId}/triage`, req);
+  }
+
+  submitNursingIntake(
+    encounterId: string,
+    req: NursingIntakeRequest,
+  ): Observable<NursingIntakeResponse> {
+    return this.http.post<NursingIntakeResponse>(
+      `${this.baseUrl}/${encounterId}/nursing-intake`,
+      req,
+    );
+  }
+
+  checkOut(encounterId: string, req: CheckOutRequest): Observable<AfterVisitSummary> {
+    return this.http
+      .post<{ data: AfterVisitSummary }>(`${this.baseUrl}/${encounterId}/check-out`, req)
+      .pipe(map((res) => res.data));
   }
 }

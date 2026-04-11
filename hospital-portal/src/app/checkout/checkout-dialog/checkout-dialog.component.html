@@ -1,0 +1,230 @@
+<!-- Overlay backdrop -->
+<div class="dialog-overlay" tabindex="-1" (click)="close()" (keydown.escape)="close()">
+  <!-- Dialog panel -->
+  <dialog
+    class="dialog-panel"
+    open
+    aria-labelledby="checkout-title"
+    tabindex="-1"
+    (click)="$event.stopPropagation()"
+    (keydown.escape)="close()"
+  >
+    <!-- Header -->
+    <header class="dialog-header">
+      <h2 id="checkout-title">{{ 'CHECKOUT.TITLE' | translate }}</h2>
+      <button class="btn-close" (click)="close()" [attr.aria-label]="'CHECKOUT.CLOSE' | translate">
+        &times;
+      </button>
+    </header>
+
+    @if (!avs()) {
+      <!-- Checkout Form -->
+      <form class="dialog-body" (ngSubmit)="submit()">
+        @if (encounter) {
+          <div class="patient-banner">
+            <strong>{{ encounter.patientName ?? encounter.patientFullName }}</strong>
+            <span class="encounter-badge">{{ encounter.status }}</span>
+          </div>
+        }
+
+        <fieldset class="form-group">
+          <legend>{{ 'CHECKOUT.DIAGNOSES_LEGEND' | translate }}</legend>
+          <label for="checkout-diagnoses" class="form-label">{{
+            'CHECKOUT.DIAGNOSES_LABEL' | translate
+          }}</label>
+          <textarea
+            id="checkout-diagnoses"
+            class="form-control"
+            rows="3"
+            [ngModel]="dischargeDiagnosesText()"
+            (ngModelChange)="dischargeDiagnosesText.set($event)"
+            name="dischargeDiagnoses"
+            placeholder="e.g. Upper respiratory infection"
+          ></textarea>
+        </fieldset>
+
+        <fieldset class="form-group">
+          <legend>{{ 'CHECKOUT.RX_LEGEND' | translate }}</legend>
+          <label for="checkout-rx" class="form-label">{{ 'CHECKOUT.RX_LABEL' | translate }}</label>
+          <textarea
+            id="checkout-rx"
+            class="form-control"
+            rows="2"
+            [ngModel]="prescriptionSummary()"
+            (ngModelChange)="prescriptionSummary.set($event)"
+            name="prescriptionSummary"
+            placeholder="e.g. Amoxicillin 500mg TID x 7 days"
+          ></textarea>
+
+          <label for="checkout-referrals" class="form-label">{{
+            'CHECKOUT.REFERRAL_LABEL' | translate
+          }}</label>
+          <textarea
+            id="checkout-referrals"
+            class="form-control"
+            rows="2"
+            [ngModel]="referralSummary()"
+            (ngModelChange)="referralSummary.set($event)"
+            name="referralSummary"
+            placeholder="e.g. Cardiology follow-up"
+          ></textarea>
+        </fieldset>
+
+        <fieldset class="form-group">
+          <legend>{{ 'CHECKOUT.INSTRUCTIONS_LEGEND' | translate }}</legend>
+          <label for="checkout-instructions" class="form-label">{{
+            'CHECKOUT.INSTRUCTIONS_LABEL' | translate
+          }}</label>
+          <textarea
+            id="checkout-instructions"
+            class="form-control"
+            rows="3"
+            [ngModel]="followUpInstructions()"
+            (ngModelChange)="followUpInstructions.set($event)"
+            name="followUpInstructions"
+            placeholder="e.g. Return to clinic if symptoms worsen"
+          ></textarea>
+
+          <label for="checkout-education" class="form-label">{{
+            'CHECKOUT.EDUCATION_LABEL' | translate
+          }}</label>
+          <input
+            id="checkout-education"
+            class="form-control"
+            type="text"
+            [ngModel]="patientEducationMaterials()"
+            (ngModelChange)="patientEducationMaterials.set($event)"
+            name="patientEducationMaterials"
+            placeholder="e.g. Medication management handout"
+          />
+        </fieldset>
+
+        <fieldset class="form-group">
+          <legend>{{ 'CHECKOUT.FOLLOWUP_LEGEND' | translate }}</legend>
+          <label for="checkout-fu-reason" class="form-label">{{
+            'CHECKOUT.FOLLOWUP_REASON' | translate
+          }}</label>
+          <input
+            id="checkout-fu-reason"
+            class="form-control"
+            type="text"
+            [ngModel]="followUpReason()"
+            (ngModelChange)="followUpReason.set($event)"
+            name="followUpReason"
+            placeholder="e.g. Recheck in 2 weeks"
+          />
+
+          <label for="checkout-fu-date" class="form-label">{{
+            'CHECKOUT.FOLLOWUP_DATE' | translate
+          }}</label>
+          <input
+            id="checkout-fu-date"
+            class="form-control"
+            type="date"
+            [ngModel]="followUpDate()"
+            (ngModelChange)="followUpDate.set($event)"
+            name="followUpDate"
+          />
+        </fieldset>
+
+        <footer class="dialog-footer">
+          <button type="button" class="btn btn-secondary" (click)="close()">
+            {{ 'CHECKOUT.CANCEL' | translate }}
+          </button>
+          <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
+            @if (saving()) {
+              <span>{{ 'CHECKOUT.CHECKING_OUT' | translate }}</span>
+            } @else {
+              <span>{{ 'CHECKOUT.SUBMIT' | translate }}</span>
+            }
+          </button>
+        </footer>
+      </form>
+    } @else {
+      <!-- AVS Preview -->
+      <div class="dialog-body avs-preview">
+        <h3 class="avs-title">{{ 'CHECKOUT.AVS_TITLE' | translate }}</h3>
+
+        <dl class="avs-details">
+          <div>
+            <dt>{{ 'CHECKOUT.AVS_PATIENT' | translate }}</dt>
+            <dd>{{ avs()!.patientName }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'CHECKOUT.AVS_VISIT_DATE' | translate }}</dt>
+            <dd>{{ avs()!.visitDate | date: 'medium' }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'CHECKOUT.AVS_PROVIDER' | translate }}</dt>
+            <dd>{{ avs()!.providerName }}</dd>
+          </div>
+          <div>
+            <dt>{{ 'CHECKOUT.AVS_DEPARTMENT' | translate }}</dt>
+            <dd>{{ avs()!.departmentName }}</dd>
+          </div>
+
+          @if (avs()!.chiefComplaint) {
+            <div>
+              <dt>{{ 'CHECKOUT.AVS_CHIEF_COMPLAINT' | translate }}</dt>
+              <dd>{{ avs()!.chiefComplaint }}</dd>
+            </div>
+          }
+
+          @if (avs()!.dischargeDiagnoses?.length) {
+            <div>
+              <dt>{{ 'CHECKOUT.AVS_DIAGNOSES' | translate }}</dt>
+              <dd>
+                <ul class="avs-list">
+                  @for (dx of avs()!.dischargeDiagnoses; track dx) {
+                    <li>{{ dx }}</li>
+                  }
+                </ul>
+              </dd>
+            </div>
+          }
+
+          @if (avs()!.prescriptionSummary) {
+            <div>
+              <dt>{{ 'CHECKOUT.AVS_PRESCRIPTIONS' | translate }}</dt>
+              <dd>{{ avs()!.prescriptionSummary }}</dd>
+            </div>
+          }
+
+          @if (avs()!.referralSummary) {
+            <div>
+              <dt>{{ 'CHECKOUT.AVS_REFERRALS' | translate }}</dt>
+              <dd>{{ avs()!.referralSummary }}</dd>
+            </div>
+          }
+
+          @if (avs()!.followUpInstructions) {
+            <div>
+              <dt>{{ 'CHECKOUT.AVS_FOLLOWUP' | translate }}</dt>
+              <dd>{{ avs()!.followUpInstructions }}</dd>
+            </div>
+          }
+
+          @if (avs()!.patientEducationMaterials) {
+            <div>
+              <dt>{{ 'CHECKOUT.AVS_EDUCATION' | translate }}</dt>
+              <dd>{{ avs()!.patientEducationMaterials }}</dd>
+            </div>
+          }
+
+          @if (avs()!.followUpAppointmentDate) {
+            <div>
+              <dt>{{ 'CHECKOUT.AVS_FOLLOWUP_DATE' | translate }}</dt>
+              <dd>{{ avs()!.followUpAppointmentDate }}</dd>
+            </div>
+          }
+        </dl>
+
+        <footer class="dialog-footer">
+          <button type="button" class="btn btn-primary" (click)="close()">
+            {{ 'CHECKOUT.DONE' | translate }}
+          </button>
+        </footer>
+      </div>
+    }
+  </dialog>
+</div>

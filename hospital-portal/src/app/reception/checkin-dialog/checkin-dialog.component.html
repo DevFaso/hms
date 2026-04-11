@@ -1,0 +1,121 @@
+<div
+  class="checkin-dialog-overlay"
+  (click)="dismissed.emit()"
+  (keydown.escape)="dismissed.emit()"
+  tabindex="-1"
+>
+  <div
+    class="checkin-dialog"
+    (click)="$event.stopPropagation()"
+    (keydown)="$event.stopPropagation()"
+    tabindex="-1"
+  >
+    <header class="checkin-dialog__header">
+      <h3>{{ 'RECEPTION.CHECKIN_TITLE' | translate }}</h3>
+      <button class="btn-close" (click)="dismissed.emit()" aria-label="Close">&times;</button>
+    </header>
+
+    <!-- Patient summary strip -->
+    <div class="checkin-dialog__patient-info" *ngIf="queueItem">
+      <div class="info-row">
+        <span class="label">{{ 'RECEPTION.PATIENT_NAME' | translate }}:</span>
+        <span class="value">{{ queueItem.patientName }}</span>
+      </div>
+      <div class="info-row" *ngIf="queueItem.mrn">
+        <span class="label">{{ 'RECEPTION.MRN' | translate }}:</span>
+        <span class="value">{{ queueItem.mrn }}</span>
+      </div>
+      <div class="info-row" *ngIf="queueItem.appointmentTime">
+        <span class="label">{{ 'RECEPTION.APPOINTMENT_TIME' | translate }}:</span>
+        <span class="value">{{ queueItem.appointmentTime }}</span>
+      </div>
+      <div class="info-row" *ngIf="queueItem.providerName">
+        <span class="label">{{ 'RECEPTION.PROVIDER' | translate }}:</span>
+        <span class="value">{{ queueItem.providerName }}</span>
+      </div>
+      <div class="info-row" *ngIf="queueItem.departmentName">
+        <span class="label">{{ 'RECEPTION.DEPARTMENT' | translate }}:</span>
+        <span class="value">{{ queueItem.departmentName }}</span>
+      </div>
+    </div>
+
+    <!-- Check-in form -->
+    <form class="checkin-dialog__form" (ngSubmit)="submit()">
+      <!-- Identity confirmation (required) -->
+      <div class="form-group checkbox-group">
+        <label>
+          <input
+            type="checkbox"
+            [checked]="identityConfirmed()"
+            (change)="identityConfirmed.set($any($event.target).checked)"
+          />
+          {{ 'RECEPTION.IDENTITY_CONFIRMED' | translate }}
+        </label>
+      </div>
+
+      <!-- Insurance verification -->
+      <div class="form-group checkbox-group">
+        <label>
+          <input
+            type="checkbox"
+            [checked]="insuranceVerified()"
+            (change)="insuranceVerified.set($any($event.target).checked)"
+          />
+          {{ 'RECEPTION.INSURANCE_VERIFIED' | translate }}
+        </label>
+      </div>
+
+      <!-- Chief complaint -->
+      <div class="form-group">
+        <label for="chiefComplaint">{{ 'RECEPTION.CHIEF_COMPLAINT' | translate }}</label>
+        <textarea
+          id="chiefComplaint"
+          rows="3"
+          [ngModel]="chiefComplaint()"
+          (ngModelChange)="chiefComplaint.set($event)"
+          name="chiefComplaint"
+          placeholder="Reason for visit..."
+        ></textarea>
+      </div>
+
+      <!-- Co-pay amount -->
+      <div class="form-group">
+        <label for="copayAmount">{{ 'RECEPTION.COPAY_AMOUNT' | translate }}</label>
+        <input
+          id="copayAmount"
+          type="number"
+          step="0.01"
+          min="0"
+          [ngModel]="copayAmount()"
+          (ngModelChange)="copayAmount.set($event)"
+          name="copayAmount"
+          placeholder="0.00"
+        />
+      </div>
+
+      <!-- Notes -->
+      <div class="form-group">
+        <label for="checkinNotes">{{ 'RECEPTION.NOTES' | translate }}</label>
+        <textarea
+          id="checkinNotes"
+          rows="2"
+          [ngModel]="notes()"
+          (ngModelChange)="notes.set($event)"
+          name="notes"
+          placeholder="Optional notes..."
+        ></textarea>
+      </div>
+
+      <!-- Actions -->
+      <div class="checkin-dialog__actions">
+        <button type="button" class="btn btn-secondary" (click)="dismissed.emit()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
+          <span *ngIf="saving()">{{ 'COMMON.SAVING' | translate }}...</span>
+          <span *ngIf="!saving()">{{ 'RECEPTION.CHECK_IN' | translate }}</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

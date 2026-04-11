@@ -1,0 +1,110 @@
+<section class="tracker-container" aria-label="Patient Tracker Board">
+  <!-- Header -->
+  <header class="tracker-header">
+    <h1 class="tracker-title">{{ 'TRACKER.TITLE' | translate }}</h1>
+    <div class="tracker-meta">
+      <span class="meta-badge">
+        <strong>{{ totalPatients() }}</strong> {{ 'TRACKER.PATIENTS_COUNT' | translate }}
+      </span>
+      <span class="meta-badge">
+        {{ 'TRACKER.AVG_WAIT' | translate }}: <strong>{{ averageWait() }}</strong>
+        {{ 'TRACKER.MIN' | translate }}
+      </span>
+      @if (lastRefreshed()) {
+        <span class="meta-muted">
+          {{ 'TRACKER.UPDATED' | translate }} {{ lastRefreshed() | date: 'shortTime' }}
+        </span>
+      }
+      <button class="btn-refresh" (click)="refresh()" [disabled]="loading()">
+        &#x21bb; {{ 'TRACKER.REFRESH' | translate }}
+      </button>
+    </div>
+  </header>
+
+  @if (loading() && !board()) {
+    <output class="tracker-loading" aria-live="polite">
+      <p>{{ 'TRACKER.LOADING' | translate }}</p>
+    </output>
+  }
+
+  <!-- Kanban columns -->
+  @if (board()) {
+    <div class="tracker-board">
+      @for (col of columns; track col.key) {
+        <div class="tracker-column" [class]="col.colorClass">
+          <div class="column-header">
+            <h2 class="column-title">{{ col.label | translate }}</h2>
+            <span class="column-count">{{ getColumnItems(col.key).length }}</span>
+          </div>
+          <ul class="column-body" [attr.aria-label]="(col.label | translate) + ' patients'">
+            @for (item of getColumnItems(col.key); track item.encounterId) {
+              <li class="patient-card" [class]="getAcuityClass(item.acuityLevel)">
+                <div class="card-header">
+                  <span class="patient-name">{{ item.patientName }}</span>
+                  @if (item.mrn) {
+                    <span class="patient-mrn">{{ item.mrn }}</span>
+                  }
+                </div>
+                <div class="card-body">
+                  @if (item.assignedProvider) {
+                    <span class="card-field">
+                      <span class="field-label">{{ 'TRACKER.PROVIDER' | translate }}:</span>
+                      {{ item.assignedProvider }}
+                    </span>
+                  }
+                  @if (item.roomAssignment) {
+                    <span class="card-field">
+                      <span class="field-label">{{ 'TRACKER.ROOM' | translate }}:</span>
+                      {{ item.roomAssignment }}
+                    </span>
+                  }
+                  @if (item.departmentName) {
+                    <span class="card-field">
+                      <span class="field-label">{{ 'TRACKER.DEPT' | translate }}:</span>
+                      {{ item.departmentName }}
+                    </span>
+                  }
+                </div>
+                <div class="card-footer">
+                  <span class="wait-badge" [class]="getWaitClass(item.currentWaitMinutes)">
+                    {{ item.currentWaitMinutes }} {{ 'TRACKER.MIN' | translate }}
+                  </span>
+                  <span class="acuity-badge">{{ item.acuityLevel }}</span>
+                  @if (item.preCheckedIn) {
+                    <span class="precheckin-badge" [title]="'TRACKER.PRE_CHECKIN_BADGE' | translate"
+                      >&#x2713; {{ 'TRACKER.PRE_CHECKIN_BADGE' | translate }}</span
+                    >
+                  }
+                  @if (
+                    col.key === 'readyForDischarge' ||
+                    col.key === 'inProgress' ||
+                    col.key === 'awaitingResults'
+                  ) {
+                    <button
+                      class="btn-checkout"
+                      (click)="openCheckout(item)"
+                      [title]="'TRACKER.CHECK_OUT' | translate"
+                    >
+                      {{ 'TRACKER.CHECK_OUT' | translate }}
+                    </button>
+                  }
+                </div>
+              </li>
+            } @empty {
+              <li class="column-empty">{{ 'TRACKER.NO_PATIENTS' | translate }}</li>
+            }
+          </ul>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Check-Out Dialog (MVP 6) -->
+  @if (showCheckoutDialog()) {
+    <app-checkout-dialog
+      [encounter]="checkoutEncounter()"
+      (dismissed)="onCheckoutDismissed()"
+      (checkoutCompleted)="onCheckoutCompleted($event)"
+    />
+  }
+</section>

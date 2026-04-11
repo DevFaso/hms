@@ -90,7 +90,10 @@ class EncounterTest {
         Encounter e = new Encounter(
                 patient, new HashSet<>(), null, staff, hospital,
                 EncounterType.EMERGENCY, null, null, null, date,
-                EncounterStatus.COMPLETED, "notes", "CODE-1",
+                EncounterStatus.COMPLETED, "notes", null, null,
+                null, null, null, null, null,
+                null, null, null, // checkoutTimestamp, followUpInstructions, dischargeDiagnoses (MVP 6)
+                "CODE-1",
                 "admin", "admin2", null, assignment, 1L
         );
         assertThat(e.getPatient()).isEqualTo(patient);

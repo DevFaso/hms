@@ -205,6 +205,7 @@ export interface PortalAppointment {
   reason: string;
   status: string;
   location: string;
+  preCheckedIn: boolean;
 }
 
 /** Raw shape returned by backend AppointmentResponseDTO */
@@ -220,6 +221,8 @@ interface AppointmentApiResponse {
   hospitalName: string;
   hospitalAddress: string;
   notes: string;
+  preCheckedIn: boolean;
+  preCheckinTimestamp: string | null;
 }
 
 /** Format "HH:mm:ss" or "HH:mm" → "h:mm AM/PM" */
@@ -460,6 +463,62 @@ export interface RescheduleAppointmentRequest {
   reason: string;
 }
 
+// ── MVP 4: Pre-Visit Questionnaires & Pre-Check-In ────────────────
+
+export interface QuestionnaireQuestion {
+  id: string;
+  text: string;
+  type: 'YES_NO' | 'SCALE' | 'TEXT' | 'MULTI_CHOICE' | 'NUMBER';
+  required?: boolean;
+  options?: string[];
+  min?: number;
+  max?: number;
+}
+
+export interface QuestionnaireDTO {
+  id: string;
+  title: string;
+  description: string | null;
+  questions: string; // JSON string of QuestionnaireQuestion[]
+  version: number;
+  departmentId: string | null;
+  departmentName: string | null;
+}
+
+export interface QuestionnaireSubmission {
+  questionnaireId: string;
+  responses: string; // JSON string of answers
+}
+
+export interface PreCheckInRequest {
+  appointmentId: string;
+  phoneNumber?: string;
+  email?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  country?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  insuranceProvider?: string;
+  insuranceMemberId?: string;
+  insurancePlan?: string;
+  questionnaireResponses?: QuestionnaireSubmission[];
+  consentAcknowledged?: boolean;
+}
+
+export interface PreCheckInResponse {
+  appointmentId: string;
+  appointmentStatus: string;
+  preCheckedIn: boolean;
+  preCheckinTimestamp: string;
+  questionnaireResponsesSubmitted: number;
+  demographicsUpdated: boolean;
+}
+
 // ── Self-Scheduling Interfaces ─────────────────────────────────────
 
 export interface BookAppointmentRequest {
@@ -651,6 +710,7 @@ export class PatientPortalService {
           reason: a.reason ?? '',
           status: a.status ?? '',
           location: a.hospitalName ?? '',
+          preCheckedIn: a.preCheckedIn ?? false,
         })),
       ),
       catchError(() => of([])),
@@ -902,6 +962,7 @@ export class PatientPortalService {
             reason: a.reason ?? '',
             status: a.status ?? '',
             location: a.hospitalName ?? '',
+            preCheckedIn: a.preCheckedIn ?? false,
           };
         }),
       );
@@ -1104,5 +1165,26 @@ export class PatientPortalService {
         map((r) => r.data ?? []),
         catchError(() => of([])),
       );
+  }
+
+  // ── MVP 4: Pre-Visit Questionnaires & Pre-Check-In ────────────────
+
+  getQuestionnairesForAppointment(appointmentId: string): Observable<QuestionnaireDTO[]> {
+    return this.http
+      .get<
+        ApiWrapper<QuestionnaireDTO[]>
+      >(`${this.base}/appointments/${appointmentId}/questionnaires`)
+      .pipe(
+        map((r) => r.data ?? []),
+        catchError(() => of([])),
+      );
+  }
+
+  submitPreCheckIn(appointmentId: string, dto: PreCheckInRequest): Observable<PreCheckInResponse> {
+    return this.http
+      .post<
+        ApiWrapper<PreCheckInResponse>
+      >(`${this.base}/appointments/${appointmentId}/pre-checkin`, dto)
+      .pipe(map((r) => r.data));
   }
 }
