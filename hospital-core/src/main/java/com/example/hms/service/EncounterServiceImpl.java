@@ -1487,6 +1487,20 @@ public class EncounterServiceImpl implements EncounterService {
         return checkOutMapper.toAfterVisitSummary(encounter, request, null);
     }
 
+    @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public com.example.hms.payload.dto.clinical.AfterVisitSummaryDTO getAfterVisitSummary(UUID encounterId) {
+        Encounter encounter = encounterRepository.findById(encounterId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null, Locale.getDefault())));
+
+        if (encounter.getCheckoutTimestamp() == null) {
+            throw new BusinessException("Encounter has not been checked out yet.");
+        }
+
+        return checkOutMapper.toAfterVisitSummary(encounter, null, null);
+    }
+
     /**
      * Resolve Staff entity from a username and hospital context.
      */

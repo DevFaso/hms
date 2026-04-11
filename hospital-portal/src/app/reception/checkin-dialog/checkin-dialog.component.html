@@ -7,7 +7,7 @@
   <div
     class="checkin-dialog"
     (click)="$event.stopPropagation()"
-    (keydown)="$event.stopPropagation()"
+    (keydown.escape)="dismissed.emit()"
     tabindex="-1"
   >
     <header class="checkin-dialog__header">

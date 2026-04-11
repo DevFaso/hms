@@ -57,6 +57,9 @@ public class InBasketController {
 
         UUID userId = requireUserId(auth);
         UUID resolvedHospitalId = resolveHospital(auth, hospitalId);
+        if (resolvedHospitalId == null) {
+            throw new BusinessException("Hospital context is required. Pass hospitalId or ensure your token has a hospital scope.");
+        }
 
         Page<InBasketItemDTO> page = inBasketService.getItems(userId, resolvedHospitalId, type, status, pageable);
         return ResponseEntity.ok(page);
@@ -74,6 +77,9 @@ public class InBasketController {
 
         UUID userId = requireUserId(auth);
         UUID resolvedHospitalId = resolveHospital(auth, hospitalId);
+        if (resolvedHospitalId == null) {
+            throw new BusinessException("Hospital context is required. Pass hospitalId or ensure your token has a hospital scope.");
+        }
 
         InBasketSummaryDTO summary = inBasketService.getSummary(userId, resolvedHospitalId);
         return ResponseEntity.ok(summary);

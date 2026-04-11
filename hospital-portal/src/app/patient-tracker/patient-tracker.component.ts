@@ -49,7 +49,6 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   board = signal<PatientTrackerBoard | null>(null);
   loading = signal(false);
   lastRefreshed = signal<Date | null>(null);
-  departmentFilter = signal<string>('');
 
   readonly columns: TrackerColumn[] = [
     { key: 'arrived', label: 'TRACKER.COL_CHECKED_IN', colorClass: 'col-arrived' },

@@ -22,7 +22,7 @@
         class="booking-form-card"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown)="$event.stopPropagation()"
+        (keydown.escape)="closeBookingForm()"
       >
         <div class="booking-header">
           <h2>

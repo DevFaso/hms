@@ -1,7 +1,7 @@
 import { Component, Output, EventEmitter, Input, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateModule } from '@ngx-translate/core';
 import {
   ReceptionService,
   ReceptionQueueItem,
@@ -24,7 +24,6 @@ export class CheckinDialogComponent {
 
   private readonly receptionService = inject(ReceptionService);
   private readonly toast = inject(ToastService);
-  private readonly translate = inject(TranslateService);
 
   /* ── Form fields ────────────────────────── */
   chiefComplaint = signal('');

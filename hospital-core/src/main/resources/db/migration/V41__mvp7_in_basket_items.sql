@@ -26,11 +26,11 @@ CREATE TABLE IF NOT EXISTS clinical.in_basket_items (
     CONSTRAINT fk_inbasket_recipient FOREIGN KEY (recipient_user_id)
         REFERENCES security.users(id),
     CONSTRAINT fk_inbasket_hospital  FOREIGN KEY (hospital_id)
-        REFERENCES core.hospitals(id),
+        REFERENCES hospital.hospitals(id),
     CONSTRAINT fk_inbasket_encounter FOREIGN KEY (encounter_id)
         REFERENCES clinical.encounters(id),
     CONSTRAINT fk_inbasket_patient   FOREIGN KEY (patient_id)
-        REFERENCES core.patients(id)
+        REFERENCES clinical.patients(id)
 );
 
 -- Indexes for common query patterns

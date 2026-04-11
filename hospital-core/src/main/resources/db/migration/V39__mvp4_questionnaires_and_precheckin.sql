@@ -13,8 +13,8 @@ CREATE TABLE IF NOT EXISTS clinical.questionnaires (
     questions       JSONB           NOT NULL DEFAULT '[]'::jsonb,
     version         INT             NOT NULL DEFAULT 1,
     active          BOOLEAN         NOT NULL DEFAULT TRUE,
-    department_id   UUID            REFERENCES clinical.departments(id),
-    hospital_id     UUID            NOT NULL REFERENCES clinical.hospitals(id),
+    department_id   UUID            REFERENCES hospital.departments(id),
+    hospital_id     UUID            NOT NULL REFERENCES hospital.hospitals(id),
     created_at      TIMESTAMP       NOT NULL DEFAULT now(),
     updated_at      TIMESTAMP       NOT NULL DEFAULT now()
 );

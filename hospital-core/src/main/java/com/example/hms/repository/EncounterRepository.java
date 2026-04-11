@@ -100,7 +100,7 @@ public interface EncounterRepository
      * patient, staff (with user), department, and appointment to avoid N+1 (MVP 5 tracker board).
      */
     @Query("""
-        SELECT e FROM Encounter e
+        SELECT DISTINCT e FROM Encounter e
         JOIN FETCH e.patient p
         LEFT JOIN FETCH p.hospitalRegistrations
         JOIN FETCH e.staff s

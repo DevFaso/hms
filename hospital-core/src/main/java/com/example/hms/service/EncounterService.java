@@ -80,4 +80,10 @@ public interface EncounterService {
     AfterVisitSummaryDTO checkOut(UUID encounterId,
                                   CheckOutRequestDTO request,
                                   String actorUsername);
+
+    /**
+     * MVP 6 — Retrieve the After-Visit Summary for a completed (checked-out) encounter.
+     * Loads the encounter entity and delegates to CheckOutMapper for full AVS construction.
+     */
+    AfterVisitSummaryDTO getAfterVisitSummary(UUID encounterId);
 }

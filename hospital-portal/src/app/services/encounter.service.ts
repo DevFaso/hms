@@ -54,12 +54,12 @@ export interface EncounterResponse {
   status: EncounterStatus;
   encounterDate: string;
   notes: string;
-  arrivalTimestamp: string;
+  arrivalTimestamp: string | null;
   chiefComplaint: string;
   esiScore: number | null;
   roomAssignment: string;
-  triageTimestamp: string;
-  roomedTimestamp: string;
+  triageTimestamp: string | null;
+  roomedTimestamp: string | null;
   urgency: EncounterUrgency | null;
   createdAt: string;
   updatedAt: string;
@@ -68,7 +68,7 @@ export interface EncounterResponse {
   note: EncounterNoteResponse;
   patientFullName: string;
   staffFullName: string;
-  nursingIntakeTimestamp: string;
+  nursingIntakeTimestamp: string | null;
 }
 
 export interface TriageSubmissionRequest {
@@ -273,8 +273,6 @@ export class EncounterService {
   }
 
   checkOut(encounterId: string, req: CheckOutRequest): Observable<AfterVisitSummary> {
-    return this.http
-      .post<{ data: AfterVisitSummary }>(`${this.baseUrl}/${encounterId}/check-out`, req)
-      .pipe(map((res) => res.data));
+    return this.http.post<AfterVisitSummary>(`${this.baseUrl}/${encounterId}/checkout`, req);
   }
 }

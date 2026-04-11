@@ -298,28 +298,7 @@ public class EncounterController {
         @PathVariable UUID encounterId,
         Locale locale
     ) {
-        // Re-use the encounter service to load the encounter and build AVS
-        EncounterResponseDTO enc = encounterService.getEncounterById(encounterId, locale);
-        if (enc.getCheckoutTimestamp() == null) {
-            throw new BusinessException("Encounter has not been checked out yet.");
-        }
-
-        AfterVisitSummaryDTO avs = AfterVisitSummaryDTO.builder()
-            .encounterId(enc.getId())
-            .appointmentId(enc.getAppointmentId())
-            .visitDate(enc.getEncounterDate())
-            .providerName(enc.getStaffName())
-            .departmentName(enc.getDepartmentName())
-            .hospitalName(enc.getHospitalName())
-            .patientId(enc.getPatientId())
-            .patientName(enc.getPatientName())
-            .chiefComplaint(enc.getChiefComplaint())
-            .followUpInstructions(enc.getFollowUpInstructions())
-            .encounterStatus(enc.getStatus() != null ? enc.getStatus().name() : null)
-            .appointmentStatus(enc.getAppointmentStatus())
-            .checkoutTimestamp(enc.getCheckoutTimestamp())
-            .build();
-
+        AfterVisitSummaryDTO avs = encounterService.getAfterVisitSummary(encounterId);
         return ResponseEntity.ok(avs);
     }
     @PostMapping(value = "/{encounterId}/notes", consumes = MediaType.APPLICATION_JSON_VALUE)

@@ -135,7 +135,7 @@ describe('PreCheckinFormComponent', () => {
     setTimeout(() => {
       expect(component.preCheckinCompleted.emit).toHaveBeenCalled();
       done();
-    }, 2000);
+    }, 1600);
   });
 
   it('should show error on submit failure', () => {

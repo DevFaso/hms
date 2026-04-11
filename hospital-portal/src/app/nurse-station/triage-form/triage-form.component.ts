@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, Output, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateModule } from '@ngx-translate/core';
 import {
   EncounterService,
   EncounterResponse,
@@ -24,7 +24,6 @@ export class TriageFormComponent {
 
   private readonly encounterService = inject(EncounterService);
   private readonly toast = inject(ToastService);
-  private readonly translate = inject(TranslateService);
 
   /* ── Vital signs ────────────────────────── */
   temperatureCelsius = signal<number | null>(null);

@@ -18,7 +18,7 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
     /**
      * Paginated list for a recipient, filtered by optional type and status.
      */
-    @Query("""
+    @Query(value = """
         SELECT i FROM InBasketItem i
         LEFT JOIN FETCH i.patient
         LEFT JOIN FETCH i.encounter
@@ -33,6 +33,12 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
             ELSE 2
           END,
           i.createdAt DESC
+    """, countQuery = """
+        SELECT COUNT(i) FROM InBasketItem i
+        WHERE i.recipientUser.id = :userId
+          AND i.hospital.id = :hospitalId
+          AND (:type IS NULL OR i.itemType = :type)
+          AND (:status IS NULL OR i.status = :status)
     """)
     Page<InBasketItem> findByRecipientFiltered(
         @Param("userId") UUID userId,
