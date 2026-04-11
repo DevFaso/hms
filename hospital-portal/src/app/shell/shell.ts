@@ -202,6 +202,19 @@ export class ShellComponent implements OnInit, OnDestroy {
           : 'NAV.AVAILABILITY',
         route: '/scheduling',
         permission: 'View Staff Schedules',
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_RECEPTIONIST',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_SUPER_ADMIN',
+          'ROLE_LAB_DIRECTOR',
+          'ROLE_LAB_MANAGER',
+          'ROLE_LAB_SCIENTIST',
+          'ROLE_QUALITY_MANAGER',
+        ],
       },
       {
         icon: 'domain',
@@ -209,6 +222,16 @@ export class ShellComponent implements OnInit, OnDestroy {
         translationKey: 'NAV.DEPARTMENTS',
         route: '/departments',
         permission: 'View Departments',
+        roles: [
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_SUPER_ADMIN',
+          'ROLE_RECEPTIONIST',
+          'ROLE_LAB_DIRECTOR',
+          'ROLE_LAB_MANAGER',
+          'ROLE_LAB_SCIENTIST',
+          'ROLE_QUALITY_MANAGER',
+        ],
       },
       {
         icon: 'swap_horiz',
@@ -244,6 +267,15 @@ export class ShellComponent implements OnInit, OnDestroy {
         translationKey: 'NAV.PATIENT_TRACKER',
         route: '/patient-tracker',
         permission: 'View Patient Records',
+        roles: [
+          'ROLE_DOCTOR',
+          'ROLE_NURSE',
+          'ROLE_MIDWIFE',
+          'ROLE_RECEPTIONIST',
+          'ROLE_HOSPITAL_ADMIN',
+          'ROLE_ADMIN',
+          'ROLE_SUPER_ADMIN',
+        ],
       },
       {
         icon: 'inbox',
@@ -362,9 +394,7 @@ export class ShellComponent implements OnInit, OnDestroy {
         route: '/audit-logs',
       });
     }
-    if (
-      this.auth.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'])
-    ) {
+    if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'])) {
       items.push({
         icon: 'handshake',
         label: 'Consent Management',
@@ -372,7 +402,7 @@ export class ShellComponent implements OnInit, OnDestroy {
         route: '/consent-management',
       });
     }
-    if (this.auth.hasAnyRole(['ROLE_LAB_DIRECTOR', 'ROLE_QUALITY_MANAGER'])) {
+    if (this.hasAnyRole(['ROLE_LAB_DIRECTOR', 'ROLE_QUALITY_MANAGER'])) {
       if (!items.some((i) => i.route === '/consent-management')) {
         items.push({
           icon: 'handshake',
@@ -383,7 +413,7 @@ export class ShellComponent implements OnInit, OnDestroy {
       }
     }
     if (
-      this.auth.hasAnyRole([
+      this.hasAnyRole([
         'ROLE_LAB_SCIENTIST',
         'ROLE_LAB_MANAGER',
         'ROLE_LAB_DIRECTOR',
@@ -399,7 +429,7 @@ export class ShellComponent implements OnInit, OnDestroy {
       });
     }
     if (
-      this.auth.hasAnyRole([
+      this.hasAnyRole([
         'ROLE_LAB_MANAGER',
         'ROLE_LAB_DIRECTOR',
         'ROLE_QUALITY_MANAGER',
@@ -424,7 +454,7 @@ export class ShellComponent implements OnInit, OnDestroy {
       );
     }
     if (
-      this.auth.hasAnyRole([
+      this.hasAnyRole([
         'ROLE_LAB_MANAGER',
         'ROLE_LAB_SCIENTIST',
         'ROLE_LAB_DIRECTOR',
@@ -441,7 +471,7 @@ export class ShellComponent implements OnInit, OnDestroy {
       });
     }
     if (
-      this.auth.hasAnyRole([
+      this.hasAnyRole([
         'ROLE_RECEPTIONIST',
         'ROLE_HOSPITAL_ADMIN',
         'ROLE_ADMIN',
@@ -457,7 +487,7 @@ export class ShellComponent implements OnInit, OnDestroy {
     }
 
     // Doctor role: hide admin/nurse-specific entries for a cleaner sidebar
-    const isDoctor = this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON']);
+    const isDoctor = this.hasAnyRole(['ROLE_DOCTOR', 'ROLE_PHYSICIAN', 'ROLE_SURGEON']);
     const doctorHiddenRoutes = isDoctor
       ? new Set(['/nurse-station', '/scheduling', '/departments', '/staff'])
       : new Set<string>();
@@ -465,10 +495,18 @@ export class ShellComponent implements OnInit, OnDestroy {
     return items.filter(
       (item) =>
         (!item.permission || this.permissions.hasPermission(item.permission)) &&
-        (!item.roles || this.auth.hasAnyRole(item.roles)) &&
+        (!item.roles || this.hasAnyRole(item.roles)) &&
         !doctorHiddenRoutes.has(item.route),
     );
   });
+
+  private hasAnyRole(roles: string[]): boolean {
+    const activeRole = this.roleContext.activeRole;
+    if (activeRole) {
+      return roles.includes(activeRole);
+    }
+    return this.auth.hasAnyRole(roles);
+  }
 
   /**
    * User-reordered nav items.
