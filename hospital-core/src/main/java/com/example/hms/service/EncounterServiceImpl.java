@@ -1555,9 +1555,16 @@ public class EncounterServiceImpl implements EncounterService {
         String recipientUsername = patient.getUser().getUsername();
         String hospitalName = encounter.getHospital() != null ? encounter.getHospital().getName() : "your hospital";
         String message = "Your visit summary is now available from " + hospitalName + ".";
-        notificationService.createNotification(message, recipientUsername, DISCHARGE_NOTIFICATION_TYPE);
+        try {
+            notificationService.createNotification(message, recipientUsername, DISCHARGE_NOTIFICATION_TYPE);
+        } catch (Exception ignored) {
+            // Do not fail checkout if in-app notification delivery is unavailable.
+        }
 
         String patientEmail = patient.getEmail();
+        if ((patientEmail == null || patientEmail.isBlank()) && patient.getUser() != null) {
+            patientEmail = patient.getUser().getEmail();
+        }
         if (patientEmail == null || patientEmail.isBlank()) {
             return;
         }
@@ -1573,7 +1580,11 @@ public class EncounterServiceImpl implements EncounterService {
             <p>Please sign in to review your discharge instructions and follow-up details.</p>
             """.formatted(patientName.isBlank() ? "Patient" : patientName, hospitalName, providerName);
 
-        emailService.sendHtml(List.of(patientEmail), List.of(), List.of(), subject, body);
+        try {
+            emailService.sendHtml(List.of(patientEmail), List.of(), List.of(), subject, body);
+        } catch (Exception ignored) {
+            // AVS persistence must not be rolled back due to email transport failures.
+        }
     }
 
     @Override

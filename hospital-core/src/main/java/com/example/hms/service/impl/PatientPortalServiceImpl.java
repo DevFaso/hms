@@ -1,5 +1,6 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.ProxyStatus;
 import com.example.hms.enums.RefillStatus;
@@ -97,9 +98,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -112,6 +115,7 @@ import java.util.UUID;
 public class PatientPortalServiceImpl implements PatientPortalService {
 
     private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
+    private static final String MEDICATION_REFILL_NOTIFICATION_TYPE = "MEDICATION_REFILL";
 
     private final PatientRepository patientRepository;
     private final PatientProxyRepository patientProxyRepository;
@@ -660,6 +664,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .build();
 
         refill = refillRequestRepository.save(refill);
+    notifyCareTeamForRefillRequest(refill);
         log.info("Patient {} requested refill {} for prescription {}",
                 patient.getId(), refill.getId(), prescription.getId());
         return toRefillResponseDTO(refill);
@@ -873,6 +878,96 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             throw new BusinessException(
                     "You are not registered at the specified source hospital and cannot manage consent on its behalf.");
         }
+    }
+
+    private void notifyCareTeamForRefillRequest(RefillRequest refill) {
+        Prescription prescription = refill.getPrescription();
+        Patient patient = refill.getPatient();
+        if (prescription == null || patient == null) {
+            return;
+        }
+
+        String medicationName = prescription.getMedicationName() != null && !prescription.getMedicationName().isBlank()
+                ? prescription.getMedicationName()
+                : "prescription";
+        String patientName = ((patient.getFirstName() != null ? patient.getFirstName() : "")
+                + " " + (patient.getLastName() != null ? patient.getLastName() : "")).trim();
+        if (patientName.isBlank()) {
+            patientName = "a patient";
+        }
+
+        Set<String> recipientUsernames = new LinkedHashSet<>();
+        Set<String> recipientEmails = new LinkedHashSet<>();
+
+        Staff prescriber = prescription.getStaff();
+        if (prescriber != null && prescriber.getUser() != null) {
+            String username = prescriber.getUser().getUsername();
+            if (username != null && !username.isBlank()) {
+                recipientUsernames.add(username);
+            }
+            String email = prescriber.getUser().getEmail();
+            if (email != null && !email.isBlank()) {
+                recipientEmails.add(email);
+            }
+        }
+
+        if (prescription.getHospital() != null
+                && prescription.getHospital().getId() != null
+                && prescriber != null
+                && prescriber.getDepartment() != null
+                && prescriber.getDepartment().getId() != null) {
+            List<Staff> careTeam = staffRepository.findActiveProvidersByHospitalAndDepartment(
+                    prescription.getHospital().getId(),
+                    prescriber.getDepartment().getId());
+
+            for (Staff staff : careTeam) {
+                if (!isDoctorOrNurse(staff) || staff.getUser() == null) {
+                    continue;
+                }
+                String username = staff.getUser().getUsername();
+                if (username != null && !username.isBlank()) {
+                    recipientUsernames.add(username);
+                }
+                String email = staff.getUser().getEmail();
+                if (email != null && !email.isBlank()) {
+                    recipientEmails.add(email);
+                }
+            }
+        }
+
+        String message = "Medication refill request from " + patientName + " for " + medicationName + ".";
+        for (String username : recipientUsernames) {
+            try {
+                notificationService.createNotification(message, username, MEDICATION_REFILL_NOTIFICATION_TYPE);
+            } catch (Exception e) {
+                log.warn("Failed to deliver refill notification to {} for refill {}", username, refill.getId());
+            }
+        }
+
+        if (!recipientEmails.isEmpty()) {
+            String subject = "Medication Refill Request Pending Review";
+            String body = """
+                <h2>Medication Refill Request</h2>
+                <p><strong>%s</strong> requested a refill for <strong>%s</strong>.</p>
+                <p>Please review and respond in your HMS dashboard.</p>
+                """.formatted(patientName, medicationName);
+            for (String email : recipientEmails) {
+                try {
+                    emailService.sendHtml(List.of(email), List.of(), List.of(), subject, body);
+                } catch (Exception e) {
+                    log.warn("Failed to send refill email to {} for refill {}", email, refill.getId());
+                }
+            }
+        }
+    }
+
+    private boolean isDoctorOrNurse(Staff staff) {
+        if (staff.getAssignment() == null || staff.getAssignment().getRole() == null) {
+            return false;
+        }
+        String roleCode = staff.getAssignment().getRole().getCode();
+        return SecurityConstants.ROLE_DOCTOR.equalsIgnoreCase(roleCode)
+                || SecurityConstants.ROLE_NURSE.equalsIgnoreCase(roleCode);
     }
 
     /** Map a RefillRequest entity to its response DTO. */

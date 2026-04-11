@@ -88,6 +88,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 
 /**
  * Unit tests for Phase 2 patient portal service methods.
@@ -649,6 +650,131 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(saved.getPatient()).isEqualTo(patient);
             assertThat(saved.getPrescription()).isEqualTo(prescription);
             assertThat(saved.getStatus()).isEqualTo(RefillStatus.REQUESTED);
+        }
+
+        @Test
+        @DisplayName("requestMedicationRefill — should notify doctor and nurses in the care team")
+        void requestRefill_notifiesDoctorAndNurseCareTeam() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+            UUID hospitalId = UUID.randomUUID();
+            UUID departmentId = UUID.randomUUID();
+
+            Hospital hospital = new Hospital();
+            hospital.setId(hospitalId);
+            Department department = new Department();
+            department.setId(departmentId);
+
+            Role doctorRole = new Role();
+            doctorRole.setCode("ROLE_DOCTOR");
+            UserRoleHospitalAssignment doctorAssignment = new UserRoleHospitalAssignment();
+            doctorAssignment.setRole(doctorRole);
+            User doctorUser = new User();
+            doctorUser.setUsername("doctor.one");
+            doctorUser.setEmail("doctor.one@hms.test");
+            Staff doctor = new Staff();
+            doctor.setUser(doctorUser);
+            doctor.setHospital(hospital);
+            doctor.setDepartment(department);
+            doctor.setAssignment(doctorAssignment);
+
+            Role nurseRole = new Role();
+            nurseRole.setCode("ROLE_NURSE");
+            UserRoleHospitalAssignment nurseAssignment = new UserRoleHospitalAssignment();
+            nurseAssignment.setRole(nurseRole);
+            User nurseUser = new User();
+            nurseUser.setUsername("nurse.one");
+            nurseUser.setEmail("nurse.one@hms.test");
+            Staff nurse = new Staff();
+            nurse.setUser(nurseUser);
+            nurse.setHospital(hospital);
+            nurse.setDepartment(department);
+            nurse.setAssignment(nurseAssignment);
+
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStaff(doctor);
+            prescription.setHospital(hospital);
+
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId))
+                    .thenReturn(List.of(doctor, nurse));
+            when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> {
+                RefillRequest saved = inv.getArgument(0);
+                saved.setId(UUID.randomUUID());
+                saved.setCreatedAt(LocalDateTime.now());
+                saved.setUpdatedAt(LocalDateTime.now());
+                return saved;
+            });
+
+            MedicationRefillRequestDTO dto = MedicationRefillRequestDTO.builder()
+                    .prescriptionId(rxId)
+                    .preferredPharmacy("CVS Pharmacy")
+                    .notes("Need refill ASAP")
+                    .build();
+
+            MedicationRefillResponseDTO result = service.requestMedicationRefill(auth, dto);
+
+            assertThat(result).isNotNull();
+            verify(notificationService).createNotification(any(), eq("doctor.one"), eq("MEDICATION_REFILL"));
+            verify(notificationService).createNotification(any(), eq("nurse.one"), eq("MEDICATION_REFILL"));
+            verify(emailService).sendHtml(eq(List.of("doctor.one@hms.test")), eq(List.of()), eq(List.of()), eq("Medication Refill Request Pending Review"), any());
+            verify(emailService).sendHtml(eq(List.of("nurse.one@hms.test")), eq(List.of()), eq(List.of()), eq("Medication Refill Request Pending Review"), any());
+        }
+
+        @Test
+        @DisplayName("requestMedicationRefill — should still succeed if notification channels fail")
+        void requestRefill_notificationFailuresDoNotFailRequest() {
+            stubPatientResolution();
+            UUID rxId = UUID.randomUUID();
+
+            Hospital hospital = new Hospital();
+            hospital.setId(UUID.randomUUID());
+            Department department = new Department();
+            department.setId(UUID.randomUUID());
+
+            Role doctorRole = new Role();
+            doctorRole.setCode("ROLE_DOCTOR");
+            UserRoleHospitalAssignment doctorAssignment = new UserRoleHospitalAssignment();
+            doctorAssignment.setRole(doctorRole);
+            User doctorUser = new User();
+            doctorUser.setUsername("doctor.fail");
+            doctorUser.setEmail("doctor.fail@hms.test");
+            Staff doctor = new Staff();
+            doctor.setUser(doctorUser);
+            doctor.setHospital(hospital);
+            doctor.setDepartment(department);
+            doctor.setAssignment(doctorAssignment);
+
+            Prescription prescription = buildPrescription(rxId, patient);
+            prescription.setStaff(doctor);
+            prescription.setHospital(hospital);
+
+            when(prescriptionRepository.findById(rxId)).thenReturn(Optional.of(prescription));
+            when(staffRepository.findActiveProvidersByHospitalAndDepartment(hospital.getId(), department.getId()))
+                    .thenReturn(List.of(doctor));
+            doThrow(new RuntimeException("notification down"))
+                    .when(notificationService).createNotification(any(), any(), eq("MEDICATION_REFILL"));
+            doThrow(new RuntimeException("smtp down"))
+                    .when(emailService).sendHtml(any(), any(), any(), eq("Medication Refill Request Pending Review"), any());
+            when(refillRequestRepository.save(any(RefillRequest.class))).thenAnswer(inv -> {
+                RefillRequest saved = inv.getArgument(0);
+                saved.setId(UUID.randomUUID());
+                saved.setCreatedAt(LocalDateTime.now());
+                saved.setUpdatedAt(LocalDateTime.now());
+                return saved;
+            });
+
+            MedicationRefillRequestDTO dto = MedicationRefillRequestDTO.builder()
+                    .prescriptionId(rxId)
+                    .preferredPharmacy("CVS Pharmacy")
+                    .notes("Need refill ASAP")
+                    .build();
+
+            MedicationRefillResponseDTO result = service.requestMedicationRefill(auth, dto);
+
+            assertThat(result).isNotNull();
+            assertThat(result.getStatus()).isEqualTo("REQUESTED");
+            verify(refillRequestRepository).save(any(RefillRequest.class));
         }
 
         @Test

@@ -638,6 +638,8 @@ interface ApiWrapper<T> {
   success: boolean;
 }
 
+type ApiMaybeWrapped<T> = ApiWrapper<T> | T;
+
 interface PageWrapper<T> {
   content: T[];
   totalElements: number;
@@ -649,6 +651,13 @@ interface PageWrapper<T> {
 export class PatientPortalService {
   private readonly http = inject(HttpClient);
   private readonly base = '/api/me/patient';
+
+  private unwrapData<T>(response: ApiMaybeWrapped<T> | null | undefined): T | null | undefined {
+    if (response && typeof response === 'object' && 'data' in response) {
+      return (response as ApiWrapper<T>).data;
+    }
+    return response as T | null | undefined;
+  }
 
   getMyProfile(): Observable<PatientProfileDTO> {
     return this.http
@@ -847,10 +856,11 @@ export class PatientPortalService {
 
   getAfterVisitSummaries(): Observable<AfterVisitSummary[]> {
     return this.http
-      .get<ApiWrapper<DischargeSummaryApiResponse[]>>(`${this.base}/after-visit-summaries`)
+      .get<ApiMaybeWrapped<DischargeSummaryApiResponse[]>>(`${this.base}/after-visit-summaries`)
       .pipe(
-        map((r) =>
-          (r.data ?? []).map((d) => ({
+        map((response) => {
+          const summaries = this.unwrapData(response) ?? [];
+          return summaries.map((d) => ({
             id: d.id,
             encounterDate: d.dischargeDate ?? '',
             providerName: d.dischargingProviderName ?? '',
@@ -872,8 +882,8 @@ export class PatientPortalService {
               (m) => `${m.medicationName} ${m.dosage} – ${m.frequency}`,
             ),
             status: d.isFinalized ? 'FINALIZED' : 'DRAFT',
-          })),
-        ),
+          }));
+        }),
         catchError(() => of([])),
       );
   }

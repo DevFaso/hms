@@ -69,6 +69,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
 import java.util.Locale;
 
 @ExtendWith(MockitoExtension.class)
@@ -822,6 +823,58 @@ class EncounterServiceImplTest {
         verify(dischargeSummaryRepository).save(any(DischargeSummary.class));
         verify(notificationService).createNotification(anyString(), org.mockito.ArgumentMatchers.eq("patient1"), org.mockito.ArgumentMatchers.eq("DISCHARGE_SUMMARY"));
         verify(emailService).sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"), anyString());
+    }
+
+    @Test
+    void checkOut_notificationOrEmailFailure_doesNotRollback() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        hospital.setName("General Hospital");
+
+        User patientUser = User.builder().username("patient1").email("patient.user@example.com").build();
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        patient.setEmail(null); // force fallback to user email
+        patient.setFirstName("Jane");
+        patient.setLastName("Doe");
+        patient.setUser(patientUser);
+
+        Staff staff = new Staff();
+        staff.setName("Dr. Smith");
+
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        encounter.setStaff(staff);
+
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder()
+            .followUpInstructions("Follow up in 2 weeks")
+            .dischargeDiagnoses(List.of("Upper respiratory infection"))
+            .build();
+
+        AfterVisitSummaryDTO avs = AfterVisitSummaryDTO.builder()
+            .encounterId(encounterId)
+            .followUpInstructions("Follow up in 2 weeks")
+            .build();
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(checkOutMapper.serializeDiagnoses(List.of("Upper respiratory infection"))).thenReturn("[\"Upper respiratory infection\"]");
+        when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(CheckOutRequestDTO.class), any())).thenReturn(avs);
+        doThrow(new RuntimeException("ws down")).when(notificationService)
+            .createNotification(anyString(), org.mockito.ArgumentMatchers.eq("patient1"), org.mockito.ArgumentMatchers.eq("DISCHARGE_SUMMARY"));
+        doThrow(new RuntimeException("smtp down")).when(emailService)
+            .sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient.user@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"), anyString());
+
+        AfterVisitSummaryDTO result = service.checkOut(encounterId, request, "doctor1");
+
+        assertThat(result.getEncounterId()).isEqualTo(encounterId);
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
+        verify(dischargeSummaryRepository).save(any(DischargeSummary.class));
+        verify(emailService).sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient.user@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"), anyString());
     }
 
     @Test
