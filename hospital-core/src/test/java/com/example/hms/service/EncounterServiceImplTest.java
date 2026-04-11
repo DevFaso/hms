@@ -14,7 +14,9 @@ import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Staff;
 import com.example.hms.model.Treatment;
 import com.example.hms.model.User;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.encounter.EncounterNoteHistory;
+import com.example.hms.model.discharge.DischargeSummary;
 import com.example.hms.payload.dto.EncounterNoteHistoryResponseDTO;
 import com.example.hms.payload.dto.EncounterResponseDTO;
 import com.example.hms.payload.dto.EncounterTreatmentResponseDTO;
@@ -34,6 +36,7 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.ObgynReferralRepository;
+import com.example.hms.repository.DischargeSummaryRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.StaffRepository;
@@ -41,6 +44,7 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -64,6 +68,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import java.util.Locale;
 
 @ExtendWith(MockitoExtension.class)
@@ -87,6 +92,9 @@ class EncounterServiceImplTest {
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private ObgynReferralRepository obgynReferralRepository;
     @Mock private UserRepository userRepository;
+    @Mock private DischargeSummaryRepository dischargeSummaryRepository;
+    @Mock private NotificationService notificationService;
+    @Mock private EmailService emailService;
     @Mock private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     @Mock private com.example.hms.repository.PatientVitalSignRepository patientVitalSignRepository;
     @Mock private com.example.hms.mapper.PatientVitalSignMapper patientVitalSignMapper;
@@ -96,6 +104,12 @@ class EncounterServiceImplTest {
     @InjectMocks private EncounterServiceImpl service;
 
     private final Locale locale = Locale.ENGLISH;
+
+    @BeforeEach
+    void setUpCheckoutDefaults() {
+        lenient().when(dischargeSummaryRepository.findByEncounter_Id(any(UUID.class))).thenReturn(Optional.empty());
+        lenient().when(dischargeSummaryRepository.save(any(DischargeSummary.class))).thenAnswer(inv -> inv.getArgument(0));
+    }
 
     // ---------- getEncounterById ----------
 
@@ -759,14 +773,29 @@ class EncounterServiceImplTest {
         UUID encounterId = UUID.randomUUID();
         Hospital hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
+        hospital.setName("General Hospital");
+
+        User patientUser = User.builder().username("patient1").build();
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
+        patient.setEmail("patient@example.com");
+        patient.setFirstName("Jane");
+        patient.setLastName("Doe");
+        patient.setUser(patientUser);
+
+        Staff staff = new Staff();
+        staff.setName("Dr. Smith");
+
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
 
         Encounter encounter = new Encounter();
         encounter.setId(encounterId);
         encounter.setStatus(EncounterStatus.IN_PROGRESS);
         encounter.setHospital(hospital);
         encounter.setPatient(patient);
+        encounter.setStaff(staff);
+        encounter.setAssignment(assignment);
 
         CheckOutRequestDTO request = CheckOutRequestDTO.builder()
             .followUpInstructions("Follow up in 2 weeks")
@@ -790,6 +819,9 @@ class EncounterServiceImplTest {
         assertThat(encounter.getCheckoutTimestamp()).isNotNull();
         assertThat(encounter.getFollowUpInstructions()).isEqualTo("Follow up in 2 weeks");
         verify(encounterRepository).save(encounter);
+        verify(dischargeSummaryRepository).save(any(DischargeSummary.class));
+        verify(notificationService).createNotification(anyString(), org.mockito.ArgumentMatchers.eq("patient1"), org.mockito.ArgumentMatchers.eq("DISCHARGE_SUMMARY"));
+        verify(emailService).sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"), anyString());
     }
 
     @Test

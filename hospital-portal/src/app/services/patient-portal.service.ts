@@ -93,6 +93,7 @@ export interface VitalSignSummary {
   unit: string;
   recordedAt: string;
   source: string;
+  groupId?: string;
 }
 
 /** Raw shape returned by the backend PatientVitalSignResponseDTO. */
@@ -157,6 +158,7 @@ function flattenVitals(raw: PatientVitalSignRaw[]): VitalSignSummary[] {
           type: f.type,
           value: f.format ? f.format(r) : `${r[f.key]}`,
           unit: f.unit,
+          groupId: r.id,
           ...base,
         });
       }

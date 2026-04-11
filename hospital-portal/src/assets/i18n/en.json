@@ -1886,10 +1886,14 @@
       "LOADING": "Loading vitals...",
       "EMPTY_TITLE": "No vital signs recorded",
       "EMPTY_DESC": "Your vital sign readings will appear here.",
+      "APPOINTMENT": "Appointment",
+      "READING": "reading",
+      "READINGS": "readings",
       "TYPE": "Type",
       "VALUE": "Value",
       "RECORDED": "Recorded",
       "SOURCE": "Source",
+      "NORMAL_PREFIX": "Normal",
       "NORMAL_RANGE": "Normal Range"
     },
     "APPOINTMENTS": {

@@ -1704,6 +1704,21 @@
     "ZIP_CODE": "Zip Code"
   },
   "PORTAL": {
+    "VITALS": {
+      "TITLE": "Mis signos vitales",
+      "LOADING": "Cargando signos vitales...",
+      "EMPTY_TITLE": "No hay signos vitales registrados",
+      "EMPTY_DESC": "Tus mediciones de signos vitales aparecerán aquí.",
+      "APPOINTMENT": "Cita",
+      "READING": "medición",
+      "READINGS": "mediciones",
+      "TYPE": "Tipo",
+      "VALUE": "Valor",
+      "RECORDED": "Registrado",
+      "SOURCE": "Fuente",
+      "NORMAL_PREFIX": "Normal",
+      "NORMAL_RANGE": "Rango normal"
+    },
     "DOCUMENTS": {
       "TITLE": "Mis Documentos",
       "UPLOAD": "Subir Documento",

@@ -1886,10 +1886,14 @@
       "LOADING": "Chargement des signes vitaux…",
       "EMPTY_TITLE": "Aucun signe vital enregistré",
       "EMPTY_DESC": "Vos mesures de signes vitaux apparaîtront ici.",
+      "APPOINTMENT": "Rendez-vous",
+      "READING": "mesure",
+      "READINGS": "mesures",
       "TYPE": "Type",
       "VALUE": "Valeur",
       "RECORDED": "Enregistré",
       "SOURCE": "Source",
+      "NORMAL_PREFIX": "Normal",
       "NORMAL_RANGE": "Plage normale"
     },
     "APPOINTMENTS": {

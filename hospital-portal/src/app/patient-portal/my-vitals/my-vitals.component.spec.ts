@@ -33,11 +33,48 @@ describe('MyVitalsComponent', () => {
   });
 
   it('should toggle expand', () => {
-    expect(component.expandedId()).toBeNull();
+    expect(component.expandedGroupId()).toBeNull();
     component.toggleExpand('test-id');
-    expect(component.expandedId()).toBe('test-id');
+    expect(component.expandedGroupId()).toBe('test-id');
     component.toggleExpand('test-id');
-    expect(component.expandedId()).toBeNull();
+    expect(component.expandedGroupId()).toBeNull();
+  });
+
+  it('should group vitals by groupId', () => {
+    component.vitals.set([
+      {
+        id: 'a-heart',
+        type: 'HEART_RATE',
+        value: '72',
+        unit: 'bpm',
+        recordedAt: '2026-04-11T10:00:00Z',
+        source: 'Nurse Station',
+        groupId: 'group-a',
+      },
+      {
+        id: 'a-temp',
+        type: 'TEMPERATURE',
+        value: '37',
+        unit: '°C',
+        recordedAt: '2026-04-11T10:00:00Z',
+        source: 'Nurse Station',
+        groupId: 'group-a',
+      },
+      {
+        id: 'b-heart',
+        type: 'HEART_RATE',
+        value: '80',
+        unit: 'bpm',
+        recordedAt: '2026-04-10T10:00:00Z',
+        source: 'Nurse Station',
+        groupId: 'group-b',
+      },
+    ]);
+
+    const groups = component.groupedVitals();
+    expect(groups.length).toBe(2);
+    expect(groups[0].id).toBe('group-a');
+    expect(groups[0].vitals.length).toBe(2);
   });
 
   it('should return correct vital icon', () => {

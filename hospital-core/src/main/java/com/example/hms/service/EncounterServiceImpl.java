@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.enums.EncounterNoteLinkType;
 import com.example.hms.enums.EncounterNoteTemplate;
 import com.example.hms.enums.EncounterStatus;
+import com.example.hms.enums.DischargeDisposition;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.EncounterMapper;
@@ -18,6 +19,7 @@ import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
+import com.example.hms.model.discharge.DischargeSummary;
 import com.example.hms.model.referral.ObgynReferral;
 import com.example.hms.model.encounter.EncounterNote;
 import com.example.hms.model.encounter.EncounterNoteAddendum;
@@ -40,6 +42,7 @@ import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.ObgynReferralRepository;
+import com.example.hms.repository.DischargeSummaryRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
@@ -89,6 +92,7 @@ public class EncounterServiceImpl implements EncounterService {
     private static final String MSG_ASSIGNMENT_NOT_FOUND = "assignment.notfound";
     private static final String MSG_ENCOUNTER_STAFF_INVALID = "encounter.staff.invalid";
     private static final String MSG_ENCOUNTER_STAFF_HOSPITAL_MISMATCH = "encounter.staff.hospital.mismatch";
+    private static final String DISCHARGE_NOTIFICATION_TYPE = "DISCHARGE_SUMMARY";
 
     private static final List<TextFieldMapping> NOTE_TEXT_FIELDS = List.of(
         new TextFieldMapping(EncounterNoteRequestDTO::getChiefComplaint, EncounterNote::setChiefComplaint),
@@ -248,6 +252,9 @@ public class EncounterServiceImpl implements EncounterService {
     private final PrescriptionRepository prescriptionRepository;
     private final ObgynReferralRepository obgynReferralRepository;
     private final UserRepository userRepository;
+    private final DischargeSummaryRepository dischargeSummaryRepository;
+    private final NotificationService notificationService;
+    private final EmailService emailService;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     private final com.example.hms.repository.PatientVitalSignRepository patientVitalSignRepository;
     private final com.example.hms.mapper.PatientVitalSignMapper patientVitalSignMapper;
@@ -1490,6 +1497,8 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         encounterRepository.save(encounter);
+        upsertDischargeSummaryForCheckout(encounter, request, now);
+        notifyPatientAfterVisitSummary(encounter);
 
         // (c) Transition linked appointment → COMPLETED
         Appointment appointment = encounter.getAppointment();
@@ -1502,6 +1511,69 @@ public class EncounterServiceImpl implements EncounterService {
 
         // (d) Build and return AVS
         return checkOutMapper.toAfterVisitSummary(encounter, request, null);
+    }
+
+    private void upsertDischargeSummaryForCheckout(
+        Encounter encounter,
+        com.example.hms.payload.dto.clinical.CheckOutRequestDTO request,
+        LocalDateTime checkoutTime
+    ) {
+        DischargeSummary summary = dischargeSummaryRepository.findByEncounter_Id(encounter.getId())
+            .orElseGet(DischargeSummary::new);
+
+        summary.setEncounter(encounter);
+        summary.setPatient(encounter.getPatient());
+        summary.setHospital(encounter.getHospital());
+        summary.setDischargingProvider(encounter.getStaff());
+        summary.setAssignment(encounter.getAssignment());
+        summary.setDischargeDate(checkoutTime.toLocalDate());
+        summary.setDischargeTime(checkoutTime);
+        summary.setDisposition(DischargeDisposition.HOME);
+        summary.setDischargeDiagnosis(buildDischargeDiagnosisText(request));
+        summary.setFollowUpInstructions(encounter.getFollowUpInstructions());
+
+        dischargeSummaryRepository.save(summary);
+    }
+
+    private String buildDischargeDiagnosisText(com.example.hms.payload.dto.clinical.CheckOutRequestDTO request) {
+        if (request == null || request.getDischargeDiagnoses() == null || request.getDischargeDiagnoses().isEmpty()) {
+            return "Discharge diagnosis not specified at checkout.";
+        }
+        return request.getDischargeDiagnoses().stream()
+            .filter(Objects::nonNull)
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .collect(Collectors.joining("; "));
+    }
+
+    private void notifyPatientAfterVisitSummary(Encounter encounter) {
+        Patient patient = encounter.getPatient();
+        if (patient == null || patient.getUser() == null || patient.getUser().getUsername() == null) {
+            return;
+        }
+
+        String recipientUsername = patient.getUser().getUsername();
+        String hospitalName = encounter.getHospital() != null ? encounter.getHospital().getName() : "your hospital";
+        String message = "Your visit summary is now available from " + hospitalName + ".";
+        notificationService.createNotification(message, recipientUsername, DISCHARGE_NOTIFICATION_TYPE);
+
+        String patientEmail = patient.getEmail();
+        if (patientEmail == null || patientEmail.isBlank()) {
+            return;
+        }
+
+        String patientName = joinName(patient.getFirstName(), patient.getLastName());
+        String providerName = encounter.getStaff() != null ? encounter.getStaff().getName() : "your care team";
+        String subject = "Your After-Visit Summary is Ready";
+        String body = """
+            <h2>After-Visit Summary Available</h2>
+            <p>Dear %s,</p>
+            <p>Your visit summary for your recent encounter at <strong>%s</strong> is now available in the patient portal.</p>
+            <p><strong>Provider:</strong> %s</p>
+            <p>Please sign in to review your discharge instructions and follow-up details.</p>
+            """.formatted(patientName.isBlank() ? "Patient" : patientName, hospitalName, providerName);
+
+        emailService.sendHtml(List.of(patientEmail), List.of(), List.of(), subject, body);
     }
 
     @Override
