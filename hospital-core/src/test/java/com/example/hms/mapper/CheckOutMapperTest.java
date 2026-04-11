@@ -209,8 +209,7 @@ class CheckOutMapperTest {
             List<String> diagnoses = List.of("Migraine", "Iron deficiency anemia");
             String json = mapper.serializeDiagnoses(diagnoses);
 
-            assertThat(json).isNotNull();
-            assertThat(json).contains("Migraine");
+            assertThat(json).isNotNull().contains("Migraine");
 
             List<String> parsed = mapper.parseDiagnoses(json);
             assertThat(parsed).containsExactly("Migraine", "Iron deficiency anemia");

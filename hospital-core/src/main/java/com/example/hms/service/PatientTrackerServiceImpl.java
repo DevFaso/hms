@@ -57,11 +57,9 @@ public class PatientTrackerServiceImpl implements PatientTrackerService {
         // Filter: exclude terminal statuses, optionally filter by department
         List<PatientTrackerItemDTO> activeItems = new ArrayList<>();
         for (Encounter enc : allEncounters) {
-            if (enc.getStatus() == null || TERMINAL_STATUSES.contains(enc.getStatus())) {
-                continue;
-            }
-            if (departmentId != null && (enc.getDepartment() == null
-                    || !departmentId.equals(enc.getDepartment().getId()))) {
+            if (enc.getStatus() == null || TERMINAL_STATUSES.contains(enc.getStatus())
+                    || (departmentId != null && (enc.getDepartment() == null
+                            || !departmentId.equals(enc.getDepartment().getId())))) {
                 continue;
             }
             PatientTrackerItemDTO item = trackerMapper.toTrackerItem(enc, hospitalId, now);
@@ -86,10 +84,8 @@ public class PatientTrackerServiceImpl implements PatientTrackerService {
                 case "IN_PROGRESS" -> inProgress.add(item);
                 case "AWAITING_RESULTS" -> awaitingResults.add(item);
                 case "READY_FOR_DISCHARGE" -> readyForDischarge.add(item);
-                default -> {
-                    // SCHEDULED or any other non-terminal status goes to arrived lane
-                    arrived.add(item);
-                }
+                // SCHEDULED or any other non-terminal status goes to arrived lane
+                default -> arrived.add(item);
             }
         }
 

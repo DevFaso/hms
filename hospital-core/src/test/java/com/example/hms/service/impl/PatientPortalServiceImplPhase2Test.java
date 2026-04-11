@@ -1318,7 +1318,7 @@ class PatientPortalServiceImplPhase2Test {
             List<java.util.Map<String, Object>> result = service.getMyHospitals(auth);
 
             assertThat(result).hasSize(1);
-            assertThat(result.get(0).get("name")).isEqualTo("City General");
+            assertThat(result.get(0)).containsEntry("name", "City General");
         }
 
         @Test
@@ -1351,8 +1351,8 @@ class PatientPortalServiceImplPhase2Test {
                     service.getDepartmentsForHospital(hospId);
 
             assertThat(result).hasSize(2);
-            assertThat(result.get(0).get("name")).isEqualTo("Cardiology");
-            assertThat(result.get(1).get("name")).isEqualTo("Radiology");
+            assertThat(result.get(0)).containsEntry("name", "Cardiology");
+            assertThat(result.get(1)).containsEntry("name", "Radiology");
         }
 
         @Test
@@ -1384,10 +1384,10 @@ class PatientPortalServiceImplPhase2Test {
                     service.getProvidersForDepartment(hospId, deptId);
 
             assertThat(result).hasSize(1);
-            assertThat(result.get(0).get("id")).isEqualTo(s.getId());
-            assertThat(result.get(0).get("name")).isEqualTo("Dr. Doe");
-            assertThat(result.get(0).get("fullName")).isEqualTo("Jane Doe");
-            assertThat(result.get(0).get("role")).isEqualTo("Doctor");
+            assertThat(result.get(0)).containsEntry("id", s.getId());
+            assertThat(result.get(0)).containsEntry("name", "Dr. Doe");
+            assertThat(result.get(0)).containsEntry("fullName", "Jane Doe");
+            assertThat(result.get(0)).containsEntry("role", "Doctor");
         }
 
         @Test

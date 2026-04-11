@@ -5,7 +5,6 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.EncounterMapper;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.EncounterStatus;
-import com.example.hms.enums.EncounterUrgency;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.EncounterTreatment;
@@ -849,7 +848,8 @@ class EncounterServiceImplTest {
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
-        assertThatThrownBy(() -> service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1"))
+        CheckOutRequestDTO request = CheckOutRequestDTO.builder().build();
+        assertThatThrownBy(() -> service.checkOut(encounterId, request, "doctor1"))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("COMPLETED");
 
@@ -866,7 +866,8 @@ class EncounterServiceImplTest {
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
-        assertThatThrownBy(() -> service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1"))
+        CheckOutRequestDTO cancelledRequest = CheckOutRequestDTO.builder().build();
+        assertThatThrownBy(() -> service.checkOut(encounterId, cancelledRequest, "doctor1"))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("CANCELLED");
 
@@ -880,7 +881,8 @@ class EncounterServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("Encounter not found");
 
-        assertThatThrownBy(() -> service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1"))
+        CheckOutRequestDTO notFoundRequest = CheckOutRequestDTO.builder().build();
+        assertThatThrownBy(() -> service.checkOut(encounterId, notFoundRequest, "doctor1"))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 

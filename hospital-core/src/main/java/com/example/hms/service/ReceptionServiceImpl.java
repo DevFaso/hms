@@ -69,6 +69,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     private static final String STATUS_WALK_IN = "WALK_IN";
     private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
     private static final String STATUS_COMPLETED = "COMPLETED";
+    private static final String ENTITY_TYPE_ENCOUNTER = "ENCOUNTER";
 
     private final AppointmentRepository appointmentRepo;
     private final EncounterRepository encounterRepo;
@@ -645,7 +646,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                         .eventType(AuditEventType.DATA_UPDATE)
                         .eventDescription("Encounter status update DENIED — encounter not assigned to caller")
                         .resourceId(encounterId.toString())
-                        .entityType("ENCOUNTER")
+                        .entityType(ENTITY_TYPE_ENCOUNTER)
                         .status(AuditStatus.FAILURE)
                         .build());
                 throw new AccessDeniedException("You may only update encounter status for your own patients.");
@@ -661,7 +662,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .eventType(AuditEventType.DATA_UPDATE)
                 .eventDescription("Encounter status updated from " + previousStatus + " to " + status)
                 .resourceId(encounterId.toString())
-                .entityType("ENCOUNTER")
+                .entityType(ENTITY_TYPE_ENCOUNTER)
                 .status(AuditStatus.SUCCESS)
                 .build());
     }
@@ -744,7 +745,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                         + (request.isIdentityConfirmed() ? " Identity confirmed." : "")
                         + (request.isInsuranceVerified() ? " Insurance verified." : ""))
                 .resourceId(encounter.getId().toString())
-                .entityType("ENCOUNTER")
+                .entityType(ENTITY_TYPE_ENCOUNTER)
                 .status(AuditStatus.SUCCESS)
                 .build());
 

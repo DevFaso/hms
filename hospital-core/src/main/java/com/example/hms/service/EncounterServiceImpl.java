@@ -1370,7 +1370,7 @@ public class EncounterServiceImpl implements EncounterService {
                             ? allergyReq.getRecordedDate()
                             : java.time.LocalDate.now())
                     .sourceSystem("NURSING_INTAKE")
-                    .active(allergyReq.getActive() != null ? allergyReq.getActive() : true)
+                    .active(allergyReq.getActive() == null || allergyReq.getActive())
                     .build();
             patientAllergyRepository.save(allergy);
             count++;
@@ -1390,49 +1390,66 @@ public class EncounterServiceImpl implements EncounterService {
 
         StringBuilder noteBuilder = new StringBuilder();
 
-        if (request.getNursingAssessmentNotes() != null && !request.getNursingAssessmentNotes().isBlank()) {
-            noteBuilder.append("[Nursing Assessment]\n").append(request.getNursingAssessmentNotes().trim()).append("\n\n");
-        }
-
-        if (request.getPainAssessment() != null && !request.getPainAssessment().isBlank()) {
-            noteBuilder.append("[Pain Assessment]\n").append(request.getPainAssessment().trim()).append("\n\n");
-        }
-
-        if (request.getFallRiskDetail() != null && !request.getFallRiskDetail().isBlank()) {
-            noteBuilder.append("[Fall Risk]\n").append(request.getFallRiskDetail().trim()).append("\n\n");
-        }
-
-        if (request.getMedications() != null && !request.getMedications().isEmpty()) {
-            noteBuilder.append("[Medication Reconciliation] ").append(medicationCount).append(" medication(s) reported:\n");
-            for (com.example.hms.payload.dto.NursingIntakeRequestDTO.MedicationReconciliationEntry med
-                    : request.getMedications()) {
-                noteBuilder.append("- ").append(med.getMedicationName() != null ? med.getMedicationName() : "Unknown");
-                if (med.getDosage() != null) noteBuilder.append(" ").append(med.getDosage());
-                if (med.getFrequency() != null) noteBuilder.append(" ").append(med.getFrequency());
-                if (!med.isStillTaking()) noteBuilder.append(" (DISCONTINUED)");
-                if (med.getNotes() != null) noteBuilder.append(" — ").append(med.getNotes());
-                noteBuilder.append("\n");
-            }
-            noteBuilder.append("\n");
-        }
+        appendSectionIfPresent(noteBuilder, "[Nursing Assessment]", request.getNursingAssessmentNotes());
+        appendSectionIfPresent(noteBuilder, "[Pain Assessment]", request.getPainAssessment());
+        appendSectionIfPresent(noteBuilder, "[Fall Risk]", request.getFallRiskDetail());
+        appendMedicationReconciliation(noteBuilder, request.getMedications(), medicationCount);
 
         if (noteBuilder.isEmpty()) {
             return false;
         }
 
-        // Append to existing notes rather than overwriting
+        appendToEncounterNotes(encounter, noteBuilder);
+        return true;
+    }
+
+    /** Appends a labelled section to the note builder if the content is non-blank. */
+    private void appendSectionIfPresent(StringBuilder noteBuilder, String header, String content) {
+        if (content != null && !content.isBlank()) {
+            noteBuilder.append(header).append("\n").append(content.trim()).append("\n\n");
+        }
+    }
+
+    /** Appends a medication reconciliation block listing each medication entry. */
+    private void appendMedicationReconciliation(
+            StringBuilder noteBuilder,
+            java.util.List<com.example.hms.payload.dto.NursingIntakeRequestDTO.MedicationReconciliationEntry> medications,
+            int medicationCount) {
+
+        if (medications == null || medications.isEmpty()) {
+            return;
+        }
+        noteBuilder.append("[Medication Reconciliation] ").append(medicationCount).append(" medication(s) reported:\n");
+        for (com.example.hms.payload.dto.NursingIntakeRequestDTO.MedicationReconciliationEntry med : medications) {
+            appendMedicationLine(noteBuilder, med);
+        }
+        noteBuilder.append("\n");
+    }
+
+    /** Formats a single medication entry as a dash-prefixed line. */
+    private void appendMedicationLine(
+            StringBuilder noteBuilder,
+            com.example.hms.payload.dto.NursingIntakeRequestDTO.MedicationReconciliationEntry med) {
+
+        noteBuilder.append("- ").append(med.getMedicationName() != null ? med.getMedicationName() : "Unknown");
+        if (med.getDosage() != null) noteBuilder.append(" ").append(med.getDosage());
+        if (med.getFrequency() != null) noteBuilder.append(" ").append(med.getFrequency());
+        if (!med.isStillTaking()) noteBuilder.append(" (DISCONTINUED)");
+        if (med.getNotes() != null) noteBuilder.append(" — ").append(med.getNotes());
+        noteBuilder.append("\n");
+    }
+
+    /** Appends the built note to the encounter's existing notes, truncating to 2048 chars. */
+    private void appendToEncounterNotes(Encounter encounter, StringBuilder noteBuilder) {
         String existingNotes = encounter.getNotes() != null ? encounter.getNotes() : "";
         String combined = existingNotes.isBlank()
                 ? noteBuilder.toString().trim()
                 : existingNotes + "\n\n--- Nursing Intake ---\n" + noteBuilder.toString().trim();
 
-        // Truncate to column limit if needed
         if (combined.length() > 2048) {
             combined = combined.substring(0, 2048);
         }
         encounter.setNotes(combined);
-
-        return true;
     }
 
     /**
