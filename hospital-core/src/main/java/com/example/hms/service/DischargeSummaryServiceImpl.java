@@ -384,7 +384,10 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         //    that are missing them (defensive — ensures checkout data is always surfaced).
         backfillMissingDischargeSummaries(patientId);
 
-        // 2. Return all discharge summaries for this patient
+        // 2. Enrich existing summaries that were backfilled before medication/notes enrichment
+        enrichSparseExistingSummaries(patientId);
+
+        // 3. Return all discharge summaries for this patient
         return dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId)
                 .stream()
                 .map(dischargeSummaryMapper::toResponseDTO)
@@ -436,6 +439,45 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
             } catch (Exception ex) {
                 log.warn("Failed to backfill discharge summary for encounter {}: {}",
                         enc.getId(), ex.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Enriches existing discharge summaries that were created before the medication/notes
+     * enrichment logic was added. Populates hospitalCourse and medicationReconciliation
+     * for summaries that are missing them.
+     */
+    private void enrichSparseExistingSummaries(UUID patientId) {
+        List<DischargeSummary> summaries = dischargeSummaryRepository
+                .findByPatient_IdOrderByDischargeDateDesc(patientId);
+        for (DischargeSummary summary : summaries) {
+            boolean changed = false;
+            Encounter enc = summary.getEncounter();
+            if (enc == null) continue;
+
+            // Enrich hospitalCourse from encounter notes if missing
+            if (summary.getHospitalCourse() == null || summary.getHospitalCourse().isBlank()) {
+                if (enc.getNotes() != null && !enc.getNotes().isBlank()) {
+                    summary.setHospitalCourse(enc.getNotes());
+                    changed = true;
+                }
+            }
+
+            // Enrich medications from prescriptions if missing
+            if (summary.getMedicationReconciliation() == null
+                    || summary.getMedicationReconciliation().isEmpty()) {
+                populateMedicationsFromPrescriptions(summary, enc);
+                if (summary.getMedicationReconciliation() != null
+                        && !summary.getMedicationReconciliation().isEmpty()) {
+                    changed = true;
+                }
+            }
+
+            if (changed) {
+                dischargeSummaryRepository.save(summary);
+                log.info("Enriched sparse discharge summary {} for encounter {}",
+                        summary.getId(), enc.getId());
             }
         }
     }
