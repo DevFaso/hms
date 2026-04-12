@@ -9,8 +9,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Science
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -80,6 +82,18 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
                     elevation = CardDefaults.cardElevation(2.dp)
                 ) {
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        // Status icon like iOS
+                        Icon(
+                            if (lab.isAbnormal || lab.isCritical) Icons.Default.Warning else Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = when {
+                                lab.isCritical -> CriticalRed
+                                lab.isAbnormal -> WarningAmber
+                                else -> SuccessGreen
+                            },
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Row(
                                 Modifier.fillMaxWidth(),
@@ -162,6 +176,27 @@ internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
                 Text("Results", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 lab.result?.let { DetailRow("Value", "$it ${lab.unit ?: ""}".trim()) }
                 lab.referenceRange?.let { DetailRow("Reference Range", it) }
+
+                // Interpretation label like iOS
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    when {
+                        lab.isCritical -> {
+                            Icon(Icons.Default.Warning, null, tint = CriticalRed, modifier = Modifier.size(16.dp))
+                            Text("Critical value — contact your provider",
+                                style = MaterialTheme.typography.bodySmall, color = CriticalRed)
+                        }
+                        lab.isAbnormal -> {
+                            Icon(Icons.Default.Warning, null, tint = WarningAmber, modifier = Modifier.size(16.dp))
+                            Text("Abnormal — review with your provider",
+                                style = MaterialTheme.typography.bodySmall, color = WarningAmber)
+                        }
+                        else -> {
+                            Icon(Icons.Default.CheckCircle, null, tint = SuccessGreen, modifier = Modifier.size(16.dp))
+                            Text("Within normal range",
+                                style = MaterialTheme.typography.bodySmall, color = SuccessGreen)
+                        }
+                    }
+                }
 
                 HorizontalDivider()
 

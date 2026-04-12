@@ -30,6 +30,7 @@ import java.util.Locale
 @Composable
 fun AppointmentsScreen(
     navController: NavController? = null,
+    onMenuClick: () -> Unit = {},
     viewModel: AppointmentsViewModel = hiltViewModel()
 ) {
     val appointments by viewModel.appointments.collectAsState()
@@ -53,6 +54,11 @@ fun AppointmentsScreen(
         topBar = {
             TopAppBar(
                 title = { Text("Appointments") },
+                navigationIcon = {
+                    IconButton(onClick = onMenuClick) {
+                        Icon(Icons.Default.Menu, contentDescription = "Menu", tint = Color.White)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BrandBlue,
                     titleContentColor = Color.White),
                 actions = {

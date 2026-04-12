@@ -38,8 +38,16 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
     val tabs = listOf("Medications", "Prescriptions", "Refills")
     var selectedMed by remember { mutableStateOf<MedicationDto?>(null) }
     var selectedRx by remember { mutableStateOf<PrescriptionDto?>(null) }
+    var refillTarget by remember { mutableStateOf<PrescriptionDto?>(null) }
+    val snackbarMessage by viewModel.snackbar.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(snackbarMessage) {
+        snackbarMessage?.let { snackbarHostState.showSnackbar(it); viewModel.clearSnackbar() }
+    }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text("Medications") },
@@ -89,17 +97,24 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                 Column(Modifier.weight(1f)) {
                                     Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                                         Text(med.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                        if (!med.isActive) {
-                                            Surface(shape = RoundedCornerShape(50),
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)) {
-                                                Text("Inactive", Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                                    style = MaterialTheme.typography.labelSmall)
-                                            }
+                                        Surface(shape = RoundedCornerShape(50),
+                                            color = if (med.isActive) androidx.compose.ui.graphics.Color(0xFF2E7D32).copy(alpha = 0.12f)
+                                                    else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)) {
+                                            Text(if (med.isActive) "Active" else "Inactive",
+                                                Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = if (med.isActive) androidx.compose.ui.graphics.Color(0xFF2E7D32)
+                                                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontWeight = FontWeight.Medium)
                                         }
                                     }
-                                    med.dosage?.let { Text("Dosage: $it", style = MaterialTheme.typography.bodySmall) }
-                                    med.frequency?.let { Text("Frequency: $it", style = MaterialTheme.typography.bodySmall) }
-                                    med.prescribedBy?.let { Text("Prescribed by: $it", style = MaterialTheme.typography.bodySmall,
+                                    med.dosage?.let { dosage ->
+                                        val dosageFreq = listOfNotNull(dosage, med.frequency).joinToString(" · ")
+                                        Text(dosageFreq, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    med.prescribedBy?.let { Text("Prescribed by $it", style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                    med.startDate?.let { Text("Since ${it.take(10)}", style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant) }
                                 }
                                 Icon(Icons.Default.ChevronRight, contentDescription = null,
@@ -131,16 +146,39 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                     Text(rx.medicationName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
                                         modifier = Modifier.weight(1f))
                                     Surface(shape = RoundedCornerShape(50), color = BrandBlue.copy(alpha = 0.1f)) {
-                                        Text("Refills: ${rx.refillsRemaining}",
+                                        Text(rx.status.replaceFirstChar { it.uppercase() },
                                             Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                            style = MaterialTheme.typography.labelSmall, color = BrandBlue)
+                                            style = MaterialTheme.typography.labelSmall, color = BrandBlue,
+                                            fontWeight = FontWeight.Medium)
                                     }
                                     Icon(Icons.Default.ChevronRight, contentDescription = "View details",
                                         modifier = Modifier.padding(start = 4.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
-                                rx.dosage?.let { Text("Dosage: $it", style = MaterialTheme.typography.bodySmall) }
-                                rx.frequency?.let { Text("Frequency: $it", style = MaterialTheme.typography.bodySmall) }
+                                rx.dosage?.let { dosage ->
+                                    val dosageFreq = listOfNotNull(dosage, rx.frequency).joinToString(" · ")
+                                    Text(dosageFreq, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                rx.prescribedBy?.let { Text("By $it", style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                Spacer(Modifier.height(6.dp))
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically) {
+                                    Text("${rx.refillsRemaining} refill(s) remaining",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    if (rx.refillsRemaining > 0) {
+                                        FilledTonalButton(
+                                            onClick = { refillTarget = rx },
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                                            modifier = Modifier.height(28.dp)
+                                        ) {
+                                            Icon(Icons.Default.Medication, null, Modifier.size(14.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("Request Refill", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -221,6 +259,57 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
     // Prescription Detail Dialog
     selectedRx?.let { rx ->
         PrescriptionDetailDialog(rx = rx, onDismiss = { selectedRx = null })
+    }
+
+    // Refill Request Dialog
+    refillTarget?.let { rx ->
+        var pharmacy by remember { mutableStateOf("") }
+        var notes by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { refillTarget = null },
+            title = { Text("Request Refill", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(rx.medicationName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    rx.dosage?.let { d ->
+                        val info = listOfNotNull(d, rx.frequency).joinToString(" · ")
+                        Text(info, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    HorizontalDivider()
+                    OutlinedTextField(
+                        value = pharmacy,
+                        onValueChange = { pharmacy = it },
+                        label = { Text("Preferred Pharmacy") },
+                        placeholder = { Text("e.g. CVS Main St") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = notes,
+                        onValueChange = { notes = it },
+                        label = { Text("Notes (optional)") },
+                        placeholder = { Text("Any special instructions") },
+                        minLines = 2,
+                        maxLines = 3,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                FilledTonalButton(onClick = {
+                    viewModel.requestRefill(
+                        prescriptionId = rx.id,
+                        pharmacy = pharmacy.takeIf { it.isNotBlank() },
+                        notes = notes.takeIf { it.isNotBlank() }
+                    )
+                    refillTarget = null
+                }) { Text("Submit") }
+            },
+            dismissButton = {
+                TextButton(onClick = { refillTarget = null }) { Text("Cancel") }
+            }
+        )
     }
 }
 

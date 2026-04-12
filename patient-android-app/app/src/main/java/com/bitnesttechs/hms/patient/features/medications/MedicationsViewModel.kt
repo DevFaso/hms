@@ -16,6 +16,8 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
     val prescriptions = MutableStateFlow<List<PrescriptionDto>>(emptyList())
     val refills = MutableStateFlow<List<RefillDto>>(emptyList())
     val isLoading = MutableStateFlow(true)
+    private val _snackbar = MutableStateFlow<String?>(null)
+    val snackbar: StateFlow<String?> = _snackbar
 
     init { load() }
 
@@ -33,4 +35,22 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
             finally { isLoading.value = false }
         }
     }
+
+    fun requestRefill(prescriptionId: String, pharmacy: String?, notes: String?) {
+        viewModelScope.launch {
+            try {
+                val resp = api.requestRefill(RefillRequest(pharmacyId = pharmacy, notes = notes))
+                if (resp.isSuccessful) {
+                    _snackbar.value = "Refill requested successfully"
+                    load()
+                } else {
+                    _snackbar.value = "Failed to request refill"
+                }
+            } catch (e: Exception) {
+                _snackbar.value = "Error: ${e.message}"
+            }
+        }
+    }
+
+    fun clearSnackbar() { _snackbar.value = null }
 }

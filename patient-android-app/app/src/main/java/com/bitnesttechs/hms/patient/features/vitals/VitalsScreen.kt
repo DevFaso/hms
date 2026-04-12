@@ -76,22 +76,22 @@ fun VitalsScreen(onBack: () -> Unit = {}, viewModel: VitalsViewModel = hiltViewM
                             }
                             Spacer(Modifier.height(12.dp))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                latest.bloodPressureDisplay?.let { VitalTile("Blood Pressure", it, Icons.Default.Favorite, Modifier.weight(1f)) }
-                                latest.heartRateDisplay?.let { VitalTile("Heart Rate", it, Icons.Default.MonitorHeart, Modifier.weight(1f)) }
+                                latest.bloodPressureDisplay?.let { VitalTile("Blood Pressure", it, Icons.Default.Favorite, color = Color(0xFFE53935), modifier = Modifier.weight(1f)) }
+                                latest.heartRateDisplay?.let { VitalTile("Heart Rate", it, Icons.Default.MonitorHeart, color = Color(0xFFEC407A), modifier = Modifier.weight(1f)) }
                             }
                             Spacer(Modifier.height(8.dp))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                latest.temperatureDisplay?.let { VitalTile("Temperature", it, Icons.Default.Thermostat, Modifier.weight(1f)) }
-                                latest.oxygenDisplay?.let { VitalTile("Oxygen Sat.", it, Icons.Default.Air, Modifier.weight(1f)) }
+                                latest.temperatureDisplay?.let { VitalTile("Temperature", it, Icons.Default.Thermostat, color = Color(0xFFFB8C00), modifier = Modifier.weight(1f)) }
+                                latest.oxygenDisplay?.let { VitalTile("SpO₂", it, Icons.Default.Air, color = Color(0xFF1E88E5), modifier = Modifier.weight(1f)) }
                             }
                             Spacer(Modifier.height(8.dp))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                latest.respiratoryRateDisplay?.let { VitalTile("Resp. Rate", it, Icons.Default.Air, Modifier.weight(1f)) }
-                                latest.bloodGlucoseDisplay?.let { VitalTile("Glucose", it, Icons.Default.Bloodtype, Modifier.weight(1f)) }
+                                latest.respiratoryRateDisplay?.let { VitalTile("Resp. Rate", it, Icons.Default.Air, color = Color(0xFF00897B), modifier = Modifier.weight(1f)) }
+                                latest.bloodGlucoseDisplay?.let { VitalTile("Glucose", it, Icons.Default.Bloodtype, color = Color(0xFF5C6BC0), modifier = Modifier.weight(1f)) }
                             }
                             Spacer(Modifier.height(8.dp))
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                latest.weightDisplay?.let { VitalTile("Weight", it, Icons.Default.FitnessCenter, Modifier.weight(1f)) }
+                                latest.weightDisplay?.let { VitalTile("Weight", it, Icons.Default.FitnessCenter, color = Color(0xFF8E24AA), modifier = Modifier.weight(1f)) }
                             }
                         }
                     }
@@ -116,13 +116,14 @@ fun VitalsScreen(onBack: () -> Unit = {}, viewModel: VitalsViewModel = hiltViewM
 }
 
 @Composable
-private fun VitalTile(label: String, value: String, icon: ImageVector, modifier: Modifier = Modifier) {
-    Surface(modifier = modifier, shape = RoundedCornerShape(12.dp), color = BrandLightBlue) {
+private fun VitalTile(label: String, value: String, icon: ImageVector, color: Color = BrandBlue, modifier: Modifier = Modifier) {
+    Surface(modifier = modifier, shape = RoundedCornerShape(14.dp), color = color.copy(alpha = 0.08f)) {
         Column(Modifier.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, null, tint = BrandBlue, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.height(4.dp))
-            Text(value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = BrandBlue)
-            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Icon(icon, null, tint = color, modifier = Modifier.size(22.dp))
+            Spacer(Modifier.height(6.dp))
+            Text(value, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = color)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1)
         }
     }
 }
@@ -134,27 +135,32 @@ private fun VitalHistoryRow(vital: VitalSignDto, onClick: () -> Unit) {
         elevation = CardDefaults.cardElevation(1.dp),
         modifier = Modifier.clickable { onClick() }
     ) {
-        Row(
-            Modifier.padding(12.dp).fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(vital.recordedDateDisplay, style = MaterialTheme.typography.bodySmall)
-                vital.sourceDisplay?.let {
-                    Text(it, style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                vital.bloodPressureDisplay?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                vital.heartRateDisplay?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                vital.oxygenDisplay?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        Column(Modifier.padding(12.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(vital.recordedDateDisplay, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                 Icon(Icons.Default.ChevronRight, contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
             }
+            vital.sourceDisplay?.let {
+                Text(it, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                vital.bloodPressureDisplay?.let { VitalMiniLabel("🩺", it) }
+                vital.heartRateDisplay?.let { VitalMiniLabel("❤️", it) }
+                vital.oxygenDisplay?.let { VitalMiniLabel("🫁", it) }
+                vital.temperatureDisplay?.let { VitalMiniLabel("🌡️", it) }
+            }
         }
     }
+}
+
+@Composable
+private fun VitalMiniLabel(emoji: String, value: String) {
+    Text("$emoji $value", style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable

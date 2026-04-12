@@ -179,7 +179,10 @@ fun MainScreen(onLogout: () -> Unit) {
                     )
                 }
                 composable(Tab.Appointments.route) {
-                    AppointmentsScreen(navController = navController)
+                    AppointmentsScreen(
+                        navController = navController,
+                        onMenuClick = { scope.launch { drawerState.open() } }
+                    )
                 }
                 composable(Tab.Messages.route) {
                     MessagesScreen(
