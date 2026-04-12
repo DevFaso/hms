@@ -209,8 +209,10 @@
 /* Visit History */
 "encounters" = "Encounters";
 "after_visit_summaries" = "After-Visit Summaries";
+"visit_summaries_title" = "Visit Summaries";
 "no_encounters" = "No encounters";
 "no_summaries" = "No after-visit summaries";
+"no_summaries_desc" = "After-visit summaries will appear here once your visits are completed.";
 "discharge_summary" = "Discharge Summary";
 "diagnosis" = "Diagnosis";
 "visit_date" = "Visit Date";

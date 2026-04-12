@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Medication Models (matches MedicationSummary)
 
-struct MedicationDTO: Codable, Identifiable {
+struct MedicationDTO: Codable, Identifiable, Hashable {
     let id: String?
     let name: String?
     let dosage: String?
@@ -46,18 +46,19 @@ struct PrescriptionDTO: Codable, Identifiable, Hashable {
     let diagnosisDescription: String?
 }
 
-// MARK: - Refill Models (matches MedicationRefill)
+// MARK: - Refill Models (matches MedicationRefillResponseDTO)
 
 struct RefillDTO: Codable, Identifiable {
     let id: String?
     let prescriptionId: String?
     let medicationName: String?
-    let dosage: String?
-    let preferredPharmacy: String?
+    let patientId: String?
     let status: String?
-    let requestedAt: String?
-    let completedAt: String?
+    let preferredPharmacy: String?
     let notes: String?
+    let providerNotes: String?
+    let requestedAt: String?
+    let updatedAt: String?
 }
 
 struct RefillRequest: Encodable {

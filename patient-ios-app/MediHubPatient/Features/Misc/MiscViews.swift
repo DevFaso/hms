@@ -232,7 +232,7 @@ struct HealthRecordsView: View {
                                        description: Text("No lab results on file."))
             } else {
                 List(vm.labs) { lab in
-                    LabResultDetailRow(result: lab)
+                    LabResultSummaryRow(result: lab)
                 }
                 .listStyle(.insetGrouped)
             }

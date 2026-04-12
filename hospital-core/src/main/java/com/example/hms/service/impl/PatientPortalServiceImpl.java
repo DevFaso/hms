@@ -706,7 +706,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     // ── After-visit summaries (discharge summaries) ──────────────────────
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public List<DischargeSummaryResponseDTO> getMyAfterVisitSummaries(Authentication auth, Locale locale) {
         UUID patientId = resolvePatientId(auth);
         return dischargeSummaryService.getDischargeSummariesForPortalPatient(patientId);

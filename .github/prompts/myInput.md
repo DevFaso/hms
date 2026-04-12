@@ -1,15 +1,123 @@
-ANALYSIS:
-HERE IS HOW THE WORKFLOW SHOULD BE. ANALYZE THE GAP CREATE AND MVP.MD FILE AND WRITE DOWN THE MVPS.
+this concerns the patient portal and both android/ios implementations. this encounter "created_at
+Value
+2026-04-11 16:00:03
+timestamp
+encounter_date
+Value
+2026-04-11 00:00:00
+timestamp
+updated_at
+Value
+2026-04-11 16:18:21
+timestamp
+version
+Value
+1
+int8
+appointment_id
+Value
+null
+uuid
+assignment_id
+Value
+3c672a19-a315-4750-a266-99e40538e106
+uuid
+department_id
+Value
+b70d91e5-5bfe-489e-8e9e-d44f2c61bbd9
+uuid
+hospital_id
+Value
+513df1b3-e036-442a-8bca-f4c4b6faa09f
+uuid
+id
+Value
+c7483dd8-a204-499c-a5c1-59c5040a4386
+uuid
+patient_id
+Value
+4b6ea3b4-b6dd-4fb8-9c99-21e59754a19d
+uuid
+staff_id
+Value
+4656160b-313b-4b92-8869-5520f4791525
+uuid
+code
+Value
+ENC-20260411-91C8F3
+varchar
+created_by
+Value
+null
+varchar
+updated_by
+Value
+null
+varchar
+notes
+Value
+testing updates
+varchar
+extra_fields
+Value
+null
+text
+encounter_type
+Value
+FOLLOW_UP
+varchar
+status
+Value
+COMPLETED
+varchar
+urgency
+Value
+null
+varchar
+arrival_timestamp
+Value
+null
+timestamp
+chief_complaint
+Value
+null
+varchar
+esi_score
+Value
+null
+int4
+room_assignment
+Value
+null
+varchar
+triage_timestamp
+Value
+null
+timestamp
+roomed_timestamp
+Value
+null
+timestamp
+nursing_intake_timestamp
+Value
+null
+timestamp
+checkout_timestamp
+Value
+2026-04-11 16:18:21
+timestamp
+follow_up_instructions
+Value
+return to clinic after seeing the Cardiologist in 2 weeks
+text
+discharge_diagnoses
+Value
+["Patient is suffering from testing workflow"]
+text"
 
-Step-by-Step Workflow (with Timing & Data)
-Appointment Scheduling (Cadence) – Days–weeks before visit: Staff or patient books a visit in Cadence (Epic scheduling). Required data: patient demographics (name, DOB), reason for visit, provider, location, preferred times. Epic captures insurance info (via Prelude link) and co-pay if needed. (If unscheduled, skip to “Walk-in Registration”.)
-Pre-Arrival (MyChart/Kiosk) – 1–2 days prior: Patients may pre-check-in via MyChart/Hello Patient, updating contact or insurance info and completing pre-visit questionnaires. Epic Prep: insurance eligibility verified (Prelude). Data fields: contact info, insurance updates, payment plan (if required).
-Arrival & Check-In (Prelude/Registration) – 0–5 min: Patient arrives. Receptionist uses Prelude (Epic Registration) to check them in for the appointment. Required fields: confirm identity (DOB, photo ID), insurance card, verify guarantor, co-pay collection, update demographics (address, phone), capture chief complaint or reason, update payer status. Epic events: triggers ADT Arrival (A01 message). Timing: ~5 min. (If patient is late, standard check-in still occurs but with delay.)
-Waiting Room/Observations – variable: Patient waits. If patient is marked urgent (by provider or nurse), expedite rooming. No new data; waiting time logged. (No Epic action besides tracking in Cadence or patient tracker.)
-Triage / Rooming (Navigator – Triage Screen) – 5–10 min: Nurse escorts patient to exam room (or triage station). The nurse enters initial assessment in Epic Navigator (Triage module or SmartForm): vital signs (BP, HR, temp, etc.), chief complaint, acuity level. Data: vitals, ESI/Triage level if ED, any fall risk. Epic may log an ADT status change (Roomed). Timing: ~5 min. Urgent cases flagged (e.g. via ESI score) and may bypass normal queue.
-Nursing Intake (Flowsheets/SmartForms) – 5–10 min: In exam room, nurse completes intake flowsheet: updates allergies/meds, documents reason for visit, records chief complaint details. Data fields: allergies, medications, chief complaint text. No additional Epic messages, but vital signs and triage info stored in flowsheets. Timing: ~5 min.
-Clinician Evaluation (Navigator/Chart Review) – 10–20 min: Clinician reviews nurse input, performs exam, documents visit. In EpicCare Ambulatory (Chart Review/Notes), provider enters history and exam. Tools: SmartForms for HPI/ROS, Chart Review for past data. If tests are needed, provider places orders via Order Entry (ordering labs, imaging, procedures). Data: exam findings, assessment, orders. Epic issues orders (ORM messages to lab/radiology). Timing: 15 min (avg).
-Labs/Imaging & Results (Beaker/Radiant integration) – 5–60 min: Patient is sent to lab/radiology. Labs: phlebotomist draws samples, Epic Beaker processes the tests. Radiology: tech performs imaging. Results are returned via HL7 ORU messages into Epic (View in results or Radiology viewer). Responsible: lab tech, rad tech. Timing: 30–60 min for results.
-Clinician Review of Results (Chart Review) – varies: Clinician sees results in Epic before or after visit using Chart Review (Alerts/In Basket may notify new results). Data: lab values, imaging reports.
-Disposition/Check-Out (Cadence/ADT) – 5 min: Clinician or staff arranges follow-up. Receptionist uses Cadence to schedule next appointment if needed. Epic forms discharge instructions (print or MyChart). Visit is checked out in Prelude, generating final ADT (A03) for check-out or A08 if admitted. Data: visit summary, next appt. Timing: ~5 min.
-Note: Variations include Walk-in Patients (e.g. unscheduled urgent visits): start at step 3 (Walk-in Registration), creating a “Walk-In” encounter (ADT Admission). Late/No-Show: if patient is late but still arrives, process as above (logging arrival time). If no-show, appointment status updated (Cadence mark “no-show”, and staff call to reschedule). Urgent Triage: high acuity patients receive immediate triage and expedited rooming (bypassing normal wait order).
+ happened yesterday. the appointment has the patient vitals, medicaltions, labs ...
+
+ the question is after visit sumaries still empty? why it's not updated?
+
+ investigate the root cause fix it.
+ read carefully the instructions from agents and prompt folders

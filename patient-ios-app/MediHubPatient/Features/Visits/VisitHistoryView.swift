@@ -71,6 +71,22 @@ struct VisitHistoryView: View {
 
 struct EncounterRowView: View {
     let encounter: EncounterDTO
+    
+    private var statusText: String {
+        (encounter.status ?? "—")
+            .replacingOccurrences(of: "_", with: " ")
+            .capitalized
+    }
+    
+    private var statusColor: String {
+        switch encounter.status?.uppercased() {
+        case "COMPLETED": return "green"
+        case "CANCELLED": return "red"
+        case "IN_PROGRESS", "TRIAGE", "WAITING_FOR_PHYSICIAN": return "blue"
+        default: return "gray"
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
@@ -82,8 +98,7 @@ struct EncounterRowView: View {
                         .cornerRadius(4)
                 }
                 Spacer()
-                StatusBadge(text: encounter.status?.capitalized ?? "—",
-                            color: encounter.status?.uppercased() == "COMPLETED" ? "gray" : "blue")
+                StatusBadge(text: statusText, color: statusColor)
             }
             Text(encounter.providerName ?? "Provider").font(.headline)
             if let dept = encounter.department {
@@ -93,10 +108,32 @@ struct EncounterRowView: View {
                 Text(complaint).font(.caption).foregroundColor(.secondary).lineLimit(2)
             }
             if let date = encounter.date {
-                Text(date).font(.caption2).foregroundColor(.secondary)
+                Text(Self.formatDate(date)).font(.caption2).foregroundColor(.secondary)
             }
         }
         .padding(.vertical, 4)
+    }
+
+    /// Format ISO-8601 datetime to "Apr 8, 2026"
+    private static func formatDate(_ iso: String) -> String {
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = isoFormatter.date(from: iso) {
+            return date.formatted(date: .abbreviated, time: .omitted)
+        }
+        isoFormatter.formatOptions = [.withInternetDateTime]
+        if let date = isoFormatter.date(from: iso) {
+            return date.formatted(date: .abbreviated, time: .omitted)
+        }
+        // Try plain date "yyyy-MM-dd"
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        df.locale = Locale(identifier: "en_US_POSIX")
+        if let date = df.date(from: String(iso.prefix(10))) {
+            df.dateFormat = "MMM d, yyyy"
+            return df.string(from: date)
+        }
+        return String(iso.prefix(10))
     }
 }
 
@@ -112,11 +149,13 @@ struct AfterVisitSummaryCard: View {
             Button(action: { withAnimation { isExpanded.toggle() } }) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(summary.providerName ?? "Provider").font(.headline)
-                        if let dept = summary.department {
-                            Text(dept).font(.caption).foregroundColor(.secondary)
+                        Text(summary.dischargingProviderName ?? "Provider").font(.headline)
+                        if let hospital = summary.hospitalName {
+                            Text(hospital).font(.caption).foregroundColor(.secondary)
                         }
-                        Text(summary.encounterDate ?? "").font(.caption2).foregroundColor(.secondary)
+                        if let date = summary.dischargeDate ?? summary.dischargeTime {
+                            Text(Self.formatDate(date)).font(.caption2).foregroundColor(.secondary)
+                        }
                     }
                     Spacer()
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
@@ -128,42 +167,82 @@ struct AfterVisitSummaryCard: View {
             if isExpanded {
                 Divider()
 
-                if let complaint = summary.chiefComplaint {
-                    DetailRow(label: "Chief Complaint", value: complaint)
+                if let diag = summary.dischargeDiagnosis, !diag.isEmpty {
+                    DetailRow(label: "Diagnosis", value: diag)
                 }
 
-                if let diagnoses = summary.diagnoses, !diagnoses.isEmpty {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Diagnoses").font(.caption).bold().foregroundColor(.secondary)
-                        ForEach(diagnoses, id: \.self) { d in
-                            Text("• \(d)").font(.subheadline)
-                        }
-                    }
+                if let condition = summary.dischargeCondition {
+                    DetailRow(label: "Condition at Discharge", value: condition)
                 }
 
-                if let treatment = summary.treatmentSummary {
-                    DetailRow(label: "Treatment", value: treatment)
+                if let course = summary.hospitalCourse {
+                    DetailRow(label: "Hospital Course", value: course)
                 }
 
-                if let instructions = summary.instructions {
-                    DetailRow(label: "Instructions", value: instructions)
+                if let instructions = summary.followUpInstructions {
+                    DetailRow(label: "Follow-up Instructions", value: instructions)
                 }
 
-                if let meds = summary.medications, !meds.isEmpty {
+                if let activity = summary.activityRestrictions {
+                    DetailRow(label: "Activity Restrictions", value: activity)
+                }
+
+                if let diet = summary.dietInstructions {
+                    DetailRow(label: "Diet Instructions", value: diet)
+                }
+
+                if let warnings = summary.warningSigns {
+                    DetailRow(label: "Warning Signs", value: warnings)
+                }
+
+                if let meds = summary.medicationReconciliation, !meds.isEmpty {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Medications").font(.caption).bold().foregroundColor(.secondary)
-                        ForEach(meds, id: \.self) { m in
-                            Text("• \(m)").font(.subheadline)
+                        ForEach(meds.indices, id: \.self) { i in
+                            let med = meds[i]
+                            Text("• \([med.medicationName, med.dosage, med.frequency, med.action].compactMap { $0 }.joined(separator: " — "))")
+                                .font(.subheadline)
                         }
                     }
                 }
 
-                if let followUp = summary.followUpDate {
-                    DetailRow(label: "Follow-Up", value: followUp)
+                if let appts = summary.followUpAppointments, !appts.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Follow-up Appointments").font(.caption).bold().foregroundColor(.secondary)
+                        ForEach(appts.indices, id: \.self) { i in
+                            let appt = appts[i]
+                            Text("• \([appt.providerName, appt.specialty, appt.appointmentDate].compactMap { $0 }.joined(separator: " — "))")
+                                .font(.subheadline)
+                        }
+                    }
+                }
+
+                if let notes = summary.additionalNotes, !notes.isEmpty {
+                    DetailRow(label: "Additional Notes", value: notes)
                 }
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private static func formatDate(_ iso: String) -> String {
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = isoFormatter.date(from: iso) {
+            return date.formatted(date: .abbreviated, time: .omitted)
+        }
+        isoFormatter.formatOptions = [.withInternetDateTime]
+        if let date = isoFormatter.date(from: iso) {
+            return date.formatted(date: .abbreviated, time: .omitted)
+        }
+        let df = DateFormatter()
+        df.dateFormat = "yyyy-MM-dd"
+        df.locale = Locale(identifier: "en_US_POSIX")
+        if let date = df.date(from: String(iso.prefix(10))) {
+            df.dateFormat = "MMM d, yyyy"
+            return df.string(from: date)
+        }
+        return String(iso.prefix(10))
     }
 }
 

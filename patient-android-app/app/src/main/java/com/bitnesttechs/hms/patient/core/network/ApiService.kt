@@ -83,6 +83,12 @@ interface ApiService {
         @Body request: RefillRequest
     ): Response<ApiResponse<RefillDto>>
 
+    @GET("me/patient/refills")
+    suspend fun getRefills(
+        @Query("page") page: Int = 0,
+        @Query("size") size: Int = 50
+    ): Response<ApiResponse<PageDto<RefillDto>>>
+
     // ── Billing ───────────────────────────────────────────────────────────────
     @GET("me/patient/billing/invoices")
     suspend fun getInvoices(
@@ -99,9 +105,6 @@ interface ApiService {
         @Query("page") page: Int = 0,
         @Query("size") size: Int = 20
     ): Response<ApiResponse<List<VitalSignDto>>>
-
-    @POST("me/patient/vitals")
-    suspend fun recordVital(@Body request: RecordVitalRequest): Response<ApiResponse<VitalSignDto>>
 
     // ── Care Team ─────────────────────────────────────────────────────────────
     @GET("me/patient/care-team")

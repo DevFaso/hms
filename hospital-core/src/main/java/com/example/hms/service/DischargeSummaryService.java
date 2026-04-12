@@ -90,7 +90,8 @@ public interface DischargeSummaryService {
      * Get all discharge summaries for a patient across every hospital they visited.
      * Intended for the patient portal — does NOT require hospital context,
      * because a patient may have been discharged from multiple hospitals.
+     * Also backfills missing DischargeSummary rows for COMPLETED encounters.
      */
-    @Transactional(readOnly = true)
+    @Transactional
     List<DischargeSummaryResponseDTO> getDischargeSummariesForPortalPatient(UUID patientId);
 }

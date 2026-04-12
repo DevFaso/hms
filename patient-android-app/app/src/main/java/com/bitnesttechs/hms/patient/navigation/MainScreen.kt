@@ -39,6 +39,7 @@ import com.bitnesttechs.hms.patient.features.profile.ProfileScreen
 import com.bitnesttechs.hms.patient.features.sharingprivacy.SharingPrivacyScreen
 import com.bitnesttechs.hms.patient.features.visits.VisitHistoryScreen
 import com.bitnesttechs.hms.patient.features.vitals.VitalsScreen
+import com.bitnesttechs.hms.patient.features.visitsummaries.VisitSummariesScreen
 import com.bitnesttechs.hms.patient.R
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 import kotlinx.coroutines.launch
@@ -63,6 +64,7 @@ val drawerItems = listOf(
     DrawerItem(R.string.billing, Icons.Default.Receipt, "billing"),
     DrawerItem(R.string.care_team, Icons.Default.Group, "care_team"),
     DrawerItem(R.string.visit_history, Icons.Default.History, "visits"),
+    DrawerItem(R.string.after_visit_summaries, Icons.Default.Description, "visit_summaries"),
     DrawerItem(R.string.documents, Icons.Default.Description, "documents"),
     DrawerItem(R.string.health_records, Icons.Default.FolderShared, "health_records"),
     DrawerItem(R.string.notifications, Icons.Default.Notifications, "notifications"),
@@ -134,7 +136,7 @@ fun MainScreen(onLogout: () -> Unit) {
                         // Map sub-screens to their parent tab
                         val dashboardSubRoutes = setOf(
                             "lab_results", "medications", "billing", "vitals",
-                            "care_team", "visits", "documents", "health_records",
+                            "care_team", "visits", "visit_summaries", "documents", "health_records",
                             "notifications", "sharing_privacy", "family_access"
                         )
                         val activeTab = when (currentRoute) {
@@ -200,6 +202,7 @@ fun MainScreen(onLogout: () -> Unit) {
                 composable("vitals") { VitalsScreen(onBack = { navController.popBackStack() }) }
                 composable("care_team") { CareTeamScreen(onBack = { navController.popBackStack() }) }
                 composable("visits") { VisitHistoryScreen(onBack = { navController.popBackStack() }) }
+                composable("visit_summaries") { VisitSummariesScreen(onBack = { navController.popBackStack() }) }
                 composable("notifications") { NotificationsScreen(onBack = { navController.popBackStack() }) }
                 composable("documents") { DocumentsScreen(onBack = { navController.popBackStack() }) }
                 composable("health_records") { HealthRecordsScreen(onBack = { navController.popBackStack() }) }

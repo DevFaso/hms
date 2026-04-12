@@ -14,6 +14,7 @@ import javax.inject.Inject
 class MedicationsViewModel @Inject constructor(private val api: ApiService) : ViewModel() {
     val medications = MutableStateFlow<List<MedicationDto>>(emptyList())
     val prescriptions = MutableStateFlow<List<PrescriptionDto>>(emptyList())
+    val refills = MutableStateFlow<List<RefillDto>>(emptyList())
     val isLoading = MutableStateFlow(true)
 
     init { load() }
@@ -24,8 +25,10 @@ class MedicationsViewModel @Inject constructor(private val api: ApiService) : Vi
             try {
                 val m = async { api.getMedications().body()?.data ?: emptyList() }
                 val p = async { api.getPrescriptions(size = 50).body()?.data ?: emptyList() }
+                val r = async { api.getRefills().body()?.data?.content ?: emptyList() }
                 medications.value = m.await()
                 prescriptions.value = p.await()
+                refills.value = r.await()
             } catch (_: Exception) {}
             finally { isLoading.value = false }
         }

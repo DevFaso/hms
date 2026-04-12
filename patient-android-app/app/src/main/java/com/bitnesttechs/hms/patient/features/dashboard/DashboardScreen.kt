@@ -182,6 +182,7 @@ fun DashboardScreen(
                         Triple(stringResource(R.string.vitals), Icons.Default.Favorite, "vitals"),
                         Triple(stringResource(R.string.care_team), Icons.Default.Group, "care_team"),
                         Triple(stringResource(R.string.visits), Icons.Default.History, "visits"),
+                        Triple(stringResource(R.string.after_visit_summaries), Icons.Default.Description, "visit_summaries"),
                         Triple(stringResource(R.string.documents), Icons.Default.Description, "documents"),
                         Triple(stringResource(R.string.family), Icons.Default.People, "family_access"),
                         Triple(stringResource(R.string.sharing), Icons.Default.Security, "sharing_privacy")

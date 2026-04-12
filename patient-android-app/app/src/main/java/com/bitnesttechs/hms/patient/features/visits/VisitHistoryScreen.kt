@@ -22,6 +22,20 @@ import com.bitnesttechs.hms.patient.core.models.EncounterDto
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 import com.bitnesttechs.hms.patient.ui.theme.BrandLightBlue
 
+private fun formatDate(iso: String): String {
+    return try {
+        val parts = iso.take(10).split("-")
+        if (parts.size == 3) {
+            val months = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+            val month = months[parts[1].toInt() - 1]
+            val day = parts[2].toInt()
+            val year = parts[0]
+            "$month $day, $year"
+        } else iso.take(10)
+    } catch (_: Exception) { iso.take(10) }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun VisitHistoryScreen(onBack: () -> Unit = {}, viewModel: VisitHistoryViewModel = hiltViewModel()) {
@@ -100,7 +114,7 @@ private fun EncounterRow(encounter: EncounterDto, onClick: () -> Unit) {
                 Text(encounter.department ?: "General",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(encounter.encounterDate.take(10),
+                Text(formatDate(encounter.encounterDate),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -138,7 +152,7 @@ private fun EncounterDetailSheet(
             Text("Visit Details", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             HorizontalDivider()
             DetailRow("Type", encounter.encounterType.replace("_", " ").replaceFirstChar { it.uppercase() })
-            DetailRow("Date", encounter.encounterDate.take(10))
+            DetailRow("Date", formatDate(encounter.encounterDate))
             encounter.department?.let { DetailRow("Department", it) }
             encounter.diagnosis?.let { DetailRow("Diagnosis", it) }
             encounter.notes?.let { DetailRow("Notes", it) }
@@ -147,8 +161,15 @@ private fun EncounterDetailSheet(
                 Text("Discharge Summary", style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold)
                 HorizontalDivider()
-                s.instructions?.let { DetailRow("Instructions", it) }
-                s.followUpDate?.let { DetailRow("Follow-up", it.take(10)) }
+                s.dischargingProviderName?.let { DetailRow("Provider", it) }
+                s.dischargeDiagnosis?.let { DetailRow("Diagnosis", it) }
+                s.dischargeCondition?.let { DetailRow("Condition", it) }
+                s.disposition?.let { DetailRow("Disposition", it.replace("_", " ").replaceFirstChar { c -> c.uppercase() }) }
+                s.followUpInstructions?.let { DetailRow("Follow-Up", it) }
+                s.activityRestrictions?.let { DetailRow("Activity Restrictions", it) }
+                s.dietInstructions?.let { DetailRow("Diet", it) }
+                s.warningSigns?.let { DetailRow("Warning Signs", it) }
+                s.dischargeDate?.let { DetailRow("Discharge Date", formatDate(it)) }
             }
             Spacer(Modifier.height(24.dp))
         }

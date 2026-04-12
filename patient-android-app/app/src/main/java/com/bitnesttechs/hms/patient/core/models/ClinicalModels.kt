@@ -22,16 +22,32 @@ data class EncounterDto(
 @JsonClass(generateAdapter = true)
 data class DischargeSummaryDto(
     @Json(name = "id") val id: String = "",
+    @Json(name = "patientId") val patientId: String? = null,
+    @Json(name = "patientName") val patientName: String? = null,
+    @Json(name = "patientMrn") val patientMrn: String? = null,
     @Json(name = "encounterId") val encounterId: String? = null,
-    @Json(name = "admissionDate") val admissionDate: String? = null,
+    @Json(name = "encounterType") val encounterType: String? = null,
+    @Json(name = "hospitalId") val hospitalId: String? = null,
+    @Json(name = "hospitalName") val hospitalName: String? = null,
+    @Json(name = "dischargingProviderId") val dischargingProviderId: String? = null,
+    @Json(name = "dischargingProviderName") val dischargingProviderName: String? = null,
+    @Json(name = "assignmentId") val assignmentId: String? = null,
     @Json(name = "dischargeDate") val dischargeDate: String? = null,
-    @Json(name = "primaryDiagnosis") val primaryDiagnosis: String? = null,
-    @Json(name = "instructions") val instructions: String? = null,
-    @Json(name = "dischargeInstructions") val dischargeInstructions: String? = null,
-    @Json(name = "followUpDate") val followUpDate: String? = null,
+    @Json(name = "dischargeTime") val dischargeTime: String? = null,
+    @Json(name = "disposition") val disposition: String? = null,
+    @Json(name = "dischargeDiagnosis") val dischargeDiagnosis: String? = null,
+    @Json(name = "hospitalCourse") val hospitalCourse: String? = null,
+    @Json(name = "dischargeCondition") val dischargeCondition: String? = null,
+    @Json(name = "activityRestrictions") val activityRestrictions: String? = null,
+    @Json(name = "dietInstructions") val dietInstructions: String? = null,
+    @Json(name = "woundCareInstructions") val woundCareInstructions: String? = null,
     @Json(name = "followUpInstructions") val followUpInstructions: String? = null,
-    @Json(name = "doctorName") val doctorName: String? = null,
-    @Json(name = "departmentName") val departmentName: String? = null
+    @Json(name = "warningSigns") val warningSigns: String? = null,
+    @Json(name = "patientEducationProvided") val patientEducationProvided: String? = null,
+    @Json(name = "isFinalized") val isFinalized: Boolean? = null,
+    @Json(name = "additionalNotes") val additionalNotes: String? = null,
+    @Json(name = "createdAt") val createdAt: String? = null,
+    @Json(name = "updatedAt") val updatedAt: String? = null
 )
 
 @JsonClass(generateAdapter = true)

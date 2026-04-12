@@ -242,6 +242,9 @@ struct SideMenuView: View {
                     MenuLink(icon: "person.2.fill", title: "care_team_title".localized) {
                         selectedTab = .dashboard; isShowing = false
                     }
+                    MenuLink(icon: "doc.text.fill", title: "visit_summaries_title".localized) {
+                        selectedTab = .dashboard; isShowing = false
+                    }
                     MenuLink(icon: "doc.fill", title: "documents".localized) {
                         selectedTab = .profile; isShowing = false
                     }

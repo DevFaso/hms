@@ -115,4 +115,24 @@ public interface EncounterRepository
             @Param("hospitalId") UUID hospitalId,
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to);
+
+    /**
+     * Find COMPLETED encounters for a patient that do NOT have a corresponding
+     * discharge summary. Used by the patient portal to backfill missing summaries.
+     */
+    @Query("""
+        SELECT e FROM Encounter e
+        JOIN FETCH e.patient p
+        JOIN FETCH e.staff s
+        LEFT JOIN FETCH e.hospital h
+        LEFT JOIN FETCH e.assignment a
+        WHERE p.id = :patientId
+          AND e.status = com.example.hms.enums.EncounterStatus.COMPLETED
+          AND NOT EXISTS (
+              SELECT 1 FROM com.example.hms.model.discharge.DischargeSummary ds
+              WHERE ds.encounter.id = e.id
+          )
+        ORDER BY e.checkoutTimestamp DESC
+    """)
+    List<Encounter> findCompletedWithoutDischargeSummary(@Param("patientId") UUID patientId);
 }

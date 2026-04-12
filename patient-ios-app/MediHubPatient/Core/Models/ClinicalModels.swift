@@ -4,62 +4,158 @@ import Foundation
 
 struct EncounterDTO: Codable, Identifiable, Hashable {
     let id: String?
-    let date: String?
-    let type: String?
-    let providerName: String?
-    let department: String?
+
+    // Backend field names (EncounterResponseDTO.java)
+    let encounterDate: String?
+    let encounterType: String?
+    let staffName: String?
+    let departmentName: String?
     let chiefComplaint: String?
     let diagnosisSummary: String?
     let status: String?
+    let notes: String?
+    let hospitalName: String?
+    let appointmentReason: String?
 
-    /// Legacy compat aliases
-    var encounterDate: String? {
-        date
-    }
-
-    var doctorName: String? {
-        providerName
-    }
-
-    var departmentName: String? {
-        department
-    }
-
-    var reason: String? {
-        chiefComplaint
-    }
-
-    var diagnosis: String? {
-        diagnosisSummary
-    }
+    // Computed aliases used by views
+    var date: String? { encounterDate }
+    var type: String? { encounterType?.replacingOccurrences(of: "_", with: " ") }
+    var providerName: String? { staffName }
+    var department: String? { departmentName }
+    var reason: String? { chiefComplaint ?? appointmentReason }
+    var diagnosis: String? { diagnosisSummary }
+    var doctorName: String? { staffName }
 }
 
 // MARK: - After Visit Summary
 
 struct AfterVisitSummaryDTO: Codable, Identifiable {
     let id: String?
-    let encounterDate: String?
-    let providerName: String?
-    let department: String?
-    let chiefComplaint: String?
-    let diagnoses: [String]?
-    let treatmentSummary: String?
-    let instructions: String?
-    let followUpDate: String?
-    let medications: [String]?
-    let status: String?
+
+    // Patient
+    let patientName: String?
+    let patientMrn: String?
+
+    // Encounter
+    let encounterId: String?
+    let encounterType: String?
+
+    // Hospital
+    let hospitalName: String?
+
+    // Provider
+    let dischargingProviderName: String?
+
+    // Dates
+    let dischargeDate: String?
+    let dischargeTime: String?
+
+    // Disposition / diagnoses
+    let disposition: String?
+    let dischargeDiagnosis: String?
+    let hospitalCourse: String?
+    let dischargeCondition: String?
+
+    // Instructions
+    let activityRestrictions: String?
+    let dietInstructions: String?
+    let woundCareInstructions: String?
+    let followUpInstructions: String?
+    let warningSigns: String?
+    let patientEducationProvided: String?
+
+    // Medication reconciliation (keep generic for now)
+    let medicationReconciliation: [MedicationReconciliationDTO]?
+    let pendingTestResults: [PendingTestResultDTO]?
+    let followUpAppointments: [FollowUpAppointmentDTO]?
+    let equipmentAndSupplies: [String]?
+
+    // Finalization
+    let isFinalized: Bool?
+    let finalizedAt: String?
+    let additionalNotes: String?
+
+    // Convenience aliases for views
+    var providerName: String? { dischargingProviderName }
+    var encounterDate: String? { dischargeDate ?? dischargeTime }
+    var department: String? { nil }
+    var chiefComplaint: String? { hospitalCourse }
+    var diagnoses: [String]? {
+        guard let d = dischargeDiagnosis, !d.isEmpty else { return nil }
+        return [d]
+    }
+    var treatmentSummary: String? { hospitalCourse }
+    var instructions: String? { followUpInstructions }
+    var followUpDate: String? {
+        followUpAppointments?.first?.appointmentDate
+    }
+    var medications: [String]? {
+        medicationReconciliation?.compactMap {
+            [$0.medicationName, $0.dosage, $0.frequency].compactMap { $0 }.joined(separator: " ")
+        }
+    }
+    var status: String? {
+        isFinalized == true ? "Finalized" : "Draft"
+    }
 }
 
-// MARK: - Care Team
+// MARK: - Discharge sub-DTOs
+
+struct MedicationReconciliationDTO: Codable {
+    let medicationName: String?
+    let dosage: String?
+    let frequency: String?
+    let route: String?
+    let action: String? // CONTINUE, STOP, NEW, MODIFIED
+}
+
+struct PendingTestResultDTO: Codable {
+    let testName: String?
+    let expectedDate: String?
+    let notes: String?
+}
+
+struct FollowUpAppointmentDTO: Codable {
+    let providerName: String?
+    let specialty: String?
+    let appointmentDate: String?
+    let notes: String?
+}
+
+// MARK: - Care Team (matches backend CareTeamDTO.java)
 
 struct CareTeamDTO: Codable {
-    let members: [CareTeamMemberDTO]?
+    let primaryCare: PrimaryCareEntry?
+    let primaryCareHistory: [PrimaryCareEntry]?
+
+    /// Flatten into displayable members list
+    var allMembers: [PrimaryCareEntry] {
+        var list: [PrimaryCareEntry] = []
+        if let pc = primaryCare { list.append(pc) }
+        if let history = primaryCareHistory {
+            list.append(contentsOf: history.filter { !$0.current })
+        }
+        return list
+    }
 }
 
+struct PrimaryCareEntry: Codable, Identifiable {
+    let id: String?
+    let hospitalId: String?
+    let hospitalName: String?
+    let doctorUserId: String?
+    let doctorDisplay: String?
+    let startDate: String?
+    let endDate: String?
+    let current: Bool
+
+    // Convenience for views
+    var displayName: String { doctorDisplay ?? "Provider" }
+}
+
+// Legacy — kept so CareTeamMemberRow still compiles if referenced
 struct CareTeamMemberDTO: Codable, Identifiable {
-    var id: String? {
-        name
-    } // use name as stable id
+    var id: String? { name }
     let name: String?
     let role: String?
     let specialty: String?

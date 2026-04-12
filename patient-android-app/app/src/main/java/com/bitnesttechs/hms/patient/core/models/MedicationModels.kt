@@ -38,10 +38,15 @@ data class PrescriptionDto(
 @JsonClass(generateAdapter = true)
 data class RefillDto(
     @Json(name = "id") val id: String = "",
-    @Json(name = "prescriptionId") val prescriptionId: String = "",
-    @Json(name = "requestedDate") val requestedDate: String? = null,
+    @Json(name = "prescriptionId") val prescriptionId: String? = null,
+    @Json(name = "medicationName") val medicationName: String? = null,
+    @Json(name = "patientId") val patientId: String? = null,
     @Json(name = "status") val status: String = "",
-    @Json(name = "notes") val notes: String? = null
+    @Json(name = "preferredPharmacy") val preferredPharmacy: String? = null,
+    @Json(name = "notes") val notes: String? = null,
+    @Json(name = "providerNotes") val providerNotes: String? = null,
+    @Json(name = "requestedAt") val requestedAt: String? = null,
+    @Json(name = "updatedAt") val updatedAt: String? = null
 )
 
 @JsonClass(generateAdapter = true)

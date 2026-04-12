@@ -13,7 +13,6 @@ import javax.inject.Inject
 class VitalsViewModel @Inject constructor(private val api: ApiService) : ViewModel() {
     val vitals = MutableStateFlow<List<VitalSignDto>>(emptyList())
     val isLoading = MutableStateFlow(true)
-    val isRecording = MutableStateFlow(false)
     init { load() }
     fun load() {
         viewModelScope.launch {
@@ -21,15 +20,6 @@ class VitalsViewModel @Inject constructor(private val api: ApiService) : ViewMod
             try { vitals.value = api.getVitals(size = 20).body()?.data ?: emptyList() }
             catch (_: Exception) {}
             finally { isLoading.value = false }
-        }
-    }
-    fun recordVital(request: RecordVitalRequest) {
-        viewModelScope.launch {
-            isRecording.value = true
-            try {
-                api.recordVital(request).body()?.data?.let { vitals.value = listOf(it) + vitals.value }
-            } catch (_: Exception) {}
-            finally { isRecording.value = false }
         }
     }
 }

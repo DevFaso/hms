@@ -209,8 +209,10 @@
 /* Visit History */
 "encounters" = "Consultations";
 "after_visit_summaries" = "Résumés post-visite";
+"visit_summaries_title" = "Résumés de visite";
 "no_encounters" = "Aucune consultation";
 "no_summaries" = "Aucun résumé post-visite";
+"no_summaries_desc" = "Les résumés post-visite apparaîtront ici une fois vos visites terminées.";
 "discharge_summary" = "Résumé de sortie";
 "diagnosis" = "Diagnostic";
 "visit_date" = "Date de visite";

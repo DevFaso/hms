@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.enums.DischargeDisposition;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.DischargeSummaryMapper;
@@ -29,9 +30,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Implementation of DischargeSummaryService
@@ -363,12 +368,75 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     // ── Portal-specific: patient-centric, no hospital context required ──
 
     @Override
-    @Transactional(readOnly = true)
+    @Transactional
     public List<DischargeSummaryResponseDTO> getDischargeSummariesForPortalPatient(UUID patientId) {
         log.debug("Portal: fetching discharge summaries for patient {}", patientId);
+
+        // 1. Backfill: create DischargeSummary rows for any COMPLETED encounters
+        //    that are missing them (defensive — ensures checkout data is always surfaced).
+        backfillMissingDischargeSummaries(patientId);
+
+        // 2. Return all discharge summaries for this patient
         return dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId)
                 .stream()
                 .map(dischargeSummaryMapper::toResponseDTO)
                 .toList();
+    }
+
+    /**
+     * Creates DischargeSummary rows for COMPLETED encounters that somehow lack one.
+     * This can happen if the encounter was completed via a code path that didn't call
+     * {@code upsertDischargeSummaryForCheckout}, or if the original insert failed
+     * silently (e.g. a constraint edge case on a prior version of the code).
+     */
+    private void backfillMissingDischargeSummaries(UUID patientId) {
+        List<Encounter> orphans = encounterRepository.findCompletedWithoutDischargeSummary(patientId);
+        if (orphans.isEmpty()) {
+            return;
+        }
+        log.info("Backfilling {} missing discharge summaries for patient {}", orphans.size(), patientId);
+        for (Encounter enc : orphans) {
+            try {
+                DischargeSummary summary = new DischargeSummary();
+                summary.setEncounter(enc);
+                summary.setPatient(enc.getPatient());
+                summary.setHospital(enc.getHospital());
+                summary.setDischargingProvider(enc.getStaff());
+                summary.setAssignment(enc.getAssignment());
+
+                LocalDateTime checkout = enc.getCheckoutTimestamp() != null
+                        ? enc.getCheckoutTimestamp() : enc.getEncounterDate();
+                summary.setDischargeDate(checkout.toLocalDate());
+                summary.setDischargeTime(checkout);
+                summary.setDisposition(DischargeDisposition.HOME);
+
+                // Build diagnosis text from JSON array stored on encounter
+                String diagText = buildDiagnosisTextFromEncounter(enc);
+                summary.setDischargeDiagnosis(diagText);
+                summary.setFollowUpInstructions(enc.getFollowUpInstructions());
+
+                dischargeSummaryRepository.save(summary);
+                log.info("Backfilled discharge summary for encounter {}", enc.getId());
+            } catch (Exception ex) {
+                log.warn("Failed to backfill discharge summary for encounter {}: {}",
+                        enc.getId(), ex.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Extracts a human-readable diagnosis string from the JSON array stored on the encounter.
+     */
+    private String buildDiagnosisTextFromEncounter(Encounter encounter) {
+        String raw = encounter.getDischargeDiagnoses();
+        if (raw == null || raw.isBlank()) {
+            return "Discharge diagnosis not specified at checkout.";
+        }
+        // Strip JSON array brackets and quotes: ["A","B"] → A; B
+        String stripped = raw.replaceAll("[\\[\\]\"]", "").trim();
+        if (stripped.isEmpty()) {
+            return "Discharge diagnosis not specified at checkout.";
+        }
+        return stripped.replace(",", ";");
     }
 }

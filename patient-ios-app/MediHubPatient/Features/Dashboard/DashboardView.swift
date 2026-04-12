@@ -9,7 +9,7 @@ struct DashboardView: View {
 
     enum DashboardDestination: Hashable {
         case appointments, labResults, medications, billing
-        case careTeam, vitals, visits, documents
+        case careTeam, vitals, visits, visitSummaries, documents
         case notifications, healthRecords
         case familyAccess, sharingPrivacy
     }
@@ -23,6 +23,7 @@ struct DashboardView: View {
             ("care_team_title", "person.2.fill", .pink, .careTeam),
             ("vitals_title", "heart.fill", .red, .vitals),
             ("visits_title", "building.2.fill", .indigo, .visits),
+            ("visit_summaries_title", "doc.text.fill", .brown, .visitSummaries),
             ("documents", "doc.fill", .blue, .documents),
             ("family_access", "person.2.circle", .cyan, .familyAccess),
             ("sharing_privacy", "lock.shield", .mint, .sharingPrivacy),
@@ -146,6 +147,7 @@ struct DashboardView: View {
                 case .careTeam: CareTeamView(embeddedInNav: false)
                 case .vitals: VitalsView(embeddedInNav: false)
                 case .visits: VisitHistoryView(embeddedInNav: false)
+                case .visitSummaries: VisitSummariesView(embeddedInNav: false)
                 case .documents: DocumentsView(embeddedInNav: false)
                 case .notifications: NotificationsView(embeddedInNav: false)
                 case .healthRecords: HealthRecordsView(embeddedInNav: false)

@@ -22,8 +22,8 @@ struct CareTeamView: View {
                                        systemImage: "person.2.fill",
                                        description: Text("no_care_team_desc".localized))
             } else {
-                List(vm.members) { member in
-                    CareTeamMemberRow(member: member)
+                List(vm.members) { entry in
+                    PrimaryCareRow(entry: entry)
                 }
                 .listStyle(.insetGrouped)
             }
@@ -33,30 +33,35 @@ struct CareTeamView: View {
     }
 }
 
-struct CareTeamMemberRow: View {
-    let member: CareTeamMemberDTO
+struct PrimaryCareRow: View {
+    let entry: PrimaryCareEntry
     var body: some View {
         HStack(spacing: 14) {
             Image(systemName: "person.crop.circle.fill")
                 .font(.largeTitle)
-                .foregroundColor(member.isPrimary == true ? .accentColor : .secondary)
+                .foregroundColor(entry.current ? .accentColor : .secondary)
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(member.name ?? "Doctor").font(.headline)
-                    if member.isPrimary == true {
-                        StatusBadge(text: "Primary", color: "blue")
+                    Text(entry.displayName).font(.headline)
+                    if entry.current {
+                        StatusBadge(text: "Current", color: "blue")
+                    } else {
+                        StatusBadge(text: "Past", color: "gray")
                     }
                 }
-                if let spec = member.specialty { Text(spec).font(.subheadline).foregroundColor(.secondary) }
-                if let role = member.role { Text(role).font(.caption).foregroundColor(.secondary) }
-                if let email = member.email { Text(email).font(.caption2).foregroundColor(.secondary) }
-            }
-            Spacer()
-            if let phone = member.phone {
-                Link(destination: URL(string: "tel:\(phone)")!) {
-                    Image(systemName: "phone.fill").foregroundColor(.green)
+                if let hospital = entry.hospitalName {
+                    Text(hospital).font(.subheadline).foregroundColor(.secondary)
+                }
+                if let start = entry.startDate {
+                    HStack(spacing: 4) {
+                        Text("Since \(start)").font(.caption).foregroundColor(.secondary)
+                        if let end = entry.endDate {
+                            Text("— \(end)").font(.caption).foregroundColor(.secondary)
+                        }
+                    }
                 }
             }
+            Spacer()
         }
         .padding(.vertical, 4)
     }
@@ -64,16 +69,15 @@ struct CareTeamMemberRow: View {
 
 @MainActor
 final class CareTeamViewModel: ObservableObject {
-    @Published var members: [CareTeamMemberDTO] = []
+    @Published var members: [PrimaryCareEntry] = []
     @Published var isLoading = false
 
     func load() async {
         isLoading = true
-        let dto: CareTeamDTO? = try? await APIClient.shared.get(APIEndpoints.careTeam)
-        members = dto?.members ?? []
-        // Fallback: some backends return array directly
-        if members.isEmpty {
-            members = await (try? APIClient.shared.get(APIEndpoints.careTeam)) ?? []
+        if let dto: CareTeamDTO = try? await APIClient.shared.get(APIEndpoints.careTeam) {
+            members = dto.allMembers
+        } else {
+            members = []
         }
         isLoading = false
     }

@@ -5,9 +5,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Medication
@@ -18,6 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bitnesttechs.hms.patient.core.models.MedicationDto
+import com.bitnesttechs.hms.patient.core.models.PrescriptionDto
+import com.bitnesttechs.hms.patient.core.models.RefillDto
 import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -25,10 +31,13 @@ import com.bitnesttechs.hms.patient.ui.theme.BrandBlue
 fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel = hiltViewModel()) {
     val medications by viewModel.medications.collectAsState()
     val prescriptions by viewModel.prescriptions.collectAsState()
+    val refills by viewModel.refills.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Medications", "Prescriptions")
+    val tabs = listOf("Medications", "Prescriptions", "Refills")
+    var selectedMed by remember { mutableStateOf<MedicationDto?>(null) }
+    var selectedRx by remember { mutableStateOf<PrescriptionDto?>(null) }
 
     Scaffold(
         topBar = {
@@ -71,26 +80,30 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                         }
                     }
                     items(medications) { med ->
-                        Card(shape = RoundedCornerShape(12.dp), elevation = CardDefaults.cardElevation(2.dp)) {
-                            Column(Modifier.padding(16.dp)) {
-                                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                    Text(med.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                                    if (!med.isActive) {
-                                        Surface(shape = RoundedCornerShape(50),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)) {
-                                            Text("Inactive", Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                                style = MaterialTheme.typography.labelSmall)
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(2.dp),
+                            modifier = Modifier.clickable { selectedMed = med }
+                        ) {
+                            Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Column(Modifier.weight(1f)) {
+                                    Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                                        Text(med.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                                        if (!med.isActive) {
+                                            Surface(shape = RoundedCornerShape(50),
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f)) {
+                                                Text("Inactive", Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                                    style = MaterialTheme.typography.labelSmall)
+                                            }
                                         }
                                     }
+                                    med.dosage?.let { Text("Dosage: $it", style = MaterialTheme.typography.bodySmall) }
+                                    med.frequency?.let { Text("Frequency: $it", style = MaterialTheme.typography.bodySmall) }
+                                    med.prescribedBy?.let { Text("Prescribed by: $it", style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant) }
                                 }
-                                med.dosage?.let { Text("Dosage: $it", style = MaterialTheme.typography.bodySmall) }
-                                med.frequency?.let { Text("Frequency: $it", style = MaterialTheme.typography.bodySmall) }
-                                med.prescribedBy?.let { Text("Prescribed by: $it", style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                med.instructions?.let {
-                                    Spacer(Modifier.height(4.dp))
-                                    Text("Instructions: $it", style = MaterialTheme.typography.bodySmall)
-                                }
+                                Icon(Icons.Default.ChevronRight, contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp))
                             }
                         }
                     }
@@ -110,7 +123,7 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                         Card(
                             shape = RoundedCornerShape(12.dp),
                             elevation = CardDefaults.cardElevation(2.dp),
-                            modifier = Modifier.clickable { expanded = !expanded }
+                            modifier = Modifier.clickable { selectedRx = rx }
                         ) {
                             Column(Modifier.padding(16.dp)) {
                                 Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth(),
@@ -122,30 +135,75 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                                             Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
                                             style = MaterialTheme.typography.labelSmall, color = BrandBlue)
                                     }
-                                    Icon(
-                                        if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                        contentDescription = if (expanded) "Collapse" else "Expand",
-                                        modifier = Modifier.padding(start = 4.dp)
-                                    )
+                                    Icon(Icons.Default.ChevronRight, contentDescription = "View details",
+                                        modifier = Modifier.padding(start = 4.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                                 rx.dosage?.let { Text("Dosage: $it", style = MaterialTheme.typography.bodySmall) }
                                 rx.frequency?.let { Text("Frequency: $it", style = MaterialTheme.typography.bodySmall) }
-
-                                AnimatedVisibility(visible = expanded) {
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        HorizontalDivider(Modifier.padding(vertical = 8.dp))
-                                        rx.prescribedBy?.let { Text("Prescribed by: $it", style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                        rx.prescribedDate?.let { Text("Prescribed date: ${it.take(10)}", style = MaterialTheme.typography.bodySmall) }
-                                        rx.expiryDate?.let { Text("Expires: ${it.take(10)}", style = MaterialTheme.typography.bodySmall) }
-                                        rx.quantity?.let { Text("Quantity: $it", style = MaterialTheme.typography.bodySmall) }
-                                        rx.status.takeIf { it.isNotBlank() }?.let { Text("Status: $it", style = MaterialTheme.typography.bodySmall) }
-                                        rx.instructions?.let {
-                                            Spacer(Modifier.height(4.dp))
-                                            Text("Instructions: $it", style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                        }
+                            }
+                        }
+                    }
+                }
+                2 -> LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (refills.isEmpty()) item {
+                        Box(Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
+                            Text("No refill requests on record")
+                        }
+                    }
+                    items(refills) { refill ->
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            elevation = CardDefaults.cardElevation(2.dp)
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Row(
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        refill.medicationName ?: "Refill",
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Surface(
+                                        shape = RoundedCornerShape(50),
+                                        color = refillStatusColor(refill.status).copy(alpha = 0.15f)
+                                    ) {
+                                        Text(
+                                            refill.status.replace("_", " ")
+                                                .replaceFirstChar { it.uppercase() },
+                                            Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = refillStatusColor(refill.status)
+                                        )
                                     }
+                                }
+                                refill.preferredPharmacy?.takeIf { it.isNotBlank() }?.let {
+                                    Text("Pharmacy: $it", style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                refill.requestedAt?.let {
+                                    Text("Requested: ${it.take(10)}", style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                refill.updatedAt?.takeIf { it != refill.requestedAt }?.let {
+                                    Text("Updated: ${it.take(10)}", style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                refill.providerNotes?.takeIf { it.isNotBlank() }?.let {
+                                    Text("Provider: $it", style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                refill.notes?.takeIf { it.isNotBlank() }?.let {
+                                    Text("Notes: $it", style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
@@ -153,5 +211,117 @@ fun MedicationsScreen(onBack: () -> Unit = {}, viewModel: MedicationsViewModel =
                 }
             }
         }
+    }
+
+    // Medication Detail Dialog
+    selectedMed?.let { med ->
+        MedicationDetailDialog(med = med, onDismiss = { selectedMed = null })
+    }
+
+    // Prescription Detail Dialog
+    selectedRx?.let { rx ->
+        PrescriptionDetailDialog(rx = rx, onDismiss = { selectedRx = null })
+    }
+}
+
+@Composable
+private fun MedicationDetailDialog(med: MedicationDto, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text(med.name, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Status
+                MedDetailRow("Status", if (med.isActive) "Active" else "Inactive")
+                HorizontalDivider()
+
+                Text("Dosage & Administration", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                med.dosage?.let { MedDetailRow("Dosage", it) }
+                med.frequency?.let { MedDetailRow("Frequency", it) }
+                med.route?.let { MedDetailRow("Route", it) }
+                HorizontalDivider()
+
+                Text("Dates", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                med.startDate?.let { MedDetailRow("Start Date", it.take(10)) }
+                med.endDate?.let { MedDetailRow("End Date", it.take(10)) }
+
+                med.prescribedBy?.let {
+                    HorizontalDivider()
+                    MedDetailRow("Prescribed By", it)
+                }
+
+                med.instructions?.takeIf { it.isNotBlank() }?.let {
+                    HorizontalDivider()
+                    Text("Instructions", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(it, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun PrescriptionDetailDialog(rx: PrescriptionDto, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+        title = { Text(rx.medicationName, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(
+                Modifier.verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                rx.status.takeIf { it.isNotBlank() }?.let { MedDetailRow("Status", it) }
+                HorizontalDivider()
+
+                Text("Dosage & Administration", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                rx.dosage?.let { MedDetailRow("Dosage", it) }
+                rx.frequency?.let { MedDetailRow("Frequency", it) }
+                rx.quantity?.let { MedDetailRow("Quantity", "$it") }
+                HorizontalDivider()
+
+                Text("Refills", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                MedDetailRow("Remaining", "${rx.refillsRemaining}")
+                HorizontalDivider()
+
+                Text("Dates", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                rx.prescribedDate?.let { MedDetailRow("Prescribed", it.take(10)) }
+                rx.expiryDate?.let { MedDetailRow("Expires", it.take(10)) }
+
+                rx.prescribedBy?.let {
+                    HorizontalDivider()
+                    MedDetailRow("Prescribed By", it)
+                }
+
+                rx.instructions?.takeIf { it.isNotBlank() }?.let {
+                    HorizontalDivider()
+                    Text("Instructions", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(it, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun MedDetailRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+    }
+}
+
+private fun refillStatusColor(status: String): androidx.compose.ui.graphics.Color {
+    return when (status.uppercase()) {
+        "COMPLETED", "FILLED", "DISPENSED" -> androidx.compose.ui.graphics.Color(0xFF2E7D32)
+        "APPROVED" -> androidx.compose.ui.graphics.Color(0xFF1565C0)
+        "PENDING", "REQUESTED" -> androidx.compose.ui.graphics.Color(0xFFF9A825)
+        "CANCELLED", "DENIED" -> androidx.compose.ui.graphics.Color(0xFFC62828)
+        else -> androidx.compose.ui.graphics.Color.Gray
     }
 }
