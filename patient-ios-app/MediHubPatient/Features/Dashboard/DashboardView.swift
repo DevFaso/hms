@@ -6,6 +6,7 @@ struct DashboardView: View {
     @EnvironmentObject var authManager: AuthManager
     @EnvironmentObject var localization: LocalizationManager
     @State private var navigateTo: DashboardDestination?
+    @State private var selectedLabResult: LabResultDTO?
 
     enum DashboardDestination: Hashable {
         case appointments, labResults, medications, billing
@@ -92,8 +93,11 @@ struct DashboardView: View {
                     if !vm.labResults.isEmpty {
                         SectionCard(title: "recent_lab_results".localized, icon: "testtube.2") {
                             ForEach(vm.labResults.prefix(3)) { lab in
-                                LabResultRowView(result: lab)
-                                    .padding(.vertical, 4)
+                                Button { selectedLabResult = lab } label: {
+                                    LabResultRowView(result: lab)
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.vertical, 4)
                                 if lab.id != vm.labResults.prefix(3).last?.id {
                                     Divider()
                                 }
@@ -138,6 +142,9 @@ struct DashboardView: View {
                 }
             }
             .refreshable { await vm.loadAll() }
+            .sheet(item: $selectedLabResult) { result in
+                LabResultDetailSheet(result: result)
+            }
             .navigationDestination(for: DashboardDestination.self) { dest in
                 switch dest {
                 case .appointments: AppointmentsView(embeddedInNav: false)

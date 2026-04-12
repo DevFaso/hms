@@ -34,6 +34,7 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var selectedLabResult by remember { mutableStateOf<LabResultDto?>(null) }
 
     // Refresh notification badge every time the dashboard is (re-)displayed
     val currentBackStackEntry by navController.currentBackStackEntryFlow.collectAsState(
@@ -235,7 +236,13 @@ fun DashboardScreen(
                     ) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             uiState.recentLabResults.take(3).forEach { lab ->
-                                LabResultRow(lab)
+                                Surface(
+                                    onClick = { selectedLabResult = lab },
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = Color.Transparent
+                                ) {
+                                    LabResultRow(lab)
+                                }
                             }
                         }
                     }
@@ -258,6 +265,14 @@ fun DashboardScreen(
 
             item { Spacer(Modifier.height(16.dp)) }
         }
+    }
+
+    // Lab result detail dialog
+    selectedLabResult?.let { lab ->
+        com.bitnesttechs.hms.patient.features.labresults.LabResultDetailDialog(
+            lab = lab,
+            onDismiss = { selectedLabResult = null }
+        )
     }
 }
 

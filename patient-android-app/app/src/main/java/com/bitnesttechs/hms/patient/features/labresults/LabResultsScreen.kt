@@ -132,7 +132,7 @@ fun LabResultsScreen(onBack: () -> Unit = {}, viewModel: LabResultsViewModel = h
 }
 
 @Composable
-private fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
+internal fun LabResultDetailDialog(lab: LabResultDto, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
