@@ -875,7 +875,10 @@ export class PatientPortalService {
             providerName: d.dischargingProviderName ?? '',
             hospitalName: d.hospitalName ?? '',
             diagnoses: d.dischargeDiagnosis
-              ? d.dischargeDiagnosis.split(';').map((s: string) => s.trim()).filter(Boolean)
+              ? d.dischargeDiagnosis
+                  .split(';')
+                  .map((s: string) => s.trim())
+                  .filter(Boolean)
               : [],
             treatmentSummary: d.hospitalCourse ?? '',
             disposition: d.disposition ?? '',

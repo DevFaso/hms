@@ -70,10 +70,16 @@
                 <div class="avs-section">
                   <h4>{{ 'PORTAL.SUMMARIES.DISPOSITION' | translate }}</h4>
                   @if (s.disposition) {
-                    <p><strong>{{ 'PORTAL.SUMMARIES.DISPOSITION_LABEL' | translate }}:</strong> {{ s.disposition }}</p>
+                    <p>
+                      <strong>{{ 'PORTAL.SUMMARIES.DISPOSITION_LABEL' | translate }}:</strong>
+                      {{ s.disposition }}
+                    </p>
                   }
                   @if (s.dischargeCondition) {
-                    <p><strong>{{ 'PORTAL.SUMMARIES.DISCHARGE_CONDITION' | translate }}:</strong> {{ s.dischargeCondition }}</p>
+                    <p>
+                      <strong>{{ 'PORTAL.SUMMARIES.DISCHARGE_CONDITION' | translate }}:</strong>
+                      {{ s.dischargeCondition }}
+                    </p>
                   }
                 </div>
               }
