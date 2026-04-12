@@ -68,50 +68,109 @@ struct VisitSummaryRow: View {
                 }
             }
 
+            // Encounter type
+            if let encounterType = summary.encounterType, !encounterType.isEmpty {
+                sectionField("Encounter Type", value: encounterType)
+            }
+
             // Diagnosis
             if let diag = summary.dischargeDiagnosis, !diag.isEmpty {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Diagnosis")
-                        .font(.caption.weight(.medium))
-                        .foregroundColor(.secondary)
-                    Text(diag)
-                        .font(.subheadline)
-                }
+                sectionField("Diagnosis", value: diag)
+            }
+
+            // Treatment Summary / Hospital Course
+            if let course = summary.hospitalCourse, !course.isEmpty {
+                sectionField("Treatment Summary", value: course)
+            }
+
+            // Disposition
+            if let disposition = summary.disposition, !disposition.isEmpty {
+                sectionField("Disposition", value: disposition)
             }
 
             // Discharge condition
-            if let condition = summary.dischargeCondition {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Condition at Discharge")
+            if let condition = summary.dischargeCondition, !condition.isEmpty {
+                sectionField("Condition at Discharge", value: condition)
+            }
+
+            // Medications
+            if let meds = summary.medicationReconciliation, !meds.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Medications")
                         .font(.caption.weight(.medium))
                         .foregroundColor(.secondary)
-                    Text(condition)
-                        .font(.subheadline)
+                    ForEach(meds.indices, id: \.self) { idx in
+                        let med = meds[idx]
+                        HStack(spacing: 4) {
+                            Image(systemName: "pill.fill")
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                            Text([med.medicationName, med.dosage, med.frequency]
+                                .compactMap { $0 }
+                                .joined(separator: " · "))
+                                .font(.caption)
+                        }
+                    }
                 }
             }
 
             // Follow-up instructions
-            if let instructions = summary.followUpInstructions {
+            if let instructions = summary.followUpInstructions, !instructions.isEmpty {
+                sectionField("Follow-up Instructions", value: instructions)
+            }
+
+            // Activity restrictions
+            if let restrictions = summary.activityRestrictions, !restrictions.isEmpty {
+                sectionField("Activity Restrictions", value: restrictions)
+            }
+
+            // Diet instructions
+            if let diet = summary.dietInstructions, !diet.isEmpty {
+                sectionField("Diet Instructions", value: diet)
+            }
+
+            // Wound care
+            if let wound = summary.woundCareInstructions, !wound.isEmpty {
+                sectionField("Wound Care", value: wound)
+            }
+
+            // Warning signs
+            if let warnings = summary.warningSigns, !warnings.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Follow-up Instructions")
+                    Label("Warning Signs", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption.weight(.medium))
-                        .foregroundColor(.secondary)
-                    Text(instructions)
+                        .foregroundColor(.orange)
+                    Text(warnings)
                         .font(.subheadline)
-                        .lineLimit(3)
                 }
+                .padding(8)
+                .background(Color.orange.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
+            // Patient education
+            if let education = summary.patientEducationProvided, !education.isEmpty {
+                sectionField("Patient Education", value: education)
+            }
+
+            // Additional notes
+            if let notes = summary.additionalNotes, !notes.isEmpty {
+                sectionField("Additional Notes", value: notes)
             }
 
             // Follow-up appointments
             if let appts = summary.followUpAppointments, !appts.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
+                    Text("Follow-up Appointments")
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(.secondary)
                     ForEach(appts.indices, id: \.self) { idx in
                         let appt = appts[idx]
                         HStack(spacing: 4) {
                             Image(systemName: "calendar.badge.clock")
                                 .font(.caption)
                                 .foregroundColor(.orange)
-                            Text("Follow-up: \(appt.providerName ?? "") \(appt.appointmentDate ?? "")")
+                            Text("\(appt.providerName ?? "") \(appt.appointmentDate ?? "")")
                                 .font(.caption)
                                 .foregroundColor(.orange)
                         }
@@ -132,6 +191,17 @@ struct VisitSummaryRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func sectionField(_ label: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption.weight(.medium))
+                .foregroundColor(.secondary)
+            Text(value)
+                .font(.subheadline)
+        }
     }
 }
 

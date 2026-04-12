@@ -171,6 +171,11 @@ private fun VisitSummaryCard(summary: DischargeSummaryDto) {
                 SummaryField("Diagnosis", it)
             }
 
+            // Treatment Summary / Hospital Course
+            summary.hospitalCourse?.let {
+                SummaryField("Treatment Summary", it)
+            }
+
             // Discharge condition
             summary.dischargeCondition?.let {
                 SummaryField("Condition at Discharge", it)
@@ -179,6 +184,26 @@ private fun VisitSummaryCard(summary: DischargeSummaryDto) {
             // Disposition
             summary.disposition?.let {
                 SummaryField("Disposition", it.replace("_", " ").replaceFirstChar { c -> c.uppercase() })
+            }
+
+            // Medications
+            summary.medicationReconciliation?.takeIf { it.isNotEmpty() }?.let { meds ->
+                Column(modifier = Modifier.padding(bottom = 8.dp)) {
+                    Text(
+                        "Medications",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    meds.forEach { med ->
+                        Text(
+                            listOfNotNull(med.medicationName, med.dosage, med.frequency)
+                                .joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
             }
 
             // Follow-up instructions
@@ -196,9 +221,19 @@ private fun VisitSummaryCard(summary: DischargeSummaryDto) {
                 SummaryField("Diet Instructions", it)
             }
 
+            // Wound care instructions
+            summary.woundCareInstructions?.let {
+                SummaryField("Wound Care Instructions", it)
+            }
+
             // Warning signs
             summary.warningSigns?.let {
-                SummaryField("Warning Signs", it)
+                SummaryField("⚠️ Warning Signs", it)
+            }
+
+            // Patient education
+            summary.patientEducationProvided?.let {
+                SummaryField("Patient Education", it)
             }
 
             // Additional notes

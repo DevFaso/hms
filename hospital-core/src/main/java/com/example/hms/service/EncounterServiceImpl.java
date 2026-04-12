@@ -4,6 +4,7 @@ import com.example.hms.enums.EncounterNoteLinkType;
 import com.example.hms.enums.EncounterNoteTemplate;
 import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.DischargeDisposition;
+import com.example.hms.enums.MedicationReconciliationAction;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.EncounterMapper;
@@ -20,6 +21,7 @@ import com.example.hms.model.Staff;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.discharge.DischargeSummary;
+import com.example.hms.model.discharge.MedicationReconciliationEntry;
 import com.example.hms.model.referral.ObgynReferral;
 import com.example.hms.model.encounter.EncounterNote;
 import com.example.hms.model.encounter.EncounterNoteAddendum;
@@ -1531,6 +1533,31 @@ public class EncounterServiceImpl implements EncounterService {
         summary.setDisposition(DischargeDisposition.HOME);
         summary.setDischargeDiagnosis(buildDischargeDiagnosisText(request));
         summary.setFollowUpInstructions(encounter.getFollowUpInstructions());
+
+        // Encounter notes → hospitalCourse (visit summary)
+        if (encounter.getNotes() != null && !encounter.getNotes().isBlank()) {
+            summary.setHospitalCourse(encounter.getNotes());
+        }
+
+        // Pull prescriptions for this encounter → medication reconciliation
+        try {
+            var prescriptions = prescriptionRepository
+                    .findByEncounter_Id(encounter.getId(), org.springframework.data.domain.PageRequest.of(0, 100))
+                    .getContent();
+            for (Prescription rx : prescriptions) {
+                MedicationReconciliationEntry entry = MedicationReconciliationEntry.builder()
+                        .medicationName(rx.getMedicationName())
+                        .dosage(rx.getDosage())
+                        .route(rx.getRoute())
+                        .frequency(rx.getFrequency())
+                        .reconciliationAction(MedicationReconciliationAction.CONTINUED)
+                        .continueAtDischarge(true)
+                        .build();
+                summary.addMedicationReconciliation(entry);
+            }
+        } catch (Exception ex) {
+            // silently skip – medications are non-critical for checkout discharge summary
+        }
 
         dischargeSummaryRepository.save(summary);
     }

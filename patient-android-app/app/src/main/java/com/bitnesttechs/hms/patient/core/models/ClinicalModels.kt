@@ -44,10 +44,32 @@ data class DischargeSummaryDto(
     @Json(name = "followUpInstructions") val followUpInstructions: String? = null,
     @Json(name = "warningSigns") val warningSigns: String? = null,
     @Json(name = "patientEducationProvided") val patientEducationProvided: String? = null,
+    @Json(name = "medicationReconciliation") val medicationReconciliation: List<MedicationReconciliationDto>? = null,
+    @Json(name = "followUpAppointments") val followUpAppointments: List<FollowUpAppointmentDto>? = null,
     @Json(name = "isFinalized") val isFinalized: Boolean? = null,
     @Json(name = "additionalNotes") val additionalNotes: String? = null,
     @Json(name = "createdAt") val createdAt: String? = null,
     @Json(name = "updatedAt") val updatedAt: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class MedicationReconciliationDto(
+    @Json(name = "medicationName") val medicationName: String? = null,
+    @Json(name = "dosage") val dosage: String? = null,
+    @Json(name = "route") val route: String? = null,
+    @Json(name = "frequency") val frequency: String? = null,
+    @Json(name = "reconciliationAction") val reconciliationAction: String? = null,
+    @Json(name = "continueAtDischarge") val continueAtDischarge: Boolean? = null,
+    @Json(name = "patientInstructions") val patientInstructions: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class FollowUpAppointmentDto(
+    @Json(name = "department") val department: String? = null,
+    @Json(name = "providerName") val providerName: String? = null,
+    @Json(name = "scheduledDate") val scheduledDate: String? = null,
+    @Json(name = "appointmentDate") val appointmentDate: String? = null,
+    @Json(name = "reason") val reason: String? = null
 )
 
 @JsonClass(generateAdapter = true)

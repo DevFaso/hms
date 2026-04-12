@@ -3,3 +3,56 @@
   flex-direction: column;
   gap: 12px;
 }
+
+/* Diagnosis tags */
+.avs-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.avs-tag {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: var(--surface-variant, #e8e0f0);
+  color: var(--on-surface-variant, #49454f);
+  font-size: 0.85rem;
+}
+
+/* Medication table */
+.avs-med-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+  margin-top: 4px;
+
+  th,
+  td {
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--outline-variant, #cac4d0);
+  }
+
+  th {
+    font-weight: 600;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: var(--on-surface-variant, #49454f);
+  }
+}
+
+/* Warning signs callout */
+.avs-warning {
+  background: #fff3e0;
+  border-left: 4px solid #fb8c00;
+  border-radius: 8px;
+  padding: 12px 16px;
+
+  h4 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #e65100;
+  }
+}

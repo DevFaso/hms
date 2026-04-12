@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.DischargeDisposition;
+import com.example.hms.enums.MedicationReconciliationAction;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.DischargeSummaryMapper;
@@ -8,9 +9,11 @@ import com.example.hms.model.DischargeApproval;
 import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
+import com.example.hms.model.Prescription;
 import com.example.hms.model.Staff;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.discharge.DischargeSummary;
+import com.example.hms.model.discharge.MedicationReconciliationEntry;
 import com.example.hms.payload.dto.discharge.DischargeSummaryRequestDTO;
 import com.example.hms.payload.dto.discharge.DischargeSummaryResponseDTO;
 import com.example.hms.payload.dto.discharge.FollowUpAppointmentDTO;
@@ -21,6 +24,7 @@ import com.example.hms.repository.DischargeSummaryRepository;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.utility.RoleValidator;
@@ -37,6 +41,9 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 /**
  * Implementation of DischargeSummaryService
@@ -57,6 +64,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     private final StaffRepository staffRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final DischargeApprovalRepository dischargeApprovalRepository;
+    private final PrescriptionRepository prescriptionRepository;
     private final RoleValidator roleValidator;
 
     @Override
@@ -415,12 +423,46 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                 summary.setDischargeDiagnosis(diagText);
                 summary.setFollowUpInstructions(enc.getFollowUpInstructions());
 
+                // Encounter notes → hospitalCourse (visit summary)
+                if (enc.getNotes() != null && !enc.getNotes().isBlank()) {
+                    summary.setHospitalCourse(enc.getNotes());
+                }
+
+                // Pull prescriptions for this encounter → medication reconciliation
+                populateMedicationsFromPrescriptions(summary, enc);
+
                 dischargeSummaryRepository.save(summary);
                 log.info("Backfilled discharge summary for encounter {}", enc.getId());
             } catch (Exception ex) {
                 log.warn("Failed to backfill discharge summary for encounter {}: {}",
                         enc.getId(), ex.getMessage());
             }
+        }
+    }
+
+    /**
+     * Populates the discharge summary's medication reconciliation list from
+     * prescriptions linked to the given encounter.
+     */
+    private void populateMedicationsFromPrescriptions(DischargeSummary summary, Encounter enc) {
+        try {
+            Pageable page = PageRequest.of(0, 100);
+            List<Prescription> prescriptions = prescriptionRepository
+                    .findByEncounter_Id(enc.getId(), page)
+                    .getContent();
+            for (Prescription rx : prescriptions) {
+                MedicationReconciliationEntry entry = MedicationReconciliationEntry.builder()
+                        .medicationName(rx.getMedicationName())
+                        .dosage(rx.getDosage())
+                        .route(rx.getRoute())
+                        .frequency(rx.getFrequency())
+                        .reconciliationAction(MedicationReconciliationAction.CONTINUED)
+                        .continueAtDischarge(true)
+                        .build();
+                summary.addMedicationReconciliation(entry);
+            }
+        } catch (Exception ex) {
+            log.warn("Could not populate medications for encounter {}: {}", enc.getId(), ex.getMessage());
         }
     }
 

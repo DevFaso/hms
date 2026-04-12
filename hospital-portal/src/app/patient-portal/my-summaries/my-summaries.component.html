@@ -35,7 +35,7 @@
               </div>
               <div class="avs-header-info">
                 <span class="avs-provider">{{ s.providerName }}</span>
-                <span class="avs-dept">{{ s.department }} · {{ s.chiefComplaint }}</span>
+                <span class="avs-dept">{{ s.hospitalName }} · {{ s.encounterType }}</span>
               </div>
             </div>
             <span class="material-symbols-outlined avs-expand-icon">
@@ -45,17 +45,19 @@
 
           @if (expandedId() === s.id) {
             <div class="avs-body">
-              @if (s.diagnoses?.length) {
+              <!-- Diagnoses -->
+              @if (s.diagnoses.length) {
                 <div class="avs-section">
                   <h4>{{ 'PORTAL.SUMMARIES.DIAGNOSES' | translate }}</h4>
-                  <ul>
+                  <div class="avs-tag-list">
                     @for (d of s.diagnoses; track d) {
-                      <li>{{ d }}</li>
+                      <span class="avs-tag">{{ d }}</span>
                     }
-                  </ul>
+                  </div>
                 </div>
               }
 
+              <!-- Treatment Summary / Hospital Course -->
               @if (s.treatmentSummary) {
                 <div class="avs-section">
                   <h4>{{ 'PORTAL.SUMMARIES.TREATMENT_SUMMARY' | translate }}</h4>
@@ -63,24 +65,104 @@
                 </div>
               }
 
-              @if (s.instructions) {
+              <!-- Disposition & Discharge Condition -->
+              @if (s.disposition || s.dischargeCondition) {
                 <div class="avs-section">
-                  <h4>{{ 'PORTAL.SUMMARIES.INSTRUCTIONS' | translate }}</h4>
-                  <p>{{ s.instructions }}</p>
+                  <h4>{{ 'PORTAL.SUMMARIES.DISPOSITION' | translate }}</h4>
+                  @if (s.disposition) {
+                    <p><strong>{{ 'PORTAL.SUMMARIES.DISPOSITION_LABEL' | translate }}:</strong> {{ s.disposition }}</p>
+                  }
+                  @if (s.dischargeCondition) {
+                    <p><strong>{{ 'PORTAL.SUMMARIES.DISCHARGE_CONDITION' | translate }}:</strong> {{ s.dischargeCondition }}</p>
+                  }
                 </div>
               }
 
-              @if (s.medications?.length) {
+              <!-- Medications -->
+              @if (s.medications.length) {
                 <div class="avs-section">
                   <h4>{{ 'PORTAL.SUMMARIES.MEDICATIONS' | translate }}</h4>
-                  <ul>
-                    @for (m of s.medications; track m) {
-                      <li>{{ m }}</li>
-                    }
-                  </ul>
+                  <table class="avs-med-table">
+                    <thead>
+                      <tr>
+                        <th>{{ 'PORTAL.SUMMARIES.MED_NAME' | translate }}</th>
+                        <th>{{ 'PORTAL.SUMMARIES.MED_DOSAGE' | translate }}</th>
+                        <th>{{ 'PORTAL.SUMMARIES.MED_FREQUENCY' | translate }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (m of s.medications; track m.name) {
+                        <tr>
+                          <td>{{ m.name }}</td>
+                          <td>{{ m.dosage }}</td>
+                          <td>{{ m.frequency }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
                 </div>
               }
 
+              <!-- Follow-Up Instructions -->
+              @if (s.followUpInstructions) {
+                <div class="avs-section">
+                  <h4>{{ 'PORTAL.SUMMARIES.FOLLOW_UP_INSTRUCTIONS' | translate }}</h4>
+                  <p>{{ s.followUpInstructions }}</p>
+                </div>
+              }
+
+              <!-- Activity Restrictions -->
+              @if (s.activityRestrictions) {
+                <div class="avs-section">
+                  <h4>{{ 'PORTAL.SUMMARIES.ACTIVITY_RESTRICTIONS' | translate }}</h4>
+                  <p>{{ s.activityRestrictions }}</p>
+                </div>
+              }
+
+              <!-- Diet Instructions -->
+              @if (s.dietInstructions) {
+                <div class="avs-section">
+                  <h4>{{ 'PORTAL.SUMMARIES.DIET_INSTRUCTIONS' | translate }}</h4>
+                  <p>{{ s.dietInstructions }}</p>
+                </div>
+              }
+
+              <!-- Wound Care -->
+              @if (s.woundCareInstructions) {
+                <div class="avs-section">
+                  <h4>{{ 'PORTAL.SUMMARIES.WOUND_CARE' | translate }}</h4>
+                  <p>{{ s.woundCareInstructions }}</p>
+                </div>
+              }
+
+              <!-- Warning Signs -->
+              @if (s.warningSigns) {
+                <div class="avs-section avs-warning">
+                  <h4>
+                    <span class="material-symbols-outlined">warning</span>
+                    {{ 'PORTAL.SUMMARIES.WARNING_SIGNS' | translate }}
+                  </h4>
+                  <p>{{ s.warningSigns }}</p>
+                </div>
+              }
+
+              <!-- Patient Education -->
+              @if (s.patientEducation) {
+                <div class="avs-section">
+                  <h4>{{ 'PORTAL.SUMMARIES.PATIENT_EDUCATION' | translate }}</h4>
+                  <p>{{ s.patientEducation }}</p>
+                </div>
+              }
+
+              <!-- Additional Notes -->
+              @if (s.additionalNotes) {
+                <div class="avs-section">
+                  <h4>{{ 'PORTAL.SUMMARIES.ADDITIONAL_NOTES' | translate }}</h4>
+                  <p>{{ s.additionalNotes }}</p>
+                </div>
+              }
+
+              <!-- Follow-Up Appointment -->
               @if (s.followUpDate) {
                 <div class="avs-section">
                   <h4>{{ 'PORTAL.SUMMARIES.FOLLOW_UP' | translate }}</h4>

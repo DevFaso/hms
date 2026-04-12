@@ -344,14 +344,22 @@ interface PrescriptionApiResponse {
 export interface AfterVisitSummary {
   id: string;
   encounterDate: string;
+  encounterType: string;
   providerName: string;
-  department: string;
-  chiefComplaint: string;
+  hospitalName: string;
   diagnoses: string[];
   treatmentSummary: string;
-  instructions: string;
+  disposition: string;
+  dischargeCondition: string;
+  followUpInstructions: string;
+  activityRestrictions: string;
+  dietInstructions: string;
+  woundCareInstructions: string;
+  warningSigns: string;
+  patientEducation: string;
+  additionalNotes: string;
   followUpDate: string | null;
-  medications: string[];
+  medications: { name: string; dosage: string; frequency: string }[];
   status: string;
 }
 
@@ -863,24 +871,28 @@ export class PatientPortalService {
           return summaries.map((d) => ({
             id: d.id,
             encounterDate: d.dischargeDate ?? '',
+            encounterType: d.encounterType ?? '',
             providerName: d.dischargingProviderName ?? '',
-            department: d.hospitalName ?? '',
-            chiefComplaint: d.dischargeDiagnosis ?? '',
-            diagnoses: d.dischargeDiagnosis ? [d.dischargeDiagnosis] : [],
+            hospitalName: d.hospitalName ?? '',
+            diagnoses: d.dischargeDiagnosis
+              ? d.dischargeDiagnosis.split(';').map((s: string) => s.trim()).filter(Boolean)
+              : [],
             treatmentSummary: d.hospitalCourse ?? '',
-            instructions: [
-              d.followUpInstructions,
-              d.activityRestrictions,
-              d.dietInstructions,
-              d.woundCareInstructions,
-              d.warningSigns,
-            ]
-              .filter(Boolean)
-              .join('\n'),
+            disposition: d.disposition ?? '',
+            dischargeCondition: d.dischargeCondition ?? '',
+            followUpInstructions: d.followUpInstructions ?? '',
+            activityRestrictions: d.activityRestrictions ?? '',
+            dietInstructions: d.dietInstructions ?? '',
+            woundCareInstructions: d.woundCareInstructions ?? '',
+            warningSigns: d.warningSigns ?? '',
+            patientEducation: d.patientEducationProvided ?? '',
+            additionalNotes: d.additionalNotes ?? '',
             followUpDate: d.followUpAppointments?.[0]?.scheduledDate ?? null,
-            medications: (d.medicationReconciliation ?? []).map(
-              (m) => `${m.medicationName} ${m.dosage} – ${m.frequency}`,
-            ),
+            medications: (d.medicationReconciliation ?? []).map((m) => ({
+              name: m.medicationName ?? '',
+              dosage: m.dosage ?? '',
+              frequency: m.frequency ?? '',
+            })),
             status: d.isFinalized ? 'FINALIZED' : 'DRAFT',
           }));
         }),
