@@ -356,9 +356,13 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     private Patient resolvePatient(AppointmentRequestDTO request, Locale locale, String authenticatedUsername) {
         if (request.getPatientId() != null) {
-            return patientRepository.findById(request.getPatientId())
+            // Use unscoped lookup: multi-hospital patients have Patient.hospitalId set
+            // to the FIRST hospital, so the tenant-scoped findById misses them when
+            // accessed from a different hospital context.
+            return patientRepository.findByIdUnscoped(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException(
-                    messageSource.getMessage("patient.notfound", new Object[]{request.getPatientId()}, locale)));
+                    messageSource.getMessage("patient.notfound", new Object[]{request.getPatientId()},
+                        "Patient not found with ID: " + request.getPatientId(), locale)));
         } else if (request.getPatientUsername() != null) {
             UUID userId = userRepository.findByUsername(request.getPatientUsername())
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + request.getPatientUsername()))
