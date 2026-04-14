@@ -90,4 +90,70 @@ describe('ReceptionCockpitComponent', () => {
     component.statusFilter.set('ALL');
     expect(component.filteredQueue().length).toBe(2);
   });
+
+  // ── Check-In Dialog Tests ─────────────────────────────────────
+
+  it('should allow check-in for SCHEDULED items with an appointmentId', () => {
+    const item = {
+      appointmentId: 'a1',
+      patientId: 'p1',
+      patientName: 'A',
+      status: 'SCHEDULED',
+    } as any;
+    expect(component.canCheckIn(item)).toBeTrue();
+  });
+
+  it('should allow check-in for CONFIRMED items with an appointmentId', () => {
+    const item = {
+      appointmentId: 'a1',
+      patientId: 'p1',
+      patientName: 'A',
+      status: 'CONFIRMED',
+    } as any;
+    expect(component.canCheckIn(item)).toBeTrue();
+  });
+
+  it('should not allow check-in for ARRIVED items', () => {
+    const item = {
+      appointmentId: 'a1',
+      patientId: 'p1',
+      patientName: 'A',
+      status: 'ARRIVED',
+    } as any;
+    expect(component.canCheckIn(item)).toBeFalse();
+  });
+
+  it('should not allow check-in when appointmentId is null', () => {
+    const item = {
+      appointmentId: null,
+      patientId: 'p1',
+      patientName: 'A',
+      status: 'SCHEDULED',
+    } as any;
+    expect(component.canCheckIn(item)).toBeFalse();
+  });
+
+  it('openCheckIn should set checkinQueueItem signal', () => {
+    const item = {
+      appointmentId: 'a1',
+      patientId: 'p1',
+      patientName: 'A',
+      status: 'SCHEDULED',
+    } as any;
+    component.openCheckIn(item);
+    expect(component.checkinQueueItem()).toEqual(item);
+  });
+
+  it('onCheckedIn should clear checkinQueueItem signal', () => {
+    const item = {
+      appointmentId: 'a1',
+      patientId: 'p1',
+      patientName: 'A',
+      status: 'SCHEDULED',
+    } as any;
+    component.openCheckIn(item);
+    expect(component.checkinQueueItem()).toBeTruthy();
+    component.onCheckedIn();
+    expect(component.checkinQueueItem()).toBeNull();
+  });
 });

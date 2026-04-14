@@ -249,4 +249,8 @@ export class AppointmentDetailComponent implements OnInit {
   goBack(): void {
     void this.router.navigate(['/appointments']);
   }
+
+  goToCheckIn(): void {
+    void this.router.navigate(['/reception']);
+  }
 }

@@ -690,7 +690,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
           icon: 'how_to_reg',
           label: 'Check-in',
           description: 'Check in a patient',
-          route: '/appointments',
+          route: '/reception',
           color: '#2563eb',
           bgColor: '#eff6ff',
         },
@@ -1092,7 +1092,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     {
       icon: 'how_to_reg',
       label: 'Check-In',
-      route: '/appointments',
+      route: '/reception',
       color: '#059669',
       bg: '#d1fae5',
     },
@@ -1172,7 +1172,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     {
       icon: 'how_to_reg',
       label: 'Check-In',
-      route: '/appointments',
+      route: '/reception',
       color: '#059669',
       bg: '#d1fae5',
     },

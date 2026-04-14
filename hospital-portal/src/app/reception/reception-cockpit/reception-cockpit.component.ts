@@ -16,6 +16,7 @@ import { PaymentPendingPanelComponent } from '../payment-pending-panel/payment-p
 import { FlowBoardComponent, FlowBoardStatusChange } from '../flow-board/flow-board.component';
 import { WalkInDialogComponent } from '../walkin-dialog/walkin-dialog.component';
 import { WaitlistPanelComponent } from '../waitlist-panel/waitlist-panel.component';
+import { CheckinDialogComponent } from '../checkin-dialog/checkin-dialog.component';
 
 type Tab = 'queue' | 'insurance' | 'payments' | 'flowboard' | 'waitlist';
 type StatusFilter =
@@ -45,6 +46,7 @@ function todayIso(): string {
     FlowBoardComponent,
     WalkInDialogComponent,
     WaitlistPanelComponent,
+    CheckinDialogComponent,
   ],
   templateUrl: './reception-cockpit.component.html',
   styleUrl: './reception-cockpit.component.scss',
@@ -72,6 +74,7 @@ export class ReceptionCockpitComponent implements OnInit {
   statusFilter = signal<StatusFilter>('ALL');
   snapPatientId = signal<string | null>(null);
   showWalkIn = signal(false);
+  checkinQueueItem = signal<ReceptionQueueItem | null>(null);
 
   summary = signal<ReceptionDashboardSummary | null>(null);
   queueItems = signal<ReceptionQueueItem[]>([]);
@@ -179,5 +182,18 @@ export class ReceptionCockpitComponent implements OnInit {
       },
       error: () => this.toast.error(this.translate.instant('RECEPTION.STATUS_UPDATE_FAILED')),
     });
+  }
+
+  openCheckIn(item: ReceptionQueueItem): void {
+    this.checkinQueueItem.set(item);
+  }
+
+  onCheckedIn(): void {
+    this.checkinQueueItem.set(null);
+    this.loadAll();
+  }
+
+  canCheckIn(item: ReceptionQueueItem): boolean {
+    return !!item.appointmentId && (item.status === 'SCHEDULED' || item.status === 'CONFIRMED');
   }
 }

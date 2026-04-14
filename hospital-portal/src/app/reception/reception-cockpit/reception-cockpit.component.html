@@ -170,6 +170,16 @@
                   >
                     <span class="material-symbols-outlined">person_search</span>
                   </button>
+                  @if (canCheckIn(item)) {
+                    <button
+                      class="btn-xs btn-checkin"
+                      (click)="openCheckIn(item)"
+                      [title]="'RECEPTION.CHECK_IN' | translate"
+                    >
+                      <span class="material-symbols-outlined">how_to_reg</span>
+                      {{ 'RECEPTION.CHECK_IN' | translate }}
+                    </button>
+                  }
                 </td>
               </tr>
             }
@@ -227,4 +237,13 @@
 <!-- Walk-In Dialog -->
 @if (showWalkIn()) {
   <app-walkin-dialog (dismissed)="showWalkIn.set(false)" (created)="onWalkInCreated()" />
+}
+
+<!-- Check-In Dialog -->
+@if (checkinQueueItem(); as ci) {
+  <app-checkin-dialog
+    [queueItem]="ci"
+    (dismissed)="checkinQueueItem.set(null)"
+    (checkedIn)="onCheckedIn()"
+  />
 }
