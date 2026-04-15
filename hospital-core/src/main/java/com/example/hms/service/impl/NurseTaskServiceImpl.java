@@ -2,12 +2,14 @@ package com.example.hms.service.impl;
 
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AcuityLevel;
+import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.MedicationAdministrationStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Announcement;
 import com.example.hms.model.Admission;
+import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Notification;
@@ -41,6 +43,7 @@ import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseWorkboardPatientDTO;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.AnnouncementRepository;
+import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.MedicationAdministrationRecordRepository;
@@ -130,6 +133,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private final StaffRepository staffRepository;
     private final HospitalRepository hospitalRepository;
     private final AdmissionRepository admissionRepository;
+    private final EncounterRepository encounterRepository;
     private final PatientRepository patientRepository;
     private final NursingTaskRepository nursingTaskRepository;
     private final NursingNoteRepository nursingNoteRepository;
@@ -978,6 +982,17 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(vital::setRecordedByStaff);
         vitalSignRepository.save(vital);
+
+        // Advance encounter status: ARRIVED → TRIAGE so the Patient Tracker Board reflects vitals captured
+        encounterRepository
+            .findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
+                patientId, hospitalId, EncounterStatus.ARRIVED)
+            .ifPresent(encounter -> {
+                encounter.setStatus(EncounterStatus.TRIAGE);
+                encounterRepository.save(encounter);
+                log.info("Encounter {} transitioned ARRIVED → TRIAGE after vitals", encounter.getId());
+            });
+
         log.info("Vitals captured: patientId={}, nurse={}, significant={}", patientId, nurseUserId, clinicallySig);
     }
 

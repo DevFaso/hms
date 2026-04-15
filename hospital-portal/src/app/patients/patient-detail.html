@@ -306,6 +306,21 @@
                   </div>
                 }
               </div>
+              @if (
+                !v.heartRate &&
+                !v.systolicBp &&
+                !v.diastolicBp &&
+                !v.temperature &&
+                !v.oxygenSaturation &&
+                !v.respiratoryRate &&
+                (v.painLevel === null || v.painLevel === undefined) &&
+                !v.weight &&
+                !v.height
+              ) {
+                <p class="vital-notes no-metrics">
+                  {{ 'PATIENTS.NO_VITAL_METRICS' | translate }}
+                </p>
+              }
               @if (v.notes) {
                 <p class="vital-notes">{{ v.notes }}</p>
               }

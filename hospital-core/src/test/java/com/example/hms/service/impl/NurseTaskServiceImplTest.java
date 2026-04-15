@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import com.example.hms.enums.AcuityLevel;
 import com.example.hms.enums.AdmissionStatus;
+import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.MedicationAdministrationStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
@@ -21,6 +22,7 @@ import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Announcement;
 import com.example.hms.model.Department;
+import com.example.hms.model.Encounter;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.MedicationAdministrationRecord;
 import com.example.hms.model.Notification;
@@ -53,6 +55,7 @@ import com.example.hms.payload.dto.nurse.NurseVitalTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseWorkboardPatientDTO;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.AnnouncementRepository;
+import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.MedicationAdministrationRecordRepository;
 import com.example.hms.repository.NotificationRepository;
@@ -92,6 +95,7 @@ class NurseTaskServiceImplTest {
     @Mock private StaffRepository staffRepository;
     @Mock private HospitalRepository hospitalRepository;
     @Mock private AdmissionRepository admissionRepository;
+    @Mock private EncounterRepository encounterRepository;
     @Mock private PatientRepository patientRepository;
     @Mock private NursingTaskRepository nursingTaskRepository;
     @Mock private NursingNoteRepository nursingNoteRepository;
@@ -105,7 +109,7 @@ class NurseTaskServiceImplTest {
         service = Mockito.spy(new NurseTaskServiceImpl(
             nurseDashboardService, prescriptionRepository, marRepository,
             vitalSignRepository, announcementRepository, staffRepository, hospitalRepository,
-            admissionRepository, patientRepository, nursingTaskRepository,
+            admissionRepository, encounterRepository, patientRepository, nursingTaskRepository,
             nursingNoteRepository, notificationRepository, userRepository));
 
         // Default stubs so synthetic/fallback paths activate in existing tests
@@ -118,6 +122,8 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of());
         lenient().when(marRepository.findById(any())).thenReturn(Optional.empty());
         lenient().when(announcementRepository.findAll(any(Pageable.class))).thenReturn(Page.empty());
+        lenient().when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
+            any(), any(), any())).thenReturn(Optional.empty());
     }
 
     @Test
@@ -1966,5 +1972,79 @@ class NurseTaskServiceImplTest {
         assertThatThrownBy(() -> service.captureVitals(patientId, UUID.randomUUID(), nurseHospitalId, req))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("not registered at this hospital");
+    }
+
+    /* ════════════════════════════════════════════════════════════════════
+       captureVitals → encounter status transition (ARRIVED → TRIAGE)
+       ════════════════════════════════════════════════════════════════════ */
+
+    @Test
+    void captureVitalsTransitionsEncounterFromArrivedToTriage() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID encounterId = UUID.randomUUID();
+
+        Patient pat = Patient.builder().build();
+        pat.setId(patientId);
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+        registerPatientAtHospital(pat, hosp);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.empty());
+
+        Encounter encounter = Encounter.builder().status(EncounterStatus.ARRIVED).build();
+        encounter.setId(encounterId);
+        when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
+            patientId, hospitalId, EncounterStatus.ARRIVED))
+            .thenReturn(Optional.of(encounter));
+
+        NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
+            .heartRateBpm(72)
+            .spo2Percent(98)
+            .build();
+
+        service.captureVitals(patientId, nurseId, hospitalId, req);
+
+        // Verify vitals are saved
+        verify(vitalSignRepository).save(any(PatientVitalSign.class));
+
+        // Verify encounter status is transitioned to TRIAGE
+        ArgumentCaptor<Encounter> encCaptor = ArgumentCaptor.forClass(Encounter.class);
+        verify(encounterRepository).save(encCaptor.capture());
+        assertThat(encCaptor.getValue().getStatus()).isEqualTo(EncounterStatus.TRIAGE);
+    }
+
+    @Test
+    void captureVitalsDoesNotTransitionWhenNoArrivedEncounterExists() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+
+        Patient pat = Patient.builder().build();
+        pat.setId(patientId);
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+        registerPatientAtHospital(pat, hosp);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.empty());
+
+        // No ARRIVED encounter
+        when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
+            patientId, hospitalId, EncounterStatus.ARRIVED))
+            .thenReturn(Optional.empty());
+
+        NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
+            .heartRateBpm(80)
+            .build();
+
+        service.captureVitals(patientId, nurseId, hospitalId, req);
+
+        // Vitals still saved
+        verify(vitalSignRepository).save(any(PatientVitalSign.class));
+        // No encounter save attempted
+        verify(encounterRepository, Mockito.never()).save(any(Encounter.class));
     }
 }

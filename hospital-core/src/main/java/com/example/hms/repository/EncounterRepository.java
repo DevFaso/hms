@@ -89,6 +89,10 @@ public interface EncounterRepository
     // Find active (in-progress) encounters for a specific doctor — used for "roomed patients"
     List<Encounter> findByStaff_IdAndStatus(UUID staffId, EncounterStatus status);
 
+    // Find the most recent encounter for a patient at a hospital in a given status
+    Optional<Encounter> findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
+        UUID patientId, UUID hospitalId, EncounterStatus status);
+
     @Query("SELECT e FROM Encounter e WHERE e.appointment.id IN :appointmentIds")
     List<Encounter> findByAppointmentIdIn(@Param("appointmentIds") List<UUID> appointmentIds);
 
