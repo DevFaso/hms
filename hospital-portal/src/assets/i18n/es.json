@@ -2886,6 +2886,7 @@
     "DEPT": "Depto.",
     "PRE_CHECKIN_BADGE": "Pre-registro",
     "CHECK_OUT": "Dar de alta",
+    "COMPLETE_TRIAGE": "Completar triaje",
     "NO_PATIENTS": "Sin pacientes"
   },
   "CHECKOUT": {

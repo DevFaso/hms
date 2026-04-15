@@ -279,4 +279,8 @@ export class EncounterService {
   startEncounter(encounterId: string): Observable<EncounterResponse> {
     return this.http.post<EncounterResponse>(`${this.baseUrl}/${encounterId}/start`, {});
   }
+
+  completeTriage(encounterId: string): Observable<EncounterResponse> {
+    return this.http.post<EncounterResponse>(`${this.baseUrl}/${encounterId}/complete-triage`, {});
+  }
 }

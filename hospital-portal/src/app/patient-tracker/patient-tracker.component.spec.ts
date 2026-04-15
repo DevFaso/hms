@@ -62,7 +62,11 @@ describe('PatientTrackerComponent', () => {
   beforeEach(async () => {
     trackerSpy = jasmine.createSpyObj('PatientTrackerService', ['getTrackerBoard']);
     authSpy = jasmine.createSpyObj('AuthService', ['getHospitalId']);
-    encounterSpy = jasmine.createSpyObj('EncounterService', ['getById', 'checkOut']);
+    encounterSpy = jasmine.createSpyObj('EncounterService', [
+      'getById',
+      'checkOut',
+      'completeTriage',
+    ]);
 
     authSpy.getHospitalId.and.returnValue('h1');
     trackerSpy.getTrackerBoard.and.returnValue(of(mockBoard()));
@@ -245,5 +249,36 @@ describe('PatientTrackerComponent', () => {
     const el: HTMLElement = fixture.nativeElement;
     const checkoutBtns = el.querySelectorAll('.btn-checkout');
     expect(checkoutBtns.length).toBeGreaterThan(0);
+  });
+
+  /* ── Complete Triage ───────────────────────────── */
+
+  it('should call completeTriage and reload board', () => {
+    const enc: EncounterResponse = {
+      id: 'e1',
+      status: 'WAITING_FOR_PHYSICIAN',
+    } as EncounterResponse;
+    encounterSpy.completeTriage.and.returnValue(of(enc));
+
+    const item = mockItem({ encounterId: 'e1', currentStatus: 'TRIAGE' });
+    component.completeTriage(item);
+
+    expect(encounterSpy.completeTriage).toHaveBeenCalledWith('e1');
+    expect(component.triageInProgress()).toBeFalse();
+    expect(trackerSpy.getTrackerBoard).toHaveBeenCalledWith('h1');
+  });
+
+  it('should render complete-triage buttons in triage column', () => {
+    trackerSpy.getTrackerBoard.and.returnValue(
+      of(
+        mockBoard({
+          triage: [mockItem({ encounterId: 'e4', currentStatus: 'TRIAGE' })],
+        }),
+      ),
+    );
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const triageBtns = el.querySelectorAll('.btn-complete-triage');
+    expect(triageBtns.length).toBeGreaterThan(0);
   });
 });

@@ -271,6 +271,28 @@
 }
 
 /* Check-Out button (MVP 6) */
+.btn-complete-triage {
+  background: #7c3aed;
+  color: #faf5ff;
+  border: none;
+  border-radius: 4px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-left: auto;
+
+  &:hover:not(:disabled) {
+    background: #6d28d9;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
 .btn-checkout {
   background: #0e7490;
   color: #f0fdfa;

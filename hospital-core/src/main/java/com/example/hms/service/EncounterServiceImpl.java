@@ -1686,4 +1686,30 @@ public class EncounterServiceImpl implements EncounterService {
         return encounterMapper.toEncounterResponseDTO(saved);
     }
 
+    // ------------------------------------------------------------------
+    // Complete-triage shortcut: TRIAGE → WAITING_FOR_PHYSICIAN
+    // ------------------------------------------------------------------
+
+    @Override
+    @Transactional
+    public EncounterResponseDTO completeTriage(UUID encounterId) {
+        Encounter encounter = encounterRepository.findById(encounterId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
+                                org.springframework.context.i18n.LocaleContextHolder.getLocale())));
+
+        EncounterStatus current = encounter.getStatus();
+        if (current != EncounterStatus.TRIAGE && current != EncounterStatus.ARRIVED) {
+            throw new BusinessException(
+                    "Cannot complete triage for encounter in status " + current
+                            + ". Expected ARRIVED or TRIAGE.");
+        }
+
+        encounter.setTriageTimestamp(LocalDateTime.now());
+        encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
+        Encounter saved = encounterRepository.save(encounter);
+
+        return encounterMapper.toEncounterResponseDTO(saved);
+    }
+
 }

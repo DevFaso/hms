@@ -149,4 +149,20 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
     this.checkoutEncounter.set(null);
     this.loadBoard();
   }
+
+  /* ── Complete Triage — advance TRIAGE → WAITING ─── */
+  triageInProgress = signal(false);
+
+  completeTriage(item: PatientTrackerItem): void {
+    this.triageInProgress.set(true);
+    this.encounterService.completeTriage(item.encounterId).subscribe({
+      next: () => {
+        this.triageInProgress.set(false);
+        this.loadBoard();
+      },
+      error: () => {
+        this.triageInProgress.set(false);
+      },
+    });
+  }
 }
