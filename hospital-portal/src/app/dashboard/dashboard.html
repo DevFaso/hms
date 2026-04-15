@@ -1461,6 +1461,7 @@
         <app-doctor-worklist
           [items]="worklistItems()"
           (patientSelected)="openPatientSnapshot($event)"
+          (encounterStarted)="onStartEncounter($event)"
           (dateChanged)="reloadWorklistForDate($event)"
         />
 

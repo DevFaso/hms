@@ -114,6 +114,15 @@
             </div>
           }
           <div class="wl-actions">
+            @if (item.encounterId && item.encounterStatus === 'WAITING') {
+              <button
+                class="wl-action-btn wl-start-btn"
+                [title]="'DASHBOARD.START_ENCOUNTER' | translate"
+                (click)="$event.stopPropagation(); requestStartEncounter(item.encounterId)"
+              >
+                <span class="material-symbols-outlined">play_arrow</span>
+              </button>
+            }
             <a
               [routerLink]="['/patients', item.patientId]"
               class="wl-action-btn"

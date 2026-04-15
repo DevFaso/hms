@@ -62,6 +62,7 @@ import { DoctorPatientFlowComponent } from './doctor-patient-flow/doctor-patient
 import { DoctorResultsPanelComponent } from './doctor-results-panel/doctor-results-panel';
 import { PatientSnapshotDrawerComponent } from './patient-snapshot-drawer/patient-snapshot-drawer';
 import { InBasketPanelComponent } from './in-basket-panel/in-basket-panel';
+import { EncounterService } from '../services/encounter.service';
 
 // ── Local interfaces ────────────────────────────────────────────────────────
 
@@ -136,6 +137,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly dashboardService = inject(DashboardService);
   private readonly portalService = inject(PatientPortalService);
+  private readonly encounterService = inject(EncounterService);
 
   // ── Time & Identity ──────────────────────────────────────────
   greeting = signal('');
@@ -2022,6 +2024,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
   reloadWorklistForDate(date: string): void {
     this.dashboardService.getWorklist(undefined, undefined, date).subscribe({
       next: (items) => this.worklistItems.set(items),
+    });
+  }
+
+  onStartEncounter(encounterId: string): void {
+    this.encounterService.startEncounter(encounterId).subscribe({
+      next: () => {
+        this.router.navigate(['/encounters', encounterId]);
+        this.dashboardService.getWorklist().subscribe({
+          next: (items) => this.worklistItems.set(items),
+        });
+      },
     });
   }
 

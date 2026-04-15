@@ -240,6 +240,23 @@ public class EncounterController {
     }
 
     // ----------------------------------------------------------
+    // Start Encounter — Doctor picks up a WAITING_FOR_PHYSICIAN patient
+    // ----------------------------------------------------------
+    @PostMapping("/{encounterId}/start")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
+    @Operation(
+        summary = "Start an encounter (doctor picks up patient)",
+        description = "Transitions a WAITING_FOR_PHYSICIAN encounter to IN_PROGRESS."
+    )
+    public ResponseEntity<EncounterResponseDTO> startEncounter(
+        @PathVariable UUID encounterId,
+        Authentication auth
+    ) {
+        EncounterResponseDTO response = encounterService.startEncounter(encounterId, auth.getName());
+        return ResponseEntity.ok(response);
+    }
+
+    // ----------------------------------------------------------
     // MVP 3 — Nursing Intake Flowsheet
     // ----------------------------------------------------------
     @PostMapping(value = "/{encounterId}/nursing-intake", consumes = MediaType.APPLICATION_JSON_VALUE)
