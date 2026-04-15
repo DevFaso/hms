@@ -2031,9 +2031,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.encounterService.startEncounter(encounterId).subscribe({
       next: () => {
         this.router.navigate(['/encounters', encounterId]);
-        this.dashboardService.getWorklist().subscribe({
-          next: (items) => this.worklistItems.set(items),
-        });
       },
     });
   }

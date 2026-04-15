@@ -117,10 +117,11 @@
             @if (item.encounterId && item.encounterStatus === 'WAITING') {
               <button
                 class="wl-action-btn wl-start-btn"
+                [attr.aria-label]="'DASHBOARD.START_ENCOUNTER' | translate"
                 [title]="'DASHBOARD.START_ENCOUNTER' | translate"
                 (click)="$event.stopPropagation(); requestStartEncounter(item.encounterId)"
               >
-                <span class="material-symbols-outlined">play_arrow</span>
+                <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span>
               </button>
             }
             <a
