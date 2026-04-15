@@ -17,6 +17,7 @@ type WorklistTab = 'ALL' | 'WAITING' | 'IN_PROGRESS' | 'CONSULTS' | 'COMPLETED';
 export class DoctorWorklistComponent {
   items = input<DoctorWorklistItem[]>([]);
   patientSelected = output<string>();
+  encounterStarted = output<string>();
   dateChanged = output<string>();
 
   readonly today = (() => {
@@ -55,7 +56,11 @@ export class DoctorWorklistComponent {
     let items = this.items();
     if (tab === 'WAITING')
       items = items.filter(
-        (i) => i.encounterStatus === 'ARRIVED' || i.encounterStatus === 'SCHEDULED',
+        (i) =>
+          i.encounterStatus === 'CHECKED_IN' ||
+          i.encounterStatus === 'TRIAGE' ||
+          i.encounterStatus === 'WAITING' ||
+          i.encounterStatus === 'SCHEDULED',
       );
     else if (tab === 'IN_PROGRESS')
       items = items.filter((i) => i.encounterStatus === 'IN_PROGRESS');
@@ -71,7 +76,11 @@ export class DoctorWorklistComponent {
     return {
       ALL: all.length,
       WAITING: all.filter(
-        (i) => i.encounterStatus === 'ARRIVED' || i.encounterStatus === 'SCHEDULED',
+        (i) =>
+          i.encounterStatus === 'CHECKED_IN' ||
+          i.encounterStatus === 'TRIAGE' ||
+          i.encounterStatus === 'WAITING' ||
+          i.encounterStatus === 'SCHEDULED',
       ).length,
       IN_PROGRESS: all.filter((i) => i.encounterStatus === 'IN_PROGRESS').length,
       CONSULTS: all.filter((i) => i.encounterStatus === 'CONSULTATION').length,
@@ -120,7 +129,9 @@ export class DoctorWorklistComponent {
   getStatusLabel(status: string): string {
     const map: Record<string, string> = {
       SCHEDULED: 'Scheduled',
-      ARRIVED: 'Waiting',
+      CHECKED_IN: 'Checked In',
+      TRIAGE: 'In Triage',
+      WAITING: 'Waiting',
       IN_PROGRESS: 'In Progress',
       COMPLETED: 'Completed',
       CANCELLED: 'Cancelled',
@@ -132,13 +143,19 @@ export class DoctorWorklistComponent {
   getStatusClass(status: string): string {
     const map: Record<string, string> = {
       SCHEDULED: 'status-scheduled',
-      ARRIVED: 'status-waiting',
+      CHECKED_IN: 'status-checked-in',
+      TRIAGE: 'status-triage',
+      WAITING: 'status-waiting',
       IN_PROGRESS: 'status-active',
       COMPLETED: 'status-completed',
       CANCELLED: 'status-cancelled',
       CONSULTATION: 'status-consult',
     };
     return map[status] ?? '';
+  }
+
+  requestStartEncounter(encounterId: string): void {
+    this.encounterStarted.emit(encounterId);
   }
 
   getInitials(name: string): string {

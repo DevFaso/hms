@@ -86,4 +86,9 @@ public interface EncounterService {
      * Loads the encounter entity and delegates to CheckOutMapper for full AVS construction.
      */
     AfterVisitSummaryDTO getAfterVisitSummary(UUID encounterId);
+
+    /**
+     * Doctor picks up a WAITING_FOR_PHYSICIAN encounter and transitions it to IN_PROGRESS.
+     */
+    EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername);
 }

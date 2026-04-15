@@ -275,4 +275,8 @@ export class EncounterService {
   checkOut(encounterId: string, req: CheckOutRequest): Observable<AfterVisitSummary> {
     return this.http.post<AfterVisitSummary>(`${this.baseUrl}/${encounterId}/checkout`, req);
   }
+
+  startEncounter(encounterId: string): Observable<EncounterResponse> {
+    return this.http.post<EncounterResponse>(`${this.baseUrl}/${encounterId}/start`, {});
+  }
 }

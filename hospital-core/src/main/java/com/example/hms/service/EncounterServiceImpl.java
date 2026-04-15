@@ -1643,5 +1643,25 @@ public class EncounterServiceImpl implements EncounterService {
                 .orElse(null);
     }
 
+    @Override
+    @Transactional
+    public EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername) {
+        Encounter encounter = encounterRepository.findById(encounterId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
+                                org.springframework.context.i18n.LocaleContextHolder.getLocale())));
+
+        EncounterStatus current = encounter.getStatus();
+        if (current != EncounterStatus.WAITING_FOR_PHYSICIAN) {
+            throw new BusinessException(
+                    "Cannot start encounter in status " + current
+                            + ". Expected WAITING_FOR_PHYSICIAN.");
+        }
+
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        Encounter saved = encounterRepository.save(encounter);
+
+        return encounterMapper.toEncounterResponseDTO(saved);
+    }
 
 }

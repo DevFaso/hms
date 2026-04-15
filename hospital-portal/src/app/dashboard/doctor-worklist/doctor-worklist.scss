@@ -229,6 +229,14 @@
   border-radius: 99px;
   white-space: nowrap;
 
+  &.status-checked-in {
+    background: #f1f5f9;
+    color: #334155;
+  }
+  &.status-triage {
+    background: #fce7f3;
+    color: #9d174d;
+  }
   &.status-waiting {
     background: #fef3c7;
     color: #92400e;
@@ -310,6 +318,18 @@
 
   .material-symbols-outlined {
     font-size: 18px;
+  }
+
+  &.wl-start-btn {
+    background: #059669;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+
+    &:hover {
+      background: #047857;
+      color: #fff;
+    }
   }
 }
 
