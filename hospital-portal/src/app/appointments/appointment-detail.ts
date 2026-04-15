@@ -25,6 +25,14 @@ const STATUS_UPDATE_ROLES: readonly string[] = [
   'ROLE_SUPER_ADMIN',
 ];
 
+/** Roles that can navigate to the Reception cockpit for check-in. */
+const CHECK_IN_ROLES: readonly string[] = [
+  'ROLE_RECEPTIONIST',
+  'ROLE_HOSPITAL_ADMIN',
+  'ROLE_ADMIN',
+  'ROLE_SUPER_ADMIN',
+];
+
 @Component({
   selector: 'app-appointment-detail',
   standalone: true,
@@ -77,6 +85,10 @@ export class AppointmentDetailComponent implements OnInit {
 
   get canUpdateStatus(): boolean {
     return STATUS_UPDATE_ROLES.some((r) => this.currentUserRoles.includes(r));
+  }
+
+  get canCheckIn(): boolean {
+    return CHECK_IN_ROLES.some((r) => this.currentUserRoles.includes(r));
   }
 
   /** True once the current date/time is at or past the appointment's start time. */
@@ -248,5 +260,9 @@ export class AppointmentDetailComponent implements OnInit {
 
   goBack(): void {
     void this.router.navigate(['/appointments']);
+  }
+
+  goToCheckIn(): void {
+    void this.router.navigate(['/reception']);
   }
 }

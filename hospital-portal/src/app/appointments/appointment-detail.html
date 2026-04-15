@@ -55,6 +55,11 @@
                 {{ 'APPOINTMENTS.CONFIRM' | translate }}
               </button>
             }
+            @if ((appt.status === 'CONFIRMED' || appt.status === 'SCHEDULED') && canCheckIn) {
+              <button class="btn-xs btn-checkin" (click)="goToCheckIn()" [disabled]="saving()">
+                {{ 'RECEPTION.CHECK_IN' | translate }}
+              </button>
+            }
             @if (appt.status === 'CONFIRMED' || appt.status === 'IN_PROGRESS') {
               <button
                 class="btn-xs btn-complete"
@@ -98,7 +103,9 @@
           </div>
           <div class="field-row">
             <span class="field-label">{{ 'APPOINTMENTS.TIME' | translate }}</span>
-            <span class="field-value">{{ appt.startTime }} – {{ appt.endTime }}</span>
+            <span class="field-value"
+              >{{ appt.startTime | slice: 0 : 5 }} – {{ appt.endTime | slice: 0 : 5 }}</span
+            >
           </div>
           <div class="field-row">
             <span class="field-label">{{ 'APPOINTMENTS.REASON' | translate }}</span>
