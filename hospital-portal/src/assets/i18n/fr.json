@@ -1642,6 +1642,7 @@
     "NO_PATIENTS": "No patients found",
     "NO_VITALS": "No vitals recorded",
     "NO_VITALS_DESC": "Vital signs will appear here when recorded.",
+    "NO_VITAL_METRICS": "Aucune mesure numérique enregistrée — uniquement des notes.",
     "OPTIONAL": "Optionnel",
     "ORGANISATION": "Organisation",
     "OTHER": "Autre",
