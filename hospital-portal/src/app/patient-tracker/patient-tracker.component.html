@@ -75,6 +75,16 @@
                       >&#x2713; {{ 'TRACKER.PRE_CHECKIN_BADGE' | translate }}</span
                     >
                   }
+                  @if (col.key === 'triage' || col.key === 'arrived') {
+                    <button
+                      class="btn-complete-triage"
+                      (click)="completeTriage(item)"
+                      [disabled]="triageInProgress()"
+                      [title]="'TRACKER.COMPLETE_TRIAGE' | translate"
+                    >
+                      {{ 'TRACKER.COMPLETE_TRIAGE' | translate }}
+                    </button>
+                  }
                   @if (
                     col.key === 'readyForDischarge' ||
                     col.key === 'inProgress' ||

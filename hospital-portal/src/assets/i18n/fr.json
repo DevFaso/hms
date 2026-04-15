@@ -3253,6 +3253,7 @@
     "DEPT": "Service",
     "PRE_CHECKIN_BADGE": "Pré-enregistré",
     "CHECK_OUT": "Sortie",
+    "COMPLETE_TRIAGE": "Terminer le triage",
     "NO_PATIENTS": "Aucun patient"
   },
   "CHECKOUT": {

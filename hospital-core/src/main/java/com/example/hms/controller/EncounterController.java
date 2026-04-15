@@ -259,6 +259,22 @@ public class EncounterController {
     }
 
     // ----------------------------------------------------------
+    // Complete Triage — Nurse advances TRIAGE → WAITING_FOR_PHYSICIAN
+    // ----------------------------------------------------------
+    @PostMapping("/{encounterId}/complete-triage")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_DOCTOR','ROLE_RECEPTIONIST')")
+    @Operation(
+        summary = "Complete triage (advance to waiting for physician)",
+        description = "Transitions an ARRIVED or TRIAGE encounter to WAITING_FOR_PHYSICIAN."
+    )
+    public ResponseEntity<EncounterResponseDTO> completeTriage(
+        @PathVariable UUID encounterId
+    ) {
+        EncounterResponseDTO response = encounterService.completeTriage(encounterId);
+        return ResponseEntity.ok(response);
+    }
+
+    // ----------------------------------------------------------
     // MVP 3 — Nursing Intake Flowsheet
     // ----------------------------------------------------------
     @PostMapping(value = "/{encounterId}/nursing-intake", consumes = MediaType.APPLICATION_JSON_VALUE)

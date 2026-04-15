@@ -92,4 +92,9 @@ public interface EncounterService {
      */
     EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername,
                                          boolean isSuperAdmin, UUID callerHospitalId);
+
+    /**
+     * Advance a TRIAGE encounter to WAITING_FOR_PHYSICIAN (nurse completes triage from tracker).
+     */
+    EncounterResponseDTO completeTriage(UUID encounterId);
 }
