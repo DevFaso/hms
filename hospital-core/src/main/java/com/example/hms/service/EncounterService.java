@@ -90,5 +90,6 @@ public interface EncounterService {
     /**
      * Doctor picks up a WAITING_FOR_PHYSICIAN encounter and transitions it to IN_PROGRESS.
      */
-    EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername);
+    EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername,
+                                         boolean isSuperAdmin, UUID callerHospitalId);
 }

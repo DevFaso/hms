@@ -1645,11 +1645,33 @@ public class EncounterServiceImpl implements EncounterService {
 
     @Override
     @Transactional
-    public EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername) {
+    public EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername,
+                                                boolean isSuperAdmin, UUID callerHospitalId) {
         Encounter encounter = encounterRepository.findById(encounterId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
                                 org.springframework.context.i18n.LocaleContextHolder.getLocale())));
+
+        // Hospital scoping: non-super-admin must belong to the encounter's hospital
+        if (!isSuperAdmin) {
+            UUID encounterHospitalId = encounter.getHospital() != null
+                    ? encounter.getHospital().getId() : null;
+            if (encounterHospitalId != null && !encounterHospitalId.equals(callerHospitalId)) {
+                throw new ResourceNotFoundException(
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
+                                org.springframework.context.i18n.LocaleContextHolder.getLocale()));
+            }
+
+            // Verify the caller is the assigned staff
+            User user = userRepository.findByUsername(actorUsername).orElse(null);
+            Staff encounterStaff = encounter.getStaff();
+            if (user != null && encounterStaff != null
+                    && encounterStaff.getUser() != null
+                    && !encounterStaff.getUser().getId().equals(user.getId())) {
+                throw new BusinessException(
+                        "You are not the assigned physician for this encounter.");
+            }
+        }
 
         EncounterStatus current = encounter.getStatus();
         if (current != EncounterStatus.WAITING_FOR_PHYSICIAN) {

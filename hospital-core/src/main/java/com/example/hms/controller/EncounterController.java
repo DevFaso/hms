@@ -252,7 +252,9 @@ public class EncounterController {
         @PathVariable UUID encounterId,
         Authentication auth
     ) {
-        EncounterResponseDTO response = encounterService.startEncounter(encounterId, auth.getName());
+        boolean isSuperAdmin = authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
+        UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
+        EncounterResponseDTO response = encounterService.startEncounter(encounterId, auth.getName(), isSuperAdmin, hospitalId);
         return ResponseEntity.ok(response);
     }
 
