@@ -1050,4 +1050,153 @@ class EncounterServiceImplTest {
         assertThat(encounter.getDischargeDiagnoses()).isNull();
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
     }
+
+    // ---------- startEncounter ----------
+
+    @Test
+    void startEncounter_happyPath_transitionsToInProgress() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().build();
+        user.setId(userId);
+        Staff staff = Staff.builder().user(user).build();
+        staff.setId(UUID.randomUUID());
+
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
+        encounter.setHospital(hospital);
+        encounter.setStaff(staff);
+
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+        dto.setId(encounterId);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(userRepository.findByUsername("doctor1")).thenReturn(Optional.of(user));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
+
+        EncounterResponseDTO result = service.startEncounter(encounterId, "doctor1", false, hospitalId);
+
+        assertThat(result.getId()).isEqualTo(encounterId);
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+        verify(encounterRepository).save(encounter);
+    }
+
+    @Test
+    void startEncounter_alreadyInProgress_returnsIdempotent() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+
+        UUID userId = UUID.randomUUID();
+        User user = User.builder().build();
+        user.setId(userId);
+        Staff staff = Staff.builder().user(user).build();
+        staff.setId(UUID.randomUUID());
+
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+        encounter.setStaff(staff);
+
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+        dto.setId(encounterId);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(userRepository.findByUsername("doctor1")).thenReturn(Optional.of(user));
+        when(encounterMapper.toEncounterResponseDTO(encounter)).thenReturn(dto);
+
+        EncounterResponseDTO result = service.startEncounter(encounterId, "doctor1", false, hospitalId);
+
+        assertThat(result.getId()).isEqualTo(encounterId);
+        verify(encounterRepository, never()).save(any(Encounter.class));
+    }
+
+    @Test
+    void startEncounter_invalidStatus_throws() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.COMPLETED);
+        encounter.setHospital(hospital);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+
+        assertThatThrownBy(() -> service.startEncounter(encounterId, "doctor1", false, hospitalId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Cannot start encounter in status COMPLETED");
+    }
+
+    @Test
+    void startEncounter_notFound_throws() {
+        UUID encounterId = UUID.randomUUID();
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
+
+        assertThatThrownBy(() -> service.startEncounter(encounterId, "doctor1", false, null))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void startEncounter_superAdmin_skipsHospitalAndStaffChecks() {
+        UUID encounterId = UUID.randomUUID();
+
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
+
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+        dto.setId(encounterId);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
+
+        EncounterResponseDTO result = service.startEncounter(encounterId, "admin", true, null);
+
+        assertThat(result.getId()).isEqualTo(encounterId);
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void startEncounter_wrongPhysician_throws() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+
+        UUID assignedUserId = UUID.randomUUID();
+        User assignedUser = User.builder().build();
+        assignedUser.setId(assignedUserId);
+        Staff staff = Staff.builder().user(assignedUser).build();
+        staff.setId(UUID.randomUUID());
+
+        UUID callerUserId = UUID.randomUUID();
+        User callerUser = User.builder().build();
+        callerUser.setId(callerUserId);
+
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
+        encounter.setHospital(hospital);
+        encounter.setStaff(staff);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(userRepository.findByUsername("other-doctor")).thenReturn(Optional.of(callerUser));
+
+        assertThatThrownBy(() -> service.startEncounter(encounterId, "other-doctor", false, hospitalId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("not the assigned physician");
+    }
 }

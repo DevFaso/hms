@@ -1674,6 +1674,10 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         EncounterStatus current = encounter.getStatus();
+        // Idempotent: if already IN_PROGRESS, return as-is instead of failing
+        if (current == EncounterStatus.IN_PROGRESS) {
+            return encounterMapper.toEncounterResponseDTO(encounter);
+        }
         if (current != EncounterStatus.WAITING_FOR_PHYSICIAN) {
             throw new BusinessException(
                     "Cannot start encounter in status " + current

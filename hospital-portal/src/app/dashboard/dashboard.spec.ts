@@ -1,12 +1,15 @@
 import { TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { DashboardComponent } from './dashboard';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
+import { ToastService } from '../core/toast.service';
+import { EncounterService } from '../services/encounter.service';
 import { signal } from '@angular/core';
+import { of, throwError } from 'rxjs';
 
 /**
  * Lightweight unit tests for dashboard navigation and RBAC fixes.
@@ -384,5 +387,95 @@ describe('Dashboard navigation & RBAC', () => {
       .withContext('Expected receptionist workflow tiles to include a Check-In tile')
       .toBeDefined();
     expect(checkIn!.route).toBe('/reception');
+  });
+});
+
+describe('Dashboard onStartEncounter', () => {
+  let component: DashboardComponent;
+  let encounterServiceSpy: jasmine.SpyObj<EncounterService>;
+  let toastSpy: jasmine.SpyObj<ToastService>;
+  let router: Router;
+
+  beforeEach(() => {
+    encounterServiceSpy = jasmine.createSpyObj('EncounterService', ['startEncounter']);
+    toastSpy = jasmine.createSpyObj('ToastService', ['error', 'success']);
+
+    const authStub = jasmine.createSpyObj('AuthService', [
+      'getRoles',
+      'hasAnyRole',
+      'getToken',
+      'getUserProfile',
+    ]);
+    authStub.getRoles.and.returnValue(['ROLE_DOCTOR']);
+    authStub.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_DOCTOR'));
+    authStub.getToken.and.returnValue('fake-token');
+    authStub.getUserProfile.and.returnValue({
+      id: 'u1',
+      username: 'testuser',
+      email: 'test@test.com',
+      roles: ['ROLE_DOCTOR'],
+      staffId: 's1',
+      active: true,
+    } as any);
+
+    const permStub: Partial<PermissionService> = {
+      hasPermission: () => true,
+      hasAnyPermission: () => true,
+    };
+
+    TestBed.configureTestingModule({
+      imports: [DashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: AuthService, useValue: authStub },
+        { provide: PermissionService, useValue: permStub },
+        { provide: EncounterService, useValue: encounterServiceSpy },
+        { provide: ToastService, useValue: toastSpy },
+      ],
+    });
+
+    const fixture = TestBed.createComponent(DashboardComponent);
+    component = fixture.componentInstance;
+    router = TestBed.inject(Router);
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('should navigate to encounter on successful start', () => {
+    encounterServiceSpy.startEncounter.and.returnValue(of({} as any));
+    const navSpy = spyOn(router, 'navigate');
+
+    component.onStartEncounter('enc-123');
+
+    expect(encounterServiceSpy.startEncounter).toHaveBeenCalledWith('enc-123');
+    expect(navSpy).toHaveBeenCalledWith(['/encounters', 'enc-123']);
+  });
+
+  it('should show toast error with backend message on failure', () => {
+    const errorResponse = {
+      error: {
+        message: 'Cannot start encounter in status COMPLETED. Expected WAITING_FOR_PHYSICIAN.',
+      },
+    };
+    encounterServiceSpy.startEncounter.and.returnValue(throwError(() => errorResponse));
+    const navSpy = spyOn(router, 'navigate');
+
+    component.onStartEncounter('enc-456');
+
+    expect(encounterServiceSpy.startEncounter).toHaveBeenCalledWith('enc-456');
+    expect(navSpy).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith(
+      'Cannot start encounter in status COMPLETED. Expected WAITING_FOR_PHYSICIAN.',
+    );
+  });
+
+  it('should show fallback toast error when no backend message', () => {
+    encounterServiceSpy.startEncounter.and.returnValue(throwError(() => ({ status: 500 })));
+
+    component.onStartEncounter('enc-789');
+
+    expect(toastSpy.error).toHaveBeenCalledWith('Failed to start encounter');
   });
 });
