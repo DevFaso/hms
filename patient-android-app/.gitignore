@@ -20,6 +20,9 @@ captures/
 *.keystore
 keystore.properties
 
+# Certificates (provision via CI/CD secrets)
+*.pem
+
 # Generated files
 app/src/main/java/**/*_GeneratedInjector.java
 

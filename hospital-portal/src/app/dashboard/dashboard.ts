@@ -716,12 +716,27 @@ export class DashboardComponent implements OnInit, OnDestroy {
   /** Check whether the current user can navigate to a role-guarded route. */
   private canAccessRoute(route: string): boolean {
     const normalizedPath = route.replace(/^\//, '');
-    const entry = this.router.config.find((r) => r.path === normalizedPath);
+    const entry = this.findRouteRecursive(this.router.config, normalizedPath);
     const requiredRoles = entry?.data?.['roles'];
     if (!Array.isArray(requiredRoles) || requiredRoles.length === 0) {
       return true; // no role guard → accessible
     }
     return this.auth.hasAnyRole(requiredRoles);
+  }
+
+  /** Walk the route tree (including children) to find a matching route config. */
+  private findRouteRecursive(
+    routes: import('@angular/router').Routes,
+    path: string,
+  ): import('@angular/router').Route | undefined {
+    for (const r of routes) {
+      if (r.path === path) return r;
+      if (r.children) {
+        const found = this.findRouteRecursive(r.children, path);
+        if (found) return found;
+      }
+    }
+    return undefined;
   }
 
   // ── Super-Admin navigation tiles ─────────────────────────────

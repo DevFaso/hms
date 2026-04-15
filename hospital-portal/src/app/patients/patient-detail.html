@@ -307,15 +307,15 @@
                 }
               </div>
               @if (
-                !v.heartRate &&
-                !v.systolicBp &&
-                !v.diastolicBp &&
-                !v.temperature &&
-                !v.oxygenSaturation &&
-                !v.respiratoryRate &&
-                (v.painLevel === null || v.painLevel === undefined) &&
-                !v.weight &&
-                !v.height
+                v.heartRate === null &&
+                v.systolicBp === null &&
+                v.diastolicBp === null &&
+                v.temperature === null &&
+                v.oxygenSaturation === null &&
+                v.respiratoryRate === null &&
+                v.painLevel === null &&
+                v.weight === null &&
+                v.height === null
               ) {
                 <p class="vital-notes no-metrics">
                   {{ 'PATIENTS.NO_VITAL_METRICS' | translate }}
