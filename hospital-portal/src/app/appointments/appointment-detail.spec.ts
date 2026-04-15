@@ -106,6 +106,10 @@ describe('AppointmentDetailComponent', () => {
     expect(component.canUpdateStatus).toBeTrue();
   });
 
+  it('canCheckIn should be true for ROLE_RECEPTIONIST', () => {
+    expect(component.canCheckIn).toBeTrue();
+  });
+
   it('time fields should include seconds for slice pipe to trim', () => {
     const appt = component.appointment();
     expect(appt?.startTime).toBe('17:30:00');

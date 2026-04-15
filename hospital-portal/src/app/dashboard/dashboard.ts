@@ -700,7 +700,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     const seen = new Set<string>();
     const actions: QuickAction[] = [];
     for (const [perm, action] of all) {
-      if (!seen.has(action.route) && this.permissions.hasPermission(perm)) {
+      if (
+        !seen.has(action.route) &&
+        this.permissions.hasPermission(perm) &&
+        this.canAccessRoute(action.route)
+      ) {
         seen.add(action.route);
         actions.push(action);
         if (actions.length >= 6) break;
@@ -708,6 +712,17 @@ export class DashboardComponent implements OnInit, OnDestroy {
     }
     return actions;
   });
+
+  /** Check whether the current user can navigate to a role-guarded route. */
+  private canAccessRoute(route: string): boolean {
+    const normalizedPath = route.replace(/^\//, '');
+    const entry = this.router.config.find((r) => r.path === normalizedPath);
+    const requiredRoles = entry?.data?.['roles'];
+    if (!Array.isArray(requiredRoles) || requiredRoles.length === 0) {
+      return true; // no role guard → accessible
+    }
+    return this.auth.hasAnyRole(requiredRoles);
+  }
 
   // ── Super-Admin navigation tiles ─────────────────────────────
   adminNavTiles = computed<NavTile[]>(() => [
@@ -1092,7 +1107,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     {
       icon: 'how_to_reg',
       label: 'Check-In',
-      route: '/reception',
+      route: '/nurse-station',
       color: '#059669',
       bg: '#d1fae5',
     },

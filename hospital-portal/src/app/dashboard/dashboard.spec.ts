@@ -348,29 +348,31 @@ describe('Dashboard navigation & RBAC', () => {
     expect(c.activeView()).toBe('lab-director');
   });
 
-  // ── Check-In route points to /reception ──────────────────────
+  // ── Check-in route points to /reception ──────────────────────
 
-  it('receptionist Check-In quick action should route to /reception', () => {
+  it('receptionist Check-in quick action should route to /reception', () => {
     const c = createComponent(
       ['ROLE_RECEPTIONIST'],
-      ['Register Patients', 'Create Appointments', 'Manage Check-Ins'],
+      ['Register Patients', 'Create Appointments', 'Check-in Patients'],
     );
     c.isReceptionist.set(true);
     const actions = c.quickActions();
-    const checkIn = actions.find((a) => a.label === 'Check-In');
-    if (checkIn) {
-      expect(checkIn.route).toBe('/reception');
-    }
+    const checkIn = actions.find((a) => a.label === 'Check-in');
+    expect(checkIn)
+      .withContext('Expected receptionist quick actions to include a Check-in action')
+      .toBeDefined();
+    expect(checkIn!.route).toBe('/reception');
   });
 
-  it('nurse Check-In tile should route to /reception', () => {
+  it('nurse Check-In tile should route to /nurse-station', () => {
     const c = createComponent(['ROLE_NURSE'], []);
     c.isNurse.set(true);
     const tiles = c.nurseWorkflowTiles();
     const checkIn = tiles.find((t) => t.label === 'Check-In');
-    if (checkIn) {
-      expect(checkIn.route).toBe('/reception');
-    }
+    expect(checkIn)
+      .withContext('Expected nurse workflow tiles to include a Check-In tile')
+      .toBeDefined();
+    expect(checkIn!.route).toBe('/nurse-station');
   });
 
   it('receptionist Check-In tile should route to /reception', () => {
@@ -378,8 +380,9 @@ describe('Dashboard navigation & RBAC', () => {
     c.isReceptionist.set(true);
     const tiles = c.receptionistWorkflowTiles();
     const checkIn = tiles.find((t) => t.label === 'Check-In');
-    if (checkIn) {
-      expect(checkIn.route).toBe('/reception');
-    }
+    expect(checkIn)
+      .withContext('Expected receptionist workflow tiles to include a Check-In tile')
+      .toBeDefined();
+    expect(checkIn!.route).toBe('/reception');
   });
 });
