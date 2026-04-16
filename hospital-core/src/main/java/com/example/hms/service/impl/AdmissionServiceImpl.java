@@ -2,6 +2,7 @@ package com.example.hms.service.impl;
 
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
+import com.example.hms.enums.EncounterStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.AdmissionMapper;
 import com.example.hms.model.Admission;
@@ -20,6 +21,7 @@ import com.example.hms.payload.dto.AdmissionUpdateRequestDTO;
 import com.example.hms.repository.AdmissionOrderSetRepository;
 import com.example.hms.repository.AdmissionRepository;
 import com.example.hms.repository.DepartmentRepository;
+import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.StaffRepository;
@@ -30,7 +32,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -42,6 +46,8 @@ public class AdmissionServiceImpl implements AdmissionService {
     private static final String DEPARTMENT_NOT_FOUND_MSG = "Department not found";
     private static final String ADMISSION_NOT_FOUND_MSG = "Admission not found";
 
+    private static final Set<EncounterStatus> ENCOUNTER_TERMINAL = EnumSet.of(
+            EncounterStatus.COMPLETED, EncounterStatus.CANCELLED);
 
     private final AdmissionRepository admissionRepository;
     private final AdmissionOrderSetRepository orderSetRepository;
@@ -49,6 +55,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     private final HospitalRepository hospitalRepository;
     private final StaffRepository staffRepository;
     private final DepartmentRepository departmentRepository;
+    private final EncounterRepository encounterRepository;
     private final AdmissionMapper admissionMapper;
     private final RoleValidator roleValidator;
 
@@ -190,7 +197,31 @@ public class AdmissionServiceImpl implements AdmissionService {
         }
 
         admission = admissionRepository.save(admission);
+
+        // Auto-complete any active encounters for this patient + hospital
+        completeActiveEncounters(admission);
+
         return admissionMapper.toResponseDTO(admission);
+    }
+
+    /**
+     * When an admission is discharged, any non-terminal encounter for the same
+     * patient + hospital should transition to COMPLETED automatically.
+     */
+    private void completeActiveEncounters(Admission admission) {
+        var active = encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(
+                admission.getPatient().getId(),
+                admission.getHospital().getId(),
+                ENCOUNTER_TERMINAL);
+
+        LocalDateTime now = LocalDateTime.now();
+        for (var enc : active) {
+            enc.setStatus(EncounterStatus.COMPLETED);
+            enc.setCheckoutTimestamp(now);
+        }
+        if (!active.isEmpty()) {
+            encounterRepository.saveAll(active);
+        }
     }
 
     @Override

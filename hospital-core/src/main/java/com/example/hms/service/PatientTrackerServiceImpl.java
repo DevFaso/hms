@@ -51,8 +51,17 @@ public class PatientTrackerServiceImpl implements PatientTrackerService {
         log.debug("Building tracker board for hospital={}, department={}, date={}",
                 hospitalId, departmentId, queryDate);
 
-        List<Encounter> allEncounters = encounterRepository.findAllByHospitalAndDateRange(
-                hospitalId, from, to);
+        List<Encounter> allEncounters = new ArrayList<>(encounterRepository.findAllByHospitalAndDateRange(
+                hospitalId, from, to));
+
+        // Include carry-over encounters (active encounters from prior days)
+        List<Encounter> carryOvers = encounterRepository.findCarryOverEncounters(
+                hospitalId, from, TERMINAL_STATUSES);
+        for (Encounter co : carryOvers) {
+            if (allEncounters.stream().noneMatch(e -> e.getId().equals(co.getId()))) {
+                allEncounters.add(co);
+            }
+        }
 
         // Filter: exclude terminal statuses, optionally filter by department
         List<PatientTrackerItemDTO> activeItems = new ArrayList<>();
