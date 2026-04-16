@@ -47,7 +47,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     @Override
     @Transactional
     public GeneralReferralResponseDTO createReferral(GeneralReferralRequestDTO request) {
-        Patient patient = patientRepository.findById(request.getPatientId())
+        Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
 
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
