@@ -79,7 +79,7 @@ class AdmissionServiceImplTest {
         admission.setId(admissionId);
         AdmissionResponseDTO response = new AdmissionResponseDTO();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(admissionRepository.save(any(Admission.class))).thenReturn(admission);
@@ -92,8 +92,29 @@ class AdmissionServiceImplTest {
     void admitPatient_patientNotFound() {
         AdmissionRequestDTO request = new AdmissionRequestDTO();
         request.setPatientId(patientId);
-        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.admitPatient(request)).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void admitPatient_usesUnscopedPatientLookup() {
+        AdmissionRequestDTO request = new AdmissionRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(hospitalId);
+        request.setAdmittingProviderId(staffId);
+
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        AdmissionResponseDTO response = new AdmissionResponseDTO();
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(admissionRepository.save(any(Admission.class))).thenReturn(admission);
+        when(admissionMapper.toResponseDTO(admission)).thenReturn(response);
+
+        assertThat(service.admitPatient(request)).isEqualTo(response);
+        verify(patientRepository).findByIdUnscoped(patientId);
     }
 
     @Test

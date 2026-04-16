@@ -55,7 +55,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Override
     @Transactional
     public AdmissionResponseDTO admitPatient(AdmissionRequestDTO request) {
-        Patient patient = patientRepository.findById(request.getPatientId())
+        Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
         
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())

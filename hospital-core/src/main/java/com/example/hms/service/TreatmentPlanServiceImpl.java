@@ -200,7 +200,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
     }
 
     private Patient fetchPatient(UUID id) {
-        return patientRepository.findById(id)
+        return patientRepository.findByIdUnscoped(id)
             .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
     }
 
