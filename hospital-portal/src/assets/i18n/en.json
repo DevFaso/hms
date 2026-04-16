@@ -3267,6 +3267,8 @@
     "PRE_CHECKIN_BADGE": "Pre-check",
     "CHECK_OUT": "Check Out",
     "COMPLETE_TRIAGE": "Complete Triage",
+    "COMPLETE_EXAM": "Complete Exam",
+    "READY_DISCHARGE": "Ready for D/C",
     "NO_PATIENTS": "No patients"
   },
   "CHECKOUT": {

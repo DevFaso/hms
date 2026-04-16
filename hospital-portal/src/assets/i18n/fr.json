@@ -3254,6 +3254,8 @@
     "PRE_CHECKIN_BADGE": "Pré-enregistré",
     "CHECK_OUT": "Sortie",
     "COMPLETE_TRIAGE": "Terminer le triage",
+    "COMPLETE_EXAM": "Terminer l'examen",
+    "READY_DISCHARGE": "Prêt pour la sortie",
     "NO_PATIENTS": "Aucun patient"
   },
   "CHECKOUT": {

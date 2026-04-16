@@ -275,6 +275,47 @@ public class EncounterController {
     }
 
     // ----------------------------------------------------------
+    // Complete Examination — Doctor finishes examining, advances flow
+    // ----------------------------------------------------------
+    @PostMapping("/{encounterId}/complete-examination")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    @Operation(
+        summary = "Complete examination (advance patient flow)",
+        description = "Transitions IN_PROGRESS → AWAITING_RESULTS (if pending orders exist) "
+            + "or READY_FOR_DISCHARGE (if no pending orders)."
+    )
+    public ResponseEntity<EncounterResponseDTO> completeExamination(
+        @PathVariable UUID encounterId,
+        Authentication auth
+    ) {
+        boolean isSuperAdmin = authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
+        UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
+        EncounterResponseDTO response = encounterService.completeExamination(
+                encounterId, auth.getName(), isSuperAdmin, hospitalId);
+        return ResponseEntity.ok(response);
+    }
+
+    // ----------------------------------------------------------
+    // Ready for Discharge — Advance AWAITING_RESULTS → READY_FOR_DISCHARGE
+    // ----------------------------------------------------------
+    @PostMapping("/{encounterId}/ready-for-discharge")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_RECEPTIONIST')")
+    @Operation(
+        summary = "Mark encounter ready for discharge",
+        description = "Transitions AWAITING_RESULTS or IN_PROGRESS → READY_FOR_DISCHARGE."
+    )
+    public ResponseEntity<EncounterResponseDTO> markReadyForDischarge(
+        @PathVariable UUID encounterId,
+        Authentication auth
+    ) {
+        boolean isSuperAdmin = authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
+        UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
+        EncounterResponseDTO response = encounterService.markReadyForDischarge(
+                encounterId, auth.getName(), isSuperAdmin, hospitalId);
+        return ResponseEntity.ok(response);
+    }
+
+    // ----------------------------------------------------------
     // MVP 3 — Nursing Intake Flowsheet
     // ----------------------------------------------------------
     @PostMapping(value = "/{encounterId}/nursing-intake", consumes = MediaType.APPLICATION_JSON_VALUE)

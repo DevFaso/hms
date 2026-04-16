@@ -165,4 +165,36 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
       },
     });
   }
+
+  /* ── Complete Examination — IN_PROGRESS → AWAITING / READY ─── */
+  examInProgress = signal(false);
+
+  completeExamination(item: PatientTrackerItem): void {
+    this.examInProgress.set(true);
+    this.encounterService.completeExamination(item.encounterId).subscribe({
+      next: () => {
+        this.examInProgress.set(false);
+        this.loadBoard();
+      },
+      error: () => {
+        this.examInProgress.set(false);
+      },
+    });
+  }
+
+  /* ── Ready for Discharge — AWAITING_RESULTS → READY ─── */
+  readyInProgress = signal(false);
+
+  markReadyForDischarge(item: PatientTrackerItem): void {
+    this.readyInProgress.set(true);
+    this.encounterService.markReadyForDischarge(item.encounterId).subscribe({
+      next: () => {
+        this.readyInProgress.set(false);
+        this.loadBoard();
+      },
+      error: () => {
+        this.readyInProgress.set(false);
+      },
+    });
+  }
 }

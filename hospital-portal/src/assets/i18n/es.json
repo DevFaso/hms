@@ -2887,6 +2887,8 @@
     "PRE_CHECKIN_BADGE": "Pre-registro",
     "CHECK_OUT": "Dar de alta",
     "COMPLETE_TRIAGE": "Completar triaje",
+    "COMPLETE_EXAM": "Completar examen",
+    "READY_DISCHARGE": "Listo para alta",
     "NO_PATIENTS": "Sin pacientes"
   },
   "CHECKOUT": {

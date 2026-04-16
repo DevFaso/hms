@@ -97,4 +97,18 @@ public interface EncounterService {
      * Advance a TRIAGE encounter to WAITING_FOR_PHYSICIAN (nurse completes triage from tracker).
      */
     EncounterResponseDTO completeTriage(UUID encounterId);
+
+    /**
+     * Doctor finishes examining a patient. Transitions IN_PROGRESS →
+     * AWAITING_RESULTS (if pending lab/procedure orders exist) or
+     * READY_FOR_DISCHARGE (if no pending orders).
+     */
+    EncounterResponseDTO completeExamination(UUID encounterId, String actorUsername,
+                                              boolean isSuperAdmin, UUID callerHospitalId);
+
+    /**
+     * Advance AWAITING_RESULTS → READY_FOR_DISCHARGE when all results have been reviewed.
+     */
+    EncounterResponseDTO markReadyForDischarge(UUID encounterId, String actorUsername,
+                                                boolean isSuperAdmin, UUID callerHospitalId);
 }

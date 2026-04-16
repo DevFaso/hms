@@ -101,6 +101,7 @@ class EncounterServiceImplTest {
     @Mock private com.example.hms.mapper.PatientVitalSignMapper patientVitalSignMapper;
     @Mock private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
     @Mock private com.example.hms.mapper.CheckOutMapper checkOutMapper;
+    @Mock private com.example.hms.repository.ProcedureOrderRepository procedureOrderRepository;
 
     @InjectMocks private EncounterServiceImpl service;
 
@@ -1198,5 +1199,205 @@ class EncounterServiceImplTest {
         assertThatThrownBy(() -> service.startEncounter(encounterId, "other-doctor", false, hospitalId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("not the assigned physician");
+    }
+
+    // ---------- completeExamination ----------
+
+    @Test
+    void completeExamination_noPendingOrders_transitionsToReadyForDischarge() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(hospitalId);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(labOrderRepository.existsByEncounter_IdAndStatusNotIn(any(UUID.class), any())).thenReturn(false);
+        when(procedureOrderRepository.existsByEncounter_IdAndStatusNotIn(any(UUID.class), any())).thenReturn(false);
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
+
+        EncounterResponseDTO result = service.completeExamination(encounterId, "doc", false, hospitalId);
+
+        assertThat(result).isSameAs(dto);
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.READY_FOR_DISCHARGE);
+        verify(encounterRepository).save(encounter);
+    }
+
+    @Test
+    void completeExamination_withPendingLabOrders_transitionsToAwaitingResults() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(hospitalId);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(labOrderRepository.existsByEncounter_IdAndStatusNotIn(any(UUID.class), any())).thenReturn(true);
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
+
+        EncounterResponseDTO result = service.completeExamination(encounterId, "doc", false, hospitalId);
+
+        assertThat(result).isSameAs(dto);
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.AWAITING_RESULTS);
+    }
+
+    @Test
+    void completeExamination_withPendingProcedureOrders_transitionsToAwaitingResults() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(hospitalId);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(labOrderRepository.existsByEncounter_IdAndStatusNotIn(any(UUID.class), any())).thenReturn(false);
+        when(procedureOrderRepository.existsByEncounter_IdAndStatusNotIn(any(UUID.class), any())).thenReturn(true);
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
+
+        EncounterResponseDTO result = service.completeExamination(encounterId, "doc", false, hospitalId);
+
+        assertThat(result).isSameAs(dto);
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.AWAITING_RESULTS);
+    }
+
+    @Test
+    void completeExamination_alreadyAwaitingResults_returnsIdempotent() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(hospitalId);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.AWAITING_RESULTS);
+        encounter.setHospital(hospital);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
+
+        EncounterResponseDTO result = service.completeExamination(encounterId, "doc", false, hospitalId);
+
+        assertThat(result).isSameAs(dto);
+        verify(encounterRepository, never()).save(any());
+    }
+
+    @Test
+    void completeExamination_invalidStatus_throws() {
+        UUID encounterId = UUID.randomUUID();
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.SCHEDULED);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+
+        assertThatThrownBy(() -> service.completeExamination(encounterId, "doc", true, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Expected IN_PROGRESS");
+    }
+
+    @Test
+    void completeExamination_wrongHospital_throws() {
+        UUID encounterId = UUID.randomUUID();
+        UUID encounterHospitalId = UUID.randomUUID();
+        UUID callerHospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(encounterHospitalId);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
+
+        assertThatThrownBy(() -> service.completeExamination(encounterId, "doc", false, callerHospitalId))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ---------- markReadyForDischarge ----------
+
+    @Test
+    void markReadyForDischarge_fromAwaitingResults_transitions() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(hospitalId);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.AWAITING_RESULTS);
+        encounter.setHospital(hospital);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
+
+        EncounterResponseDTO result = service.markReadyForDischarge(encounterId, "doc", false, hospitalId);
+
+        assertThat(result).isSameAs(dto);
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.READY_FOR_DISCHARGE);
+        verify(encounterRepository).save(encounter);
+    }
+
+    @Test
+    void markReadyForDischarge_fromInProgress_transitions() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(hospitalId);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
+
+        EncounterResponseDTO result = service.markReadyForDischarge(encounterId, "doc", false, hospitalId);
+
+        assertThat(result).isSameAs(dto);
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.READY_FOR_DISCHARGE);
+    }
+
+    @Test
+    void markReadyForDischarge_alreadyReady_idempotent() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(hospitalId);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);
+        encounter.setHospital(hospital);
+
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
+
+        EncounterResponseDTO result = service.markReadyForDischarge(encounterId, "doc", false, hospitalId);
+
+        assertThat(result).isSameAs(dto);
+        verify(encounterRepository, never()).save(any());
+    }
+
+    @Test
+    void markReadyForDischarge_invalidStatus_throws() {
+        UUID encounterId = UUID.randomUUID();
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.COMPLETED);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+
+        assertThatThrownBy(() -> service.markReadyForDischarge(encounterId, "doc", true, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Expected AWAITING_RESULTS or IN_PROGRESS");
     }
 }
