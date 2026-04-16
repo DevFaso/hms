@@ -136,7 +136,7 @@ class PrescriptionServiceImplTest {
             .id(UUID.randomUUID())
             .build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -158,7 +158,7 @@ class PrescriptionServiceImplTest {
 
         UUID currentUser = UUID.randomUUID();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -184,7 +184,7 @@ class PrescriptionServiceImplTest {
         Prescription mappedEntity = new Prescription();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -226,7 +226,7 @@ class PrescriptionServiceImplTest {
         Prescription mappedEntity = new Prescription();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUser)).thenReturn(Optional.of(staff));
         when(encounterRepository.findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
@@ -261,7 +261,7 @@ class PrescriptionServiceImplTest {
         Prescription mappedEntity = new Prescription();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUser)).thenReturn(Optional.of(staff));
         when(encounterRepository.findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
@@ -332,7 +332,7 @@ class PrescriptionServiceImplTest {
         differentPatient.setId(UUID.randomUUID());
         encounter.setPatient(differentPatient);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
@@ -344,7 +344,7 @@ class PrescriptionServiceImplTest {
     @Test
     void createPrescriptionWhenPatientMissingThrowsResourceNotFound() {
         PrescriptionRequestDTO request = buildRequest();
-        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class)
@@ -367,7 +367,7 @@ class PrescriptionServiceImplTest {
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(prescriptionId).build();
 
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -611,7 +611,7 @@ class PrescriptionServiceImplTest {
 
         when(patientRepository.findByUsernameOrEmail(patientUuid.toString())).thenReturn(Optional.empty());
         when(patientRepository.findByMrn(patientUuid.toString())).thenReturn(List.of());
-        when(patientRepository.findById(patientUuid)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientUuid)).thenReturn(Optional.of(patient));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUser)).thenReturn(Optional.of(staff));
         when(encounterRepository.findFirstByPatient_IdAndStaff_IdAndHospital_IdOrderByEncounterDateDesc(
@@ -662,7 +662,7 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request = buildRequest();
         encounter.setHospital(null);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
@@ -678,7 +678,7 @@ class PrescriptionServiceImplTest {
         differentStaff.setId(UUID.randomUUID());
         encounter.setStaff(differentStaff);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
@@ -694,7 +694,7 @@ class PrescriptionServiceImplTest {
         differentHospital.setId(UUID.randomUUID());
         staff.setHospital(differentHospital);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
@@ -708,7 +708,7 @@ class PrescriptionServiceImplTest {
     @Test
     void createPrescriptionWhenStaffNotFoundByIdThrows() {
         PrescriptionRequestDTO request = buildRequest();
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
@@ -724,7 +724,7 @@ class PrescriptionServiceImplTest {
             .frequency(TEST_FREQUENCY)
             .build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(authService.getCurrentUserId()).thenReturn(null);
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
@@ -742,7 +742,7 @@ class PrescriptionServiceImplTest {
             .build();
 
         UUID currentUser = UUID.randomUUID();
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUser)).thenReturn(Optional.empty());
 
@@ -756,7 +756,7 @@ class PrescriptionServiceImplTest {
     @Test
     void createPrescriptionWhenEncounterNotFoundByIdThrows() {
         PrescriptionRequestDTO request = buildRequest();
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.empty());
 
@@ -782,7 +782,7 @@ class PrescriptionServiceImplTest {
         allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
         allergy.setReaction("Anaphylaxis");
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -822,7 +822,7 @@ class PrescriptionServiceImplTest {
         allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
         allergy.setReaction("Rash");
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -853,7 +853,7 @@ class PrescriptionServiceImplTest {
         allergy.setSeverity(com.example.hms.enums.AllergySeverity.LIFE_THREATENING);
         allergy.setReaction("Anaphylaxis");
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -884,7 +884,7 @@ class PrescriptionServiceImplTest {
         allergy.setSeverity(com.example.hms.enums.AllergySeverity.MILD);
         allergy.setReaction("Mild rash");
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -917,7 +917,7 @@ class PrescriptionServiceImplTest {
         allergy.setSeverity(null);
         allergy.setReaction(null);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -949,7 +949,7 @@ class PrescriptionServiceImplTest {
         allergy.setAllergenDisplay("Ibuprofen");
         allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -981,7 +981,7 @@ class PrescriptionServiceImplTest {
         allergy.setAllergenDisplay("Penicillin"); // does not match Ibuprofen
         allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -1013,7 +1013,7 @@ class PrescriptionServiceImplTest {
         allergy.setAllergenDisplay(null);
         allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -1048,7 +1048,7 @@ class PrescriptionServiceImplTest {
         Prescription mappedEntity = new Prescription();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -1083,7 +1083,7 @@ class PrescriptionServiceImplTest {
         Prescription mappedEntity = new Prescription();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -1113,7 +1113,7 @@ class PrescriptionServiceImplTest {
         Prescription mappedEntity = new Prescription();
         PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder().id(UUID.randomUUID()).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -1136,7 +1136,7 @@ class PrescriptionServiceImplTest {
 
         UUID currentUser = UUID.randomUUID();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -1162,7 +1162,7 @@ class PrescriptionServiceImplTest {
 
         UUID currentUser = UUID.randomUUID();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
@@ -1192,7 +1192,7 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request = buildRequest();
         encounter.getHospital().setId(null);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
@@ -1222,7 +1222,7 @@ class PrescriptionServiceImplTest {
         patient.setHospitalId(hospitalId);
 
         UUID currentUser = UUID.randomUUID();
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUser)).thenReturn(Optional.of(noHospitalStaff));
 
@@ -1255,7 +1255,7 @@ class PrescriptionServiceImplTest {
 
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(roleValidator.canCreatePrescription(any(), eq(hospitalId))).thenReturn(true);
@@ -1281,7 +1281,7 @@ class PrescriptionServiceImplTest {
 
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
@@ -1300,7 +1300,7 @@ class PrescriptionServiceImplTest {
 
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(existing));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(roleValidator.canCreatePrescription(any(), eq(hospitalId))).thenReturn(false);
@@ -1315,7 +1315,7 @@ class PrescriptionServiceImplTest {
     void createPrescriptionUsesRoleDoctorFallback() {
         PrescriptionRequestDTO request = buildRequest();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -1349,7 +1349,7 @@ class PrescriptionServiceImplTest {
         directAssignment.setHospital(assignmentHospital);
         staff.setAssignment(directAssignment);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -1377,7 +1377,7 @@ class PrescriptionServiceImplTest {
             .frequency(TEST_FREQUENCY)
             .build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
@@ -1408,7 +1408,7 @@ class PrescriptionServiceImplTest {
             .frequency(TEST_FREQUENCY)
             .build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
@@ -1451,7 +1451,7 @@ class PrescriptionServiceImplTest {
 
         patient.setHospitalId(null);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(noHospStaff));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
@@ -1509,7 +1509,7 @@ class PrescriptionServiceImplTest {
         mismatchAssignment.setHospital(otherHospital);
         staff.setAssignment(mismatchAssignment);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -1537,7 +1537,7 @@ class PrescriptionServiceImplTest {
         nullHospAssignment.setHospital(null);
         staff.setAssignment(nullHospAssignment);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -1561,7 +1561,7 @@ class PrescriptionServiceImplTest {
         // Set encounter's assignment directly
         encounter.setAssignment(assignment);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -1594,7 +1594,7 @@ class PrescriptionServiceImplTest {
             .patient(patient).staff(staff).hospital(null).build();
         noHospEncounter.setId(encounterId);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(noHospEncounter));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -1629,7 +1629,7 @@ class PrescriptionServiceImplTest {
             .frequency(TEST_FREQUENCY)
             .build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         UUID currentUserId = UUID.randomUUID();
         when(authService.getCurrentUserId()).thenReturn(currentUserId);
         when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)).thenReturn(Optional.of(staff));
@@ -1661,7 +1661,7 @@ class PrescriptionServiceImplTest {
 
         when(patientRepository.findByUsernameOrEmail(unknownPatientId.toString())).thenReturn(Optional.empty());
         when(patientRepository.findByMrn(unknownPatientId.toString())).thenReturn(List.of());
-        when(patientRepository.findById(unknownPatientId)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdUnscoped(unknownPatientId)).thenReturn(Optional.empty());
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
@@ -1675,7 +1675,7 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request = buildRequest();
         encounter.setPatient(null); // patient is null on encounter
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -1691,7 +1691,7 @@ class PrescriptionServiceImplTest {
         PrescriptionRequestDTO request = buildRequest();
         encounter.setStaff(null); // staff is null on encounter
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -1722,7 +1722,7 @@ class PrescriptionServiceImplTest {
 
         patient.setHospitalId(null);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(noHospStaff));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(roleValidator.getCurrentHospitalId()).thenReturn(null);
@@ -1743,7 +1743,7 @@ class PrescriptionServiceImplTest {
             .frequency(TEST_FREQUENCY)
             .build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
@@ -1773,7 +1773,7 @@ class PrescriptionServiceImplTest {
         badAssignment.setHospital(null); // null hospital on assignment
         staff.setAssignment(badAssignment);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -1813,7 +1813,7 @@ class PrescriptionServiceImplTest {
         mismatchedAssignment.setHospital(otherHospital); // hospital doesn't match
         staff.setAssignment(mismatchedAssignment);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
@@ -1853,7 +1853,7 @@ class PrescriptionServiceImplTest {
         staff.setUser(null); // null user on staff
         staff.setAssignment(null); // no direct assignment
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
@@ -1872,7 +1872,7 @@ class PrescriptionServiceImplTest {
         // Set encounter assignment so resolvePrescriberAssignmentOrThrow returns immediately
         encounter.setAssignment(assignment);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -1939,7 +1939,7 @@ class PrescriptionServiceImplTest {
         // Actually, the found encounter sets its own staff to noHospStaff. But staff.hospital is null → throws.
         // This means the patient.hospitalId branch in determineHospitalId is tested but ensureContextConsistency fails.
         // We should expect BusinessException for the hospital mismatch.
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(noHospStaff));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
@@ -1981,7 +1981,7 @@ class PrescriptionServiceImplTest {
 
         patient.setHospitalId(null);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(noHospStaff));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
         when(roleValidator.getCurrentHospitalId()).thenReturn(hospitalId);
@@ -2022,7 +2022,7 @@ class PrescriptionServiceImplTest {
         noHospEnc.setId(encounterId);
 
         when(prescriptionRepository.findById(prescId)).thenReturn(Optional.of(existing));
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(noHospEnc));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -2045,7 +2045,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(assignment);
 
         when(prescriptionRepository.findById(prescId)).thenReturn(Optional.of(existing));
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -2068,7 +2068,7 @@ class PrescriptionServiceImplTest {
         // staff assignment matches hospital → resolveAssignmentForStaff returns it
         staff.setAssignment(assignment);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -2092,7 +2092,7 @@ class PrescriptionServiceImplTest {
         otherStaff.setId(UUID.randomUUID()); // different staff ID
         encounter.setStaff(otherStaff);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(UUID.randomUUID());
@@ -2214,5 +2214,50 @@ class PrescriptionServiceImplTest {
 
         List<PrescriptionResponseDTO> result = prescriptionService.getPrescriptionsByPatientId(patientId, Locale.ENGLISH);
         assertThat(result).isEmpty();
+    }
+
+    // ---------- resolvePatient unscoped lookup ----------
+
+    @Test
+    void createPrescription_usesUnscopedPatientLookup() {
+        // Verifies that findByIdUnscoped is used (not tenant-scoped findById)
+        // so multi-hospital patients are found regardless of caller's hospital context
+        PrescriptionRequestDTO request = buildRequest();
+        UUID currentUser = UUID.randomUUID();
+
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+
+        Prescription mappedEntity = new Prescription();
+        PrescriptionResponseDTO responseDTO = PrescriptionResponseDTO.builder()
+            .id(UUID.randomUUID()).build();
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(responseDTO);
+
+        PrescriptionResponseDTO result = prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        assertThat(result).isSameAs(responseDTO);
+        verify(patientRepository).findByIdUnscoped(patientId);
+        verify(patientRepository, never()).findById(patientId);
+    }
+
+    @Test
+    void createPrescription_patientNotFound_throwsResourceNotFound() {
+        PrescriptionRequestDTO request = buildRequest();
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class)
+            .hasMessageContaining("patient.notfound");
     }
 }
