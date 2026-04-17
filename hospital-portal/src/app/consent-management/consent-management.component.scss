@@ -74,6 +74,31 @@
   white-space: nowrap;
 }
 
+/* Error state */
+.error-state {
+  text-align: center;
+  padding: 3rem 2rem;
+  background: #fff;
+  border-radius: 12px;
+  border: 1px solid #fecaca;
+}
+
+.error-icon {
+  font-size: 48px;
+  color: #ef4444;
+  margin-bottom: 0.75rem;
+}
+
+.error-state h3 {
+  font-size: 1.125rem;
+  color: #991b1b;
+  margin: 0 0 1rem;
+}
+
+.error-state .btn-primary {
+  margin-top: 0.5rem;
+}
+
 /* Modal */
 .modal-overlay {
   position: fixed;

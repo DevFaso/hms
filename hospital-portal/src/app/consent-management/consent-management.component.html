@@ -160,8 +160,17 @@
     </div>
   }
 
+  <!-- Error -->
+  @if (!loading() && loadError()) {
+    <div class="error-state" role="alert">
+      <span class="material-symbols-outlined error-icon">error</span>
+      <h3>{{ loadError() }}</h3>
+      <button class="btn btn-primary" (click)="load()">{{ 'COMMON.RETRY' | translate }}</button>
+    </div>
+  }
+
   <!-- Empty -->
-  @if (!loading() && filteredConsents().length === 0) {
+  @if (!loading() && !loadError() && filteredConsents().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">handshake</span>
       <h3>{{ 'CONSENT.MANAGEMENT.NO_CONSENTS' | translate }}</h3>
@@ -170,7 +179,7 @@
   }
 
   <!-- Table -->
-  @if (!loading() && filteredConsents().length > 0) {
+  @if (!loading() && !loadError() && filteredConsents().length > 0) {
     <div class="data-table">
       <table>
         <thead>

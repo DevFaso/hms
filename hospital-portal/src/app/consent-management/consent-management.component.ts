@@ -43,6 +43,7 @@ export class ConsentManagementComponent implements OnInit {
 
   consents = signal<PatientConsentResponse[]>([]);
   loading = signal(true);
+  loadError = signal<string | null>(null);
   submitting = signal(false);
   showGrantForm = signal(false);
   filterActive = signal<'' | 'true' | 'false'>('');
@@ -74,6 +75,7 @@ export class ConsentManagementComponent implements OnInit {
 
   load(): void {
     this.loading.set(true);
+    this.loadError.set(null);
     this.sharingService.listConsents({ page: this.currentPage(), size: this.pageSize }).subscribe({
       next: (res) => {
         this.consents.set(res.content ?? []);
@@ -82,6 +84,7 @@ export class ConsentManagementComponent implements OnInit {
         this.loading.set(false);
       },
       error: () => {
+        this.loadError.set(this.translate.instant('CONSENT.ERRORS.LOAD_FAILED'));
         this.toast.error('CONSENT.ERRORS.LOAD_FAILED');
         this.loading.set(false);
       },

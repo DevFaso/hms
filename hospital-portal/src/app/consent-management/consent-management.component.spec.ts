@@ -78,6 +78,44 @@ describe('ConsentManagementComponent', () => {
     expect(toastStub.error).toHaveBeenCalledWith('CONSENT.ERRORS.LOAD_FAILED');
   });
 
+  it('sets loadError signal when listConsents fails', () => {
+    sharingStub.listConsents.and.returnValue(throwError(() => new Error('fail')));
+    component.load();
+    expect(component.loadError()).toBeTruthy();
+    expect(component.loading()).toBeFalse();
+  });
+
+  it('clears loadError on successful reload', () => {
+    sharingStub.listConsents.and.returnValue(throwError(() => new Error('fail')));
+    component.load();
+    expect(component.loadError()).toBeTruthy();
+
+    sharingStub.listConsents.and.returnValue(of(PAGE_RESPONSE([])));
+    component.load();
+    expect(component.loadError()).toBeNull();
+  });
+
+  it('renders error-state banner when loadError is set', () => {
+    sharingStub.listConsents.and.returnValue(throwError(() => new Error('fail')));
+    component.load();
+    fixture.detectChanges();
+
+    const errorEl = fixture.nativeElement.querySelector('.error-state');
+    expect(errorEl).toBeTruthy();
+
+    const retryBtn = errorEl.querySelector('button');
+    expect(retryBtn).toBeTruthy();
+  });
+
+  it('hides empty-state when loadError is set', () => {
+    sharingStub.listConsents.and.returnValue(throwError(() => new Error('fail')));
+    component.load();
+    fixture.detectChanges();
+
+    const emptyEl = fixture.nativeElement.querySelector('.empty-state');
+    expect(emptyEl).toBeFalsy();
+  });
+
   it('opens and resets grant form', () => {
     component.grantForm.patientId = 'existing-id';
     component.openGrantForm();
