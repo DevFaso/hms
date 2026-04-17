@@ -1,12 +1,17 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import { Component, inject, OnInit, OnDestroy, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { Subject, Subscription } from 'rxjs';
+import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
   RecordSharingService,
   PatientConsentResponse,
   ConsentGrantRequest,
 } from '../services/record-sharing.service';
+import { PatientService, PatientResponse } from '../services/patient.service';
+import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
 type ConsentTypeValue =
@@ -33,8 +38,11 @@ const CONSENT_TYPES: ConsentTypeValue[] = [
   templateUrl: './consent-management.component.html',
   styleUrl: './consent-management.component.scss',
 })
-export class ConsentManagementComponent implements OnInit {
+export class ConsentManagementComponent implements OnInit, OnDestroy {
   private readonly sharingService = inject(RecordSharingService);
+  private readonly patientService = inject(PatientService);
+  private readonly hospitalService = inject(HospitalService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
@@ -59,6 +67,19 @@ export class ConsentManagementComponent implements OnInit {
     return this.consents().filter((c) => c.consentGiven === active);
   });
 
+  // ── Patient picker ──────────────────────────────────────
+  patientQuery = signal('');
+  patientSuggestions = signal<PatientResponse[]>([]);
+  patientDropdownOpen = signal(false);
+  patientSearchLoading = signal(false);
+  selectedPatient = signal<PatientResponse | null>(null);
+  private readonly patientSearch$ = new Subject<string>();
+  private patientSearchSub?: Subscription;
+
+  // ── Hospital dropdowns ──────────────────────────────────
+  hospitals = signal<HospitalResponse[]>([]);
+  hospitalsLoading = signal(false);
+
   grantForm: ConsentGrantRequest = {
     patientId: '',
     fromHospitalId: '',
@@ -71,6 +92,81 @@ export class ConsentManagementComponent implements OnInit {
 
   ngOnInit(): void {
     this.load();
+    this.loadHospitals();
+    this.initPatientSearch();
+  }
+
+  ngOnDestroy(): void {
+    this.patientSearchSub?.unsubscribe();
+  }
+
+  // ── Patient search ──────────────────────────────────────
+  private initPatientSearch(): void {
+    this.patientSearchSub = this.patientSearch$
+      .pipe(
+        debounceTime(220),
+        distinctUntilChanged(),
+        switchMap((q) => {
+          this.patientSearchLoading.set(true);
+          return this.patientService.list(undefined, q || undefined);
+        }),
+      )
+      .subscribe({
+        next: (list) => {
+          this.patientSuggestions.set(list.slice(0, 8));
+          this.patientDropdownOpen.set(list.length > 0);
+          this.patientSearchLoading.set(false);
+        },
+        error: () => this.patientSearchLoading.set(false),
+      });
+  }
+
+  onPatientQueryChange(q: string): void {
+    this.patientQuery.set(q);
+    if (q.length >= 1) this.patientSearch$.next(q);
+    else {
+      this.patientSuggestions.set([]);
+      this.patientDropdownOpen.set(false);
+    }
+  }
+
+  selectPatient(p: PatientResponse): void {
+    this.selectedPatient.set(p);
+    this.grantForm.patientId = p.id;
+    this.patientDropdownOpen.set(false);
+    this.patientQuery.set('');
+  }
+
+  clearPatient(): void {
+    this.selectedPatient.set(null);
+    this.grantForm.patientId = '';
+    this.patientQuery.set('');
+  }
+
+  patientInitials(p: PatientResponse): string {
+    return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
+  }
+
+  // ── Hospital loading ────────────────────────────────────
+  private loadHospitals(): void {
+    this.hospitalsLoading.set(true);
+    if (this.roleContext.isSuperAdmin()) {
+      this.hospitalService.list().subscribe({
+        next: (h) => {
+          this.hospitals.set(h);
+          this.hospitalsLoading.set(false);
+        },
+        error: () => this.hospitalsLoading.set(false),
+      });
+    } else {
+      this.hospitalService.getMyHospitalAsResponse().subscribe({
+        next: (h) => {
+          this.hospitals.set([h]);
+          this.hospitalsLoading.set(false);
+        },
+        error: () => this.hospitalsLoading.set(false),
+      });
+    }
   }
 
   load(): void {
@@ -115,6 +211,10 @@ export class ConsentManagementComponent implements OnInit {
       consentType: 'TREATMENT',
       scope: '',
     };
+    this.selectedPatient.set(null);
+    this.patientQuery.set('');
+    this.patientSuggestions.set([]);
+    this.patientDropdownOpen.set(false);
     this.showGrantForm.set(true);
   }
 

@@ -110,6 +110,175 @@
   z-index: 1000;
 }
 
+/* Patient picker */
+.picker-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.picker-search-icon {
+  position: absolute;
+  left: 0.6rem;
+  font-size: 1.2rem;
+  color: #9ca3af;
+  pointer-events: none;
+}
+
+.picker-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem 0.5rem 2.2rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s;
+
+  &:focus {
+    border-color: #6366f1;
+  }
+}
+
+.picker-spinner {
+  position: absolute;
+  right: 0.6rem;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #6366f1;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+.picker-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  margin-top: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  list-style: none;
+  padding: 0.25rem 0;
+  z-index: 10;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.picker-option {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+
+  &:hover {
+    background: #f3f4f6;
+  }
+}
+
+.opt-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #dbeafe;
+  color: #1d4ed8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.opt-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.opt-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #111827;
+}
+
+.opt-meta {
+  font-size: 0.72rem;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Selected patient chip */
+.picker-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.chip-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #dbeafe;
+  color: #1d4ed8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.chip-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.chip-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #111827;
+}
+
+.chip-sub {
+  font-size: 0.72rem;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip-clear {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.2rem;
+  color: #6b7280;
+  border-radius: 4px;
+  display: flex;
+
+  &:hover {
+    background: #f3f4f6;
+    color: #111827;
+  }
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+}
+
 .modal-card {
   background: #fff;
   border-radius: 16px;

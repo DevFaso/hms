@@ -1,8 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { ConsentManagementComponent } from './consent-management.component';
 import { RecordSharingService, PatientConsentResponse } from '../services/record-sharing.service';
+import { PatientService, PatientResponse } from '../services/patient.service';
+import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
 const PAGE_RESPONSE = (content: PatientConsentResponse[]) => ({
@@ -27,10 +31,27 @@ const makeConsent = (overrides: Partial<PatientConsentResponse> = {}): PatientCo
   ...overrides,
 });
 
+const MOCK_PATIENT: PatientResponse = {
+  id: 'p1',
+  firstName: 'Jane',
+  lastName: 'Doe',
+  email: 'jane@example.com',
+  mrn: 'MRN-001',
+  active: true,
+};
+
+const MOCK_HOSPITALS: HospitalResponse[] = [
+  { id: 'h1', name: 'Hospital Alpha' } as HospitalResponse,
+  { id: 'h2', name: 'Hospital Beta' } as HospitalResponse,
+];
+
 describe('ConsentManagementComponent', () => {
   let component: ConsentManagementComponent;
   let fixture: ComponentFixture<ConsentManagementComponent>;
   let sharingStub: jasmine.SpyObj<RecordSharingService>;
+  let patientStub: jasmine.SpyObj<PatientService>;
+  let hospitalStub: jasmine.SpyObj<HospitalService>;
+  let roleContextStub: Partial<RoleContextService>;
   let toastStub: jasmine.SpyObj<ToastService>;
 
   beforeEach(async () => {
@@ -39,14 +60,24 @@ describe('ConsentManagementComponent', () => {
       'grantConsent',
       'revokeConsent',
     ]);
+    patientStub = jasmine.createSpyObj('PatientService', ['list']);
+    hospitalStub = jasmine.createSpyObj('HospitalService', ['list', 'getMyHospitalAsResponse']);
     toastStub = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    roleContextStub = {
+      isSuperAdmin: signal(true),
+    };
 
     sharingStub.listConsents.and.returnValue(of(PAGE_RESPONSE([])));
+    patientStub.list.and.returnValue(of([]));
+    hospitalStub.list.and.returnValue(of(MOCK_HOSPITALS));
 
     await TestBed.configureTestingModule({
       imports: [ConsentManagementComponent, TranslateModule.forRoot()],
       providers: [
         { provide: RecordSharingService, useValue: sharingStub },
+        { provide: PatientService, useValue: patientStub },
+        { provide: HospitalService, useValue: hospitalStub },
+        { provide: RoleContextService, useValue: roleContextStub },
         { provide: ToastService, useValue: toastStub },
       ],
     }).compileComponents();
@@ -118,10 +149,13 @@ describe('ConsentManagementComponent', () => {
 
   it('opens and resets grant form', () => {
     component.grantForm.patientId = 'existing-id';
+    component.selectedPatient.set(MOCK_PATIENT);
     component.openGrantForm();
     expect(component.showGrantForm()).toBeTrue();
     expect(component.grantForm.patientId).toBe('');
     expect(component.grantForm.consentType).toBe('TREATMENT');
+    expect(component.selectedPatient()).toBeNull();
+    expect(component.patientQuery()).toBe('');
   });
 
   it('cancelGrant hides the form', () => {
@@ -184,6 +218,88 @@ describe('ConsentManagementComponent', () => {
     sharingStub.revokeConsent.and.returnValue(throwError(() => new Error('fail')));
     component.revoke(makeConsent());
     expect(toastStub.error).toHaveBeenCalledWith('CONSENT.ERRORS.REVOKE_FAILED');
+  });
+
+  // ── Patient picker tests ──────────────────────────────────
+  describe('patient picker', () => {
+    it('selectPatient sets selectedPatient and grantForm.patientId', () => {
+      component.selectPatient(MOCK_PATIENT);
+      expect(component.selectedPatient()).toEqual(MOCK_PATIENT);
+      expect(component.grantForm.patientId).toBe('p1');
+      expect(component.patientDropdownOpen()).toBeFalse();
+    });
+
+    it('clearPatient resets selectedPatient and patientId', () => {
+      component.selectPatient(MOCK_PATIENT);
+      component.clearPatient();
+      expect(component.selectedPatient()).toBeNull();
+      expect(component.grantForm.patientId).toBe('');
+    });
+
+    it('patientInitials returns correct initials', () => {
+      expect(component.patientInitials(MOCK_PATIENT)).toBe('JD');
+    });
+
+    it('onPatientQueryChange updates patientQuery signal', () => {
+      component.onPatientQueryChange('Jan');
+      expect(component.patientQuery()).toBe('Jan');
+    });
+
+    it('onPatientQueryChange clears suggestions for empty input', () => {
+      component.patientSuggestions.set([MOCK_PATIENT]);
+      component.patientDropdownOpen.set(true);
+      component.onPatientQueryChange('');
+      expect(component.patientSuggestions()).toEqual([]);
+      expect(component.patientDropdownOpen()).toBeFalse();
+    });
+
+    it('renders patient chip when patient is selected', () => {
+      component.selectPatient(MOCK_PATIENT);
+      component.showGrantForm.set(true);
+      fixture.detectChanges();
+      const chip = fixture.nativeElement.querySelector('.picker-chip');
+      expect(chip).toBeTruthy();
+      expect(chip.textContent).toContain('Jane');
+      expect(chip.textContent).toContain('Doe');
+    });
+
+    it('renders search input when no patient selected', () => {
+      component.showGrantForm.set(true);
+      fixture.detectChanges();
+      const input = fixture.nativeElement.querySelector('.picker-input');
+      expect(input).toBeTruthy();
+    });
+  });
+
+  // ── Hospital dropdown tests ───────────────────────────────
+  describe('hospital dropdowns', () => {
+    it('loads hospitals on init for super admin', () => {
+      expect(hospitalStub.list).toHaveBeenCalled();
+      expect(component.hospitals().length).toBe(2);
+    });
+
+    it('renders hospital select dropdowns in grant form', () => {
+      component.showGrantForm.set(true);
+      fixture.detectChanges();
+      const selects = fixture.nativeElement.querySelectorAll('.form-select');
+      // consentType + fromHospital + toHospital = 3 selects
+      expect(selects.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('loads single hospital for non-super-admin', async () => {
+      (roleContextStub as any).isSuperAdmin = signal(false);
+      hospitalStub.getMyHospitalAsResponse.and.returnValue(
+        of({ id: 'h1', name: 'My Hospital' } as HospitalResponse),
+      );
+
+      // Re-create to test init path
+      const fix2 = TestBed.createComponent(ConsentManagementComponent);
+      fix2.componentInstance.ngOnInit();
+      fix2.detectChanges();
+
+      expect(hospitalStub.getMyHospitalAsResponse).toHaveBeenCalled();
+      expect(fix2.componentInstance.hospitals().length).toBe(1);
+    });
   });
 
   describe('pagination', () => {
