@@ -789,9 +789,9 @@ export const routes: Routes = [
           ],
         },
         loadComponent: () =>
-          import(
-            './consent-management/shared-records-viewer/shared-records-viewer.component'
-          ).then((m) => m.SharedRecordsViewerComponent),
+          import('./consent-management/shared-records-viewer/shared-records-viewer.component').then(
+            (m) => m.SharedRecordsViewerComponent,
+          ),
       },
 
       // Reception / Front Desk Cockpit
