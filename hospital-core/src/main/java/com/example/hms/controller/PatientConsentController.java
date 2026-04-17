@@ -74,12 +74,12 @@ public class PatientConsentController {
                 locale
         );
 
-        HospitalResponseDTO fromHospital = hospitalService.getHospitalById(
+        HospitalResponseDTO fromHospital = hospitalService.getHospitalByIdUnscoped(
                 requestDTO.getFromHospitalId(),
                 locale
         );
 
-        HospitalResponseDTO toHospital = hospitalService.getHospitalById(
+        HospitalResponseDTO toHospital = hospitalService.getHospitalByIdUnscoped(
                 requestDTO.getToHospitalId(),
                 locale
         );

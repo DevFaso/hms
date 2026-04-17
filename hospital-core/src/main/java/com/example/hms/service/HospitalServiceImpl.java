@@ -92,6 +92,13 @@ public class HospitalServiceImpl implements HospitalService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public HospitalResponseDTO getHospitalByIdUnscoped(UUID id, Locale locale) {
+        Hospital hospital = getHospitalOrThrow(id, locale);
+        return hospitalMapper.toHospitalDTO(hospital);
+    }
+
+    @Override
     @Transactional
     public HospitalResponseDTO createHospital(HospitalRequestDTO dto, Locale locale) {
         validateSuperAdminOrThrow(locale);
