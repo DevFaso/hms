@@ -487,7 +487,11 @@
       "RELATIONSHIP": "Relationship",
       "EFFECTIVE": "Effective Date",
       "CHANGED_BY": "Changed By",
-      "ENCOUNTER_TYPE": "Encounter Type"
+      "ENCOUNTER_TYPE": "Encounter Type",
+      "ENCOUNTER_DATE": "Encounter Date",
+      "PREVIOUS_VALUES": "Previous Values",
+      "ALLERGIES": "Allergies",
+      "LEGACY_DATA": "Legacy Data"
     }
   },
   "CONSULTATIONS": {

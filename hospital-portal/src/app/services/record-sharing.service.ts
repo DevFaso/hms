@@ -180,6 +180,8 @@ export interface SharedEncounterHistoryEntry {
   encounterDate?: string;
   notes?: string;
   changeType?: string;
+  previousValuesJson?: string;
+  extraFieldsJson?: string;
 }
 
 export interface SharedVitalSignEntry {

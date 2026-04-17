@@ -480,5 +480,72 @@ describe('SharedRecordsViewerComponent', () => {
       expect(cards[0].textContent).toContain('STATUS_CHANGE');
       expect(cards[0].textContent).toContain('Dr. Smith');
     });
+
+    it('renders legacy allergy fallback when allergiesDetailed is empty', async () => {
+      sharingStub.getAggregatedRecord.and.returnValue(
+        of({
+          ...MOCK_RECORD,
+          allergiesDetailed: [],
+          allergies: 'peanuts, garlic',
+        }),
+      );
+
+      await TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({
+        imports: [SharedRecordsViewerComponent, TranslateModule.forRoot()],
+        providers: [
+          { provide: RecordSharingService, useValue: sharingStub },
+          { provide: Router, useValue: routerStub },
+          {
+            provide: ActivatedRoute,
+            useValue: createRouteSnapshot({
+              patientId: 'p1',
+              toHospitalId: 'h2',
+            }),
+          },
+        ],
+      }).compileComponents();
+
+      const fix = TestBed.createComponent(SharedRecordsViewerComponent);
+      fix.detectChanges();
+
+      fix.componentInstance.setTab('allergies');
+      fix.detectChanges();
+
+      const cards = fix.nativeElement.querySelectorAll('.record-card');
+      expect(cards.length).toBe(1);
+      expect(cards[0].textContent).toContain('peanuts, garlic');
+    });
+
+    it('counts legacy allergies as 1 in tab count', async () => {
+      sharingStub.getAggregatedRecord.and.returnValue(
+        of({
+          ...MOCK_RECORD,
+          allergiesDetailed: [],
+          allergies: 'peanuts, garlic',
+        }),
+      );
+
+      await TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({
+        imports: [SharedRecordsViewerComponent, TranslateModule.forRoot()],
+        providers: [
+          { provide: RecordSharingService, useValue: sharingStub },
+          { provide: Router, useValue: routerStub },
+          {
+            provide: ActivatedRoute,
+            useValue: createRouteSnapshot({
+              patientId: 'p1',
+              toHospitalId: 'h2',
+            }),
+          },
+        ],
+      }).compileComponents();
+
+      const fix = TestBed.createComponent(SharedRecordsViewerComponent);
+      fix.detectChanges();
+
+      expect(fix.componentInstance.tabCounts()['allergies']).toBe(1);
+    });
   });
 });

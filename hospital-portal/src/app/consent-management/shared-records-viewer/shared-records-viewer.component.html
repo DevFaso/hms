@@ -496,10 +496,30 @@
 
       <!-- ═══ Allergies ═══ -->
       @if (activeTab() === 'allergies') {
-        @if ((record()!.allergiesDetailed?.length ?? 0) === 0) {
+        @if ((record()!.allergiesDetailed?.length ?? 0) === 0 && !record()!.allergies) {
           <div class="empty-tab">
             <span class="material-symbols-outlined">warning</span>
             <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
+          </div>
+        } @else if ((record()!.allergiesDetailed?.length ?? 0) === 0 && record()!.allergies) {
+          <div class="record-cards">
+            <div class="record-card card-flagged">
+              <div class="card-header">
+                <div class="card-title-row">
+                  <span class="card-title">{{
+                    'SHARED_RECORDS.FIELDS.ALLERGIES' | translate
+                  }}</span>
+                  <span class="severity-flag severity-high">{{
+                    'SHARED_RECORDS.FIELDS.LEGACY_DATA' | translate
+                  }}</span>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="detail-row">
+                  <span class="detail-value">{{ record()!.allergies }}</span>
+                </div>
+              </div>
+            </div>
           </div>
         } @else {
           <div class="record-cards">
@@ -1114,12 +1134,28 @@
                       <span class="detail-value">{{ h.encounterType }}</span>
                     </div>
                   }
+                  @if (h.encounterDate) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.ENCOUNTER_DATE' | translate
+                      }}</span>
+                      <span class="detail-value">{{ h.encounterDate | date: 'medium' }}</span>
+                    </div>
+                  }
                   @if (h.notes) {
                     <div class="detail-row notes-row">
                       <span class="detail-label">{{
                         'SHARED_RECORDS.FIELDS.NOTES' | translate
                       }}</span>
                       <span class="detail-value notes-text">{{ h.notes }}</span>
+                    </div>
+                  }
+                  @if (h.previousValuesJson) {
+                    <div class="detail-row notes-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.PREVIOUS_VALUES' | translate
+                      }}</span>
+                      <span class="detail-value notes-text">{{ h.previousValuesJson }}</span>
                     </div>
                   }
                 </div>

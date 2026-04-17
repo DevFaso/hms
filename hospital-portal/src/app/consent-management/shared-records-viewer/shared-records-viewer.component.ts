@@ -88,7 +88,7 @@ export class SharedRecordsViewerComponent implements OnInit {
       prescriptions: r.prescriptions?.length ?? 0,
       labOrders: r.labOrders?.length ?? 0,
       labResults: r.labResults?.length ?? 0,
-      allergies: r.allergiesDetailed?.length ?? 0,
+      allergies: (r.allergiesDetailed?.length ?? 0) || (r.allergies ? 1 : 0),
       problems: r.problems?.length ?? 0,
       surgicalHistory: r.surgicalHistory?.length ?? 0,
       advanceDirectives: r.advanceDirectives?.length ?? 0,
