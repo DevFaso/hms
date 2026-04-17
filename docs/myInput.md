@@ -2,6 +2,8 @@
 
 ## Process
 
+IF YOU HAE TO USE SUBAGENT TO GET THE JOB FASTER BUT FOLLOW THE INSTRUCTIONS 
+
 1. **Follow the Agent Instructions** — create scenarios as user stories
 2. **Clarify the Issue** — understand scope and impact
 3. **Plan the Implementation** — design the solution across all layers
@@ -14,6 +16,8 @@
 
 ## Build Pipeline (run in order)
 
+RUN:
+
 1. Build & test
 2. Format
 3. Test
@@ -24,24 +28,24 @@
 ---
 
 # Issues
-
 Request URL
-https://hms.dev.bitnesttechs.com/api/patient-consents?page=0&size=20
+https://hms.dev.bitnesttechs.com/api/records/aggregate?patientId=4b6ea3b4-b6dd-4fb8-9c99-21e59754a19d&requestingHospitalId=9ee57cac-193c-41e6-86c6-a8db507b0d68
 Request Method
 GET
 Status Code
-500 Internal Server Error
+404 Not Found
 Remote Address
 151.101.2.15:443
 Referrer Policy
-strict-origin-when-cross-origin
+strict-origin-when-cross-origi
 
 {
-    "timestamp": "2026-04-17T10:48:44.582678814",
-    "status": 500,
-    "error": "Internal Server Error",
-    "message": "An unexpected error occurred: Could not initialize proxy [com.example.hms.model.Patient#4b6ea3b4-b6dd-4fb8-9c99-21e59754a19d] - no session",
-    "path": "/api/patient-consents"
+    "timestamp": "2026-04-17T21:48:00.06281523",
+    "status": 404,
+    "error": "Not Found",
+    "message": "[Missing translation] Patient not found.",
+    "path": "/api/records/aggregate"
 }
 
-Issue 2
+issue 2:
+look at view record button big and dark blue cannot event see the text in it
