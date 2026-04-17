@@ -55,7 +55,10 @@ public class PatientConsentServiceImpl implements PatientConsentService {
         UUID fromHospitalId = requestDTO.getFromHospitalId();
         UUID toHospitalId = requestDTO.getToHospitalId();
 
-        Patient patient = patientRepository.findById(patientId)
+        // Use unscoped lookup: consent is cross-hospital, so the patient's
+        // hospitalId (set to their first hospital) may not match the caller's
+        // tenant scope. The controller's @PreAuthorize already enforces auth.
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("Patient not found."));
 
         Hospital fromHospital = hospitalRepository.findById(fromHospitalId)
@@ -158,7 +161,10 @@ public class PatientConsentServiceImpl implements PatientConsentService {
         UUID fromHospitalId = fromHospitalDTO.getId();
         UUID toHospitalId = toHospitalDTO.getId();
 
-        Patient patient = patientRepository.findById(patientId)
+        // Use unscoped lookup: consent is cross-hospital, so the patient's
+        // hospitalId (set to their first hospital) may not match the caller's
+        // tenant scope. The controller's @PreAuthorize already enforces auth.
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
 
         Hospital fromHospital = hospitalRepository.findById(fromHospitalId)
