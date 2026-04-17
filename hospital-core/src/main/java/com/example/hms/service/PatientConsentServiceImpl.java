@@ -122,21 +122,25 @@ public class PatientConsentServiceImpl implements PatientConsentService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<PatientConsentResponseDTO> getAllConsents(Pageable pageable) {
         return consentRepository.findAll(pageable).map(this::mapWithDetails);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<PatientConsentResponseDTO> getConsentsByPatient(UUID patientId, Pageable pageable) {
         return consentRepository.findAllByPatientId(patientId, pageable).map(this::mapWithDetails);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<PatientConsentResponseDTO> getConsentsByFromHospital(UUID fromHospitalId, Pageable pageable) {
         return consentRepository.findAllByFromHospitalId(fromHospitalId, pageable).map(this::mapWithDetails);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<PatientConsentResponseDTO> getConsentsByToHospital(UUID toHospitalId, Pageable pageable) {
         return consentRepository.findAllByToHospitalId(toHospitalId, pageable).map(this::mapWithDetails);
     }
