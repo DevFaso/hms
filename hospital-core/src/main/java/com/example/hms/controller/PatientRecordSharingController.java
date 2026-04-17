@@ -91,6 +91,28 @@ public class PatientRecordSharingController {
         return ResponseEntity.ok(result);
     }
 
+    // ── New: aggregate records from all consented hospitals ───────────────
+
+    @Operation(
+        summary = "Aggregate Patient Records",
+        description = """
+            Returns patient records aggregated from ALL hospitals that have granted
+            active consent to the requesting hospital, merged into a single DTO.
+            Also includes records from the requesting hospital itself if the patient
+            is registered there.
+            """)
+    @ApiResponse(responseCode = "200", description = "Aggregated record returned successfully.")
+    @ApiResponse(responseCode = "400", description = "No active consent or registration found.")
+    @ApiResponse(responseCode = "404", description = "Patient or hospital not found.")
+    @GetMapping("/aggregate")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    public ResponseEntity<PatientRecordDTO> aggregateRecords(
+            @RequestParam @NotNull UUID patientId,
+            @RequestParam @NotNull UUID requestingHospitalId) {
+        PatientRecordDTO aggregated = sharingService.getAggregatedPatientRecord(patientId, requestingHospitalId);
+        return ResponseEntity.ok(aggregated);
+    }
+
     // ── Existing: export ───────────────────────────────────────────────────
 
     @PostMapping("/export")

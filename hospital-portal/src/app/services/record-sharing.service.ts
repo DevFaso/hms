@@ -309,6 +309,16 @@ export class RecordSharingService {
   }
 
   /**
+   * Aggregates records from ALL hospitals that have granted consent to the requesting hospital.
+   */
+  getAggregatedRecord(patientId: string, requestingHospitalId: string): Observable<PatientRecord> {
+    const params = new HttpParams()
+      .set('patientId', patientId)
+      .set('requestingHospitalId', requestingHospitalId);
+    return this.http.get<PatientRecord>('/records/aggregate', { params });
+  }
+
+  /**
    * Grant a sharing consent from one hospital to another.
    */
   grantConsent(req: ConsentGrantRequest): Observable<PatientConsentResponse> {

@@ -124,9 +124,12 @@ describe('SharedRecordsViewerComponent', () => {
   let routerStub: jasmine.SpyObj<Router>;
 
   beforeEach(async () => {
-    sharingStub = jasmine.createSpyObj('RecordSharingService', ['getPatientRecord']);
+    sharingStub = jasmine.createSpyObj('RecordSharingService', [
+      'getPatientRecord',
+      'getAggregatedRecord',
+    ]);
     routerStub = jasmine.createSpyObj('Router', ['navigate']);
-    sharingStub.getPatientRecord.and.returnValue(of(MOCK_RECORD));
+    sharingStub.getAggregatedRecord.and.returnValue(of(MOCK_RECORD));
 
     await TestBed.configureTestingModule({
       imports: [SharedRecordsViewerComponent, TranslateModule.forRoot()],
@@ -137,7 +140,6 @@ describe('SharedRecordsViewerComponent', () => {
           provide: ActivatedRoute,
           useValue: createRouteSnapshot({
             patientId: 'p1',
-            fromHospitalId: 'h1',
             toHospitalId: 'h2',
           }),
         },
@@ -153,8 +155,8 @@ describe('SharedRecordsViewerComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('calls getPatientRecord with query params on init', () => {
-    expect(sharingStub.getPatientRecord).toHaveBeenCalledWith('p1', 'h1', 'h2');
+  it('calls getAggregatedRecord with query params on init', () => {
+    expect(sharingStub.getAggregatedRecord).toHaveBeenCalledWith('p1', 'h2');
   });
 
   it('sets record signal after successful load', () => {
@@ -231,7 +233,7 @@ describe('SharedRecordsViewerComponent', () => {
 
   describe('error handling', () => {
     it('sets error on API failure', async () => {
-      sharingStub.getPatientRecord.and.returnValue(throwError(() => new Error('fail')));
+      sharingStub.getAggregatedRecord.and.returnValue(throwError(() => new Error('fail')));
 
       await TestBed.resetTestingModule();
       await TestBed.configureTestingModule({
@@ -243,7 +245,6 @@ describe('SharedRecordsViewerComponent', () => {
             provide: ActivatedRoute,
             useValue: createRouteSnapshot({
               patientId: 'p1',
-              fromHospitalId: 'h1',
               toHospitalId: 'h2',
             }),
           },
@@ -268,7 +269,6 @@ describe('SharedRecordsViewerComponent', () => {
             provide: ActivatedRoute,
             useValue: createRouteSnapshot({
               patientId: null,
-              fromHospitalId: null,
               toHospitalId: null,
             }),
           },
@@ -280,7 +280,7 @@ describe('SharedRecordsViewerComponent', () => {
 
       expect(fix.componentInstance.error()).toBe('Missing required parameters');
       expect(fix.componentInstance.loading()).toBeFalse();
-      expect(sharingStub.getPatientRecord).toHaveBeenCalledTimes(1); // only first test call
+      expect(sharingStub.getAggregatedRecord).toHaveBeenCalledTimes(1); // only first test call
     });
   });
 

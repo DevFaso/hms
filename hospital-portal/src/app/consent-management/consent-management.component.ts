@@ -343,7 +343,6 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
     this.router.navigate(['/consent-management/shared-records'], {
       queryParams: {
         patientId: c.patient.id,
-        fromHospitalId: c.fromHospital.id,
         toHospitalId: c.toHospital.id,
       },
     });

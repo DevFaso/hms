@@ -85,16 +85,15 @@ export class SharedRecordsViewerComponent implements OnInit {
 
   ngOnInit(): void {
     const patientId = this.route.snapshot.queryParamMap.get('patientId');
-    const fromHospitalId = this.route.snapshot.queryParamMap.get('fromHospitalId');
     const toHospitalId = this.route.snapshot.queryParamMap.get('toHospitalId');
 
-    if (!patientId || !fromHospitalId || !toHospitalId) {
+    if (!patientId || !toHospitalId) {
       this.error.set('Missing required parameters');
       this.loading.set(false);
       return;
     }
 
-    this.sharingService.getPatientRecord(patientId, fromHospitalId, toHospitalId).subscribe({
+    this.sharingService.getAggregatedRecord(patientId, toHospitalId).subscribe({
       next: (data) => {
         this.record.set(data);
         this.loading.set(false);

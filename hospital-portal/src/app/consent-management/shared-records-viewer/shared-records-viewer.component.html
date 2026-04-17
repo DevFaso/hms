@@ -79,18 +79,20 @@
       <div class="strip-item">
         <span class="material-symbols-outlined strip-icon">business</span>
         <div class="strip-detail">
-          <span class="strip-label">{{ 'SHARED_RECORDS.FROM' | translate }}</span>
-          <span class="strip-value">{{ record()!.fromHospitalName }}</span>
-        </div>
-      </div>
-      <span class="material-symbols-outlined strip-arrow">arrow_forward</span>
-      <div class="strip-item">
-        <span class="material-symbols-outlined strip-icon">business</span>
-        <div class="strip-detail">
           <span class="strip-label">{{ 'SHARED_RECORDS.TO' | translate }}</span>
           <span class="strip-value">{{ record()!.toHospitalName }}</span>
         </div>
       </div>
+      @if (record()!.fromHospitalName) {
+        <div class="strip-divider"></div>
+        <div class="strip-item">
+          <span class="material-symbols-outlined strip-icon">business</span>
+          <div class="strip-detail">
+            <span class="strip-label">{{ 'SHARED_RECORDS.FROM' | translate }}</span>
+            <span class="strip-value">{{ record()!.fromHospitalName }}</span>
+          </div>
+        </div>
+      }
       @if (record()!.consentPurpose) {
         <div class="strip-divider"></div>
         <div class="strip-item">

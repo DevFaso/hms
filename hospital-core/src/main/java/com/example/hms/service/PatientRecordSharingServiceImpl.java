@@ -1362,4 +1362,139 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             .build();
     }
 
+    // ── Multi-hospital aggregation ─────────────────────────────────────────
+
+    @Override
+    @Transactional(readOnly = true)
+    public PatientRecordDTO getAggregatedPatientRecord(UUID patientId, UUID requestingHospitalId) {
+        Patient patient = patientRepository.findById(patientId)
+            .orElseThrow(() -> new ResourceNotFoundException("Patient not found."));
+        Hospital requestingHospital = hospitalRepository.findById(requestingHospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("Requesting hospital not found."));
+
+        List<PatientRecordDTO> partials = new ArrayList<>();
+
+        // 1. SAME_HOSPITAL — patient is registered at the requesting hospital
+        boolean registeredAtRequesting = patient.getHospitalRegistrations() != null
+            && patient.getHospitalRegistrations().stream()
+                .anyMatch(r -> r.isActive() && r.getHospital() != null
+                    && requestingHospitalId.equals(r.getHospital().getId()));
+
+        if (registeredAtRequesting) {
+            partials.add(buildPatientRecordFromEntities(
+                patientId, requestingHospitalId, requestingHospitalId,
+                patient, requestingHospital, requestingHospital));
+        }
+
+        // 2. All active consents where toHospitalId == requestingHospitalId
+        List<PatientConsent> consents = consentRepository
+            .findAllByPatientIdAndToHospitalId(patientId, requestingHospitalId);
+
+        for (PatientConsent c : consents) {
+            if (!c.isConsentActive()) continue;
+            UUID fromId = c.getFromHospital().getId();
+            // Skip if already covered by SAME_HOSPITAL
+            if (fromId.equals(requestingHospitalId)) continue;
+            Hospital fromHospital = c.getFromHospital();
+            partials.add(buildPatientRecordFromEntities(
+                patientId, fromId, requestingHospitalId,
+                patient, fromHospital, requestingHospital, c));
+        }
+
+        if (partials.isEmpty()) {
+            throw new BusinessException("No active consent or registration found for this patient at the requesting hospital.");
+        }
+
+        return mergePatientRecords(partials, patient, requestingHospital);
+    }
+
+    private PatientRecordDTO mergePatientRecords(List<PatientRecordDTO> partials,
+                                                  Patient patient,
+                                                  Hospital requestingHospital) {
+        List<EncounterResponseDTO> allEncounters = new ArrayList<>();
+        List<EncounterTreatmentResponseDTO> allTreatments = new ArrayList<>();
+        List<PrescriptionResponseDTO> allPrescriptions = new ArrayList<>();
+        List<LabOrderResponseDTO> allLabOrders = new ArrayList<>();
+        List<LabResultResponseDTO> allLabResults = new ArrayList<>();
+        List<PatientAllergyResponseDTO> allAllergies = new ArrayList<>();
+        List<PatientInsuranceResponseDTO> allInsurances = new ArrayList<>();
+        List<EncounterHistoryResponseDTO> allEncounterHistory = new ArrayList<>();
+        List<PatientProblemResponseDTO> allProblems = new ArrayList<>();
+        List<PatientSurgicalHistoryResponseDTO> allSurgicalHistory = new ArrayList<>();
+        List<AdvanceDirectiveResponseDTO> allAdvanceDirectives = new ArrayList<>();
+        Map<UUID, String> mergedMrnMap = new LinkedHashMap<>();
+
+        Set<UUID> seenEncounterIds = new HashSet<>();
+        Set<UUID> seenAllergyIds = new HashSet<>();
+        Set<UUID> seenProblemIds = new HashSet<>();
+
+        for (PatientRecordDTO p : partials) {
+            mergedMrnMap.putAll(p.getHospitalMrnMap());
+
+            for (EncounterResponseDTO e : p.getEncounters()) {
+                if (e.getId() != null && seenEncounterIds.add(e.getId())) {
+                    allEncounters.add(e);
+                }
+            }
+            allTreatments.addAll(p.getTreatments());
+            allPrescriptions.addAll(p.getPrescriptions());
+            allLabOrders.addAll(p.getLabOrders());
+            allLabResults.addAll(p.getLabResults());
+
+            for (PatientAllergyResponseDTO a : p.getAllergiesDetailed()) {
+                if (a.getId() != null && seenAllergyIds.add(a.getId())) {
+                    allAllergies.add(a);
+                }
+            }
+            allInsurances.addAll(p.getInsurances());
+            allEncounterHistory.addAll(p.getEncounterHistory());
+
+            for (PatientProblemResponseDTO prob : p.getProblems()) {
+                if (prob.getId() != null && seenProblemIds.add(prob.getId())) {
+                    allProblems.add(prob);
+                }
+            }
+            allSurgicalHistory.addAll(p.getSurgicalHistory());
+            allAdvanceDirectives.addAll(p.getAdvanceDirectives());
+        }
+
+        return PatientRecordDTO.builder()
+            .patientId(patient.getId())
+            .firstName(patient.getFirstName())
+            .lastName(patient.getLastName())
+            .middleName(patient.getMiddleName())
+            .dateOfBirth(patient.getDateOfBirth())
+            .gender(patient.getGender())
+            .bloodType(patient.getBloodType())
+            .medicalHistorySummary(patient.getMedicalHistorySummary())
+            .allergies(patient.getAllergies())
+            .address(patient.getAddress())
+            .city(patient.getCity())
+            .state(patient.getState())
+            .zipCode(patient.getZipCode())
+            .country(patient.getCountry())
+            .phoneNumberPrimary(patient.getPhoneNumberPrimary())
+            .phoneNumberSecondary(patient.getPhoneNumberSecondary())
+            .email(patient.getEmail())
+            .emergencyContactName(patient.getEmergencyContactName())
+            .emergencyContactPhone(patient.getEmergencyContactPhone())
+            .emergencyContactRelationship(patient.getEmergencyContactRelationship())
+            .hospitalMRNs(Set.copyOf(mergedMrnMap.values()))
+            .hospitalMrnMap(mergedMrnMap)
+            .toHospitalId(requestingHospital.getId())
+            .toHospitalName(requestingHospital.getName())
+            .encounters(allEncounters)
+            .treatments(allTreatments)
+            .labOrders(allLabOrders)
+            .labResults(allLabResults)
+            .allergiesDetailed(allAllergies)
+            .prescriptions(allPrescriptions)
+            .insurances(allInsurances)
+            .problems(allProblems)
+            .surgicalHistory(allSurgicalHistory)
+            .advanceDirectives(allAdvanceDirectives)
+            .encounterHistory(allEncounterHistory)
+            .build();
+    }
+
 }

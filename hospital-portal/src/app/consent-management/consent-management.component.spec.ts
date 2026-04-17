@@ -431,7 +431,6 @@ describe('ConsentManagementComponent', () => {
       expect(router.navigate).toHaveBeenCalledWith(['/consent-management/shared-records'], {
         queryParams: {
           patientId: 'p1',
-          fromHospitalId: 'h1',
           toHospitalId: 'h2',
         },
       });

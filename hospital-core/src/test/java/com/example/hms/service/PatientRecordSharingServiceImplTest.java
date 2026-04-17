@@ -20,6 +20,7 @@ import com.example.hms.model.Hospital;
 import com.example.hms.model.LabOrder;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientConsent;
+import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.EncounterResponseDTO;
 import com.example.hms.payload.dto.LabOrderResponseDTO;
@@ -448,6 +449,224 @@ class PatientRecordSharingServiceImplTest {
             service.getPatientRecord(patientId, fromHospitalId, toHospitalId);
 
             verify(auditRepository).save(any());
+        }
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // getAggregatedPatientRecord
+    // ════════════════════════════════════════════════════════════════════════
+
+    @Nested
+    @DisplayName("getAggregatedPatientRecord")
+    class GetAggregatedPatientRecord {
+
+        private final UUID hospitalBId = UUID.randomUUID();
+        private Hospital hospitalB;
+        private PatientConsent consentFromB;
+
+        @BeforeEach
+        void setUpHospitalB() {
+            hospitalB = new Hospital();
+            hospitalB.setId(hospitalBId);
+            hospitalB.setName("Hospital B");
+
+            consentFromB = new PatientConsent();
+            consentFromB.setId(UUID.randomUUID());
+            consentFromB.setPatient(patient);
+            consentFromB.setFromHospital(hospitalB);
+            consentFromB.setToHospital(toHospital);
+            consentFromB.setConsentGiven(true);
+            consentFromB.setConsentTimestamp(LocalDateTime.now().minusDays(1));
+            consentFromB.setConsentExpiration(LocalDateTime.now().plusDays(30));
+            consentFromB.setPurpose("Treatment");
+            consentFromB.setConsentType(ConsentType.TREATMENT);
+        }
+
+        private void stubEmptyClinicalDataForHospital(UUID hospitalId) {
+            lenient().when(encounterRepository.findAllByPatient_IdAndHospital_Id(patientId, hospitalId))
+                .thenReturn(List.of());
+            lenient().when(labOrderRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+                .thenReturn(List.of());
+            lenient().when(labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(eq(patientId), eq(hospitalId), any()))
+                .thenReturn(List.of());
+            lenient().when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+                .thenReturn(List.of());
+            lenient().when(patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+                .thenReturn(List.of());
+            lenient().when(patientProblemRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+                .thenReturn(List.of());
+            lenient().when(patientSurgicalHistoryRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+                .thenReturn(List.of());
+            lenient().when(advanceDirectiveRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+                .thenReturn(List.of());
+        }
+
+        @Test
+        @DisplayName("aggregates records from two consented hospitals")
+        void aggregatesFromMultipleHospitals() throws Exception {
+            allTablesAvailable();
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepository.findById(toHospitalId)).thenReturn(Optional.of(toHospital));
+
+            // Consent from Hospital A (fromHospital) → toHospital
+            activeConsent.setScope(null);
+            // Consent from Hospital B → toHospital
+            consentFromB.setScope(null);
+
+            when(consentRepository.findAllByPatientIdAndToHospitalId(patientId, toHospitalId))
+                .thenReturn(List.of(activeConsent, consentFromB));
+
+            stubEmptyClinicalDataForHospital(fromHospitalId);
+            stubEmptyClinicalDataForHospital(hospitalBId);
+            lenient().when(patientInsuranceRepository.findByPatient_Id(patientId)).thenReturn(List.of());
+            lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+            // Hospital A has 1 encounter
+            Encounter encA = buildEncounter();
+            when(encounterRepository.findAllByPatient_IdAndHospital_Id(patientId, fromHospitalId))
+                .thenReturn(List.of(encA));
+            when(encounterMapper.toEncounterResponseDTO(encA))
+                .thenReturn(EncounterResponseDTO.builder().id(encA.getId()).build());
+
+            // Hospital B has 1 encounter
+            Encounter encB = new Encounter();
+            encB.setId(UUID.randomUUID());
+            encB.setPatient(patient);
+            encB.setEncounterDate(LocalDateTime.now());
+            encB.setHospital(hospitalB);
+            when(encounterRepository.findAllByPatient_IdAndHospital_Id(patientId, hospitalBId))
+                .thenReturn(List.of(encB));
+            when(encounterMapper.toEncounterResponseDTO(encB))
+                .thenReturn(EncounterResponseDTO.builder().id(encB.getId()).build());
+
+            PatientRecordDTO result = service.getAggregatedPatientRecord(patientId, toHospitalId);
+
+            assertThat(result).isNotNull();
+            assertThat(result.getEncounters()).hasSize(2);
+            assertThat(result.getToHospitalId()).isEqualTo(toHospitalId);
+        }
+
+        @Test
+        @DisplayName("includes same-hospital records when patient is registered there")
+        void includesSameHospitalRecords() throws Exception {
+            allTablesAvailable();
+
+            // Register patient at requesting hospital
+            PatientHospitalRegistration reg = new PatientHospitalRegistration();
+            reg.setHospital(toHospital);
+            reg.setActive(true);
+            reg.setMrn("MRN-TO");
+            patient.setHospitalRegistrations(Set.of(reg));
+
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepository.findById(toHospitalId)).thenReturn(Optional.of(toHospital));
+            when(consentRepository.findAllByPatientIdAndToHospitalId(patientId, toHospitalId))
+                .thenReturn(List.of());
+
+            stubEmptyClinicalDataForHospital(toHospitalId);
+            lenient().when(patientInsuranceRepository.findByPatient_Id(patientId)).thenReturn(List.of());
+            lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+            PatientRecordDTO result = service.getAggregatedPatientRecord(patientId, toHospitalId);
+
+            assertThat(result).isNotNull();
+            assertThat(result.getPatientId()).isEqualTo(patientId);
+        }
+
+        @Test
+        @DisplayName("throws when no consent and no registration found")
+        void throwsWhenNothingFound() {
+            patient.setHospitalRegistrations(Set.of());
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepository.findById(toHospitalId)).thenReturn(Optional.of(toHospital));
+            when(consentRepository.findAllByPatientIdAndToHospitalId(patientId, toHospitalId))
+                .thenReturn(List.of());
+
+            assertThatThrownBy(() -> service.getAggregatedPatientRecord(patientId, toHospitalId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("No active consent");
+        }
+
+        @Test
+        @DisplayName("skips expired consents during aggregation")
+        void skipsExpiredConsents() throws Exception {
+            allTablesAvailable();
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepository.findById(toHospitalId)).thenReturn(Optional.of(toHospital));
+
+            // Active consent from Hospital A
+            activeConsent.setScope(null);
+            // Expired consent from Hospital B
+            consentFromB.setConsentExpiration(LocalDateTime.now().minusDays(5));
+
+            when(consentRepository.findAllByPatientIdAndToHospitalId(patientId, toHospitalId))
+                .thenReturn(List.of(activeConsent, consentFromB));
+
+            stubEmptyClinicalDataForHospital(fromHospitalId);
+            stubEmptyClinicalDataForHospital(hospitalBId);
+            lenient().when(patientInsuranceRepository.findByPatient_Id(patientId)).thenReturn(List.of());
+            lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+            PatientRecordDTO result = service.getAggregatedPatientRecord(patientId, toHospitalId);
+
+            assertThat(result).isNotNull();
+            // Only Hospital A's data should be included (Hospital B expired)
+            verify(encounterRepository).findAllByPatient_IdAndHospital_Id(patientId, fromHospitalId);
+            verify(encounterRepository, never()).findAllByPatient_IdAndHospital_Id(patientId, hospitalBId);
+        }
+
+        @Test
+        @DisplayName("respects scope filtering per consent during aggregation")
+        void respectsScopePerConsent() throws Exception {
+            allTablesAvailable();
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepository.findById(toHospitalId)).thenReturn(Optional.of(toHospital));
+
+            // Hospital A allows only ENCOUNTERS
+            activeConsent.setScope("ENCOUNTERS");
+            // Hospital B allows only PRESCRIPTIONS
+            consentFromB.setScope("PRESCRIPTIONS");
+
+            when(consentRepository.findAllByPatientIdAndToHospitalId(patientId, toHospitalId))
+                .thenReturn(List.of(activeConsent, consentFromB));
+
+            stubEmptyClinicalDataForHospital(fromHospitalId);
+            stubEmptyClinicalDataForHospital(hospitalBId);
+            lenient().when(patientInsuranceRepository.findByPatient_Id(patientId)).thenReturn(List.of());
+            lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+            Encounter encA = buildEncounter();
+            when(encounterRepository.findAllByPatient_IdAndHospital_Id(patientId, fromHospitalId))
+                .thenReturn(List.of(encA));
+            when(encounterMapper.toEncounterResponseDTO(encA))
+                .thenReturn(EncounterResponseDTO.builder().id(encA.getId()).build());
+
+            PatientRecordDTO result = service.getAggregatedPatientRecord(patientId, toHospitalId);
+
+            assertThat(result.getEncounters()).hasSize(1);
+            // Hospital B was scope-restricted to PRESCRIPTIONS — no encounters from B
+            verify(encounterRepository, never()).findAllByPatient_IdAndHospital_Id(patientId, hospitalBId);
+        }
+
+        @Test
+        @DisplayName("throws ResourceNotFoundException when patient not found")
+        void throwsWhenPatientNotFound() {
+            when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.getAggregatedPatientRecord(patientId, toHospitalId))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("Patient not found");
+        }
+
+        @Test
+        @DisplayName("throws ResourceNotFoundException when hospital not found")
+        void throwsWhenHospitalNotFound() {
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(hospitalRepository.findById(toHospitalId)).thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> service.getAggregatedPatientRecord(patientId, toHospitalId))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessageContaining("hospital not found");
         }
     }
 

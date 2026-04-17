@@ -49,6 +49,7 @@ class PatientRecordSharingControllerTest {
 
     private static final String SHARE_URL = "/records/share";
     private static final String RESOLVE_URL = "/records/resolve";
+    private static final String AGGREGATE_URL = "/records/aggregate";
     private static final String EXPORT_URL = "/records/export";
 
     @Autowired private MockMvc mockMvc;
@@ -220,6 +221,48 @@ class PatientRecordSharingControllerTest {
         }
     }
 
+    // ═══════════════════════ GET /records/aggregate ═══════════════════════
+
+    @Nested
+    @DisplayName("GET /records/aggregate — aggregateRecords")
+    class AggregateRecords {
+
+        @Test
+        @WithMockUser(authorities = "ROLE_DOCTOR")
+        @DisplayName("returns 200 OK with valid params")
+        void aggregateRecords_ok() throws Exception {
+            PatientRecordDTO record = buildPatientRecord();
+            when(sharingService.getAggregatedPatientRecord(PATIENT_ID, TO_HOSPITAL_ID))
+                    .thenReturn(record);
+
+            mockMvc.perform(get(AGGREGATE_URL)
+                            .param("patientId", PATIENT_ID.toString())
+                            .param("requestingHospitalId", TO_HOSPITAL_ID.toString()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.patientId").value(PATIENT_ID.toString()));
+
+            verify(sharingService).getAggregatedPatientRecord(PATIENT_ID, TO_HOSPITAL_ID);
+        }
+
+        @Test
+        @WithMockUser(authorities = "ROLE_NURSE")
+        @DisplayName("returns 400 when patientId is missing")
+        void aggregateRecords_missingPatientId() throws Exception {
+            mockMvc.perform(get(AGGREGATE_URL)
+                            .param("requestingHospitalId", TO_HOSPITAL_ID.toString()))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @WithMockUser(authorities = "ROLE_NURSE")
+        @DisplayName("returns 400 when requestingHospitalId is missing")
+        void aggregateRecords_missingRequestingHospitalId() throws Exception {
+            mockMvc.perform(get(AGGREGATE_URL)
+                            .param("patientId", PATIENT_ID.toString()))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
     // ═══════════════════════ POST /records/export ═══════════════════════
 
     @Nested
@@ -319,6 +362,22 @@ class PatientRecordSharingControllerTest {
         void resolveAndShare_allowedRoles() throws Exception {
             var method = PatientRecordSharingController.class.getDeclaredMethod(
                     "resolveAndShare", UUID.class, UUID.class);
+            var ann = method.getAnnotation(
+                    org.springframework.security.access.prepost.PreAuthorize.class);
+            org.assertj.core.api.Assertions.assertThat(ann).isNotNull();
+            org.assertj.core.api.Assertions.assertThat(ann.value())
+                    .contains("ROLE_NURSE")
+                    .contains("ROLE_DOCTOR")
+                    .contains("ROLE_MIDWIFE")
+                    .contains("ROLE_HOSPITAL_ADMIN")
+                    .contains("ROLE_SUPER_ADMIN");
+        }
+
+        @Test
+        @DisplayName("aggregateRecords allows same 5 clinical roles")
+        void aggregateRecords_allowedRoles() throws Exception {
+            var method = PatientRecordSharingController.class.getDeclaredMethod(
+                    "aggregateRecords", UUID.class, UUID.class);
             var ann = method.getAnnotation(
                     org.springframework.security.access.prepost.PreAuthorize.class);
             org.assertj.core.api.Assertions.assertThat(ann).isNotNull();
