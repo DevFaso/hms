@@ -40,6 +40,8 @@ public class PrescriptionMapper {
             .dosage(p.getDosage())
             .frequency(p.getFrequency())
             .duration(p.getDuration())
+            .route(p.getRoute())
+            .instructions(p.getInstructions())
             .notes(p.getNotes())
 
             .status(p.getStatus() != null ? p.getStatus().name() : null)

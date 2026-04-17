@@ -71,6 +71,9 @@
             </span>
           }
         </div>
+        @if (record()!.medicalHistorySummary) {
+          <p class="medical-summary">{{ record()!.medicalHistorySummary }}</p>
+        }
       </div>
     </div>
 
@@ -194,6 +197,30 @@
                       <span class="detail-value notes-text">{{ e.notes }}</span>
                     </div>
                   }
+                  @if (e.followUpInstructions) {
+                    <div class="detail-row notes-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.FOLLOW_UP' | translate
+                      }}</span>
+                      <span class="detail-value notes-text">{{ e.followUpInstructions }}</span>
+                    </div>
+                  }
+                  @if (e.dischargeDiagnoses) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.DISCHARGE_DIAGNOSES' | translate
+                      }}</span>
+                      <span class="detail-value">{{ e.dischargeDiagnoses }}</span>
+                    </div>
+                  }
+                  @if (e.checkoutTimestamp) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.DISCHARGED' | translate
+                      }}</span>
+                      <span class="detail-value">{{ e.checkoutTimestamp | date: 'medium' }}</span>
+                    </div>
+                  }
                 </div>
               </div>
             }
@@ -307,6 +334,22 @@
                         'SHARED_RECORDS.FIELDS.DURATION' | translate
                       }}</span>
                       <span class="detail-value">{{ p.duration }}</span>
+                    </div>
+                  }
+                  @if (p.route) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.ROUTE' | translate
+                      }}</span>
+                      <span class="detail-value">{{ p.route }}</span>
+                    </div>
+                  }
+                  @if (p.instructions) {
+                    <div class="detail-row notes-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.INSTRUCTIONS' | translate
+                      }}</span>
+                      <span class="detail-value notes-text">{{ p.instructions }}</span>
                     </div>
                   }
                   @if (p.staffFullName) {
@@ -717,6 +760,366 @@
                         'SHARED_RECORDS.FIELDS.EXPIRATION' | translate
                       }}</span>
                       <span class="detail-value">{{ d.expirationDate | date: 'mediumDate' }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      }
+
+      <!-- ═══ Vital Signs ═══ -->
+      @if (activeTab() === 'vitalSigns') {
+        @if ((record()!.vitalSigns?.length ?? 0) === 0) {
+          <div class="empty-tab">
+            <span class="material-symbols-outlined">monitor_heart</span>
+            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
+          </div>
+        } @else {
+          <div class="record-cards">
+            @for (v of record()!.vitalSigns!; track v.id) {
+              <div class="record-card" [ngClass]="{ 'card-flagged': v.clinicallySignificant }">
+                <div class="card-header">
+                  <div class="card-title-row">
+                    <span class="card-title">{{
+                      'SHARED_RECORDS.FIELDS.VITALS_READING' | translate
+                    }}</span>
+                    @if (v.clinicallySignificant) {
+                      <span class="severity-flag severity-high">
+                        <span class="material-symbols-outlined">flag</span>
+                        {{ 'SHARED_RECORDS.FIELDS.CLINICALLY_SIGNIFICANT' | translate }}
+                      </span>
+                    }
+                  </div>
+                  @if (v.recordedAt) {
+                    <span class="card-date">
+                      <span class="material-symbols-outlined">calendar_today</span>
+                      {{ v.recordedAt | date: 'medium' }}
+                    </span>
+                  }
+                </div>
+                <div class="card-body vitals-grid">
+                  @if (v.systolicBpMmHg || v.diastolicBpMmHg) {
+                    <div class="vital-item">
+                      <span class="vital-label">{{
+                        'SHARED_RECORDS.FIELDS.BLOOD_PRESSURE' | translate
+                      }}</span>
+                      <span class="vital-value"
+                        >{{ v.systolicBpMmHg }}/{{ v.diastolicBpMmHg }} mmHg</span
+                      >
+                    </div>
+                  }
+                  @if (v.heartRateBpm) {
+                    <div class="vital-item">
+                      <span class="vital-label">{{
+                        'SHARED_RECORDS.FIELDS.HEART_RATE' | translate
+                      }}</span>
+                      <span class="vital-value">{{ v.heartRateBpm }} bpm</span>
+                    </div>
+                  }
+                  @if (v.temperatureCelsius) {
+                    <div class="vital-item">
+                      <span class="vital-label">{{
+                        'SHARED_RECORDS.FIELDS.TEMPERATURE' | translate
+                      }}</span>
+                      <span class="vital-value">{{ v.temperatureCelsius }} °C</span>
+                    </div>
+                  }
+                  @if (v.respiratoryRateBpm) {
+                    <div class="vital-item">
+                      <span class="vital-label">{{
+                        'SHARED_RECORDS.FIELDS.RESPIRATORY_RATE' | translate
+                      }}</span>
+                      <span class="vital-value">{{ v.respiratoryRateBpm }} /min</span>
+                    </div>
+                  }
+                  @if (v.spo2Percent) {
+                    <div class="vital-item">
+                      <span class="vital-label">{{
+                        'SHARED_RECORDS.FIELDS.SPO2' | translate
+                      }}</span>
+                      <span class="vital-value">{{ v.spo2Percent }}%</span>
+                    </div>
+                  }
+                  @if (v.bloodGlucoseMgDl) {
+                    <div class="vital-item">
+                      <span class="vital-label">{{
+                        'SHARED_RECORDS.FIELDS.BLOOD_GLUCOSE' | translate
+                      }}</span>
+                      <span class="vital-value">{{ v.bloodGlucoseMgDl }} mg/dL</span>
+                    </div>
+                  }
+                  @if (v.weightKg) {
+                    <div class="vital-item">
+                      <span class="vital-label">{{
+                        'SHARED_RECORDS.FIELDS.WEIGHT' | translate
+                      }}</span>
+                      <span class="vital-value">{{ v.weightKg }} kg</span>
+                    </div>
+                  }
+                </div>
+                @if (v.recordedByName) {
+                  <div class="card-footer">
+                    <span class="detail-label">{{
+                      'SHARED_RECORDS.FIELDS.RECORDED_BY' | translate
+                    }}</span>
+                    <span class="detail-value">{{ v.recordedByName }}</span>
+                  </div>
+                }
+              </div>
+            }
+          </div>
+        }
+      }
+
+      <!-- ═══ Immunizations ═══ -->
+      @if (activeTab() === 'immunizations') {
+        @if ((record()!.immunizations?.length ?? 0) === 0) {
+          <div class="empty-tab">
+            <span class="material-symbols-outlined">vaccines</span>
+            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
+          </div>
+        } @else {
+          <div class="record-cards">
+            @for (imm of record()!.immunizations!; track imm.id) {
+              <div class="record-card">
+                <div class="card-header">
+                  <div class="card-title-row">
+                    <span class="card-title">{{
+                      imm.vaccineDisplay || imm.vaccineCode || 'Vaccine'
+                    }}</span>
+                    @if (imm.status) {
+                      <span class="status-badge" [ngClass]="statusClass(imm.status)">{{
+                        imm.status
+                      }}</span>
+                    }
+                  </div>
+                  @if (imm.administrationDate) {
+                    <span class="card-date">
+                      <span class="material-symbols-outlined">calendar_today</span>
+                      {{ imm.administrationDate | date: 'mediumDate' }}
+                    </span>
+                  }
+                </div>
+                <div class="card-body">
+                  @if (imm.targetDisease) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.TARGET_DISEASE' | translate
+                      }}</span>
+                      <span class="detail-value">{{ imm.targetDisease }}</span>
+                    </div>
+                  }
+                  @if (imm.doseNumber) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.DOSE' | translate
+                      }}</span>
+                      <span class="detail-value">
+                        {{ imm.doseNumber }}
+                        @if (imm.totalDosesInSeries) {
+                          / {{ imm.totalDosesInSeries }}
+                        }
+                      </span>
+                    </div>
+                  }
+                  @if (imm.route) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.ROUTE' | translate
+                      }}</span>
+                      <span class="detail-value">{{ imm.route }}</span>
+                    </div>
+                  }
+                  @if (imm.site) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.SITE' | translate
+                      }}</span>
+                      <span class="detail-value">{{ imm.site }}</span>
+                    </div>
+                  }
+                  @if (imm.manufacturer) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.MANUFACTURER' | translate
+                      }}</span>
+                      <span class="detail-value">{{ imm.manufacturer }}</span>
+                    </div>
+                  }
+                  @if (imm.lotNumber) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.LOT_NUMBER' | translate
+                      }}</span>
+                      <span class="detail-value mono">{{ imm.lotNumber }}</span>
+                    </div>
+                  }
+                  @if (imm.administeredByName) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.ADMINISTERED_BY' | translate
+                      }}</span>
+                      <span class="detail-value">{{ imm.administeredByName }}</span>
+                    </div>
+                  }
+                  @if (imm.nextDoseDueDate) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.NEXT_DOSE_DUE' | translate
+                      }}</span>
+                      <span class="detail-value">{{
+                        imm.nextDoseDueDate | date: 'mediumDate'
+                      }}</span>
+                    </div>
+                  }
+                  @if (imm.adverseReaction) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.ADVERSE_REACTION' | translate
+                      }}</span>
+                      <span class="detail-value" [ngClass]="severityClass(imm.reactionSeverity)">
+                        {{ imm.reactionDescription || 'Yes' }}
+                      </span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      }
+
+      <!-- ═══ Insurances ═══ -->
+      @if (activeTab() === 'insurances') {
+        @if ((record()!.insurances?.length ?? 0) === 0) {
+          <div class="empty-tab">
+            <span class="material-symbols-outlined">shield</span>
+            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
+          </div>
+        } @else {
+          <div class="record-cards">
+            @for (ins of record()!.insurances!; track ins.id) {
+              <div class="record-card">
+                <div class="card-header">
+                  <div class="card-title-row">
+                    <span class="card-title">{{ ins.providerName || 'Insurance' }}</span>
+                    @if (ins.primary) {
+                      <span class="status-badge status-success">{{
+                        'SHARED_RECORDS.FIELDS.PRIMARY' | translate
+                      }}</span>
+                    }
+                  </div>
+                </div>
+                <div class="card-body">
+                  @if (ins.policyNumber) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.POLICY_NUMBER' | translate
+                      }}</span>
+                      <span class="detail-value mono">{{ ins.policyNumber }}</span>
+                    </div>
+                  }
+                  @if (ins.groupNumber) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.GROUP_NUMBER' | translate
+                      }}</span>
+                      <span class="detail-value mono">{{ ins.groupNumber }}</span>
+                    </div>
+                  }
+                  @if (ins.subscriberName) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.SUBSCRIBER' | translate
+                      }}</span>
+                      <span class="detail-value">{{ ins.subscriberName }}</span>
+                    </div>
+                  }
+                  @if (ins.subscriberRelationship) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.RELATIONSHIP' | translate
+                      }}</span>
+                      <span class="detail-value">{{ ins.subscriberRelationship }}</span>
+                    </div>
+                  }
+                  @if (ins.effectiveDate) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.EFFECTIVE' | translate
+                      }}</span>
+                      <span class="detail-value">{{ ins.effectiveDate | date: 'mediumDate' }}</span>
+                    </div>
+                  }
+                  @if (ins.expirationDate) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.EXPIRATION' | translate
+                      }}</span>
+                      <span class="detail-value">{{
+                        ins.expirationDate | date: 'mediumDate'
+                      }}</span>
+                    </div>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      }
+
+      <!-- ═══ Encounter History ═══ -->
+      @if (activeTab() === 'encounterHistory') {
+        @if ((record()!.encounterHistory?.length ?? 0) === 0) {
+          <div class="empty-tab">
+            <span class="material-symbols-outlined">history</span>
+            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
+          </div>
+        } @else {
+          <div class="record-cards">
+            @for (h of record()!.encounterHistory!; track h.id) {
+              <div class="record-card">
+                <div class="card-header">
+                  <div class="card-title-row">
+                    <span class="card-title">{{ h.changeType || 'Change' }}</span>
+                    @if (h.status) {
+                      <span class="status-badge" [ngClass]="statusClass(h.status)">{{
+                        h.status
+                      }}</span>
+                    }
+                  </div>
+                  @if (h.changedAt) {
+                    <span class="card-date">
+                      <span class="material-symbols-outlined">calendar_today</span>
+                      {{ h.changedAt | date: 'medium' }}
+                    </span>
+                  }
+                </div>
+                <div class="card-body">
+                  @if (h.changedBy) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.CHANGED_BY' | translate
+                      }}</span>
+                      <span class="detail-value">{{ h.changedBy }}</span>
+                    </div>
+                  }
+                  @if (h.encounterType) {
+                    <div class="detail-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.ENCOUNTER_TYPE' | translate
+                      }}</span>
+                      <span class="detail-value">{{ h.encounterType }}</span>
+                    </div>
+                  }
+                  @if (h.notes) {
+                    <div class="detail-row notes-row">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.NOTES' | translate
+                      }}</span>
+                      <span class="detail-value notes-text">{{ h.notes }}</span>
                     </div>
                   }
                 </div>

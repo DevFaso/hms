@@ -105,6 +105,61 @@ const MOCK_RECORD: PatientRecord = {
     },
   ],
   advanceDirectives: [],
+  vitalSigns: [
+    {
+      id: 'vs1',
+      systolicBpMmHg: 120,
+      diastolicBpMmHg: 80,
+      heartRateBpm: 72,
+      temperatureCelsius: 36.6,
+      respiratoryRateBpm: 16,
+      spo2Percent: 98,
+      bloodGlucoseMgDl: 95,
+      weightKg: 70,
+      recordedByName: 'Nurse Joy',
+      recordedAt: '2026-01-10T10:00:00',
+      clinicallySignificant: false,
+    },
+  ],
+  immunizations: [
+    {
+      id: 'imm1',
+      vaccineDisplay: 'Influenza Vaccine',
+      targetDisease: 'Influenza',
+      administrationDate: '2025-10-01',
+      doseNumber: 1,
+      totalDosesInSeries: 1,
+      route: 'Intramuscular',
+      site: 'Left Deltoid',
+      manufacturer: 'Pfizer',
+      lotNumber: 'LOT-12345',
+      status: 'COMPLETED',
+      administeredByName: 'Nurse Joy',
+    },
+  ],
+  insurances: [
+    {
+      id: 'ins1',
+      providerName: 'Blue Cross',
+      policyNumber: 'POL-9999',
+      groupNumber: 'GRP-100',
+      subscriberName: 'Jane Doe',
+      subscriberRelationship: 'Self',
+      effectiveDate: '2025-01-01',
+      primary: true,
+    },
+  ],
+  encounterHistory: [
+    {
+      id: 'eh1',
+      encounterId: 'e1',
+      changeType: 'STATUS_CHANGE',
+      changedBy: 'Dr. Smith',
+      changedAt: '2026-01-10T12:00:00',
+      status: 'COMPLETED',
+      encounterType: 'OUTPATIENT',
+    },
+  ],
 };
 
 function createRouteSnapshot(params: Record<string, string | null>) {
@@ -184,6 +239,10 @@ describe('SharedRecordsViewerComponent', () => {
     expect(counts['problems']).toBe(1);
     expect(counts['surgicalHistory']).toBe(1);
     expect(counts['advanceDirectives']).toBe(0);
+    expect(counts['vitalSigns']).toBe(1);
+    expect(counts['immunizations']).toBe(1);
+    expect(counts['insurances']).toBe(1);
+    expect(counts['encounterHistory']).toBe(1);
   });
 
   it('defaults to encounters tab', () => {
@@ -214,7 +273,7 @@ describe('SharedRecordsViewerComponent', () => {
 
   it('renders tab buttons', () => {
     const tabs = fixture.nativeElement.querySelectorAll('.tab-btn');
-    expect(tabs.length).toBe(9);
+    expect(tabs.length).toBe(13);
   });
 
   it('renders encounter cards when encounters tab is active', () => {
@@ -383,6 +442,43 @@ describe('SharedRecordsViewerComponent', () => {
       const cards = fixture.nativeElement.querySelectorAll('.record-card');
       expect(cards.length).toBe(1);
       expect(cards[0].textContent).toContain('Appendectomy');
+    });
+
+    it('renders vital sign cards with measurements', () => {
+      component.setTab('vitalSigns');
+      fixture.detectChanges();
+      const cards = fixture.nativeElement.querySelectorAll('.record-card');
+      expect(cards.length).toBe(1);
+      expect(cards[0].textContent).toContain('120');
+      expect(cards[0].textContent).toContain('80');
+      expect(cards[0].textContent).toContain('72');
+    });
+
+    it('renders immunization cards', () => {
+      component.setTab('immunizations');
+      fixture.detectChanges();
+      const cards = fixture.nativeElement.querySelectorAll('.record-card');
+      expect(cards.length).toBe(1);
+      expect(cards[0].textContent).toContain('Influenza Vaccine');
+      expect(cards[0].textContent).toContain('Pfizer');
+    });
+
+    it('renders insurance cards', () => {
+      component.setTab('insurances');
+      fixture.detectChanges();
+      const cards = fixture.nativeElement.querySelectorAll('.record-card');
+      expect(cards.length).toBe(1);
+      expect(cards[0].textContent).toContain('Blue Cross');
+      expect(cards[0].textContent).toContain('POL-9999');
+    });
+
+    it('renders encounter history cards', () => {
+      component.setTab('encounterHistory');
+      fixture.detectChanges();
+      const cards = fixture.nativeElement.querySelectorAll('.record-card');
+      expect(cards.length).toBe(1);
+      expect(cards[0].textContent).toContain('STATUS_CHANGE');
+      expect(cards[0].textContent).toContain('Dr. Smith');
     });
   });
 });

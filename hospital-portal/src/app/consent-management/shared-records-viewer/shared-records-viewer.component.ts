@@ -13,7 +13,11 @@ type RecordTab =
   | 'allergies'
   | 'problems'
   | 'surgicalHistory'
-  | 'advanceDirectives';
+  | 'advanceDirectives'
+  | 'vitalSigns'
+  | 'immunizations'
+  | 'insurances'
+  | 'encounterHistory';
 
 interface TabDef {
   key: RecordTab;
@@ -27,13 +31,21 @@ const TABS: TabDef[] = [
   { key: 'prescriptions', icon: 'medication', labelKey: 'SHARED_RECORDS.TABS.PRESCRIPTIONS' },
   { key: 'labOrders', icon: 'biotech', labelKey: 'SHARED_RECORDS.TABS.LAB_ORDERS' },
   { key: 'labResults', icon: 'science', labelKey: 'SHARED_RECORDS.TABS.LAB_RESULTS' },
+  { key: 'vitalSigns', icon: 'monitor_heart', labelKey: 'SHARED_RECORDS.TABS.VITAL_SIGNS' },
+  { key: 'immunizations', icon: 'vaccines', labelKey: 'SHARED_RECORDS.TABS.IMMUNIZATIONS' },
   { key: 'allergies', icon: 'warning', labelKey: 'SHARED_RECORDS.TABS.ALLERGIES' },
-  { key: 'problems', icon: 'monitor_heart', labelKey: 'SHARED_RECORDS.TABS.PROBLEMS' },
+  { key: 'problems', icon: 'health_and_safety', labelKey: 'SHARED_RECORDS.TABS.PROBLEMS' },
   { key: 'surgicalHistory', icon: 'surgical', labelKey: 'SHARED_RECORDS.TABS.SURGICAL_HISTORY' },
   {
     key: 'advanceDirectives',
     icon: 'description',
     labelKey: 'SHARED_RECORDS.TABS.ADVANCE_DIRECTIVES',
+  },
+  { key: 'insurances', icon: 'shield', labelKey: 'SHARED_RECORDS.TABS.INSURANCES' },
+  {
+    key: 'encounterHistory',
+    icon: 'history',
+    labelKey: 'SHARED_RECORDS.TABS.ENCOUNTER_HISTORY',
   },
 ];
 
@@ -80,6 +92,10 @@ export class SharedRecordsViewerComponent implements OnInit {
       problems: r.problems?.length ?? 0,
       surgicalHistory: r.surgicalHistory?.length ?? 0,
       advanceDirectives: r.advanceDirectives?.length ?? 0,
+      vitalSigns: r.vitalSigns?.length ?? 0,
+      immunizations: r.immunizations?.length ?? 0,
+      insurances: r.insurances?.length ?? 0,
+      encounterHistory: r.encounterHistory?.length ?? 0,
     } as Record<RecordTab, number>;
   });
 

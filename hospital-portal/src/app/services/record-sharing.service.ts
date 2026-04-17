@@ -24,6 +24,9 @@ export interface SharedEncounterEntry {
   esiScore?: number;
   roomAssignment?: string;
   triageTimestamp?: string;
+  checkoutTimestamp?: string;
+  followUpInstructions?: string;
+  dischargeDiagnoses?: string;
 }
 
 export interface SharedEncounterTreatmentEntry {
@@ -103,6 +106,8 @@ export interface SharedPrescriptionEntry {
   dosage?: string;
   frequency?: string;
   duration?: string;
+  route?: string;
+  instructions?: string;
   notes?: string;
   status?: string;
   createdAt?: string;
@@ -177,6 +182,54 @@ export interface SharedEncounterHistoryEntry {
   changeType?: string;
 }
 
+export interface SharedVitalSignEntry {
+  id: string;
+  patientId?: string;
+  hospitalId?: string;
+  recordedByName?: string;
+  source?: string;
+  temperatureCelsius?: number;
+  heartRateBpm?: number;
+  respiratoryRateBpm?: number;
+  systolicBpMmHg?: number;
+  diastolicBpMmHg?: number;
+  spo2Percent?: number;
+  bloodGlucoseMgDl?: number;
+  weightKg?: number;
+  bodyPosition?: string;
+  notes?: string;
+  clinicallySignificant?: boolean;
+  recordedAt?: string;
+}
+
+export interface SharedImmunizationEntry {
+  id: string;
+  patientId?: string;
+  hospitalId?: string;
+  hospitalName?: string;
+  administeredByName?: string;
+  vaccineCode?: string;
+  vaccineDisplay?: string;
+  vaccineType?: string;
+  targetDisease?: string;
+  administrationDate?: string;
+  doseNumber?: number;
+  totalDosesInSeries?: number;
+  doseQuantity?: number;
+  doseUnit?: string;
+  route?: string;
+  site?: string;
+  manufacturer?: string;
+  lotNumber?: string;
+  status?: string;
+  statusReason?: string;
+  verified?: boolean;
+  adverseReaction?: boolean;
+  reactionDescription?: string;
+  reactionSeverity?: string;
+  nextDoseDueDate?: string;
+}
+
 export interface PatientRecord {
   patientId: string;
   firstName: string;
@@ -219,6 +272,8 @@ export interface PatientRecord {
   surgicalHistory?: SharedSurgicalHistoryEntry[];
   advanceDirectives?: SharedAdvanceDirectiveEntry[];
   encounterHistory?: SharedEncounterHistoryEntry[];
+  vitalSigns?: SharedVitalSignEntry[];
+  immunizations?: SharedImmunizationEntry[];
 }
 
 export type ShareScope = 'SAME_HOSPITAL' | 'INTRA_ORG' | 'CROSS_ORG';

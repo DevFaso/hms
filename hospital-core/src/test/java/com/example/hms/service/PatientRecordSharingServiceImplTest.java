@@ -11,6 +11,8 @@ import com.example.hms.mapper.EncounterTreatmentMapper;
 import com.example.hms.mapper.LabOrderMapper;
 import com.example.hms.mapper.LabResultMapper;
 import com.example.hms.mapper.PatientAllergyMapper;
+import com.example.hms.mapper.PatientVitalSignMapper;
+import com.example.hms.mapper.ImmunizationMapper;
 import com.example.hms.mapper.PatientInsuranceMapper;
 import com.example.hms.mapper.PatientProblemMapper;
 import com.example.hms.mapper.PatientSurgicalHistoryMapper;
@@ -35,6 +37,8 @@ import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.LabResultRepository;
 import com.example.hms.repository.PatientAllergyRepository;
+import com.example.hms.repository.PatientVitalSignRepository;
+import com.example.hms.repository.ImmunizationRepository;
 import com.example.hms.repository.PatientConsentRepository;
 import com.example.hms.repository.PatientInsuranceRepository;
 import com.example.hms.repository.PatientProblemRepository;
@@ -89,6 +93,8 @@ class PatientRecordSharingServiceImplTest {
     @Mock private PatientSurgicalHistoryRepository patientSurgicalHistoryRepository;
     @Mock private AdvanceDirectiveRepository advanceDirectiveRepository;
     @Mock private PatientAllergyRepository patientAllergyRepository;
+    @Mock private PatientVitalSignRepository patientVitalSignRepository;
+    @Mock private ImmunizationRepository immunizationRepository;
     @Mock private AuditEventLogRepository auditRepository;
 
     // ── Mappers ─────────────────────────────────────────────────────────────
@@ -103,6 +109,8 @@ class PatientRecordSharingServiceImplTest {
     @Mock private PatientSurgicalHistoryMapper patientSurgicalHistoryMapper;
     @Mock private AdvanceDirectiveMapper advanceDirectiveMapper;
     @Mock private PatientAllergyMapper patientAllergyMapper;
+    @Mock private PatientVitalSignMapper patientVitalSignMapper;
+    @Mock private ImmunizationMapper immunizationMapper;
 
     // ── Other dependencies ──────────────────────────────────────────────────
     @Mock private ObjectMapper objectMapper;
@@ -184,6 +192,10 @@ class PatientRecordSharingServiceImplTest {
         lenient().when(patientSurgicalHistoryRepository.findByPatient_IdAndHospital_Id(patientId, fromHospitalId))
             .thenReturn(List.of());
         lenient().when(advanceDirectiveRepository.findByPatient_IdAndHospital_Id(patientId, fromHospitalId))
+            .thenReturn(List.of());
+        lenient().when(patientVitalSignRepository.findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(eq(patientId), eq(fromHospitalId), any()))
+            .thenReturn(List.of());
+        lenient().when(immunizationRepository.findByPatient_IdAndHospital_IdOrderByAdministrationDateDesc(patientId, fromHospitalId))
             .thenReturn(List.of());
         lenient().when(objectMapper.writeValueAsString(any())).thenReturn("{}");
     }
@@ -317,6 +329,60 @@ class PatientRecordSharingServiceImplTest {
 
             assertThat(result.getEncounters()).isEmpty();
             verify(encounterRepository, never()).findAllByPatient_IdAndHospital_Id(any(), any());
+        }
+
+        @Test
+        @DisplayName("scope=VITAL_SIGNS includes vital signs but excludes encounters")
+        void vitalSignsScope_includesVitals() throws Exception {
+            activeConsent.setScope("VITAL_SIGNS");
+            stubEmptyClinicalData();
+
+            when(consentRepository.findByPatientIdAndFromHospitalIdAndToHospitalId(
+                patientId, fromHospitalId, toHospitalId))
+                .thenReturn(Optional.of(activeConsent));
+
+            PatientRecordDTO result = service.getPatientRecord(patientId, fromHospitalId, toHospitalId);
+
+            assertThat(result.getVitalSigns()).isEmpty(); // empty because stub returns empty
+            assertThat(result.getEncounters()).isEmpty();
+            verify(encounterRepository, never()).findAllByPatient_IdAndHospital_Id(any(), any());
+            verify(patientVitalSignRepository).findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(eq(patientId), eq(fromHospitalId), any());
+        }
+
+        @Test
+        @DisplayName("scope=IMMUNIZATIONS includes immunizations but excludes encounters")
+        void immunizationsScope_includesImmunizations() throws Exception {
+            activeConsent.setScope("IMMUNIZATIONS");
+            stubEmptyClinicalData();
+
+            when(consentRepository.findByPatientIdAndFromHospitalIdAndToHospitalId(
+                patientId, fromHospitalId, toHospitalId))
+                .thenReturn(Optional.of(activeConsent));
+
+            PatientRecordDTO result = service.getPatientRecord(patientId, fromHospitalId, toHospitalId);
+
+            assertThat(result.getImmunizations()).isEmpty();
+            assertThat(result.getEncounters()).isEmpty();
+            verify(encounterRepository, never()).findAllByPatient_IdAndHospital_Id(any(), any());
+            verify(immunizationRepository).findByPatient_IdAndHospital_IdOrderByAdministrationDateDesc(patientId, fromHospitalId);
+        }
+
+        @Test
+        @DisplayName("null scope includes vital signs and immunizations")
+        void nullScope_includesVitalsAndImmunizations() throws Exception {
+            activeConsent.setScope(null);
+            stubEmptyClinicalData();
+
+            when(consentRepository.findByPatientIdAndFromHospitalIdAndToHospitalId(
+                patientId, fromHospitalId, toHospitalId))
+                .thenReturn(Optional.of(activeConsent));
+
+            PatientRecordDTO result = service.getPatientRecord(patientId, fromHospitalId, toHospitalId);
+
+            assertThat(result.getVitalSigns()).isNotNull();
+            assertThat(result.getImmunizations()).isNotNull();
+            verify(patientVitalSignRepository).findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(eq(patientId), eq(fromHospitalId), any());
+            verify(immunizationRepository).findByPatient_IdAndHospital_IdOrderByAdministrationDateDesc(patientId, fromHospitalId);
         }
     }
 

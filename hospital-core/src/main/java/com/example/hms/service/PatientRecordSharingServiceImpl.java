@@ -16,6 +16,8 @@ import com.example.hms.mapper.PatientAllergyMapper;
 import com.example.hms.mapper.PatientProblemMapper;
 import com.example.hms.mapper.PatientSurgicalHistoryMapper;
 import com.example.hms.mapper.PatientInsuranceMapper;
+import com.example.hms.mapper.PatientVitalSignMapper;
+import com.example.hms.mapper.ImmunizationMapper;
 import com.example.hms.mapper.PrescriptionMapper;
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.Encounter;
@@ -30,6 +32,8 @@ import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.PatientInsurance;
 import com.example.hms.model.PatientProblem;
 import com.example.hms.model.PatientSurgicalHistory;
+import com.example.hms.model.PatientVitalSign;
+import com.example.hms.model.PatientImmunization;
 import com.example.hms.model.Prescription;
 import com.example.hms.payload.dto.AdvanceDirectiveResponseDTO;
 import com.example.hms.payload.dto.EncounterHistoryResponseDTO;
@@ -42,7 +46,9 @@ import com.example.hms.payload.dto.PatientRecordDTO;
 import com.example.hms.payload.dto.PatientInsuranceResponseDTO;
 import com.example.hms.payload.dto.PatientProblemResponseDTO;
 import com.example.hms.payload.dto.PatientSurgicalHistoryResponseDTO;
+import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
+import com.example.hms.payload.dto.medicalhistory.ImmunizationResponseDTO;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.AdvanceDirectiveRepository;
 import com.example.hms.repository.EncounterHistoryRepository;
@@ -57,6 +63,8 @@ import com.example.hms.repository.PatientInsuranceRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientSurgicalHistoryRepository;
+import com.example.hms.repository.PatientVitalSignRepository;
+import com.example.hms.repository.ImmunizationRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itextpdf.barcodes.BarcodeQRCode;
@@ -132,6 +140,8 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
     private static final String SCOPE_SURGICAL_HISTORY = "SURGICAL_HISTORY";
     private static final String SCOPE_ADVANCE_DIRECTIVES = "ADVANCE_DIRECTIVES";
     private static final String SCOPE_ENCOUNTER_HISTORY = "ENCOUNTER_HISTORY";
+    private static final String SCOPE_VITAL_SIGNS = "VITAL_SIGNS";
+    private static final String SCOPE_IMMUNIZATIONS = "IMMUNIZATIONS";
 
     private static final String HEADER_STATUS = "Status";
     private static final String HEADER_NOTES = "Notes";
@@ -161,6 +171,10 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
     private final AdvanceDirectiveMapper advanceDirectiveMapper;
     private final PatientAllergyRepository patientAllergyRepository;
     private final PatientAllergyMapper patientAllergyMapper;
+    private final PatientVitalSignRepository patientVitalSignRepository;
+    private final PatientVitalSignMapper patientVitalSignMapper;
+    private final ImmunizationRepository immunizationRepository;
+    private final ImmunizationMapper immunizationMapper;
     private final AuditEventLogRepository auditRepository;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
@@ -412,6 +426,36 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             );
         }
 
+        // ── Vital Signs ────────────────────────────────────────────────────
+        List<PatientVitalSignResponseDTO> vitalSignDtos = List.of();
+        if (isDomainAllowed(allowedDomains, SCOPE_VITAL_SIGNS)) {
+            vitalSignDtos = safeFetchFromTable(
+                CLINICAL_CATEGORY,
+                "patient_vital_signs",
+                () -> patientVitalSignRepository
+                    .findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, fromHospitalId, Pageable.unpaged())
+                    .stream()
+                    .map(patientVitalSignMapper::toResponse)
+                    .toList(),
+                "Patient vital sign"
+            );
+        }
+
+        // ── Immunizations ──────────────────────────────────────────────────
+        List<ImmunizationResponseDTO> immunizationDtos = List.of();
+        if (isDomainAllowed(allowedDomains, SCOPE_IMMUNIZATIONS)) {
+            immunizationDtos = safeFetchFromTable(
+                CLINICAL_CATEGORY,
+                "patient_immunizations",
+                () -> immunizationRepository
+                    .findByPatient_IdAndHospital_IdOrderByAdministrationDateDesc(patientId, fromHospitalId)
+                    .stream()
+                    .map(immunizationMapper::toResponseDTO)
+                    .toList(),
+                "Patient immunization"
+            );
+        }
+
         PatientRecordDTO dto = PatientRecordDTO.builder()
             .patientId(patient.getId())
             .firstName(patient.getFirstName())
@@ -454,6 +498,8 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             .surgicalHistory(surgicalHistoryDtos)
             .advanceDirectives(advanceDirectiveDtos)
             .encounterHistory(encounterHistoryDtos)
+            .vitalSigns(vitalSignDtos)
+            .immunizations(immunizationDtos)
             .build();
 
         logAuditEvent(patient, fromHospitalId, toHospitalId, dto, consent, allowedDomains);
@@ -1429,6 +1475,8 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         List<PatientProblemResponseDTO> allProblems = new ArrayList<>();
         List<PatientSurgicalHistoryResponseDTO> allSurgicalHistory = new ArrayList<>();
         List<AdvanceDirectiveResponseDTO> allAdvanceDirectives = new ArrayList<>();
+        List<PatientVitalSignResponseDTO> allVitalSigns = new ArrayList<>();
+        List<ImmunizationResponseDTO> allImmunizations = new ArrayList<>();
         Map<UUID, String> mergedMrnMap = new LinkedHashMap<>();
 
         Set<UUID> seenEncounterIds = new HashSet<>();
@@ -1463,6 +1511,8 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             }
             allSurgicalHistory.addAll(p.getSurgicalHistory());
             allAdvanceDirectives.addAll(p.getAdvanceDirectives());
+            allVitalSigns.addAll(p.getVitalSigns());
+            allImmunizations.addAll(p.getImmunizations());
         }
 
         return PatientRecordDTO.builder()
@@ -1501,6 +1551,8 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             .surgicalHistory(allSurgicalHistory)
             .advanceDirectives(allAdvanceDirectives)
             .encounterHistory(allEncounterHistory)
+            .vitalSigns(allVitalSigns)
+            .immunizations(allImmunizations)
             .build();
     }
 
