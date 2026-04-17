@@ -25,18 +25,23 @@
 
 # Issues
 
-## Grant Consent Form
+Request URL
+https://hms.dev.bitnesttechs.com/api/patient-consents?page=0&size=20
+Request Method
+GET
+Status Code
+500 Internal Server Error
+Remote Address
+151.101.2.15:443
+Referrer Policy
+strict-origin-when-cross-origin
 
-The **Grant Consent** dialog has the following fields:
+{
+    "timestamp": "2026-04-17T10:48:44.582678814",
+    "status": 500,
+    "error": "Internal Server Error",
+    "message": "An unexpected error occurred: Could not initialize proxy [com.example.hms.model.Patient#4b6ea3b4-b6dd-4fb8-9c99-21e59754a19d] - no session",
+    "path": "/api/patient-consents"
+}
 
-| Field           | Input Type | Required | Notes                                                                  |
-|-----------------|------------|----------|------------------------------------------------------------------------|
-| Patient ID      | UUID       | Yes      | Text input — "Enter UUID"                                              |
-| From Hospital   | UUID       | Yes      | Text input — "Enter UUID"                                              |
-| To Hospital     | UUID       | Yes      | Text input — "Enter UUID"                                              |
-| Consent Type    | Select     | No       | e.g. `Treatment`                                                       |
-| Purpose         | Text       | No       | Free-text description                                                  |
-| Scope           | Text       | No       | Comma-separated domains (e.g. `PRESCRIPTIONS,LAB_RESULTS`). Blank = all |
-| Expires         | Date/Time  | No       | Format: `mm/dd/yyyy hh:mm AM/PM`                                      |
-
-**Actions:** `Cancel` · `Grant Consent`
+Issue 2

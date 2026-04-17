@@ -386,7 +386,59 @@
       "REVOKE": "Révoquer",
       "NO_CONSENTS": "Aucun consentement trouvé",
       "NO_CONSENTS_HINT": "Utilisez le bouton Accorder un consentement pour en ajouter un nouveau.",
-      "REVOKE_CONFIRM": "Êtes-vous sûr de vouloir révoquer ce consentement ?"
+      "REVOKE_CONFIRM": "Êtes-vous sûr de vouloir révoquer ce consentement ?",
+      "VIEW_RECORDS": "Voir les dossiers"
+    }
+  },
+  "SHARED_RECORDS": {
+    "TITLE": "Dossiers médicaux partagés",
+    "SUBTITLE": "Dossiers du patient partagés via un consentement actif",
+    "BACK": "Retour aux consentements",
+    "FROM": "Établissement source",
+    "TO": "Établissement destinataire",
+    "PURPOSE": "Objectif",
+    "EXPIRES": "Expiration",
+    "CHRONIC": "Chronique",
+    "NO_DATA": "Aucun dossier dans cette catégorie",
+    "ERRORS": {
+      "LOAD_FAILED": "Échec du chargement des dossiers partagés. Veuillez réessayer."
+    },
+    "TABS": {
+      "ENCOUNTERS": "Consultations",
+      "TREATMENTS": "Traitements",
+      "PRESCRIPTIONS": "Prescriptions",
+      "LAB_ORDERS": "Analyses prescrites",
+      "LAB_RESULTS": "Résultats de labo",
+      "ALLERGIES": "Allergies",
+      "PROBLEMS": "Problèmes",
+      "SURGICAL_HISTORY": "Antécédents chirurgicaux",
+      "ADVANCE_DIRECTIVES": "Directives anticipées"
+    },
+    "FIELDS": {
+      "CHIEF_COMPLAINT": "Motif de consultation",
+      "DEPARTMENT": "Service",
+      "PROVIDER": "Praticien",
+      "NOTES": "Notes",
+      "OUTCOME": "Résultat",
+      "DOSAGE": "Posologie",
+      "FREQUENCY": "Fréquence",
+      "DURATION": "Durée",
+      "PRESCRIBED_BY": "Prescrit par",
+      "ORDER_CODE": "Code de commande",
+      "PRIORITY": "Priorité",
+      "INDICATION": "Indication",
+      "REACTION": "Réaction",
+      "VERIFICATION": "Vérification",
+      "ONSET": "Début",
+      "SEVERITY": "Sévérité",
+      "RESOLVED": "Résolu",
+      "CODE": "Code",
+      "PERFORMED_BY": "Réalisé par",
+      "LOCATION": "Lieu",
+      "DESCRIPTION": "Description",
+      "PHYSICIAN": "Médecin",
+      "WITNESS": "Témoin",
+      "EXPIRATION": "Expiration"
     }
   },
   "CONSULTATIONS": {

@@ -282,9 +282,15 @@
               </td>
               <td>
                 @if (isActive(c)) {
-                  <button class="btn btn-danger btn-sm" (click)="revoke(c)">
-                    {{ 'CONSENT.MANAGEMENT.REVOKE' | translate }}
-                  </button>
+                  <div class="action-buttons">
+                    <button class="btn btn-primary btn-sm" (click)="viewRecords(c)">
+                      <span class="material-symbols-outlined btn-icon">folder_shared</span>
+                      {{ 'CONSENT.MANAGEMENT.VIEW_RECORDS' | translate }}
+                    </button>
+                    <button class="btn btn-danger btn-sm" (click)="revoke(c)">
+                      {{ 'CONSENT.MANAGEMENT.REVOKE' | translate }}
+                    </button>
+                  </div>
                 }
               </td>
             </tr>

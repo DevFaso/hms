@@ -389,7 +389,59 @@
       "REVOKE": "Revoke",
       "NO_CONSENTS": "No consents found",
       "NO_CONSENTS_HINT": "Use the Grant Consent button to add a new sharing consent.",
-      "REVOKE_CONFIRM": "Are you sure you want to revoke this consent?"
+      "REVOKE_CONFIRM": "Are you sure you want to revoke this consent?",
+      "VIEW_RECORDS": "View Records"
+    }
+  },
+  "SHARED_RECORDS": {
+    "TITLE": "Shared Medical Records",
+    "SUBTITLE": "Patient records shared via active consent",
+    "BACK": "Back to Consents",
+    "FROM": "From Hospital",
+    "TO": "To Hospital",
+    "PURPOSE": "Purpose",
+    "EXPIRES": "Expires",
+    "CHRONIC": "Chronic",
+    "NO_DATA": "No records in this category",
+    "ERRORS": {
+      "LOAD_FAILED": "Failed to load shared records. Please try again."
+    },
+    "TABS": {
+      "ENCOUNTERS": "Encounters",
+      "TREATMENTS": "Treatments",
+      "PRESCRIPTIONS": "Prescriptions",
+      "LAB_ORDERS": "Lab Orders",
+      "LAB_RESULTS": "Lab Results",
+      "ALLERGIES": "Allergies",
+      "PROBLEMS": "Problems",
+      "SURGICAL_HISTORY": "Surgical History",
+      "ADVANCE_DIRECTIVES": "Advance Directives"
+    },
+    "FIELDS": {
+      "CHIEF_COMPLAINT": "Chief Complaint",
+      "DEPARTMENT": "Department",
+      "PROVIDER": "Provider",
+      "NOTES": "Notes",
+      "OUTCOME": "Outcome",
+      "DOSAGE": "Dosage",
+      "FREQUENCY": "Frequency",
+      "DURATION": "Duration",
+      "PRESCRIBED_BY": "Prescribed By",
+      "ORDER_CODE": "Order Code",
+      "PRIORITY": "Priority",
+      "INDICATION": "Indication",
+      "REACTION": "Reaction",
+      "VERIFICATION": "Verification",
+      "ONSET": "Onset",
+      "SEVERITY": "Severity",
+      "RESOLVED": "Resolved",
+      "CODE": "Code",
+      "PERFORMED_BY": "Performed By",
+      "LOCATION": "Location",
+      "DESCRIPTION": "Description",
+      "PHYSICIAN": "Physician",
+      "WITNESS": "Witness",
+      "EXPIRATION": "Expiration"
     }
   },
   "CONSULTATIONS": {

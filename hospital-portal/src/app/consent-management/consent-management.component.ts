@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, OnDestroy, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
@@ -43,6 +44,7 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
   private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly router = inject(Router);
 
   readonly consentTypes = CONSENT_TYPES;
   readonly pageSize = 20;
@@ -285,5 +287,15 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
     if (!c.consentGiven) return false;
     if (!c.consentExpiration) return true;
     return new Date(c.consentExpiration) > new Date();
+  }
+
+  viewRecords(c: PatientConsentResponse): void {
+    this.router.navigate(['/consent-management/shared-records'], {
+      queryParams: {
+        patientId: c.patient.id,
+        fromHospitalId: c.fromHospital.id,
+        toHospitalId: c.toHospital.id,
+      },
+    });
   }
 }

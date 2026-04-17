@@ -431,3 +431,29 @@
     transform: rotate(360deg);
   }
 }
+
+/* Action buttons in table */
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn-icon {
+  font-size: 1rem;
+  vertical-align: middle;
+  margin-right: 0.2rem;
+}
+
+/* Action buttons in table */
+.action-buttons {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.btn-icon {
+  font-size: 1rem;
+  vertical-align: middle;
+  margin-right: 0.2rem;
+}

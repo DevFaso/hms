@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
+import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { ConsentManagementComponent } from './consent-management.component';
 import { RecordSharingService, PatientConsentResponse } from '../services/record-sharing.service';
@@ -418,6 +419,22 @@ describe('ConsentManagementComponent', () => {
 
     it('replaces underscore with space', () => {
       expect(component.consentTypeLabel('ALL_PURPOSES')).toBe('ALL PURPOSES');
+    });
+  });
+
+  describe('viewRecords', () => {
+    it('navigates to shared-records with correct query params', () => {
+      const router = TestBed.inject(Router);
+      spyOn(router, 'navigate');
+      const consent = makeConsent();
+      component.viewRecords(consent);
+      expect(router.navigate).toHaveBeenCalledWith(['/consent-management/shared-records'], {
+        queryParams: {
+          patientId: 'p1',
+          fromHospitalId: 'h1',
+          toHospitalId: 'h2',
+        },
+      });
     });
   });
 });

@@ -775,6 +775,24 @@ export const routes: Routes = [
             (m) => m.ConsentManagementComponent,
           ),
       },
+      {
+        path: 'consent-management/shared-records',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_ADMIN',
+            'ROLE_SUPER_ADMIN',
+            'ROLE_DOCTOR',
+            'ROLE_LAB_DIRECTOR',
+            'ROLE_QUALITY_MANAGER',
+          ],
+        },
+        loadComponent: () =>
+          import(
+            './consent-management/shared-records-viewer/shared-records-viewer.component'
+          ).then((m) => m.SharedRecordsViewerComponent),
+      },
 
       // Reception / Front Desk Cockpit
       {
