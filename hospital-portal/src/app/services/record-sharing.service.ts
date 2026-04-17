@@ -4,6 +4,179 @@ import { Observable } from 'rxjs';
 
 // ── Types mirroring backend PatientRecordDTO / RecordShareResultDTO ──────────
 
+export interface SharedEncounterEntry {
+  id: string;
+  patientId?: string;
+  patientName?: string;
+  staffId?: string;
+  staffName?: string;
+  departmentId?: string;
+  departmentName?: string;
+  hospitalId?: string;
+  hospitalName?: string;
+  appointmentId?: string;
+  encounterType?: string;
+  status?: string;
+  encounterDate?: string;
+  notes?: string;
+  arrivalTimestamp?: string;
+  chiefComplaint?: string;
+  esiScore?: number;
+  roomAssignment?: string;
+  triageTimestamp?: string;
+}
+
+export interface SharedEncounterTreatmentEntry {
+  id: string;
+  encounterId?: string;
+  encounterCode?: string;
+  encounterType?: string;
+  patientId?: string;
+  patientFullName?: string;
+  treatmentId?: string;
+  treatmentName?: string;
+  staffId?: string;
+  staffFullName?: string;
+  performedAt?: string;
+  outcome?: string;
+  notes?: string;
+}
+
+export interface SharedLabOrderEntry {
+  id: string;
+  labOrderCode?: string;
+  patientId?: string;
+  patientFullName?: string;
+  hospitalName?: string;
+  labTestName?: string;
+  labTestCode?: string;
+  orderDatetime?: string;
+  status?: string;
+  priority?: string;
+  clinicalIndication?: string;
+  notes?: string;
+}
+
+export interface SharedLabResultEntry {
+  id: string;
+  labOrderId?: string;
+  labOrderCode?: string;
+  patientId?: string;
+  patientFullName?: string;
+  hospitalName?: string;
+  labTestName?: string;
+  resultValue?: string;
+  resultUnit?: string;
+  resultDate?: string;
+  notes?: string;
+  severityFlag?: string;
+  acknowledged?: boolean;
+  released?: boolean;
+}
+
+export interface SharedAllergyEntry {
+  id: string;
+  patientId?: string;
+  hospitalId?: string;
+  hospitalName?: string;
+  allergenDisplay?: string;
+  allergenCode?: string;
+  category?: string;
+  severity?: string;
+  verificationStatus?: string;
+  reaction?: string;
+  reactionNotes?: string;
+  onsetDate?: string;
+  active?: boolean;
+}
+
+export interface SharedPrescriptionEntry {
+  id: string;
+  patientId?: string;
+  patientFullName?: string;
+  staffId?: string;
+  staffFullName?: string;
+  encounterId?: string;
+  hospitalId?: string;
+  medicationName?: string;
+  medicationDisplayName?: string;
+  dosage?: string;
+  frequency?: string;
+  duration?: string;
+  notes?: string;
+  status?: string;
+  createdAt?: string;
+}
+
+export interface SharedInsuranceEntry {
+  id: string;
+  patientId?: string;
+  hospitalId?: string;
+  providerName?: string;
+  policyNumber?: string;
+  groupNumber?: string;
+  subscriberName?: string;
+  subscriberRelationship?: string;
+  effectiveDate?: string;
+  expirationDate?: string;
+  primary?: boolean;
+}
+
+export interface SharedProblemEntry {
+  id: string;
+  patientId?: string;
+  hospitalId?: string;
+  hospitalName?: string;
+  problemCode?: string;
+  problemDisplay?: string;
+  status?: string;
+  severity?: string;
+  onsetDate?: string;
+  resolvedDate?: string;
+  notes?: string;
+  chronic?: boolean;
+}
+
+export interface SharedSurgicalHistoryEntry {
+  id: string;
+  patientId?: string;
+  hospitalId?: string;
+  hospitalName?: string;
+  procedureCode?: string;
+  procedureDisplay?: string;
+  procedureDate?: string;
+  outcome?: string;
+  performedBy?: string;
+  location?: string;
+  notes?: string;
+}
+
+export interface SharedAdvanceDirectiveEntry {
+  id: string;
+  patientId?: string;
+  hospitalId?: string;
+  hospitalName?: string;
+  directiveType?: string;
+  status?: string;
+  description?: string;
+  effectiveDate?: string;
+  expirationDate?: string;
+  witnessName?: string;
+  physicianName?: string;
+}
+
+export interface SharedEncounterHistoryEntry {
+  id: string;
+  encounterId?: string;
+  changedAt?: string;
+  changedBy?: string;
+  encounterType?: string;
+  status?: string;
+  encounterDate?: string;
+  notes?: string;
+  changeType?: string;
+}
+
 export interface PatientRecord {
   patientId: string;
   firstName: string;
@@ -35,17 +208,17 @@ export interface PatientRecord {
   fromHospitalName?: string;
   toHospitalId?: string;
   toHospitalName?: string;
-  encounters?: unknown[];
-  treatments?: unknown[];
-  labOrders?: unknown[];
-  labResults?: unknown[];
-  allergiesDetailed?: unknown[];
-  prescriptions?: unknown[];
-  insurances?: unknown[];
-  problems?: unknown[];
-  surgicalHistory?: unknown[];
-  advanceDirectives?: unknown[];
-  encounterHistory?: unknown[];
+  encounters?: SharedEncounterEntry[];
+  treatments?: SharedEncounterTreatmentEntry[];
+  labOrders?: SharedLabOrderEntry[];
+  labResults?: SharedLabResultEntry[];
+  allergiesDetailed?: SharedAllergyEntry[];
+  prescriptions?: SharedPrescriptionEntry[];
+  insurances?: SharedInsuranceEntry[];
+  problems?: SharedProblemEntry[];
+  surgicalHistory?: SharedSurgicalHistoryEntry[];
+  advanceDirectives?: SharedAdvanceDirectiveEntry[];
+  encounterHistory?: SharedEncounterHistoryEntry[];
 }
 
 export type ShareScope = 'SAME_HOSPITAL' | 'INTRA_ORG' | 'CROSS_ORG';
@@ -167,7 +340,7 @@ export class RecordSharingService {
       .set('fromHospitalId', fromHospitalId)
       .set('toHospitalId', toHospitalId)
       .set('format', format);
-    return this.http.get('/records/export', { params, responseType: 'blob' });
+    return this.http.post('/records/export', null, { params, responseType: 'blob' });
   }
 
   /**

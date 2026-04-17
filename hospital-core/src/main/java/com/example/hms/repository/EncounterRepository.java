@@ -151,6 +151,26 @@ public interface EncounterRepository
             UUID patientId, UUID hospitalId, Collection<EncounterStatus> statuses);
 
     /**
+     * Unpaged list of encounters for a patient at a specific hospital, eagerly fetching
+     * associations to avoid N+1 (used by record sharing).
+     */
+    @Query("""
+        SELECT e FROM Encounter e
+        JOIN FETCH e.patient p
+        JOIN FETCH p.user
+        JOIN FETCH e.staff s
+        JOIN FETCH s.user
+        LEFT JOIN FETCH e.department d
+        LEFT JOIN FETCH e.hospital h
+        LEFT JOIN FETCH e.appointment a
+        WHERE p.id = :patientId
+          AND e.hospital.id = :hospitalId
+    """)
+    List<Encounter> findAllByPatient_IdAndHospital_Id(
+            @Param("patientId") UUID patientId,
+            @Param("hospitalId") UUID hospitalId);
+
+    /**
      * Find COMPLETED encounters for a patient that do NOT have a corresponding
      * discharge summary. Used by the patient portal to backfill missing summaries.
      */
