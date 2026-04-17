@@ -165,17 +165,32 @@
             />
           </div>
           <div class="form-row">
-            <label class="form-label" for="scope">
+            <span class="form-label" id="scope-group-label">
               {{ 'CONSENT.MANAGEMENT.SCOPE' | translate }}
-            </label>
-            <input
-              id="scope"
-              class="form-input"
-              type="text"
-              [(ngModel)]="grantForm.scope"
-              [placeholder]="'CONSENT.MANAGEMENT.SCOPE_PLACEHOLDER' | translate"
-              maxlength="500"
-            />
+            </span>
+            <div class="scope-checkboxes" role="group" aria-labelledby="scope-group-label">
+              <label class="scope-checkbox share-all">
+                <input
+                  type="checkbox"
+                  [checked]="shareAll()"
+                  (change)="toggleShareAll($any($event.target).checked)"
+                />
+                <span class="scope-label">{{ 'CONSENT.MANAGEMENT.SHARE_ALL' | translate }}</span>
+              </label>
+              @for (domain of scopeDomains; track domain) {
+                <label class="scope-checkbox">
+                  <input
+                    type="checkbox"
+                    [checked]="scopeSelections()[domain]"
+                    (change)="toggleScope(domain, $any($event.target).checked)"
+                    [disabled]="shareAll()"
+                  />
+                  <span class="scope-label">{{
+                    'CONSENT.SCOPE_DOMAINS.' + domain | translate
+                  }}</span>
+                </label>
+              }
+            </div>
             <span class="form-hint">{{ 'CONSENT.MANAGEMENT.SCOPE_HINT' | translate }}</span>
           </div>
           <div class="form-row">

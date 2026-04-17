@@ -2,10 +2,7 @@ import { Component, inject, OnInit, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import {
-  RecordSharingService,
-  PatientRecord,
-} from '../../services/record-sharing.service';
+import { RecordSharingService, PatientRecord } from '../../services/record-sharing.service';
 
 type RecordTab =
   | 'encounters'
@@ -33,7 +30,11 @@ const TABS: TabDef[] = [
   { key: 'allergies', icon: 'warning', labelKey: 'SHARED_RECORDS.TABS.ALLERGIES' },
   { key: 'problems', icon: 'monitor_heart', labelKey: 'SHARED_RECORDS.TABS.PROBLEMS' },
   { key: 'surgicalHistory', icon: 'surgical', labelKey: 'SHARED_RECORDS.TABS.SURGICAL_HISTORY' },
-  { key: 'advanceDirectives', icon: 'description', labelKey: 'SHARED_RECORDS.TABS.ADVANCE_DIRECTIVES' },
+  {
+    key: 'advanceDirectives',
+    icon: 'description',
+    labelKey: 'SHARED_RECORDS.TABS.ADVANCE_DIRECTIVES',
+  },
 ];
 
 @Component({

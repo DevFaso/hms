@@ -445,15 +445,46 @@
   margin-right: 0.2rem;
 }
 
-/* Action buttons in table */
-.action-buttons {
+/* Scope checkboxes */
+.scope-checkboxes {
   display: flex;
-  gap: 0.5rem;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #f8fafc;
 }
 
-.btn-icon {
-  font-size: 1rem;
-  vertical-align: middle;
-  margin-right: 0.2rem;
+.scope-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  min-width: 140px;
+
+  input[type='checkbox'] {
+    width: 16px;
+    height: 16px;
+    accent-color: #4f46e5;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+  }
+
+  &.share-all {
+    width: 100%;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #e2e8f0;
+    margin-bottom: 0.25rem;
+    font-weight: 600;
+  }
+}
+
+.scope-label {
+  user-select: none;
 }

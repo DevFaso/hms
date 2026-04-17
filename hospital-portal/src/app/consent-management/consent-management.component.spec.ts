@@ -437,4 +437,83 @@ describe('ConsentManagementComponent', () => {
       });
     });
   });
+
+  describe('scope checkboxes', () => {
+    it('defaults to shareAll true', () => {
+      expect(component.shareAll()).toBeTrue();
+    });
+
+    it('all scope selections default to false', () => {
+      const selections = component.scopeSelections();
+      expect(Object.values(selections).every((v) => v === false)).toBeTrue();
+    });
+
+    it('toggleShareAll(true) resets all selections', () => {
+      component.toggleScope('ENCOUNTERS', true);
+      component.toggleShareAll(true);
+      expect(component.shareAll()).toBeTrue();
+      expect(component.scopeSelections()['ENCOUNTERS']).toBeFalse();
+    });
+
+    it('toggleScope checks a domain and unchecks shareAll', () => {
+      component.toggleScope('LAB_ORDERS', true);
+      expect(component.scopeSelections()['LAB_ORDERS']).toBeTrue();
+      expect(component.shareAll()).toBeFalse();
+    });
+
+    it('toggleScope unchecking all re-enables shareAll', () => {
+      component.toggleScope('ALLERGIES', true);
+      expect(component.shareAll()).toBeFalse();
+      component.toggleScope('ALLERGIES', false);
+      expect(component.shareAll()).toBeTrue();
+    });
+
+    it('openGrantForm resets scope to shareAll', () => {
+      component.toggleScope('ENCOUNTERS', true);
+      component.openGrantForm();
+      expect(component.shareAll()).toBeTrue();
+      expect(component.scopeSelections()['ENCOUNTERS']).toBeFalse();
+    });
+
+    it('submitGrant sends undefined scope when shareAll', () => {
+      const consent = makeConsent();
+      sharingStub.grantConsent.and.returnValue(of(consent));
+      component.grantForm = {
+        patientId: 'p1',
+        fromHospitalId: 'h1',
+        toHospitalId: 'h2',
+        purpose: 'Test',
+      };
+      component.shareAll.set(true);
+      component.submitGrant();
+      const arg = sharingStub.grantConsent.calls.mostRecent().args[0];
+      expect(arg.scope).toBeUndefined();
+    });
+
+    it('submitGrant sends comma-separated scope for selected domains', () => {
+      const consent = makeConsent();
+      sharingStub.grantConsent.and.returnValue(of(consent));
+      component.grantForm = {
+        patientId: 'p1',
+        fromHospitalId: 'h1',
+        toHospitalId: 'h2',
+        purpose: 'Test',
+      };
+      component.shareAll.set(false);
+      component.scopeSelections.set({
+        ENCOUNTERS: true,
+        TREATMENTS: false,
+        PRESCRIPTIONS: true,
+        LAB_ORDERS: false,
+        LAB_RESULTS: false,
+        ALLERGIES: false,
+        PROBLEMS: false,
+        SURGICAL_HISTORY: false,
+        ADVANCE_DIRECTIVES: false,
+      });
+      component.submitGrant();
+      const arg = sharingStub.grantConsent.calls.mostRecent().args[0];
+      expect(arg.scope).toBe('ENCOUNTERS,PRESCRIPTIONS');
+    });
+  });
 });

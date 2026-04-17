@@ -374,8 +374,8 @@
       "TO_HOSPITAL": "Établissement destinataire",
       "CONSENT_TYPE": "Type de consentement",
       "SCOPE": "Portée",
-      "SCOPE_PLACEHOLDER": "ex. PRESCRIPTIONS,RESULTATS_LABO",
-      "SCOPE_HINT": "Domaines de dossiers séparés par des virgules. Laisser vide pour tout partager.",
+      "SHARE_ALL": "Partager tous les dossiers",
+      "SCOPE_HINT": "Sélectionnez les domaines à partager, ou gardez « Partager tous » coché pour tout partager.",
       "EXPIRATION": "Expiration",
       "PATIENT_ID": "ID patient",
       "UUID_PLACEHOLDER": "Saisir un UUID",
@@ -388,6 +388,17 @@
       "NO_CONSENTS_HINT": "Utilisez le bouton Accorder un consentement pour en ajouter un nouveau.",
       "REVOKE_CONFIRM": "Êtes-vous sûr de vouloir révoquer ce consentement ?",
       "VIEW_RECORDS": "Voir les dossiers"
+    },
+    "SCOPE_DOMAINS": {
+      "ENCOUNTERS": "Consultations",
+      "TREATMENTS": "Traitements",
+      "PRESCRIPTIONS": "Prescriptions",
+      "LAB_ORDERS": "Analyses prescrites",
+      "LAB_RESULTS": "Résultats de labo",
+      "ALLERGIES": "Allergies",
+      "PROBLEMS": "Problèmes",
+      "SURGICAL_HISTORY": "Antécédents chirurgicaux",
+      "ADVANCE_DIRECTIVES": "Directives anticipées"
     }
   },
   "SHARED_RECORDS": {

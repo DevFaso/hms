@@ -49,7 +49,7 @@
           @if (record()!.dateOfBirth) {
             <span class="meta-item">
               <span class="material-symbols-outlined meta-icon">cake</span>
-              {{ record()!.dateOfBirth | date:'mediumDate' }}
+              {{ record()!.dateOfBirth | date: 'mediumDate' }}
             </span>
           }
           @if (record()!.bloodType) {
@@ -107,7 +107,7 @@
           <span class="material-symbols-outlined strip-icon">schedule</span>
           <div class="strip-detail">
             <span class="strip-label">{{ 'SHARED_RECORDS.EXPIRES' | translate }}</span>
-            <span class="strip-value">{{ record()!.consentExpiration | date:'mediumDate' }}</span>
+            <span class="strip-value">{{ record()!.consentExpiration | date: 'mediumDate' }}</span>
           </div>
         </div>
       }
@@ -132,7 +132,6 @@
 
     <!-- Tab content -->
     <div class="tab-content" role="tabpanel">
-
       <!-- ═══ Encounters ═══ -->
       @if (activeTab() === 'encounters') {
         @if ((record()!.encounters?.length ?? 0) === 0) {
@@ -148,38 +147,48 @@
                   <div class="card-title-row">
                     <span class="card-type-badge">{{ e.encounterType || 'Encounter' }}</span>
                     @if (e.status) {
-                      <span class="status-badge" [ngClass]="statusClass(e.status)">{{ e.status }}</span>
+                      <span class="status-badge" [ngClass]="statusClass(e.status)">{{
+                        e.status
+                      }}</span>
                     }
                   </div>
                   @if (e.encounterDate) {
                     <span class="card-date">
                       <span class="material-symbols-outlined">calendar_today</span>
-                      {{ e.encounterDate | date:'medium' }}
+                      {{ e.encounterDate | date: 'medium' }}
                     </span>
                   }
                 </div>
                 <div class="card-body">
                   @if (e.chiefComplaint) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.CHIEF_COMPLAINT' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.CHIEF_COMPLAINT' | translate
+                      }}</span>
                       <span class="detail-value">{{ e.chiefComplaint }}</span>
                     </div>
                   }
                   @if (e.departmentName) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.DEPARTMENT' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.DEPARTMENT' | translate
+                      }}</span>
                       <span class="detail-value">{{ e.departmentName }}</span>
                     </div>
                   }
                   @if (e.staffName) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.PROVIDER' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.PROVIDER' | translate
+                      }}</span>
                       <span class="detail-value">{{ e.staffName }}</span>
                     </div>
                   }
                   @if (e.notes) {
                     <div class="detail-row notes-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.NOTES' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.NOTES' | translate
+                      }}</span>
                       <span class="detail-value notes-text">{{ e.notes }}</span>
                     </div>
                   }
@@ -208,26 +217,32 @@
                   @if (t.performedAt) {
                     <span class="card-date">
                       <span class="material-symbols-outlined">calendar_today</span>
-                      {{ t.performedAt | date:'medium' }}
+                      {{ t.performedAt | date: 'medium' }}
                     </span>
                   }
                 </div>
                 <div class="card-body">
                   @if (t.outcome) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.OUTCOME' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.OUTCOME' | translate
+                      }}</span>
                       <span class="detail-value">{{ t.outcome }}</span>
                     </div>
                   }
                   @if (t.staffFullName) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.PROVIDER' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.PROVIDER' | translate
+                      }}</span>
                       <span class="detail-value">{{ t.staffFullName }}</span>
                     </div>
                   }
                   @if (t.notes) {
                     <div class="detail-row notes-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.NOTES' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.NOTES' | translate
+                      }}</span>
                       <span class="detail-value notes-text">{{ t.notes }}</span>
                     </div>
                   }
@@ -251,46 +266,60 @@
               <div class="record-card">
                 <div class="card-header">
                   <div class="card-title-row">
-                    <span class="card-title">{{ p.medicationDisplayName || p.medicationName || 'Medication' }}</span>
+                    <span class="card-title">{{
+                      p.medicationDisplayName || p.medicationName || 'Medication'
+                    }}</span>
                     @if (p.status) {
-                      <span class="status-badge" [ngClass]="statusClass(p.status)">{{ p.status }}</span>
+                      <span class="status-badge" [ngClass]="statusClass(p.status)">{{
+                        p.status
+                      }}</span>
                     }
                   </div>
                   @if (p.createdAt) {
                     <span class="card-date">
                       <span class="material-symbols-outlined">calendar_today</span>
-                      {{ p.createdAt | date:'mediumDate' }}
+                      {{ p.createdAt | date: 'mediumDate' }}
                     </span>
                   }
                 </div>
                 <div class="card-body">
                   @if (p.dosage) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.DOSAGE' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.DOSAGE' | translate
+                      }}</span>
                       <span class="detail-value">{{ p.dosage }}</span>
                     </div>
                   }
                   @if (p.frequency) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.FREQUENCY' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.FREQUENCY' | translate
+                      }}</span>
                       <span class="detail-value">{{ p.frequency }}</span>
                     </div>
                   }
                   @if (p.duration) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.DURATION' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.DURATION' | translate
+                      }}</span>
                       <span class="detail-value">{{ p.duration }}</span>
                     </div>
                   }
                   @if (p.staffFullName) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.PRESCRIBED_BY' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.PRESCRIBED_BY' | translate
+                      }}</span>
                       <span class="detail-value">{{ p.staffFullName }}</span>
                     </div>
                   }
                   @if (p.notes) {
                     <div class="detail-row notes-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.NOTES' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.NOTES' | translate
+                      }}</span>
                       <span class="detail-value notes-text">{{ p.notes }}</span>
                     </div>
                   }
@@ -316,32 +345,42 @@
                   <div class="card-title-row">
                     <span class="card-title">{{ l.labTestName || 'Lab Test' }}</span>
                     @if (l.status) {
-                      <span class="status-badge" [ngClass]="statusClass(l.status)">{{ l.status }}</span>
+                      <span class="status-badge" [ngClass]="statusClass(l.status)">{{
+                        l.status
+                      }}</span>
                     }
                   </div>
                   @if (l.orderDatetime) {
                     <span class="card-date">
                       <span class="material-symbols-outlined">calendar_today</span>
-                      {{ l.orderDatetime | date:'medium' }}
+                      {{ l.orderDatetime | date: 'medium' }}
                     </span>
                   }
                 </div>
                 <div class="card-body">
                   @if (l.labOrderCode) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.ORDER_CODE' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.ORDER_CODE' | translate
+                      }}</span>
                       <span class="detail-value mono">{{ l.labOrderCode }}</span>
                     </div>
                   }
                   @if (l.priority) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.PRIORITY' | translate }}</span>
-                      <span class="detail-value" [ngClass]="severityClass(l.priority)">{{ l.priority }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.PRIORITY' | translate
+                      }}</span>
+                      <span class="detail-value" [ngClass]="severityClass(l.priority)">{{
+                        l.priority
+                      }}</span>
                     </div>
                   }
                   @if (l.clinicalIndication) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.INDICATION' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.INDICATION' | translate
+                      }}</span>
                       <span class="detail-value">{{ l.clinicalIndication }}</span>
                     </div>
                   }
@@ -376,7 +415,7 @@
                   @if (r.resultDate) {
                     <span class="card-date">
                       <span class="material-symbols-outlined">calendar_today</span>
-                      {{ r.resultDate | date:'medium' }}
+                      {{ r.resultDate | date: 'medium' }}
                     </span>
                   }
                 </div>
@@ -389,13 +428,17 @@
                   </div>
                   @if (r.labOrderCode) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.ORDER_CODE' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.ORDER_CODE' | translate
+                      }}</span>
                       <span class="detail-value mono">{{ r.labOrderCode }}</span>
                     </div>
                   }
                   @if (r.notes) {
                     <div class="detail-row notes-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.NOTES' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.NOTES' | translate
+                      }}</span>
                       <span class="detail-value notes-text">{{ r.notes }}</span>
                     </div>
                   }
@@ -421,7 +464,9 @@
                   <div class="card-title-row">
                     <span class="card-title">{{ a.allergenDisplay || 'Allergen' }}</span>
                     @if (a.severity) {
-                      <span class="severity-flag" [ngClass]="severityClass(a.severity)">{{ a.severity }}</span>
+                      <span class="severity-flag" [ngClass]="severityClass(a.severity)">{{
+                        a.severity
+                      }}</span>
                     }
                   </div>
                   @if (a.category) {
@@ -431,25 +476,33 @@
                 <div class="card-body">
                   @if (a.reaction) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.REACTION' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.REACTION' | translate
+                      }}</span>
                       <span class="detail-value">{{ a.reaction }}</span>
                     </div>
                   }
                   @if (a.verificationStatus) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.VERIFICATION' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.VERIFICATION' | translate
+                      }}</span>
                       <span class="detail-value">{{ a.verificationStatus }}</span>
                     </div>
                   }
                   @if (a.onsetDate) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.ONSET' | translate }}</span>
-                      <span class="detail-value">{{ a.onsetDate | date:'mediumDate' }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.ONSET' | translate
+                      }}</span>
+                      <span class="detail-value">{{ a.onsetDate | date: 'mediumDate' }}</span>
                     </div>
                   }
                   @if (a.reactionNotes) {
                     <div class="detail-row notes-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.NOTES' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.NOTES' | translate
+                      }}</span>
                       <span class="detail-value notes-text">{{ a.reactionNotes }}</span>
                     </div>
                   }
@@ -475,7 +528,9 @@
                   <div class="card-title-row">
                     <span class="card-title">{{ p.problemDisplay || 'Problem' }}</span>
                     @if (p.status) {
-                      <span class="status-badge" [ngClass]="statusClass(p.status)">{{ p.status }}</span>
+                      <span class="status-badge" [ngClass]="statusClass(p.status)">{{
+                        p.status
+                      }}</span>
                     }
                     @if (p.chronic) {
                       <span class="chronic-badge">{{ 'SHARED_RECORDS.CHRONIC' | translate }}</span>
@@ -485,31 +540,43 @@
                 <div class="card-body">
                   @if (p.severity) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.SEVERITY' | translate }}</span>
-                      <span class="detail-value" [ngClass]="severityClass(p.severity)">{{ p.severity }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.SEVERITY' | translate
+                      }}</span>
+                      <span class="detail-value" [ngClass]="severityClass(p.severity)">{{
+                        p.severity
+                      }}</span>
                     </div>
                   }
                   @if (p.onsetDate) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.ONSET' | translate }}</span>
-                      <span class="detail-value">{{ p.onsetDate | date:'mediumDate' }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.ONSET' | translate
+                      }}</span>
+                      <span class="detail-value">{{ p.onsetDate | date: 'mediumDate' }}</span>
                     </div>
                   }
                   @if (p.resolvedDate) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.RESOLVED' | translate }}</span>
-                      <span class="detail-value">{{ p.resolvedDate | date:'mediumDate' }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.RESOLVED' | translate
+                      }}</span>
+                      <span class="detail-value">{{ p.resolvedDate | date: 'mediumDate' }}</span>
                     </div>
                   }
                   @if (p.problemCode) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.CODE' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.CODE' | translate
+                      }}</span>
                       <span class="detail-value mono">{{ p.problemCode }}</span>
                     </div>
                   }
                   @if (p.notes) {
                     <div class="detail-row notes-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.NOTES' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.NOTES' | translate
+                      }}</span>
                       <span class="detail-value notes-text">{{ p.notes }}</span>
                     </div>
                   }
@@ -538,38 +605,48 @@
                   @if (s.procedureDate) {
                     <span class="card-date">
                       <span class="material-symbols-outlined">calendar_today</span>
-                      {{ s.procedureDate | date:'mediumDate' }}
+                      {{ s.procedureDate | date: 'mediumDate' }}
                     </span>
                   }
                 </div>
                 <div class="card-body">
                   @if (s.outcome) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.OUTCOME' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.OUTCOME' | translate
+                      }}</span>
                       <span class="detail-value">{{ s.outcome }}</span>
                     </div>
                   }
                   @if (s.performedBy) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.PERFORMED_BY' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.PERFORMED_BY' | translate
+                      }}</span>
                       <span class="detail-value">{{ s.performedBy }}</span>
                     </div>
                   }
                   @if (s.location) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.LOCATION' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.LOCATION' | translate
+                      }}</span>
                       <span class="detail-value">{{ s.location }}</span>
                     </div>
                   }
                   @if (s.procedureCode) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.CODE' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.CODE' | translate
+                      }}</span>
                       <span class="detail-value mono">{{ s.procedureCode }}</span>
                     </div>
                   }
                   @if (s.notes) {
                     <div class="detail-row notes-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.NOTES' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.NOTES' | translate
+                      }}</span>
                       <span class="detail-value notes-text">{{ s.notes }}</span>
                     </div>
                   }
@@ -595,39 +672,49 @@
                   <div class="card-title-row">
                     <span class="card-title">{{ d.directiveType || 'Directive' }}</span>
                     @if (d.status) {
-                      <span class="status-badge" [ngClass]="statusClass(d.status)">{{ d.status }}</span>
+                      <span class="status-badge" [ngClass]="statusClass(d.status)">{{
+                        d.status
+                      }}</span>
                     }
                   </div>
                   @if (d.effectiveDate) {
                     <span class="card-date">
                       <span class="material-symbols-outlined">calendar_today</span>
-                      {{ d.effectiveDate | date:'mediumDate' }}
+                      {{ d.effectiveDate | date: 'mediumDate' }}
                     </span>
                   }
                 </div>
                 <div class="card-body">
                   @if (d.description) {
                     <div class="detail-row notes-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.DESCRIPTION' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.DESCRIPTION' | translate
+                      }}</span>
                       <span class="detail-value notes-text">{{ d.description }}</span>
                     </div>
                   }
                   @if (d.physicianName) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.PHYSICIAN' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.PHYSICIAN' | translate
+                      }}</span>
                       <span class="detail-value">{{ d.physicianName }}</span>
                     </div>
                   }
                   @if (d.witnessName) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.WITNESS' | translate }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.WITNESS' | translate
+                      }}</span>
                       <span class="detail-value">{{ d.witnessName }}</span>
                     </div>
                   }
                   @if (d.expirationDate) {
                     <div class="detail-row">
-                      <span class="detail-label">{{ 'SHARED_RECORDS.FIELDS.EXPIRATION' | translate }}</span>
-                      <span class="detail-value">{{ d.expirationDate | date:'mediumDate' }}</span>
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.EXPIRATION' | translate
+                      }}</span>
+                      <span class="detail-value">{{ d.expirationDate | date: 'mediumDate' }}</span>
                     </div>
                   }
                 </div>
@@ -636,7 +723,6 @@
           </div>
         }
       }
-
     </div>
   }
 </div>

@@ -31,6 +31,20 @@ const CONSENT_TYPES: ConsentTypeValue[] = [
   'ALL_PURPOSES',
 ];
 
+const SCOPE_DOMAINS = [
+  'ENCOUNTERS',
+  'TREATMENTS',
+  'PRESCRIPTIONS',
+  'LAB_ORDERS',
+  'LAB_RESULTS',
+  'ALLERGIES',
+  'PROBLEMS',
+  'SURGICAL_HISTORY',
+  'ADVANCE_DIRECTIVES',
+] as const;
+
+type ScopeDomain = (typeof SCOPE_DOMAINS)[number];
+
 @Component({
   selector: 'app-consent-management',
   standalone: true,
@@ -47,6 +61,7 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
 
   readonly consentTypes = CONSENT_TYPES;
+  readonly scopeDomains = SCOPE_DOMAINS;
   readonly pageSize = 20;
 
   consents = signal<PatientConsentResponse[]>([]);
@@ -98,6 +113,36 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
     consentType: 'TREATMENT',
     scope: '',
   };
+
+  // ── Scope checkboxes ─────────────────────────────────────
+  shareAll = signal(true);
+  scopeSelections = signal<Record<ScopeDomain, boolean>>(
+    Object.fromEntries(SCOPE_DOMAINS.map((d) => [d, false])) as Record<ScopeDomain, boolean>,
+  );
+
+  toggleShareAll(checked: boolean): void {
+    this.shareAll.set(checked);
+    if (checked) {
+      this.scopeSelections.set(
+        Object.fromEntries(SCOPE_DOMAINS.map((d) => [d, false])) as Record<ScopeDomain, boolean>,
+      );
+    }
+  }
+
+  toggleScope(domain: ScopeDomain, checked: boolean): void {
+    this.scopeSelections.update((s) => ({ ...s, [domain]: checked }));
+    // If at least one domain is checked, uncheck "Share All"
+    const anyChecked = Object.values({ ...this.scopeSelections(), [domain]: checked }).some(
+      Boolean,
+    );
+    if (anyChecked) this.shareAll.set(false);
+    else this.shareAll.set(true);
+  }
+
+  private buildScopeString(): string {
+    if (this.shareAll()) return '';
+    return SCOPE_DOMAINS.filter((d) => this.scopeSelections()[d]).join(',');
+  }
 
   ngOnInit(): void {
     this.load();
@@ -223,6 +268,10 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
       consentType: 'TREATMENT',
       scope: '',
     };
+    this.shareAll.set(true);
+    this.scopeSelections.set(
+      Object.fromEntries(SCOPE_DOMAINS.map((d) => [d, false])) as Record<ScopeDomain, boolean>,
+    );
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.patientSuggestions.set([]);
@@ -244,11 +293,12 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
       return;
     }
     this.submitting.set(true);
+    const scopeStr = this.buildScopeString();
     const req: ConsentGrantRequest = {
       ...this.grantForm,
       purpose: this.grantForm.purpose || undefined,
       consentExpiration: this.grantForm.consentExpiration || undefined,
-      scope: this.grantForm.scope || undefined,
+      scope: scopeStr || undefined,
     };
     this.sharingService.grantConsent(req).subscribe({
       next: () => {
