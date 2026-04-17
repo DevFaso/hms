@@ -1,12 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { ConsentManagementComponent } from './consent-management.component';
 import { RecordSharingService, PatientConsentResponse } from '../services/record-sharing.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
-import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
 const PAGE_RESPONSE = (content: PatientConsentResponse[]) => ({
@@ -51,7 +49,6 @@ describe('ConsentManagementComponent', () => {
   let sharingStub: jasmine.SpyObj<RecordSharingService>;
   let patientStub: jasmine.SpyObj<PatientService>;
   let hospitalStub: jasmine.SpyObj<HospitalService>;
-  let roleContextStub: Partial<RoleContextService>;
   let toastStub: jasmine.SpyObj<ToastService>;
 
   beforeEach(async () => {
@@ -63,13 +60,13 @@ describe('ConsentManagementComponent', () => {
     patientStub = jasmine.createSpyObj('PatientService', ['list']);
     hospitalStub = jasmine.createSpyObj('HospitalService', ['list', 'getMyHospitalAsResponse']);
     toastStub = jasmine.createSpyObj('ToastService', ['success', 'error']);
-    roleContextStub = {
-      isSuperAdmin: signal(true),
-    };
 
     sharingStub.listConsents.and.returnValue(of(PAGE_RESPONSE([])));
     patientStub.list.and.returnValue(of([]));
     hospitalStub.list.and.returnValue(of(MOCK_HOSPITALS));
+    hospitalStub.getMyHospitalAsResponse.and.returnValue(
+      of({ id: 'h1', name: 'Hospital Alpha' } as HospitalResponse),
+    );
 
     await TestBed.configureTestingModule({
       imports: [ConsentManagementComponent, TranslateModule.forRoot()],
@@ -77,7 +74,6 @@ describe('ConsentManagementComponent', () => {
         { provide: RecordSharingService, useValue: sharingStub },
         { provide: PatientService, useValue: patientStub },
         { provide: HospitalService, useValue: hospitalStub },
-        { provide: RoleContextService, useValue: roleContextStub },
         { provide: ToastService, useValue: toastStub },
       ],
     }).compileComponents();
@@ -147,13 +143,14 @@ describe('ConsentManagementComponent', () => {
     expect(emptyEl).toBeFalsy();
   });
 
-  it('opens and resets grant form', () => {
+  it('opens and resets grant form with toHospitalId locked', () => {
     component.grantForm.patientId = 'existing-id';
     component.selectedPatient.set(MOCK_PATIENT);
     component.openGrantForm();
     expect(component.showGrantForm()).toBeTrue();
     expect(component.grantForm.patientId).toBe('');
     expect(component.grantForm.consentType).toBe('TREATMENT');
+    expect(component.grantForm.toHospitalId).toBe('h1');
     expect(component.selectedPatient()).toBeNull();
     expect(component.patientQuery()).toBe('');
   });
@@ -274,31 +271,61 @@ describe('ConsentManagementComponent', () => {
   // ── Hospital dropdown tests ───────────────────────────────
   describe('hospital dropdowns', () => {
     it('loads hospitals on init for super admin', () => {
+      expect(hospitalStub.getMyHospitalAsResponse).toHaveBeenCalled();
       expect(hospitalStub.list).toHaveBeenCalled();
       expect(component.hospitals().length).toBe(2);
     });
 
-    it('renders hospital select dropdowns in grant form', () => {
-      component.showGrantForm.set(true);
-      fixture.detectChanges();
-      const selects = fixture.nativeElement.querySelectorAll('.form-select');
-      // consentType + fromHospital + toHospital = 3 selects
-      expect(selects.length).toBeGreaterThanOrEqual(2);
+    it('sets currentHospital from getMyHospitalAsResponse', () => {
+      expect(component.currentHospital()).toEqual(
+        jasmine.objectContaining({ id: 'h1', name: 'Hospital Alpha' }),
+      );
     });
 
-    it('loads single hospital for non-super-admin', async () => {
-      (roleContextStub as any).isSuperAdmin = signal(false);
+    it('locks toHospitalId to currentHospital on openGrantForm', () => {
+      component.openGrantForm();
+      expect(component.grantForm.toHospitalId).toBe('h1');
+    });
+
+    it('fromHospitalOptions excludes the currentHospital', () => {
+      const options = component.fromHospitalOptions();
+      expect(options.some((h) => h.id === 'h1')).toBeFalse();
+      expect(options.some((h) => h.id === 'h2')).toBeTrue();
+    });
+
+    it('renders locked To Hospital in grant form', () => {
+      component.showGrantForm.set(true);
+      fixture.detectChanges();
+      const locked = fixture.nativeElement.querySelector('.locked-hospital');
+      expect(locked).toBeTruthy();
+      expect(locked.textContent).toContain('Hospital Alpha');
+    });
+
+    it('renders From Hospital select without current hospital', () => {
+      component.showGrantForm.set(true);
+      fixture.detectChanges();
+      const select = fixture.nativeElement.querySelector('#fromHospital');
+      expect(select).toBeTruthy();
+      const options = select.querySelectorAll('option');
+      // placeholder + filtered hospitals (only h2)
+      const optionTexts = Array.from(options).map((o: any) => o.textContent.trim());
+      expect(optionTexts.some((t: string) => t.includes('Hospital Alpha'))).toBeFalse();
+      expect(optionTexts.some((t: string) => t.includes('Hospital Beta'))).toBeTrue();
+    });
+
+    it('falls back to own hospital when list() fails', () => {
+      hospitalStub.list.and.returnValue(throwError(() => new Error('forbidden')));
       hospitalStub.getMyHospitalAsResponse.and.returnValue(
         of({ id: 'h1', name: 'My Hospital' } as HospitalResponse),
       );
 
-      // Re-create to test init path
       const fix2 = TestBed.createComponent(ConsentManagementComponent);
       fix2.componentInstance.ngOnInit();
       fix2.detectChanges();
 
-      expect(hospitalStub.getMyHospitalAsResponse).toHaveBeenCalled();
       expect(fix2.componentInstance.hospitals().length).toBe(1);
+      expect(fix2.componentInstance.hospitals()[0].name).toBe('My Hospital');
+      expect(fix2.componentInstance.currentHospital()?.id).toBe('h1');
     });
   });
 

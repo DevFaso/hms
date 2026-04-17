@@ -11,7 +11,6 @@ import {
 } from '../services/record-sharing.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
-import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 
 type ConsentTypeValue =
@@ -42,7 +41,6 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
   private readonly sharingService = inject(RecordSharingService);
   private readonly patientService = inject(PatientService);
   private readonly hospitalService = inject(HospitalService);
-  private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
@@ -79,6 +77,15 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
   // ── Hospital dropdowns ──────────────────────────────────
   hospitals = signal<HospitalResponse[]>([]);
   hospitalsLoading = signal(false);
+  /** The logged-in user's hospital — auto-set as "To Hospital" */
+  currentHospital = signal<HospitalResponse | null>(null);
+
+  /** From Hospital options: all hospitals except the locked "To Hospital" */
+  fromHospitalOptions = computed(() => {
+    const current = this.currentHospital();
+    if (!current) return this.hospitals();
+    return this.hospitals().filter((h) => h.id !== current.id);
+  });
 
   grantForm: ConsentGrantRequest = {
     patientId: '',
@@ -150,23 +157,25 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
   // ── Hospital loading ────────────────────────────────────
   private loadHospitals(): void {
     this.hospitalsLoading.set(true);
-    if (this.roleContext.isSuperAdmin()) {
-      this.hospitalService.list().subscribe({
-        next: (h) => {
-          this.hospitals.set(h);
-          this.hospitalsLoading.set(false);
-        },
-        error: () => this.hospitalsLoading.set(false),
-      });
-    } else {
-      this.hospitalService.getMyHospitalAsResponse().subscribe({
-        next: (h) => {
-          this.hospitals.set([h]);
-          this.hospitalsLoading.set(false);
-        },
-        error: () => this.hospitalsLoading.set(false),
-      });
-    }
+    // Load the user's own hospital (locked as "To Hospital")
+    this.hospitalService.getMyHospitalAsResponse().subscribe({
+      next: (myHosp) => {
+        this.currentHospital.set(myHosp);
+        // All roles load the full hospital list for the "From" dropdown
+        this.hospitalService.list().subscribe({
+          next: (h) => {
+            this.hospitals.set(h);
+            this.hospitalsLoading.set(false);
+          },
+          error: () => {
+            // Fallback: at least show the user's own hospital
+            this.hospitals.set([myHosp]);
+            this.hospitalsLoading.set(false);
+          },
+        });
+      },
+      error: () => this.hospitalsLoading.set(false),
+    });
   }
 
   load(): void {
@@ -202,10 +211,11 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
   }
 
   openGrantForm(): void {
+    const toId = this.currentHospital()?.id ?? '';
     this.grantForm = {
       patientId: '',
       fromHospitalId: '',
-      toHospitalId: '',
+      toHospitalId: toId,
       purpose: '',
       consentExpiration: '',
       consentType: 'TREATMENT',

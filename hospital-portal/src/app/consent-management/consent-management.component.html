@@ -124,23 +124,23 @@
             </label>
             <select id="fromHospital" class="form-select" [(ngModel)]="grantForm.fromHospitalId">
               <option value="">— {{ 'CONSENT.MANAGEMENT.SELECT_HOSPITAL' | translate }} —</option>
-              @for (h of hospitals(); track h.id) {
+              @for (h of fromHospitalOptions(); track h.id) {
                 <option [value]="h.id">{{ h.name }}</option>
               }
             </select>
           </div>
 
-          <!-- To Hospital -->
+          <!-- To Hospital (locked to current hospital) -->
           <div class="form-row">
-            <label class="form-label" for="toHospital">
-              {{ 'CONSENT.MANAGEMENT.TO_HOSPITAL' | translate }} *
-            </label>
-            <select id="toHospital" class="form-select" [(ngModel)]="grantForm.toHospitalId">
-              <option value="">— {{ 'CONSENT.MANAGEMENT.SELECT_HOSPITAL' | translate }} —</option>
-              @for (h of hospitals(); track h.id) {
-                <option [value]="h.id">{{ h.name }}</option>
-              }
-            </select>
+            <span class="form-label"> {{ 'CONSENT.MANAGEMENT.TO_HOSPITAL' | translate }} * </span>
+            <div
+              class="locked-hospital"
+              role="status"
+              [attr.aria-label]="'CONSENT.MANAGEMENT.TO_HOSPITAL' | translate"
+            >
+              <span class="material-symbols-outlined locked-icon">lock</span>
+              <span class="locked-name">{{ currentHospital()?.name || '—' }}</span>
+            </div>
           </div>
           <div class="form-row">
             <label class="form-label" for="consentType">
