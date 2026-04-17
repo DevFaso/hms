@@ -1367,10 +1367,20 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
     @Override
     @Transactional(readOnly = true)
     public PatientRecordDTO getAggregatedPatientRecord(UUID patientId, UUID requestingHospitalId) {
-        Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found."));
         Hospital requestingHospital = hospitalRepository.findById(requestingHospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("Requesting hospital not found."));
+
+        // Load consents first — consent repo is NOT tenant-scoped, and @EntityGraph eagerly loads patient
+        List<PatientConsent> consents = consentRepository
+            .findAllByPatientIdAndToHospitalId(patientId, requestingHospitalId);
+
+        // Resolve patient from a consent entity (bypasses tenant-scoped patientRepository.findById)
+        Patient patient = consents.stream()
+            .filter(c -> c.getPatient() != null)
+            .map(PatientConsent::getPatient)
+            .findFirst()
+            .orElseGet(() -> patientRepository.findById(patientId)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found.")));
 
         List<PatientRecordDTO> partials = new ArrayList<>();
 
@@ -1387,9 +1397,6 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         }
 
         // 2. All active consents where toHospitalId == requestingHospitalId
-        List<PatientConsent> consents = consentRepository
-            .findAllByPatientIdAndToHospitalId(patientId, requestingHospitalId);
-
         for (PatientConsent c : consents) {
             if (!c.isConsentActive()) continue;
             UUID fromId = c.getFromHospital().getId();

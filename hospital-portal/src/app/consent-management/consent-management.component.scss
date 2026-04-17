@@ -397,6 +397,22 @@
   margin-right: 6px;
 }
 
+.btn-outline {
+  background: #fff;
+  color: #2563eb;
+  border: 1px solid #2563eb;
+  font-size: 0.8rem;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+
+  &:hover {
+    background: #2563eb;
+    color: #fff;
+  }
+}
+
 .btn-danger {
   background: #ef4444;
   color: #fff;

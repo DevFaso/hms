@@ -55,6 +55,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -505,7 +506,7 @@ class PatientRecordSharingServiceImplTest {
         @DisplayName("aggregates records from two consented hospitals")
         void aggregatesFromMultipleHospitals() throws Exception {
             allTablesAvailable();
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(toHospitalId)).thenReturn(Optional.of(toHospital));
 
             // Consent from Hospital A (fromHospital) → toHospital
@@ -591,7 +592,7 @@ class PatientRecordSharingServiceImplTest {
         @DisplayName("skips expired consents during aggregation")
         void skipsExpiredConsents() throws Exception {
             allTablesAvailable();
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(toHospitalId)).thenReturn(Optional.of(toHospital));
 
             // Active consent from Hospital A
@@ -619,7 +620,7 @@ class PatientRecordSharingServiceImplTest {
         @DisplayName("respects scope filtering per consent during aggregation")
         void respectsScopePerConsent() throws Exception {
             allTablesAvailable();
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(toHospitalId)).thenReturn(Optional.of(toHospital));
 
             // Hospital A allows only ENCOUNTERS
@@ -651,6 +652,9 @@ class PatientRecordSharingServiceImplTest {
         @Test
         @DisplayName("throws ResourceNotFoundException when patient not found")
         void throwsWhenPatientNotFound() {
+            when(hospitalRepository.findById(toHospitalId)).thenReturn(Optional.of(toHospital));
+            when(consentRepository.findAllByPatientIdAndToHospitalId(patientId, toHospitalId))
+                .thenReturn(Collections.emptyList());
             when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.getAggregatedPatientRecord(patientId, toHospitalId))
@@ -661,7 +665,6 @@ class PatientRecordSharingServiceImplTest {
         @Test
         @DisplayName("throws ResourceNotFoundException when hospital not found")
         void throwsWhenHospitalNotFound() {
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(toHospitalId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.getAggregatedPatientRecord(patientId, toHospitalId))
