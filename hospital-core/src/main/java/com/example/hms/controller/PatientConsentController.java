@@ -68,9 +68,8 @@ public class PatientConsentController {
     ) {
         Locale locale = LocaleContextHolder.getLocale();
 
-        PatientResponseDTO patient = patientService.getPatientById(
+        PatientResponseDTO patient = patientService.getPatientByIdUnscoped(
                 requestDTO.getPatientId(),
-                requestDTO.getFromHospitalId(),
                 locale
         );
 

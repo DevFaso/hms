@@ -29,6 +29,12 @@ public interface PatientService {
 
     PatientResponseDTO getPatientById(UUID id, UUID hospitalId, Locale locale);
 
+    /**
+     * Retrieve a patient by ID without enforcing hospital scope.
+     * Used by cross-hospital workflows such as patient consent management.
+     */
+    PatientResponseDTO getPatientByIdUnscoped(UUID id, Locale locale);
+
     PatientResponseDTO createPatient(PatientRequestDTO patientRequestDTO, Locale locale);
 
     PatientResponseDTO updatePatient(UUID id, PatientRequestDTO patientRequestDTO, Locale locale);
