@@ -4,51 +4,6 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { RecordSharingService, PatientRecord } from '../../services/record-sharing.service';
 
-type RecordTab =
-  | 'encounters'
-  | 'treatments'
-  | 'prescriptions'
-  | 'labOrders'
-  | 'labResults'
-  | 'allergies'
-  | 'problems'
-  | 'surgicalHistory'
-  | 'advanceDirectives'
-  | 'vitalSigns'
-  | 'immunizations'
-  | 'insurances'
-  | 'encounterHistory';
-
-interface TabDef {
-  key: RecordTab;
-  icon: string;
-  labelKey: string;
-}
-
-const TABS: TabDef[] = [
-  { key: 'encounters', icon: 'local_hospital', labelKey: 'SHARED_RECORDS.TABS.ENCOUNTERS' },
-  { key: 'treatments', icon: 'healing', labelKey: 'SHARED_RECORDS.TABS.TREATMENTS' },
-  { key: 'prescriptions', icon: 'medication', labelKey: 'SHARED_RECORDS.TABS.PRESCRIPTIONS' },
-  { key: 'labOrders', icon: 'biotech', labelKey: 'SHARED_RECORDS.TABS.LAB_ORDERS' },
-  { key: 'labResults', icon: 'science', labelKey: 'SHARED_RECORDS.TABS.LAB_RESULTS' },
-  { key: 'vitalSigns', icon: 'monitor_heart', labelKey: 'SHARED_RECORDS.TABS.VITAL_SIGNS' },
-  { key: 'immunizations', icon: 'vaccines', labelKey: 'SHARED_RECORDS.TABS.IMMUNIZATIONS' },
-  { key: 'allergies', icon: 'warning', labelKey: 'SHARED_RECORDS.TABS.ALLERGIES' },
-  { key: 'problems', icon: 'health_and_safety', labelKey: 'SHARED_RECORDS.TABS.PROBLEMS' },
-  { key: 'surgicalHistory', icon: 'surgical', labelKey: 'SHARED_RECORDS.TABS.SURGICAL_HISTORY' },
-  {
-    key: 'advanceDirectives',
-    icon: 'description',
-    labelKey: 'SHARED_RECORDS.TABS.ADVANCE_DIRECTIVES',
-  },
-  { key: 'insurances', icon: 'shield', labelKey: 'SHARED_RECORDS.TABS.INSURANCES' },
-  {
-    key: 'encounterHistory',
-    icon: 'history',
-    labelKey: 'SHARED_RECORDS.TABS.ENCOUNTER_HISTORY',
-  },
-];
-
 @Component({
   selector: 'app-shared-records-viewer',
   standalone: true,
@@ -61,11 +16,10 @@ export class SharedRecordsViewerComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly sharingService = inject(RecordSharingService);
 
-  readonly tabs = TABS;
-  activeTab = signal<RecordTab>('encounters');
   record = signal<PatientRecord | null>(null);
   loading = signal(true);
   error = signal<string | null>(null);
+  toHospitalId = signal<string>('');
 
   patientName = computed(() => {
     const r = this.record();
@@ -79,24 +33,26 @@ export class SharedRecordsViewerComponent implements OnInit {
     return ((r.firstName?.[0] ?? '') + (r.lastName?.[0] ?? '')).toUpperCase() || '?';
   });
 
-  tabCounts = computed(() => {
+  partitioned = computed(() => {
     const r = this.record();
-    if (!r) return {} as Record<RecordTab, number>;
+    if (!r) return null;
+    const toId = this.toHospitalId();
+    const toName = r.toHospitalName ?? '';
     return {
-      encounters: r.encounters?.length ?? 0,
-      treatments: r.treatments?.length ?? 0,
-      prescriptions: r.prescriptions?.length ?? 0,
-      labOrders: r.labOrders?.length ?? 0,
-      labResults: r.labResults?.length ?? 0,
-      allergies: (r.allergiesDetailed?.length ?? 0) || (r.allergies ? 1 : 0),
-      problems: r.problems?.length ?? 0,
-      surgicalHistory: r.surgicalHistory?.length ?? 0,
-      advanceDirectives: r.advanceDirectives?.length ?? 0,
-      vitalSigns: r.vitalSigns?.length ?? 0,
-      immunizations: r.immunizations?.length ?? 0,
-      insurances: r.insurances?.length ?? 0,
-      encounterHistory: r.encounterHistory?.length ?? 0,
-    } as Record<RecordTab, number>;
+      encounters: this.split(r.encounters, toId, toName),
+      treatments: this.split(r.treatments, toId, toName),
+      prescriptions: this.split(r.prescriptions, toId, toName),
+      labOrders: this.split(r.labOrders, toId, toName),
+      labResults: this.split(r.labResults, toId, toName),
+      allergies: this.split(r.allergiesDetailed, toId, toName),
+      problems: this.split(r.problems, toId, toName),
+      surgicalHistory: this.split(r.surgicalHistory, toId, toName),
+      advanceDirectives: this.split(r.advanceDirectives, toId, toName),
+      vitalSigns: this.split(r.vitalSigns, toId, toName),
+      immunizations: this.split(r.immunizations, toId, toName),
+      insurances: this.split(r.insurances, toId, toName),
+      encounterHistory: this.split(r.encounterHistory, toId, toName),
+    };
   });
 
   ngOnInit(): void {
@@ -109,6 +65,8 @@ export class SharedRecordsViewerComponent implements OnInit {
       return;
     }
 
+    this.toHospitalId.set(toHospitalId);
+
     this.sharingService.getAggregatedRecord(patientId, toHospitalId).subscribe({
       next: (data) => {
         this.record.set(data);
@@ -119,10 +77,6 @@ export class SharedRecordsViewerComponent implements OnInit {
         this.loading.set(false);
       },
     });
-  }
-
-  setTab(tab: RecordTab): void {
-    this.activeTab.set(tab);
   }
 
   goBack(): void {
@@ -166,5 +120,22 @@ export class SharedRecordsViewerComponent implements OnInit {
       default:
         return '';
     }
+  }
+
+  private split<T extends { hospitalId?: string; hospitalName?: string }>(
+    items: T[] | undefined,
+    toId: string,
+    toName: string,
+  ): { to: T[]; from: T[] } {
+    const to: T[] = [];
+    const from: T[] = [];
+    for (const item of items ?? []) {
+      if (item.hospitalId === toId || (!item.hospitalId && item.hospitalName === toName)) {
+        to.push(item);
+      } else {
+        from.push(item);
+      }
+    }
+    return { to, from };
   }
 }

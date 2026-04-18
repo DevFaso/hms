@@ -24,8 +24,8 @@ public interface EncounterRepository
         SELECT e FROM Encounter e
         JOIN FETCH e.patient p
         JOIN FETCH p.user
-        JOIN FETCH e.staff s
-        JOIN FETCH s.user
+        LEFT JOIN FETCH e.staff s
+        LEFT JOIN FETCH s.user
         LEFT JOIN FETCH e.department d
         LEFT JOIN FETCH e.hospital h
         LEFT JOIN FETCH e.appointment a
@@ -158,8 +158,8 @@ public interface EncounterRepository
         SELECT e FROM Encounter e
         JOIN FETCH e.patient p
         JOIN FETCH p.user
-        JOIN FETCH e.staff s
-        JOIN FETCH s.user
+        LEFT JOIN FETCH e.staff s
+        LEFT JOIN FETCH s.user
         LEFT JOIN FETCH e.department d
         LEFT JOIN FETCH e.hospital h
         LEFT JOIN FETCH e.appointment a

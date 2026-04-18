@@ -43,6 +43,8 @@ export interface SharedEncounterTreatmentEntry {
   performedAt?: string;
   outcome?: string;
   notes?: string;
+  hospitalId?: string;
+  hospitalName?: string;
 }
 
 export interface SharedLabOrderEntry {
@@ -50,6 +52,7 @@ export interface SharedLabOrderEntry {
   labOrderCode?: string;
   patientId?: string;
   patientFullName?: string;
+  hospitalId?: string;
   hospitalName?: string;
   labTestName?: string;
   labTestCode?: string;
@@ -66,6 +69,7 @@ export interface SharedLabResultEntry {
   labOrderCode?: string;
   patientId?: string;
   patientFullName?: string;
+  hospitalId?: string;
   hospitalName?: string;
   labTestName?: string;
   resultValue?: string;
@@ -101,6 +105,7 @@ export interface SharedPrescriptionEntry {
   staffFullName?: string;
   encounterId?: string;
   hospitalId?: string;
+  hospitalName?: string;
   medicationName?: string;
   medicationDisplayName?: string;
   dosage?: string;
@@ -117,6 +122,7 @@ export interface SharedInsuranceEntry {
   id: string;
   patientId?: string;
   hospitalId?: string;
+  hospitalName?: string;
   providerName?: string;
   policyNumber?: string;
   groupNumber?: string;
@@ -182,12 +188,15 @@ export interface SharedEncounterHistoryEntry {
   changeType?: string;
   previousValuesJson?: string;
   extraFieldsJson?: string;
+  hospitalId?: string;
+  hospitalName?: string;
 }
 
 export interface SharedVitalSignEntry {
   id: string;
   patientId?: string;
   hospitalId?: string;
+  hospitalName?: string;
   recordedByName?: string;
   source?: string;
   temperatureCelsius?: number;

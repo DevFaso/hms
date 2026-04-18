@@ -33,46 +33,46 @@
   }
 
   <!-- Content -->
-  @if (!loading() && !error() && record()) {
+  @if (!loading() && !error() && record(); as r) {
     <!-- Patient banner -->
     <div class="patient-banner">
       <div class="patient-avatar">{{ patientInitials() }}</div>
       <div class="patient-info">
         <h2 class="patient-name">{{ patientName() }}</h2>
         <div class="patient-meta">
-          @if (record()!.gender) {
+          @if (r.gender) {
             <span class="meta-item">
               <span class="material-symbols-outlined meta-icon">person</span>
-              {{ record()!.gender }}
+              {{ r.gender }}
             </span>
           }
-          @if (record()!.dateOfBirth) {
+          @if (r.dateOfBirth) {
             <span class="meta-item">
               <span class="material-symbols-outlined meta-icon">cake</span>
-              {{ record()!.dateOfBirth | date: 'mediumDate' }}
+              {{ r.dateOfBirth | date: 'mediumDate' }}
             </span>
           }
-          @if (record()!.bloodType) {
+          @if (r.bloodType) {
             <span class="meta-item blood-type">
               <span class="material-symbols-outlined meta-icon">water_drop</span>
-              {{ record()!.bloodType }}
+              {{ r.bloodType }}
             </span>
           }
-          @if (record()!.email) {
+          @if (r.email) {
             <span class="meta-item">
               <span class="material-symbols-outlined meta-icon">email</span>
-              {{ record()!.email }}
+              {{ r.email }}
             </span>
           }
-          @if (record()!.phoneNumberPrimary) {
+          @if (r.phoneNumberPrimary) {
             <span class="meta-item">
               <span class="material-symbols-outlined meta-icon">call</span>
-              {{ record()!.phoneNumberPrimary }}
+              {{ r.phoneNumberPrimary }}
             </span>
           }
         </div>
-        @if (record()!.medicalHistorySummary) {
-          <p class="medical-summary">{{ record()!.medicalHistorySummary }}</p>
+        @if (r.medicalHistorySummary) {
+          <p class="medical-summary">{{ r.medicalHistorySummary }}</p>
         }
       </div>
     </div>
@@ -83,425 +83,1463 @@
         <span class="material-symbols-outlined strip-icon">business</span>
         <div class="strip-detail">
           <span class="strip-label">{{ 'SHARED_RECORDS.TO' | translate }}</span>
-          <span class="strip-value">{{ record()!.toHospitalName }}</span>
+          <span class="strip-value">{{ r.toHospitalName }}</span>
         </div>
       </div>
-      @if (record()!.fromHospitalName) {
+      @if (r.fromHospitalName) {
         <div class="strip-divider"></div>
         <div class="strip-item">
           <span class="material-symbols-outlined strip-icon">business</span>
           <div class="strip-detail">
             <span class="strip-label">{{ 'SHARED_RECORDS.FROM' | translate }}</span>
-            <span class="strip-value">{{ record()!.fromHospitalName }}</span>
+            <span class="strip-value">{{ r.fromHospitalName }}</span>
           </div>
         </div>
       }
-      @if (record()!.consentPurpose) {
+      @if (r.consentPurpose) {
         <div class="strip-divider"></div>
         <div class="strip-item">
           <span class="material-symbols-outlined strip-icon">info</span>
           <div class="strip-detail">
             <span class="strip-label">{{ 'SHARED_RECORDS.PURPOSE' | translate }}</span>
-            <span class="strip-value">{{ record()!.consentPurpose }}</span>
+            <span class="strip-value">{{ r.consentPurpose }}</span>
           </div>
         </div>
       }
-      @if (record()!.consentExpiration) {
+      @if (r.consentExpiration) {
         <div class="strip-divider"></div>
         <div class="strip-item">
           <span class="material-symbols-outlined strip-icon">schedule</span>
           <div class="strip-detail">
             <span class="strip-label">{{ 'SHARED_RECORDS.EXPIRES' | translate }}</span>
-            <span class="strip-value">{{ record()!.consentExpiration | date: 'mediumDate' }}</span>
+            <span class="strip-value">{{ r.consentExpiration | date: 'mediumDate' }}</span>
           </div>
         </div>
       }
     </div>
 
-    <!-- Tabs -->
-    <div class="record-tabs" role="tablist">
-      @for (tab of tabs; track tab.key) {
-        <button
-          class="tab-btn"
-          [class.active]="activeTab() === tab.key"
-          (click)="setTab(tab.key)"
-          role="tab"
-          [attr.aria-selected]="activeTab() === tab.key"
-        >
-          <span class="material-symbols-outlined tab-icon">{{ tab.icon }}</span>
-          <span class="tab-label">{{ tab.labelKey | translate }}</span>
-          <span class="tab-count">{{ tabCounts()[tab.key] }}</span>
-        </button>
-      }
-    </div>
-
-    <!-- Tab content -->
-    <div class="tab-content" role="tabpanel">
-      <!-- ═══ Encounters ═══ -->
-      @if (activeTab() === 'encounters') {
-        @if ((record()!.encounters?.length ?? 0) === 0) {
-          <div class="empty-tab">
-            <span class="material-symbols-outlined">local_hospital</span>
-            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
-          </div>
-        } @else {
-          <div class="record-cards">
-            @for (e of record()!.encounters!; track e.id) {
-              <div class="record-card">
-                <div class="card-header">
-                  <div class="card-title-row">
-                    <span class="card-type-badge">{{ e.encounterType || 'Encounter' }}</span>
-                    @if (e.status) {
-                      <span class="status-badge" [ngClass]="statusClass(e.status)">{{
-                        e.status
-                      }}</span>
-                    }
-                  </div>
-                  @if (e.encounterDate) {
-                    <span class="card-date">
-                      <span class="material-symbols-outlined">calendar_today</span>
-                      {{ e.encounterDate | date: 'medium' }}
-                    </span>
-                  }
-                </div>
-                <div class="card-body">
-                  @if (e.chiefComplaint) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.CHIEF_COMPLAINT' | translate
-                      }}</span>
-                      <span class="detail-value">{{ e.chiefComplaint }}</span>
-                    </div>
-                  }
-                  @if (e.departmentName) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.DEPARTMENT' | translate
-                      }}</span>
-                      <span class="detail-value">{{ e.departmentName }}</span>
-                    </div>
-                  }
-                  @if (e.staffName) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.PROVIDER' | translate
-                      }}</span>
-                      <span class="detail-value">{{ e.staffName }}</span>
-                    </div>
-                  }
-                  @if (e.notes) {
-                    <div class="detail-row notes-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.NOTES' | translate
-                      }}</span>
-                      <span class="detail-value notes-text">{{ e.notes }}</span>
-                    </div>
-                  }
-                  @if (e.followUpInstructions) {
-                    <div class="detail-row notes-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.FOLLOW_UP' | translate
-                      }}</span>
-                      <span class="detail-value notes-text">{{ e.followUpInstructions }}</span>
-                    </div>
-                  }
-                  @if (e.dischargeDiagnoses) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.DISCHARGE_DIAGNOSES' | translate
-                      }}</span>
-                      <span class="detail-value">{{ e.dischargeDiagnoses }}</span>
-                    </div>
-                  }
-                  @if (e.checkoutTimestamp) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.DISCHARGED' | translate
-                      }}</span>
-                      <span class="detail-value">{{ e.checkoutTimestamp | date: 'medium' }}</span>
-                    </div>
-                  }
-                </div>
+    @if (partitioned(); as p) {
+      <!-- ═══════════════════ Encounters ═══════════════════ -->
+      <div class="comparison-section">
+        <div class="section-header">
+          <span class="material-symbols-outlined section-icon">local_hospital</span>
+          <h3>{{ 'SHARED_RECORDS.TABS.ENCOUNTERS' | translate }}</h3>
+          <span class="section-count">{{ p.encounters.to.length + p.encounters.from.length }}</span>
+        </div>
+        <div class="comparison-grid">
+          <div class="hospital-column">
+            <div class="column-header to-header">
+              <span class="material-symbols-outlined">domain</span>
+              {{ r.toHospitalName }}
+              <span class="column-count">({{ p.encounters.to.length }})</span>
+            </div>
+            @if (p.encounters.to.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
               </div>
-            }
-          </div>
-        }
-      }
-
-      <!-- ═══ Treatments ═══ -->
-      @if (activeTab() === 'treatments') {
-        @if ((record()!.treatments?.length ?? 0) === 0) {
-          <div class="empty-tab">
-            <span class="material-symbols-outlined">healing</span>
-            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
-          </div>
-        } @else {
-          <div class="record-cards">
-            @for (t of record()!.treatments!; track t.id) {
-              <div class="record-card">
-                <div class="card-header">
-                  <div class="card-title-row">
-                    <span class="card-title">{{ t.treatmentName || 'Treatment' }}</span>
-                  </div>
-                  @if (t.performedAt) {
-                    <span class="card-date">
-                      <span class="material-symbols-outlined">calendar_today</span>
-                      {{ t.performedAt | date: 'medium' }}
-                    </span>
-                  }
-                </div>
-                <div class="card-body">
-                  @if (t.outcome) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.OUTCOME' | translate
-                      }}</span>
-                      <span class="detail-value">{{ t.outcome }}</span>
+            } @else {
+              @for (e of p.encounters.to; track e.id) {
+                <div class="record-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-type-badge">{{ e.encounterType || 'Encounter' }}</span>
+                      @if (e.status) {
+                        <span class="status-badge" [ngClass]="statusClass(e.status)">{{
+                          e.status
+                        }}</span>
+                      }
                     </div>
-                  }
-                  @if (t.staffFullName) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.PROVIDER' | translate
-                      }}</span>
-                      <span class="detail-value">{{ t.staffFullName }}</span>
-                    </div>
-                  }
-                  @if (t.notes) {
-                    <div class="detail-row notes-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.NOTES' | translate
-                      }}</span>
-                      <span class="detail-value notes-text">{{ t.notes }}</span>
-                    </div>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        }
-      }
-
-      <!-- ═══ Prescriptions ═══ -->
-      @if (activeTab() === 'prescriptions') {
-        @if ((record()!.prescriptions?.length ?? 0) === 0) {
-          <div class="empty-tab">
-            <span class="material-symbols-outlined">medication</span>
-            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
-          </div>
-        } @else {
-          <div class="record-cards">
-            @for (p of record()!.prescriptions!; track p.id) {
-              <div class="record-card">
-                <div class="card-header">
-                  <div class="card-title-row">
-                    <span class="card-title">{{
-                      p.medicationDisplayName || p.medicationName || 'Medication'
-                    }}</span>
-                    @if (p.status) {
-                      <span class="status-badge" [ngClass]="statusClass(p.status)">{{
-                        p.status
-                      }}</span>
-                    }
-                  </div>
-                  @if (p.createdAt) {
-                    <span class="card-date">
-                      <span class="material-symbols-outlined">calendar_today</span>
-                      {{ p.createdAt | date: 'mediumDate' }}
-                    </span>
-                  }
-                </div>
-                <div class="card-body">
-                  @if (p.dosage) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.DOSAGE' | translate
-                      }}</span>
-                      <span class="detail-value">{{ p.dosage }}</span>
-                    </div>
-                  }
-                  @if (p.frequency) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.FREQUENCY' | translate
-                      }}</span>
-                      <span class="detail-value">{{ p.frequency }}</span>
-                    </div>
-                  }
-                  @if (p.duration) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.DURATION' | translate
-                      }}</span>
-                      <span class="detail-value">{{ p.duration }}</span>
-                    </div>
-                  }
-                  @if (p.route) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.ROUTE' | translate
-                      }}</span>
-                      <span class="detail-value">{{ p.route }}</span>
-                    </div>
-                  }
-                  @if (p.instructions) {
-                    <div class="detail-row notes-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.INSTRUCTIONS' | translate
-                      }}</span>
-                      <span class="detail-value notes-text">{{ p.instructions }}</span>
-                    </div>
-                  }
-                  @if (p.staffFullName) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.PRESCRIBED_BY' | translate
-                      }}</span>
-                      <span class="detail-value">{{ p.staffFullName }}</span>
-                    </div>
-                  }
-                  @if (p.notes) {
-                    <div class="detail-row notes-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.NOTES' | translate
-                      }}</span>
-                      <span class="detail-value notes-text">{{ p.notes }}</span>
-                    </div>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        }
-      }
-
-      <!-- ═══ Lab Orders ═══ -->
-      @if (activeTab() === 'labOrders') {
-        @if ((record()!.labOrders?.length ?? 0) === 0) {
-          <div class="empty-tab">
-            <span class="material-symbols-outlined">biotech</span>
-            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
-          </div>
-        } @else {
-          <div class="record-cards">
-            @for (l of record()!.labOrders!; track l.id) {
-              <div class="record-card">
-                <div class="card-header">
-                  <div class="card-title-row">
-                    <span class="card-title">{{ l.labTestName || 'Lab Test' }}</span>
-                    @if (l.status) {
-                      <span class="status-badge" [ngClass]="statusClass(l.status)">{{
-                        l.status
-                      }}</span>
-                    }
-                  </div>
-                  @if (l.orderDatetime) {
-                    <span class="card-date">
-                      <span class="material-symbols-outlined">calendar_today</span>
-                      {{ l.orderDatetime | date: 'medium' }}
-                    </span>
-                  }
-                </div>
-                <div class="card-body">
-                  @if (l.labOrderCode) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.ORDER_CODE' | translate
-                      }}</span>
-                      <span class="detail-value mono">{{ l.labOrderCode }}</span>
-                    </div>
-                  }
-                  @if (l.priority) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.PRIORITY' | translate
-                      }}</span>
-                      <span class="detail-value" [ngClass]="severityClass(l.priority)">{{
-                        l.priority
-                      }}</span>
-                    </div>
-                  }
-                  @if (l.clinicalIndication) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.INDICATION' | translate
-                      }}</span>
-                      <span class="detail-value">{{ l.clinicalIndication }}</span>
-                    </div>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        }
-      }
-
-      <!-- ═══ Lab Results ═══ -->
-      @if (activeTab() === 'labResults') {
-        @if ((record()!.labResults?.length ?? 0) === 0) {
-          <div class="empty-tab">
-            <span class="material-symbols-outlined">science</span>
-            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
-          </div>
-        } @else {
-          <div class="record-cards">
-            @for (r of record()!.labResults!; track r.id) {
-              <div class="record-card" [ngClass]="{ 'card-flagged': r.severityFlag }">
-                <div class="card-header">
-                  <div class="card-title-row">
-                    <span class="card-title">{{ r.labTestName || 'Lab Result' }}</span>
-                    @if (r.severityFlag) {
-                      <span class="severity-flag" [ngClass]="severityClass(r.severityFlag)">
-                        <span class="material-symbols-outlined">flag</span>
-                        {{ r.severityFlag }}
+                    @if (e.encounterDate) {
+                      <span class="card-date">
+                        <span class="material-symbols-outlined">calendar_today</span>
+                        {{ e.encounterDate | date: 'medium' }}
                       </span>
                     }
                   </div>
-                  @if (r.resultDate) {
-                    <span class="card-date">
-                      <span class="material-symbols-outlined">calendar_today</span>
-                      {{ r.resultDate | date: 'medium' }}
-                    </span>
-                  }
-                </div>
-                <div class="card-body">
-                  <div class="result-value-box">
-                    <span class="result-number">{{ r.resultValue }}</span>
-                    @if (r.resultUnit) {
-                      <span class="result-unit">{{ r.resultUnit }}</span>
+                  <div class="card-body">
+                    @if (e.chiefComplaint) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.CHIEF_COMPLAINT' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.chiefComplaint }}</span>
+                      </div>
+                    }
+                    @if (e.departmentName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.DEPARTMENT' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.departmentName }}</span>
+                      </div>
+                    }
+                    @if (e.staffName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.PROVIDER' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.staffName }}</span>
+                      </div>
+                    }
+                    @if (e.hospitalName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.HOSPITAL' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.hospitalName }}</span>
+                      </div>
+                    }
+                    @if (e.esiScore) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ESI_SCORE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.esiScore }}</span>
+                      </div>
+                    }
+                    @if (e.roomAssignment) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ROOM' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.roomAssignment }}</span>
+                      </div>
+                    }
+                    @if (e.arrivalTimestamp) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ARRIVAL' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.arrivalTimestamp | date: 'medium' }}</span>
+                      </div>
+                    }
+                    @if (e.triageTimestamp) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.TRIAGE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.triageTimestamp | date: 'medium' }}</span>
+                      </div>
+                    }
+                    @if (e.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ e.notes }}</span>
+                      </div>
+                    }
+                    @if (e.followUpInstructions) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.FOLLOW_UP' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ e.followUpInstructions }}</span>
+                      </div>
+                    }
+                    @if (e.dischargeDiagnoses) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.DISCHARGE_DIAGNOSES' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.dischargeDiagnoses }}</span>
+                      </div>
+                    }
+                    @if (e.checkoutTimestamp) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.DISCHARGED' | translate
+                        }}</span
+                        ><span class="detail-value">{{
+                          e.checkoutTimestamp | date: 'medium'
+                        }}</span>
+                      </div>
                     }
                   </div>
-                  @if (r.labOrderCode) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.ORDER_CODE' | translate
-                      }}</span>
-                      <span class="detail-value mono">{{ r.labOrderCode }}</span>
+                </div>
+              }
+            }
+          </div>
+          <div class="hospital-column">
+            <div class="column-header from-header">
+              <span class="material-symbols-outlined">share</span>
+              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              <span class="column-count">({{ p.encounters.from.length }})</span>
+            </div>
+            @if (p.encounters.from.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (e of p.encounters.from; track e.id) {
+                <div class="record-card from-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-type-badge">{{ e.encounterType || 'Encounter' }}</span>
+                      @if (e.status) {
+                        <span class="status-badge" [ngClass]="statusClass(e.status)">{{
+                          e.status
+                        }}</span>
+                      }
                     </div>
-                  }
-                  @if (r.notes) {
-                    <div class="detail-row notes-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.NOTES' | translate
+                    @if (e.encounterDate) {
+                      <span class="card-date">
+                        <span class="material-symbols-outlined">calendar_today</span>
+                        {{ e.encounterDate | date: 'medium' }}
+                      </span>
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (e.hospitalName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.HOSPITAL' | translate
+                        }}</span
+                        ><span class="detail-value hospital-tag">{{ e.hospitalName }}</span>
+                      </div>
+                    }
+                    @if (e.chiefComplaint) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.CHIEF_COMPLAINT' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.chiefComplaint }}</span>
+                      </div>
+                    }
+                    @if (e.departmentName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.DEPARTMENT' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.departmentName }}</span>
+                      </div>
+                    }
+                    @if (e.staffName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.PROVIDER' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.staffName }}</span>
+                      </div>
+                    }
+                    @if (e.esiScore) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ESI_SCORE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.esiScore }}</span>
+                      </div>
+                    }
+                    @if (e.roomAssignment) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ROOM' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.roomAssignment }}</span>
+                      </div>
+                    }
+                    @if (e.arrivalTimestamp) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ARRIVAL' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.arrivalTimestamp | date: 'medium' }}</span>
+                      </div>
+                    }
+                    @if (e.triageTimestamp) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.TRIAGE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.triageTimestamp | date: 'medium' }}</span>
+                      </div>
+                    }
+                    @if (e.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ e.notes }}</span>
+                      </div>
+                    }
+                    @if (e.followUpInstructions) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.FOLLOW_UP' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ e.followUpInstructions }}</span>
+                      </div>
+                    }
+                    @if (e.dischargeDiagnoses) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.DISCHARGE_DIAGNOSES' | translate
+                        }}</span
+                        ><span class="detail-value">{{ e.dischargeDiagnoses }}</span>
+                      </div>
+                    }
+                    @if (e.checkoutTimestamp) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.DISCHARGED' | translate
+                        }}</span
+                        ><span class="detail-value">{{
+                          e.checkoutTimestamp | date: 'medium'
+                        }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════ Treatments ═══════════════════ -->
+      <div class="comparison-section">
+        <div class="section-header">
+          <span class="material-symbols-outlined section-icon">healing</span>
+          <h3>{{ 'SHARED_RECORDS.TABS.TREATMENTS' | translate }}</h3>
+          <span class="section-count">{{ p.treatments.to.length + p.treatments.from.length }}</span>
+        </div>
+        <div class="comparison-grid">
+          <div class="hospital-column">
+            <div class="column-header to-header">
+              <span class="material-symbols-outlined">domain</span>
+              {{ r.toHospitalName }}
+              <span class="column-count">({{ p.treatments.to.length }})</span>
+            </div>
+            @if (p.treatments.to.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (t of p.treatments.to; track t.id) {
+                <div class="record-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ t.treatmentName || 'Treatment' }}</span>
+                    </div>
+                    @if (t.performedAt) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ t.performedAt | date: 'medium' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (t.outcome) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.OUTCOME' | translate
+                        }}</span
+                        ><span class="detail-value">{{ t.outcome }}</span>
+                      </div>
+                    }
+                    @if (t.staffFullName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.PROVIDER' | translate
+                        }}</span
+                        ><span class="detail-value">{{ t.staffFullName }}</span>
+                      </div>
+                    }
+                    @if (t.encounterType) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ENCOUNTER_TYPE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ t.encounterType }}</span>
+                      </div>
+                    }
+                    @if (t.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ t.notes }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+          <div class="hospital-column">
+            <div class="column-header from-header">
+              <span class="material-symbols-outlined">share</span>
+              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              <span class="column-count">({{ p.treatments.from.length }})</span>
+            </div>
+            @if (p.treatments.from.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (t of p.treatments.from; track t.id) {
+                <div class="record-card from-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ t.treatmentName || 'Treatment' }}</span>
+                    </div>
+                    @if (t.performedAt) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ t.performedAt | date: 'medium' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (t.hospitalName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.HOSPITAL' | translate
+                        }}</span
+                        ><span class="detail-value hospital-tag">{{ t.hospitalName }}</span>
+                      </div>
+                    }
+                    @if (t.outcome) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.OUTCOME' | translate
+                        }}</span
+                        ><span class="detail-value">{{ t.outcome }}</span>
+                      </div>
+                    }
+                    @if (t.staffFullName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.PROVIDER' | translate
+                        }}</span
+                        ><span class="detail-value">{{ t.staffFullName }}</span>
+                      </div>
+                    }
+                    @if (t.encounterType) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ENCOUNTER_TYPE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ t.encounterType }}</span>
+                      </div>
+                    }
+                    @if (t.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ t.notes }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════ Prescriptions ═══════════════════ -->
+      <div class="comparison-section">
+        <div class="section-header">
+          <span class="material-symbols-outlined section-icon">medication</span>
+          <h3>{{ 'SHARED_RECORDS.TABS.PRESCRIPTIONS' | translate }}</h3>
+          <span class="section-count">{{
+            p.prescriptions.to.length + p.prescriptions.from.length
+          }}</span>
+        </div>
+        <div class="comparison-grid">
+          <div class="hospital-column">
+            <div class="column-header to-header">
+              <span class="material-symbols-outlined">domain</span>
+              {{ r.toHospitalName }}
+              <span class="column-count">({{ p.prescriptions.to.length }})</span>
+            </div>
+            @if (p.prescriptions.to.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (rx of p.prescriptions.to; track rx.id) {
+                <div class="record-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{
+                        rx.medicationDisplayName || rx.medicationName || 'Medication'
                       }}</span>
-                      <span class="detail-value notes-text">{{ r.notes }}</span>
+                      @if (rx.status) {
+                        <span class="status-badge" [ngClass]="statusClass(rx.status)">{{
+                          rx.status
+                        }}</span>
+                      }
+                    </div>
+                    @if (rx.createdAt) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ rx.createdAt | date: 'mediumDate' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (rx.dosage) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.DOSAGE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ rx.dosage }}</span>
+                      </div>
+                    }
+                    @if (rx.frequency) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.FREQUENCY' | translate
+                        }}</span
+                        ><span class="detail-value">{{ rx.frequency }}</span>
+                      </div>
+                    }
+                    @if (rx.duration) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.DURATION' | translate
+                        }}</span
+                        ><span class="detail-value">{{ rx.duration }}</span>
+                      </div>
+                    }
+                    @if (rx.route) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ROUTE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ rx.route }}</span>
+                      </div>
+                    }
+                    @if (rx.staffFullName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.PRESCRIBED_BY' | translate
+                        }}</span
+                        ><span class="detail-value">{{ rx.staffFullName }}</span>
+                      </div>
+                    }
+                    @if (rx.instructions) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.INSTRUCTIONS' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ rx.instructions }}</span>
+                      </div>
+                    }
+                    @if (rx.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ rx.notes }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+          <div class="hospital-column">
+            <div class="column-header from-header">
+              <span class="material-symbols-outlined">share</span>
+              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              <span class="column-count">({{ p.prescriptions.from.length }})</span>
+            </div>
+            @if (p.prescriptions.from.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (rx of p.prescriptions.from; track rx.id) {
+                <div class="record-card from-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{
+                        rx.medicationDisplayName || rx.medicationName || 'Medication'
+                      }}</span>
+                      @if (rx.status) {
+                        <span class="status-badge" [ngClass]="statusClass(rx.status)">{{
+                          rx.status
+                        }}</span>
+                      }
+                    </div>
+                    @if (rx.createdAt) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ rx.createdAt | date: 'mediumDate' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (rx.dosage) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.DOSAGE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ rx.dosage }}</span>
+                      </div>
+                    }
+                    @if (rx.frequency) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.FREQUENCY' | translate
+                        }}</span
+                        ><span class="detail-value">{{ rx.frequency }}</span>
+                      </div>
+                    }
+                    @if (rx.duration) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.DURATION' | translate
+                        }}</span
+                        ><span class="detail-value">{{ rx.duration }}</span>
+                      </div>
+                    }
+                    @if (rx.route) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ROUTE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ rx.route }}</span>
+                      </div>
+                    }
+                    @if (rx.staffFullName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.PRESCRIBED_BY' | translate
+                        }}</span
+                        ><span class="detail-value">{{ rx.staffFullName }}</span>
+                      </div>
+                    }
+                    @if (rx.instructions) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.INSTRUCTIONS' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ rx.instructions }}</span>
+                      </div>
+                    }
+                    @if (rx.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ rx.notes }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════ Lab Orders ═══════════════════ -->
+      <div class="comparison-section">
+        <div class="section-header">
+          <span class="material-symbols-outlined section-icon">biotech</span>
+          <h3>{{ 'SHARED_RECORDS.TABS.LAB_ORDERS' | translate }}</h3>
+          <span class="section-count">{{ p.labOrders.to.length + p.labOrders.from.length }}</span>
+        </div>
+        <div class="comparison-grid">
+          <div class="hospital-column">
+            <div class="column-header to-header">
+              <span class="material-symbols-outlined">domain</span>
+              {{ r.toHospitalName }}
+              <span class="column-count">({{ p.labOrders.to.length }})</span>
+            </div>
+            @if (p.labOrders.to.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (l of p.labOrders.to; track l.id) {
+                <div class="record-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ l.labTestName || 'Lab Test' }}</span>
+                      @if (l.status) {
+                        <span class="status-badge" [ngClass]="statusClass(l.status)">{{
+                          l.status
+                        }}</span>
+                      }
+                    </div>
+                    @if (l.orderDatetime) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ l.orderDatetime | date: 'medium' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (l.labOrderCode) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ORDER_CODE' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ l.labOrderCode }}</span>
+                      </div>
+                    }
+                    @if (l.priority) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.PRIORITY' | translate
+                        }}</span
+                        ><span class="detail-value" [ngClass]="severityClass(l.priority)">{{
+                          l.priority
+                        }}</span>
+                      </div>
+                    }
+                    @if (l.clinicalIndication) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.INDICATION' | translate
+                        }}</span
+                        ><span class="detail-value">{{ l.clinicalIndication }}</span>
+                      </div>
+                    }
+                    @if (l.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ l.notes }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+          <div class="hospital-column">
+            <div class="column-header from-header">
+              <span class="material-symbols-outlined">share</span>
+              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              <span class="column-count">({{ p.labOrders.from.length }})</span>
+            </div>
+            @if (p.labOrders.from.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (l of p.labOrders.from; track l.id) {
+                <div class="record-card from-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ l.labTestName || 'Lab Test' }}</span>
+                      @if (l.status) {
+                        <span class="status-badge" [ngClass]="statusClass(l.status)">{{
+                          l.status
+                        }}</span>
+                      }
+                    </div>
+                    @if (l.orderDatetime) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ l.orderDatetime | date: 'medium' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (l.hospitalName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.HOSPITAL' | translate
+                        }}</span
+                        ><span class="detail-value hospital-tag">{{ l.hospitalName }}</span>
+                      </div>
+                    }
+                    @if (l.labOrderCode) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ORDER_CODE' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ l.labOrderCode }}</span>
+                      </div>
+                    }
+                    @if (l.priority) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.PRIORITY' | translate
+                        }}</span
+                        ><span class="detail-value" [ngClass]="severityClass(l.priority)">{{
+                          l.priority
+                        }}</span>
+                      </div>
+                    }
+                    @if (l.clinicalIndication) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.INDICATION' | translate
+                        }}</span
+                        ><span class="detail-value">{{ l.clinicalIndication }}</span>
+                      </div>
+                    }
+                    @if (l.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ l.notes }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════ Lab Results ═══════════════════ -->
+      <div class="comparison-section">
+        <div class="section-header">
+          <span class="material-symbols-outlined section-icon">science</span>
+          <h3>{{ 'SHARED_RECORDS.TABS.LAB_RESULTS' | translate }}</h3>
+          <span class="section-count">{{ p.labResults.to.length + p.labResults.from.length }}</span>
+        </div>
+        <div class="comparison-grid">
+          <div class="hospital-column">
+            <div class="column-header to-header">
+              <span class="material-symbols-outlined">domain</span>
+              {{ r.toHospitalName }}
+              <span class="column-count">({{ p.labResults.to.length }})</span>
+            </div>
+            @if (p.labResults.to.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (lr of p.labResults.to; track lr.id) {
+                <div class="record-card" [ngClass]="{ 'card-flagged': lr.severityFlag }">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ lr.labTestName || 'Lab Result' }}</span>
+                      @if (lr.severityFlag) {
+                        <span class="severity-flag" [ngClass]="severityClass(lr.severityFlag)"
+                          ><span class="material-symbols-outlined">flag</span>
+                          {{ lr.severityFlag }}</span
+                        >
+                      }
+                    </div>
+                    @if (lr.resultDate) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ lr.resultDate | date: 'medium' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    <div class="result-value-box">
+                      <span class="result-number">{{ lr.resultValue }}</span>
+                      @if (lr.resultUnit) {
+                        <span class="result-unit">{{ lr.resultUnit }}</span>
+                      }
+                    </div>
+                    @if (lr.labOrderCode) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ORDER_CODE' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ lr.labOrderCode }}</span>
+                      </div>
+                    }
+                    @if (lr.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ lr.notes }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+          <div class="hospital-column">
+            <div class="column-header from-header">
+              <span class="material-symbols-outlined">share</span>
+              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              <span class="column-count">({{ p.labResults.from.length }})</span>
+            </div>
+            @if (p.labResults.from.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (lr of p.labResults.from; track lr.id) {
+                <div class="record-card from-card" [ngClass]="{ 'card-flagged': lr.severityFlag }">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ lr.labTestName || 'Lab Result' }}</span>
+                      @if (lr.severityFlag) {
+                        <span class="severity-flag" [ngClass]="severityClass(lr.severityFlag)"
+                          ><span class="material-symbols-outlined">flag</span>
+                          {{ lr.severityFlag }}</span
+                        >
+                      }
+                    </div>
+                    @if (lr.resultDate) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ lr.resultDate | date: 'medium' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (lr.hospitalName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.HOSPITAL' | translate
+                        }}</span
+                        ><span class="detail-value hospital-tag">{{ lr.hospitalName }}</span>
+                      </div>
+                    }
+                    <div class="result-value-box">
+                      <span class="result-number">{{ lr.resultValue }}</span>
+                      @if (lr.resultUnit) {
+                        <span class="result-unit">{{ lr.resultUnit }}</span>
+                      }
+                    </div>
+                    @if (lr.labOrderCode) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ORDER_CODE' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ lr.labOrderCode }}</span>
+                      </div>
+                    }
+                    @if (lr.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ lr.notes }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════ Vital Signs ═══════════════════ -->
+      <div class="comparison-section">
+        <div class="section-header">
+          <span class="material-symbols-outlined section-icon">monitor_heart</span>
+          <h3>{{ 'SHARED_RECORDS.TABS.VITAL_SIGNS' | translate }}</h3>
+          <span class="section-count">{{ p.vitalSigns.to.length + p.vitalSigns.from.length }}</span>
+        </div>
+        <div class="comparison-grid">
+          <div class="hospital-column">
+            <div class="column-header to-header">
+              <span class="material-symbols-outlined">domain</span>
+              {{ r.toHospitalName }}
+              <span class="column-count">({{ p.vitalSigns.to.length }})</span>
+            </div>
+            @if (p.vitalSigns.to.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (v of p.vitalSigns.to; track v.id) {
+                <div class="record-card" [ngClass]="{ 'card-flagged': v.clinicallySignificant }">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{
+                        'SHARED_RECORDS.FIELDS.VITALS_READING' | translate
+                      }}</span>
+                      @if (v.clinicallySignificant) {
+                        <span class="severity-flag severity-high"
+                          ><span class="material-symbols-outlined">flag</span>
+                          {{ 'SHARED_RECORDS.FIELDS.CLINICALLY_SIGNIFICANT' | translate }}</span
+                        >
+                      }
+                    </div>
+                    @if (v.recordedAt) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ v.recordedAt | date: 'medium' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body vitals-grid">
+                    @if (v.systolicBpMmHg || v.diastolicBpMmHg) {
+                      <div class="vital-item">
+                        <span class="vital-label">{{
+                          'SHARED_RECORDS.FIELDS.BLOOD_PRESSURE' | translate
+                        }}</span
+                        ><span class="vital-value"
+                          >{{ v.systolicBpMmHg }}/{{ v.diastolicBpMmHg }} mmHg</span
+                        >
+                      </div>
+                    }
+                    @if (v.heartRateBpm) {
+                      <div class="vital-item">
+                        <span class="vital-label">{{
+                          'SHARED_RECORDS.FIELDS.HEART_RATE' | translate
+                        }}</span
+                        ><span class="vital-value">{{ v.heartRateBpm }} bpm</span>
+                      </div>
+                    }
+                    @if (v.temperatureCelsius) {
+                      <div class="vital-item">
+                        <span class="vital-label">{{
+                          'SHARED_RECORDS.FIELDS.TEMPERATURE' | translate
+                        }}</span
+                        ><span class="vital-value">{{ v.temperatureCelsius }} °C</span>
+                      </div>
+                    }
+                    @if (v.respiratoryRateBpm) {
+                      <div class="vital-item">
+                        <span class="vital-label">{{
+                          'SHARED_RECORDS.FIELDS.RESPIRATORY_RATE' | translate
+                        }}</span
+                        ><span class="vital-value">{{ v.respiratoryRateBpm }} /min</span>
+                      </div>
+                    }
+                    @if (v.spo2Percent) {
+                      <div class="vital-item">
+                        <span class="vital-label">{{
+                          'SHARED_RECORDS.FIELDS.SPO2' | translate
+                        }}</span
+                        ><span class="vital-value">{{ v.spo2Percent }}%</span>
+                      </div>
+                    }
+                    @if (v.bloodGlucoseMgDl) {
+                      <div class="vital-item">
+                        <span class="vital-label">{{
+                          'SHARED_RECORDS.FIELDS.BLOOD_GLUCOSE' | translate
+                        }}</span
+                        ><span class="vital-value">{{ v.bloodGlucoseMgDl }} mg/dL</span>
+                      </div>
+                    }
+                    @if (v.weightKg) {
+                      <div class="vital-item">
+                        <span class="vital-label">{{
+                          'SHARED_RECORDS.FIELDS.WEIGHT' | translate
+                        }}</span
+                        ><span class="vital-value">{{ v.weightKg }} kg</span>
+                      </div>
+                    }
+                  </div>
+                  @if (v.recordedByName) {
+                    <div class="card-footer">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.RECORDED_BY' | translate
+                      }}</span
+                      ><span class="detail-value">{{ v.recordedByName }}</span>
                     </div>
                   }
                 </div>
-              </div>
+              }
             }
           </div>
-        }
-      }
-
-      <!-- ═══ Allergies ═══ -->
-      @if (activeTab() === 'allergies') {
-        @if ((record()!.allergiesDetailed?.length ?? 0) === 0 && !record()!.allergies) {
-          <div class="empty-tab">
-            <span class="material-symbols-outlined">warning</span>
-            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
+          <div class="hospital-column">
+            <div class="column-header from-header">
+              <span class="material-symbols-outlined">share</span>
+              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              <span class="column-count">({{ p.vitalSigns.from.length }})</span>
+            </div>
+            @if (p.vitalSigns.from.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (v of p.vitalSigns.from; track v.id) {
+                <div
+                  class="record-card from-card"
+                  [ngClass]="{ 'card-flagged': v.clinicallySignificant }"
+                >
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{
+                        'SHARED_RECORDS.FIELDS.VITALS_READING' | translate
+                      }}</span>
+                      @if (v.clinicallySignificant) {
+                        <span class="severity-flag severity-high"
+                          ><span class="material-symbols-outlined">flag</span>
+                          {{ 'SHARED_RECORDS.FIELDS.CLINICALLY_SIGNIFICANT' | translate }}</span
+                        >
+                      }
+                    </div>
+                    @if (v.recordedAt) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ v.recordedAt | date: 'medium' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body vitals-grid">
+                    @if (v.systolicBpMmHg || v.diastolicBpMmHg) {
+                      <div class="vital-item">
+                        <span class="vital-label">{{
+                          'SHARED_RECORDS.FIELDS.BLOOD_PRESSURE' | translate
+                        }}</span
+                        ><span class="vital-value"
+                          >{{ v.systolicBpMmHg }}/{{ v.diastolicBpMmHg }} mmHg</span
+                        >
+                      </div>
+                    }
+                    @if (v.heartRateBpm) {
+                      <div class="vital-item">
+                        <span class="vital-label">{{
+                          'SHARED_RECORDS.FIELDS.HEART_RATE' | translate
+                        }}</span
+                        ><span class="vital-value">{{ v.heartRateBpm }} bpm</span>
+                      </div>
+                    }
+                    @if (v.temperatureCelsius) {
+                      <div class="vital-item">
+                        <span class="vital-label">{{
+                          'SHARED_RECORDS.FIELDS.TEMPERATURE' | translate
+                        }}</span
+                        ><span class="vital-value">{{ v.temperatureCelsius }} °C</span>
+                      </div>
+                    }
+                    @if (v.respiratoryRateBpm) {
+                      <div class="vital-item">
+                        <span class="vital-label">{{
+                          'SHARED_RECORDS.FIELDS.RESPIRATORY_RATE' | translate
+                        }}</span
+                        ><span class="vital-value">{{ v.respiratoryRateBpm }} /min</span>
+                      </div>
+                    }
+                    @if (v.spo2Percent) {
+                      <div class="vital-item">
+                        <span class="vital-label">{{
+                          'SHARED_RECORDS.FIELDS.SPO2' | translate
+                        }}</span
+                        ><span class="vital-value">{{ v.spo2Percent }}%</span>
+                      </div>
+                    }
+                    @if (v.bloodGlucoseMgDl) {
+                      <div class="vital-item">
+                        <span class="vital-label">{{
+                          'SHARED_RECORDS.FIELDS.BLOOD_GLUCOSE' | translate
+                        }}</span
+                        ><span class="vital-value">{{ v.bloodGlucoseMgDl }} mg/dL</span>
+                      </div>
+                    }
+                    @if (v.weightKg) {
+                      <div class="vital-item">
+                        <span class="vital-label">{{
+                          'SHARED_RECORDS.FIELDS.WEIGHT' | translate
+                        }}</span
+                        ><span class="vital-value">{{ v.weightKg }} kg</span>
+                      </div>
+                    }
+                  </div>
+                  @if (v.recordedByName) {
+                    <div class="card-footer">
+                      <span class="detail-label">{{
+                        'SHARED_RECORDS.FIELDS.RECORDED_BY' | translate
+                      }}</span
+                      ><span class="detail-value">{{ v.recordedByName }}</span>
+                    </div>
+                  }
+                </div>
+              }
+            }
           </div>
-        } @else if ((record()!.allergiesDetailed?.length ?? 0) === 0 && record()!.allergies) {
+        </div>
+      </div>
+
+      <!-- ═══════════════════ Immunizations ═══════════════════ -->
+      <div class="comparison-section">
+        <div class="section-header">
+          <span class="material-symbols-outlined section-icon">vaccines</span>
+          <h3>{{ 'SHARED_RECORDS.TABS.IMMUNIZATIONS' | translate }}</h3>
+          <span class="section-count">{{
+            p.immunizations.to.length + p.immunizations.from.length
+          }}</span>
+        </div>
+        <div class="comparison-grid">
+          <div class="hospital-column">
+            <div class="column-header to-header">
+              <span class="material-symbols-outlined">domain</span>
+              {{ r.toHospitalName }}
+              <span class="column-count">({{ p.immunizations.to.length }})</span>
+            </div>
+            @if (p.immunizations.to.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (imm of p.immunizations.to; track imm.id) {
+                <div class="record-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{
+                        imm.vaccineDisplay || imm.vaccineCode || 'Vaccine'
+                      }}</span>
+                      @if (imm.status) {
+                        <span class="status-badge" [ngClass]="statusClass(imm.status)">{{
+                          imm.status
+                        }}</span>
+                      }
+                    </div>
+                    @if (imm.administrationDate) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ imm.administrationDate | date: 'mediumDate' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (imm.targetDisease) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.TARGET_DISEASE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ imm.targetDisease }}</span>
+                      </div>
+                    }
+                    @if (imm.doseNumber) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.DOSE' | translate
+                        }}</span
+                        ><span class="detail-value"
+                          >{{ imm.doseNumber }}
+                          @if (imm.totalDosesInSeries) {
+                            / {{ imm.totalDosesInSeries }}
+                          }
+                        </span>
+                      </div>
+                    }
+                    @if (imm.route) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ROUTE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ imm.route }}</span>
+                      </div>
+                    }
+                    @if (imm.site) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.SITE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ imm.site }}</span>
+                      </div>
+                    }
+                    @if (imm.manufacturer) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.MANUFACTURER' | translate
+                        }}</span
+                        ><span class="detail-value">{{ imm.manufacturer }}</span>
+                      </div>
+                    }
+                    @if (imm.lotNumber) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.LOT_NUMBER' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ imm.lotNumber }}</span>
+                      </div>
+                    }
+                    @if (imm.administeredByName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ADMINISTERED_BY' | translate
+                        }}</span
+                        ><span class="detail-value">{{ imm.administeredByName }}</span>
+                      </div>
+                    }
+                    @if (imm.nextDoseDueDate) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NEXT_DOSE_DUE' | translate
+                        }}</span
+                        ><span class="detail-value">{{
+                          imm.nextDoseDueDate | date: 'mediumDate'
+                        }}</span>
+                      </div>
+                    }
+                    @if (imm.adverseReaction) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ADVERSE_REACTION' | translate
+                        }}</span
+                        ><span
+                          class="detail-value"
+                          [ngClass]="severityClass(imm.reactionSeverity)"
+                          >{{ imm.reactionDescription || 'Yes' }}</span
+                        >
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+          <div class="hospital-column">
+            <div class="column-header from-header">
+              <span class="material-symbols-outlined">share</span>
+              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              <span class="column-count">({{ p.immunizations.from.length }})</span>
+            </div>
+            @if (p.immunizations.from.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (imm of p.immunizations.from; track imm.id) {
+                <div class="record-card from-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{
+                        imm.vaccineDisplay || imm.vaccineCode || 'Vaccine'
+                      }}</span>
+                      @if (imm.status) {
+                        <span class="status-badge" [ngClass]="statusClass(imm.status)">{{
+                          imm.status
+                        }}</span>
+                      }
+                    </div>
+                    @if (imm.administrationDate) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ imm.administrationDate | date: 'mediumDate' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (imm.hospitalName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.HOSPITAL' | translate
+                        }}</span
+                        ><span class="detail-value hospital-tag">{{ imm.hospitalName }}</span>
+                      </div>
+                    }
+                    @if (imm.targetDisease) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.TARGET_DISEASE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ imm.targetDisease }}</span>
+                      </div>
+                    }
+                    @if (imm.doseNumber) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.DOSE' | translate
+                        }}</span
+                        ><span class="detail-value"
+                          >{{ imm.doseNumber }}
+                          @if (imm.totalDosesInSeries) {
+                            / {{ imm.totalDosesInSeries }}
+                          }
+                        </span>
+                      </div>
+                    }
+                    @if (imm.route) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ROUTE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ imm.route }}</span>
+                      </div>
+                    }
+                    @if (imm.site) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.SITE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ imm.site }}</span>
+                      </div>
+                    }
+                    @if (imm.manufacturer) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.MANUFACTURER' | translate
+                        }}</span
+                        ><span class="detail-value">{{ imm.manufacturer }}</span>
+                      </div>
+                    }
+                    @if (imm.lotNumber) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.LOT_NUMBER' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ imm.lotNumber }}</span>
+                      </div>
+                    }
+                    @if (imm.administeredByName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ADMINISTERED_BY' | translate
+                        }}</span
+                        ><span class="detail-value">{{ imm.administeredByName }}</span>
+                      </div>
+                    }
+                    @if (imm.nextDoseDueDate) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NEXT_DOSE_DUE' | translate
+                        }}</span
+                        ><span class="detail-value">{{
+                          imm.nextDoseDueDate | date: 'mediumDate'
+                        }}</span>
+                      </div>
+                    }
+                    @if (imm.adverseReaction) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ADVERSE_REACTION' | translate
+                        }}</span
+                        ><span
+                          class="detail-value"
+                          [ngClass]="severityClass(imm.reactionSeverity)"
+                          >{{ imm.reactionDescription || 'Yes' }}</span
+                        >
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════ Allergies ═══════════════════ -->
+      <div class="comparison-section">
+        <div class="section-header">
+          <span class="material-symbols-outlined section-icon">warning</span>
+          <h3>{{ 'SHARED_RECORDS.TABS.ALLERGIES' | translate }}</h3>
+          <span class="section-count">{{
+            p.allergies.to.length +
+              p.allergies.from.length +
+              (r.allergies && p.allergies.to.length + p.allergies.from.length === 0 ? 1 : 0)
+          }}</span>
+        </div>
+        <!-- Legacy allergy fallback -->
+        @if (p.allergies.to.length + p.allergies.from.length === 0 && r.allergies) {
           <div class="record-cards">
             <div class="record-card card-flagged">
               <div class="card-header">
@@ -516,654 +1554,1006 @@
               </div>
               <div class="card-body">
                 <div class="detail-row">
-                  <span class="detail-value">{{ record()!.allergies }}</span>
+                  <span class="detail-value">{{ r.allergies }}</span>
                 </div>
               </div>
             </div>
           </div>
         } @else {
-          <div class="record-cards">
-            @for (a of record()!.allergiesDetailed!; track a.id) {
-              <div class="record-card" [ngClass]="{ 'card-flagged': a.severity === 'SEVERE' }">
-                <div class="card-header">
-                  <div class="card-title-row">
-                    <span class="card-title">{{ a.allergenDisplay || 'Allergen' }}</span>
-                    @if (a.severity) {
-                      <span class="severity-flag" [ngClass]="severityClass(a.severity)">{{
-                        a.severity
-                      }}</span>
-                    }
-                  </div>
-                  @if (a.category) {
-                    <span class="card-subtitle">{{ a.category }}</span>
-                  }
-                </div>
-                <div class="card-body">
-                  @if (a.reaction) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.REACTION' | translate
-                      }}</span>
-                      <span class="detail-value">{{ a.reaction }}</span>
-                    </div>
-                  }
-                  @if (a.verificationStatus) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.VERIFICATION' | translate
-                      }}</span>
-                      <span class="detail-value">{{ a.verificationStatus }}</span>
-                    </div>
-                  }
-                  @if (a.onsetDate) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.ONSET' | translate
-                      }}</span>
-                      <span class="detail-value">{{ a.onsetDate | date: 'mediumDate' }}</span>
-                    </div>
-                  }
-                  @if (a.reactionNotes) {
-                    <div class="detail-row notes-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.NOTES' | translate
-                      }}</span>
-                      <span class="detail-value notes-text">{{ a.reactionNotes }}</span>
-                    </div>
-                  }
-                </div>
+          <div class="comparison-grid">
+            <div class="hospital-column">
+              <div class="column-header to-header">
+                <span class="material-symbols-outlined">domain</span>
+                {{ r.toHospitalName }}
+                <span class="column-count">({{ p.allergies.to.length }})</span>
               </div>
-            }
-          </div>
-        }
-      }
-
-      <!-- ═══ Problems ═══ -->
-      @if (activeTab() === 'problems') {
-        @if ((record()!.problems?.length ?? 0) === 0) {
-          <div class="empty-tab">
-            <span class="material-symbols-outlined">monitor_heart</span>
-            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
-          </div>
-        } @else {
-          <div class="record-cards">
-            @for (p of record()!.problems!; track p.id) {
-              <div class="record-card">
-                <div class="card-header">
-                  <div class="card-title-row">
-                    <span class="card-title">{{ p.problemDisplay || 'Problem' }}</span>
-                    @if (p.status) {
-                      <span class="status-badge" [ngClass]="statusClass(p.status)">{{
-                        p.status
-                      }}</span>
-                    }
-                    @if (p.chronic) {
-                      <span class="chronic-badge">{{ 'SHARED_RECORDS.CHRONIC' | translate }}</span>
-                    }
-                  </div>
+              @if (p.allergies.to.length === 0) {
+                <div class="empty-column">
+                  <span class="material-symbols-outlined">info</span>
+                  {{ 'SHARED_RECORDS.NO_DATA' | translate }}
                 </div>
-                <div class="card-body">
-                  @if (p.severity) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.SEVERITY' | translate
-                      }}</span>
-                      <span class="detail-value" [ngClass]="severityClass(p.severity)">{{
-                        p.severity
-                      }}</span>
+              } @else {
+                @for (a of p.allergies.to; track a.id) {
+                  <div class="record-card" [ngClass]="{ 'card-flagged': a.severity === 'SEVERE' }">
+                    <div class="card-header">
+                      <div class="card-title-row">
+                        <span class="card-title">{{ a.allergenDisplay || 'Allergen' }}</span>
+                        @if (a.severity) {
+                          <span class="severity-flag" [ngClass]="severityClass(a.severity)">{{
+                            a.severity
+                          }}</span>
+                        }
+                      </div>
+                      @if (a.category) {
+                        <span class="card-subtitle">{{ a.category }}</span>
+                      }
                     </div>
-                  }
-                  @if (p.onsetDate) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.ONSET' | translate
-                      }}</span>
-                      <span class="detail-value">{{ p.onsetDate | date: 'mediumDate' }}</span>
+                    <div class="card-body">
+                      @if (a.reaction) {
+                        <div class="detail-row">
+                          <span class="detail-label">{{
+                            'SHARED_RECORDS.FIELDS.REACTION' | translate
+                          }}</span
+                          ><span class="detail-value">{{ a.reaction }}</span>
+                        </div>
+                      }
+                      @if (a.verificationStatus) {
+                        <div class="detail-row">
+                          <span class="detail-label">{{
+                            'SHARED_RECORDS.FIELDS.VERIFICATION' | translate
+                          }}</span
+                          ><span class="detail-value">{{ a.verificationStatus }}</span>
+                        </div>
+                      }
+                      @if (a.onsetDate) {
+                        <div class="detail-row">
+                          <span class="detail-label">{{
+                            'SHARED_RECORDS.FIELDS.ONSET' | translate
+                          }}</span
+                          ><span class="detail-value">{{ a.onsetDate | date: 'mediumDate' }}</span>
+                        </div>
+                      }
+                      @if (a.reactionNotes) {
+                        <div class="detail-row notes-row">
+                          <span class="detail-label">{{
+                            'SHARED_RECORDS.FIELDS.NOTES' | translate
+                          }}</span
+                          ><span class="detail-value notes-text">{{ a.reactionNotes }}</span>
+                        </div>
+                      }
                     </div>
-                  }
-                  @if (p.resolvedDate) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.RESOLVED' | translate
-                      }}</span>
-                      <span class="detail-value">{{ p.resolvedDate | date: 'mediumDate' }}</span>
-                    </div>
-                  }
-                  @if (p.problemCode) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.CODE' | translate
-                      }}</span>
-                      <span class="detail-value mono">{{ p.problemCode }}</span>
-                    </div>
-                  }
-                  @if (p.notes) {
-                    <div class="detail-row notes-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.NOTES' | translate
-                      }}</span>
-                      <span class="detail-value notes-text">{{ p.notes }}</span>
-                    </div>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        }
-      }
-
-      <!-- ═══ Surgical History ═══ -->
-      @if (activeTab() === 'surgicalHistory') {
-        @if ((record()!.surgicalHistory?.length ?? 0) === 0) {
-          <div class="empty-tab">
-            <span class="material-symbols-outlined">surgical</span>
-            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
-          </div>
-        } @else {
-          <div class="record-cards">
-            @for (s of record()!.surgicalHistory!; track s.id) {
-              <div class="record-card">
-                <div class="card-header">
-                  <div class="card-title-row">
-                    <span class="card-title">{{ s.procedureDisplay || 'Procedure' }}</span>
-                  </div>
-                  @if (s.procedureDate) {
-                    <span class="card-date">
-                      <span class="material-symbols-outlined">calendar_today</span>
-                      {{ s.procedureDate | date: 'mediumDate' }}
-                    </span>
-                  }
-                </div>
-                <div class="card-body">
-                  @if (s.outcome) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.OUTCOME' | translate
-                      }}</span>
-                      <span class="detail-value">{{ s.outcome }}</span>
-                    </div>
-                  }
-                  @if (s.performedBy) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.PERFORMED_BY' | translate
-                      }}</span>
-                      <span class="detail-value">{{ s.performedBy }}</span>
-                    </div>
-                  }
-                  @if (s.location) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.LOCATION' | translate
-                      }}</span>
-                      <span class="detail-value">{{ s.location }}</span>
-                    </div>
-                  }
-                  @if (s.procedureCode) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.CODE' | translate
-                      }}</span>
-                      <span class="detail-value mono">{{ s.procedureCode }}</span>
-                    </div>
-                  }
-                  @if (s.notes) {
-                    <div class="detail-row notes-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.NOTES' | translate
-                      }}</span>
-                      <span class="detail-value notes-text">{{ s.notes }}</span>
-                    </div>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        }
-      }
-
-      <!-- ═══ Advance Directives ═══ -->
-      @if (activeTab() === 'advanceDirectives') {
-        @if ((record()!.advanceDirectives?.length ?? 0) === 0) {
-          <div class="empty-tab">
-            <span class="material-symbols-outlined">description</span>
-            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
-          </div>
-        } @else {
-          <div class="record-cards">
-            @for (d of record()!.advanceDirectives!; track d.id) {
-              <div class="record-card">
-                <div class="card-header">
-                  <div class="card-title-row">
-                    <span class="card-title">{{ d.directiveType || 'Directive' }}</span>
-                    @if (d.status) {
-                      <span class="status-badge" [ngClass]="statusClass(d.status)">{{
-                        d.status
-                      }}</span>
-                    }
-                  </div>
-                  @if (d.effectiveDate) {
-                    <span class="card-date">
-                      <span class="material-symbols-outlined">calendar_today</span>
-                      {{ d.effectiveDate | date: 'mediumDate' }}
-                    </span>
-                  }
-                </div>
-                <div class="card-body">
-                  @if (d.description) {
-                    <div class="detail-row notes-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.DESCRIPTION' | translate
-                      }}</span>
-                      <span class="detail-value notes-text">{{ d.description }}</span>
-                    </div>
-                  }
-                  @if (d.physicianName) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.PHYSICIAN' | translate
-                      }}</span>
-                      <span class="detail-value">{{ d.physicianName }}</span>
-                    </div>
-                  }
-                  @if (d.witnessName) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.WITNESS' | translate
-                      }}</span>
-                      <span class="detail-value">{{ d.witnessName }}</span>
-                    </div>
-                  }
-                  @if (d.expirationDate) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.EXPIRATION' | translate
-                      }}</span>
-                      <span class="detail-value">{{ d.expirationDate | date: 'mediumDate' }}</span>
-                    </div>
-                  }
-                </div>
-              </div>
-            }
-          </div>
-        }
-      }
-
-      <!-- ═══ Vital Signs ═══ -->
-      @if (activeTab() === 'vitalSigns') {
-        @if ((record()!.vitalSigns?.length ?? 0) === 0) {
-          <div class="empty-tab">
-            <span class="material-symbols-outlined">monitor_heart</span>
-            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
-          </div>
-        } @else {
-          <div class="record-cards">
-            @for (v of record()!.vitalSigns!; track v.id) {
-              <div class="record-card" [ngClass]="{ 'card-flagged': v.clinicallySignificant }">
-                <div class="card-header">
-                  <div class="card-title-row">
-                    <span class="card-title">{{
-                      'SHARED_RECORDS.FIELDS.VITALS_READING' | translate
-                    }}</span>
-                    @if (v.clinicallySignificant) {
-                      <span class="severity-flag severity-high">
-                        <span class="material-symbols-outlined">flag</span>
-                        {{ 'SHARED_RECORDS.FIELDS.CLINICALLY_SIGNIFICANT' | translate }}
-                      </span>
-                    }
-                  </div>
-                  @if (v.recordedAt) {
-                    <span class="card-date">
-                      <span class="material-symbols-outlined">calendar_today</span>
-                      {{ v.recordedAt | date: 'medium' }}
-                    </span>
-                  }
-                </div>
-                <div class="card-body vitals-grid">
-                  @if (v.systolicBpMmHg || v.diastolicBpMmHg) {
-                    <div class="vital-item">
-                      <span class="vital-label">{{
-                        'SHARED_RECORDS.FIELDS.BLOOD_PRESSURE' | translate
-                      }}</span>
-                      <span class="vital-value"
-                        >{{ v.systolicBpMmHg }}/{{ v.diastolicBpMmHg }} mmHg</span
-                      >
-                    </div>
-                  }
-                  @if (v.heartRateBpm) {
-                    <div class="vital-item">
-                      <span class="vital-label">{{
-                        'SHARED_RECORDS.FIELDS.HEART_RATE' | translate
-                      }}</span>
-                      <span class="vital-value">{{ v.heartRateBpm }} bpm</span>
-                    </div>
-                  }
-                  @if (v.temperatureCelsius) {
-                    <div class="vital-item">
-                      <span class="vital-label">{{
-                        'SHARED_RECORDS.FIELDS.TEMPERATURE' | translate
-                      }}</span>
-                      <span class="vital-value">{{ v.temperatureCelsius }} °C</span>
-                    </div>
-                  }
-                  @if (v.respiratoryRateBpm) {
-                    <div class="vital-item">
-                      <span class="vital-label">{{
-                        'SHARED_RECORDS.FIELDS.RESPIRATORY_RATE' | translate
-                      }}</span>
-                      <span class="vital-value">{{ v.respiratoryRateBpm }} /min</span>
-                    </div>
-                  }
-                  @if (v.spo2Percent) {
-                    <div class="vital-item">
-                      <span class="vital-label">{{
-                        'SHARED_RECORDS.FIELDS.SPO2' | translate
-                      }}</span>
-                      <span class="vital-value">{{ v.spo2Percent }}%</span>
-                    </div>
-                  }
-                  @if (v.bloodGlucoseMgDl) {
-                    <div class="vital-item">
-                      <span class="vital-label">{{
-                        'SHARED_RECORDS.FIELDS.BLOOD_GLUCOSE' | translate
-                      }}</span>
-                      <span class="vital-value">{{ v.bloodGlucoseMgDl }} mg/dL</span>
-                    </div>
-                  }
-                  @if (v.weightKg) {
-                    <div class="vital-item">
-                      <span class="vital-label">{{
-                        'SHARED_RECORDS.FIELDS.WEIGHT' | translate
-                      }}</span>
-                      <span class="vital-value">{{ v.weightKg }} kg</span>
-                    </div>
-                  }
-                </div>
-                @if (v.recordedByName) {
-                  <div class="card-footer">
-                    <span class="detail-label">{{
-                      'SHARED_RECORDS.FIELDS.RECORDED_BY' | translate
-                    }}</span>
-                    <span class="detail-value">{{ v.recordedByName }}</span>
                   </div>
                 }
+              }
+            </div>
+            <div class="hospital-column">
+              <div class="column-header from-header">
+                <span class="material-symbols-outlined">share</span>
+                {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+                <span class="column-count">({{ p.allergies.from.length }})</span>
               </div>
-            }
-          </div>
-        }
-      }
-
-      <!-- ═══ Immunizations ═══ -->
-      @if (activeTab() === 'immunizations') {
-        @if ((record()!.immunizations?.length ?? 0) === 0) {
-          <div class="empty-tab">
-            <span class="material-symbols-outlined">vaccines</span>
-            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
-          </div>
-        } @else {
-          <div class="record-cards">
-            @for (imm of record()!.immunizations!; track imm.id) {
-              <div class="record-card">
-                <div class="card-header">
-                  <div class="card-title-row">
-                    <span class="card-title">{{
-                      imm.vaccineDisplay || imm.vaccineCode || 'Vaccine'
-                    }}</span>
-                    @if (imm.status) {
-                      <span class="status-badge" [ngClass]="statusClass(imm.status)">{{
-                        imm.status
-                      }}</span>
-                    }
-                  </div>
-                  @if (imm.administrationDate) {
-                    <span class="card-date">
-                      <span class="material-symbols-outlined">calendar_today</span>
-                      {{ imm.administrationDate | date: 'mediumDate' }}
-                    </span>
-                  }
+              @if (p.allergies.from.length === 0) {
+                <div class="empty-column">
+                  <span class="material-symbols-outlined">info</span>
+                  {{ 'SHARED_RECORDS.NO_DATA' | translate }}
                 </div>
-                <div class="card-body">
-                  @if (imm.targetDisease) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.TARGET_DISEASE' | translate
-                      }}</span>
-                      <span class="detail-value">{{ imm.targetDisease }}</span>
-                    </div>
-                  }
-                  @if (imm.doseNumber) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.DOSE' | translate
-                      }}</span>
-                      <span class="detail-value">
-                        {{ imm.doseNumber }}
-                        @if (imm.totalDosesInSeries) {
-                          / {{ imm.totalDosesInSeries }}
+              } @else {
+                @for (a of p.allergies.from; track a.id) {
+                  <div
+                    class="record-card from-card"
+                    [ngClass]="{ 'card-flagged': a.severity === 'SEVERE' }"
+                  >
+                    <div class="card-header">
+                      <div class="card-title-row">
+                        <span class="card-title">{{ a.allergenDisplay || 'Allergen' }}</span>
+                        @if (a.severity) {
+                          <span class="severity-flag" [ngClass]="severityClass(a.severity)">{{
+                            a.severity
+                          }}</span>
                         }
-                      </span>
+                      </div>
+                      @if (a.category) {
+                        <span class="card-subtitle">{{ a.category }}</span>
+                      }
                     </div>
-                  }
-                  @if (imm.route) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.ROUTE' | translate
-                      }}</span>
-                      <span class="detail-value">{{ imm.route }}</span>
+                    <div class="card-body">
+                      @if (a.hospitalName) {
+                        <div class="detail-row">
+                          <span class="detail-label">{{
+                            'SHARED_RECORDS.FIELDS.HOSPITAL' | translate
+                          }}</span
+                          ><span class="detail-value hospital-tag">{{ a.hospitalName }}</span>
+                        </div>
+                      }
+                      @if (a.reaction) {
+                        <div class="detail-row">
+                          <span class="detail-label">{{
+                            'SHARED_RECORDS.FIELDS.REACTION' | translate
+                          }}</span
+                          ><span class="detail-value">{{ a.reaction }}</span>
+                        </div>
+                      }
+                      @if (a.verificationStatus) {
+                        <div class="detail-row">
+                          <span class="detail-label">{{
+                            'SHARED_RECORDS.FIELDS.VERIFICATION' | translate
+                          }}</span
+                          ><span class="detail-value">{{ a.verificationStatus }}</span>
+                        </div>
+                      }
+                      @if (a.onsetDate) {
+                        <div class="detail-row">
+                          <span class="detail-label">{{
+                            'SHARED_RECORDS.FIELDS.ONSET' | translate
+                          }}</span
+                          ><span class="detail-value">{{ a.onsetDate | date: 'mediumDate' }}</span>
+                        </div>
+                      }
+                      @if (a.reactionNotes) {
+                        <div class="detail-row notes-row">
+                          <span class="detail-label">{{
+                            'SHARED_RECORDS.FIELDS.NOTES' | translate
+                          }}</span
+                          ><span class="detail-value notes-text">{{ a.reactionNotes }}</span>
+                        </div>
+                      }
                     </div>
-                  }
-                  @if (imm.site) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.SITE' | translate
-                      }}</span>
-                      <span class="detail-value">{{ imm.site }}</span>
-                    </div>
-                  }
-                  @if (imm.manufacturer) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.MANUFACTURER' | translate
-                      }}</span>
-                      <span class="detail-value">{{ imm.manufacturer }}</span>
-                    </div>
-                  }
-                  @if (imm.lotNumber) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.LOT_NUMBER' | translate
-                      }}</span>
-                      <span class="detail-value mono">{{ imm.lotNumber }}</span>
-                    </div>
-                  }
-                  @if (imm.administeredByName) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.ADMINISTERED_BY' | translate
-                      }}</span>
-                      <span class="detail-value">{{ imm.administeredByName }}</span>
-                    </div>
-                  }
-                  @if (imm.nextDoseDueDate) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.NEXT_DOSE_DUE' | translate
-                      }}</span>
-                      <span class="detail-value">{{
-                        imm.nextDoseDueDate | date: 'mediumDate'
-                      }}</span>
-                    </div>
-                  }
-                  @if (imm.adverseReaction) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.ADVERSE_REACTION' | translate
-                      }}</span>
-                      <span class="detail-value" [ngClass]="severityClass(imm.reactionSeverity)">
-                        {{ imm.reactionDescription || 'Yes' }}
-                      </span>
-                    </div>
-                  }
-                </div>
-              </div>
-            }
+                  </div>
+                }
+              }
+            </div>
           </div>
         }
-      }
+      </div>
 
-      <!-- ═══ Insurances ═══ -->
-      @if (activeTab() === 'insurances') {
-        @if ((record()!.insurances?.length ?? 0) === 0) {
-          <div class="empty-tab">
-            <span class="material-symbols-outlined">shield</span>
-            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
-          </div>
-        } @else {
-          <div class="record-cards">
-            @for (ins of record()!.insurances!; track ins.id) {
-              <div class="record-card">
-                <div class="card-header">
-                  <div class="card-title-row">
-                    <span class="card-title">{{ ins.providerName || 'Insurance' }}</span>
-                    @if (ins.primary) {
-                      <span class="status-badge status-success">{{
-                        'SHARED_RECORDS.FIELDS.PRIMARY' | translate
-                      }}</span>
+      <!-- ═══════════════════ Problems ═══════════════════ -->
+      <div class="comparison-section">
+        <div class="section-header">
+          <span class="material-symbols-outlined section-icon">health_and_safety</span>
+          <h3>{{ 'SHARED_RECORDS.TABS.PROBLEMS' | translate }}</h3>
+          <span class="section-count">{{ p.problems.to.length + p.problems.from.length }}</span>
+        </div>
+        <div class="comparison-grid">
+          <div class="hospital-column">
+            <div class="column-header to-header">
+              <span class="material-symbols-outlined">domain</span>
+              {{ r.toHospitalName }}
+              <span class="column-count">({{ p.problems.to.length }})</span>
+            </div>
+            @if (p.problems.to.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (prob of p.problems.to; track prob.id) {
+                <div class="record-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ prob.problemDisplay || 'Problem' }}</span>
+                      @if (prob.status) {
+                        <span class="status-badge" [ngClass]="statusClass(prob.status)">{{
+                          prob.status
+                        }}</span>
+                      }
+                      @if (prob.chronic) {
+                        <span class="chronic-badge">{{
+                          'SHARED_RECORDS.CHRONIC' | translate
+                        }}</span>
+                      }
+                    </div>
+                  </div>
+                  <div class="card-body">
+                    @if (prob.severity) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.SEVERITY' | translate
+                        }}</span
+                        ><span class="detail-value" [ngClass]="severityClass(prob.severity)">{{
+                          prob.severity
+                        }}</span>
+                      </div>
+                    }
+                    @if (prob.onsetDate) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ONSET' | translate
+                        }}</span
+                        ><span class="detail-value">{{ prob.onsetDate | date: 'mediumDate' }}</span>
+                      </div>
+                    }
+                    @if (prob.resolvedDate) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.RESOLVED' | translate
+                        }}</span
+                        ><span class="detail-value">{{
+                          prob.resolvedDate | date: 'mediumDate'
+                        }}</span>
+                      </div>
+                    }
+                    @if (prob.problemCode) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.CODE' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ prob.problemCode }}</span>
+                      </div>
+                    }
+                    @if (prob.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ prob.notes }}</span>
+                      </div>
                     }
                   </div>
                 </div>
-                <div class="card-body">
-                  @if (ins.policyNumber) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.POLICY_NUMBER' | translate
-                      }}</span>
-                      <span class="detail-value mono">{{ ins.policyNumber }}</span>
-                    </div>
-                  }
-                  @if (ins.groupNumber) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.GROUP_NUMBER' | translate
-                      }}</span>
-                      <span class="detail-value mono">{{ ins.groupNumber }}</span>
-                    </div>
-                  }
-                  @if (ins.subscriberName) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.SUBSCRIBER' | translate
-                      }}</span>
-                      <span class="detail-value">{{ ins.subscriberName }}</span>
-                    </div>
-                  }
-                  @if (ins.subscriberRelationship) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.RELATIONSHIP' | translate
-                      }}</span>
-                      <span class="detail-value">{{ ins.subscriberRelationship }}</span>
-                    </div>
-                  }
-                  @if (ins.effectiveDate) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.EFFECTIVE' | translate
-                      }}</span>
-                      <span class="detail-value">{{ ins.effectiveDate | date: 'mediumDate' }}</span>
-                    </div>
-                  }
-                  @if (ins.expirationDate) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.EXPIRATION' | translate
-                      }}</span>
-                      <span class="detail-value">{{
-                        ins.expirationDate | date: 'mediumDate'
-                      }}</span>
-                    </div>
-                  }
-                </div>
-              </div>
+              }
             }
           </div>
-        }
-      }
-
-      <!-- ═══ Encounter History ═══ -->
-      @if (activeTab() === 'encounterHistory') {
-        @if ((record()!.encounterHistory?.length ?? 0) === 0) {
-          <div class="empty-tab">
-            <span class="material-symbols-outlined">history</span>
-            <p>{{ 'SHARED_RECORDS.NO_DATA' | translate }}</p>
-          </div>
-        } @else {
-          <div class="record-cards">
-            @for (h of record()!.encounterHistory!; track h.id) {
-              <div class="record-card">
-                <div class="card-header">
-                  <div class="card-title-row">
-                    <span class="card-title">{{ h.changeType || 'Change' }}</span>
-                    @if (h.status) {
-                      <span class="status-badge" [ngClass]="statusClass(h.status)">{{
-                        h.status
-                      }}</span>
+          <div class="hospital-column">
+            <div class="column-header from-header">
+              <span class="material-symbols-outlined">share</span>
+              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              <span class="column-count">({{ p.problems.from.length }})</span>
+            </div>
+            @if (p.problems.from.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (prob of p.problems.from; track prob.id) {
+                <div class="record-card from-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ prob.problemDisplay || 'Problem' }}</span>
+                      @if (prob.status) {
+                        <span class="status-badge" [ngClass]="statusClass(prob.status)">{{
+                          prob.status
+                        }}</span>
+                      }
+                      @if (prob.chronic) {
+                        <span class="chronic-badge">{{
+                          'SHARED_RECORDS.CHRONIC' | translate
+                        }}</span>
+                      }
+                    </div>
+                  </div>
+                  <div class="card-body">
+                    @if (prob.hospitalName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.HOSPITAL' | translate
+                        }}</span
+                        ><span class="detail-value hospital-tag">{{ prob.hospitalName }}</span>
+                      </div>
+                    }
+                    @if (prob.severity) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.SEVERITY' | translate
+                        }}</span
+                        ><span class="detail-value" [ngClass]="severityClass(prob.severity)">{{
+                          prob.severity
+                        }}</span>
+                      </div>
+                    }
+                    @if (prob.onsetDate) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ONSET' | translate
+                        }}</span
+                        ><span class="detail-value">{{ prob.onsetDate | date: 'mediumDate' }}</span>
+                      </div>
+                    }
+                    @if (prob.resolvedDate) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.RESOLVED' | translate
+                        }}</span
+                        ><span class="detail-value">{{
+                          prob.resolvedDate | date: 'mediumDate'
+                        }}</span>
+                      </div>
+                    }
+                    @if (prob.problemCode) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.CODE' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ prob.problemCode }}</span>
+                      </div>
+                    }
+                    @if (prob.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ prob.notes }}</span>
+                      </div>
                     }
                   </div>
-                  @if (h.changedAt) {
-                    <span class="card-date">
-                      <span class="material-symbols-outlined">calendar_today</span>
-                      {{ h.changedAt | date: 'medium' }}
-                    </span>
-                  }
                 </div>
-                <div class="card-body">
-                  @if (h.changedBy) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.CHANGED_BY' | translate
-                      }}</span>
-                      <span class="detail-value">{{ h.changedBy }}</span>
-                    </div>
-                  }
-                  @if (h.encounterType) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.ENCOUNTER_TYPE' | translate
-                      }}</span>
-                      <span class="detail-value">{{ h.encounterType }}</span>
-                    </div>
-                  }
-                  @if (h.encounterDate) {
-                    <div class="detail-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.ENCOUNTER_DATE' | translate
-                      }}</span>
-                      <span class="detail-value">{{ h.encounterDate | date: 'medium' }}</span>
-                    </div>
-                  }
-                  @if (h.notes) {
-                    <div class="detail-row notes-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.NOTES' | translate
-                      }}</span>
-                      <span class="detail-value notes-text">{{ h.notes }}</span>
-                    </div>
-                  }
-                  @if (h.previousValuesJson) {
-                    <div class="detail-row notes-row">
-                      <span class="detail-label">{{
-                        'SHARED_RECORDS.FIELDS.PREVIOUS_VALUES' | translate
-                      }}</span>
-                      <span class="detail-value notes-text">{{ h.previousValuesJson }}</span>
-                    </div>
-                  }
-                </div>
-              </div>
+              }
             }
           </div>
-        }
-      }
-    </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════ Surgical History ═══════════════════ -->
+      <div class="comparison-section">
+        <div class="section-header">
+          <span class="material-symbols-outlined section-icon">surgical</span>
+          <h3>{{ 'SHARED_RECORDS.TABS.SURGICAL_HISTORY' | translate }}</h3>
+          <span class="section-count">{{
+            p.surgicalHistory.to.length + p.surgicalHistory.from.length
+          }}</span>
+        </div>
+        <div class="comparison-grid">
+          <div class="hospital-column">
+            <div class="column-header to-header">
+              <span class="material-symbols-outlined">domain</span>
+              {{ r.toHospitalName }}
+              <span class="column-count">({{ p.surgicalHistory.to.length }})</span>
+            </div>
+            @if (p.surgicalHistory.to.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (s of p.surgicalHistory.to; track s.id) {
+                <div class="record-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ s.procedureDisplay || 'Procedure' }}</span>
+                    </div>
+                    @if (s.procedureDate) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ s.procedureDate | date: 'mediumDate' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (s.outcome) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.OUTCOME' | translate
+                        }}</span
+                        ><span class="detail-value">{{ s.outcome }}</span>
+                      </div>
+                    }
+                    @if (s.performedBy) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.PERFORMED_BY' | translate
+                        }}</span
+                        ><span class="detail-value">{{ s.performedBy }}</span>
+                      </div>
+                    }
+                    @if (s.location) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.LOCATION' | translate
+                        }}</span
+                        ><span class="detail-value">{{ s.location }}</span>
+                      </div>
+                    }
+                    @if (s.procedureCode) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.CODE' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ s.procedureCode }}</span>
+                      </div>
+                    }
+                    @if (s.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ s.notes }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+          <div class="hospital-column">
+            <div class="column-header from-header">
+              <span class="material-symbols-outlined">share</span>
+              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              <span class="column-count">({{ p.surgicalHistory.from.length }})</span>
+            </div>
+            @if (p.surgicalHistory.from.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (s of p.surgicalHistory.from; track s.id) {
+                <div class="record-card from-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ s.procedureDisplay || 'Procedure' }}</span>
+                    </div>
+                    @if (s.procedureDate) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ s.procedureDate | date: 'mediumDate' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (s.hospitalName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.HOSPITAL' | translate
+                        }}</span
+                        ><span class="detail-value hospital-tag">{{ s.hospitalName }}</span>
+                      </div>
+                    }
+                    @if (s.outcome) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.OUTCOME' | translate
+                        }}</span
+                        ><span class="detail-value">{{ s.outcome }}</span>
+                      </div>
+                    }
+                    @if (s.performedBy) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.PERFORMED_BY' | translate
+                        }}</span
+                        ><span class="detail-value">{{ s.performedBy }}</span>
+                      </div>
+                    }
+                    @if (s.location) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.LOCATION' | translate
+                        }}</span
+                        ><span class="detail-value">{{ s.location }}</span>
+                      </div>
+                    }
+                    @if (s.procedureCode) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.CODE' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ s.procedureCode }}</span>
+                      </div>
+                    }
+                    @if (s.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ s.notes }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════ Advance Directives ═══════════════════ -->
+      <div class="comparison-section">
+        <div class="section-header">
+          <span class="material-symbols-outlined section-icon">description</span>
+          <h3>{{ 'SHARED_RECORDS.TABS.ADVANCE_DIRECTIVES' | translate }}</h3>
+          <span class="section-count">{{
+            p.advanceDirectives.to.length + p.advanceDirectives.from.length
+          }}</span>
+        </div>
+        <div class="comparison-grid">
+          <div class="hospital-column">
+            <div class="column-header to-header">
+              <span class="material-symbols-outlined">domain</span>
+              {{ r.toHospitalName }}
+              <span class="column-count">({{ p.advanceDirectives.to.length }})</span>
+            </div>
+            @if (p.advanceDirectives.to.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (d of p.advanceDirectives.to; track d.id) {
+                <div class="record-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ d.directiveType || 'Directive' }}</span>
+                      @if (d.status) {
+                        <span class="status-badge" [ngClass]="statusClass(d.status)">{{
+                          d.status
+                        }}</span>
+                      }
+                    </div>
+                    @if (d.effectiveDate) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ d.effectiveDate | date: 'mediumDate' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (d.description) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.DESCRIPTION' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ d.description }}</span>
+                      </div>
+                    }
+                    @if (d.physicianName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.PHYSICIAN' | translate
+                        }}</span
+                        ><span class="detail-value">{{ d.physicianName }}</span>
+                      </div>
+                    }
+                    @if (d.witnessName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.WITNESS' | translate
+                        }}</span
+                        ><span class="detail-value">{{ d.witnessName }}</span>
+                      </div>
+                    }
+                    @if (d.expirationDate) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.EXPIRATION' | translate
+                        }}</span
+                        ><span class="detail-value">{{
+                          d.expirationDate | date: 'mediumDate'
+                        }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+          <div class="hospital-column">
+            <div class="column-header from-header">
+              <span class="material-symbols-outlined">share</span>
+              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              <span class="column-count">({{ p.advanceDirectives.from.length }})</span>
+            </div>
+            @if (p.advanceDirectives.from.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (d of p.advanceDirectives.from; track d.id) {
+                <div class="record-card from-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ d.directiveType || 'Directive' }}</span>
+                      @if (d.status) {
+                        <span class="status-badge" [ngClass]="statusClass(d.status)">{{
+                          d.status
+                        }}</span>
+                      }
+                    </div>
+                    @if (d.effectiveDate) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ d.effectiveDate | date: 'mediumDate' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (d.hospitalName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.HOSPITAL' | translate
+                        }}</span
+                        ><span class="detail-value hospital-tag">{{ d.hospitalName }}</span>
+                      </div>
+                    }
+                    @if (d.description) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.DESCRIPTION' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ d.description }}</span>
+                      </div>
+                    }
+                    @if (d.physicianName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.PHYSICIAN' | translate
+                        }}</span
+                        ><span class="detail-value">{{ d.physicianName }}</span>
+                      </div>
+                    }
+                    @if (d.witnessName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.WITNESS' | translate
+                        }}</span
+                        ><span class="detail-value">{{ d.witnessName }}</span>
+                      </div>
+                    }
+                    @if (d.expirationDate) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.EXPIRATION' | translate
+                        }}</span
+                        ><span class="detail-value">{{
+                          d.expirationDate | date: 'mediumDate'
+                        }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════ Insurances ═══════════════════ -->
+      <div class="comparison-section">
+        <div class="section-header">
+          <span class="material-symbols-outlined section-icon">shield</span>
+          <h3>{{ 'SHARED_RECORDS.TABS.INSURANCES' | translate }}</h3>
+          <span class="section-count">{{ p.insurances.to.length + p.insurances.from.length }}</span>
+        </div>
+        <div class="comparison-grid">
+          <div class="hospital-column">
+            <div class="column-header to-header">
+              <span class="material-symbols-outlined">domain</span>
+              {{ r.toHospitalName }}
+              <span class="column-count">({{ p.insurances.to.length }})</span>
+            </div>
+            @if (p.insurances.to.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (ins of p.insurances.to; track ins.id) {
+                <div class="record-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ ins.providerName || 'Insurance' }}</span>
+                      @if (ins.primary) {
+                        <span class="status-badge status-success">{{
+                          'SHARED_RECORDS.FIELDS.PRIMARY' | translate
+                        }}</span>
+                      }
+                    </div>
+                  </div>
+                  <div class="card-body">
+                    @if (ins.policyNumber) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.POLICY_NUMBER' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ ins.policyNumber }}</span>
+                      </div>
+                    }
+                    @if (ins.groupNumber) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.GROUP_NUMBER' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ ins.groupNumber }}</span>
+                      </div>
+                    }
+                    @if (ins.subscriberName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.SUBSCRIBER' | translate
+                        }}</span
+                        ><span class="detail-value">{{ ins.subscriberName }}</span>
+                      </div>
+                    }
+                    @if (ins.subscriberRelationship) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.RELATIONSHIP' | translate
+                        }}</span
+                        ><span class="detail-value">{{ ins.subscriberRelationship }}</span>
+                      </div>
+                    }
+                    @if (ins.effectiveDate) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.EFFECTIVE' | translate
+                        }}</span
+                        ><span class="detail-value">{{
+                          ins.effectiveDate | date: 'mediumDate'
+                        }}</span>
+                      </div>
+                    }
+                    @if (ins.expirationDate) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.EXPIRATION' | translate
+                        }}</span
+                        ><span class="detail-value">{{
+                          ins.expirationDate | date: 'mediumDate'
+                        }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+          <div class="hospital-column">
+            <div class="column-header from-header">
+              <span class="material-symbols-outlined">share</span>
+              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              <span class="column-count">({{ p.insurances.from.length }})</span>
+            </div>
+            @if (p.insurances.from.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (ins of p.insurances.from; track ins.id) {
+                <div class="record-card from-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ ins.providerName || 'Insurance' }}</span>
+                      @if (ins.primary) {
+                        <span class="status-badge status-success">{{
+                          'SHARED_RECORDS.FIELDS.PRIMARY' | translate
+                        }}</span>
+                      }
+                    </div>
+                  </div>
+                  <div class="card-body">
+                    @if (ins.policyNumber) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.POLICY_NUMBER' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ ins.policyNumber }}</span>
+                      </div>
+                    }
+                    @if (ins.groupNumber) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.GROUP_NUMBER' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ ins.groupNumber }}</span>
+                      </div>
+                    }
+                    @if (ins.subscriberName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.SUBSCRIBER' | translate
+                        }}</span
+                        ><span class="detail-value">{{ ins.subscriberName }}</span>
+                      </div>
+                    }
+                    @if (ins.subscriberRelationship) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.RELATIONSHIP' | translate
+                        }}</span
+                        ><span class="detail-value">{{ ins.subscriberRelationship }}</span>
+                      </div>
+                    }
+                    @if (ins.effectiveDate) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.EFFECTIVE' | translate
+                        }}</span
+                        ><span class="detail-value">{{
+                          ins.effectiveDate | date: 'mediumDate'
+                        }}</span>
+                      </div>
+                    }
+                    @if (ins.expirationDate) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.EXPIRATION' | translate
+                        }}</span
+                        ><span class="detail-value">{{
+                          ins.expirationDate | date: 'mediumDate'
+                        }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════════ Encounter History ═══════════════════ -->
+      <div class="comparison-section">
+        <div class="section-header">
+          <span class="material-symbols-outlined section-icon">history</span>
+          <h3>{{ 'SHARED_RECORDS.TABS.ENCOUNTER_HISTORY' | translate }}</h3>
+          <span class="section-count">{{
+            p.encounterHistory.to.length + p.encounterHistory.from.length
+          }}</span>
+        </div>
+        <div class="comparison-grid">
+          <div class="hospital-column">
+            <div class="column-header to-header">
+              <span class="material-symbols-outlined">domain</span>
+              {{ r.toHospitalName }}
+              <span class="column-count">({{ p.encounterHistory.to.length }})</span>
+            </div>
+            @if (p.encounterHistory.to.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (h of p.encounterHistory.to; track h.id) {
+                <div class="record-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ h.changeType || 'Change' }}</span>
+                      @if (h.status) {
+                        <span class="status-badge" [ngClass]="statusClass(h.status)">{{
+                          h.status
+                        }}</span>
+                      }
+                    </div>
+                    @if (h.changedAt) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ h.changedAt | date: 'medium' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (h.changedBy) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.CHANGED_BY' | translate
+                        }}</span
+                        ><span class="detail-value">{{ h.changedBy }}</span>
+                      </div>
+                    }
+                    @if (h.encounterType) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ENCOUNTER_TYPE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ h.encounterType }}</span>
+                      </div>
+                    }
+                    @if (h.encounterDate) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ENCOUNTER_DATE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ h.encounterDate | date: 'medium' }}</span>
+                      </div>
+                    }
+                    @if (h.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ h.notes }}</span>
+                      </div>
+                    }
+                    @if (h.previousValuesJson) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.PREVIOUS_VALUES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ h.previousValuesJson }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+          <div class="hospital-column">
+            <div class="column-header from-header">
+              <span class="material-symbols-outlined">share</span>
+              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              <span class="column-count">({{ p.encounterHistory.from.length }})</span>
+            </div>
+            @if (p.encounterHistory.from.length === 0) {
+              <div class="empty-column">
+                <span class="material-symbols-outlined">info</span>
+                {{ 'SHARED_RECORDS.NO_DATA' | translate }}
+              </div>
+            } @else {
+              @for (h of p.encounterHistory.from; track h.id) {
+                <div class="record-card from-card">
+                  <div class="card-header">
+                    <div class="card-title-row">
+                      <span class="card-title">{{ h.changeType || 'Change' }}</span>
+                      @if (h.status) {
+                        <span class="status-badge" [ngClass]="statusClass(h.status)">{{
+                          h.status
+                        }}</span>
+                      }
+                    </div>
+                    @if (h.changedAt) {
+                      <span class="card-date"
+                        ><span class="material-symbols-outlined">calendar_today</span>
+                        {{ h.changedAt | date: 'medium' }}</span
+                      >
+                    }
+                  </div>
+                  <div class="card-body">
+                    @if (h.hospitalName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.HOSPITAL' | translate
+                        }}</span
+                        ><span class="detail-value hospital-tag">{{ h.hospitalName }}</span>
+                      </div>
+                    }
+                    @if (h.changedBy) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.CHANGED_BY' | translate
+                        }}</span
+                        ><span class="detail-value">{{ h.changedBy }}</span>
+                      </div>
+                    }
+                    @if (h.encounterType) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ENCOUNTER_TYPE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ h.encounterType }}</span>
+                      </div>
+                    }
+                    @if (h.encounterDate) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ENCOUNTER_DATE' | translate
+                        }}</span
+                        ><span class="detail-value">{{ h.encounterDate | date: 'medium' }}</span>
+                      </div>
+                    }
+                    @if (h.notes) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.NOTES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ h.notes }}</span>
+                      </div>
+                    }
+                    @if (h.previousValuesJson) {
+                      <div class="detail-row notes-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.PREVIOUS_VALUES' | translate
+                        }}</span
+                        ><span class="detail-value notes-text">{{ h.previousValuesJson }}</span>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        </div>
+      </div>
+    }
   }
 </div>

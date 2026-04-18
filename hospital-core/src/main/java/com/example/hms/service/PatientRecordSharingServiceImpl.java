@@ -273,12 +273,20 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             Map<UUID, Encounter> encounterById = encountersInScope.stream()
                 .collect(Collectors.toMap(Encounter::getId, Function.identity()));
             encounterHistoryDtos = loadEncounterHistory(encounterById);
+            encounterHistoryDtos.forEach(h -> {
+                h.setHospitalId(fromHospital.getId());
+                h.setHospitalName(fromHospital.getName());
+            });
         }
 
         // ── Treatments (independent scope check) ───────────────────────────
         List<EncounterTreatmentResponseDTO> treatmentDtos = List.of();
         if (isDomainAllowed(allowedDomains, SCOPE_TREATMENTS) && !encountersInScope.isEmpty()) {
             treatmentDtos = loadEncounterTreatments(encountersInScope);
+            treatmentDtos.forEach(t -> {
+                t.setHospitalId(fromHospital.getId());
+                t.setHospitalName(fromHospital.getName());
+            });
         }
 
         // ── Problems ───────────────────────────────────────────────────────

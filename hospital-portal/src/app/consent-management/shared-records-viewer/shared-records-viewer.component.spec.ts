@@ -30,6 +30,19 @@ const MOCK_RECORD: PatientRecord = {
       departmentName: 'Neurology',
       staffName: 'Dr. Smith',
       notes: 'Patient reports recurring headaches.',
+      hospitalId: 'h2',
+      hospitalName: 'Hospital Beta',
+    },
+    {
+      id: 'e2',
+      encounterType: 'INPATIENT',
+      status: 'COMPLETED',
+      encounterDate: '2026-01-08',
+      chiefComplaint: 'Fever',
+      departmentName: 'Internal Medicine',
+      staffName: 'Dr. Jones',
+      hospitalId: 'h1',
+      hospitalName: 'Hospital Alpha',
     },
   ],
   treatments: [
@@ -40,6 +53,8 @@ const MOCK_RECORD: PatientRecord = {
       outcome: 'Improved',
       staffFullName: 'Dr. Smith',
       notes: 'Administered saline drip',
+      hospitalId: 'h2',
+      hospitalName: 'Hospital Beta',
     },
   ],
   prescriptions: [
@@ -52,6 +67,8 @@ const MOCK_RECORD: PatientRecord = {
       status: 'ACTIVE',
       staffFullName: 'Dr. Smith',
       createdAt: '2026-01-10',
+      hospitalId: 'h2',
+      hospitalName: 'Hospital Beta',
     },
   ],
   labOrders: [
@@ -62,6 +79,8 @@ const MOCK_RECORD: PatientRecord = {
       status: 'COMPLETED',
       priority: 'ROUTINE',
       orderDatetime: '2026-01-10',
+      hospitalId: 'h2',
+      hospitalName: 'Hospital Beta',
     },
   ],
   labResults: [
@@ -73,6 +92,8 @@ const MOCK_RECORD: PatientRecord = {
       resultDate: '2026-01-11',
       severityFlag: undefined,
       labOrderCode: 'CBC-001',
+      hospitalId: 'h2',
+      hospitalName: 'Hospital Beta',
     },
   ],
   allergiesDetailed: [
@@ -83,6 +104,8 @@ const MOCK_RECORD: PatientRecord = {
       severity: 'SEVERE',
       reaction: 'Anaphylaxis',
       verificationStatus: 'CONFIRMED',
+      hospitalId: 'h2',
+      hospitalName: 'Hospital Beta',
     },
   ],
   problems: [
@@ -93,6 +116,8 @@ const MOCK_RECORD: PatientRecord = {
       severity: 'MODERATE',
       chronic: true,
       onsetDate: '2020-03-01',
+      hospitalId: 'h2',
+      hospitalName: 'Hospital Beta',
     },
   ],
   surgicalHistory: [
@@ -102,6 +127,8 @@ const MOCK_RECORD: PatientRecord = {
       procedureDate: '2018-06-15',
       outcome: 'Successful',
       performedBy: 'Dr. Lee',
+      hospitalId: 'h1',
+      hospitalName: 'Hospital Alpha',
     },
   ],
   advanceDirectives: [],
@@ -119,6 +146,8 @@ const MOCK_RECORD: PatientRecord = {
       recordedByName: 'Nurse Joy',
       recordedAt: '2026-01-10T10:00:00',
       clinicallySignificant: false,
+      hospitalId: 'h2',
+      hospitalName: 'Hospital Beta',
     },
   ],
   immunizations: [
@@ -135,6 +164,8 @@ const MOCK_RECORD: PatientRecord = {
       lotNumber: 'LOT-12345',
       status: 'COMPLETED',
       administeredByName: 'Nurse Joy',
+      hospitalId: 'h2',
+      hospitalName: 'Hospital Beta',
     },
   ],
   insurances: [
@@ -147,6 +178,8 @@ const MOCK_RECORD: PatientRecord = {
       subscriberRelationship: 'Self',
       effectiveDate: '2025-01-01',
       primary: true,
+      hospitalId: 'h2',
+      hospitalName: 'Hospital Beta',
     },
   ],
   encounterHistory: [
@@ -158,6 +191,8 @@ const MOCK_RECORD: PatientRecord = {
       changedAt: '2026-01-10T12:00:00',
       status: 'COMPLETED',
       encounterType: 'OUTPATIENT',
+      hospitalId: 'h2',
+      hospitalName: 'Hospital Beta',
     },
   ],
 };
@@ -228,66 +263,86 @@ describe('SharedRecordsViewerComponent', () => {
     expect(component.patientInitials()).toBe('JD');
   });
 
-  it('computes tab counts from record', () => {
-    const counts = component.tabCounts();
-    expect(counts['encounters']).toBe(1);
-    expect(counts['treatments']).toBe(1);
-    expect(counts['prescriptions']).toBe(1);
-    expect(counts['labOrders']).toBe(1);
-    expect(counts['labResults']).toBe(1);
-    expect(counts['allergies']).toBe(1);
-    expect(counts['problems']).toBe(1);
-    expect(counts['surgicalHistory']).toBe(1);
-    expect(counts['advanceDirectives']).toBe(0);
-    expect(counts['vitalSigns']).toBe(1);
-    expect(counts['immunizations']).toBe(1);
-    expect(counts['insurances']).toBe(1);
-    expect(counts['encounterHistory']).toBe(1);
-  });
-
-  it('defaults to encounters tab', () => {
-    expect(component.activeTab()).toBe('encounters');
-  });
-
-  it('setTab changes active tab', () => {
-    component.setTab('prescriptions');
-    expect(component.activeTab()).toBe('prescriptions');
-  });
-
   it('goBack navigates to consent-management', () => {
     component.goBack();
     expect(routerStub.navigate).toHaveBeenCalledWith(['/consent-management']);
   });
 
-  it('renders patient banner with name', () => {
-    const name = fixture.nativeElement.querySelector('.patient-name');
-    expect(name.textContent).toContain('Jane');
-    expect(name.textContent).toContain('Doe');
+  describe('partitioned signal', () => {
+    it('partitions encounters into to and from', () => {
+      const p = component.partitioned()!;
+      expect(p.encounters.to.length).toBe(1);
+      expect(p.encounters.to[0].id).toBe('e1');
+      expect(p.encounters.from.length).toBe(1);
+      expect(p.encounters.from[0].id).toBe('e2');
+    });
+
+    it('places treatments belonging to toHospital in to array', () => {
+      const p = component.partitioned()!;
+      expect(p.treatments.to.length).toBe(1);
+      expect(p.treatments.from.length).toBe(0);
+    });
+
+    it('places surgicalHistory from other hospital in from array', () => {
+      const p = component.partitioned()!;
+      expect(p.surgicalHistory.to.length).toBe(0);
+      expect(p.surgicalHistory.from.length).toBe(1);
+      expect(p.surgicalHistory.from[0].procedureDisplay).toBe('Appendectomy');
+    });
+
+    it('handles empty arrays', () => {
+      const p = component.partitioned()!;
+      expect(p.advanceDirectives.to.length).toBe(0);
+      expect(p.advanceDirectives.from.length).toBe(0);
+    });
+
+    it('returns null when record is null', () => {
+      component.record.set(null);
+      expect(component.partitioned()).toBeNull();
+    });
   });
 
-  it('renders consent strip with hospital names', () => {
-    const strip = fixture.nativeElement.querySelector('.consent-strip');
-    expect(strip.textContent).toContain('Hospital Alpha');
-    expect(strip.textContent).toContain('Hospital Beta');
-  });
+  describe('DOM rendering', () => {
+    it('renders patient banner with name', () => {
+      const name = fixture.nativeElement.querySelector('.patient-name');
+      expect(name.textContent).toContain('Jane');
+      expect(name.textContent).toContain('Doe');
+    });
 
-  it('renders tab buttons', () => {
-    const tabs = fixture.nativeElement.querySelectorAll('.tab-btn');
-    expect(tabs.length).toBe(13);
-  });
+    it('renders consent strip with hospital names', () => {
+      const strip = fixture.nativeElement.querySelector('.consent-strip');
+      expect(strip.textContent).toContain('Hospital Beta');
+    });
 
-  it('renders encounter cards when encounters tab is active', () => {
-    const cards = fixture.nativeElement.querySelectorAll('.record-card');
-    expect(cards.length).toBe(1);
-    expect(cards[0].textContent).toContain('OUTPATIENT');
-    expect(cards[0].textContent).toContain('Headache');
-  });
+    it('renders comparison sections for all categories', () => {
+      const sections = fixture.nativeElement.querySelectorAll('.comparison-section');
+      expect(sections.length).toBe(13);
+    });
 
-  it('shows empty state when tab has no data', () => {
-    component.setTab('advanceDirectives');
-    fixture.detectChanges();
-    const empty = fixture.nativeElement.querySelector('.empty-tab');
-    expect(empty).toBeTruthy();
+    it('renders encounter cards in both columns', () => {
+      const sections = fixture.nativeElement.querySelectorAll('.comparison-section');
+      const encounterSection = sections[0];
+      const columns = encounterSection.querySelectorAll('.hospital-column');
+      expect(columns.length).toBe(2);
+
+      const toCards = columns[0].querySelectorAll('.record-card');
+      expect(toCards.length).toBe(1);
+      expect(toCards[0].textContent).toContain('Headache');
+
+      const fromCards = columns[1].querySelectorAll('.record-card');
+      expect(fromCards.length).toBe(1);
+      expect(fromCards[0].textContent).toContain('Fever');
+    });
+
+    it('marks from-column cards with from-card class', () => {
+      const fromCards = fixture.nativeElement.querySelectorAll('.from-card');
+      expect(fromCards.length).toBeGreaterThan(0);
+    });
+
+    it('shows empty-column when no data in a column', () => {
+      const empties = fixture.nativeElement.querySelectorAll('.empty-column');
+      expect(empties.length).toBeGreaterThan(0);
+    });
   });
 
   describe('error handling', () => {
@@ -339,7 +394,7 @@ describe('SharedRecordsViewerComponent', () => {
 
       expect(fix.componentInstance.error()).toBe('Missing required parameters');
       expect(fix.componentInstance.loading()).toBeFalse();
-      expect(sharingStub.getAggregatedRecord).toHaveBeenCalledTimes(1); // only first test call
+      expect(sharingStub.getAggregatedRecord).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -387,101 +442,8 @@ describe('SharedRecordsViewerComponent', () => {
     });
   });
 
-  describe('tab content rendering', () => {
-    it('renders treatment cards', () => {
-      component.setTab('treatments');
-      fixture.detectChanges();
-      const cards = fixture.nativeElement.querySelectorAll('.record-card');
-      expect(cards.length).toBe(1);
-      expect(cards[0].textContent).toContain('IV Therapy');
-    });
-
-    it('renders prescription cards', () => {
-      component.setTab('prescriptions');
-      fixture.detectChanges();
-      const cards = fixture.nativeElement.querySelectorAll('.record-card');
-      expect(cards.length).toBe(1);
-      expect(cards[0].textContent).toContain('Ibuprofen 400mg');
-    });
-
-    it('renders lab order cards', () => {
-      component.setTab('labOrders');
-      fixture.detectChanges();
-      const cards = fixture.nativeElement.querySelectorAll('.record-card');
-      expect(cards.length).toBe(1);
-      expect(cards[0].textContent).toContain('Complete Blood Count');
-    });
-
-    it('renders lab result cards', () => {
-      component.setTab('labResults');
-      fixture.detectChanges();
-      const cards = fixture.nativeElement.querySelectorAll('.record-card');
-      expect(cards.length).toBe(1);
-      expect(cards[0].textContent).toContain('14.2');
-    });
-
-    it('renders allergy cards with severity', () => {
-      component.setTab('allergies');
-      fixture.detectChanges();
-      const cards = fixture.nativeElement.querySelectorAll('.record-card');
-      expect(cards.length).toBe(1);
-      expect(cards[0].textContent).toContain('Penicillin');
-    });
-
-    it('renders problem cards with chronic badge', () => {
-      component.setTab('problems');
-      fixture.detectChanges();
-      const cards = fixture.nativeElement.querySelectorAll('.record-card');
-      expect(cards.length).toBe(1);
-      expect(cards[0].textContent).toContain('Migraine');
-    });
-
-    it('renders surgical history cards', () => {
-      component.setTab('surgicalHistory');
-      fixture.detectChanges();
-      const cards = fixture.nativeElement.querySelectorAll('.record-card');
-      expect(cards.length).toBe(1);
-      expect(cards[0].textContent).toContain('Appendectomy');
-    });
-
-    it('renders vital sign cards with measurements', () => {
-      component.setTab('vitalSigns');
-      fixture.detectChanges();
-      const cards = fixture.nativeElement.querySelectorAll('.record-card');
-      expect(cards.length).toBe(1);
-      expect(cards[0].textContent).toContain('120');
-      expect(cards[0].textContent).toContain('80');
-      expect(cards[0].textContent).toContain('72');
-    });
-
-    it('renders immunization cards', () => {
-      component.setTab('immunizations');
-      fixture.detectChanges();
-      const cards = fixture.nativeElement.querySelectorAll('.record-card');
-      expect(cards.length).toBe(1);
-      expect(cards[0].textContent).toContain('Influenza Vaccine');
-      expect(cards[0].textContent).toContain('Pfizer');
-    });
-
-    it('renders insurance cards', () => {
-      component.setTab('insurances');
-      fixture.detectChanges();
-      const cards = fixture.nativeElement.querySelectorAll('.record-card');
-      expect(cards.length).toBe(1);
-      expect(cards[0].textContent).toContain('Blue Cross');
-      expect(cards[0].textContent).toContain('POL-9999');
-    });
-
-    it('renders encounter history cards', () => {
-      component.setTab('encounterHistory');
-      fixture.detectChanges();
-      const cards = fixture.nativeElement.querySelectorAll('.record-card');
-      expect(cards.length).toBe(1);
-      expect(cards[0].textContent).toContain('STATUS_CHANGE');
-      expect(cards[0].textContent).toContain('Dr. Smith');
-    });
-
-    it('renders legacy allergy fallback when allergiesDetailed is empty', async () => {
+  describe('legacy allergy fallback', () => {
+    it('renders legacy allergy text when allergiesDetailed is empty', async () => {
       sharingStub.getAggregatedRecord.and.returnValue(
         of({
           ...MOCK_RECORD,
@@ -509,43 +471,8 @@ describe('SharedRecordsViewerComponent', () => {
       const fix = TestBed.createComponent(SharedRecordsViewerComponent);
       fix.detectChanges();
 
-      fix.componentInstance.setTab('allergies');
-      fix.detectChanges();
-
-      const cards = fix.nativeElement.querySelectorAll('.record-card');
-      expect(cards.length).toBe(1);
-      expect(cards[0].textContent).toContain('peanuts, garlic');
-    });
-
-    it('counts legacy allergies as 1 in tab count', async () => {
-      sharingStub.getAggregatedRecord.and.returnValue(
-        of({
-          ...MOCK_RECORD,
-          allergiesDetailed: [],
-          allergies: 'peanuts, garlic',
-        }),
-      );
-
-      await TestBed.resetTestingModule();
-      await TestBed.configureTestingModule({
-        imports: [SharedRecordsViewerComponent, TranslateModule.forRoot()],
-        providers: [
-          { provide: RecordSharingService, useValue: sharingStub },
-          { provide: Router, useValue: routerStub },
-          {
-            provide: ActivatedRoute,
-            useValue: createRouteSnapshot({
-              patientId: 'p1',
-              toHospitalId: 'h2',
-            }),
-          },
-        ],
-      }).compileComponents();
-
-      const fix = TestBed.createComponent(SharedRecordsViewerComponent);
-      fix.detectChanges();
-
-      expect(fix.componentInstance.tabCounts()['allergies']).toBe(1);
+      const body = fix.nativeElement.textContent;
+      expect(body).toContain('peanuts, garlic');
     });
   });
 });

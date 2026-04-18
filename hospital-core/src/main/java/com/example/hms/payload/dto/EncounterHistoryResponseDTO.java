@@ -52,4 +52,10 @@ public class EncounterHistoryResponseDTO {
 
     @Schema(description = "Serialized payload for additional context captured by the encounter workflow.")
     private String extraFieldsJson;
+
+    @Schema(description = "Hospital identifier associated with the encounter.")
+    private UUID hospitalId;
+
+    @Schema(description = "Hospital name associated with the encounter.")
+    private String hospitalName;
 }

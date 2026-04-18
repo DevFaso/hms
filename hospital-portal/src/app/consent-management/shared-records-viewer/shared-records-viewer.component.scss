@@ -120,77 +120,137 @@
   background: #e5e7eb;
 }
 
-/* ── Tabs ───────────────────────────────────────────────── */
-.record-tabs {
-  display: flex;
-  gap: 0.25rem;
-  overflow-x: auto;
-  padding-bottom: 0.25rem;
-  margin-bottom: 1.5rem;
-  border-bottom: 2px solid #e5e7eb;
+/* ── Comparison Sections ────────────────────────────────── */
+.comparison-section {
+  margin-bottom: 2rem;
 }
 
-.tab-btn {
+.section-header {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.65rem 1rem;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: #6b7280;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-  white-space: nowrap;
-  transition:
-    color 0.15s,
-    border-color 0.15s;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px 10px 0 0;
+  border-bottom: 2px solid #6366f1;
 
-  &:hover {
-    color: #4f46e5;
-  }
-
-  &.active {
-    color: #4f46e5;
-    border-bottom-color: #4f46e5;
+  h3 {
+    margin: 0;
+    font-size: 0.95rem;
     font-weight: 600;
+    color: #111827;
   }
 }
 
-.tab-icon {
-  font-size: 1.1rem;
+.section-icon {
+  font-size: 1.15rem;
+  color: #6366f1;
 }
 
-.tab-count {
+.section-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
+  min-width: 22px;
+  height: 22px;
   padding: 0 6px;
-  border-radius: 10px;
-  background: #f3f4f6;
-  color: #6b7280;
-  font-size: 0.7rem;
+  border-radius: 11px;
+  background: #eef2ff;
+  color: #4f46e5;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+}
+
+.hospital-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.column-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
   font-weight: 600;
 
-  .active & {
-    background: #eef2ff;
-    color: #4f46e5;
+  .material-symbols-outlined {
+    font-size: 1rem;
   }
 }
 
-/* ── Tab Content / Cards ────────────────────────────────── */
-.tab-content {
-  min-height: 200px;
+.column-count {
+  font-weight: 400;
+  color: #9ca3af;
+  font-size: 0.78rem;
+}
+
+.to-header {
+  background: #eef2ff;
+  color: #4338ca;
+  border: 1px solid #c7d2fe;
+}
+
+.from-header {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fde68a;
+}
+
+.from-card {
+  border-left: 3px solid #f59e0b;
+}
+
+.empty-column {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem;
+  color: #9ca3af;
+  font-size: 0.85rem;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px dashed #e5e7eb;
+
+  .material-symbols-outlined {
+    font-size: 1.15rem;
+  }
+}
+
+.hospital-tag {
+  display: inline-block;
+  background: #fef3c7;
+  color: #92400e;
+  padding: 0.1rem 0.5rem;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.8rem;
 }
 
 .record-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: 1rem;
+}
+
+@media (max-width: 900px) {
+  .comparison-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .record-card {
@@ -405,8 +465,6 @@
   font-size: 0.85rem;
   color: #6b7280;
 }
-
-/* ── Empty Tab ──────────────────────────────────────────── */
 
 .medical-summary {
   margin: 0.5rem 0 0;
