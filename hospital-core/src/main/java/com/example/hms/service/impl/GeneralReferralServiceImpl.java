@@ -25,6 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -196,14 +198,22 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     public List<GeneralReferralResponseDTO> getReferralsByHospital(UUID hospitalId, String status) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
-        List<GeneralReferral> referrals;
+        List<GeneralReferral> outgoing;
+        List<GeneralReferral> incoming;
         if (status != null && !status.isBlank()) {
             ReferralStatus referralStatus = ReferralStatus.valueOf(status.toUpperCase());
-            referrals = referralRepository.findByHospitalIdAndStatusOrderByCreatedAtDesc(effectiveHospitalId, referralStatus);
+            outgoing = referralRepository.findByHospitalIdAndStatusOrderByCreatedAtDesc(effectiveHospitalId, referralStatus);
+            incoming = referralRepository.findByReceivingHospitalIdAndStatusOrderByCreatedAtDesc(effectiveHospitalId, referralStatus);
         } else {
-            referrals = referralRepository.findByHospitalIdOrderByCreatedAtDesc(effectiveHospitalId);
+            outgoing = referralRepository.findByHospitalIdOrderByCreatedAtDesc(effectiveHospitalId);
+            incoming = referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(effectiveHospitalId);
         }
-        return referrals.stream()
+        // Merge outgoing and incoming, dedup by ID, sort newest-first
+        Map<UUID, GeneralReferral> merged = new LinkedHashMap<>();
+        outgoing.forEach(r -> merged.put(r.getId(), r));
+        incoming.forEach(r -> merged.putIfAbsent(r.getId(), r));
+        return merged.values().stream()
+            .sorted(Comparator.comparing(GeneralReferral::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
             .map(this::toResponse)
             .toList();
     }
@@ -244,9 +254,14 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         GeneralReferral referral = referralRepository.findById(referralId)
             .orElseThrow(() -> new ResourceNotFoundException("Referral not found"));
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        if (activeHospitalId != null && referral.getHospital() != null
-                && !activeHospitalId.equals(referral.getHospital().getId())) {
-            throw new ResourceNotFoundException("Referral not found");
+        if (activeHospitalId != null) {
+            boolean isSendingHospital = referral.getHospital() != null
+                && activeHospitalId.equals(referral.getHospital().getId());
+            boolean isReceivingHospital = referral.getReceivingHospital() != null
+                && activeHospitalId.equals(referral.getReceivingHospital().getId());
+            if (!isSendingHospital && !isReceivingHospital) {
+                throw new ResourceNotFoundException("Referral not found");
+            }
         }
         return referral;
     }
