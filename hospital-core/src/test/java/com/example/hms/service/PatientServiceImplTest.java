@@ -220,6 +220,32 @@ class PatientServiceImplTest {
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
+    // ═══════════════ getPatientByIdUnscoped ═══════════════
+
+    @Test
+    void getPatientByIdUnscopedReturnsDtoWithoutScopeCheck() {
+        PatientResponseDTO responseDTO = PatientResponseDTO.builder().id(patientId).build();
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(patientMapper.toPatientDTO(patient, null)).thenReturn(responseDTO);
+        when(patientVitalSignService.getLatestSnapshot(patientId, null)).thenReturn(Optional.empty());
+
+        PatientResponseDTO result = patientService.getPatientByIdUnscoped(patientId, Locale.ENGLISH);
+
+        assertThat(result).isSameAs(responseDTO);
+        verify(patientRepository).findByIdUnscoped(patientId);
+        verify(registrationRepository, never()).existsByPatientIdAndHospitalId(any(), any());
+    }
+
+    @Test
+    void getPatientByIdUnscopedThrowsWhenNotFound() {
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
+        when(patientRepository.findByUserId(patientId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> patientService.getPatientByIdUnscoped(patientId, Locale.ENGLISH))
+            .isInstanceOf(ResourceNotFoundException.class);
+    }
+
     @Test
     void createPatientCreatesNewPatientAndInsurance() {
         UUID userId = UUID.randomUUID();

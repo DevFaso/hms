@@ -290,6 +290,37 @@ class HospitalServiceImplTest {
         }
     }
 
+    // ═══════════════ getHospitalByIdUnscoped ═══════════════
+
+    @Nested
+    @DisplayName("getHospitalByIdUnscoped")
+    class GetHospitalByIdUnscoped {
+
+        @Test
+        @DisplayName("returns DTO without enforcing hospital scope")
+        void returnsWithoutScope() {
+            UUID hospitalId = UUID.randomUUID();
+            setScopedContext(UUID.randomUUID()); // scope doesn't include hospitalId
+
+            Hospital hospital = buildHospital(hospitalId, "Other Hospital", "OTH-01");
+            when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+
+            HospitalResponseDTO result = hospitalService.getHospitalByIdUnscoped(hospitalId, Locale.ENGLISH);
+            assertEquals("Other Hospital", result.getName());
+        }
+
+        @Test
+        @DisplayName("throws when hospital not found")
+        void notFound() {
+            UUID id = UUID.randomUUID();
+            stubMessage("hospital.notFound");
+            when(hospitalRepository.findById(id)).thenReturn(Optional.empty());
+
+            assertThrows(ResourceNotFoundException.class,
+                    () -> hospitalService.getHospitalByIdUnscoped(id, Locale.ENGLISH));
+        }
+    }
+
     // ═══════════════ createHospital ═══════════════
 
     @Nested

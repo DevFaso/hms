@@ -232,8 +232,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
     @SuppressWarnings("java:S1172") // locale reserved for i18n error messages
     private Patient resolvePatient(PrescriptionRequestDTO request, Locale locale) {
+        // Use findByIdUnscoped: multi-hospital patients have Patient.hospitalId
+        // set to their first hospital, so the tenant-scoped findById misses them
+        // when accessed from a different hospital. Security is enforced via
+        // ensureContextConsistency (encounter ↔ patient ↔ staff ↔ hospital).
         if (request.getPatientId() != null) {
-            return patientRepository.findById(request.getPatientId())
+            return patientRepository.findByIdUnscoped(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
         }
         if (StringUtils.hasText(request.getPatientIdentifier())) {
@@ -250,7 +254,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
             try {
                 UUID parsed = UUID.fromString(identifier);
-                return patientRepository.findById(parsed)
+                return patientRepository.findByIdUnscoped(parsed)
                     .orElseThrow(() -> new ResourceNotFoundException("patient.notfound"));
             } catch (IllegalArgumentException ignore) {
                 // not a UUID, fall through

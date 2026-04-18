@@ -26,6 +26,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -52,6 +53,10 @@ class PatientTrackerServiceImplTest {
     void setUp() {
         trackerMapper = new PatientTrackerMapper(); // real mapper (no external deps)
         service = new PatientTrackerServiceImpl(encounterRepository, trackerMapper);
+
+        // Default: no carry-over encounters (overridden in carry-over-specific tests)
+        lenient().when(encounterRepository.findCarryOverEncounters(any(), any(), anyCollection()))
+                .thenReturn(Collections.emptyList());
     }
 
     // ── Helpers ─────────────────────────────────────────────
@@ -304,5 +309,67 @@ class PatientTrackerServiceImplTest {
         PatientTrackerBoardDTO board = service.getTrackerBoard(HOSPITAL_ID, DEPT_ID, TODAY);
 
         assertEquals(0, board.getTotalPatients());
+    }
+
+    @Test
+    void getTrackerBoard_shouldIncludeCarryOverEncounters() {
+        // Today has no encounters
+        when(encounterRepository.findAllByHospitalAndDateRange(eq(HOSPITAL_ID), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        // But there's a carry-over IN_PROGRESS encounter from yesterday
+        Encounter carryOver = buildEncounter(UUID.randomUUID(), EncounterStatus.IN_PROGRESS,
+                "Carry", "Over", null, null, null);
+        when(encounterRepository.findCarryOverEncounters(eq(HOSPITAL_ID), any(), anyCollection()))
+                .thenReturn(List.of(carryOver));
+
+        PatientTrackerBoardDTO board = service.getTrackerBoard(HOSPITAL_ID, null, null);
+
+        assertEquals(1, board.getTotalPatients());
+        assertEquals(1, board.getInProgress().size());
+        assertEquals("Carry Over", board.getInProgress().get(0).getPatientName());
+    }
+
+    @Test
+    void getTrackerBoard_carryOverNotDuplicatedWithTodaysEncounters() {
+        UUID encId = UUID.randomUUID();
+        // Encounter appears in today's results (started today but spans midnight or re-queried)
+        Encounter todayEnc = buildEncounter(encId, EncounterStatus.AWAITING_RESULTS,
+                "Same", "Patient", null, null, null);
+        when(encounterRepository.findAllByHospitalAndDateRange(eq(HOSPITAL_ID), any(), any()))
+                .thenReturn(List.of(todayEnc));
+
+        // Same encounter also returned by carry-over query (same ID)
+        Encounter carryOverEnc = buildEncounter(encId, EncounterStatus.AWAITING_RESULTS,
+                "Same", "Patient", null, null, null);
+        when(encounterRepository.findCarryOverEncounters(eq(HOSPITAL_ID), any(), anyCollection()))
+                .thenReturn(List.of(carryOverEnc));
+
+        PatientTrackerBoardDTO board = service.getTrackerBoard(HOSPITAL_ID, null, null);
+
+        // Only 1, not 2
+        assertEquals(1, board.getTotalPatients());
+    }
+
+    @Test
+    void getTrackerBoard_multipleCarryOversInDifferentLanes() {
+        when(encounterRepository.findAllByHospitalAndDateRange(eq(HOSPITAL_ID), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        Encounter ip = buildEncounter(UUID.randomUUID(), EncounterStatus.IN_PROGRESS,
+                "IP", "Patient", null, null, null);
+        Encounter ar = buildEncounter(UUID.randomUUID(), EncounterStatus.AWAITING_RESULTS,
+                "AR", "Patient", null, null, null);
+        Encounter rd = buildEncounter(UUID.randomUUID(), EncounterStatus.READY_FOR_DISCHARGE,
+                "RD", "Patient", null, null, null);
+        when(encounterRepository.findCarryOverEncounters(eq(HOSPITAL_ID), any(), anyCollection()))
+                .thenReturn(List.of(ip, ar, rd));
+
+        PatientTrackerBoardDTO board = service.getTrackerBoard(HOSPITAL_ID, null, null);
+
+        assertEquals(3, board.getTotalPatients());
+        assertEquals(1, board.getInProgress().size());
+        assertEquals(1, board.getAwaitingResults().size());
+        assertEquals(1, board.getReadyForDischarge().size());
     }
 }

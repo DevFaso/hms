@@ -83,7 +83,7 @@ class PatientConsentServiceImplTest {
             .patient(patient).fromHospital(fromHosp).toHospital(toHosp).build();
         newConsent.setId(UUID.randomUUID());
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(fromHospId)).thenReturn(Optional.of(fromHosp));
         when(hospitalRepository.findById(toHospId)).thenReturn(Optional.of(toHosp));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, fromHospId)).thenReturn(true);
@@ -111,7 +111,7 @@ class PatientConsentServiceImplTest {
         request.setFromHospitalId(UUID.randomUUID());
         request.setToHospitalId(UUID.randomUUID());
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.grantConsent(request))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -132,7 +132,7 @@ class PatientConsentServiceImplTest {
         patient.setId(patientId);
         patient.setHospitalRegistrations(new HashSet<>());
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(fromHospId)).thenReturn(Optional.of(Hospital.builder().build()));
         when(hospitalRepository.findById(toHospId)).thenReturn(Optional.of(Hospital.builder().build()));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, fromHospId)).thenReturn(false);
@@ -352,7 +352,7 @@ class PatientConsentServiceImplTest {
             .patient(patient).fromHospital(fromHosp).toHospital(toHosp).build();
         newConsent.setId(UUID.randomUUID());
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(fromHospId)).thenReturn(Optional.of(fromHosp));
         when(hospitalRepository.findById(toHospId)).thenReturn(Optional.of(toHosp));
         when(consentRepository.findByPatientIdAndFromHospitalIdAndToHospitalId(patientId, fromHospId, toHospId))
@@ -375,7 +375,7 @@ class PatientConsentServiceImplTest {
         HospitalResponseDTO fromHospDTO = HospitalResponseDTO.builder().id(UUID.randomUUID()).build();
         HospitalResponseDTO toHospDTO = HospitalResponseDTO.builder().id(UUID.randomUUID()).build();
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
         PatientConsentRequestDTO request = new PatientConsentRequestDTO();
         assertThatThrownBy(() -> service.grantConsentWithDetails(
@@ -410,7 +410,7 @@ class PatientConsentServiceImplTest {
             .patient(patient).fromHospital(fromHosp).toHospital(toHosp).consentGiven(false).build();
         existingConsent.setId(UUID.randomUUID());
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(fromHospId)).thenReturn(Optional.of(fromHosp));
         when(hospitalRepository.findById(toHospId)).thenReturn(Optional.of(toHosp));
         when(consentRepository.findByPatientIdAndFromHospitalIdAndToHospitalId(patientId, fromHospId, toHospId))
@@ -451,7 +451,7 @@ class PatientConsentServiceImplTest {
             .patient(patient).fromHospital(fromHosp).toHospital(toHosp).consentGiven(false).build();
         existing.setId(UUID.randomUUID());
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(fromHospId)).thenReturn(Optional.of(fromHosp));
         when(hospitalRepository.findById(toHospId)).thenReturn(Optional.of(toHosp));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, fromHospId)).thenReturn(true);
@@ -496,7 +496,7 @@ class PatientConsentServiceImplTest {
             .patient(patient).fromHospital(fromHosp).toHospital(toHosp).build();
         consent.setId(UUID.randomUUID());
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(fromHospId)).thenReturn(Optional.of(fromHosp));
         when(hospitalRepository.findById(toHospId)).thenReturn(Optional.of(toHosp));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, fromHospId)).thenReturn(true);
@@ -556,7 +556,7 @@ class PatientConsentServiceImplTest {
         Patient patient = Patient.builder().build();
         patient.setId(patientId);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(fromHospId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.grantConsent(request))
@@ -577,7 +577,7 @@ class PatientConsentServiceImplTest {
         Patient patient = Patient.builder().build();
         patient.setId(patientId);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(fromHospId)).thenReturn(Optional.of(Hospital.builder().build()));
         when(hospitalRepository.findById(toHospId)).thenReturn(Optional.empty());
 
@@ -612,7 +612,7 @@ class PatientConsentServiceImplTest {
         Patient patient = Patient.builder().build();
         patient.setId(patientId);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(fromHospId)).thenReturn(Optional.empty());
 
         PatientConsentRequestDTO request = new PatientConsentRequestDTO();
@@ -635,7 +635,7 @@ class PatientConsentServiceImplTest {
         Patient patient = Patient.builder().build();
         patient.setId(patientId);
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(fromHospId)).thenReturn(Optional.of(Hospital.builder().build()));
         when(hospitalRepository.findById(toHospId)).thenReturn(Optional.empty());
 
@@ -673,7 +673,7 @@ class PatientConsentServiceImplTest {
             .patient(patient).fromHospital(fromHosp).toHospital(toHosp).build();
         newConsent.setId(UUID.randomUUID());
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(fromHospId)).thenReturn(Optional.of(fromHosp));
         when(hospitalRepository.findById(toHospId)).thenReturn(Optional.of(toHosp));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, fromHospId)).thenReturn(true);

@@ -66,6 +66,8 @@ describe('PatientTrackerComponent', () => {
       'getById',
       'checkOut',
       'completeTriage',
+      'completeExamination',
+      'markReadyForDischarge',
     ]);
 
     authSpy.getHospitalId.and.returnValue('h1');
@@ -280,5 +282,78 @@ describe('PatientTrackerComponent', () => {
     const el: HTMLElement = fixture.nativeElement;
     const triageBtns = el.querySelectorAll('.btn-complete-triage');
     expect(triageBtns.length).toBeGreaterThan(0);
+  });
+
+  /* ── Complete Examination ──────────────────────── */
+
+  it('should call completeExamination and reload board', () => {
+    const enc: EncounterResponse = {
+      id: 'e2',
+      status: 'READY_FOR_DISCHARGE',
+    } as EncounterResponse;
+    encounterSpy.completeExamination.and.returnValue(of(enc));
+
+    const item = mockItem({ encounterId: 'e2', currentStatus: 'IN_PROGRESS' });
+    component.completeExamination(item);
+
+    expect(encounterSpy.completeExamination).toHaveBeenCalledWith('e2');
+    expect(component.examInProgress()).toBeFalse();
+    expect(trackerSpy.getTrackerBoard).toHaveBeenCalledWith('h1');
+  });
+
+  it('should handle completeExamination error gracefully', () => {
+    encounterSpy.completeExamination.and.returnValue(throwError(() => new Error('fail')));
+
+    const item = mockItem({ encounterId: 'e2', currentStatus: 'IN_PROGRESS' });
+    component.completeExamination(item);
+
+    expect(component.examInProgress()).toBeFalse();
+  });
+
+  it('should render complete-exam button in inProgress column', () => {
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const examBtns = el.querySelectorAll('.btn-complete-exam');
+    expect(examBtns.length).toBeGreaterThan(0);
+  });
+
+  /* ── Ready for Discharge ───────────────────────── */
+
+  it('should call markReadyForDischarge and reload board', () => {
+    const enc: EncounterResponse = {
+      id: 'e5',
+      status: 'READY_FOR_DISCHARGE',
+    } as EncounterResponse;
+    encounterSpy.markReadyForDischarge.and.returnValue(of(enc));
+
+    const item = mockItem({ encounterId: 'e5', currentStatus: 'AWAITING_RESULTS' });
+    component.markReadyForDischarge(item);
+
+    expect(encounterSpy.markReadyForDischarge).toHaveBeenCalledWith('e5');
+    expect(component.readyInProgress()).toBeFalse();
+    expect(trackerSpy.getTrackerBoard).toHaveBeenCalledWith('h1');
+  });
+
+  it('should handle markReadyForDischarge error gracefully', () => {
+    encounterSpy.markReadyForDischarge.and.returnValue(throwError(() => new Error('fail')));
+
+    const item = mockItem({ encounterId: 'e5', currentStatus: 'AWAITING_RESULTS' });
+    component.markReadyForDischarge(item);
+
+    expect(component.readyInProgress()).toBeFalse();
+  });
+
+  it('should render ready-discharge button in awaitingResults column', () => {
+    trackerSpy.getTrackerBoard.and.returnValue(
+      of(
+        mockBoard({
+          awaitingResults: [mockItem({ encounterId: 'e6', currentStatus: 'AWAITING_RESULTS' })],
+        }),
+      ),
+    );
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const readyBtns = el.querySelectorAll('.btn-ready-discharge');
+    expect(readyBtns.length).toBeGreaterThan(0);
   });
 });

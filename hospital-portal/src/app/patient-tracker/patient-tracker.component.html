@@ -85,6 +85,26 @@
                       {{ 'TRACKER.COMPLETE_TRIAGE' | translate }}
                     </button>
                   }
+                  @if (col.key === 'inProgress') {
+                    <button
+                      class="btn-complete-exam"
+                      (click)="completeExamination(item)"
+                      [disabled]="examInProgress()"
+                      [title]="'TRACKER.COMPLETE_EXAM' | translate"
+                    >
+                      {{ 'TRACKER.COMPLETE_EXAM' | translate }}
+                    </button>
+                  }
+                  @if (col.key === 'awaitingResults') {
+                    <button
+                      class="btn-ready-discharge"
+                      (click)="markReadyForDischarge(item)"
+                      [disabled]="readyInProgress()"
+                      [title]="'TRACKER.READY_DISCHARGE' | translate"
+                    >
+                      {{ 'TRACKER.READY_DISCHARGE' | translate }}
+                    </button>
+                  }
                   @if (
                     col.key === 'readyForDischarge' ||
                     col.key === 'inProgress' ||

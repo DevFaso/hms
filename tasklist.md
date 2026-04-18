@@ -1,3 +1,56 @@
+# Patient Tracker Board & Discharge → Encounter Auto-Complete
+
+> Two bugs reported: Patient Tracker Board ignores carry-over encounters
+> from prior days, and discharging an admission doesn't auto-complete the
+> linked encounter.
+
+## User Stories
+
+### Story 1 — Carry-over encounters appear on the tracker board
+**As a** Doctor/Nurse viewing the Patient Tracker Board,  
+**I want** active encounters from prior days (e.g., IN_PROGRESS from yesterday) to appear on today's board,  
+**So that** I can see all patients still in the clinic regardless of which day their encounter started.
+
+**Acceptance Criteria:**
+- Encounters in a non-terminal status (anything except COMPLETED/CANCELLED) that started before today still appear on the tracker board
+- No duplicate entries when an encounter is from today AND active
+- Board count and average wait reflect all active encounters (including carry-overs)
+
+### Story 2 — Discharge auto-completes the associated encounter
+**As a** Doctor/Nurse discharging a patient,  
+**I want** the patient's active encounter(s) to automatically move to COMPLETED when I discharge them,  
+**So that** discharged patients don't remain stuck as "In Progress" on the encounter list.
+
+**Acceptance Criteria:**
+- After admission discharge, any non-terminal encounters for the same patient+hospital are completed
+- checkoutTimestamp is set to the discharge time
+- Already-completed encounters are not affected
+
+---
+
+## Root Cause Analysis
+
+| Bug | Root Cause |
+|-----|-----------|
+| Tracker empty for carry-overs | `PatientTrackerServiceImpl.getTrackerBoard()` queries `findAllByHospitalAndDateRange(today)` — encounters from yesterday are not included |
+| Encounter stuck after discharge | `AdmissionServiceImpl.dischargePatient()` only sets admission status; no code touches the encounter |
+
+---
+
+## Task List
+
+- [ ] 1. Add `findCarryOverEncounters()` query to EncounterRepository
+- [ ] 2. Update PatientTrackerServiceImpl to merge carry-over encounters
+- [ ] 3. Inject EncounterRepository into AdmissionServiceImpl
+- [ ] 4. Auto-complete active encounters in dischargePatient()
+- [ ] 5. Add JUnit tests for carry-over encounters (PatientTrackerServiceImplTest)
+- [ ] 6. Add JUnit tests for discharge auto-complete (AdmissionServiceImplTest)
+- [ ] 7. Build, format, test, lint, JaCoCo
+- [ ] 8. Commit and push
+
+---
+---
+
 # Lab Role Permission — Gap Analysis & Task List
 
 > Generated from code audit against the Feature × Lab Role matrix.  

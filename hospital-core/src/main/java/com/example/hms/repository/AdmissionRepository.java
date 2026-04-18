@@ -3,6 +3,7 @@ package com.example.hms.repository;
 import com.example.hms.enums.AdmissionStatus;
 import com.example.hms.enums.AdmissionType;
 import com.example.hms.model.Admission;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -22,22 +23,26 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
     /**
      * Find admissions by patient
      */
+    @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "department", "attendingPhysician", "attendingPhysician.user", "dischargingProvider", "dischargingProvider.user"})
     List<Admission> findByPatientIdOrderByAdmissionDateTimeDesc(UUID patientId);
 
     /**
      * Find admissions by hospital
      */
+    @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "department", "attendingPhysician", "attendingPhysician.user", "dischargingProvider", "dischargingProvider.user"})
     List<Admission> findByHospitalIdOrderByAdmissionDateTimeDesc(UUID hospitalId);
 
     /**
      * Find active admissions for a hospital
      */
+    @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "department", "attendingPhysician", "attendingPhysician.user", "dischargingProvider", "dischargingProvider.user"})
     @Query("SELECT a FROM Admission a WHERE a.hospital.id = :hospitalId AND a.status IN ('ACTIVE', 'ON_LEAVE') ORDER BY a.admissionDateTime DESC")
     List<Admission> findActiveAdmissionsByHospital(@Param("hospitalId") UUID hospitalId);
 
     /**
      * Find admissions by admitting provider
      */
+    @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "department", "attendingPhysician", "attendingPhysician.user", "dischargingProvider", "dischargingProvider.user"})
     List<Admission> findByAdmittingProviderIdOrderByAdmissionDateTimeDesc(UUID admittingProviderId);
 
     /**
@@ -54,16 +59,19 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
     /**
      * Find admissions by department/ward
      */
+    @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "department", "attendingPhysician", "attendingPhysician.user", "dischargingProvider", "dischargingProvider.user"})
     List<Admission> findByDepartmentIdAndStatusOrderByAdmissionDateTimeDesc(UUID departmentId, AdmissionStatus status);
 
     /**
      * Find admissions by status
      */
+    @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "department", "attendingPhysician", "attendingPhysician.user", "dischargingProvider", "dischargingProvider.user"})
     List<Admission> findByStatusOrderByAdmissionDateTimeDesc(AdmissionStatus status);
 
     /**
      * Find admissions by hospital and status
      */
+    @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "department", "attendingPhysician", "attendingPhysician.user", "dischargingProvider", "dischargingProvider.user"})
     List<Admission> findByHospitalIdAndStatusOrderByAdmissionDateTimeDesc(UUID hospitalId, AdmissionStatus status);
 
     /**
@@ -84,6 +92,7 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
     /**
      * Find admissions by admission type and date range
      */
+    @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "department", "attendingPhysician", "attendingPhysician.user", "dischargingProvider", "dischargingProvider.user"})
     @Query("SELECT a FROM Admission a WHERE a.hospital.id = :hospitalId AND a.admissionType = :admissionType " +
            "AND a.admissionDateTime BETWEEN :startDate AND :endDate ORDER BY a.admissionDateTime DESC")
     List<Admission> findByHospitalAndTypeAndDateRange(
@@ -119,6 +128,7 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
     /**
      * Find admissions awaiting discharge
      */
+    @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "department", "attendingPhysician", "attendingPhysician.user", "dischargingProvider", "dischargingProvider.user"})
     @Query("SELECT a FROM Admission a WHERE a.status = 'AWAITING_DISCHARGE' AND a.hospital.id = :hospitalId ORDER BY a.admissionDateTime ASC")
     List<Admission> findAwaitingDischarge(@Param("hospitalId") UUID hospitalId);
 
@@ -135,8 +145,13 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
         @Param("endDate") LocalDateTime endDate
     );
 
+    @Override
+    @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "department", "attendingPhysician", "attendingPhysician.user", "dischargingProvider", "dischargingProvider.user"})
+    List<Admission> findAll();
+
     /**
      * Find admissions with room/bed assignment
      */
+    @EntityGraph(attributePaths = {"patient", "hospital", "admittingProvider", "admittingProvider.user", "department", "attendingPhysician", "attendingPhysician.user", "dischargingProvider", "dischargingProvider.user"})
     List<Admission> findByHospitalIdAndRoomBedContainingIgnoreCaseOrderByRoomBed(UUID hospitalId, String roomBedSearch);
 }

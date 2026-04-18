@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import com.example.hms.enums.EncounterStatus;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,8 +24,8 @@ public interface EncounterRepository
         SELECT e FROM Encounter e
         JOIN FETCH e.patient p
         JOIN FETCH p.user
-        JOIN FETCH e.staff s
-        JOIN FETCH s.user
+        LEFT JOIN FETCH e.staff s
+        LEFT JOIN FETCH s.user
         LEFT JOIN FETCH e.department d
         LEFT JOIN FETCH e.hospital h
         LEFT JOIN FETCH e.appointment a
@@ -119,6 +120,55 @@ public interface EncounterRepository
             @Param("hospitalId") UUID hospitalId,
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to);
+
+    /**
+     * Carry-over encounters: active (non-terminal) encounters from <em>before</em> a
+     * cut-off date.  Used by the patient tracker board to surface encounters that
+     * started on a prior day and are still in progress.
+     */
+    @Query("""
+        SELECT DISTINCT e FROM Encounter e
+        JOIN FETCH e.patient p
+        LEFT JOIN FETCH p.hospitalRegistrations
+        LEFT JOIN FETCH e.staff s
+        LEFT JOIN FETCH s.user
+        LEFT JOIN FETCH e.department d
+        LEFT JOIN FETCH e.appointment a
+        WHERE e.hospital.id = :hospitalId
+          AND e.encounterDate < :before
+          AND e.status NOT IN :terminalStatuses
+    """)
+    List<Encounter> findCarryOverEncounters(
+            @Param("hospitalId") UUID hospitalId,
+            @Param("before") LocalDateTime before,
+            @Param("terminalStatuses") Collection<EncounterStatus> terminalStatuses);
+
+    /**
+     * Find all non-terminal encounters for a patient at a specific hospital.
+     * Used when discharging an admission to auto-complete the linked encounter.
+     */
+    List<Encounter> findByPatient_IdAndHospital_IdAndStatusNotIn(
+            UUID patientId, UUID hospitalId, Collection<EncounterStatus> statuses);
+
+    /**
+     * Unpaged list of encounters for a patient at a specific hospital, eagerly fetching
+     * associations to avoid N+1 (used by record sharing).
+     */
+    @Query("""
+        SELECT e FROM Encounter e
+        JOIN FETCH e.patient p
+        JOIN FETCH p.user
+        LEFT JOIN FETCH e.staff s
+        LEFT JOIN FETCH s.user
+        LEFT JOIN FETCH e.department d
+        LEFT JOIN FETCH e.hospital h
+        LEFT JOIN FETCH e.appointment a
+        WHERE p.id = :patientId
+          AND e.hospital.id = :hospitalId
+    """)
+    List<Encounter> findAllByPatient_IdAndHospital_Id(
+            @Param("patientId") UUID patientId,
+            @Param("hospitalId") UUID hospitalId);
 
     /**
      * Find COMPLETED encounters for a patient that do NOT have a corresponding

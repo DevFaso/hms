@@ -40,7 +40,14 @@ describe('PatientDetailComponent', () => {
     vitalServiceSpy = jasmine.createSpyObj('VitalSignService', ['getRecent']);
     encounterServiceSpy = jasmine.createSpyObj('EncounterService', ['list']);
     appointmentServiceSpy = jasmine.createSpyObj('AppointmentService', ['list']);
-    sharingServiceSpy = jasmine.createSpyObj('RecordSharingService', ['getShareResult']);
+    sharingServiceSpy = jasmine.createSpyObj('RecordSharingService', [
+      'resolveAndShare',
+      'getPatientRecord',
+      'grantConsent',
+      'revokeConsent',
+      'exportRecord',
+      'listConsents',
+    ]);
     hospitalServiceSpy = jasmine.createSpyObj('HospitalService', [
       'list',
       'getMyHospitalAsResponse',

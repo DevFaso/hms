@@ -16,6 +16,8 @@ import com.example.hms.mapper.PatientAllergyMapper;
 import com.example.hms.mapper.PatientProblemMapper;
 import com.example.hms.mapper.PatientSurgicalHistoryMapper;
 import com.example.hms.mapper.PatientInsuranceMapper;
+import com.example.hms.mapper.PatientVitalSignMapper;
+import com.example.hms.mapper.ImmunizationMapper;
 import com.example.hms.mapper.PrescriptionMapper;
 import com.example.hms.model.AuditEventLog;
 import com.example.hms.model.Encounter;
@@ -30,6 +32,8 @@ import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.PatientInsurance;
 import com.example.hms.model.PatientProblem;
 import com.example.hms.model.PatientSurgicalHistory;
+import com.example.hms.model.PatientVitalSign;
+import com.example.hms.model.PatientImmunization;
 import com.example.hms.model.Prescription;
 import com.example.hms.payload.dto.AdvanceDirectiveResponseDTO;
 import com.example.hms.payload.dto.EncounterHistoryResponseDTO;
@@ -42,7 +46,9 @@ import com.example.hms.payload.dto.PatientRecordDTO;
 import com.example.hms.payload.dto.PatientInsuranceResponseDTO;
 import com.example.hms.payload.dto.PatientProblemResponseDTO;
 import com.example.hms.payload.dto.PatientSurgicalHistoryResponseDTO;
+import com.example.hms.payload.dto.PatientVitalSignResponseDTO;
 import com.example.hms.payload.dto.PrescriptionResponseDTO;
+import com.example.hms.payload.dto.medicalhistory.ImmunizationResponseDTO;
 import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.AdvanceDirectiveRepository;
 import com.example.hms.repository.EncounterHistoryRepository;
@@ -57,6 +63,8 @@ import com.example.hms.repository.PatientInsuranceRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientSurgicalHistoryRepository;
+import com.example.hms.repository.PatientVitalSignRepository;
+import com.example.hms.repository.ImmunizationRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.itextpdf.barcodes.BarcodeQRCode;
@@ -82,7 +90,9 @@ import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.layout.properties.UnitValue;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
+import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -97,6 +107,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -117,6 +128,20 @@ import jakarta.persistence.PersistenceException;
 public class PatientRecordSharingServiceImpl implements PatientRecordSharingService {
     private static final String CLINICAL_CATEGORY = "clinical";
 
+    // Consent scope domain constants
+    private static final String SCOPE_ENCOUNTERS = "ENCOUNTERS";
+    private static final String SCOPE_TREATMENTS = "TREATMENTS";
+    private static final String SCOPE_LAB_ORDERS = "LAB_ORDERS";
+    private static final String SCOPE_LAB_RESULTS = "LAB_RESULTS";
+    private static final String SCOPE_ALLERGIES = "ALLERGIES";
+    private static final String SCOPE_PRESCRIPTIONS = "PRESCRIPTIONS";
+    private static final String SCOPE_INSURANCES = "INSURANCES";
+    private static final String SCOPE_PROBLEMS = "PROBLEMS";
+    private static final String SCOPE_SURGICAL_HISTORY = "SURGICAL_HISTORY";
+    private static final String SCOPE_ADVANCE_DIRECTIVES = "ADVANCE_DIRECTIVES";
+    private static final String SCOPE_ENCOUNTER_HISTORY = "ENCOUNTER_HISTORY";
+    private static final String SCOPE_VITAL_SIGNS = "VITAL_SIGNS";
+    private static final String SCOPE_IMMUNIZATIONS = "IMMUNIZATIONS";
 
     private static final String HEADER_STATUS = "Status";
     private static final String HEADER_NOTES = "Notes";
@@ -146,10 +171,17 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
     private final AdvanceDirectiveMapper advanceDirectiveMapper;
     private final PatientAllergyRepository patientAllergyRepository;
     private final PatientAllergyMapper patientAllergyMapper;
+    private final PatientVitalSignRepository patientVitalSignRepository;
+    private final PatientVitalSignMapper patientVitalSignMapper;
+    private final ImmunizationRepository immunizationRepository;
+    private final ImmunizationMapper immunizationMapper;
     private final AuditEventLogRepository auditRepository;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
     private final ConsentResolutionService consentResolutionService;
+
+    @Value("${hms.record.qr-base-url:https://hospital-system.com/patient/}")
+    private String qrBaseUrl;
 
     private final Map<String, Boolean> tableAvailabilityCache = new ConcurrentHashMap<>();
 
@@ -218,151 +250,181 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             PatientConsent consent) {
 
         Map<UUID, String> mrnByHospital = buildHospitalMrnMap(patient);
+        Set<String> allowedDomains = parseConsentScope(consent);
 
-        List<Encounter> encounters = safeFetchFromTable(
+        // ── Encounters (always fetched internally for treatments/history) ──
+        List<Encounter> encountersInScope = safeFetchFromTable(
             CLINICAL_CATEGORY,
             "encounters",
-            () -> encounterRepository.findByPatient_Id(patientId),
+            () -> encounterRepository.findAllByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
+                .sorted(Comparator.comparing(Encounter::getEncounterDate, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList(),
             "Encounter"
         );
 
-        List<Encounter> encountersInScope = encounters.stream()
-            .filter(encounter -> encounter.getHospital() != null && fromHospitalId.equals(encounter.getHospital().getId()))
-            .sorted(Comparator.comparing(Encounter::getEncounterDate, Comparator.nullsLast(Comparator.naturalOrder())))
-            .toList();
+        // Only include encounter DTOs when ENCOUNTERS scope is allowed
+        List<EncounterResponseDTO> encounterDtos = isDomainAllowed(allowedDomains, SCOPE_ENCOUNTERS)
+            ? encountersInScope.stream().map(encounterMapper::toEncounterResponseDTO).toList()
+            : List.of();
 
-        List<EncounterResponseDTO> encounterDtos = encountersInScope.stream()
-            .map(encounterMapper::toEncounterResponseDTO)
-            .toList();
+        // ── Encounter history (independent scope check) ────────────────────
+        List<EncounterHistoryResponseDTO> encounterHistoryDtos =
+            loadScopedEncounterHistory(allowedDomains, encountersInScope, fromHospital);
 
-        Map<UUID, Encounter> encounterById = encountersInScope.stream()
-            .collect(Collectors.toMap(Encounter::getId, Function.identity()));
+        // ── Treatments (independent scope check) ───────────────────────────
+        List<EncounterTreatmentResponseDTO> treatmentDtos =
+            loadScopedTreatments(allowedDomains, encountersInScope, fromHospital);
 
-        List<EncounterHistoryResponseDTO> encounterHistoryDtos = encounterById.isEmpty()
-            ? List.of()
-            : loadEncounterHistory(encounterById);
+        // ── Problems ───────────────────────────────────────────────────────
+        List<PatientProblemResponseDTO> problemDtos = List.of();
+        if (isDomainAllowed(allowedDomains, SCOPE_PROBLEMS)) {
+            Comparator<PatientProblem> problemComparator = Comparator
+                .comparing(PatientProblem::getOnsetDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                .thenComparing(PatientProblem::getLastReviewedAt, Comparator.nullsLast(Comparator.reverseOrder()));
 
-        List<EncounterTreatmentResponseDTO> treatmentDtos = loadEncounterTreatments(encountersInScope);
+            problemDtos = safeFetchFromTable(
+                CLINICAL_CATEGORY,
+                "patient_problems",
+                () -> patientProblemRepository
+                    .findByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
+                    .sorted(problemComparator)
+                    .map(patientProblemMapper::toResponseDto)
+                    .toList(),
+                "Patient problem"
+            );
+        }
 
-        Comparator<PatientProblem> problemComparator = Comparator
-            .comparing(PatientProblem::getOnsetDate, Comparator.nullsLast(Comparator.reverseOrder()))
-            .thenComparing(PatientProblem::getLastReviewedAt, Comparator.nullsLast(Comparator.reverseOrder()));
+        // ── Surgical history ───────────────────────────────────────────────
+        List<PatientSurgicalHistoryResponseDTO> surgicalHistoryDtos = List.of();
+        if (isDomainAllowed(allowedDomains, SCOPE_SURGICAL_HISTORY)) {
+            surgicalHistoryDtos = safeFetchFromTable(
+                CLINICAL_CATEGORY,
+                "patient_surgical_history",
+                () -> patientSurgicalHistoryRepository
+                    .findByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
+                    .sorted(Comparator
+                        .comparing(PatientSurgicalHistory::getProcedureDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(PatientSurgicalHistory::getLastUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                    .map(patientSurgicalHistoryMapper::toResponseDto)
+                    .toList(),
+                "Patient surgical history"
+            );
+        }
 
-        List<PatientProblemResponseDTO> problemDtos = safeFetchFromTable(
-            CLINICAL_CATEGORY,
-            "patient_problems",
-            () -> patientProblemRepository
-                .findByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
-                .sorted(problemComparator)
-                .map(patientProblemMapper::toResponseDto)
-                .toList(),
-            "Patient problem"
-        );
+        // ── Advance directives ─────────────────────────────────────────────
+        List<AdvanceDirectiveResponseDTO> advanceDirectiveDtos = List.of();
+        if (isDomainAllowed(allowedDomains, SCOPE_ADVANCE_DIRECTIVES)) {
+            advanceDirectiveDtos = safeFetchFromTable(
+                CLINICAL_CATEGORY,
+                "advance_directives",
+                () -> advanceDirectiveRepository
+                    .findByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
+                    .sorted(Comparator
+                        .comparing(AdvanceDirective::getEffectiveDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(AdvanceDirective::getLastReviewedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                    .map(advanceDirectiveMapper::toResponseDto)
+                    .toList(),
+                "Advance directive"
+            );
+        }
 
-        List<PatientSurgicalHistoryResponseDTO> surgicalHistoryDtos = safeFetchFromTable(
-            CLINICAL_CATEGORY,
-            "patient_surgical_history",
-            () -> patientSurgicalHistoryRepository
-                .findByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
-                .sorted(Comparator
-                    .comparing(PatientSurgicalHistory::getProcedureDate, Comparator.nullsLast(Comparator.reverseOrder()))
-                    .thenComparing(PatientSurgicalHistory::getLastUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(patientSurgicalHistoryMapper::toResponseDto)
-                .toList(),
-            "Patient surgical history"
-        );
+        // ── Lab orders (N+1 fix: hospital-scoped query) ────────────────────
+        List<LabOrderResponseDTO> labOrderDtos = List.of();
+        List<LabResultResponseDTO> labResultDtos = List.of();
+        if (isDomainAllowed(allowedDomains, SCOPE_LAB_ORDERS)) {
+            List<LabOrder> labOrdersInScope = safeFetchFromTable(
+                "lab",
+                "lab_orders",
+                () -> labOrderRepository.findByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
+                    .sorted(Comparator.comparing(LabOrder::getOrderDatetime, Comparator.nullsLast(Comparator.naturalOrder())))
+                    .toList(),
+                "Lab order"
+            );
 
-        List<AdvanceDirectiveResponseDTO> advanceDirectiveDtos = safeFetchFromTable(
-            CLINICAL_CATEGORY,
-            "advance_directives",
-            () -> advanceDirectiveRepository
-                .findByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
-                .sorted(Comparator
-                    .comparing(AdvanceDirective::getEffectiveDate, Comparator.nullsLast(Comparator.reverseOrder()))
-                    .thenComparing(AdvanceDirective::getLastReviewedAt, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(advanceDirectiveMapper::toResponseDto)
-                .toList(),
-            "Advance directive"
-        );
+            labOrderDtos = labOrdersInScope.stream()
+                .map(labOrderMapper::toLabOrderResponseDTO)
+                .toList();
+        }
 
-        List<LabOrder> labOrdersInScope = safeFetchFromTable(
-            "lab",
-            "lab_orders",
-            () -> labOrderRepository.findByPatient_Id(patientId).stream()
-                .filter(order -> order.getHospital() != null && fromHospitalId.equals(order.getHospital().getId()))
-                .sorted(Comparator.comparing(LabOrder::getOrderDatetime, Comparator.nullsLast(Comparator.naturalOrder())))
-                .toList(),
-            "Lab order"
-        );
+        // ── Lab results (independent of LAB_ORDERS scope) ─────────────────
+        if (isDomainAllowed(allowedDomains, SCOPE_LAB_RESULTS)) {
+            labResultDtos = safeFetchFromTable(
+                "lab",
+                "lab_results",
+                () -> labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
+                        patientId, fromHospitalId, Pageable.unpaged()).stream()
+                    .map(labResultMapper::toResponseDTO)
+                    .toList(),
+                "Lab result"
+            );
+        }
 
-        List<LabOrderResponseDTO> labOrderDtos = labOrdersInScope.stream()
-            .map(labOrderMapper::toLabOrderResponseDTO)
-            .toList();
+        // ── Allergies ──────────────────────────────────────────────────────
+        List<PatientAllergyResponseDTO> allergyDtos = loadScopedAllergies(allowedDomains, patientId, fromHospitalId);
 
-        Set<UUID> labOrderIds = labOrdersInScope.stream()
-            .map(LabOrder::getId)
-            .collect(Collectors.toSet());
+        // ── Prescriptions ──────────────────────────────────────────────────
+        List<PrescriptionResponseDTO> prescriptionDtos = List.of();
+        if (isDomainAllowed(allowedDomains, SCOPE_PRESCRIPTIONS)) {
+            prescriptionDtos = safeFetchFromTable(
+                CLINICAL_CATEGORY,
+                "prescriptions",
+                () -> prescriptionRepository
+                    .findByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
+                    .sorted(Comparator.comparing(Prescription::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
+                    .map(prescriptionMapper::toResponseDTO)
+                    .toList(),
+                "Prescription"
+            );
+        }
 
-        List<LabResultResponseDTO> labResultDtos = safeFetchFromTable(
-            "lab",
-            "lab_results",
-            () -> labResultRepository.findByLabOrder_Patient_Id(patientId).stream()
-                .filter(result -> result.getLabOrder() != null
-                    && result.getLabOrder().getHospital() != null
-                    && fromHospitalId.equals(result.getLabOrder().getHospital().getId()))
-                .filter(result -> {
-                    UUID orderId = result.getLabOrder() != null ? result.getLabOrder().getId() : null;
-                    return orderId == null || labOrderIds.contains(orderId);
-                })
-                .map(labResultMapper::toResponseDTO)
-                .toList(),
-            "Lab result"
-        );
+        // ── Insurance ──────────────────────────────────────────────────────
+        List<PatientInsuranceResponseDTO> insuranceDtos = List.of();
+        if (isDomainAllowed(allowedDomains, SCOPE_INSURANCES)) {
+            insuranceDtos = safeFetchFromTable(
+                CLINICAL_CATEGORY,
+                "patient_insurances",
+                () -> patientInsuranceRepository
+                    .findByPatient_Id(patientId).stream()
+                    .filter(insurance -> isInsuranceInScope(insurance, fromHospitalId))
+                    .sorted(Comparator
+                        .comparing(PatientInsurance::isPrimary).reversed()
+                        .thenComparing(PatientInsurance::getEffectiveDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(PatientInsurance::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                    .map(patientInsuranceMapper::toPatientInsuranceResponseDTO)
+                    .toList(),
+                "Patient insurance"
+            );
+        }
 
-        Comparator<PatientAllergy> allergyComparator = Comparator
-            .<PatientAllergy>comparingInt(allergy -> severityOrder(allergy.getSeverity()))
-            .thenComparing(PatientAllergy::getOnsetDate, Comparator.nullsLast(Comparator.naturalOrder()))
-            .thenComparing(PatientAllergy::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()));
+        // ── Vital Signs ────────────────────────────────────────────────────
+        List<PatientVitalSignResponseDTO> vitalSignDtos = List.of();
+        if (isDomainAllowed(allowedDomains, SCOPE_VITAL_SIGNS)) {
+            vitalSignDtos = safeFetchFromTable(
+                CLINICAL_CATEGORY,
+                "patient_vital_signs",
+                () -> patientVitalSignRepository
+                    .findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, fromHospitalId, Pageable.unpaged())
+                    .stream()
+                    .map(patientVitalSignMapper::toResponse)
+                    .toList(),
+                "Patient vital sign"
+            );
+        }
 
-        List<PatientAllergy> allergyEntities = safeFetchFromTable(
-            CLINICAL_CATEGORY,
-            "patient_allergies",
-            () -> fromHospitalId == null
-                ? patientAllergyRepository.findByPatient_Id(patientId)
-                : patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, fromHospitalId),
-            "Patient allergy"
-        );
-
-        List<PatientAllergyResponseDTO> allergyDtos = allergyEntities.stream()
-            .sorted(allergyComparator)
-            .map(patientAllergyMapper::toResponseDto)
-            .toList();
-
-        List<PrescriptionResponseDTO> prescriptionDtos = safeFetchFromTable(
-            CLINICAL_CATEGORY,
-            "prescriptions",
-            () -> prescriptionRepository
-                .findByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
-                .sorted(Comparator.comparing(Prescription::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())))
-                .map(prescriptionMapper::toResponseDTO)
-                .toList(),
-            "Prescription"
-        );
-
-        List<PatientInsuranceResponseDTO> insuranceDtos = safeFetchFromTable(
-            CLINICAL_CATEGORY,
-            "patient_insurances",
-            () -> patientInsuranceRepository
-                .findByPatient_Id(patientId).stream()
-                .filter(insurance -> isInsuranceInScope(insurance, fromHospitalId))
-                .sorted(Comparator
-                    .comparing(PatientInsurance::isPrimary).reversed()
-                    .thenComparing(PatientInsurance::getEffectiveDate, Comparator.nullsLast(Comparator.reverseOrder()))
-                    .thenComparing(PatientInsurance::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
-                .map(patientInsuranceMapper::toPatientInsuranceResponseDTO)
-                .toList(),
-            "Patient insurance"
-        );
+        // ── Immunizations ──────────────────────────────────────────────────
+        List<ImmunizationResponseDTO> immunizationDtos = List.of();
+        if (isDomainAllowed(allowedDomains, SCOPE_IMMUNIZATIONS)) {
+            immunizationDtos = safeFetchFromTable(
+                CLINICAL_CATEGORY,
+                "patient_immunizations",
+                () -> immunizationRepository
+                    .findByPatient_IdAndHospital_IdOrderByAdministrationDateDesc(patientId, fromHospitalId)
+                    .stream()
+                    .map(immunizationMapper::toResponseDTO)
+                    .toList(),
+                "Patient immunization"
+            );
+        }
 
         PatientRecordDTO dto = PatientRecordDTO.builder()
             .patientId(patient.getId())
@@ -387,10 +449,6 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             .emergencyContactRelationship(patient.getEmergencyContactRelationship())
             .hospitalMRNs(Set.copyOf(mrnByHospital.values()))
             .hospitalMrnMap(new LinkedHashMap<>(mrnByHospital))
-            .consentId(consent != null ? consent.getId() : null)
-            .consentTimestamp(consent != null ? consent.getConsentTimestamp() : null)
-            .consentExpiration(consent != null ? consent.getConsentExpiration() : null)
-            .consentPurpose(consent != null ? consent.getPurpose() : null)
             .fromHospitalId(fromHospital.getId())
             .fromHospitalName(fromHospital.getName())
             .toHospitalId(toHospital.getId())
@@ -406,10 +464,94 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             .surgicalHistory(surgicalHistoryDtos)
             .advanceDirectives(advanceDirectiveDtos)
             .encounterHistory(encounterHistoryDtos)
+            .vitalSigns(vitalSignDtos)
+            .immunizations(immunizationDtos)
             .build();
 
-        logAuditEvent(patient, fromHospitalId, toHospitalId, dto, consent);
+        if (consent != null) {
+            dto.setConsentId(consent.getId());
+            dto.setConsentTimestamp(consent.getConsentTimestamp());
+            dto.setConsentExpiration(consent.getConsentExpiration());
+            dto.setConsentPurpose(consent.getPurpose());
+        }
+
+        logAuditEvent(patient, fromHospitalId, toHospitalId, dto, consent, allowedDomains);
         return dto;
+    }
+
+    /**
+     * Parses the consent scope into a set of allowed domain names.
+     * Returns an empty set when the scope is empty/null (meaning all domains allowed).
+     */
+    private Set<String> parseConsentScope(PatientConsent consent) {
+        if (consent == null || consent.getScope() == null || consent.getScope().isBlank()) {
+            return Collections.emptySet();
+        }
+        return Arrays.stream(consent.getScope().split(","))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .map(String::toUpperCase)
+            .collect(Collectors.toCollection(HashSet::new));
+    }
+
+    /**
+     * Returns true if the domain is present in the allowed set, or the set is empty (all domains).
+     */
+    private boolean isDomainAllowed(Set<String> allowedDomains, String domain) {
+        return allowedDomains.isEmpty() || allowedDomains.contains(domain);
+    }
+
+    private List<EncounterHistoryResponseDTO> loadScopedEncounterHistory(
+            Set<String> allowedDomains, List<Encounter> encountersInScope, Hospital fromHospital) {
+        if (!isDomainAllowed(allowedDomains, SCOPE_ENCOUNTER_HISTORY) || encountersInScope.isEmpty()) {
+            return List.of();
+        }
+        Map<UUID, Encounter> encounterById = encountersInScope.stream()
+            .collect(Collectors.toMap(Encounter::getId, Function.identity()));
+        List<EncounterHistoryResponseDTO> dtos = loadEncounterHistory(encounterById);
+        dtos.forEach(h -> {
+            h.setHospitalId(fromHospital.getId());
+            h.setHospitalName(fromHospital.getName());
+        });
+        return dtos;
+    }
+
+    private List<EncounterTreatmentResponseDTO> loadScopedTreatments(
+            Set<String> allowedDomains, List<Encounter> encountersInScope, Hospital fromHospital) {
+        if (!isDomainAllowed(allowedDomains, SCOPE_TREATMENTS) || encountersInScope.isEmpty()) {
+            return List.of();
+        }
+        List<EncounterTreatmentResponseDTO> dtos = loadEncounterTreatments(encountersInScope);
+        dtos.forEach(t -> {
+            t.setHospitalId(fromHospital.getId());
+            t.setHospitalName(fromHospital.getName());
+        });
+        return dtos;
+    }
+
+    private List<PatientAllergyResponseDTO> loadScopedAllergies(
+            Set<String> allowedDomains, UUID patientId, UUID fromHospitalId) {
+        if (!isDomainAllowed(allowedDomains, SCOPE_ALLERGIES)) {
+            return List.of();
+        }
+        Comparator<PatientAllergy> allergyComparator = Comparator
+            .<PatientAllergy>comparingInt(allergy -> severityOrder(allergy.getSeverity()))
+            .thenComparing(PatientAllergy::getOnsetDate, Comparator.nullsLast(Comparator.naturalOrder()))
+            .thenComparing(PatientAllergy::getUpdatedAt, Comparator.nullsLast(Comparator.reverseOrder()));
+
+        List<PatientAllergy> allergyEntities = safeFetchFromTable(
+            CLINICAL_CATEGORY,
+            "patient_allergies",
+            () -> fromHospitalId == null
+                ? patientAllergyRepository.findByPatient_Id(patientId)
+                : patientAllergyRepository.findByPatient_IdAndHospital_Id(patientId, fromHospitalId),
+            "Patient allergy"
+        );
+
+        return allergyEntities.stream()
+            .sorted(allergyComparator)
+            .map(patientAllergyMapper::toResponseDto)
+            .toList();
     }
 
     private Map<UUID, String> buildHospitalMrnMap(Patient patient) {
@@ -426,7 +568,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
                 Comparator.nullsLast(Comparator.naturalOrder())
             ))
             .collect(Collectors.toMap(
-                registration -> registration.getHospital().getId(),
+                reg -> reg.getHospital().getId(),
                 PatientHospitalRegistration::getMrn,
                 (existing, replacement) -> existing,
                 LinkedHashMap::new
@@ -835,7 +977,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             addAdvanceDirectiveSection(document, dto, font, headerColor, borderColor);
             addInsuranceSection(document, dto, font, headerColor, borderColor);
 
-            String qrContent = "https://hospital-system.com/patient/" + dto.getPatientId();
+            String qrContent = qrBaseUrl + dto.getPatientId();
             BarcodeQRCode qrCode = new BarcodeQRCode(qrContent);
             PdfFormXObject qrFormObject = qrCode.createFormXObject(ColorConstants.BLACK, pdfDoc);
             Image qrImage = new Image(qrFormObject)
@@ -1190,7 +1332,8 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         throw new IllegalArgumentException("Unsupported export format: " + format);
     }
 
-    private void logAuditEvent(Patient patient, UUID fromHospitalId, UUID toHospitalId, PatientRecordDTO dto, PatientConsent consent) {
+    private void logAuditEvent(Patient patient, UUID fromHospitalId, UUID toHospitalId,
+                               PatientRecordDTO dto, PatientConsent consent, Set<String> scopeApplied) {
         try {
             Map<String, Object> auditPayload = new HashMap<>();
             auditPayload.put("patientId", patient.getId());
@@ -1198,6 +1341,7 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             auditPayload.put("toHospitalId", toHospitalId);
             auditPayload.put("consentId", consent != null ? consent.getId() : "SELF_SERVE");
             auditPayload.put("consentExpiresAt", consent != null ? consent.getConsentExpiration() : null);
+            auditPayload.put("scopeApplied", scopeApplied.isEmpty() ? "ALL" : scopeApplied);
             auditPayload.put("encounterCount", dto.getEncounters().size());
             auditPayload.put("treatmentCount", dto.getTreatments().size());
             auditPayload.put("labOrderCount", dto.getLabOrders().size());
@@ -1290,22 +1434,146 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             .build();
     }
 
-    /**
-     * Assemble patient record skipping the consent lookup — used for SAME_HOSPITAL
-     * where the requesting hospital already owns the records.
-     */
-    private PatientRecordDTO buildPatientRecordNoConsent(
-            UUID patientId, UUID fromHospitalId, UUID toHospitalId, com.example.hms.model.Patient patient) {
+    // ── Multi-hospital aggregation ─────────────────────────────────────────
 
-        Hospital fromHospital = hospitalRepository.findById(fromHospitalId)
-            .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("Source hospital not found."));
-        Hospital toHospital = hospitalRepository.findById(toHospitalId)
-            .orElseThrow(() -> new com.example.hms.exception.ResourceNotFoundException("Target hospital not found."));
+    @Override
+    @Transactional(readOnly = true)
+    public PatientRecordDTO getAggregatedPatientRecord(UUID patientId, UUID requestingHospitalId) {
+        Hospital requestingHospital = hospitalRepository.findById(requestingHospitalId)
+            .orElseThrow(() -> new ResourceNotFoundException("Requesting hospital not found."));
 
-        // Delegate directly to the internal assembly logic by constructing a synthetic
-        // "self-consent" view — reuse the data-assembly pipeline without hitting the DB
-        // for a consent row that intentionally doesn't exist.
-        return buildPatientRecordFromEntities(patientId, fromHospitalId, toHospitalId, patient, fromHospital, toHospital);
+        // Load consents first — consent repo is NOT tenant-scoped, and @EntityGraph eagerly loads patient
+        List<PatientConsent> consents = consentRepository
+            .findAllByPatientIdAndToHospitalId(patientId, requestingHospitalId);
+
+        // Resolve patient from a consent entity (bypasses tenant-scoped patientRepository.findById)
+        Patient patient = consents.stream()
+            .filter(c -> c.getPatient() != null)
+            .map(PatientConsent::getPatient)
+            .findFirst()
+            .orElseGet(() -> patientRepository.findById(patientId)
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found.")));
+
+        List<PatientRecordDTO> partials = new ArrayList<>();
+
+        // 1. SAME_HOSPITAL — patient is registered at the requesting hospital
+        boolean registeredAtRequesting = patient.getHospitalRegistrations() != null
+            && patient.getHospitalRegistrations().stream()
+                .anyMatch(r -> r.isActive() && r.getHospital() != null
+                    && requestingHospitalId.equals(r.getHospital().getId()));
+
+        if (registeredAtRequesting) {
+            partials.add(buildPatientRecordFromEntities(
+                patientId, requestingHospitalId, requestingHospitalId,
+                patient, requestingHospital, requestingHospital));
+        }
+
+        // 2. All active consents where toHospitalId == requestingHospitalId
+        for (PatientConsent c : consents) {
+            UUID fromId = c.getFromHospital().getId();
+            if (c.isConsentActive() && !fromId.equals(requestingHospitalId)) {
+                Hospital fromHospital = c.getFromHospital();
+                partials.add(buildPatientRecordFromEntities(
+                    patientId, fromId, requestingHospitalId,
+                    patient, fromHospital, requestingHospital, c));
+            }
+        }
+
+        if (partials.isEmpty()) {
+            throw new BusinessException("No active consent or registration found for this patient at the requesting hospital.");
+        }
+
+        return mergePatientRecords(partials, patient, requestingHospital);
+    }
+
+    private <T> void addWithDedup(List<T> target, List<T> source, Set<UUID> seen,
+                                   Function<T, UUID> idExtractor) {
+        for (T item : source) {
+            UUID id = idExtractor.apply(item);
+            if (id != null && seen.add(id)) {
+                target.add(item);
+            }
+        }
+    }
+
+    private PatientRecordDTO mergePatientRecords(List<PatientRecordDTO> partials,
+                                                  Patient patient,
+                                                  Hospital requestingHospital) {
+        List<EncounterResponseDTO> allEncounters = new ArrayList<>();
+        List<EncounterTreatmentResponseDTO> allTreatments = new ArrayList<>();
+        List<PrescriptionResponseDTO> allPrescriptions = new ArrayList<>();
+        List<LabOrderResponseDTO> allLabOrders = new ArrayList<>();
+        List<LabResultResponseDTO> allLabResults = new ArrayList<>();
+        List<PatientAllergyResponseDTO> allAllergies = new ArrayList<>();
+        List<PatientInsuranceResponseDTO> allInsurances = new ArrayList<>();
+        List<EncounterHistoryResponseDTO> allEncounterHistory = new ArrayList<>();
+        List<PatientProblemResponseDTO> allProblems = new ArrayList<>();
+        List<PatientSurgicalHistoryResponseDTO> allSurgicalHistory = new ArrayList<>();
+        List<AdvanceDirectiveResponseDTO> allAdvanceDirectives = new ArrayList<>();
+        List<PatientVitalSignResponseDTO> allVitalSigns = new ArrayList<>();
+        List<ImmunizationResponseDTO> allImmunizations = new ArrayList<>();
+        Map<UUID, String> mergedMrnMap = new LinkedHashMap<>();
+
+        Set<UUID> seenEncounterIds = new HashSet<>();
+        Set<UUID> seenAllergyIds = new HashSet<>();
+        Set<UUID> seenProblemIds = new HashSet<>();
+
+        for (PatientRecordDTO p : partials) {
+            mergedMrnMap.putAll(p.getHospitalMrnMap());
+            addWithDedup(allEncounters, p.getEncounters(), seenEncounterIds, EncounterResponseDTO::getId);
+            allTreatments.addAll(p.getTreatments());
+            allPrescriptions.addAll(p.getPrescriptions());
+            allLabOrders.addAll(p.getLabOrders());
+            allLabResults.addAll(p.getLabResults());
+            addWithDedup(allAllergies, p.getAllergiesDetailed(), seenAllergyIds, PatientAllergyResponseDTO::getId);
+            allInsurances.addAll(p.getInsurances());
+            allEncounterHistory.addAll(p.getEncounterHistory());
+            addWithDedup(allProblems, p.getProblems(), seenProblemIds, PatientProblemResponseDTO::getId);
+            allSurgicalHistory.addAll(p.getSurgicalHistory());
+            allAdvanceDirectives.addAll(p.getAdvanceDirectives());
+            allVitalSigns.addAll(p.getVitalSigns());
+            allImmunizations.addAll(p.getImmunizations());
+        }
+
+        return PatientRecordDTO.builder()
+            .patientId(patient.getId())
+            .firstName(patient.getFirstName())
+            .lastName(patient.getLastName())
+            .middleName(patient.getMiddleName())
+            .dateOfBirth(patient.getDateOfBirth())
+            .gender(patient.getGender())
+            .bloodType(patient.getBloodType())
+            .medicalHistorySummary(patient.getMedicalHistorySummary())
+            .allergies(patient.getAllergies())
+            .address(patient.getAddress())
+            .city(patient.getCity())
+            .state(patient.getState())
+            .zipCode(patient.getZipCode())
+            .country(patient.getCountry())
+            .phoneNumberPrimary(patient.getPhoneNumberPrimary())
+            .phoneNumberSecondary(patient.getPhoneNumberSecondary())
+            .email(patient.getEmail())
+            .emergencyContactName(patient.getEmergencyContactName())
+            .emergencyContactPhone(patient.getEmergencyContactPhone())
+            .emergencyContactRelationship(patient.getEmergencyContactRelationship())
+            .hospitalMRNs(Set.copyOf(mergedMrnMap.values()))
+            .hospitalMrnMap(mergedMrnMap)
+            .toHospitalId(requestingHospital.getId())
+            .toHospitalName(requestingHospital.getName())
+            .encounters(allEncounters)
+            .treatments(allTreatments)
+            .labOrders(allLabOrders)
+            .labResults(allLabResults)
+            .allergiesDetailed(allAllergies)
+            .prescriptions(allPrescriptions)
+            .insurances(allInsurances)
+            .problems(allProblems)
+            .surgicalHistory(allSurgicalHistory)
+            .advanceDirectives(allAdvanceDirectives)
+            .encounterHistory(allEncounterHistory)
+            .vitalSigns(allVitalSigns)
+            .immunizations(allImmunizations)
+            .build();
     }
 
 }

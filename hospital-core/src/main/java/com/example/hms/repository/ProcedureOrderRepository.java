@@ -33,4 +33,7 @@ public interface ProcedureOrderRepository extends JpaRepository<ProcedureOrder, 
     List<ProcedureOrder> findByStatusAndConsentObtainedFalse(ProcedureOrderStatus status);
 
     List<ProcedureOrder> findByHospital_IdAndStatusAndConsentObtainedFalse(UUID hospitalId, ProcedureOrderStatus status);
+
+    /** True when the encounter has at least one procedure order whose status is NOT in the given terminal set. */
+    boolean existsByEncounter_IdAndStatusNotIn(UUID encounterId, java.util.Collection<ProcedureOrderStatus> terminalStatuses);
 }

@@ -283,4 +283,18 @@ export class EncounterService {
   completeTriage(encounterId: string): Observable<EncounterResponse> {
     return this.http.post<EncounterResponse>(`${this.baseUrl}/${encounterId}/complete-triage`, {});
   }
+
+  completeExamination(encounterId: string): Observable<EncounterResponse> {
+    return this.http.post<EncounterResponse>(
+      `${this.baseUrl}/${encounterId}/complete-examination`,
+      {},
+    );
+  }
+
+  markReadyForDischarge(encounterId: string): Observable<EncounterResponse> {
+    return this.http.post<EncounterResponse>(
+      `${this.baseUrl}/${encounterId}/ready-for-discharge`,
+      {},
+    );
+  }
 }

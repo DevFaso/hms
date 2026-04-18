@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -100,7 +101,7 @@ class GeneralReferralServiceImplTest {
         Department department = buildDepartment(departmentId, "Cardiology");
         Department sourceDept = buildDepartment(sourceDepartmentId, "Emergency");
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(hospitalRepository.findById(receivingHospitalId)).thenReturn(Optional.of(receivingHospital));
         when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
@@ -145,6 +146,39 @@ class GeneralReferralServiceImplTest {
     }
 
     @Test
+    void createReferral_usesUnscopedPatientLookup() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID referringProviderId = UUID.randomUUID();
+        UUID referralId = UUID.randomUUID();
+
+        GeneralReferralRequestDTO request = new GeneralReferralRequestDTO();
+        request.setPatientId(patientId);
+        request.setHospitalId(hospitalId);
+        request.setReferringProviderId(referringProviderId);
+        request.setReferralType(ReferralType.CONSULTATION);
+        request.setUrgency(ReferralUrgency.ROUTINE);
+        request.setReferralReason("Cross-hospital referral");
+
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(buildPatient(patientId, "Cross", "Hospital")));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(buildHospital(hospitalId, "Hospital A")));
+        when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(buildStaff(referringProviderId, "Dr. Cross")));
+        when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(invocation -> {
+            GeneralReferral ref = invocation.getArgument(0);
+            ref.setId(referralId);
+            ref.setCreatedAt(LocalDateTime.now());
+            ref.setUpdatedAt(LocalDateTime.now());
+            return ref;
+        });
+
+        GeneralReferralResponseDTO response = generalReferralService.createReferral(request);
+
+        assertNotNull(response);
+        verify(patientRepository).findByIdUnscoped(patientId);
+        verify(patientRepository, never()).findById(patientId);
+    }
+
+    @Test
     void createReferral_withoutOptionalHospitalAndDepartment_leavesFieldsNull() {
         UUID patientId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
@@ -160,7 +194,7 @@ class GeneralReferralServiceImplTest {
         request.setReferralReason("Follow-up care");
         // receivingHospitalId and sourceDepartmentId deliberately omitted
 
-        when(patientRepository.findById(patientId)).thenReturn(Optional.of(buildPatient(patientId, "Bob", "Jones")));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(buildPatient(patientId, "Bob", "Jones")));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(buildHospital(hospitalId, "Main Hospital")));
         when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(buildStaff(referringProviderId, "Dr. Provider")));
         when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(invocation -> {

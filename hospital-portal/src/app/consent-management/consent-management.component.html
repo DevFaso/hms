@@ -53,41 +53,94 @@
           </button>
         </div>
         <div class="modal-body">
+          <!-- Patient picker -->
           <div class="form-row">
-            <label class="form-label" for="patientId">
+            <label class="form-label" for="patientSearch">
               {{ 'CONSENT.MANAGEMENT.PATIENT_ID' | translate }} *
             </label>
-            <input
-              id="patientId"
-              class="form-input"
-              type="text"
-              [(ngModel)]="grantForm.patientId"
-              [placeholder]="'CONSENT.MANAGEMENT.UUID_PLACEHOLDER' | translate"
-            />
+            @if (selectedPatient()) {
+              <div class="picker-chip">
+                <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
+                <div class="chip-info">
+                  <span class="chip-name"
+                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
+                  >
+                  <span class="chip-sub"
+                    >{{ selectedPatient()!.email
+                    }}{{ selectedPatient()!.mrn ? ' · MRN ' + selectedPatient()!.mrn : '' }}</span
+                  >
+                </div>
+                <button
+                  type="button"
+                  class="chip-clear"
+                  (click)="clearPatient()"
+                  [title]="'COMMON.CHANGE_PATIENT' | translate"
+                >
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            } @else {
+              <div class="picker-wrap">
+                <span class="material-symbols-outlined picker-search-icon">person_search</span>
+                <input
+                  id="patientSearch"
+                  class="picker-input"
+                  type="text"
+                  [placeholder]="'CONSENT.MANAGEMENT.SEARCH_PATIENT' | translate"
+                  [value]="patientQuery()"
+                  (input)="onPatientQueryChange($any($event.target).value)"
+                  (blur)="patientDropdownOpen.set(false)"
+                  autocomplete="off"
+                />
+                @if (patientSearchLoading()) {
+                  <div class="picker-spinner"></div>
+                }
+                @if (patientDropdownOpen()) {
+                  <ul
+                    class="picker-dropdown"
+                    [attr.aria-label]="'CONSENT.MANAGEMENT.PATIENT_SUGGESTIONS' | translate"
+                  >
+                    @for (p of patientSuggestions(); track p.id) {
+                      <li class="picker-option" (mousedown)="selectPatient(p)">
+                        <div class="opt-avatar">{{ patientInitials(p) }}</div>
+                        <div class="opt-info">
+                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                          <span class="opt-meta"
+                            >{{ p.email }}{{ p.mrn ? ' · MRN ' + p.mrn : '' }}</span
+                          >
+                        </div>
+                      </li>
+                    }
+                  </ul>
+                }
+              </div>
+            }
           </div>
+
+          <!-- From Hospital -->
           <div class="form-row">
             <label class="form-label" for="fromHospital">
               {{ 'CONSENT.MANAGEMENT.FROM_HOSPITAL' | translate }} *
             </label>
-            <input
-              id="fromHospital"
-              class="form-input"
-              type="text"
-              [(ngModel)]="grantForm.fromHospitalId"
-              [placeholder]="'CONSENT.MANAGEMENT.UUID_PLACEHOLDER' | translate"
-            />
+            <select id="fromHospital" class="form-select" [(ngModel)]="grantForm.fromHospitalId">
+              <option value="">— {{ 'CONSENT.MANAGEMENT.SELECT_HOSPITAL' | translate }} —</option>
+              @for (h of fromHospitalOptions(); track h.id) {
+                <option [value]="h.id">{{ h.name }}</option>
+              }
+            </select>
           </div>
+
+          <!-- To Hospital (locked to current hospital) -->
           <div class="form-row">
-            <label class="form-label" for="toHospital">
-              {{ 'CONSENT.MANAGEMENT.TO_HOSPITAL' | translate }} *
-            </label>
-            <input
-              id="toHospital"
-              class="form-input"
-              type="text"
-              [(ngModel)]="grantForm.toHospitalId"
-              [placeholder]="'CONSENT.MANAGEMENT.UUID_PLACEHOLDER' | translate"
-            />
+            <span class="form-label"> {{ 'CONSENT.MANAGEMENT.TO_HOSPITAL' | translate }} * </span>
+            <div
+              class="locked-hospital"
+              role="status"
+              [attr.aria-label]="'CONSENT.MANAGEMENT.TO_HOSPITAL' | translate"
+            >
+              <span class="material-symbols-outlined locked-icon">lock</span>
+              <span class="locked-name">{{ currentHospital()?.name || '—' }}</span>
+            </div>
           </div>
           <div class="form-row">
             <label class="form-label" for="consentType">
@@ -112,17 +165,32 @@
             />
           </div>
           <div class="form-row">
-            <label class="form-label" for="scope">
+            <span class="form-label" id="scope-group-label">
               {{ 'CONSENT.MANAGEMENT.SCOPE' | translate }}
-            </label>
-            <input
-              id="scope"
-              class="form-input"
-              type="text"
-              [(ngModel)]="grantForm.scope"
-              [placeholder]="'CONSENT.MANAGEMENT.SCOPE_PLACEHOLDER' | translate"
-              maxlength="500"
-            />
+            </span>
+            <div class="scope-checkboxes" role="group" aria-labelledby="scope-group-label">
+              <label class="scope-checkbox share-all">
+                <input
+                  type="checkbox"
+                  [checked]="shareAll()"
+                  (change)="toggleShareAll($any($event.target).checked)"
+                />
+                <span class="scope-label">{{ 'CONSENT.MANAGEMENT.SHARE_ALL' | translate }}</span>
+              </label>
+              @for (domain of scopeDomains; track domain) {
+                <label class="scope-checkbox">
+                  <input
+                    type="checkbox"
+                    [checked]="scopeSelections()[domain]"
+                    (change)="toggleScope(domain, $any($event.target).checked)"
+                    [disabled]="shareAll()"
+                  />
+                  <span class="scope-label">{{
+                    'CONSENT.SCOPE_DOMAINS.' + domain | translate
+                  }}</span>
+                </label>
+              }
+            </div>
             <span class="form-hint">{{ 'CONSENT.MANAGEMENT.SCOPE_HINT' | translate }}</span>
           </div>
           <div class="form-row">
@@ -160,8 +228,17 @@
     </div>
   }
 
+  <!-- Error -->
+  @if (!loading() && loadError()) {
+    <div class="error-state" role="alert">
+      <span class="material-symbols-outlined error-icon">error</span>
+      <h3>{{ loadError() }}</h3>
+      <button class="btn btn-primary" (click)="load()">{{ 'COMMON.RETRY' | translate }}</button>
+    </div>
+  }
+
   <!-- Empty -->
-  @if (!loading() && filteredConsents().length === 0) {
+  @if (!loading() && !loadError() && filteredConsents().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">handshake</span>
       <h3>{{ 'CONSENT.MANAGEMENT.NO_CONSENTS' | translate }}</h3>
@@ -170,7 +247,7 @@
   }
 
   <!-- Table -->
-  @if (!loading() && filteredConsents().length > 0) {
+  @if (!loading() && !loadError() && filteredConsents().length > 0) {
     <div class="data-table">
       <table>
         <thead>
@@ -220,9 +297,15 @@
               </td>
               <td>
                 @if (isActive(c)) {
-                  <button class="btn btn-danger btn-sm" (click)="revoke(c)">
-                    {{ 'CONSENT.MANAGEMENT.REVOKE' | translate }}
-                  </button>
+                  <div class="action-buttons">
+                    <button class="btn btn-outline btn-sm" (click)="viewRecords(c)">
+                      <span class="material-symbols-outlined btn-icon">folder_shared</span>
+                      {{ 'CONSENT.MANAGEMENT.VIEW_RECORDS' | translate }}
+                    </button>
+                    <button class="btn btn-danger btn-sm" (click)="revoke(c)">
+                      {{ 'CONSENT.MANAGEMENT.REVOKE' | translate }}
+                    </button>
+                  </div>
                 }
               </td>
             </tr>

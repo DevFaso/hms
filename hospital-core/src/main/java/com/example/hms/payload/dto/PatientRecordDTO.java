@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto;
 
+import com.example.hms.payload.dto.medicalhistory.ImmunizationResponseDTO;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -157,6 +158,14 @@ public class PatientRecordDTO {
     @Schema(description = "Advance directives supplied with the consented record share.")
     private List<AdvanceDirectiveResponseDTO> advanceDirectives = emptyList();
 
+    @Builder.Default
+    @Schema(description = "Vital sign readings recorded at the source hospital.")
+    private List<PatientVitalSignResponseDTO> vitalSigns = emptyList();
+
+    @Builder.Default
+    @Schema(description = "Immunization records from the source hospital.")
+    private List<ImmunizationResponseDTO> immunizations = emptyList();
+
     public Set<String> getHospitalMRNs() {
         return hospitalMRNs;
     }
@@ -207,5 +216,13 @@ public class PatientRecordDTO {
 
     public List<AdvanceDirectiveResponseDTO> getAdvanceDirectives() {
         return advanceDirectives == null ? emptyList() : advanceDirectives;
+    }
+
+    public List<PatientVitalSignResponseDTO> getVitalSigns() {
+        return vitalSigns == null ? emptyList() : vitalSigns;
+    }
+
+    public List<ImmunizationResponseDTO> getImmunizations() {
+        return immunizations == null ? emptyList() : immunizations;
     }
 }

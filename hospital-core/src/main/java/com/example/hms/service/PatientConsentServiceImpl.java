@@ -55,8 +55,11 @@ public class PatientConsentServiceImpl implements PatientConsentService {
         UUID fromHospitalId = requestDTO.getFromHospitalId();
         UUID toHospitalId = requestDTO.getToHospitalId();
 
-        Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found."));
+        // Use unscoped lookup: consent is cross-hospital, so the patient's
+        // hospitalId (set to their first hospital) may not match the caller's
+        // tenant scope. The controller's @PreAuthorize already enforces auth.
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         Hospital fromHospital = hospitalRepository.findById(fromHospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("From Hospital not found."));
@@ -119,21 +122,25 @@ public class PatientConsentServiceImpl implements PatientConsentService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<PatientConsentResponseDTO> getAllConsents(Pageable pageable) {
         return consentRepository.findAll(pageable).map(this::mapWithDetails);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<PatientConsentResponseDTO> getConsentsByPatient(UUID patientId, Pageable pageable) {
         return consentRepository.findAllByPatientId(patientId, pageable).map(this::mapWithDetails);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<PatientConsentResponseDTO> getConsentsByFromHospital(UUID fromHospitalId, Pageable pageable) {
         return consentRepository.findAllByFromHospitalId(fromHospitalId, pageable).map(this::mapWithDetails);
     }
 
     @Override
+    @Transactional(readOnly = true)
     public Page<PatientConsentResponseDTO> getConsentsByToHospital(UUID toHospitalId, Pageable pageable) {
         return consentRepository.findAllByToHospitalId(toHospitalId, pageable).map(this::mapWithDetails);
     }
@@ -158,8 +165,11 @@ public class PatientConsentServiceImpl implements PatientConsentService {
         UUID fromHospitalId = fromHospitalDTO.getId();
         UUID toHospitalId = toHospitalDTO.getId();
 
-        Patient patient = patientRepository.findById(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
+        // Use unscoped lookup: consent is cross-hospital, so the patient's
+        // hospitalId (set to their first hospital) may not match the caller's
+        // tenant scope. The controller's @PreAuthorize already enforces auth.
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         Hospital fromHospital = hospitalRepository.findById(fromHospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("From Hospital not found with ID: " + fromHospitalId));

@@ -42,6 +42,9 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
 
     boolean existsByPatient_IdAndLabTestDefinition_IdAndOrderDatetime(UUID id, UUID id1, @NotNull LocalDateTime orderDatetime);
 
+    /** True when the encounter has at least one lab order whose status is NOT in the given terminal set. */
+    boolean existsByEncounter_IdAndStatusNotIn(UUID encounterId, java.util.Collection<LabOrderStatus> terminalStatuses);
+
     // Count lab orders placed by a specific ordering staff with a given status
     long countByOrderingStaff_IdAndStatus(UUID staffId, LabOrderStatus status);
 

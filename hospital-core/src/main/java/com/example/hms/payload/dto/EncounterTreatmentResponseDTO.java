@@ -39,4 +39,7 @@ public class EncounterTreatmentResponseDTO {
     private String outcome;
     private String notes;
 
+    private UUID hospitalId;
+    private String hospitalName;
+
 }

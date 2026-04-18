@@ -122,7 +122,7 @@ class GeneralReferralServiceImplTest {
         void createMinimal() {
             GeneralReferralRequestDTO request = buildRequest();
 
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
             when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> {
@@ -145,7 +145,7 @@ class GeneralReferralServiceImplTest {
             request.setReceivingProviderId(receivingProviderId);
             request.setTargetDepartmentId(departmentId);
 
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
             when(staffRepository.findById(receivingProviderId)).thenReturn(Optional.of(receivingProvider));
@@ -168,7 +168,7 @@ class GeneralReferralServiceImplTest {
             GeneralReferralRequestDTO request = buildRequest();
             request.setUrgency(ReferralUrgency.EMERGENCY);
 
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
             when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> {
@@ -188,7 +188,7 @@ class GeneralReferralServiceImplTest {
             GeneralReferralRequestDTO request = buildRequest();
             request.setUrgency(ReferralUrgency.URGENT);
 
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
             when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> {
@@ -208,7 +208,7 @@ class GeneralReferralServiceImplTest {
             GeneralReferralRequestDTO request = buildRequest();
             request.setUrgency(ReferralUrgency.PRIORITY);
 
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
             when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> {
@@ -226,7 +226,7 @@ class GeneralReferralServiceImplTest {
         @DisplayName("throws when patient not found")
         void throwsWhenPatientNotFound() {
             GeneralReferralRequestDTO request = buildRequest();
-            when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
 
             assertThatThrownBy(() -> service.createReferral(request))
                     .isInstanceOf(ResourceNotFoundException.class);
@@ -238,7 +238,7 @@ class GeneralReferralServiceImplTest {
             GeneralReferralRequestDTO request = buildRequest();
             request.setReceivingProviderId(receivingProviderId);
 
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
             when(staffRepository.findById(receivingProviderId)).thenReturn(Optional.empty());
@@ -254,7 +254,7 @@ class GeneralReferralServiceImplTest {
             request.setCurrentMedications(null);
             request.setDiagnoses(null);
 
-            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
             when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
             when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> {

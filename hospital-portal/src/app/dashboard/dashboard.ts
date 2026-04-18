@@ -63,6 +63,7 @@ import { DoctorResultsPanelComponent } from './doctor-results-panel/doctor-resul
 import { PatientSnapshotDrawerComponent } from './patient-snapshot-drawer/patient-snapshot-drawer';
 import { InBasketPanelComponent } from './in-basket-panel/in-basket-panel';
 import { EncounterService } from '../services/encounter.service';
+import { ToastService } from '../core/toast.service';
 
 // ── Local interfaces ────────────────────────────────────────────────────────
 
@@ -138,6 +139,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private readonly dashboardService = inject(DashboardService);
   private readonly portalService = inject(PatientPortalService);
   private readonly encounterService = inject(EncounterService);
+  private readonly toast = inject(ToastService);
 
   // ── Time & Identity ──────────────────────────────────────────
   greeting = signal('');
@@ -2031,6 +2033,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.encounterService.startEncounter(encounterId).subscribe({
       next: () => {
         this.router.navigate(['/encounters', encounterId]);
+      },
+      error: (err) => {
+        const msg = err?.error?.message || 'Failed to start encounter';
+        this.toast.error(msg);
       },
     });
   }
