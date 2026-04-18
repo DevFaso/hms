@@ -262,6 +262,7 @@ public class EncounterServiceImpl implements EncounterService {
     private final com.example.hms.mapper.PatientVitalSignMapper patientVitalSignMapper;
     private final com.example.hms.mapper.CheckOutMapper checkOutMapper;
     private final com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
+    private final com.example.hms.repository.ProcedureOrderRepository procedureOrderRepository;
 
         private void recordHistory(Encounter encounter, String changeType, String changedBy, String previousValuesJson) {
             EncounterHistory history = EncounterHistory.builder()
@@ -1643,5 +1644,183 @@ public class EncounterServiceImpl implements EncounterService {
                 .orElse(null);
     }
 
+    @Override
+    @Transactional
+    public EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername,
+                                                boolean isSuperAdmin, UUID callerHospitalId) {
+        Encounter encounter = encounterRepository.findById(encounterId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
+                                org.springframework.context.i18n.LocaleContextHolder.getLocale())));
+
+        // Hospital scoping: non-super-admin must belong to the encounter's hospital
+        if (!isSuperAdmin) {
+            UUID encounterHospitalId = encounter.getHospital() != null
+                    ? encounter.getHospital().getId() : null;
+            if (encounterHospitalId != null && !encounterHospitalId.equals(callerHospitalId)) {
+                throw new ResourceNotFoundException(
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
+                                org.springframework.context.i18n.LocaleContextHolder.getLocale()));
+            }
+
+            // Verify the caller is the assigned staff
+            User user = userRepository.findByUsername(actorUsername).orElse(null);
+            Staff encounterStaff = encounter.getStaff();
+            if (user != null && encounterStaff != null
+                    && encounterStaff.getUser() != null
+                    && !encounterStaff.getUser().getId().equals(user.getId())) {
+                throw new BusinessException(
+                        "You are not the assigned physician for this encounter.");
+            }
+        }
+
+        EncounterStatus current = encounter.getStatus();
+        // Idempotent: if already IN_PROGRESS, return as-is instead of failing
+        if (current == EncounterStatus.IN_PROGRESS) {
+            return encounterMapper.toEncounterResponseDTO(encounter);
+        }
+        if (current != EncounterStatus.WAITING_FOR_PHYSICIAN) {
+            throw new BusinessException(
+                    "Cannot start encounter in status " + current
+                            + ". Expected WAITING_FOR_PHYSICIAN.");
+        }
+
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        Encounter saved = encounterRepository.save(encounter);
+
+        return encounterMapper.toEncounterResponseDTO(saved);
+    }
+
+    // ------------------------------------------------------------------
+    // Complete-triage shortcut: TRIAGE → WAITING_FOR_PHYSICIAN
+    // ------------------------------------------------------------------
+
+    @Override
+    @Transactional
+    public EncounterResponseDTO completeTriage(UUID encounterId) {
+        Encounter encounter = encounterRepository.findById(encounterId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
+                                org.springframework.context.i18n.LocaleContextHolder.getLocale())));
+
+        EncounterStatus current = encounter.getStatus();
+        if (current != EncounterStatus.TRIAGE && current != EncounterStatus.ARRIVED) {
+            throw new BusinessException(
+                    "Cannot complete triage for encounter in status " + current
+                            + ". Expected ARRIVED or TRIAGE.");
+        }
+
+        encounter.setTriageTimestamp(LocalDateTime.now());
+        encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
+        Encounter saved = encounterRepository.save(encounter);
+
+        return encounterMapper.toEncounterResponseDTO(saved);
+    }
+
+    // ------------------------------------------------------------------
+    // Complete-examination: IN_PROGRESS → AWAITING_RESULTS / READY_FOR_DISCHARGE
+    // ------------------------------------------------------------------
+
+    /** Terminal statuses for lab orders — orders in these states are considered done. */
+    private static final java.util.Set<com.example.hms.enums.LabOrderStatus> LAB_TERMINAL =
+            java.util.EnumSet.of(
+                    com.example.hms.enums.LabOrderStatus.COMPLETED,
+                    com.example.hms.enums.LabOrderStatus.VERIFIED,
+                    com.example.hms.enums.LabOrderStatus.CANCELLED);
+
+    /** Terminal statuses for procedure orders. */
+    private static final java.util.Set<com.example.hms.enums.ProcedureOrderStatus> PROC_TERMINAL =
+            java.util.EnumSet.of(
+                    com.example.hms.enums.ProcedureOrderStatus.COMPLETED,
+                    com.example.hms.enums.ProcedureOrderStatus.CANCELLED);
+
+    @Override
+    @Transactional
+    public EncounterResponseDTO completeExamination(UUID encounterId,
+                                                     boolean isSuperAdmin, UUID callerHospitalId) {
+        Encounter encounter = encounterRepository.findById(encounterId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, new Object[]{encounterId},
+                                org.springframework.context.i18n.LocaleContextHolder.getLocale())));
+
+        // Hospital scoping for non-super-admins
+        if (!isSuperAdmin) {
+            UUID encounterHospitalId = encounter.getHospital() != null
+                    ? encounter.getHospital().getId() : null;
+            if (encounterHospitalId != null && !encounterHospitalId.equals(callerHospitalId)) {
+                throw new ResourceNotFoundException(
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, new Object[]{encounterId},
+                                org.springframework.context.i18n.LocaleContextHolder.getLocale()));
+            }
+        }
+
+        EncounterStatus current = encounter.getStatus();
+        // Idempotent: already past examination
+        if (current == EncounterStatus.AWAITING_RESULTS || current == EncounterStatus.READY_FOR_DISCHARGE) {
+            return encounterMapper.toEncounterResponseDTO(encounter);
+        }
+        if (current != EncounterStatus.IN_PROGRESS) {
+            throw new BusinessException(
+                    "Cannot complete examination in status " + current
+                            + ". Expected IN_PROGRESS.");
+        }
+
+        boolean hasPendingOrders = hasPendingOrdersForEncounter(encounterId);
+        EncounterStatus next = hasPendingOrders
+                ? EncounterStatus.AWAITING_RESULTS
+                : EncounterStatus.READY_FOR_DISCHARGE;
+
+        encounter.setStatus(next);
+        Encounter saved = encounterRepository.save(encounter);
+        return encounterMapper.toEncounterResponseDTO(saved);
+    }
+
+    // ------------------------------------------------------------------
+    // Ready-for-discharge: AWAITING_RESULTS → READY_FOR_DISCHARGE
+    // ------------------------------------------------------------------
+
+    @Override
+    @Transactional
+    public EncounterResponseDTO markReadyForDischarge(UUID encounterId,
+                                                       boolean isSuperAdmin, UUID callerHospitalId) {
+        Encounter encounter = encounterRepository.findById(encounterId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, new Object[]{encounterId},
+                                org.springframework.context.i18n.LocaleContextHolder.getLocale())));
+
+        if (!isSuperAdmin) {
+            UUID encounterHospitalId = encounter.getHospital() != null
+                    ? encounter.getHospital().getId() : null;
+            if (encounterHospitalId != null && !encounterHospitalId.equals(callerHospitalId)) {
+                throw new ResourceNotFoundException(
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, new Object[]{encounterId},
+                                org.springframework.context.i18n.LocaleContextHolder.getLocale()));
+            }
+        }
+
+        EncounterStatus current = encounter.getStatus();
+        // Idempotent
+        if (current == EncounterStatus.READY_FOR_DISCHARGE) {
+            return encounterMapper.toEncounterResponseDTO(encounter);
+        }
+        if (current != EncounterStatus.AWAITING_RESULTS && current != EncounterStatus.IN_PROGRESS) {
+            throw new BusinessException(
+                    "Cannot mark ready for discharge in status " + current
+                            + ". Expected AWAITING_RESULTS or IN_PROGRESS.");
+        }
+
+        encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);
+        Encounter saved = encounterRepository.save(encounter);
+        return encounterMapper.toEncounterResponseDTO(saved);
+    }
+
+    /** Returns true if the encounter has any non-terminal lab or procedure orders. */
+    private boolean hasPendingOrdersForEncounter(UUID encounterId) {
+        boolean pendingLabs = labOrderRepository.existsByEncounter_IdAndStatusNotIn(
+                encounterId, LAB_TERMINAL);
+        if (pendingLabs) return true;
+        return procedureOrderRepository.existsByEncounter_IdAndStatusNotIn(
+                encounterId, PROC_TERMINAL);
+    }
 
 }

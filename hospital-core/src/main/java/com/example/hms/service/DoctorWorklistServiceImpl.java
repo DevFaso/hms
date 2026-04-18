@@ -241,7 +241,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
                 .sex(p.getGender())
                 .chiefComplaint(consult.getReasonForConsult())
                 .urgency(consultUrgency)
-                .encounterStatus("CONSULT_PENDING")
+                .encounterStatus("CONSULTATION")
                 .updatedAt(consult.getRequestedAt())
                 .alerts(Collections.emptyList())
                 .build();
@@ -318,11 +318,11 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
 
     private String mapEncounterStatus(EncounterStatus es) {
         return switch (es) {
-            case IN_PROGRESS -> "IN_PROGRESS";
             case ARRIVED -> STATUS_CHECKED_IN;
             case SCHEDULED -> "SCHEDULED";
-            case TRIAGE -> STATUS_CHECKED_IN;
-            case WAITING_FOR_PHYSICIAN -> STATUS_CHECKED_IN;
+            case TRIAGE -> "TRIAGE";
+            case WAITING_FOR_PHYSICIAN -> "WAITING";
+            case IN_PROGRESS -> "IN_PROGRESS";
             case AWAITING_RESULTS -> "IN_PROGRESS";
             case READY_FOR_DISCHARGE -> "IN_PROGRESS";
             case COMPLETED -> "COMPLETED";

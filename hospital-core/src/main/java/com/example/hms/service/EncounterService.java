@@ -86,4 +86,29 @@ public interface EncounterService {
      * Loads the encounter entity and delegates to CheckOutMapper for full AVS construction.
      */
     AfterVisitSummaryDTO getAfterVisitSummary(UUID encounterId);
+
+    /**
+     * Doctor picks up a WAITING_FOR_PHYSICIAN encounter and transitions it to IN_PROGRESS.
+     */
+    EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername,
+                                         boolean isSuperAdmin, UUID callerHospitalId);
+
+    /**
+     * Advance a TRIAGE encounter to WAITING_FOR_PHYSICIAN (nurse completes triage from tracker).
+     */
+    EncounterResponseDTO completeTriage(UUID encounterId);
+
+    /**
+     * Doctor finishes examining a patient. Transitions IN_PROGRESS →
+     * AWAITING_RESULTS (if pending lab/procedure orders exist) or
+     * READY_FOR_DISCHARGE (if no pending orders).
+     */
+    EncounterResponseDTO completeExamination(UUID encounterId,
+                                              boolean isSuperAdmin, UUID callerHospitalId);
+
+    /**
+     * Advance AWAITING_RESULTS → READY_FOR_DISCHARGE when all results have been reviewed.
+     */
+    EncounterResponseDTO markReadyForDischarge(UUID encounterId,
+                                                boolean isSuperAdmin, UUID callerHospitalId);
 }

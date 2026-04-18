@@ -30,6 +30,8 @@ public class PrescriptionResponseDTO {
     private String dosage;
     private String frequency;
     private String duration;
+    private String route;
+    private String instructions;
     private String notes;
 
     private String status;

@@ -702,7 +702,7 @@ class DoctorWorklistServiceImplTest {
         List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);
 
         assertEquals(1, result.size());
-        assertEquals("CONSULT_PENDING", result.get(0).getEncounterStatus());
+        assertEquals("CONSULTATION", result.get(0).getEncounterStatus());
         assertEquals("Cardiac eval", result.get(0).getChiefComplaint());
         assertEquals("URGENT", result.get(0).getUrgency());
     }
@@ -815,7 +815,57 @@ class DoctorWorklistServiceImplTest {
         List<DoctorWorklistItemDTO> result = service.getWorklist(userId, "CONSULTS", null, null);
 
         assertEquals(1, result.size());
-        assertEquals("CONSULT_PENDING", result.get(0).getEncounterStatus());
+        assertEquals("CONSULTATION", result.get(0).getEncounterStatus());
+    }
+
+    @Test
+    void getWorklist_triageEncounter_shouldMapToTriage() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "Triage", "Patient");
+        Encounter enc = stubEncounter(UUID.randomUUID(), p, EncounterStatus.TRIAGE, LocalDateTime.now());
+
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.TRIAGE))
+                .thenReturn(List.of(enc));
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("TRIAGE", result.get(0).getEncounterStatus());
+    }
+
+    @Test
+    void getWorklist_waitingForPhysicianEncounter_shouldMapToWaiting() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        Staff staff = stubStaff(staffId);
+        givenStaffFor(userId, staff);
+
+        Patient p = stubPatient(UUID.randomUUID(), "Waiting", "Patient");
+        Encounter enc = stubEncounter(UUID.randomUUID(), p, EncounterStatus.WAITING_FOR_PHYSICIAN, LocalDateTime.now());
+
+        lenient().when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any()))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.WAITING_FOR_PHYSICIAN))
+                .thenReturn(List.of(enc));
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any(LocalDate.class)))
+                .thenReturn(Collections.emptyList());
+        when(consultationRepository.findByConsultant_IdAndStatusOrderByRequestedAtDesc(staffId, ConsultationStatus.REQUESTED))
+                .thenReturn(Collections.emptyList());
+
+        List<DoctorWorklistItemDTO> result = service.getWorklist(userId, null, null, null);
+
+        assertEquals(1, result.size());
+        assertEquals("WAITING", result.get(0).getEncounterStatus());
     }
 
     @Test

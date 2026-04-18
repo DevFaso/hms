@@ -149,4 +149,52 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
     this.checkoutEncounter.set(null);
     this.loadBoard();
   }
+
+  /* ── Complete Triage — advance TRIAGE → WAITING ─── */
+  triageInProgress = signal(false);
+
+  completeTriage(item: PatientTrackerItem): void {
+    this.triageInProgress.set(true);
+    this.encounterService.completeTriage(item.encounterId).subscribe({
+      next: () => {
+        this.triageInProgress.set(false);
+        this.loadBoard();
+      },
+      error: () => {
+        this.triageInProgress.set(false);
+      },
+    });
+  }
+
+  /* ── Complete Examination — IN_PROGRESS → AWAITING / READY ─── */
+  examInProgress = signal(false);
+
+  completeExamination(item: PatientTrackerItem): void {
+    this.examInProgress.set(true);
+    this.encounterService.completeExamination(item.encounterId).subscribe({
+      next: () => {
+        this.examInProgress.set(false);
+        this.loadBoard();
+      },
+      error: () => {
+        this.examInProgress.set(false);
+      },
+    });
+  }
+
+  /* ── Ready for Discharge — AWAITING_RESULTS → READY ─── */
+  readyInProgress = signal(false);
+
+  markReadyForDischarge(item: PatientTrackerItem): void {
+    this.readyInProgress.set(true);
+    this.encounterService.markReadyForDischarge(item.encounterId).subscribe({
+      next: () => {
+        this.readyInProgress.set(false);
+        this.loadBoard();
+      },
+      error: () => {
+        this.readyInProgress.set(false);
+      },
+    });
+  }
 }

@@ -1975,11 +1975,11 @@ class NurseTaskServiceImplTest {
     }
 
     /* ════════════════════════════════════════════════════════════════════
-       captureVitals → encounter status transition (ARRIVED → TRIAGE)
+       captureVitals → encounter status transition (ARRIVED → WAITING_FOR_PHYSICIAN)
        ════════════════════════════════════════════════════════════════════ */
 
     @Test
-    void captureVitalsTransitionsEncounterFromArrivedToTriage() {
+    void captureVitalsTransitionsEncounterFromArrivedToWaitingForPhysician() {
         UUID patientId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
@@ -1999,6 +1999,9 @@ class NurseTaskServiceImplTest {
         when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
             patientId, hospitalId, EncounterStatus.ARRIVED))
             .thenReturn(Optional.of(encounter));
+        when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
+            patientId, hospitalId, EncounterStatus.TRIAGE))
+            .thenReturn(Optional.empty());
 
         NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
             .heartRateBpm(72)
@@ -2010,14 +2013,54 @@ class NurseTaskServiceImplTest {
         // Verify vitals are saved
         verify(vitalSignRepository).save(any(PatientVitalSign.class));
 
-        // Verify encounter status is transitioned to TRIAGE
+        // Verify encounter status is transitioned to WAITING_FOR_PHYSICIAN
         ArgumentCaptor<Encounter> encCaptor = ArgumentCaptor.forClass(Encounter.class);
         verify(encounterRepository).save(encCaptor.capture());
-        assertThat(encCaptor.getValue().getStatus()).isEqualTo(EncounterStatus.TRIAGE);
+        assertThat(encCaptor.getValue().getStatus()).isEqualTo(EncounterStatus.WAITING_FOR_PHYSICIAN);
     }
 
     @Test
-    void captureVitalsDoesNotTransitionWhenNoArrivedEncounterExists() {
+    void captureVitalsTransitionsEncounterFromTriageToWaitingForPhysician() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID encounterId = UUID.randomUUID();
+
+        Patient pat = Patient.builder().build();
+        pat.setId(patientId);
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+        registerPatientAtHospital(pat, hosp);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hosp));
+        when(staffRepository.findByUserIdAndHospitalId(nurseId, hospitalId)).thenReturn(Optional.empty());
+
+        // No ARRIVED encounter
+        when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
+            patientId, hospitalId, EncounterStatus.ARRIVED))
+            .thenReturn(Optional.empty());
+
+        // TRIAGE encounter exists
+        Encounter encounter = Encounter.builder().status(EncounterStatus.TRIAGE).build();
+        encounter.setId(encounterId);
+        when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
+            patientId, hospitalId, EncounterStatus.TRIAGE))
+            .thenReturn(Optional.of(encounter));
+
+        NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
+            .heartRateBpm(72)
+            .build();
+
+        service.captureVitals(patientId, nurseId, hospitalId, req);
+
+        // Verify encounter status is transitioned to WAITING_FOR_PHYSICIAN
+        ArgumentCaptor<Encounter> encCaptor = ArgumentCaptor.forClass(Encounter.class);
+        verify(encounterRepository).save(encCaptor.capture());
+        assertThat(encCaptor.getValue().getStatus()).isEqualTo(EncounterStatus.WAITING_FOR_PHYSICIAN);
+    }
+
+    @Test
+    void captureVitalsDoesNotTransitionWhenNoArrivedOrTriageEncounterExists() {
         UUID patientId = UUID.randomUUID();
         UUID hospitalId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
@@ -2034,6 +2077,10 @@ class NurseTaskServiceImplTest {
         // No ARRIVED encounter
         when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
             patientId, hospitalId, EncounterStatus.ARRIVED))
+            .thenReturn(Optional.empty());
+        // No TRIAGE encounter
+        when(encounterRepository.findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
+            patientId, hospitalId, EncounterStatus.TRIAGE))
             .thenReturn(Optional.empty());
 
         NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()

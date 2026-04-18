@@ -7,11 +7,15 @@ import com.example.hms.service.PatientRecordSharingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,6 +28,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/records")
 @RequiredArgsConstructor
+@Validated
 @Tag(name = "Patient Record Sharing", description = "Endpoints for sharing and exporting patient records with consent verification.")
 public class PatientRecordSharingController {
 
@@ -44,7 +49,7 @@ public class PatientRecordSharingController {
             description = "Payload containing patientId, source hospital, and target hospital",
             required = true
         )
-        @RequestBody RecordShareRequestDTO shareRequest
+        @Valid @RequestBody RecordShareRequestDTO shareRequest
     ) {
         PatientRecordDTO sharedRecord = sharingService.getPatientRecord(
             shareRequest.getPatientId(),
@@ -80,21 +85,43 @@ public class PatientRecordSharingController {
     @GetMapping("/resolve")
     @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<RecordShareResultDTO> resolveAndShare(
-            @RequestParam UUID patientId,
-            @RequestParam UUID requestingHospitalId) {
+            @RequestParam @NotNull UUID patientId,
+            @RequestParam @NotNull UUID requestingHospitalId) {
         RecordShareResultDTO result = sharingService.resolveAndShare(patientId, requestingHospitalId);
         return ResponseEntity.ok(result);
     }
 
+    // ── New: aggregate records from all consented hospitals ───────────────
+
+    @Operation(
+        summary = "Aggregate Patient Records",
+        description = """
+            Returns patient records aggregated from ALL hospitals that have granted
+            active consent to the requesting hospital, merged into a single DTO.
+            Also includes records from the requesting hospital itself if the patient
+            is registered there.
+            """)
+    @ApiResponse(responseCode = "200", description = "Aggregated record returned successfully.")
+    @ApiResponse(responseCode = "400", description = "No active consent or registration found.")
+    @ApiResponse(responseCode = "404", description = "Patient or hospital not found.")
+    @GetMapping("/aggregate")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
+    public ResponseEntity<PatientRecordDTO> aggregateRecords(
+            @RequestParam @NotNull UUID patientId,
+            @RequestParam @NotNull UUID requestingHospitalId) {
+        PatientRecordDTO aggregated = sharingService.getAggregatedPatientRecord(patientId, requestingHospitalId);
+        return ResponseEntity.ok(aggregated);
+    }
+
     // ── Existing: export ───────────────────────────────────────────────────
 
-    @GetMapping("/export")
+    @PostMapping("/export")
     @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_HOSPITAL_ADMIN','ROLE_SUPER_ADMIN')")
     public ResponseEntity<byte[]> exportRecords(
-            @RequestParam UUID patientId,
-            @RequestParam UUID fromHospitalId,
-            @RequestParam UUID toHospitalId,
-            @RequestParam String format) {
+            @RequestParam @NotNull UUID patientId,
+            @RequestParam @NotNull UUID fromHospitalId,
+            @RequestParam @NotNull UUID toHospitalId,
+            @RequestParam @NotBlank String format) {
 
         byte[] fileContent = sharingService.exportPatientRecord(patientId, fromHospitalId, toHospitalId, format);
 

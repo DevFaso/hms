@@ -14,6 +14,13 @@ public interface HospitalService {
                                               String state,
                                               Locale locale);
     HospitalResponseDTO getHospitalById(UUID id, Locale locale);
+
+    /**
+     * Retrieve a hospital by ID without enforcing tenant scope.
+     * Used by cross-hospital workflows such as patient consent management.
+     */
+    HospitalResponseDTO getHospitalByIdUnscoped(UUID id, Locale locale);
+
     HospitalResponseDTO createHospital(HospitalRequestDTO hospitalRequestDTO, Locale locale);
     HospitalResponseDTO updateHospital(UUID id, HospitalRequestDTO hospitalRequestDTO, Locale locale);
     void deleteHospital(UUID id, Locale locale);

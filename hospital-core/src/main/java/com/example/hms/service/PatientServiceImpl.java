@@ -280,6 +280,24 @@ public class PatientServiceImpl implements PatientService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public PatientResponseDTO getPatientByIdUnscoped(UUID id, Locale locale) {
+        log.info("[getPatientByIdUnscoped] Looking up patient id={}", id);
+
+        Patient patient = patientRepository.findByIdUnscoped(id)
+            .or(() -> {
+                log.info("[getPatientByIdUnscoped] findByIdUnscoped returned empty, trying findByUserId for id={}", id);
+                return patientRepository.findByUserId(id);
+            })
+            .orElseThrow(() -> {
+                log.warn("[getPatientByIdUnscoped] Patient NOT FOUND by id or userId: {}", id);
+                return new ResourceNotFoundException(MSG_PATIENT_NOT_FOUND, id);
+            });
+
+        return buildPatientDto(patient, null);
+    }
+
+    @Override
     @Transactional
     public PatientResponseDTO createPatient(PatientRequestDTO dto, Locale locale) {
         User user = userRepository.findById(dto.getUserId())

@@ -19,10 +19,13 @@ public class LabResultResponseDTO {
     private String id;
     private String labOrderId;
     private String labOrderCode;
+    private String labTestCode;
     private String patientId;
     private String patientFullName;
     private String patientEmail;
+    private String hospitalId;
     private String hospitalName;
+    private String orderedByName;
     private String labTestName;
     private String resultValue;
     private String resultUnit;

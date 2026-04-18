@@ -1,13 +1,13 @@
 ### ========================================
 ### 28 - Records Sharing & Patient Consent
-### Export, Share, Consent Management
+### Share, Resolve, Export, Consent Management
 ### ========================================
 
 ### ----------------------------------------
 ### RECORD SHARING
 ### ----------------------------------------
 
-### Share patient records
+### Share patient records (explicit source → target)
 POST {{baseUrl}}/records/share
 Authorization: Bearer {{doctorToken}}
 Content-Type: application/json
@@ -15,103 +15,69 @@ Content-Type: application/json
 {
   "patientId": "{{patientId}}",
   "fromHospitalId": "{{hospitalId}}",
-  "toHospitalId": "{{hospitalId2}}",
-  "sharedById": "{{staffId}}",
-  "recordTypes": ["LAB_RESULTS", "IMAGING", "MEDICATIONS"],
-  "purpose": "REFERRAL",
-  "expiresAt": "2026-03-14T00:00:00",
-  "notes": "Sharing records for specialist referral"
+  "toHospitalId": "{{hospitalId2}}"
 }
 
-### Export patient records
-POST {{baseUrl}}/records/export
-Authorization: Bearer {{doctorToken}}
-Content-Type: application/json
-
-{
-  "patientId": "{{patientId}}",
-  "hospitalId": "{{hospitalId}}",
-  "format": "PDF",
-  "recordTypes": ["DEMOGRAPHICS", "DIAGNOSES", "MEDICATIONS", "LAB_RESULTS"],
-  "dateFrom": "2025-01-01",
-  "dateTo": "2026-02-14"
-}
-
-### Get shared records for patient
-GET {{baseUrl}}/records/shared/patient/{{patientId}}
-Authorization: Bearer {{accessToken}}
-Accept: application/json
-
-### Get shared records by hospital
-GET {{baseUrl}}/records/shared/hospital/{{hospitalId}}
-Authorization: Bearer {{accessToken}}
-Accept: application/json
-
-### Revoke record sharing
-DELETE {{baseUrl}}/records/share/{{sharingId}}
+### Smart resolve: auto-pick consent path (SAME_HOSPITAL → INTRA_ORG → CROSS_ORG)
+GET {{baseUrl}}/records/resolve?patientId={{patientId}}&requestingHospitalId={{hospitalId}}
 Authorization: Bearer {{doctorToken}}
 Accept: application/json
+
+### Export patient record as PDF
+POST {{baseUrl}}/records/export?patientId={{patientId}}&fromHospitalId={{hospitalId}}&toHospitalId={{hospitalId2}}&format=pdf
+Authorization: Bearer {{doctorToken}}
+Accept: application/pdf
+
+### Export patient record as CSV
+POST {{baseUrl}}/records/export?patientId={{patientId}}&fromHospitalId={{hospitalId}}&toHospitalId={{hospitalId2}}&format=csv
+Authorization: Bearer {{doctorToken}}
+Accept: text/csv
 
 ### ----------------------------------------
 ### PATIENT CONSENT
 ### ----------------------------------------
 
-### Grant consent
-POST {{baseUrl}}/patient-consents
-Authorization: Bearer {{accessToken}}
+### Grant consent (with optional scope filtering)
+POST {{baseUrl}}/patient-consents/grant
+Authorization: Bearer {{doctorToken}}
 Content-Type: application/json
 
 {
   "patientId": "{{patientId}}",
   "fromHospitalId": "{{hospitalId}}",
   "toHospitalId": "{{hospitalId2}}",
-  "consentType": "RECORD_SHARING",
-  "scope": ["LAB_RESULTS", "IMAGING", "MEDICATIONS"],
-  "grantedAt": "2026-02-14T10:00:00",
-  "expiresAt": "2027-02-14T10:00:00",
-  "notes": "Patient consented to share records with specialist"
+  "purpose": "Specialist referral",
+  "consentExpiration": "2027-02-14T00:00:00",
+  "consentType": "TREATMENT",
+  "scope": "ENCOUNTERS,LAB_RESULTS,PRESCRIPTIONS"
 }
 
 ### Revoke consent
-PUT {{baseUrl}}/patient-consents/{{consentId}}/revoke
-Authorization: Bearer {{accessToken}}
-Content-Type: application/json
+POST {{baseUrl}}/patient-consents/revoke?patientId={{patientId}}&fromHospitalId={{hospitalId}}&toHospitalId={{hospitalId2}}
+Authorization: Bearer {{doctorToken}}
+Accept: application/json
 
-{
-  "revokedReason": "Patient no longer under care at referral hospital"
-}
-
-### List all consents
+### List all consents (paginated)
 GET {{baseUrl}}/patient-consents?page=0&size=20
 Authorization: Bearer {{superAdminToken}}
 Accept: application/json
 
-### Get consent by ID
-GET {{baseUrl}}/patient-consents/{{consentId}}
-Authorization: Bearer {{accessToken}}
-Accept: application/json
-
 ### Get consents by patient
-GET {{baseUrl}}/patient-consents/patient/{{patientId}}
-Authorization: Bearer {{accessToken}}
+GET {{baseUrl}}/patient-consents/patient/{{patientId}}?page=0&size=20
+Authorization: Bearer {{doctorToken}}
 Accept: application/json
 
 ### Get consents from hospital
-GET {{baseUrl}}/patient-consents/from-hospital/{{hospitalId}}
+GET {{baseUrl}}/patient-consents/from-hospital/{{hospitalId}}?page=0&size=20
 Authorization: Bearer {{adminToken}}
 Accept: application/json
 
 ### Get consents to hospital
-GET {{baseUrl}}/patient-consents/to-hospital/{{hospitalId2}}
+GET {{baseUrl}}/patient-consents/to-hospital/{{hospitalId2}}?page=0&size=20
 Authorization: Bearer {{adminToken}}
 Accept: application/json
 
-### Get active consents
-GET {{baseUrl}}/patient-consents/active?patientId={{patientId}}
-Authorization: Bearer {{accessToken}}
-Accept: application/json
-
-### Delete consent
-DELETE {{baseUrl}}/patient-consents/{{consentId}}
-Authorization: Bearer {{superAdminToken}}
+### Check if consent is active
+GET {{baseUrl}}/patient-consents/active?patientId={{patientId}}&fromHospitalId={{hospitalId}}&toHospitalId={{hospitalId2}}
+Authorization: Bearer {{doctorToken}}
 Accept: application/json

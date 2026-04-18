@@ -983,14 +983,27 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(vital::setRecordedByStaff);
         vitalSignRepository.save(vital);
 
-        // Advance encounter status: ARRIVED → TRIAGE so the Patient Tracker Board reflects vitals captured
+        // Advance encounter status after vitals are captured.
+        // ARRIVED → WAITING_FOR_PHYSICIAN  (vitals captured = triage complete)
+        // TRIAGE  → WAITING_FOR_PHYSICIAN  (patient was already in triage, now done)
         encounterRepository
             .findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
                 patientId, hospitalId, EncounterStatus.ARRIVED)
             .ifPresent(encounter -> {
-                encounter.setStatus(EncounterStatus.TRIAGE);
+                encounter.setTriageTimestamp(LocalDateTime.now());
+                encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
                 encounterRepository.save(encounter);
-                log.info("Encounter {} transitioned ARRIVED → TRIAGE after vitals", encounter.getId());
+                log.info("Encounter {} transitioned ARRIVED → WAITING_FOR_PHYSICIAN after vitals", encounter.getId());
+            });
+
+        encounterRepository
+            .findFirstByPatient_IdAndHospital_IdAndStatusOrderByEncounterDateDesc(
+                patientId, hospitalId, EncounterStatus.TRIAGE)
+            .ifPresent(encounter -> {
+                encounter.setTriageTimestamp(LocalDateTime.now());
+                encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
+                encounterRepository.save(encounter);
+                log.info("Encounter {} transitioned TRIAGE → WAITING_FOR_PHYSICIAN after vitals", encounter.getId());
             });
 
         log.info("Vitals captured: patientId={}, nurse={}, significant={}", patientId, nurseUserId, clinicallySig);
