@@ -392,7 +392,9 @@ describe('SharedRecordsViewerComponent', () => {
       const fix = TestBed.createComponent(SharedRecordsViewerComponent);
       fix.detectChanges();
 
-      expect(fix.componentInstance.error()).toBe('Missing required parameters');
+      expect(fix.componentInstance.error()).toBe(
+        'SHARED_RECORDS.ERRORS.MISSING_PARAMS',
+      );
       expect(fix.componentInstance.loading()).toBeFalse();
       expect(sharingStub.getAggregatedRecord).toHaveBeenCalledTimes(1);
     });

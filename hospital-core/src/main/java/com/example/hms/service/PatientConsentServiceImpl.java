@@ -59,7 +59,7 @@ public class PatientConsentServiceImpl implements PatientConsentService {
         // hospitalId (set to their first hospital) may not match the caller's
         // tenant scope. The controller's @PreAuthorize already enforces auth.
         Patient patient = patientRepository.findByIdUnscoped(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found."));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         Hospital fromHospital = hospitalRepository.findById(fromHospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("From Hospital not found."));
@@ -169,7 +169,7 @@ public class PatientConsentServiceImpl implements PatientConsentService {
         // hospitalId (set to their first hospital) may not match the caller's
         // tenant scope. The controller's @PreAuthorize already enforces auth.
         Patient patient = patientRepository.findByIdUnscoped(patientId)
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found with ID: " + patientId));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
 
         Hospital fromHospital = hospitalRepository.findById(fromHospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("From Hospital not found with ID: " + fromHospitalId));

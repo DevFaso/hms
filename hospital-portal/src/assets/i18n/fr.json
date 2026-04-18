@@ -387,7 +387,10 @@
       "NO_CONSENTS": "Aucun consentement trouvé",
       "NO_CONSENTS_HINT": "Utilisez le bouton Accorder un consentement pour en ajouter un nouveau.",
       "REVOKE_CONFIRM": "Êtes-vous sûr de vouloir révoquer ce consentement ?",
-      "VIEW_RECORDS": "Voir les dossiers"
+      "VIEW_RECORDS": "Voir les dossiers",
+      "SEARCH_PATIENT": "Rechercher par nom, courriel ou NRM…",
+      "PATIENT_SUGGESTIONS": "Suggestions de patients",
+      "SELECT_HOSPITAL": "Sélectionner un hôpital"
     },
     "SCOPE_DOMAINS": {
       "ENCOUNTERS": "Consultations",
@@ -412,7 +415,8 @@
     "CHRONIC": "Chronique",
     "NO_DATA": "Aucun dossier dans cette catégorie",
     "ERRORS": {
-      "LOAD_FAILED": "Échec du chargement des dossiers partagés. Veuillez réessayer."
+      "LOAD_FAILED": "Échec du chargement des dossiers partagés. Veuillez réessayer.",
+      "MISSING_PARAMS": "Paramètres requis manquants"
     },
     "TABS": {
       "ENCOUNTERS": "Consultations",
@@ -423,7 +427,11 @@
       "ALLERGIES": "Allergies",
       "PROBLEMS": "Problèmes",
       "SURGICAL_HISTORY": "Antécédents chirurgicaux",
-      "ADVANCE_DIRECTIVES": "Directives anticipées"
+      "ADVANCE_DIRECTIVES": "Directives anticipées",
+      "VITAL_SIGNS": "Signes vitaux",
+      "IMMUNIZATIONS": "Vaccinations",
+      "INSURANCES": "Assurance",
+      "ENCOUNTER_HISTORY": "Historique des consultations"
     },
     "FIELDS": {
       "CHIEF_COMPLAINT": "Motif de consultation",
@@ -449,7 +457,42 @@
       "DESCRIPTION": "Description",
       "PHYSICIAN": "Médecin",
       "WITNESS": "Témoin",
-      "EXPIRATION": "Expiration"
+      "EXPIRATION": "Expiration",
+      "FOLLOW_UP": "Instructions de suivi",
+      "DISCHARGE_DIAGNOSES": "Diagnostics de sortie",
+      "DISCHARGED": "Sorti(e)",
+      "ROUTE": "Voie d'administration",
+      "INSTRUCTIONS": "Instructions",
+      "VITALS_READING": "Relevé des constantes",
+      "CLINICALLY_SIGNIFICANT": "Cliniquement significatif",
+      "BLOOD_PRESSURE": "Tension artérielle",
+      "HEART_RATE": "Fréquence cardiaque",
+      "TEMPERATURE": "Température",
+      "RESPIRATORY_RATE": "Fréquence respiratoire",
+      "SPO2": "SpO₂",
+      "BLOOD_GLUCOSE": "Glycémie",
+      "WEIGHT": "Poids",
+      "RECORDED_BY": "Enregistré par",
+      "TARGET_DISEASE": "Maladie ciblée",
+      "DOSE": "Dose",
+      "SITE": "Site",
+      "MANUFACTURER": "Fabricant",
+      "LOT_NUMBER": "Numéro de lot",
+      "ADMINISTERED_BY": "Administré par",
+      "NEXT_DOSE_DUE": "Prochaine dose prévue",
+      "ADVERSE_REACTION": "Effet indésirable",
+      "PRIMARY": "Principal",
+      "POLICY_NUMBER": "Numéro de police",
+      "GROUP_NUMBER": "Numéro de groupe",
+      "SUBSCRIBER": "Souscripteur",
+      "RELATIONSHIP": "Lien de parenté",
+      "EFFECTIVE": "Date d'effet",
+      "CHANGED_BY": "Modifié par",
+      "ENCOUNTER_TYPE": "Type de consultation",
+      "ENCOUNTER_DATE": "Date de consultation",
+      "PREVIOUS_VALUES": "Valeurs précédentes",
+      "ALLERGIES": "Allergies",
+      "LEGACY_DATA": "Données historiques"
     }
   },
   "CONSULTATIONS": {

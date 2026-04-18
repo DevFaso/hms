@@ -60,7 +60,7 @@ export class SharedRecordsViewerComponent implements OnInit {
     const toHospitalId = this.route.snapshot.queryParamMap.get('toHospitalId');
 
     if (!patientId || !toHospitalId) {
-      this.error.set('Missing required parameters');
+      this.error.set('SHARED_RECORDS.ERRORS.MISSING_PARAMS');
       this.loading.set(false);
       return;
     }

@@ -130,8 +130,8 @@ public interface EncounterRepository
         SELECT DISTINCT e FROM Encounter e
         JOIN FETCH e.patient p
         LEFT JOIN FETCH p.hospitalRegistrations
-        JOIN FETCH e.staff s
-        JOIN FETCH s.user
+        LEFT JOIN FETCH e.staff s
+        LEFT JOIN FETCH s.user
         LEFT JOIN FETCH e.department d
         LEFT JOIN FETCH e.appointment a
         WHERE e.hospital.id = :hospitalId

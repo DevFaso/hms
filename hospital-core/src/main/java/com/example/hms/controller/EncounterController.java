@@ -291,7 +291,7 @@ public class EncounterController {
         boolean isSuperAdmin = authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
         UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
         EncounterResponseDTO response = encounterService.completeExamination(
-                encounterId, auth.getName(), isSuperAdmin, hospitalId);
+                encounterId, isSuperAdmin, hospitalId);
         return ResponseEntity.ok(response);
     }
 
@@ -311,7 +311,7 @@ public class EncounterController {
         boolean isSuperAdmin = authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN");
         UUID hospitalId = isSuperAdmin ? null : authUtils.resolveHospitalScope(auth, (UUID) null, false);
         EncounterResponseDTO response = encounterService.markReadyForDischarge(
-                encounterId, auth.getName(), isSuperAdmin, hospitalId);
+                encounterId, isSuperAdmin, hospitalId);
         return ResponseEntity.ok(response);
     }
 

@@ -415,7 +415,8 @@
     "CHRONIC": "Chronic",
     "NO_DATA": "No records in this category",
     "ERRORS": {
-      "LOAD_FAILED": "Failed to load shared records. Please try again."
+      "LOAD_FAILED": "Failed to load shared records. Please try again.",
+      "MISSING_PARAMS": "Missing required parameters"
     },
     "TABS": {
       "ENCOUNTERS": "Encounters",

@@ -63,7 +63,7 @@ public class AdmissionServiceImpl implements AdmissionService {
     @Transactional
     public AdmissionResponseDTO admitPatient(AdmissionRequestDTO request) {
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())
-            .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+            .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
         
         Hospital hospital = hospitalRepository.findById(request.getHospitalId())
             .orElseThrow(() -> new ResourceNotFoundException("Hospital not found"));

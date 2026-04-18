@@ -103,12 +103,12 @@ public interface EncounterService {
      * AWAITING_RESULTS (if pending lab/procedure orders exist) or
      * READY_FOR_DISCHARGE (if no pending orders).
      */
-    EncounterResponseDTO completeExamination(UUID encounterId, String actorUsername,
+    EncounterResponseDTO completeExamination(UUID encounterId,
                                               boolean isSuperAdmin, UUID callerHospitalId);
 
     /**
      * Advance AWAITING_RESULTS → READY_FOR_DISCHARGE when all results have been reviewed.
      */
-    EncounterResponseDTO markReadyForDischarge(UUID encounterId, String actorUsername,
+    EncounterResponseDTO markReadyForDischarge(UUID encounterId,
                                                 boolean isSuperAdmin, UUID callerHospitalId);
 }

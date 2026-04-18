@@ -26,8 +26,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -106,9 +105,9 @@ class PatientRecordSharingControllerTest {
         @WithMockUser(authorities = "ROLE_DOCTOR")
         @DisplayName("returns 200 OK with valid request")
         void shareRecords_ok() throws Exception {
-            PatientRecordDTO record = buildPatientRecord();
+            PatientRecordDTO patientRecord = buildPatientRecord();
             when(sharingService.getPatientRecord(PATIENT_ID, FROM_HOSPITAL_ID, TO_HOSPITAL_ID))
-                    .thenReturn(record);
+                    .thenReturn(patientRecord);
 
             mockMvc.perform(post(SHARE_URL)
                             .contentType(MediaType.APPLICATION_JSON)
@@ -231,9 +230,9 @@ class PatientRecordSharingControllerTest {
         @WithMockUser(authorities = "ROLE_DOCTOR")
         @DisplayName("returns 200 OK with valid params")
         void aggregateRecords_ok() throws Exception {
-            PatientRecordDTO record = buildPatientRecord();
+            PatientRecordDTO patientRecord = buildPatientRecord();
             when(sharingService.getAggregatedPatientRecord(PATIENT_ID, TO_HOSPITAL_ID))
-                    .thenReturn(record);
+                    .thenReturn(patientRecord);
 
             mockMvc.perform(get(AGGREGATE_URL)
                             .param("patientId", PATIENT_ID.toString())
@@ -275,7 +274,7 @@ class PatientRecordSharingControllerTest {
         void exportRecords_pdf() throws Exception {
             byte[] pdfContent = "mock-pdf-content".getBytes();
             when(sharingService.exportPatientRecord(
-                    eq(PATIENT_ID), eq(FROM_HOSPITAL_ID), eq(TO_HOSPITAL_ID), eq("pdf")))
+                    PATIENT_ID, FROM_HOSPITAL_ID, TO_HOSPITAL_ID, "pdf"))
                     .thenReturn(pdfContent);
 
             mockMvc.perform(post(EXPORT_URL)
@@ -297,8 +296,8 @@ class PatientRecordSharingControllerTest {
         void exportRecords_csv() throws Exception {
             byte[] csvContent = "id,name\n1,Jane".getBytes();
             when(sharingService.exportPatientRecord(
-                    eq(PATIENT_ID), eq(FROM_HOSPITAL_ID), eq(TO_HOSPITAL_ID), eq("csv")))
-                    .thenReturn(csvContent);
+                    PATIENT_ID, FROM_HOSPITAL_ID, TO_HOSPITAL_ID, "csv")
+            ).thenReturn(csvContent);
 
             mockMvc.perform(post(EXPORT_URL)
                             .param("patientId", PATIENT_ID.toString())

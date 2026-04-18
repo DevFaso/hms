@@ -1220,7 +1220,7 @@ class EncounterServiceImplTest {
         EncounterResponseDTO dto = new EncounterResponseDTO();
         when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
 
-        EncounterResponseDTO result = service.completeExamination(encounterId, "doc", false, hospitalId);
+        EncounterResponseDTO result = service.completeExamination(encounterId, false, hospitalId);
 
         assertThat(result).isSameAs(dto);
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.READY_FOR_DISCHARGE);
@@ -1243,7 +1243,7 @@ class EncounterServiceImplTest {
         EncounterResponseDTO dto = new EncounterResponseDTO();
         when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
 
-        EncounterResponseDTO result = service.completeExamination(encounterId, "doc", false, hospitalId);
+        EncounterResponseDTO result = service.completeExamination(encounterId, false, hospitalId);
 
         assertThat(result).isSameAs(dto);
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.AWAITING_RESULTS);
@@ -1266,7 +1266,7 @@ class EncounterServiceImplTest {
         EncounterResponseDTO dto = new EncounterResponseDTO();
         when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
 
-        EncounterResponseDTO result = service.completeExamination(encounterId, "doc", false, hospitalId);
+        EncounterResponseDTO result = service.completeExamination(encounterId, false, hospitalId);
 
         assertThat(result).isSameAs(dto);
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.AWAITING_RESULTS);
@@ -1286,7 +1286,7 @@ class EncounterServiceImplTest {
         EncounterResponseDTO dto = new EncounterResponseDTO();
         when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
 
-        EncounterResponseDTO result = service.completeExamination(encounterId, "doc", false, hospitalId);
+        EncounterResponseDTO result = service.completeExamination(encounterId, false, hospitalId);
 
         assertThat(result).isSameAs(dto);
         verify(encounterRepository, never()).save(any());
@@ -1300,7 +1300,7 @@ class EncounterServiceImplTest {
         encounter.setStatus(EncounterStatus.SCHEDULED);
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
-        assertThatThrownBy(() -> service.completeExamination(encounterId, "doc", true, null))
+        assertThatThrownBy(() -> service.completeExamination(encounterId, true, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Expected IN_PROGRESS");
     }
@@ -1319,7 +1319,7 @@ class EncounterServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("not found");
 
-        assertThatThrownBy(() -> service.completeExamination(encounterId, "doc", false, callerHospitalId))
+        assertThatThrownBy(() -> service.completeExamination(encounterId, false, callerHospitalId))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -1340,7 +1340,7 @@ class EncounterServiceImplTest {
         EncounterResponseDTO dto = new EncounterResponseDTO();
         when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
 
-        EncounterResponseDTO result = service.markReadyForDischarge(encounterId, "doc", false, hospitalId);
+        EncounterResponseDTO result = service.markReadyForDischarge(encounterId, false, hospitalId);
 
         assertThat(result).isSameAs(dto);
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.READY_FOR_DISCHARGE);
@@ -1362,7 +1362,7 @@ class EncounterServiceImplTest {
         EncounterResponseDTO dto = new EncounterResponseDTO();
         when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
 
-        EncounterResponseDTO result = service.markReadyForDischarge(encounterId, "doc", false, hospitalId);
+        EncounterResponseDTO result = service.markReadyForDischarge(encounterId, false, hospitalId);
 
         assertThat(result).isSameAs(dto);
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.READY_FOR_DISCHARGE);
@@ -1382,7 +1382,7 @@ class EncounterServiceImplTest {
         EncounterResponseDTO dto = new EncounterResponseDTO();
         when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
 
-        EncounterResponseDTO result = service.markReadyForDischarge(encounterId, "doc", false, hospitalId);
+        EncounterResponseDTO result = service.markReadyForDischarge(encounterId, false, hospitalId);
 
         assertThat(result).isSameAs(dto);
         verify(encounterRepository, never()).save(any());
@@ -1396,7 +1396,7 @@ class EncounterServiceImplTest {
         encounter.setStatus(EncounterStatus.COMPLETED);
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
-        assertThatThrownBy(() -> service.markReadyForDischarge(encounterId, "doc", true, null))
+        assertThatThrownBy(() -> service.markReadyForDischarge(encounterId, true, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Expected AWAITING_RESULTS or IN_PROGRESS");
     }

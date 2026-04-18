@@ -175,7 +175,7 @@ class TreatmentPlanServiceImplTest {
 
         assertThatThrownBy(() -> service.create(requestDTO))
                 .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("Patient not found");
+                .hasMessageContaining("patient.notFound");
     }
 
     @Test

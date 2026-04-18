@@ -19,6 +19,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Aggregation service for the hospital-wide patient tracker board (MVP 5).
@@ -57,8 +58,11 @@ public class PatientTrackerServiceImpl implements PatientTrackerService {
         // Include carry-over encounters (active encounters from prior days)
         List<Encounter> carryOvers = encounterRepository.findCarryOverEncounters(
                 hospitalId, from, TERMINAL_STATUSES);
+        Set<UUID> existingIds = allEncounters.stream()
+                .map(Encounter::getId)
+                .collect(Collectors.toSet());
         for (Encounter co : carryOvers) {
-            if (allEncounters.stream().noneMatch(e -> e.getId().equals(co.getId()))) {
+            if (existingIds.add(co.getId())) {
                 allEncounters.add(co);
             }
         }
@@ -66,9 +70,7 @@ public class PatientTrackerServiceImpl implements PatientTrackerService {
         // Filter: exclude terminal statuses, optionally filter by department
         List<PatientTrackerItemDTO> activeItems = new ArrayList<>();
         for (Encounter enc : allEncounters) {
-            if (enc.getStatus() == null || TERMINAL_STATUSES.contains(enc.getStatus())
-                    || (departmentId != null && (enc.getDepartment() == null
-                            || !departmentId.equals(enc.getDepartment().getId())))) {
+            if (!isActiveForBoard(enc, departmentId)) {
                 continue;
             }
             PatientTrackerItemDTO item = trackerMapper.toTrackerItem(enc, hospitalId, now);
@@ -113,5 +115,16 @@ public class PatientTrackerServiceImpl implements PatientTrackerService {
                 .totalPatients(total)
                 .averageWaitMinutes(avgWait)
                 .build();
+    }
+
+    private boolean isActiveForBoard(Encounter enc, UUID departmentId) {
+        if (enc.getStatus() == null || TERMINAL_STATUSES.contains(enc.getStatus())) {
+            return false;
+        }
+        if (departmentId != null
+                && (enc.getDepartment() == null || !departmentId.equals(enc.getDepartment().getId()))) {
+            return false;
+        }
+        return true;
     }
 }

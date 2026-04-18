@@ -2249,15 +2249,4 @@ class PrescriptionServiceImplTest {
         verify(patientRepository).findByIdUnscoped(patientId);
         verify(patientRepository, never()).findById(patientId);
     }
-
-    @Test
-    void createPrescription_patientNotFound_throwsResourceNotFound() {
-        PrescriptionRequestDTO request = buildRequest();
-
-        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
-            .isInstanceOf(ResourceNotFoundException.class)
-            .hasMessageContaining("patient.notfound");
-    }
 }

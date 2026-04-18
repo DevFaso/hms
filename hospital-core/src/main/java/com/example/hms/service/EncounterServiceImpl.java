@@ -1736,7 +1736,7 @@ public class EncounterServiceImpl implements EncounterService {
 
     @Override
     @Transactional
-    public EncounterResponseDTO completeExamination(UUID encounterId, String actorUsername,
+    public EncounterResponseDTO completeExamination(UUID encounterId,
                                                      boolean isSuperAdmin, UUID callerHospitalId) {
         Encounter encounter = encounterRepository.findById(encounterId)
                 .orElseThrow(() -> new ResourceNotFoundException(
@@ -1781,7 +1781,7 @@ public class EncounterServiceImpl implements EncounterService {
 
     @Override
     @Transactional
-    public EncounterResponseDTO markReadyForDischarge(UUID encounterId, String actorUsername,
+    public EncounterResponseDTO markReadyForDischarge(UUID encounterId,
                                                        boolean isSuperAdmin, UUID callerHospitalId) {
         Encounter encounter = encounterRepository.findById(encounterId)
                 .orElseThrow(() -> new ResourceNotFoundException(
