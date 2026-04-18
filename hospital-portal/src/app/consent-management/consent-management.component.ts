@@ -226,7 +226,11 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
           },
         });
       },
-      error: () => this.hospitalsLoading.set(false),
+      error: () => {
+        this.hospitalsLoading.set(false);
+        this.loading.set(false);
+        this.loadError.set(this.translate.instant('CONSENT.ERRORS.LOAD_FAILED'));
+      },
     });
   }
 
@@ -234,6 +238,13 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
     this.loading.set(true);
     this.loadError.set(null);
     const toHospitalId = this.currentHospital()?.id;
+    if (!toHospitalId) {
+      const msg = this.translate.instant('CONSENT.ERRORS.LOAD_FAILED');
+      this.loadError.set(msg);
+      this.toast.error(msg);
+      this.loading.set(false);
+      return;
+    }
     this.sharingService
       .listConsents({ page: this.currentPage(), size: this.pageSize, toHospitalId })
       .subscribe({

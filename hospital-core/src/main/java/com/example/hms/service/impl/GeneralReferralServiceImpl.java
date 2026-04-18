@@ -250,9 +250,11 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             .toList();
     }
 
+    private static final String REFERRAL_NOT_FOUND = "generalReferral.notFound";
+
     private GeneralReferral findReferral(UUID referralId) {
         GeneralReferral referral = referralRepository.findById(referralId)
-            .orElseThrow(() -> new ResourceNotFoundException("Referral not found"));
+            .orElseThrow(() -> new ResourceNotFoundException(REFERRAL_NOT_FOUND));
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (activeHospitalId != null) {
             boolean isSendingHospital = referral.getHospital() != null
@@ -260,7 +262,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             boolean isReceivingHospital = referral.getReceivingHospital() != null
                 && activeHospitalId.equals(referral.getReceivingHospital().getId());
             if (!isSendingHospital && !isReceivingHospital) {
-                throw new ResourceNotFoundException("Referral not found");
+                throw new ResourceNotFoundException(REFERRAL_NOT_FOUND);
             }
         }
         return referral;

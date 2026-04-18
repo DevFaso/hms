@@ -91,7 +91,7 @@ describe('ConsentManagementComponent', () => {
   });
 
   it('calls listConsents on init', () => {
-    expect(sharingStub.listConsents).toHaveBeenCalledWith({ page: 0, size: 20 });
+    expect(sharingStub.listConsents).toHaveBeenCalledWith({ page: 0, size: 20, toHospitalId: 'h1' });
   });
 
   it('populates consents signal from response', () => {
@@ -433,7 +433,7 @@ describe('ConsentManagementComponent', () => {
       expect(router.navigate).toHaveBeenCalledWith(['/consent-management/shared-records'], {
         queryParams: {
           patientId: 'p1',
-          toHospitalId: 'h1',
+          toHospitalId: 'h2',
         },
       });
     });
@@ -511,6 +511,10 @@ describe('ConsentManagementComponent', () => {
         PROBLEMS: false,
         SURGICAL_HISTORY: false,
         ADVANCE_DIRECTIVES: false,
+        ENCOUNTER_HISTORY: false,
+        VITAL_SIGNS: false,
+        IMMUNIZATIONS: false,
+        INSURANCES: false,
       });
       component.submitGrant();
       const arg = sharingStub.grantConsent.calls.mostRecent().args[0];
