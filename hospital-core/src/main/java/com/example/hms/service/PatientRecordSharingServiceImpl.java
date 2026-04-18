@@ -252,37 +252,33 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
         Map<UUID, String> mrnByHospital = buildHospitalMrnMap(patient);
         Set<String> allowedDomains = parseConsentScope(consent);
 
-        // ── Encounters (N+1 fix: hospital-scoped query) ────────────────────
-        List<Encounter> encountersInScope = List.of();
-        List<EncounterResponseDTO> encounterDtos = List.of();
+        // ── Encounters (always fetched internally for treatments/history) ──
+        List<Encounter> encountersInScope = safeFetchFromTable(
+            CLINICAL_CATEGORY,
+            "encounters",
+            () -> encounterRepository.findAllByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
+                .sorted(Comparator.comparing(Encounter::getEncounterDate, Comparator.nullsLast(Comparator.naturalOrder())))
+                .toList(),
+            "Encounter"
+        );
+
+        // Only include encounter DTOs when ENCOUNTERS scope is allowed
+        List<EncounterResponseDTO> encounterDtos = isDomainAllowed(allowedDomains, SCOPE_ENCOUNTERS)
+            ? encountersInScope.stream().map(encounterMapper::toEncounterResponseDTO).toList()
+            : List.of();
+
+        // ── Encounter history (independent scope check) ────────────────────
         List<EncounterHistoryResponseDTO> encounterHistoryDtos = List.of();
+        if (isDomainAllowed(allowedDomains, SCOPE_ENCOUNTER_HISTORY) && !encountersInScope.isEmpty()) {
+            Map<UUID, Encounter> encounterById = encountersInScope.stream()
+                .collect(Collectors.toMap(Encounter::getId, Function.identity()));
+            encounterHistoryDtos = loadEncounterHistory(encounterById);
+        }
+
+        // ── Treatments (independent scope check) ───────────────────────────
         List<EncounterTreatmentResponseDTO> treatmentDtos = List.of();
-
-        if (isDomainAllowed(allowedDomains, SCOPE_ENCOUNTERS)) {
-            encountersInScope = safeFetchFromTable(
-                CLINICAL_CATEGORY,
-                "encounters",
-                () -> encounterRepository.findAllByPatient_IdAndHospital_Id(patientId, fromHospitalId).stream()
-                    .sorted(Comparator.comparing(Encounter::getEncounterDate, Comparator.nullsLast(Comparator.naturalOrder())))
-                    .toList(),
-                "Encounter"
-            );
-
-            encounterDtos = encountersInScope.stream()
-                .map(encounterMapper::toEncounterResponseDTO)
-                .toList();
-
-            if (isDomainAllowed(allowedDomains, SCOPE_ENCOUNTER_HISTORY)) {
-                Map<UUID, Encounter> encounterById = encountersInScope.stream()
-                    .collect(Collectors.toMap(Encounter::getId, Function.identity()));
-                encounterHistoryDtos = encounterById.isEmpty()
-                    ? List.of()
-                    : loadEncounterHistory(encounterById);
-            }
-
-            if (isDomainAllowed(allowedDomains, SCOPE_TREATMENTS)) {
-                treatmentDtos = loadEncounterTreatments(encountersInScope);
-            }
+        if (isDomainAllowed(allowedDomains, SCOPE_TREATMENTS) && !encountersInScope.isEmpty()) {
+            treatmentDtos = loadEncounterTreatments(encountersInScope);
         }
 
         // ── Problems ───────────────────────────────────────────────────────

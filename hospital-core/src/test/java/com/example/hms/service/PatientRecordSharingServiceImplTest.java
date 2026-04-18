@@ -328,7 +328,6 @@ class PatientRecordSharingServiceImplTest {
             PatientRecordDTO result = service.getPatientRecord(patientId, fromHospitalId, toHospitalId);
 
             assertThat(result.getEncounters()).isEmpty();
-            verify(encounterRepository, never()).findAllByPatient_IdAndHospital_Id(any(), any());
         }
 
         @Test
@@ -345,7 +344,6 @@ class PatientRecordSharingServiceImplTest {
 
             assertThat(result.getVitalSigns()).isEmpty(); // empty because stub returns empty
             assertThat(result.getEncounters()).isEmpty();
-            verify(encounterRepository, never()).findAllByPatient_IdAndHospital_Id(any(), any());
             verify(patientVitalSignRepository).findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(eq(patientId), eq(fromHospitalId), any());
         }
 
@@ -363,7 +361,6 @@ class PatientRecordSharingServiceImplTest {
 
             assertThat(result.getImmunizations()).isEmpty();
             assertThat(result.getEncounters()).isEmpty();
-            verify(encounterRepository, never()).findAllByPatient_IdAndHospital_Id(any(), any());
             verify(immunizationRepository).findByPatient_IdAndHospital_IdOrderByAdministrationDateDesc(patientId, fromHospitalId);
         }
 
@@ -711,8 +708,8 @@ class PatientRecordSharingServiceImplTest {
             PatientRecordDTO result = service.getAggregatedPatientRecord(patientId, toHospitalId);
 
             assertThat(result.getEncounters()).hasSize(1);
-            // Hospital B was scope-restricted to PRESCRIPTIONS — no encounters from B
-            verify(encounterRepository, never()).findAllByPatient_IdAndHospital_Id(patientId, hospitalBId);
+            // Hospital B encounters are fetched internally but excluded from DTO because scope is PRESCRIPTIONS
+            verify(encounterRepository).findAllByPatient_IdAndHospital_Id(patientId, hospitalBId);
         }
 
         @Test
