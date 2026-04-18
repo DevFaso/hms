@@ -410,6 +410,7 @@
     "SUBTITLE": "Registros del paciente compartidos mediante consentimiento activo",
     "BACK": "Volver a consentimientos",
     "FROM": "Hospital origen",
+    "FROM_HOSPITALS": "Compartido desde otros hospitales",
     "TO": "Hospital destino",
     "PURPOSE": "Propósito",
     "EXPIRES": "Vencimiento",
@@ -493,6 +494,15 @@
       "ENCOUNTER_DATE": "Fecha de consulta",
       "PREVIOUS_VALUES": "Valores anteriores",
       "ALLERGIES": "Alergias",
+      "HOSPITAL": "Hospital",
+      "ESI_SCORE": "Puntuación ESI",
+      "ROOM": "Habitación",
+      "ARRIVAL": "Hora de llegada",
+      "TRIAGE": "Hora de triaje",
+      "REFERENCE_RANGE": "Rango de referencia",
+      "RESULT_STATUS": "Estado del resultado",
+      "ORDERED_BY": "Solicitado por",
+      "TEST_CODE": "Código de prueba",
       "LEGACY_DATA": "Datos históricos"
     }
   },

@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { Router } from '@angular/router';
 import { of, throwError } from 'rxjs';
@@ -72,6 +73,7 @@ describe('ConsentManagementComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ConsentManagementComponent, TranslateModule.forRoot()],
       providers: [
+        provideRouter([]),
         { provide: RecordSharingService, useValue: sharingStub },
         { provide: PatientService, useValue: patientStub },
         { provide: HospitalService, useValue: hospitalStub },

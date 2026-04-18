@@ -237,7 +237,7 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
       },
       error: () => {
         this.loadError.set(this.translate.instant('CONSENT.ERRORS.LOAD_FAILED'));
-        this.toast.error('CONSENT.ERRORS.LOAD_FAILED');
+        this.toast.error(this.translate.instant('CONSENT.ERRORS.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -289,7 +289,7 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
       !this.grantForm.fromHospitalId ||
       !this.grantForm.toHospitalId
     ) {
-      this.toast.error('CONSENT.ERRORS.REQUIRED_FIELDS');
+      this.toast.error(this.translate.instant('CONSENT.ERRORS.REQUIRED_FIELDS'));
       return;
     }
     this.submitting.set(true);
@@ -302,14 +302,14 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
     };
     this.sharingService.grantConsent(req).subscribe({
       next: () => {
-        this.toast.success('CONSENT.GRANTED');
+        this.toast.success(this.translate.instant('CONSENT.GRANTED'));
         this.showGrantForm.set(false);
         this.submitting.set(false);
         this.currentPage.set(0);
         this.load();
       },
       error: () => {
-        this.toast.error('CONSENT.ERRORS.GRANT_FAILED');
+        this.toast.error(this.translate.instant('CONSENT.ERRORS.GRANT_FAILED'));
         this.submitting.set(false);
       },
     });
@@ -321,10 +321,10 @@ export class ConsentManagementComponent implements OnInit, OnDestroy {
       .revokeConsent(consent.patient.id, consent.fromHospital.id, consent.toHospital.id)
       .subscribe({
         next: () => {
-          this.toast.success('CONSENT.REVOKED');
+          this.toast.success(this.translate.instant('CONSENT.REVOKED'));
           this.load();
         },
-        error: () => this.toast.error('CONSENT.ERRORS.REVOKE_FAILED'),
+        error: () => this.toast.error(this.translate.instant('CONSENT.ERRORS.REVOKE_FAILED')),
       });
   }
 

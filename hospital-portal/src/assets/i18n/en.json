@@ -409,6 +409,7 @@
     "SUBTITLE": "Patient records shared via active consent",
     "BACK": "Back to Consents",
     "FROM": "From Hospital",
+    "FROM_HOSPITALS": "Shared from Other Hospitals",
     "TO": "To Hospital",
     "PURPOSE": "Purpose",
     "EXPIRES": "Expires",
@@ -492,6 +493,15 @@
       "ENCOUNTER_DATE": "Encounter Date",
       "PREVIOUS_VALUES": "Previous Values",
       "ALLERGIES": "Allergies",
+      "HOSPITAL": "Hospital",
+      "ESI_SCORE": "ESI Score",
+      "ROOM": "Room",
+      "ARRIVAL": "Arrival Time",
+      "TRIAGE": "Triage Time",
+      "REFERENCE_RANGE": "Reference Range",
+      "RESULT_STATUS": "Result Status",
+      "ORDERED_BY": "Ordered By",
+      "TEST_CODE": "Test Code",
       "LEGACY_DATA": "Legacy Data"
     }
   },

@@ -442,6 +442,77 @@ describe('SharedRecordsViewerComponent', () => {
     });
   });
 
+  describe('uniqueFromNames', () => {
+    it('returns unique hospital names joined by comma', () => {
+      const items = [
+        { hospitalName: 'Hospital Alpha' },
+        { hospitalName: 'Hospital Alpha' },
+        { hospitalName: 'Hospital Beta' },
+      ];
+      expect(component.uniqueFromNames(items)).toBe('Hospital Alpha, Hospital Beta');
+    });
+
+    it('returns empty string when all hospitalNames are undefined', () => {
+      expect(component.uniqueFromNames([{}, {}])).toBe('');
+    });
+
+    it('returns empty string for empty array', () => {
+      expect(component.uniqueFromNames([])).toBe('');
+    });
+
+    it('returns single name when all items share one hospital', () => {
+      const items = [{ hospitalName: 'Hospital Alpha' }, { hospitalName: 'Hospital Alpha' }];
+      expect(component.uniqueFromNames(items)).toBe('Hospital Alpha');
+    });
+  });
+
+  describe('from-column headers', () => {
+    it('renders source hospital name in from-column header when records have hospitalName', () => {
+      const fromHeaders = fixture.nativeElement.querySelectorAll('.from-header');
+      const encounterHeader = fromHeaders[0].textContent as string;
+      expect(encounterHeader).toContain('Hospital Alpha');
+    });
+  });
+
+  describe('lab result fields', () => {
+    it('shows labTestCode when present', async () => {
+      sharingStub.getAggregatedRecord.and.returnValue(
+        of({
+          ...MOCK_RECORD,
+          labResults: [
+            {
+              id: 'lr2',
+              labTestName: 'CBC',
+              labTestCode: 'CBC-TEST',
+              resultValue: '5.3',
+              resultUnit: 'g/dL',
+              resultDate: '2026-01-11',
+              hospitalId: 'h1',
+              hospitalName: 'Hospital Alpha',
+            },
+          ],
+        }),
+      );
+
+      await TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({
+        imports: [SharedRecordsViewerComponent, TranslateModule.forRoot()],
+        providers: [
+          { provide: RecordSharingService, useValue: sharingStub },
+          { provide: Router, useValue: routerStub },
+          {
+            provide: ActivatedRoute,
+            useValue: createRouteSnapshot({ patientId: 'p1', toHospitalId: 'h2' }),
+          },
+        ],
+      }).compileComponents();
+
+      const fix = TestBed.createComponent(SharedRecordsViewerComponent);
+      fix.detectChanges();
+      expect(fix.nativeElement.textContent).toContain('CBC-TEST');
+    });
+  });
+
   describe('legacy allergy fallback', () => {
     it('renders legacy allergy text when allergiesDetailed is empty', async () => {
       sharingStub.getAggregatedRecord.and.returnValue(

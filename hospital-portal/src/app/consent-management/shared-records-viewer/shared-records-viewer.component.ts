@@ -83,6 +83,11 @@ export class SharedRecordsViewerComponent implements OnInit {
     this.router.navigate(['/consent-management']);
   }
 
+  uniqueFromNames(records: { hospitalName?: string }[]): string {
+    const names = [...new Set(records.map((r) => r.hospitalName).filter((n): n is string => !!n))];
+    return names.length > 0 ? names.join(', ') : '';
+  }
+
   severityClass(severity: string | undefined): string {
     if (!severity) return '';
     switch (severity.toUpperCase()) {

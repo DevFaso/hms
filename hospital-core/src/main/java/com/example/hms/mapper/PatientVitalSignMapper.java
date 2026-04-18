@@ -21,6 +21,7 @@ public class PatientVitalSignMapper {
             .patientId(entity.getPatient() != null ? entity.getPatient().getId() : null)
             .registrationId(entity.getRegistration() != null ? entity.getRegistration().getId() : null)
             .hospitalId(entity.getHospital() != null ? entity.getHospital().getId() : null)
+            .hospitalName(entity.getHospital() != null ? entity.getHospital().getName() : null)
             .recordedByStaffId(entity.getRecordedByStaff() != null ? entity.getRecordedByStaff().getId() : null)
             .recordedByAssignmentId(entity.getRecordedByAssignment() != null ? entity.getRecordedByAssignment().getId() : null)
             .recordedByName(resolveRecorderName(entity))

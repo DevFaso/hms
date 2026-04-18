@@ -1740,7 +1740,7 @@ public class EncounterServiceImpl implements EncounterService {
                                                      boolean isSuperAdmin, UUID callerHospitalId) {
         Encounter encounter = encounterRepository.findById(encounterId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, new Object[]{encounterId},
                                 org.springframework.context.i18n.LocaleContextHolder.getLocale())));
 
         // Hospital scoping for non-super-admins
@@ -1749,7 +1749,7 @@ public class EncounterServiceImpl implements EncounterService {
                     ? encounter.getHospital().getId() : null;
             if (encounterHospitalId != null && !encounterHospitalId.equals(callerHospitalId)) {
                 throw new ResourceNotFoundException(
-                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, new Object[]{encounterId},
                                 org.springframework.context.i18n.LocaleContextHolder.getLocale()));
             }
         }
@@ -1785,7 +1785,7 @@ public class EncounterServiceImpl implements EncounterService {
                                                        boolean isSuperAdmin, UUID callerHospitalId) {
         Encounter encounter = encounterRepository.findById(encounterId)
                 .orElseThrow(() -> new ResourceNotFoundException(
-                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, new Object[]{encounterId},
                                 org.springframework.context.i18n.LocaleContextHolder.getLocale())));
 
         if (!isSuperAdmin) {
@@ -1793,7 +1793,7 @@ public class EncounterServiceImpl implements EncounterService {
                     ? encounter.getHospital().getId() : null;
             if (encounterHospitalId != null && !encounterHospitalId.equals(callerHospitalId)) {
                 throw new ResourceNotFoundException(
-                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, null,
+                        messageSource.getMessage(MSG_ENCOUNTER_NOT_FOUND, new Object[]{encounterId},
                                 org.springframework.context.i18n.LocaleContextHolder.getLocale()));
             }
         }
