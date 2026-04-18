@@ -354,19 +354,19 @@ public class PatientRecordSharingServiceImpl implements PatientRecordSharingServ
             labOrderDtos = labOrdersInScope.stream()
                 .map(labOrderMapper::toLabOrderResponseDTO)
                 .toList();
+        }
 
-            // ── Lab results (N+1 fix: hospital-scoped query) ──────────────
-            if (isDomainAllowed(allowedDomains, SCOPE_LAB_RESULTS)) {
-                labResultDtos = safeFetchFromTable(
-                    "lab",
-                    "lab_results",
-                    () -> labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
-                            patientId, fromHospitalId, Pageable.unpaged()).stream()
-                        .map(labResultMapper::toResponseDTO)
-                        .toList(),
-                    "Lab result"
-                );
-            }
+        // ── Lab results (independent of LAB_ORDERS scope) ─────────────────
+        if (isDomainAllowed(allowedDomains, SCOPE_LAB_RESULTS)) {
+            labResultDtos = safeFetchFromTable(
+                "lab",
+                "lab_results",
+                () -> labResultRepository.findByLabOrder_Patient_IdAndLabOrder_Hospital_Id(
+                        patientId, fromHospitalId, Pageable.unpaged()).stream()
+                    .map(labResultMapper::toResponseDTO)
+                    .toList(),
+                "Lab result"
+            );
         }
 
         // ── Allergies ──────────────────────────────────────────────────────
