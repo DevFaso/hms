@@ -5,6 +5,7 @@ import com.example.hms.model.LabResult;
 import com.example.hms.model.LabTestDefinition;
 import com.example.hms.model.LabTestReferenceRange;
 import com.example.hms.model.Patient;
+import com.example.hms.model.Staff;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.payload.dto.LabResultRequestDTO;
 import com.example.hms.payload.dto.LabResultResponseDTO;
@@ -33,6 +34,9 @@ public class LabResultMapper {
         null,
         null,
         null,
+        null,
+        null,
+        null,
         Collections.emptyList()
     );
 
@@ -49,12 +53,15 @@ public class LabResultMapper {
             .labOrderId(result.getLabOrder() != null && result.getLabOrder().getId() != null
                 ? result.getLabOrder().getId().toString() : null)
             .labOrderCode(context.labOrderCode())
+            .labTestCode(context.labTestCode())
             .patientId(result.getLabOrder() != null && result.getLabOrder().getPatient() != null
                 && result.getLabOrder().getPatient().getId() != null
                 ? result.getLabOrder().getPatient().getId().toString() : null)
             .patientFullName(context.patientFullName())
             .patientEmail(context.patientEmail())
+            .hospitalId(context.hospitalId())
             .hospitalName(context.hospitalName())
+            .orderedByName(context.orderedByName())
             .labTestName(context.labTestName())
             .resultValue(result.getResultValue())
             .resultUnit(result.getResultUnit())
@@ -114,16 +121,21 @@ public class LabResultMapper {
         }
 
         PatientInfo patientInfo = resolvePatientInfo(order);
+        String hospitalId = resolveHospitalId(order);
         String hospitalName = resolveHospitalName(order);
         LabTestMetadata labTestMetadata = resolveLabTestMetadata(order);
         String labOrderCode = order.getId() != null ? order.getId().toString() : null;
+        String orderedByName = resolveOrderingStaffName(order);
 
         return new OrderContext(
             patientInfo.fullName(),
             patientInfo.email(),
+            hospitalId,
             hospitalName,
             labTestMetadata.name(),
+            labTestMetadata.testCode(),
             labOrderCode,
+            orderedByName,
             labTestMetadata.referenceRanges()
         );
     }
@@ -131,15 +143,18 @@ public class LabResultMapper {
     private record OrderContext(
             String patientFullName,
             String patientEmail,
+            String hospitalId,
             String hospitalName,
             String labTestName,
+            String labTestCode,
             String labOrderCode,
+            String orderedByName,
             List<LabTestReferenceRange> referenceRanges
     ) {}
 
     private record PatientInfo(String fullName, String email) {}
 
-    private record LabTestMetadata(String name, List<LabTestReferenceRange> referenceRanges) {}
+    private record LabTestMetadata(String name, String testCode, List<LabTestReferenceRange> referenceRanges) {}
 
     private PatientInfo resolvePatientInfo(LabOrder order) {
         Patient patient = order.getPatient();
@@ -156,6 +171,13 @@ public class LabResultMapper {
         return new PatientInfo(fullName, email);
     }
 
+    private String resolveHospitalId(LabOrder order) {
+        if (order.getHospital() == null || !Hibernate.isInitialized(order.getHospital())) {
+            return null;
+        }
+        return order.getHospital().getId() != null ? order.getHospital().getId().toString() : null;
+    }
+
     private String resolveHospitalName(LabOrder order) {
         if (order.getHospital() == null || !Hibernate.isInitialized(order.getHospital())) {
             return null;
@@ -163,15 +185,34 @@ public class LabResultMapper {
         return order.getHospital().getName();
     }
 
+    private String resolveOrderingStaffName(LabOrder order) {
+        if (order.getOrderingStaff() == null || !Hibernate.isInitialized(order.getOrderingStaff())) {
+            return null;
+        }
+        Staff staff = order.getOrderingStaff();
+        if (staff.getName() != null && !staff.getName().isBlank()) {
+            return staff.getName().trim();
+        }
+        if (staff.getUser() != null && Hibernate.isInitialized(staff.getUser())) {
+            String first = nullToEmpty(staff.getUser().getFirstName());
+            String last = nullToEmpty(staff.getUser().getLastName());
+            String combined = (first + " " + last).trim();
+            if (!combined.isEmpty()) {
+                return combined;
+            }
+        }
+        return null;
+    }
+
     private LabTestMetadata resolveLabTestMetadata(LabOrder order) {
         if (order.getLabTestDefinition() == null || !Hibernate.isInitialized(order.getLabTestDefinition())) {
-            return new LabTestMetadata(null, Collections.emptyList());
+            return new LabTestMetadata(null, null, Collections.emptyList());
         }
         LabTestDefinition definition = order.getLabTestDefinition();
         List<LabTestReferenceRange> referenceRanges = definition.getReferenceRanges() != null
             ? definition.getReferenceRanges()
             : Collections.emptyList();
-        return new LabTestMetadata(definition.getName(), referenceRanges);
+        return new LabTestMetadata(definition.getName(), definition.getTestCode(), referenceRanges);
     }
 
     private String nullToEmpty(String value) {

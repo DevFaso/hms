@@ -409,6 +409,7 @@
     "SUBTITLE": "Dossiers du patient partagés via un consentement actif",
     "BACK": "Retour aux consentements",
     "FROM": "Établissement source",
+    "FROM_HOSPITALS": "Partagé depuis d'autres établissements",
     "TO": "Établissement destinataire",
     "PURPOSE": "Objectif",
     "EXPIRES": "Expiration",
@@ -492,6 +493,15 @@
       "ENCOUNTER_DATE": "Date de consultation",
       "PREVIOUS_VALUES": "Valeurs précédentes",
       "ALLERGIES": "Allergies",
+      "HOSPITAL": "Établissement",
+      "ESI_SCORE": "Score ESI",
+      "ROOM": "Chambre",
+      "ARRIVAL": "Heure d'arrivée",
+      "TRIAGE": "Heure de triage",
+      "REFERENCE_RANGE": "Plage de référence",
+      "RESULT_STATUS": "Statut du résultat",
+      "ORDERED_BY": "Prescrit par",
+      "TEST_CODE": "Code du test",
       "LEGACY_DATA": "Données historiques"
     }
   },

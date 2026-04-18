@@ -264,7 +264,9 @@
           <div class="hospital-column">
             <div class="column-header from-header">
               <span class="material-symbols-outlined">share</span>
-              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              {{
+                uniqueFromNames(p.encounters.from) || ('SHARED_RECORDS.FROM_HOSPITALS' | translate)
+              }}
               <span class="column-count">({{ p.encounters.from.length }})</span>
             </div>
             @if (p.encounters.from.length === 0) {
@@ -472,7 +474,9 @@
           <div class="hospital-column">
             <div class="column-header from-header">
               <span class="material-symbols-outlined">share</span>
-              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              {{
+                uniqueFromNames(p.treatments.from) || ('SHARED_RECORDS.FROM_HOSPITALS' | translate)
+              }}
               <span class="column-count">({{ p.treatments.from.length }})</span>
             </div>
             @if (p.treatments.from.length === 0) {
@@ -650,7 +654,10 @@
           <div class="hospital-column">
             <div class="column-header from-header">
               <span class="material-symbols-outlined">share</span>
-              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              {{
+                uniqueFromNames(p.prescriptions.from) ||
+                  ('SHARED_RECORDS.FROM_HOSPITALS' | translate)
+              }}
               <span class="column-count">({{ p.prescriptions.from.length }})</span>
             </div>
             @if (p.prescriptions.from.length === 0) {
@@ -825,7 +832,9 @@
           <div class="hospital-column">
             <div class="column-header from-header">
               <span class="material-symbols-outlined">share</span>
-              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              {{
+                uniqueFromNames(p.labOrders.from) || ('SHARED_RECORDS.FROM_HOSPITALS' | translate)
+              }}
               <span class="column-count">({{ p.labOrders.from.length }})</span>
             </div>
             @if (p.labOrders.from.length === 0) {
@@ -949,6 +958,35 @@
                         <span class="result-unit">{{ lr.resultUnit }}</span>
                       }
                     </div>
+                    @if (lr.labTestCode) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.TEST_CODE' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ lr.labTestCode }}</span>
+                      </div>
+                    }
+                    @if (lr.orderedByName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ORDERED_BY' | translate
+                        }}</span
+                        ><span class="detail-value">{{ lr.orderedByName }}</span>
+                      </div>
+                    }
+                    @if (lr.referenceRanges && lr.referenceRanges.length > 0) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.REFERENCE_RANGE' | translate
+                        }}</span
+                        ><span class="detail-value">
+                          @for (rr of lr.referenceRanges; track $index) {
+                            {{ rr.minValue ?? '?' }} – {{ rr.maxValue ?? '?'
+                            }}{{ rr.unit ? ' ' + rr.unit : '' }}
+                          }
+                        </span>
+                      </div>
+                    }
                     @if (lr.labOrderCode) {
                       <div class="detail-row">
                         <span class="detail-label">{{
@@ -973,7 +1011,9 @@
           <div class="hospital-column">
             <div class="column-header from-header">
               <span class="material-symbols-outlined">share</span>
-              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              {{
+                uniqueFromNames(p.labResults.from) || ('SHARED_RECORDS.FROM_HOSPITALS' | translate)
+              }}
               <span class="column-count">({{ p.labResults.from.length }})</span>
             </div>
             @if (p.labResults.from.length === 0) {
@@ -1016,6 +1056,35 @@
                         <span class="result-unit">{{ lr.resultUnit }}</span>
                       }
                     </div>
+                    @if (lr.labTestCode) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.TEST_CODE' | translate
+                        }}</span
+                        ><span class="detail-value mono">{{ lr.labTestCode }}</span>
+                      </div>
+                    }
+                    @if (lr.orderedByName) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.ORDERED_BY' | translate
+                        }}</span
+                        ><span class="detail-value">{{ lr.orderedByName }}</span>
+                      </div>
+                    }
+                    @if (lr.referenceRanges && lr.referenceRanges.length > 0) {
+                      <div class="detail-row">
+                        <span class="detail-label">{{
+                          'SHARED_RECORDS.FIELDS.REFERENCE_RANGE' | translate
+                        }}</span
+                        ><span class="detail-value">
+                          @for (rr of lr.referenceRanges; track $index) {
+                            {{ rr.minValue ?? '?' }} – {{ rr.maxValue ?? '?'
+                            }}{{ rr.unit ? ' ' + rr.unit : '' }}
+                          }
+                        </span>
+                      </div>
+                    }
                     @if (lr.labOrderCode) {
                       <div class="detail-row">
                         <span class="detail-label">{{
@@ -1156,7 +1225,9 @@
           <div class="hospital-column">
             <div class="column-header from-header">
               <span class="material-symbols-outlined">share</span>
-              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              {{
+                uniqueFromNames(p.vitalSigns.from) || ('SHARED_RECORDS.FROM_HOSPITALS' | translate)
+              }}
               <span class="column-count">({{ p.vitalSigns.from.length }})</span>
             </div>
             @if (p.vitalSigns.from.length === 0) {
@@ -1398,7 +1469,10 @@
           <div class="hospital-column">
             <div class="column-header from-header">
               <span class="material-symbols-outlined">share</span>
-              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              {{
+                uniqueFromNames(p.immunizations.from) ||
+                  ('SHARED_RECORDS.FROM_HOSPITALS' | translate)
+              }}
               <span class="column-count">({{ p.immunizations.from.length }})</span>
             </div>
             @if (p.immunizations.from.length === 0) {
@@ -1629,7 +1703,9 @@
             <div class="hospital-column">
               <div class="column-header from-header">
                 <span class="material-symbols-outlined">share</span>
-                {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+                {{
+                  uniqueFromNames(p.allergies.from) || ('SHARED_RECORDS.FROM_HOSPITALS' | translate)
+                }}
                 <span class="column-count">({{ p.allergies.from.length }})</span>
               </div>
               @if (p.allergies.from.length === 0) {
@@ -1796,7 +1872,9 @@
           <div class="hospital-column">
             <div class="column-header from-header">
               <span class="material-symbols-outlined">share</span>
-              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              {{
+                uniqueFromNames(p.problems.from) || ('SHARED_RECORDS.FROM_HOSPITALS' | translate)
+              }}
               <span class="column-count">({{ p.problems.from.length }})</span>
             </div>
             @if (p.problems.from.length === 0) {
@@ -1967,7 +2045,10 @@
           <div class="hospital-column">
             <div class="column-header from-header">
               <span class="material-symbols-outlined">share</span>
-              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              {{
+                uniqueFromNames(p.surgicalHistory.from) ||
+                  ('SHARED_RECORDS.FROM_HOSPITALS' | translate)
+              }}
               <span class="column-count">({{ p.surgicalHistory.from.length }})</span>
             </div>
             @if (p.surgicalHistory.from.length === 0) {
@@ -2129,7 +2210,10 @@
           <div class="hospital-column">
             <div class="column-header from-header">
               <span class="material-symbols-outlined">share</span>
-              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              {{
+                uniqueFromNames(p.advanceDirectives.from) ||
+                  ('SHARED_RECORDS.FROM_HOSPITALS' | translate)
+              }}
               <span class="column-count">({{ p.advanceDirectives.from.length }})</span>
             </div>
             @if (p.advanceDirectives.from.length === 0) {
@@ -2300,7 +2384,9 @@
           <div class="hospital-column">
             <div class="column-header from-header">
               <span class="material-symbols-outlined">share</span>
-              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              {{
+                uniqueFromNames(p.insurances.from) || ('SHARED_RECORDS.FROM_HOSPITALS' | translate)
+              }}
               <span class="column-count">({{ p.insurances.from.length }})</span>
             </div>
             @if (p.insurances.from.length === 0) {
@@ -2471,7 +2557,10 @@
           <div class="hospital-column">
             <div class="column-header from-header">
               <span class="material-symbols-outlined">share</span>
-              {{ 'SHARED_RECORDS.FROM_HOSPITALS' | translate }}
+              {{
+                uniqueFromNames(p.encounterHistory.from) ||
+                  ('SHARED_RECORDS.FROM_HOSPITALS' | translate)
+              }}
               <span class="column-count">({{ p.encounterHistory.from.length }})</span>
             </div>
             @if (p.encounterHistory.from.length === 0) {

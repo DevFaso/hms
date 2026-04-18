@@ -67,18 +67,31 @@ export interface SharedLabResultEntry {
   id: string;
   labOrderId?: string;
   labOrderCode?: string;
+  labTestCode?: string;
   patientId?: string;
   patientFullName?: string;
   hospitalId?: string;
   hospitalName?: string;
+  orderedByName?: string;
   labTestName?: string;
   resultValue?: string;
   resultUnit?: string;
   resultDate?: string;
   notes?: string;
+  referenceRanges?: {
+    minValue?: number;
+    maxValue?: number;
+    unit?: string;
+    ageMin?: number;
+    ageMax?: number;
+    gender?: string;
+    notes?: string;
+  }[];
   severityFlag?: string;
-  acknowledged?: boolean;
   released?: boolean;
+  releasedByFullName?: string;
+  acknowledged?: boolean;
+  acknowledgedBy?: string;
 }
 
 export interface SharedAllergyEntry {

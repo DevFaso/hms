@@ -18,6 +18,7 @@ public class PatientVitalSignResponseDTO {
     private UUID patientId;
     private UUID registrationId;
     private UUID hospitalId;
+    private String hospitalName;
     private UUID recordedByStaffId;
     private UUID recordedByAssignmentId;
     private String recordedByName;
