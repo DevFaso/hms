@@ -75,6 +75,13 @@ public enum AuditEventType {
     REFUND_ISSUED,
     CLAIM_SUBMITTED,
 
+    // Pharmacy & inventory
+    STOCK_RECEIPT,
+    STOCK_ADJUSTMENT,
+    STOCK_TRANSFER,
+    STOCK_RETURN,
+    STOCK_REORDER_ALERT,
+
     // Security & platform configuration
     SECURITY_POLICY_UPDATED,
     SECURITY_ALERT_TRIGGERED,
