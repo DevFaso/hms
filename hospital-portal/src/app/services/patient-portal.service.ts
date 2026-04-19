@@ -641,6 +641,71 @@ export interface NotificationPreferenceUpdate {
   enabled: boolean;
 }
 
+// ── Medical & Family History ──────────────────────────────────────
+
+export interface PatientDiagnosisSummary {
+  id: string;
+  description: string;
+  icdCode: string | null;
+  status: string;
+  diagnosedAt: string;
+  diagnosedByName: string | null;
+}
+
+export interface SurgicalHistorySummary {
+  id: string;
+  patientId: string;
+  hospitalId: string | null;
+  hospitalName: string | null;
+  procedureCode: string | null;
+  procedureDisplay: string;
+  procedureDate: string | null;
+  outcome: string | null;
+  performedBy: string | null;
+  location: string | null;
+  notes: string | null;
+}
+
+export interface FamilyHistorySummary {
+  id: string;
+  relationship: string;
+  relativeName: string | null;
+  relativeGender: string | null;
+  relativeLiving: boolean | null;
+  relativeAge: number | null;
+  relativeAgeAtDeath: number | null;
+  causeOfDeath: string | null;
+  conditionCode: string | null;
+  conditionDisplay: string | null;
+  conditionCategory: string | null;
+  ageAtOnset: number | null;
+  severity: string | null;
+  notes: string | null;
+  active: boolean | null;
+}
+
+export interface SocialHistorySummary {
+  id: string;
+  tobaccoUse: boolean | null;
+  tobaccoType: string | null;
+  tobaccoPacksPerDay: number | null;
+  tobaccoYearsUsed: number | null;
+  tobaccoQuitDate: string | null;
+  tobaccoNotes: string | null;
+  alcoholUse: boolean | null;
+  alcoholFrequency: string | null;
+  alcoholDrinksPerWeek: number | null;
+  alcoholBingeDrinking: boolean | null;
+  alcoholNotes: string | null;
+  recreationalDrugUse: boolean | null;
+  exerciseFrequency: string | null;
+  exerciseType: string | null;
+  occupation: string | null;
+  employmentStatus: string | null;
+  maritalStatus: string | null;
+  active: boolean | null;
+}
+
 interface ApiWrapper<T> {
   data: T;
   success: boolean;
@@ -1213,5 +1278,31 @@ export class PatientPortalService {
         ApiWrapper<PreCheckInResponse>
       >(`${this.base}/appointments/${appointmentId}/pre-checkin`, dto)
       .pipe(map((r) => r.data));
+  }
+
+  // ── Medical & Family History ───────────────────────────────────────
+
+  getMyMedicalHistory(): Observable<PatientDiagnosisSummary[]> {
+    return this.http
+      .get<ApiWrapper<PatientDiagnosisSummary[]>>(`${this.base}/medical-history`)
+      .pipe(map((r) => r.data ?? []));
+  }
+
+  getMySurgicalHistory(): Observable<SurgicalHistorySummary[]> {
+    return this.http
+      .get<ApiWrapper<SurgicalHistorySummary[]>>(`${this.base}/surgical-history`)
+      .pipe(map((r) => r.data ?? []));
+  }
+
+  getMyFamilyHistory(): Observable<FamilyHistorySummary[]> {
+    return this.http
+      .get<ApiWrapper<FamilyHistorySummary[]>>(`${this.base}/family-history`)
+      .pipe(map((r) => r.data ?? []));
+  }
+
+  getMySocialHistory(): Observable<SocialHistorySummary | null> {
+    return this.http
+      .get<ApiWrapper<SocialHistorySummary | null>>(`${this.base}/social-history`)
+      .pipe(map((r) => r.data ?? null));
   }
 }

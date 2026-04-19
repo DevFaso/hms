@@ -402,7 +402,11 @@
       "ALLERGIES": "Alergias",
       "PROBLEMS": "Problemas",
       "SURGICAL_HISTORY": "Antecedentes quirúrgicos",
-      "ADVANCE_DIRECTIVES": "Directivas anticipadas"
+      "ADVANCE_DIRECTIVES": "Directivas anticipadas",
+      "ENCOUNTER_HISTORY": "Historial de consultas",
+      "VITAL_SIGNS": "Signos vitales",
+      "IMMUNIZATIONS": "Inmunizaciones",
+      "INSURANCES": "Información de seguros"
     }
   },
   "SHARED_RECORDS": {

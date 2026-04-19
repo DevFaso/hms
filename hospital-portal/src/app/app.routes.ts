@@ -118,6 +118,15 @@ export const routes: Routes = [
           ),
       },
       {
+        path: 'my-medical-history',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-medical-history/my-medical-history.component').then(
+            (m) => m.MyMedicalHistoryComponent,
+          ),
+      },
+      {
         path: 'my-sharing',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },

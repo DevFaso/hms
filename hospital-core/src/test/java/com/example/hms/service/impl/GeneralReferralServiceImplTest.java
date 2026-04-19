@@ -497,14 +497,282 @@ class GeneralReferralServiceImplTest {
 
     @Test
     void getReferralsByHospital_scopedWithStatus() {
-        UUID activeHospId = UUID.randomUUID();
-
-        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        UUID activeHospId = UUID.randomUUID();        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
         when(referralRepository.findByHospitalIdAndStatusOrderByCreatedAtDesc(activeHospId, ReferralStatus.SUBMITTED))
             .thenReturn(List.of());
 
         List<GeneralReferralResponseDTO> result = generalReferralService.getReferralsByHospital(UUID.randomUUID(), "submitted");
         assertThat(result).isEmpty();
         verify(referralRepository).findByHospitalIdAndStatusOrderByCreatedAtDesc(activeHospId, ReferralStatus.SUBMITTED);
+    }
+
+    @Test
+    void getReferralsByHospital_includesIncomingReferrals() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID incomingReferralId = UUID.randomUUID();
+
+        GeneralReferral incoming = buildReferral(incomingReferralId);
+        incoming.setStatus(ReferralStatus.SUBMITTED);
+        incoming.setReceivingHospital(buildHospital(hospitalId, "My Hospital"));
+
+        when(referralRepository.findByHospitalIdOrderByCreatedAtDesc(hospitalId)).thenReturn(List.of());
+        when(referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(hospitalId)).thenReturn(List.of(incoming));
+
+        List<GeneralReferralResponseDTO> results = generalReferralService.getReferralsByHospital(hospitalId, null);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getId()).isEqualTo(incomingReferralId);
+        verify(referralRepository).findByReceivingHospitalIdOrderByCreatedAtDesc(hospitalId);
+    }
+
+    @Test
+    void getReferralsByHospital_deduplicatesReferralPresentInBothOutgoingAndIncoming() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID sharedReferralId = UUID.randomUUID();
+
+        GeneralReferral referral = buildReferral(sharedReferralId);
+        referral.setStatus(ReferralStatus.SUBMITTED);
+        referral.setCreatedAt(LocalDateTime.now());
+
+        when(referralRepository.findByHospitalIdOrderByCreatedAtDesc(hospitalId)).thenReturn(List.of(referral));
+        when(referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(hospitalId)).thenReturn(List.of(referral));
+
+        List<GeneralReferralResponseDTO> results = generalReferralService.getReferralsByHospital(hospitalId, null);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getId()).isEqualTo(sharedReferralId);
+    }
+
+    @Test
+    void getReferralsByHospital_scopedIncludesIncomingViaReceivingHospitalQuery() {
+        UUID activeHospId = UUID.randomUUID();
+        UUID incomingReferralId = UUID.randomUUID();
+
+        GeneralReferral incoming = buildReferral(incomingReferralId);
+        incoming.setStatus(ReferralStatus.SUBMITTED);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(referralRepository.findByHospitalIdOrderByCreatedAtDesc(activeHospId)).thenReturn(List.of());
+        when(referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(activeHospId)).thenReturn(List.of(incoming));
+
+        List<GeneralReferralResponseDTO> results = generalReferralService.getReferralsByHospital(UUID.randomUUID(), null);
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getId()).isEqualTo(incomingReferralId);
+        verify(referralRepository).findByReceivingHospitalIdOrderByCreatedAtDesc(activeHospId);
+    }
+
+    @Test
+    void getReferralsByHospital_excludesDraftIncomingReferrals() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID draftIncomingId = UUID.randomUUID();
+
+        GeneralReferral draftIncoming = buildReferral(draftIncomingId);
+        // status defaults to DRAFT — should be filtered from incoming
+
+        when(referralRepository.findByHospitalIdOrderByCreatedAtDesc(hospitalId)).thenReturn(List.of());
+        when(referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(hospitalId)).thenReturn(List.of(draftIncoming));
+
+        List<GeneralReferralResponseDTO> results = generalReferralService.getReferralsByHospital(hospitalId, null);
+
+        assertThat(results).isEmpty();
+    }
+
+    // ── getReferralsByHospital incoming + status ─────────────────────────
+
+    @Test
+    void getReferralsByHospital_statusFilter_includesIncomingReferrals() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID incomingId = UUID.randomUUID();
+
+        GeneralReferral incoming = buildReferral(incomingId);
+        incoming.setStatus(ReferralStatus.SUBMITTED);
+
+        when(referralRepository.findByHospitalIdAndStatusOrderByCreatedAtDesc(hospitalId, ReferralStatus.SUBMITTED))
+            .thenReturn(List.of());
+        when(referralRepository.findByReceivingHospitalIdAndStatusOrderByCreatedAtDesc(hospitalId, ReferralStatus.SUBMITTED))
+            .thenReturn(List.of(incoming));
+
+        List<GeneralReferralResponseDTO> results = generalReferralService.getReferralsByHospital(hospitalId, "submitted");
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getId()).isEqualTo(incomingId);
+        verify(referralRepository).findByReceivingHospitalIdAndStatusOrderByCreatedAtDesc(hospitalId, ReferralStatus.SUBMITTED);
+    }
+
+    @Test
+    void getReferralsByHospital_scopedStatusFilter_includesIncomingReferrals() {
+        UUID activeHospId = UUID.randomUUID();
+        UUID incomingId = UUID.randomUUID();
+
+        GeneralReferral incoming = buildReferral(incomingId);
+        incoming.setStatus(ReferralStatus.ACKNOWLEDGED);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(referralRepository.findByHospitalIdAndStatusOrderByCreatedAtDesc(activeHospId, ReferralStatus.ACKNOWLEDGED))
+            .thenReturn(List.of());
+        when(referralRepository.findByReceivingHospitalIdAndStatusOrderByCreatedAtDesc(activeHospId, ReferralStatus.ACKNOWLEDGED))
+            .thenReturn(List.of(incoming));
+
+        List<GeneralReferralResponseDTO> results = generalReferralService.getReferralsByHospital(UUID.randomUUID(), "acknowledged");
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getId()).isEqualTo(incomingId);
+        verify(referralRepository).findByReceivingHospitalIdAndStatusOrderByCreatedAtDesc(activeHospId, ReferralStatus.ACKNOWLEDGED);
+    }
+
+    // ── getAllReferrals ───────────────────────────────────────────────────
+
+    @Test
+    void getAllReferrals_unscopedNoStatus_delegatesToFindAll() {
+        GeneralReferral referral = buildReferral(UUID.randomUUID());
+
+        when(referralRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(referral));
+
+        List<GeneralReferralResponseDTO> results = generalReferralService.getAllReferrals(null);
+
+        assertThat(results).hasSize(1);
+        verify(referralRepository).findAllByOrderByCreatedAtDesc();
+    }
+
+    @Test
+    void getAllReferrals_unscopedWithStatus_delegatesToFindByStatus() {
+        GeneralReferral referral = buildReferral(UUID.randomUUID());
+        referral.setStatus(ReferralStatus.SUBMITTED);
+
+        when(referralRepository.findByStatusOrderByCreatedAtDesc(ReferralStatus.SUBMITTED))
+            .thenReturn(List.of(referral));
+
+        List<GeneralReferralResponseDTO> results = generalReferralService.getAllReferrals("submitted");
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getStatus()).isEqualTo(ReferralStatus.SUBMITTED);
+        verify(referralRepository).findByStatusOrderByCreatedAtDesc(ReferralStatus.SUBMITTED);
+    }
+
+    @Test
+    void getAllReferrals_scoped_delegatesToGetReferralsByHospital() {
+        UUID activeHospId = UUID.randomUUID();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(referralRepository.findByHospitalIdOrderByCreatedAtDesc(activeHospId)).thenReturn(List.of());
+        when(referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(activeHospId)).thenReturn(List.of());
+
+        List<GeneralReferralResponseDTO> results = generalReferralService.getAllReferrals(null);
+
+        assertThat(results).isEmpty();
+        verify(referralRepository).findByHospitalIdOrderByCreatedAtDesc(activeHospId);
+    }
+
+    // ── getOverdueReferrals scoped ───────────────────────────────────────
+
+    @Test
+    void getOverdueReferrals_scopedDelegatesToHospitalRepository() {
+        UUID activeHospId = UUID.randomUUID();
+        GeneralReferral overdue = buildReferral(UUID.randomUUID());
+        overdue.submit();
+        overdue.setSlaDueAt(LocalDateTime.now().minusDays(1));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(referralRepository.findOverdueReferralsByHospital(any(UUID.class), any(LocalDateTime.class)))
+            .thenReturn(List.of(overdue));
+
+        List<GeneralReferralResponseDTO> results = generalReferralService.getOverdueReferrals();
+
+        assertThat(results).hasSize(1);
+        assertThat(results.get(0).getIsOverdue()).isTrue();
+        verify(referralRepository).findOverdueReferralsByHospital(any(UUID.class), any(LocalDateTime.class));
+    }
+
+    // ── findReferral access-control conditions ───────────────────────────
+
+    @Test
+    void findReferral_scopedUserIsSendingHospital_allowsAccess() {
+        UUID referralId = UUID.randomUUID();
+        UUID activeHospId = UUID.randomUUID();
+
+        GeneralReferral referral = buildReferral(referralId);
+        referral.setHospital(buildHospital(activeHospId, "Sending Hospital"));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(referralRepository.save(referral)).thenReturn(referral);
+
+        // completeReferral calls findReferral internally
+        GeneralReferralResponseDTO result = generalReferralService.completeReferral(referralId, "Done", null);
+
+        assertNotNull(result);
+        assertEquals(referralId, result.getId());
+    }
+
+    @Test
+    void findReferral_scopedUserIsReceivingHospital_allowsAccess() {
+        UUID referralId = UUID.randomUUID();
+        UUID activeHospId = UUID.randomUUID();
+        UUID otherHospId = UUID.randomUUID();
+
+        GeneralReferral referral = buildReferral(referralId);
+        referral.setHospital(buildHospital(otherHospId, "Sending Hospital"));
+        referral.setReceivingHospital(buildHospital(activeHospId, "Receiving Hospital"));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(referralRepository.save(referral)).thenReturn(referral);
+
+        GeneralReferralResponseDTO result = generalReferralService.completeReferral(referralId, "Done", null);
+
+        assertNotNull(result);
+    }
+
+    @Test
+    void findReferral_scopedUserIsNeitherHospital_throwsNotFound() {
+        UUID referralId = UUID.randomUUID();
+        UUID activeHospId = UUID.randomUUID();
+        UUID sendingHospId = UUID.randomUUID();
+        UUID receivingHospId = UUID.randomUUID();
+
+        GeneralReferral referral = buildReferral(referralId);
+        referral.setHospital(buildHospital(sendingHospId, "Sending Hospital"));
+        referral.setReceivingHospital(buildHospital(receivingHospId, "Receiving Hospital"));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> generalReferralService.completeReferral(referralId, "Done", null));
+    }
+
+    @Test
+    void findReferral_scopedHospitalNullButReceivingMatches_allowsAccess() {
+        UUID referralId = UUID.randomUUID();
+        UUID activeHospId = UUID.randomUUID();
+
+        GeneralReferral referral = buildReferral(referralId);
+        referral.setHospital(null);  // hospital is null — isSendingHospital evaluates to false safely
+        referral.setReceivingHospital(buildHospital(activeHospId, "Receiving Hospital"));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(referralRepository.save(referral)).thenReturn(referral);
+
+        GeneralReferralResponseDTO result = generalReferralService.completeReferral(referralId, "Done", null);
+
+        assertNotNull(result);
+    }
+
+    @Test
+    void findReferral_scopedBothHospitalsNullThrowsNotFound() {
+        UUID referralId = UUID.randomUUID();
+        UUID activeHospId = UUID.randomUUID();
+
+        GeneralReferral referral = buildReferral(referralId);
+        referral.setHospital(null);
+        referral.setReceivingHospital(null);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> generalReferralService.completeReferral(referralId, "Done", null));
     }
 }

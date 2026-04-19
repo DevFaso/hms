@@ -158,6 +158,15 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final QuestionnaireResponseRepository questionnaireResponseRepository;
     private final QuestionnaireMapper questionnaireMapper;
 
+    // Medical & Family History
+    private final com.example.hms.repository.PatientDiagnosisRepository patientDiagnosisRepository;
+    private final com.example.hms.repository.PatientSurgicalHistoryRepository surgicalHistoryRepository;
+    private final com.example.hms.repository.FamilyHistoryRepository familyHistoryRepository;
+    private final com.example.hms.repository.SocialHistoryRepository socialHistoryRepository;
+    private final com.example.hms.mapper.PatientSurgicalHistoryMapper surgicalHistoryMapper;
+    private final com.example.hms.mapper.FamilyHistoryMapper familyHistoryMapper;
+    private final com.example.hms.mapper.SocialHistoryMapper socialHistoryMapper;
+
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
 
@@ -1399,5 +1408,56 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             patientRepository.save(patient);
         }
         return changed;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Medical & Family History
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.portal.PatientDiagnosisSummaryDTO> getMyMedicalHistory(Authentication auth) {
+        Patient patient = findPatient(auth);
+        return patientDiagnosisRepository.findByPatient_IdOrderByDiagnosedAtDesc(patient.getId())
+                .stream()
+                .map(d -> com.example.hms.payload.dto.portal.PatientDiagnosisSummaryDTO.builder()
+                        .id(d.getId())
+                        .description(d.getDescription())
+                        .icdCode(d.getIcdCode())
+                        .status(d.getStatus())
+                        .diagnosedAt(d.getDiagnosedAt())
+                        .diagnosedByName(d.getDiagnosedBy() != null ? d.getDiagnosedBy().getFullName() : null)
+                        .build())
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.PatientSurgicalHistoryResponseDTO> getMySurgicalHistory(Authentication auth) {
+        Patient patient = findPatient(auth);
+        return surgicalHistoryRepository.findByPatient_Id(patient.getId())
+                .stream()
+                .map(surgicalHistoryMapper::toResponseDto)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.medicalhistory.FamilyHistoryResponseDTO> getMyFamilyHistory(Authentication auth) {
+        Patient patient = findPatient(auth);
+        return familyHistoryRepository.findByPatient_IdOrderByRecordedDateDesc(patient.getId())
+                .stream()
+                .map(familyHistoryMapper::toResponseDTO)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.medicalhistory.SocialHistoryResponseDTO getMySocialHistory(Authentication auth) {
+        Patient patient = findPatient(auth);
+        return socialHistoryRepository
+                .findFirstByPatient_IdAndActiveTrueOrderByRecordedDateDesc(patient.getId())
+                .map(socialHistoryMapper::toResponseDTO)
+                .orElse(null);
     }
 }

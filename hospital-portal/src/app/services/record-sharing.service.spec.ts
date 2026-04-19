@@ -211,5 +211,22 @@ describe('RecordSharingService', () => {
       expect(req.request.method).toBe('GET');
       req.flush(mockPage);
     });
+
+    it('should GET /patient-consents/to-hospital/:id when toHospitalId is provided', () => {
+      const mockPage = { content: [mockConsent], totalElements: 1, totalPages: 1 };
+
+      service.listConsents({ page: 0, size: 10, toHospitalId: 'h2' }).subscribe((res) => {
+        expect(res.content[0].id).toBe('c1');
+      });
+
+      const req = httpMock.expectOne(
+        (r) =>
+          r.url === '/patient-consents/to-hospital/h2' &&
+          r.params.get('page') === '0' &&
+          r.params.get('size') === '10',
+      );
+      expect(req.request.method).toBe('GET');
+      req.flush(mockPage);
+    });
   });
 });
