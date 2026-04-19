@@ -180,6 +180,78 @@ class MfaServiceTest {
     }
 
     @Test
+    void verifyEnrollment_noEnrollment_returnsFalse() {
+        when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.empty());
+
+        assertThat(mfaService.verifyEnrollment(userId, "123456")).isFalse();
+    }
+
+    @Test
+    void verifyEnrollment_alreadyVerified_returnsTrue() {
+        UserMfaEnrollment enrollment = UserMfaEnrollment.builder()
+                .user(testUser).method(MfaMethodType.TOTP).verified(true).enabled(true)
+                .totpSecret("SECRET").build();
+
+        when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.of(enrollment));
+
+        assertThat(mfaService.verifyEnrollment(userId, "123456")).isTrue();
+        verify(enrollmentRepository, never()).save(any());
+    }
+
+    @Test
+    void verifyCode_noEnrollment_returnsFalse() {
+        when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.empty());
+
+        assertThat(mfaService.verifyCode(userId, "123456")).isFalse();
+    }
+
+    @Test
+    void verifyCode_notVerified_returnsFalse() {
+        UserMfaEnrollment enrollment = UserMfaEnrollment.builder()
+                .user(testUser).method(MfaMethodType.TOTP).verified(false).enabled(true)
+                .totpSecret("SECRET").build();
+
+        when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.of(enrollment));
+
+        assertThat(mfaService.verifyCode(userId, "123456")).isFalse();
+    }
+
+    @Test
+    void verifyCode_notEnabled_returnsFalse() {
+        UserMfaEnrollment enrollment = UserMfaEnrollment.builder()
+                .user(testUser).method(MfaMethodType.TOTP).verified(true).enabled(false)
+                .totpSecret("SECRET").build();
+
+        when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.of(enrollment));
+
+        assertThat(mfaService.verifyCode(userId, "123456")).isFalse();
+    }
+
+    @Test
+    void verifyBackupCode_emptyList_returnsFalse() {
+        when(backupCodeRepository.findByUserIdAndUsedFalse(userId))
+                .thenReturn(List.of());
+
+        assertThat(mfaService.verifyBackupCode(userId, "12345678")).isFalse();
+    }
+
+    @Test
+    void isMfaEnabled_notEnabled_returnsFalse() {
+        UserMfaEnrollment enrollment = UserMfaEnrollment.builder()
+                .user(testUser).method(MfaMethodType.TOTP).verified(true).enabled(false).build();
+
+        when(enrollmentRepository.findByUserIdAndMethod(userId, MfaMethodType.TOTP))
+                .thenReturn(Optional.of(enrollment));
+
+        assertThat(mfaService.isMfaEnabled(userId)).isFalse();
+    }
+
+    @Test
     void regenerateBackupCodes_deletesOldAndCreatesNew() {
         when(backupCodeRepository.save(any(MfaBackupCode.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
