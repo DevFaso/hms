@@ -512,6 +512,7 @@ class GeneralReferralServiceImplTest {
         UUID incomingReferralId = UUID.randomUUID();
 
         GeneralReferral incoming = buildReferral(incomingReferralId);
+        incoming.setStatus(ReferralStatus.SUBMITTED);
         incoming.setReceivingHospital(buildHospital(hospitalId, "My Hospital"));
 
         when(referralRepository.findByHospitalIdOrderByCreatedAtDesc(hospitalId)).thenReturn(List.of());
@@ -530,6 +531,7 @@ class GeneralReferralServiceImplTest {
         UUID sharedReferralId = UUID.randomUUID();
 
         GeneralReferral referral = buildReferral(sharedReferralId);
+        referral.setStatus(ReferralStatus.SUBMITTED);
         referral.setCreatedAt(LocalDateTime.now());
 
         when(referralRepository.findByHospitalIdOrderByCreatedAtDesc(hospitalId)).thenReturn(List.of(referral));
@@ -547,6 +549,7 @@ class GeneralReferralServiceImplTest {
         UUID incomingReferralId = UUID.randomUUID();
 
         GeneralReferral incoming = buildReferral(incomingReferralId);
+        incoming.setStatus(ReferralStatus.SUBMITTED);
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(activeHospId);
         when(referralRepository.findByHospitalIdOrderByCreatedAtDesc(activeHospId)).thenReturn(List.of());
@@ -557,6 +560,22 @@ class GeneralReferralServiceImplTest {
         assertThat(results).hasSize(1);
         assertThat(results.get(0).getId()).isEqualTo(incomingReferralId);
         verify(referralRepository).findByReceivingHospitalIdOrderByCreatedAtDesc(activeHospId);
+    }
+
+    @Test
+    void getReferralsByHospital_excludesDraftIncomingReferrals() {
+        UUID hospitalId = UUID.randomUUID();
+        UUID draftIncomingId = UUID.randomUUID();
+
+        GeneralReferral draftIncoming = buildReferral(draftIncomingId);
+        // status defaults to DRAFT — should be filtered from incoming
+
+        when(referralRepository.findByHospitalIdOrderByCreatedAtDesc(hospitalId)).thenReturn(List.of());
+        when(referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(hospitalId)).thenReturn(List.of(draftIncoming));
+
+        List<GeneralReferralResponseDTO> results = generalReferralService.getReferralsByHospital(hospitalId, null);
+
+        assertThat(results).isEmpty();
     }
 
     // ── getReferralsByHospital incoming + status ─────────────────────────

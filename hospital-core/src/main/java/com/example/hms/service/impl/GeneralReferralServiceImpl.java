@@ -208,6 +208,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             outgoing = referralRepository.findByHospitalIdOrderByCreatedAtDesc(effectiveHospitalId);
             incoming = referralRepository.findByReceivingHospitalIdOrderByCreatedAtDesc(effectiveHospitalId);
         }
+        // Exclude DRAFT incoming referrals — drafts are unsent and only visible to the sender
+        incoming = incoming.stream()
+            .filter(r -> r.getStatus() != ReferralStatus.DRAFT)
+            .toList();
         // Merge outgoing and incoming, dedup by ID, sort newest-first
         Map<UUID, GeneralReferral> merged = new LinkedHashMap<>();
         outgoing.forEach(r -> merged.put(r.getId(), r));
