@@ -694,4 +694,40 @@ public class PatientPortalController {
         PreCheckInResponseDTO result = portalService.submitPreCheckIn(auth, dto);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponseWrapper.success(result));
     }
+
+    // ══════════════════════════════════════════════════════════════════════
+    // Medical & Family History
+    // ══════════════════════════════════════════════════════════════════════
+
+    @Operation(summary = "Get my medical history (diagnoses)")
+    @GetMapping("/medical-history")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<com.example.hms.payload.dto.portal.PatientDiagnosisSummaryDTO>>> getMyMedicalHistory(
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMyMedicalHistory(auth)));
+    }
+
+    @Operation(summary = "Get my surgical history")
+    @GetMapping("/surgical-history")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<com.example.hms.payload.dto.PatientSurgicalHistoryResponseDTO>>> getMySurgicalHistory(
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMySurgicalHistory(auth)));
+    }
+
+    @Operation(summary = "Get my family history")
+    @GetMapping("/family-history")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<com.example.hms.payload.dto.medicalhistory.FamilyHistoryResponseDTO>>> getMyFamilyHistory(
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMyFamilyHistory(auth)));
+    }
+
+    @Operation(summary = "Get my social history")
+    @GetMapping("/social-history")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<com.example.hms.payload.dto.medicalhistory.SocialHistoryResponseDTO>> getMySocialHistory(
+            Authentication auth) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMySocialHistory(auth)));
+    }
 }

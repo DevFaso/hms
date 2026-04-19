@@ -143,6 +143,12 @@ export class ShellComponent implements OnInit, OnDestroy {
           route: '/my-records',
         },
         {
+          icon: 'medical_information',
+          label: 'Medical History',
+          translationKey: 'NAV.MEDICAL_HISTORY',
+          route: '/my-medical-history',
+        },
+        {
           icon: 'share',
           label: 'Record Sharing',
           translationKey: 'NAV.RECORD_SHARING',

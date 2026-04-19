@@ -1,0 +1,312 @@
+<div class="portal-page">
+  <div class="portal-page-header">
+    <h1>
+      <span class="material-symbols-outlined">medical_information</span>
+      {{ 'PORTAL.MEDICAL_HISTORY.TITLE' | translate }}
+    </h1>
+  </div>
+
+  @if (loading()) {
+    <div class="portal-loading">
+      <div class="portal-spinner"></div>
+      <p>{{ 'PORTAL.MEDICAL_HISTORY.LOADING' | translate }}</p>
+    </div>
+  } @else {
+    <!-- Medical History -->
+    <section class="history-section">
+      <h2 class="section-heading">
+        <span class="material-symbols-outlined" style="color: #2563eb">diagnosis</span>
+        {{ 'PORTAL.MEDICAL_HISTORY.MEDICAL' | translate }}
+      </h2>
+
+      @if (medicalHistory().length === 0) {
+        <p class="empty-message">{{ 'PORTAL.MEDICAL_HISTORY.NO_MEDICAL' | translate }}</p>
+      } @else {
+        <div class="history-table-wrap">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>{{ 'PORTAL.MEDICAL_HISTORY.DIAGNOSIS' | translate }}</th>
+                <th>{{ 'PORTAL.MEDICAL_HISTORY.DATE' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of medicalHistory(); track item.id) {
+                <tr>
+                  <td>{{ item.description }}</td>
+                  <td>{{ item.diagnosedAt | date: 'MM/dd/yyyy' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <div class="personal-notes">
+        <button class="notes-link" (click)="toggleNoteEdit('medical')">
+          {{ 'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_MEDICAL' | translate }}
+        </button>
+        <p class="notes-disclaimer">
+          {{ 'PORTAL.MEDICAL_HISTORY.NOTES_DISCLAIMER' | translate }}
+        </p>
+        @if (editingSection() === 'medical') {
+          <textarea
+            class="notes-textarea"
+            [value]="medicalNotes()"
+            (input)="onNoteChange('medical', $any($event.target).value)"
+            rows="3"
+          ></textarea>
+        } @else if (medicalNotes()) {
+          <p class="notes-content">{{ medicalNotes() }}</p>
+        }
+        <button class="notes-add-btn" (click)="toggleNoteEdit('medical')">
+          <span class="material-symbols-outlined">add</span>
+          {{
+            editingSection() === 'medical'
+              ? ('PORTAL.MEDICAL_HISTORY.SAVE' | translate)
+              : ('PORTAL.MEDICAL_HISTORY.ADD' | translate)
+          }}
+        </button>
+      </div>
+    </section>
+
+    <!-- Surgical History -->
+    <section class="history-section">
+      <h2 class="section-heading">
+        <span class="material-symbols-outlined" style="color: #7c3aed">surgical</span>
+        {{ 'PORTAL.MEDICAL_HISTORY.SURGICAL' | translate }}
+      </h2>
+
+      @if (surgicalHistory().length === 0) {
+        <div class="empty-state-card">
+          <span class="material-symbols-outlined empty-icon">schedule</span>
+          <p>{{ 'PORTAL.MEDICAL_HISTORY.NO_SURGICAL' | translate }}</p>
+        </div>
+      } @else {
+        <div class="history-table-wrap">
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>{{ 'PORTAL.MEDICAL_HISTORY.PROCEDURE' | translate }}</th>
+                <th>{{ 'PORTAL.MEDICAL_HISTORY.DATE' | translate }}</th>
+                <th>{{ 'PORTAL.MEDICAL_HISTORY.OUTCOME' | translate }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of surgicalHistory(); track item.id) {
+                <tr>
+                  <td>{{ item.procedureDisplay }}</td>
+                  <td>{{ item.procedureDate | date: 'MM/dd/yyyy' }}</td>
+                  <td>{{ item.outcome || '-' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+
+      <div class="personal-notes">
+        <button class="notes-link" (click)="toggleNoteEdit('surgical')">
+          {{ 'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_SURGICAL' | translate }}
+        </button>
+        <p class="notes-disclaimer">
+          {{ 'PORTAL.MEDICAL_HISTORY.NOTES_DISCLAIMER' | translate }}
+        </p>
+        @if (editingSection() === 'surgical') {
+          <textarea
+            class="notes-textarea"
+            [value]="surgicalNotes()"
+            (input)="onNoteChange('surgical', $any($event.target).value)"
+            rows="3"
+          ></textarea>
+        } @else if (surgicalNotes()) {
+          <p class="notes-content">{{ surgicalNotes() }}</p>
+        }
+        <button class="notes-add-btn" (click)="toggleNoteEdit('surgical')">
+          <span class="material-symbols-outlined">add</span>
+          {{
+            editingSection() === 'surgical'
+              ? ('PORTAL.MEDICAL_HISTORY.SAVE' | translate)
+              : ('PORTAL.MEDICAL_HISTORY.ADD' | translate)
+          }}
+        </button>
+      </div>
+    </section>
+
+    <!-- Family History -->
+    <section class="history-section">
+      <h2 class="section-heading">
+        <span class="material-symbols-outlined" style="color: #059669">family_restroom</span>
+        {{ 'PORTAL.MEDICAL_HISTORY.FAMILY' | translate }}
+      </h2>
+
+      @if (familyHistory().length === 0) {
+        <div class="empty-state-card">
+          <span class="material-symbols-outlined empty-icon">schedule</span>
+          <p>{{ 'PORTAL.MEDICAL_HISTORY.NO_FAMILY' | translate }}</p>
+        </div>
+      } @else {
+        <div class="portal-list">
+          @for (item of familyHistory(); track item.id) {
+            <div class="portal-list-item">
+              <div class="pli-icon" style="background: #d1fae5; color: #059669">
+                <span class="material-symbols-outlined">person</span>
+              </div>
+              <div class="pli-body">
+                <span class="pli-title"
+                  >{{ item.relationship
+                  }}{{ item.relativeName ? ' — ' + item.relativeName : '' }}</span
+                >
+                <span class="pli-sub">{{
+                  item.conditionDisplay || item.conditionCode || '-'
+                }}</span>
+                @if (item.ageAtOnset) {
+                  <span class="pli-meta"
+                    >{{ 'PORTAL.MEDICAL_HISTORY.AGE_AT_ONSET' | translate }}:
+                    {{ item.ageAtOnset }}</span
+                  >
+                }
+              </div>
+              @if (item.severity) {
+                <span class="portal-status-chip" [attr.data-status]="item.severity">{{
+                  item.severity
+                }}</span>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      <div class="personal-notes">
+        <button class="notes-link" (click)="toggleNoteEdit('family')">
+          {{ 'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_FAMILY' | translate }}
+        </button>
+        <p class="notes-disclaimer">
+          {{ 'PORTAL.MEDICAL_HISTORY.NOTES_DISCLAIMER' | translate }}
+        </p>
+        @if (editingSection() === 'family') {
+          <textarea
+            class="notes-textarea"
+            [value]="familyNotes()"
+            (input)="onNoteChange('family', $any($event.target).value)"
+            rows="3"
+          ></textarea>
+        } @else if (familyNotes()) {
+          <p class="notes-content">{{ familyNotes() }}</p>
+        }
+        <button class="notes-add-btn" (click)="toggleNoteEdit('family')">
+          <span class="material-symbols-outlined">add</span>
+          {{
+            editingSection() === 'family'
+              ? ('PORTAL.MEDICAL_HISTORY.SAVE' | translate)
+              : ('PORTAL.MEDICAL_HISTORY.ADD' | translate)
+          }}
+        </button>
+      </div>
+    </section>
+
+    <!-- Social History -->
+    <section class="history-section">
+      <h2 class="section-heading">
+        <span class="material-symbols-outlined" style="color: #d97706">groups</span>
+        {{ 'PORTAL.MEDICAL_HISTORY.SOCIAL' | translate }}
+      </h2>
+
+      @if (!socialHistory()) {
+        <div class="empty-state-card">
+          <span class="material-symbols-outlined empty-icon">schedule</span>
+          <p>{{ 'PORTAL.MEDICAL_HISTORY.NO_SOCIAL' | translate }}</p>
+        </div>
+      } @else {
+        <div class="social-cards">
+          <div class="social-card">
+            <h3>{{ 'PORTAL.MEDICAL_HISTORY.SMOKING_TOBACCO' | translate }}</h3>
+            <div class="social-field">
+              <span class="social-label">{{
+                'PORTAL.MEDICAL_HISTORY.TOBACCO_USE' | translate
+              }}</span>
+              <span class="social-value">{{ getTobaccoStatus() }}</span>
+            </div>
+            @if (socialHistory()?.tobaccoType) {
+              <div class="social-field">
+                <span class="social-label">{{
+                  'PORTAL.MEDICAL_HISTORY.TOBACCO_TYPES' | translate
+                }}</span>
+                <span class="social-value">{{ socialHistory()?.tobaccoType }}</span>
+              </div>
+            }
+            @if (socialHistory()?.tobaccoQuitDate) {
+              <div class="social-field">
+                <span class="social-label">{{
+                  'PORTAL.MEDICAL_HISTORY.QUIT_DATE' | translate
+                }}</span>
+                <span class="social-value">{{
+                  socialHistory()?.tobaccoQuitDate | date: 'MM/dd/yyyy'
+                }}</span>
+              </div>
+            }
+          </div>
+
+          <div class="social-card">
+            <h3>{{ 'PORTAL.MEDICAL_HISTORY.SMOKELESS_TOBACCO' | translate }}</h3>
+            <div class="social-field">
+              <span class="social-label">{{
+                'PORTAL.MEDICAL_HISTORY.SMOKELESS_USE' | translate
+              }}</span>
+              <span class="social-value">{{
+                socialHistory()?.tobaccoUse === false
+                  ? 'Never'
+                  : socialHistory()?.tobaccoType || '-'
+              }}</span>
+            </div>
+          </div>
+
+          <div class="social-card">
+            <h3>{{ 'PORTAL.MEDICAL_HISTORY.ALCOHOL' | translate }}</h3>
+            <div class="social-field">
+              <span class="social-label">{{
+                'PORTAL.MEDICAL_HISTORY.ALCOHOL_USE' | translate
+              }}</span>
+              <span class="social-value">{{ getAlcoholStatus() || '-' }}</span>
+            </div>
+            @if (socialHistory()?.alcoholDrinksPerWeek) {
+              <div class="social-field">
+                <span class="social-label">{{
+                  'PORTAL.MEDICAL_HISTORY.DRINKS_PER_WEEK' | translate
+                }}</span>
+                <span class="social-value">{{ socialHistory()?.alcoholDrinksPerWeek }}</span>
+              </div>
+            }
+          </div>
+        </div>
+      }
+
+      <div class="personal-notes">
+        <button class="notes-link" (click)="toggleNoteEdit('social')">
+          {{ 'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_SOCIAL' | translate }}
+        </button>
+        <p class="notes-disclaimer">
+          {{ 'PORTAL.MEDICAL_HISTORY.NOTES_DISCLAIMER' | translate }}
+        </p>
+        @if (editingSection() === 'social') {
+          <textarea
+            class="notes-textarea"
+            [value]="socialNotes()"
+            (input)="onNoteChange('social', $any($event.target).value)"
+            rows="3"
+          ></textarea>
+        } @else if (socialNotes()) {
+          <p class="notes-content">{{ socialNotes() }}</p>
+        }
+        <button class="notes-add-btn" (click)="toggleNoteEdit('social')">
+          <span class="material-symbols-outlined">add</span>
+          {{
+            editingSection() === 'social'
+              ? ('PORTAL.MEDICAL_HISTORY.SAVE' | translate)
+              : ('PORTAL.MEDICAL_HISTORY.ADD' | translate)
+          }}
+        </button>
+      </div>
+    </section>
+  }
+</div>
