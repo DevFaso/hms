@@ -24,6 +24,8 @@ import java.util.UUID;
 @Transactional
 public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemService {
 
+    private static final String MEDICATION_CATALOG_NOT_FOUND = "medication.catalog.notfound";
+
     private final MedicationCatalogItemRepository catalogRepository;
     private final HospitalRepository hospitalRepository;
     private final MedicationCatalogItemMapper mapper;
@@ -45,7 +47,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     @Transactional(readOnly = true)
     public MedicationCatalogItemResponseDTO getById(UUID id, UUID hospitalId) {
         MedicationCatalogItem item = catalogRepository.findByIdAndHospital_Id(id, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND));
         return mapper.toResponseDTO(item);
     }
 
@@ -73,7 +75,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     @Override
     public MedicationCatalogItemResponseDTO update(UUID id, MedicationCatalogItemRequestDTO dto) {
         MedicationCatalogItem existing = catalogRepository.findByIdAndHospital_Id(id, dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND));
 
         existing.setNameFr(dto.getNameFr());
         existing.setGenericName(dto.getGenericName());
@@ -98,7 +100,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     @Override
     public void deactivate(UUID id, UUID hospitalId) {
         MedicationCatalogItem item = catalogRepository.findByIdAndHospital_Id(id, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND));
         item.setActive(false);
         catalogRepository.save(item);
         log.info("Deactivated medication catalog item '{}'", item.getNameFr());

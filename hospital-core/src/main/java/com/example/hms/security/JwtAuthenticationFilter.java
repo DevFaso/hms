@@ -67,31 +67,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             // ── WebSocket ticket-based auth (T-38) ──
-            // For /ws-chat/** handshake, accept a single-use ticket instead of a raw JWT
-            // to avoid leaking credentials in query strings, logs, and browser history.
-            if (path != null && path.startsWith("/api/ws-chat")) {
-                String ticket = request.getParameter("ticket");
-                if (StringUtils.hasText(ticket)) {
-                    String username = wsTicketService.redeem(ticket);
-                    if (username != null) {
-                        try {
-                            var userDetails = hospitalUserDetailsService.loadUserByUsername(username);
-                            var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
-                                    userDetails, null, userDetails.getAuthorities());
-                            SecurityContextHolder.getContext().setAuthentication(auth);
-                            log.debug("[WS-TICKET] Authenticated user='{}' via ticket on path={}",
-                                    username, path);
-                            filterChain.doFilter(request, response);
-                            return;
-                        } catch (Exception ex) {
-                            log.warn("[WS-TICKET] Failed to load user for ticket, user='{}': {}",
-                                    username, ex.getMessage());
-                        }
-                    }
-                    log.warn("[WS-TICKET] Invalid or expired ticket on path={}", path);
-                    respondUnauthorized(response, null);
-                    return;
-                }
+            if (path != null && path.startsWith("/api/ws-chat")
+                    && handleWsTicketAuth(request, response, filterChain, path)) {
+                return;
             }
 
             String jwt = getJwtFromRequest(request);
@@ -116,6 +94,36 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 log.trace("[JWT] Completed filter for path={} in {}ms status={}", path, elapsed, response.getStatus());
             }
         }
+    }
+
+    /**
+     * Handle WebSocket ticket-based authentication.
+     * Returns {@code true} if the request was fully handled (authenticated or rejected),
+     * or {@code false} if no ticket was present and normal JWT auth should proceed.
+     */
+    private boolean handleWsTicketAuth(HttpServletRequest request, HttpServletResponse response,
+                                       FilterChain filterChain, String path) throws ServletException, IOException {
+        String ticket = request.getParameter("ticket");
+        if (!StringUtils.hasText(ticket)) {
+            return false; // no ticket — fall through to JWT auth
+        }
+        String username = wsTicketService.redeem(ticket);
+        if (username != null) {
+            try {
+                var userDetails = hospitalUserDetailsService.loadUserByUsername(username);
+                var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        userDetails, null, userDetails.getAuthorities());
+                SecurityContextHolder.getContext().setAuthentication(auth);
+                log.debug("[WS-TICKET] Authenticated user='{}' via ticket on path={}", username, path);
+                filterChain.doFilter(request, response);
+                return true;
+            } catch (Exception ex) {
+                log.warn("[WS-TICKET] Failed to load user for ticket, user='{}': {}", username, ex.getMessage());
+            }
+        }
+        log.warn("[WS-TICKET] Invalid or expired ticket on path={}", path);
+        respondUnauthorized(response, null);
+        return true;
     }
 
     private boolean handleJwtAuthentication(HttpServletRequest request, HttpServletResponse response,

@@ -170,7 +170,7 @@ public class JwtTokenProvider {
         log.info("JWT configured with HMAC-SHA256 ({} bytes) activeProfile={}", keyBytes.length, active);
     }
 
-    static PrivateKey loadPrivateKey(String pem) throws Exception {
+    static PrivateKey loadPrivateKey(String pem) throws java.security.GeneralSecurityException {
         String base64 = pem
                 .replace("-----BEGIN PRIVATE KEY-----", "")
                 .replace("-----END PRIVATE KEY-----", "")
@@ -180,7 +180,7 @@ public class JwtTokenProvider {
         return KeyFactory.getInstance("RSA").generatePrivate(spec);
     }
 
-    static PublicKey loadPublicKey(String pem) throws Exception {
+    static PublicKey loadPublicKey(String pem) throws java.security.GeneralSecurityException {
         String base64 = pem
                 .replace("-----BEGIN PUBLIC KEY-----", "")
                 .replace("-----END PUBLIC KEY-----", "")

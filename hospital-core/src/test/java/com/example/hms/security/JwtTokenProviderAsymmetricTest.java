@@ -11,7 +11,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
-import java.security.interfaces.RSAPublicKey;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,6 +37,7 @@ class JwtTokenProviderAsymmetricTest {
 
     @Nested
     @DisplayName("HMAC fallback (no RSA keys)")
+    @SuppressWarnings("removal")
     class HmacFallback {
 
         @Test
@@ -133,6 +133,7 @@ class JwtTokenProviderAsymmetricTest {
             setRsaKeys(oldKp, null);
             provider.init();
             String oldToken = provider.generateMfaToken("rotationuser");
+            assertThat(oldToken).isNotBlank();
 
             // Now "rotate": new keypair, old public key as previous
             KeyPair newKp = generateRsaKeyPair();

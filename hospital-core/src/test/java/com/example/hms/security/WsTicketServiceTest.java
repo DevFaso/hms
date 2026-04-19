@@ -52,9 +52,10 @@ class WsTicketServiceTest {
     @Test
     void evictExpired_removesOldTickets() {
         // Issue a ticket — it won't be expired yet, so evict shouldn't remove it
-        wsTicketService.issue("user@hms.com");
+        String ticket = wsTicketService.issue("user@hms.com");
         wsTicketService.evictExpired();
-        // Can't easily test expiry without reflection, but at least verify no exception
+        // Ticket should still be redeemable since it hasn't expired
+        assertThat(wsTicketService.redeem(ticket)).isEqualTo("user@hms.com");
     }
 
     @Test

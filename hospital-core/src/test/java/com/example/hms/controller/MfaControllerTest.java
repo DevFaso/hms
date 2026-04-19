@@ -1,7 +1,6 @@
 package com.example.hms.controller;
 
 import com.example.hms.model.User;
-import com.example.hms.payload.dto.mfa.MfaEnrollmentResponse;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.JwtTokenProvider;
@@ -30,7 +29,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -117,7 +115,7 @@ class MfaControllerTest {
 
     @Test
     void verifyEnrollment_validCode_returnsSuccess() throws Exception {
-        when(mfaService.verifyEnrollment(eq(USER_ID), eq("123456"))).thenReturn(true);
+        when(mfaService.verifyEnrollment(USER_ID, "123456")).thenReturn(true);
 
         mockMvc.perform(post("/api/auth/mfa/verify-enrollment")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -128,7 +126,7 @@ class MfaControllerTest {
 
     @Test
     void verifyEnrollment_invalidCode_returnsBadRequest() throws Exception {
-        when(mfaService.verifyEnrollment(eq(USER_ID), eq("000000"))).thenReturn(false);
+        when(mfaService.verifyEnrollment(USER_ID, "000000")).thenReturn(false);
 
         mockMvc.perform(post("/api/auth/mfa/verify-enrollment")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -163,7 +161,7 @@ class MfaControllerTest {
     void verifyMfa_validCode_returnsFullJwt() throws Exception {
         when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
-        when(mfaService.verifyCode(eq(USER_ID), eq("654321"))).thenReturn(true);
+        when(mfaService.verifyCode(USER_ID, "654321")).thenReturn(true);
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
         when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class))).thenReturn("access-jwt");
         when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class))).thenReturn("refresh-jwt");
@@ -192,8 +190,8 @@ class MfaControllerTest {
     void verifyMfa_invalidCode_returns401() throws Exception {
         when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
-        when(mfaService.verifyCode(eq(USER_ID), eq("999999"))).thenReturn(false);
-        when(mfaService.verifyBackupCode(eq(USER_ID), eq("999999"))).thenReturn(false);
+        when(mfaService.verifyCode(USER_ID, "999999")).thenReturn(false);
+        when(mfaService.verifyBackupCode(USER_ID, "999999")).thenReturn(false);
 
         mockMvc.perform(post("/api/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -206,8 +204,8 @@ class MfaControllerTest {
     void verifyMfa_backupCode_succeeds() throws Exception {
         when(jwtTokenProvider.isMfaToken("mfa-tok-123")).thenReturn(true);
         when(jwtTokenProvider.getUsernameFromJWT("mfa-tok-123")).thenReturn(USERNAME);
-        when(mfaService.verifyCode(eq(USER_ID), eq("BACKUP01"))).thenReturn(false);
-        when(mfaService.verifyBackupCode(eq(USER_ID), eq("BACKUP01"))).thenReturn(true);
+        when(mfaService.verifyCode(USER_ID, "BACKUP01")).thenReturn(false);
+        when(mfaService.verifyBackupCode(USER_ID, "BACKUP01")).thenReturn(true);
         when(assignmentRepository.findByUser_IdAndActiveTrue(USER_ID)).thenReturn(List.of());
         when(jwtTokenProvider.generateAccessToken(any(TokenUserDescriptor.class))).thenReturn("access-jwt");
         when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class))).thenReturn("refresh-jwt");

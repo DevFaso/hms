@@ -32,17 +32,17 @@ public class LoginAttemptService {
             return;
         }
         String key = username.toLowerCase();
-        attempts.compute(key, (k, record) -> {
+        attempts.compute(key, (k, attempt) -> {
             long now = System.currentTimeMillis();
-            if (record == null || now - record.windowStart > WINDOW_MS) {
+            if (attempt == null || now - attempt.windowStart > WINDOW_MS) {
                 return new AttemptRecord(now, 1, 0);
             }
-            int newCount = record.failures + 1;
-            long lockUntil = newCount >= MAX_ATTEMPTS ? now + LOCK_DURATION_MS : record.lockedUntil;
+            int newCount = attempt.failures + 1;
+            long lockUntil = newCount >= MAX_ATTEMPTS ? now + LOCK_DURATION_MS : attempt.lockedUntil;
             if (newCount >= MAX_ATTEMPTS) {
                 log.warn("[LOGIN-THROTTLE] Account '{}' locked after {} failed attempts", username, newCount);
             }
-            return new AttemptRecord(record.windowStart, newCount, lockUntil);
+            return new AttemptRecord(attempt.windowStart, newCount, lockUntil);
         });
     }
 
@@ -53,15 +53,15 @@ public class LoginAttemptService {
         if (username == null || username.isBlank()) {
             return false;
         }
-        AttemptRecord record = attempts.get(username.toLowerCase());
-        if (record == null) {
+        AttemptRecord attempt = attempts.get(username.toLowerCase());
+        if (attempt == null) {
             return false;
         }
-        if (record.lockedUntil > 0 && System.currentTimeMillis() < record.lockedUntil) {
+        if (attempt.lockedUntil > 0 && System.currentTimeMillis() < attempt.lockedUntil) {
             return true;
         }
         // Lock expired — clean up
-        if (record.lockedUntil > 0) {
+        if (attempt.lockedUntil > 0) {
             attempts.remove(username.toLowerCase());
         }
         return false;
@@ -74,11 +74,11 @@ public class LoginAttemptService {
         if (username == null || username.isBlank()) {
             return 0;
         }
-        AttemptRecord record = attempts.get(username.toLowerCase());
-        if (record == null || record.lockedUntil == 0) {
+        AttemptRecord attempt = attempts.get(username.toLowerCase());
+        if (attempt == null || attempt.lockedUntil == 0) {
             return 0;
         }
-        long remaining = record.lockedUntil - System.currentTimeMillis();
+        long remaining = attempt.lockedUntil - System.currentTimeMillis();
         return Math.max(0, remaining);
     }
 

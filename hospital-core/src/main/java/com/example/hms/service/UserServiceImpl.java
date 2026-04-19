@@ -773,19 +773,20 @@ public class UserServiceImpl implements UserService {
 
             io.jsonwebtoken.Claims claims;
             java.security.Key vk = jwtTokenProvider.getVerificationKey();
-            if (vk instanceof javax.crypto.SecretKey sk) {
-                claims = io.jsonwebtoken.Jwts.parser()
+            claims = switch (vk) {
+                case javax.crypto.SecretKey sk -> io.jsonwebtoken.Jwts.parser()
                         .verifyWith(sk)
                         .build()
                         .parseSignedClaims(jwt)
                         .getPayload();
-            } else if (vk instanceof java.security.PublicKey pk) {
-                claims = io.jsonwebtoken.Jwts.parser()
+                case java.security.PublicKey pk -> io.jsonwebtoken.Jwts.parser()
                         .verifyWith(pk)
                         .build()
                         .parseSignedClaims(jwt)
                         .getPayload();
-            } else {
+                default -> null;
+            };
+            if (claims == null) {
                 return null;
             }
 

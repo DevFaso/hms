@@ -71,6 +71,8 @@ import java.util.UUID;
 @Slf4j
 public class AuthController {
 
+    private static final String BEARER_PREFIX = "Bearer ";
+
     private final UserRepository userRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
 
@@ -437,7 +439,7 @@ public class AuthController {
         // Blacklist the current access token so it cannot be reused
         String bearerToken = request.getHeader("Authorization");
         String username = null;
-        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+        if (bearerToken != null && bearerToken.startsWith(BEARER_PREFIX)) {
             String jwt = bearerToken.substring(7);
             try {
                 String jti = jwtTokenProvider.getJtiFromToken(jwt);
@@ -765,10 +767,10 @@ public class AuthController {
     @GetMapping("/token/echo")
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Object> echoToken(@RequestHeader(value = "Authorization", required = false) String authz) {
-        if (authz == null || !authz.startsWith("Bearer ")) {
+        if (authz == null || !authz.startsWith(BEARER_PREFIX)) {
             return ResponseEntity.badRequest().body(new MessageResponse("Missing or invalid Authorization header"));
         }
-        String token = authz.substring("Bearer ".length());
+        String token = authz.substring(BEARER_PREFIX.length());
         try {
             boolean valid = jwtTokenProvider.validateToken(token);
             var roles = valid ? jwtTokenProvider.getRolesFromToken(token) : null;

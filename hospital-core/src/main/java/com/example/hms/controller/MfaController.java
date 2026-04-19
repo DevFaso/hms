@@ -39,6 +39,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class MfaController {
 
+    private static final String AUTHENTICATED_USER_NOT_FOUND = "Authenticated user not found";
+
     private final MfaService mfaService;
     private final UserRepository userRepository;
     private final AuditEventLogService auditEventLogService;
@@ -52,7 +54,7 @@ public class MfaController {
     @PostMapping("/enroll")
     public ResponseEntity<Object> enroll(@AuthenticationPrincipal UserDetails principal) {
         User user = userRepository.findByUsername(principal.getUsername())
-                .orElseThrow(() -> new IllegalStateException("Authenticated user not found"));
+                .orElseThrow(() -> new IllegalStateException(AUTHENTICATED_USER_NOT_FOUND));
 
         MfaService.MfaEnrollmentResult result = mfaService.enrollTotp(user);
 
@@ -81,7 +83,7 @@ public class MfaController {
             @Valid @RequestBody MfaVerifyRequest request) {
 
         User user = userRepository.findByUsername(principal.getUsername())
-                .orElseThrow(() -> new IllegalStateException("Authenticated user not found"));
+                .orElseThrow(() -> new IllegalStateException(AUTHENTICATED_USER_NOT_FOUND));
 
         boolean verified = mfaService.verifyEnrollment(user.getId(), request.code());
 
@@ -112,7 +114,7 @@ public class MfaController {
     @GetMapping("/status")
     public ResponseEntity<Object> status(@AuthenticationPrincipal UserDetails principal) {
         User user = userRepository.findByUsername(principal.getUsername())
-                .orElseThrow(() -> new IllegalStateException("Authenticated user not found"));
+                .orElseThrow(() -> new IllegalStateException(AUTHENTICATED_USER_NOT_FOUND));
 
         boolean enabled = mfaService.isMfaEnabled(user.getId());
         return ResponseEntity.ok(Map.of("mfaEnabled", enabled));

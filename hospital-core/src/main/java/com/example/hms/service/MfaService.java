@@ -39,6 +39,7 @@ public class MfaService {
     private static final String ISSUER = "HMS";
     private static final int BACKUP_CODE_COUNT = 10;
     private static final int BACKUP_CODE_LENGTH = 8;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final UserMfaEnrollmentRepository enrollmentRepository;
     private final MfaBackupCodeRepository backupCodeRepository;
@@ -231,7 +232,7 @@ public class MfaService {
         // Delete existing codes
         backupCodeRepository.deleteAllByUserId(userId);
 
-        SecureRandom random = new SecureRandom();
+        SecureRandom random = SECURE_RANDOM;
         List<String> rawCodes = new ArrayList<>(BACKUP_CODE_COUNT);
 
         for (int i = 0; i < BACKUP_CODE_COUNT; i++) {

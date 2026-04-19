@@ -24,6 +24,8 @@ import java.util.UUID;
 @Transactional
 public class PharmacyServiceImpl implements PharmacyService {
 
+    private static final String PHARMACY_NOT_FOUND = "pharmacy.notfound";
+
     private final PharmacyRepository pharmacyRepository;
     private final HospitalRepository hospitalRepository;
     private final PharmacyMapper mapper;
@@ -45,7 +47,7 @@ public class PharmacyServiceImpl implements PharmacyService {
     @Transactional(readOnly = true)
     public PharmacyResponseDTO getById(UUID id, UUID hospitalId) {
         Pharmacy pharmacy = pharmacyRepository.findByIdAndHospital_Id(id, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_NOT_FOUND));
         return mapper.toResponseDTO(pharmacy);
     }
 
@@ -73,7 +75,7 @@ public class PharmacyServiceImpl implements PharmacyService {
     @Override
     public PharmacyResponseDTO update(UUID id, PharmacyRequestDTO dto) {
         Pharmacy existing = pharmacyRepository.findByIdAndHospital_Id(id, dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_NOT_FOUND));
 
         existing.setName(dto.getName());
         existing.setLicenseNumber(dto.getLicenseNumber());
@@ -102,7 +104,7 @@ public class PharmacyServiceImpl implements PharmacyService {
     @Override
     public void deactivate(UUID id, UUID hospitalId) {
         Pharmacy pharmacy = pharmacyRepository.findByIdAndHospital_Id(id, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
+                .orElseThrow(() -> new ResourceNotFoundException(PHARMACY_NOT_FOUND));
         pharmacy.setActive(false);
         pharmacyRepository.save(pharmacy);
         log.info("Deactivated pharmacy '{}'", pharmacy.getName());
