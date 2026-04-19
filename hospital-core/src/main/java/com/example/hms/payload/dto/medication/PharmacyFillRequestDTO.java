@@ -81,6 +81,12 @@ public class PharmacyFillRequestDTO {
     @Size(max = 20)
     private String pharmacyNcpdp;
 
+    @Size(max = 50)
+    private String pharmacyLicense;
+
+    @Size(max = 50)
+    private String facilityCode;
+
     @Size(max = 120)
     private String pharmacyPhone;
 

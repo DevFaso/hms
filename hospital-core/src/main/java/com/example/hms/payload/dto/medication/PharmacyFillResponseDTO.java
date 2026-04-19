@@ -63,6 +63,8 @@ public class PharmacyFillResponseDTO {
     private String pharmacyName;
     private String pharmacyNpi;
     private String pharmacyNcpdp;
+    private String pharmacyLicense;
+    private String facilityCode;
     private String pharmacyPhone;
     private String pharmacyAddress;
 

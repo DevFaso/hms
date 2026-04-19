@@ -1,14 +1,17 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.PharmacyFulfillmentMode;
+import com.example.hms.enums.PharmacyType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
+import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.payload.dto.PharmacyLocationResponseDTO;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientHospitalRegistrationRepository;
 import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.pharmacy.PharmacyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -26,12 +29,10 @@ import java.util.UUID;
 @Slf4j
 public class PharmacyDirectoryServiceImpl implements PharmacyDirectoryService {
 
-    private static final String MAIL_ORDER_NAME = "Direct Mail Order Pharmacy";
-    private static final String MAIL_ORDER_PHONE = "+1-800-555-0100";
-
     private final PatientRepository patientRepository;
     private final HospitalRepository hospitalRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
+    private final PharmacyRepository pharmacyRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -54,10 +55,31 @@ public class PharmacyDirectoryServiceImpl implements PharmacyDirectoryService {
 
         Map<UUID, PharmacyLocationResponseDTO> options = new LinkedHashMap<>();
         addPreferredPharmacy(options, patient);
-        addHospitalDispensary(options, hospital);
-        addMailOrderOption(options, patient);
+        List<Pharmacy> registered = addRegisteredPharmacies(options, hospitalId);
+        boolean hasDispensary = registered.stream()
+            .anyMatch(p -> p.getPharmacyType() == PharmacyType.HOSPITAL_DISPENSARY);
+        if (!hasDispensary) {
+            addHospitalDispensary(options, hospital);
+        }
 
         return List.copyOf(options.values());
+    }
+
+    private List<Pharmacy> addRegisteredPharmacies(Map<UUID, PharmacyLocationResponseDTO> store, UUID hospitalId) {
+        List<Pharmacy> pharmacies = pharmacyRepository.findByHospitalIdAndActiveTrueOrderByNameAsc(hospitalId);
+        for (Pharmacy p : pharmacies) {
+            store.putIfAbsent(p.getId(), PharmacyLocationResponseDTO.builder()
+                .id(p.getId())
+                .name(p.getName())
+                .mode(p.getFulfillmentMode())
+                .addressLine1(trimToNull(p.getAddressLine1()))
+                .city(trimToNull(p.getCity()))
+                .phoneNumber(trimToNull(p.getPhoneNumber()))
+                .supportsEprescribe(Boolean.FALSE)
+                .supportsControlledSubstances(Boolean.FALSE)
+                .build());
+        }
+        return pharmacies;
     }
 
     private void addPreferredPharmacy(Map<UUID, PharmacyLocationResponseDTO> store, Patient patient) {
@@ -93,18 +115,6 @@ public class PharmacyDirectoryServiceImpl implements PharmacyDirectoryService {
             .phoneNumber(trimToNull(hospital.getPhoneNumber()))
             .supportsEprescribe(Boolean.FALSE)
             .supportsControlledSubstances(Boolean.TRUE)
-            .build());
-    }
-
-    private void addMailOrderOption(Map<UUID, PharmacyLocationResponseDTO> store, Patient patient) {
-        UUID id = stableId("mail:" + patient.getId());
-        store.put(id, PharmacyLocationResponseDTO.builder()
-            .id(id)
-            .name(MAIL_ORDER_NAME)
-            .mode(PharmacyFulfillmentMode.MAIL_ORDER)
-            .phoneNumber(MAIL_ORDER_PHONE)
-            .supportsEprescribe(Boolean.TRUE)
-            .supportsControlledSubstances(Boolean.FALSE)
             .build());
     }
 
