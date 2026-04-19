@@ -10,9 +10,15 @@ public enum AuditEventType {
     PASSWORD_CHANGED,
     MFA_CHALLENGE,
     MFA_FAILURE,
+    MFA_ENROLLED,
+    MFA_VERIFIED,
+    MFA_BACKUP_USED,
     ACCOUNT_LOCKED,
     ACCOUNT_UNLOCKED,
     SESSION_TERMINATED,
+    TOKEN_REFRESH,
+    TOKEN_REVOKED,
+    PASSWORD_HISTORY_VIOLATION,
 
     // User & access administration
     USER_CREATE,
@@ -68,6 +74,13 @@ public enum AuditEventType {
     PAYMENT_POSTED,
     REFUND_ISSUED,
     CLAIM_SUBMITTED,
+
+    // Pharmacy & inventory
+    STOCK_RECEIPT,
+    STOCK_ADJUSTMENT,
+    STOCK_TRANSFER,
+    STOCK_RETURN,
+    STOCK_REORDER_ALERT,
 
     // Security & platform configuration
     SECURITY_POLICY_UPDATED,

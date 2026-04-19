@@ -1,0 +1,163 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'PHARMACY.STOCK_ADJUSTMENT_TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PHARMACY.STOCK_ADJUSTMENT_SUBTITLE' | translate }}</p>
+    </div>
+    <div class="header-actions">
+      <select
+        class="pharmacy-select"
+        [(ngModel)]="selectedPharmacyId"
+        (ngModelChange)="onPharmacyChange()"
+      >
+        @for (p of pharmacies(); track p.id) {
+          <option [value]="p.id">{{ p.name }}</option>
+        }
+      </select>
+      <button class="btn-primary" (click)="openForm()">
+        <span class="material-symbols-outlined">swap_vert</span>
+        {{ 'PHARMACY.NEW_TRANSACTION' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Record Transaction Form -->
+  @if (showForm()) {
+    <div class="form-card">
+      <h3>
+        <span class="material-symbols-outlined">swap_vert</span>
+        {{ 'PHARMACY.NEW_TRANSACTION' | translate }}
+      </h3>
+      <form (ngSubmit)="submitForm()">
+        <div class="form-row">
+          <div class="field">
+            <label for="txItem">{{ 'PHARMACY.INVENTORY_ITEM' | translate }} *</label>
+            <select id="txItem" [(ngModel)]="form.inventoryItemId" name="inventoryItemId" required>
+              <option value="">— Select Item —</option>
+              @for (item of inventoryItems(); track item.id) {
+                <option [value]="item.id">
+                  {{ getItemName(item) }} (Qty: {{ item.quantityOnHand }})
+                </option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="txType">{{ 'PHARMACY.TRANSACTION_TYPE' | translate }} *</label>
+            <select id="txType" [(ngModel)]="form.transactionType" name="transactionType" required>
+              <option value="">— Select Type —</option>
+              @for (t of transactionTypes; track t) {
+                <option [value]="t">{{ t }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="txQty">{{ 'PHARMACY.QUANTITY' | translate }} *</label>
+            <input
+              id="txQty"
+              type="number"
+              [(ngModel)]="form.quantity"
+              name="quantity"
+              min="1"
+              required
+            />
+          </div>
+        </div>
+        <div class="field">
+          <label for="txReason">{{ 'PHARMACY.REASON' | translate }}</label>
+          <textarea
+            id="txReason"
+            [(ngModel)]="form.reason"
+            name="reason"
+            rows="2"
+            placeholder="e.g., Physical count discrepancy"
+          ></textarea>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="closeForm()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button type="submit" class="btn-primary" [disabled]="saving()">
+            <span class="material-symbols-outlined">check</span>
+            {{
+              saving() ? ('COMMON.SAVING' | translate) : ('PHARMACY.RECORD_TRANSACTION' | translate)
+            }}
+          </button>
+        </div>
+      </form>
+    </div>
+  }
+
+  <!-- Filter -->
+  <div class="filter-bar">
+    <label for="txFilterType">{{ 'PHARMACY.FILTER_BY_TYPE' | translate }}:</label>
+    <select id="txFilterType" [(ngModel)]="filterType" (ngModelChange)="onFilterChange()">
+      <option value="">{{ 'COMMON.ALL' | translate }}</option>
+      @for (t of transactionTypes; track t) {
+        <option [value]="t">{{ t }}</option>
+      }
+    </select>
+  </div>
+
+  <!-- Transactions List -->
+  @if (txLoading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'COMMON.LOADING' | translate }}</p>
+    </div>
+  } @else if (transactions().length > 0) {
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>{{ 'PHARMACY.TRANSACTION_TYPE' | translate }}</th>
+            <th>{{ 'PHARMACY.QUANTITY' | translate }}</th>
+            <th>{{ 'PHARMACY.LOT_NUMBER' | translate }}</th>
+            <th>{{ 'PHARMACY.REASON' | translate }}</th>
+            <th>{{ 'PHARMACY.DATE' | translate }}</th>
+            <th>{{ 'PHARMACY.PERFORMED_BY' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (tx of transactions(); track tx.id) {
+            <tr>
+              <td>
+                <span class="tx-type" [class]="getTypeClass(tx.transactionType)">
+                  {{ tx.transactionType }}
+                </span>
+              </td>
+              <td>
+                <span class="tx-qty" [class]="getTypeClass(tx.transactionType)">
+                  {{
+                    ['RECEIVE', 'ADJUSTMENT_IN', 'RETURN', 'TRANSFER_IN'].includes(
+                      tx.transactionType
+                    )
+                      ? '+'
+                      : '-'
+                  }}{{ tx.quantity }}
+                </span>
+              </td>
+              <td>
+                @if (tx.stockLotId) {
+                  <span class="code-chip">{{ tx.stockLotId }}</span>
+                } @else {
+                  —
+                }
+              </td>
+              <td class="reason-cell">{{ tx.reason ?? '—' }}</td>
+              <td>{{ tx.createdAt | date: 'medium' }}</td>
+              <td>{{ tx.performedBy ?? '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">swap_vert</span>
+      <h3>{{ 'PHARMACY.NO_TRANSACTIONS' | translate }}</h3>
+      <p>{{ 'PHARMACY.RECORD_FIRST_TRANSACTION' | translate }}</p>
+    </div>
+  }
+</div>

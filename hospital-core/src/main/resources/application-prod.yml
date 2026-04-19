@@ -65,6 +65,8 @@ app:
     enabled: false
     synthetic:
       enabled: false
+  security:
+    totp-encryption-key: ${TOTP_ENCRYPTION_KEY}
   # Frontend base URL used in emails, activation links, and onboarding flows.
   # Set FRONTEND_BASE_URL=https://hms.bitnesttechs.com in Railway env vars.
   frontend:

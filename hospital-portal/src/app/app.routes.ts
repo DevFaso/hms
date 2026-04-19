@@ -14,6 +14,15 @@ export const routes: Routes = [
     loadComponent: () => import('./login/login').then((m) => m.Login),
   },
   {
+    path: 'mfa-challenge',
+    loadComponent: () => import('./mfa/mfa-challenge').then((m) => m.MfaChallengeComponent),
+  },
+  {
+    path: 'mfa-enroll',
+    canActivate: [AuthGuard],
+    loadComponent: () => import('./mfa/mfa-enroll').then((m) => m.MfaEnrollComponent),
+  },
+  {
     path: 'reset-password',
     loadComponent: () =>
       import('./reset-password/reset-password').then((m) => m.ResetPasswordComponent),
@@ -814,6 +823,71 @@ export const routes: Routes = [
           import('./reception/reception-cockpit/reception-cockpit.component').then(
             (m) => m.ReceptionCockpitComponent,
           ),
+      },
+
+      // Pharmacy Module
+      {
+        path: 'medication-catalog',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_PHARMACIST', 'ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./pharmacy/medication-catalog').then((m) => m.MedicationCatalogComponent),
+      },
+      {
+        path: 'pharmacy-registry',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./pharmacy/pharmacy-registry').then((m) => m.PharmacyRegistryComponent),
+      },
+      {
+        path: 'pharmacy/inventory',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_INVENTORY_CLERK',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/inventory-dashboard').then((m) => m.InventoryDashboardComponent),
+      },
+      {
+        path: 'pharmacy/goods-receipt',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_INVENTORY_CLERK',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/goods-receipt').then((m) => m.GoodsReceiptComponent),
+      },
+      {
+        path: 'pharmacy/stock-adjustment',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_INVENTORY_CLERK',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/stock-adjustment').then((m) => m.StockAdjustmentComponent),
       },
 
       // Administration

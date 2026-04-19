@@ -1,7 +1,7 @@
 package com.example.hms.mapper.pharmacy;
 
 import com.example.hms.model.pharmacy.InventoryItem;
-import com.example.hms.model.pharmacy.MedicationCatalogItem;
+import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.payload.dto.pharmacy.InventoryItemRequestDTO;
 import com.example.hms.payload.dto.pharmacy.InventoryItemResponseDTO;

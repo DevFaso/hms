@@ -2,6 +2,7 @@ package com.example.hms.model.pharmacy;
 
 import com.example.hms.enums.DispenseStatus;
 import com.example.hms.model.BaseEntity;
+import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.Patient;
 import com.example.hms.model.User;
 import com.example.hms.model.Prescription;
