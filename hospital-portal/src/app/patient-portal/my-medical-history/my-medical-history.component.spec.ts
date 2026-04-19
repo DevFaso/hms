@@ -97,12 +97,22 @@ describe('MyMedicalHistoryComponent', () => {
     expect(component.editingSection()).toBeNull();
   });
 
-  it('should save and load notes from localStorage', () => {
+  it('should save notes encrypted in localStorage', async () => {
     component.onNoteChange('medical', 'test note');
-    component.toggleNoteEdit('medical');
-    component.toggleNoteEdit('medical');
+    // Manually call saveNotes via toggleNoteEdit (which calls void this.saveNotes)
+    component.toggleNoteEdit('medical'); // open
+    component.toggleNoteEdit('medical'); // close → triggers save
+    // Allow async encryption to complete
+    await new Promise((resolve) => setTimeout(resolve, 200));
 
-    expect(localStorage.getItem('portal-notes-medical')).toBe('test note');
+    const stored = localStorage.getItem('portal-notes-medical');
+    expect(stored).toBeTruthy();
+    // Stored value should be encrypted JSON, not plain text
+    expect(stored).not.toBe('test note');
+    const parsed = JSON.parse(stored!);
+    expect(parsed.s).toBeTruthy();
+    expect(parsed.i).toBeTruthy();
+    expect(parsed.c).toBeTruthy();
   });
 
   it('should get notes by section', () => {
