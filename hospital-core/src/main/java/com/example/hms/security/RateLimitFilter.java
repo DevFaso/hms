@@ -46,7 +46,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final Set<String> RATE_LIMITED_PREFIXES = Set.of(
             "/api/auth/login",
             "/api/auth/register",
-            "/api/auth/refresh",
+            "/api/auth/token/refresh",
             "/api/auth/mfa/verify",
             "/api/auth/password"
     );

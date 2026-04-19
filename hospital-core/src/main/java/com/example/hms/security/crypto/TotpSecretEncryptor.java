@@ -34,8 +34,13 @@ public class TotpSecretEncryptor implements AttributeConverter<String, String> {
     private final SecureRandom secureRandom = new SecureRandom();
 
     public TotpSecretEncryptor(
-            @Value("${app.security.totp-encryption-key:0000000000000000000000000000000000000000000000000000000000000000}")
+            @Value("${app.security.totp-encryption-key}")
             String hexKey) {
+        if (hexKey == null || hexKey.isBlank()) {
+            throw new IllegalStateException(
+                    "app.security.totp-encryption-key must be configured. "
+                  + "Generate a 32-byte hex key: openssl rand -hex 32");
+        }
         byte[] keyBytes = hexStringToBytes(hexKey);
         if (keyBytes.length != 32) {
             throw new IllegalArgumentException("TOTP encryption key must be 32 bytes (64 hex chars)");

@@ -216,12 +216,14 @@ export class Login implements OnInit {
                 },
               });
             } else {
-              // User needs to enroll — store the MFA token temporarily so
-              // the enrollment page can authenticate with it.
-              if (res.mfaToken) {
-                this.auth.setToken(res.mfaToken, false);
-              }
-              this.router.navigateByUrl('/mfa-enroll');
+              // User needs to enroll — pass the MFA token via router state
+              // so the enrollment page can authenticate with it.
+              this.router.navigateByUrl('/mfa-enroll', {
+                state: {
+                  mfaToken: res.mfaToken,
+                  username: res.username ?? this.username,
+                },
+              });
             }
             return;
           }

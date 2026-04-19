@@ -2,6 +2,7 @@ import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 
+import { AuthService } from '../auth/auth.service';
 import { MfaService } from '../auth/mfa.service';
 
 /**
@@ -18,6 +19,7 @@ import { MfaService } from '../auth/mfa.service';
 })
 export class MfaEnrollComponent {
   private readonly mfaService = inject(MfaService);
+  private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
 
   /** Wizard step: 'start' | 'qr' | 'verify' | 'backup' */
@@ -34,8 +36,15 @@ export class MfaEnrollComponent {
   /** 6-digit TOTP code entered by user */
   totpCode = '';
 
-  /** Called from the mfaToken (login) or mfaEnrolled=false redirect */
-  mfaToken = ''; // stored from login response
+  constructor() {
+    // Read the temporary MFA token from router state and store it in
+    // sessionStorage so the auth interceptor can authenticate MFA API calls.
+    const nav = this.router.getCurrentNavigation();
+    const mfaToken = nav?.extras?.state?.['mfaToken'] as string | undefined;
+    if (mfaToken) {
+      this.auth.setToken(mfaToken, false);
+    }
+  }
 
   startEnrollment(): void {
     this.loading.set(true);
@@ -80,6 +89,8 @@ export class MfaEnrollComponent {
   }
 
   finish(): void {
+    // Clear the temporary MFA token so the user is not considered authenticated.
+    this.auth.logout();
     this.router.navigateByUrl('/login');
   }
 

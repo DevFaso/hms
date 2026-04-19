@@ -620,4 +620,16 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V50: Schema fixes (Copilot review)
+         - mfa_backup_codes: add missing updated_at column
+         - Drop orphaned hospital.pharmacies table
+         ================================================================= -->
+    <changeSet id="V50-schema-fixes" author="hms-team" runOnChange="false">
+        <sqlFile path="V50__schema_fixes.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
