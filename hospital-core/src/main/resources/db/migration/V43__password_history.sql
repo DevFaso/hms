@@ -3,7 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS security.password_history (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id         UUID NOT NULL REFERENCES core.users(id) ON DELETE CASCADE,
+    user_id         UUID NOT NULL REFERENCES security.users(id) ON DELETE CASCADE,
     password_hash   VARCHAR(255) NOT NULL,
     created_at      TIMESTAMP NOT NULL DEFAULT now()
 );
