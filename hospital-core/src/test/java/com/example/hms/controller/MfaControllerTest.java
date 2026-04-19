@@ -100,6 +100,7 @@ class MfaControllerTest {
     void enroll_returnsSecretAndBackupCodes() throws Exception {
         var result = new MfaService.MfaEnrollmentResult(
                 UUID.randomUUID(), "BASE32SECRET", "otpauth://totp/HMS:doctor@hms.com?secret=BASE32SECRET",
+                "data:image/png;base64,fake",
                 List.of("AAAA1111", "BBBB2222"));
 
         when(mfaService.enrollTotp(any(User.class))).thenReturn(result);

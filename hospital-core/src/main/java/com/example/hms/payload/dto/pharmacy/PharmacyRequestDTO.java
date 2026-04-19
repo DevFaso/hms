@@ -2,6 +2,7 @@ package com.example.hms.payload.dto.pharmacy;
 
 import com.example.hms.enums.PharmacyFulfillmentMode;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -50,11 +51,13 @@ public class PharmacyRequestDTO {
 
     private Double longitude;
 
+    @NotNull(message = "Fulfillment mode is required")
     private PharmacyFulfillmentMode fulfillmentMode;
 
     @Builder.Default
     private int tier = 1;
 
+    @NotNull(message = "Hospital ID is required")
     private UUID hospitalId;
 
     private boolean partnerAgreement;

@@ -13,8 +13,10 @@ import com.example.hms.payload.dto.PlatformServiceUpdateRequestDTO;
 import com.example.hms.service.platform.PlatformRegistryService;
 import com.example.hms.service.platform.discovery.IntegrationDescriptor;
 import com.example.hms.service.platform.discovery.PlatformServiceRegistry;
+import com.example.hms.security.HospitalUserDetailsService;
 import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.security.TokenBlacklistService;
+import com.example.hms.security.WsTicketService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,6 +64,12 @@ class PlatformRegistryControllerTest {
 
     @MockitoBean
     private TokenBlacklistService tokenBlacklistService;
+
+    @MockitoBean
+    private WsTicketService wsTicketService;
+
+    @MockitoBean
+    private HospitalUserDetailsService hospitalUserDetailsService;
 
     @MockitoBean
     private PlatformServiceRegistry platformServiceRegistry;

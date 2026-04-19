@@ -12,6 +12,7 @@ import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.lang.NonNull;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -19,34 +20,47 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Per-user / per-IP API rate-limiting filter using Bucket4j token-bucket algorithm.
+ * Rate-limiting filter for authentication endpoints using Bucket4j token-bucket algorithm.
  * <p>
+ * Only applies to auth-related paths ({@code /api/auth/**}).
  * Authenticated requests are rate-limited per username; anonymous requests per IP.
- * When the limit is exceeded the filter returns {@code 429 Too Many Requests} with
- * a {@code Retry-After} header.
+ * When the limit is exceeded the filter returns {@code 429 Too Many Requests}.
  *
  * <p>Configuration:
  * <ul>
- *   <li>{@code app.rate-limit.requests-per-minute} — default 120</li>
+ *   <li>{@code app.rate-limit.requests-per-minute} — default 30 (for auth endpoints)</li>
+ *   <li>{@code app.rate-limit.trust-proxy} — default false; set true behind a reverse proxy</li>
  * </ul>
- *
- * <p><strong>Limitation:</strong> in-memory; not shared across instances.
  */
 @Slf4j
 @Component
-@Order(Ordered.HIGHEST_PRECEDENCE + 10)  // run after CORS but before security filters
+@Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class RateLimitFilter extends OncePerRequestFilter {
 
-    private final int requestsPerMinute;
-    private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
+    private static final Set<String> RATE_LIMITED_PREFIXES = Set.of(
+            "/api/auth/login",
+            "/api/auth/register",
+            "/api/auth/refresh",
+            "/api/auth/mfa/verify",
+            "/api/auth/password"
+    );
 
-    public RateLimitFilter(@Value("${app.rate-limit.requests-per-minute:120}") int requestsPerMinute) {
+    private final int requestsPerMinute;
+    private final boolean trustProxy;
+    private final Map<String, BucketEntry> buckets = new ConcurrentHashMap<>();
+
+    public RateLimitFilter(
+            @Value("${app.rate-limit.requests-per-minute:30}") int requestsPerMinute,
+            @Value("${app.rate-limit.trust-proxy:false}") boolean trustProxy) {
         this.requestsPerMinute = requestsPerMinute;
-        log.info("[RATE-LIMIT] Configured at {} requests/minute per key", requestsPerMinute);
+        this.trustProxy = trustProxy;
+        log.info("[RATE-LIMIT] Auth endpoints: {} requests/minute, trustProxy={}", requestsPerMinute, trustProxy);
     }
 
     @Override
@@ -54,9 +68,10 @@ public class RateLimitFilter extends OncePerRequestFilter {
                                     @NonNull HttpServletResponse response,
                                     @NonNull FilterChain filterChain) throws ServletException, IOException {
         String key = resolveKey(request);
-        Bucket bucket = buckets.computeIfAbsent(key, k -> createBucket());
+        BucketEntry entry = buckets.computeIfAbsent(key, k -> new BucketEntry(createBucket()));
+        entry.lastAccessed = Instant.now();
 
-        if (bucket.tryConsume(1)) {
+        if (entry.bucket.tryConsume(1)) {
             filterChain.doFilter(request, response);
         } else {
             log.warn("[RATE-LIMIT] 429 for key='{}' path={}", key, request.getRequestURI());
@@ -70,11 +85,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(@NonNull HttpServletRequest request) {
         String path = request.getRequestURI();
-        // Don't rate-limit health checks, actuator, or static assets
-        return path.startsWith("/api/actuator")
-                || path.startsWith("/assets/")
-                || path.startsWith("/static/")
-                || path.equals("/api/actuator/health");
+        // Only rate-limit auth endpoints
+        return RATE_LIMITED_PREFIXES.stream().noneMatch(path::startsWith);
     }
 
     private String resolveKey(HttpServletRequest request) {
@@ -82,12 +94,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
             return "user:" + auth.getName();
         }
-        // Fall back to IP address
-        String forwarded = request.getHeader("X-Forwarded-For");
-        String ip = (forwarded != null && !forwarded.isBlank())
-                ? forwarded.split(",")[0].trim()
-                : request.getRemoteAddr();
-        return "ip:" + ip;
+        // Only trust X-Forwarded-For when explicitly configured behind a trusted proxy
+        if (trustProxy) {
+            String forwarded = request.getHeader("X-Forwarded-For");
+            if (forwarded != null && !forwarded.isBlank()) {
+                return "ip:" + forwarded.split(",")[0].trim();
+            }
+        }
+        return "ip:" + request.getRemoteAddr();
     }
 
     private Bucket createBucket() {
@@ -97,5 +111,27 @@ public class RateLimitFilter extends OncePerRequestFilter {
                         .refillGreedy(requestsPerMinute, Duration.ofMinutes(1))
                         .build())
                 .build();
+    }
+
+    /** Evict stale bucket entries every 5 minutes to prevent unbounded memory growth. */
+    @Scheduled(fixedRate = 300_000)
+    public void evictStaleBuckets() {
+        Instant cutoff = Instant.now().minus(Duration.ofMinutes(5));
+        int before = buckets.size();
+        buckets.entrySet().removeIf(e -> e.getValue().lastAccessed.isBefore(cutoff));
+        int evicted = before - buckets.size();
+        if (evicted > 0) {
+            log.debug("[RATE-LIMIT] Evicted {} stale bucket entries", evicted);
+        }
+    }
+
+    private static class BucketEntry {
+        final Bucket bucket;
+        volatile Instant lastAccessed;
+
+        BucketEntry(Bucket bucket) {
+            this.bucket = bucket;
+            this.lastAccessed = Instant.now();
+        }
     }
 }

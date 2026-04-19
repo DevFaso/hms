@@ -6,8 +6,10 @@ import com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportReques
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportResponseDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentBulkImportResultDTO;
 import com.example.hms.payload.dto.assignment.UserRoleAssignmentMultiRequestDTO;
+import com.example.hms.security.HospitalUserDetailsService;
 import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.security.TokenBlacklistService;
+import com.example.hms.security.WsTicketService;
 import com.example.hms.service.UserRoleHospitalAssignmentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -45,6 +47,12 @@ class UserRoleHospitalAssignmentControllerTest {
 
     @MockitoBean
     private TokenBlacklistService tokenBlacklistService;
+
+    @MockitoBean
+    private WsTicketService wsTicketService;
+
+    @MockitoBean
+    private HospitalUserDetailsService hospitalUserDetailsService;
 
     @Test
     void assignAcrossMultipleScopesReturnsBatchSummary() throws Exception {

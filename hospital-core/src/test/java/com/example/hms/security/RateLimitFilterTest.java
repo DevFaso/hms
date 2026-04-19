@@ -22,15 +22,16 @@ class RateLimitFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new RateLimitFilter(5); // 5 requests per minute for testing
+        filter = new RateLimitFilter(5, false); // 5 requests per minute for testing
         chain = mock(FilterChain.class);
         SecurityContextHolder.clearContext();
     }
 
     @Test
     void allowsRequestsWithinLimit() throws ServletException, IOException {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/patients");
-        request.setServletPath("/api/patients");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/login");
+        request.setServletPath("/api/auth/login");
+        request.setRequestURI("/api/auth/login");
         for (int i = 0; i < 5; i++) {
             MockHttpServletResponse response = new MockHttpServletResponse();
             filter.doFilter(request, response, chain);
@@ -41,8 +42,9 @@ class RateLimitFilterTest {
 
     @Test
     void returns429WhenLimitExceeded() throws ServletException, IOException {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/patients");
-        request.setServletPath("/api/patients");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/login");
+        request.setServletPath("/api/auth/login");
+        request.setRequestURI("/api/auth/login");
         request.setRemoteAddr("10.0.0.1");
 
         // Exhaust the bucket
@@ -63,8 +65,9 @@ class RateLimitFilterTest {
         var auth = new UsernamePasswordAuthenticationToken("doc@hms.com", null, Collections.emptyList());
         SecurityContextHolder.getContext().setAuthentication(auth);
 
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/patients");
-        request.setServletPath("/api/patients");
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/auth/refresh");
+        request.setServletPath("/api/auth/refresh");
+        request.setRequestURI("/api/auth/refresh");
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         filter.doFilter(request, response, chain);
@@ -72,10 +75,10 @@ class RateLimitFilterTest {
     }
 
     @Test
-    void skipsActuatorPaths() {
-        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/actuator/health");
-        request.setServletPath("/api/actuator/health");
-        request.setRequestURI("/api/actuator/health");
+    void skipsNonAuthPaths() {
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/patients");
+        request.setServletPath("/api/patients");
+        request.setRequestURI("/api/patients");
 
         assertThat(filter.shouldNotFilter(request)).isTrue();
     }

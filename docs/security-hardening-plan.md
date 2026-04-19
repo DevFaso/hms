@@ -74,7 +74,7 @@
 | Password history (last 5) | ✅ | | | ✅ Done |
 | MFA enforcement at login | | ✅ TOTP for privileged roles | SMS MFA | ✅ Done |
 | HTTP rate limiting (Bucket4j) | | ✅ | | ✅ Done |
-| Asymmetric JWT (RS256 + JWK) | | | ✅ When multi-service | 🔲 Future |
+| Asymmetric JWT (RS256 + JWK) | | ✅ Implemented | | ✅ Done |
 | WebSocket ticket-based auth | | ✅ | | ✅ Done |
 | Keycloak migration | | | ✅ When SSO needed | 🔲 Future |
 

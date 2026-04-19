@@ -31,7 +31,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     @Override
     public MedicationCatalogItemResponseDTO create(MedicationCatalogItemRequestDTO dto) {
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + dto.getHospitalId()));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
 
         MedicationCatalogItem entity = mapper.toEntity(dto);
         entity.setHospital(hospital);
@@ -45,7 +45,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     @Transactional(readOnly = true)
     public MedicationCatalogItemResponseDTO getById(UUID id, UUID hospitalId) {
         MedicationCatalogItem item = catalogRepository.findByIdAndHospital_Id(id, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Medication catalog item not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
         return mapper.toResponseDTO(item);
     }
 
@@ -73,7 +73,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     @Override
     public MedicationCatalogItemResponseDTO update(UUID id, MedicationCatalogItemRequestDTO dto) {
         MedicationCatalogItem existing = catalogRepository.findByIdAndHospital_Id(id, dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("Medication catalog item not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
 
         existing.setNameFr(dto.getNameFr());
         existing.setGenericName(dto.getGenericName());
@@ -98,7 +98,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     @Override
     public void deactivate(UUID id, UUID hospitalId) {
         MedicationCatalogItem item = catalogRepository.findByIdAndHospital_Id(id, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Medication catalog item not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
         item.setActive(false);
         catalogRepository.save(item);
         log.info("Deactivated medication catalog item '{}'", item.getNameFr());

@@ -1,7 +1,9 @@
 package com.example.hms.model;
 
 import com.example.hms.enums.MfaMethodType;
+import com.example.hms.security.crypto.TotpSecretEncryptor;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -53,6 +55,7 @@ public class UserMfaEnrollment extends BaseEntity {
     @Column(name = "last_verified_at")
     private LocalDateTime lastVerifiedAt;
 
+    @Convert(converter = TotpSecretEncryptor.class)
     @Column(name = "totp_secret", length = 512)
     private String totpSecret;
 

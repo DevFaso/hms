@@ -31,7 +31,7 @@ public class PharmacyServiceImpl implements PharmacyService {
     @Override
     public PharmacyResponseDTO create(PharmacyRequestDTO dto) {
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("Hospital not found: " + dto.getHospitalId()));
+                .orElseThrow(() -> new ResourceNotFoundException("hospital.notfound"));
 
         Pharmacy entity = mapper.toEntity(dto);
         entity.setHospital(hospital);
@@ -45,7 +45,7 @@ public class PharmacyServiceImpl implements PharmacyService {
     @Transactional(readOnly = true)
     public PharmacyResponseDTO getById(UUID id, UUID hospitalId) {
         Pharmacy pharmacy = pharmacyRepository.findByIdAndHospital_Id(id, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Pharmacy not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
         return mapper.toResponseDTO(pharmacy);
     }
 
@@ -73,7 +73,7 @@ public class PharmacyServiceImpl implements PharmacyService {
     @Override
     public PharmacyResponseDTO update(UUID id, PharmacyRequestDTO dto) {
         Pharmacy existing = pharmacyRepository.findByIdAndHospital_Id(id, dto.getHospitalId())
-                .orElseThrow(() -> new ResourceNotFoundException("Pharmacy not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
 
         existing.setName(dto.getName());
         existing.setLicenseNumber(dto.getLicenseNumber());
@@ -102,7 +102,7 @@ public class PharmacyServiceImpl implements PharmacyService {
     @Override
     public void deactivate(UUID id, UUID hospitalId) {
         Pharmacy pharmacy = pharmacyRepository.findByIdAndHospital_Id(id, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("Pharmacy not found: " + id));
+                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
         pharmacy.setActive(false);
         pharmacyRepository.save(pharmacy);
         log.info("Deactivated pharmacy '{}'", pharmacy.getName());

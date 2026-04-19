@@ -65,6 +65,7 @@ class PharmacyRegistryControllerTest {
     void create_returnsCreated() throws Exception {
         PharmacyRequestDTO request = PharmacyRequestDTO.builder()
                 .name("Pharmacie Centrale")
+                .fulfillmentMode(PharmacyFulfillmentMode.COMMUNITY)
                 .hospitalId(hospitalId)
                 .build();
 
@@ -114,6 +115,7 @@ class PharmacyRegistryControllerTest {
     void update_returnsOk() throws Exception {
         PharmacyRequestDTO request = PharmacyRequestDTO.builder()
                 .name("Pharmacie Centrale Updated")
+                .fulfillmentMode(PharmacyFulfillmentMode.COMMUNITY)
                 .hospitalId(hospitalId)
                 .build();
 

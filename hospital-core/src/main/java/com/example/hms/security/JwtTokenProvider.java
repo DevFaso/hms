@@ -589,16 +589,12 @@ public class JwtTokenProvider {
     }
 
     public String getUsernameFromJWT(String token) {
-        Claims claims = jwtParser()
-            .parseSignedClaims(token)
-            .getPayload();
+        Claims claims = parseClaimsWithRotation(token);
         return claims.getSubject();
     }
 
     public Authentication getAuthenticationFromJwt(String token) {
-        Claims claims = jwtParser()
-            .parseSignedClaims(token)
-            .getPayload();
+        Claims claims = parseClaimsWithRotation(token);
 
         String username = claims.getSubject();
 

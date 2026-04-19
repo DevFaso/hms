@@ -34,12 +34,7 @@
       <div class="step-content">
         <p>Scan this QR code with your authenticator app:</p>
         <div class="qr-container">
-          <img
-            [src]="'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + otpauthUri"
-            alt="TOTP QR Code"
-            width="200"
-            height="200"
-          />
+          <img [src]="qrCodeDataUrl" alt="TOTP QR Code" width="200" height="200" />
         </div>
         <p class="manual-entry">
           Or enter this secret manually:

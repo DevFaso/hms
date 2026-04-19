@@ -1,6 +1,7 @@
 package com.example.hms.payload.dto.medication;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,6 +23,7 @@ public class MedicationCatalogItemRequestDTO {
     private String nameFr;
 
     @Size(max = 255)
+    @NotBlank(message = "Generic name is required")
     private String genericName;
 
     @Size(max = 255)
@@ -58,5 +60,6 @@ public class MedicationCatalogItemRequestDTO {
     @Size(max = 1000)
     private String description;
 
+    @NotNull(message = "Hospital ID is required")
     private UUID hospitalId;
 }

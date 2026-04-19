@@ -113,10 +113,13 @@ public class MfaService {
 
         log.info("[MFA] TOTP enrollment started for user={}", userId);
 
+        String qrCodeDataUrl = generateQrCodeDataUrl(qrData.getUri());
+
         return new MfaEnrollmentResult(
                 enrollment.getId(),
                 secret,
                 qrData.getUri(),
+                qrCodeDataUrl,
                 rawBackupCodes
         );
     }
@@ -254,12 +257,33 @@ public class MfaService {
         return sb.toString();
     }
 
+    /**
+     * Generate a QR code as a base64 data URL using ZXing — no external service needed.
+     */
+    private String generateQrCodeDataUrl(String otpauthUri) {
+        try {
+            var hints = new java.util.EnumMap<>(com.google.zxing.EncodeHintType.class);
+            hints.put(com.google.zxing.EncodeHintType.MARGIN, 1);
+            var bitMatrix = new com.google.zxing.qrcode.QRCodeWriter()
+                    .encode(otpauthUri, com.google.zxing.BarcodeFormat.QR_CODE, 200, 200, hints);
+            var image = com.google.zxing.client.j2se.MatrixToImageWriter.toBufferedImage(bitMatrix);
+            var baos = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(image, "PNG", baos);
+            String base64 = java.util.Base64.getEncoder().encodeToString(baos.toByteArray());
+            return "data:image/png;base64," + base64;
+        } catch (Exception e) {
+            log.warn("[MFA] Failed to generate QR code locally, returning empty", e);
+            return "";
+        }
+    }
+
     // ───── Result record ─────
 
     public record MfaEnrollmentResult(
             UUID enrollmentId,
             String secret,
             String otpauthUri,
+            String qrCodeDataUrl,
             List<String> backupCodes
     ) {}
 }

@@ -7,6 +7,7 @@ import { Observable } from 'rxjs';
 export interface MfaEnrollmentResponse {
   secret: string;
   otpauthUri: string;
+  qrCodeDataUrl: string;
   backupCodes: string[];
 }
 

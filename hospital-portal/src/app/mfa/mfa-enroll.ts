@@ -28,6 +28,7 @@ export class MfaEnrollComponent {
 
   secret = '';
   otpauthUri = '';
+  qrCodeDataUrl = '';
   backupCodes: string[] = [];
 
   /** 6-digit TOTP code entered by user */
@@ -43,6 +44,7 @@ export class MfaEnrollComponent {
       next: (res) => {
         this.secret = res.secret;
         this.otpauthUri = res.otpauthUri;
+        this.qrCodeDataUrl = res.qrCodeDataUrl;
         this.backupCodes = res.backupCodes;
         this.step.set('qr');
         this.loading.set(false);

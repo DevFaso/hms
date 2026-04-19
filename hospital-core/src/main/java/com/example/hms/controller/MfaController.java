@@ -67,6 +67,7 @@ public class MfaController {
         return ResponseEntity.ok(new MfaEnrollmentResponse(
                 result.secret(),
                 result.otpauthUri(),
+                result.qrCodeDataUrl(),
                 result.backupCodes()
         ));
     }
@@ -88,7 +89,7 @@ public class MfaController {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                     .userId(user.getId())
                     .userName(user.getUsername())
-                    .eventType(AuditEventType.MFA_ENROLLED)
+                    .eventType(AuditEventType.MFA_VERIFIED)
                     .status(AuditStatus.SUCCESS)
                     .eventDescription("TOTP enrollment verified")
                     .build());

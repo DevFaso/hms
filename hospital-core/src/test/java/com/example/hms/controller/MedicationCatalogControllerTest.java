@@ -67,6 +67,7 @@ class MedicationCatalogControllerTest {
     void create_returnsCreated() throws Exception {
         MedicationCatalogItemRequestDTO request = MedicationCatalogItemRequestDTO.builder()
                 .nameFr("Paracétamol")
+                .genericName("Paracetamol")
                 .hospitalId(hospitalId)
                 .build();
 
@@ -116,6 +117,7 @@ class MedicationCatalogControllerTest {
     void update_returnsOk() throws Exception {
         MedicationCatalogItemRequestDTO request = MedicationCatalogItemRequestDTO.builder()
                 .nameFr("Paracétamol 1g")
+                .genericName("Paracetamol")
                 .hospitalId(hospitalId)
                 .build();
 
