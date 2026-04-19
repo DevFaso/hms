@@ -1,6 +1,9 @@
 package com.example.hms.controller;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.BootstrapSignupRequest;
 import com.example.hms.payload.dto.EmailVerificationRequestDTO;
 import com.example.hms.payload.dto.EmailVerificationResponseDTO;
@@ -17,6 +20,12 @@ import com.example.hms.controller.support.AuthNotificationFacade;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.JwtTokenProvider;
+import com.example.hms.security.LoginAttemptService;
+import com.example.hms.service.PasswordHistoryService;
+import com.example.hms.service.MfaService;
+import com.example.hms.security.WsTicketService;
+import com.example.hms.security.TokenBlacklistService;
+import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.UserCredentialLifecycleService;
 import com.example.hms.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -53,6 +62,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.UUID;
 
@@ -70,7 +80,14 @@ public class AuthController {
 
     private final UserService userService;
     private final UserCredentialLifecycleService userCredentialLifecycleService;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final LoginAttemptService loginAttemptService;
+    private final AuditEventLogService auditEventLogService;
+    private final PasswordHistoryService passwordHistoryService;
+    private final MfaService mfaService;
+    private final WsTicketService wsTicketService;
     private final String frontendBaseUrl;
+    private final List<String> mfaRequiredRoles;
 
     public AuthController(UserRepository userRepository,
             UserRoleHospitalAssignmentRepository assignmentRepository,
@@ -79,7 +96,14 @@ public class AuthController {
             JwtTokenProvider jwtTokenProvider,
             AuthNotificationFacade authNotification,
             UserCredentialLifecycleService userCredentialLifecycleService,
-            @Value("${app.frontend.base-url}") String frontendBaseUrl) {
+            TokenBlacklistService tokenBlacklistService,
+            LoginAttemptService loginAttemptService,
+            AuditEventLogService auditEventLogService,
+            PasswordHistoryService passwordHistoryService,
+            MfaService mfaService,
+            WsTicketService wsTicketService,
+            @Value("${app.frontend.base-url}") String frontendBaseUrl,
+            @Value("${app.mfa.required-roles:}") List<String> mfaRequiredRoles) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
         this.userService = userService;
@@ -87,7 +111,14 @@ public class AuthController {
         this.jwtTokenProvider = jwtTokenProvider;
         this.authNotification = authNotification;
         this.userCredentialLifecycleService = userCredentialLifecycleService;
+        this.tokenBlacklistService = tokenBlacklistService;
+        this.loginAttemptService = loginAttemptService;
+        this.auditEventLogService = auditEventLogService;
+        this.passwordHistoryService = passwordHistoryService;
+        this.mfaService = mfaService;
+        this.wsTicketService = wsTicketService;
         this.frontendBaseUrl = frontendBaseUrl;
+        this.mfaRequiredRoles = mfaRequiredRoles;
     }
 
     /**
@@ -134,6 +165,21 @@ public class AuthController {
         long start = System.nanoTime();
         log.info("🔐 [LOGIN] Attempting login for user='{}' at {}", loginRequest.getUsername(),
                 java.time.Instant.now());
+
+        // ── Lockout check (T-12) ──
+        if (loginAttemptService.isLocked(loginRequest.getUsername())) {
+            long remainMs = loginAttemptService.remainingLockMs(loginRequest.getUsername());
+            long remainMin = Math.max(1, (remainMs + 59_999) / 60_000);
+            log.warn("🔐 [LOGIN] Account '{}' is locked", loginRequest.getUsername());
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.ACCOUNT_LOCKED)
+                    .eventDescription("Login rejected — account locked")
+                    .userName(loginRequest.getUsername())
+                    .status(AuditStatus.FAILURE)
+                    .build());
+            return ResponseEntity.status(423)
+                    .body(new MessageResponse("Account is temporarily locked. Try again in " + remainMin + " minute(s)."));
+        }
 
         try {
             log.debug("🔐 [LOGIN] Authenticating via AuthenticationManager...");
@@ -187,11 +233,40 @@ public class AuthController {
 
             var descriptor = new com.example.hms.security.TokenUserDescriptor(
                     user.getId(), user.getUsername(), effectiveRoles);
+
+            // ── MFA challenge gate (T-28) ──
+            if (mfaService != null && isMfaRequiredForUser(effectiveRoles)) {
+                boolean mfaEnabled = mfaService.isMfaEnabled(user.getId());
+                String mfaToken = jwtTokenProvider.generateMfaToken(user.getUsername());
+
+                auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                        .eventType(AuditEventType.MFA_CHALLENGE)
+                        .eventDescription("MFA challenge issued")
+                        .userName(user.getUsername())
+                        .userId(user.getId())
+                        .status(AuditStatus.PENDING)
+                        .build());
+
+                long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+                log.info("🔐 [LOGIN] MFA required for user='{}', enrolled={} in {}ms",
+                        user.getUsername(), mfaEnabled, elapsedMs);
+
+                var body = JwtResponse.builder()
+                        .mfaRequired(true)
+                        .mfaEnrolled(mfaEnabled)
+                        .mfaToken(mfaToken)
+                        .username(user.getUsername())
+                        .build();
+                // Store selected role in mfa token for later use after verification
+                return ResponseEntity.ok(body);
+            }
+
             String accessToken = jwtTokenProvider.generateAccessToken(descriptor);
             String refreshToken = jwtTokenProvider.generateRefreshToken(descriptor);
             log.debug("🔐 [LOGIN] Tokens generated (effectiveRoles={}); fetching profiles...", effectiveRoles);
 
             userCredentialLifecycleService.recordSuccessfulLogin(user.getId());
+            loginAttemptService.resetAttempts(loginRequest.getUsername());
 
             // Pull details from related profiles
             var patient = user.getPatientProfile();
@@ -243,6 +318,7 @@ public class AuthController {
             return ResponseEntity.ok(body);
 
         } catch (BadCredentialsException ex) {
+            loginAttemptService.recordFailure(loginRequest.getUsername());
             log.warn("🔐 [LOGIN] Bad credentials for user='{}'", loginRequest.getUsername());
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("Invalid username or password."));
@@ -357,7 +433,32 @@ public class AuthController {
     @PostMapping("/logout")
     @Operation(summary = "Logout current user", description = "Clears authentication context on the server side (stateless JWT requires client to discard tokens).")
     @ApiResponse(responseCode = "200", description = "Logout successful", content = @Content(schema = @Schema(implementation = MessageResponse.class)))
-    public ResponseEntity<Object> logout() {
+    public ResponseEntity<Object> logout(HttpServletRequest request) {
+        // Blacklist the current access token so it cannot be reused
+        String bearerToken = request.getHeader("Authorization");
+        String username = null;
+        if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
+            String jwt = bearerToken.substring(7);
+            try {
+                String jti = jwtTokenProvider.getJtiFromToken(jwt);
+                long expMs = jwtTokenProvider.getExpiration(jwt).getTime();
+                username = jwtTokenProvider.getUsernameFromJWT(jwt);
+                if (jti != null) {
+                    tokenBlacklistService.blacklist(jti, expMs);
+                    log.info("[LOGOUT] Blacklisted access token jti={}", jti);
+
+                    auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                            .eventType(AuditEventType.TOKEN_REVOKED)
+                            .eventDescription("Access token revoked on logout (jti=" + jti + ")")
+                            .ipAddress(request.getRemoteAddr())
+                            .status(AuditStatus.SUCCESS)
+                            .userName(username)
+                            .build());
+                }
+            } catch (Exception ex) {
+                log.debug("[LOGOUT] Could not extract jti from token: {}", ex.getMessage());
+            }
+        }
         SecurityContextHolder.clearContext();
         return ResponseEntity.ok(new MessageResponse("Logged out successfully."));
     }
@@ -396,6 +497,14 @@ public class AuthController {
                     .body(new MessageResponse("Refresh token is invalid or has expired. Please log in again."));
         }
 
+        // Replay detection: reject already-used refresh tokens
+        String refreshJti = jwtTokenProvider.getJtiFromToken(refreshToken);
+        if (refreshJti != null && tokenBlacklistService.isBlacklisted(refreshJti)) {
+            log.warn("🔄 [REFRESH] Replay detected — refresh token jti={} already used", refreshJti);
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(new MessageResponse("Refresh token has already been used. Please log in again."));
+        }
+
         String username = jwtTokenProvider.getUsernameFromJWT(refreshToken);
         var user = userRepository.findByUsername(username).orElse(null);
         if (user == null || !user.isActive()) {
@@ -426,11 +535,26 @@ public class AuthController {
                      .toList());
         String newRefreshToken = jwtTokenProvider.generateRefreshToken(refreshAuth);
 
+        // Blacklist the old refresh token to prevent replay
+        if (refreshJti != null) {
+            long oldRefreshExp = jwtTokenProvider.getExpiration(refreshToken).getTime();
+            tokenBlacklistService.blacklist(refreshJti, oldRefreshExp);
+            log.debug("🔄 [REFRESH] Blacklisted old refresh token jti={}", refreshJti);
+        }
+
         long nowMs      = System.currentTimeMillis();
         long accessExp  = jwtTokenProvider.getExpiration(newAccessToken).getTime();
         long refreshExp = jwtTokenProvider.getExpiration(newRefreshToken).getTime();
 
         log.info("🔄 [REFRESH] Tokens rotated for user='{}'", username);
+
+        auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.TOKEN_REFRESH)
+                .eventDescription("Token pair rotated (old refresh jti=" + refreshJti + ")")
+                .userName(username)
+                .userId(user.getId())
+                .status(AuditStatus.SUCCESS)
+                .build());
 
         // Include fresh hospital context so the frontend can re-hydrate
         var hospitalContext = resolveHospitalContext(user.getId());
@@ -536,7 +660,20 @@ public class AuthController {
                     .body(new MessageResponse("New password must differ from the current password."));
         }
 
-        // Update password and clear force-change flag via service
+        // Password history check (T-20) — reject reuse of last 5 passwords
+        if (passwordHistoryService.isPasswordReused(user.getId(), request.newPassword())) {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.PASSWORD_HISTORY_VIOLATION)
+                    .eventDescription("Password change rejected — matches a recent password")
+                    .userName(username)
+                    .userId(user.getId())
+                    .status(AuditStatus.FAILURE)
+                    .build());
+            return ResponseEntity.badRequest()
+                    .body(new MessageResponse("New password must not match any of your last 5 passwords."));
+        }
+
+        // Update password, clear force-change flag, and record in history
         userService.changeOwnPassword(user.getId(), request.newPassword());
 
         log.info("🔑 [CHANGE-PWD] Password changed for user='{}'; forcePasswordChange cleared.", username);
@@ -624,8 +761,9 @@ public class AuthController {
         return ResponseEntity.noContent().build();
     }
 
-    // Temporary diagnostic: validate provided Authorization bearer token
+    // Diagnostic endpoint — restricted to SUPER_ADMIN only (T-15 security hardening)
     @GetMapping("/token/echo")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('SUPER_ADMIN')")
     public ResponseEntity<Object> echoToken(@RequestHeader(value = "Authorization", required = false) String authz) {
         if (authz == null || !authz.startsWith("Bearer ")) {
             return ResponseEntity.badRequest().body(new MessageResponse("Missing or invalid Authorization header"));
@@ -754,6 +892,23 @@ public class AuthController {
 
     // helper methods removed as self-registration is deprecated
 
+    // ── WebSocket ticket (T-37) ──
+
+    /**
+     * Issue a single-use, 1-minute ticket for WebSocket handshake authentication.
+     * The client passes this as {@code ?ticket=<value>} on the {@code /ws-chat} endpoint
+     * instead of sending the JWT as a query parameter.
+     */
+    @PostMapping("/ws-ticket")
+    public ResponseEntity<Map<String, String>> issueWsTicket(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(401).build();
+        }
+        String username = authentication.getName();
+        String ticket = wsTicketService.issue(username);
+        return ResponseEntity.ok(Map.of("ticket", ticket));
+    }
+
     /* ── Hospital assignment context ── */
     private record HospitalContext(UUID primaryHospitalId, String primaryHospitalName,
                                    List<UUID> hospitalIds) {}
@@ -762,6 +917,13 @@ public class AuthController {
      * Resolve hospital context from the user's active tenant role assignments.
      * Returns the primary hospital (first active assignment) and all permitted hospital IDs.
      */
+    private boolean isMfaRequiredForUser(List<String> roles) {
+        if (mfaRequiredRoles == null || mfaRequiredRoles.isEmpty()) {
+            return false;
+        }
+        return roles.stream().anyMatch(mfaRequiredRoles::contains);
+    }
+
     private HospitalContext resolveHospitalContext(UUID userId) {
         var assignments = assignmentRepository.findAllDetailedByUserId(userId).stream()
                 .filter(a -> Boolean.TRUE.equals(a.getActive()) && a.getHospital() != null)

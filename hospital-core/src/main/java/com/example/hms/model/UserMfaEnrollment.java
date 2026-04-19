@@ -53,6 +53,13 @@ public class UserMfaEnrollment extends BaseEntity {
     @Column(name = "last_verified_at")
     private LocalDateTime lastVerifiedAt;
 
+    @Column(name = "totp_secret", length = 512)
+    private String totpSecret;
+
+    @Builder.Default
+    @Column(name = "verified", nullable = false)
+    private boolean verified = false;
+
     @Column(name = "metadata_json")
     private String metadataJson;
 }

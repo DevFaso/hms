@@ -33,6 +33,9 @@ import static com.example.hms.config.SecurityConstants.TOKEN_PREFIX;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
+    private final TokenBlacklistService tokenBlacklistService;
+    private final WsTicketService wsTicketService;
+    private final HospitalUserDetailsService hospitalUserDetailsService;
 
     private static final Set<String> EXACT_SKIP_PATHS = Set.of(
         "/", "/index.html", "/favicon.ico",
@@ -63,6 +66,34 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         try {
+            // ── WebSocket ticket-based auth (T-38) ──
+            // For /ws-chat/** handshake, accept a single-use ticket instead of a raw JWT
+            // to avoid leaking credentials in query strings, logs, and browser history.
+            if (path != null && path.startsWith("/api/ws-chat")) {
+                String ticket = request.getParameter("ticket");
+                if (StringUtils.hasText(ticket)) {
+                    String username = wsTicketService.redeem(ticket);
+                    if (username != null) {
+                        try {
+                            var userDetails = hospitalUserDetailsService.loadUserByUsername(username);
+                            var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                                    userDetails, null, userDetails.getAuthorities());
+                            SecurityContextHolder.getContext().setAuthentication(auth);
+                            log.debug("[WS-TICKET] Authenticated user='{}' via ticket on path={}",
+                                    username, path);
+                            filterChain.doFilter(request, response);
+                            return;
+                        } catch (Exception ex) {
+                            log.warn("[WS-TICKET] Failed to load user for ticket, user='{}': {}",
+                                    username, ex.getMessage());
+                        }
+                    }
+                    log.warn("[WS-TICKET] Invalid or expired ticket on path={}", path);
+                    respondUnauthorized(response, null);
+                    return;
+                }
+            }
+
             String jwt = getJwtFromRequest(request);
 
             if (StringUtils.hasText(jwt)) {
@@ -98,6 +129,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         if (tokenProvider.validateToken(jwt)) {
+            // Reject tokens that have been explicitly revoked (logout / refresh rotation)
+            String jti = tokenProvider.getJtiFromToken(jwt);
+            if (jti != null && tokenBlacklistService.isBlacklisted(jti)) {
+                log.debug("[JWT] Token jti={} is blacklisted, rejecting on path={}", jti, path);
+                respondUnauthorized(response, extractedSubject);
+                return false;
+            }
+
             if (log.isTraceEnabled()) {
                 log.trace("[JWT] Token present and valid (len={})", jwt.length());
             }
@@ -155,19 +194,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith(TOKEN_PREFIX)) {
             return bearerToken.substring(TOKEN_PREFIX.length());
         }
-        // 2. Query-parameter fallback — restricted to WebSocket handshake paths only.
-        //    SockJS initiates plain browser GETs (/ws-chat/info, /ws-chat/…/websocket)
-        //    that bypass Angular's HttpClient interceptor, so the Authorization header
-        //    is never attached. The frontend passes the JWT as ?token= instead.
-        //    We only honour this on /ws-chat/** to avoid credential leakage via access
-        //    logs, browser history, proxies, and Referer headers on other endpoints.
-        String uri = request.getRequestURI();
-        if (uri != null && uri.startsWith("/api/ws-chat")) {
-            String queryToken = request.getParameter("token");
-            if (StringUtils.hasText(queryToken)) {
-                return queryToken;
-            }
-        }
+        // 2. WebSocket handshake paths now use single-use ticket auth (T-38)
+        //    handled earlier in doFilterInternal. No JWT query-param fallback needed.
         return null;
     }
 

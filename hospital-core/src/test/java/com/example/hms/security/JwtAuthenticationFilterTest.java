@@ -31,6 +31,15 @@ class JwtAuthenticationFilterTest {
     @Mock
     private JwtTokenProvider tokenProvider;
 
+    @Mock
+    private TokenBlacklistService tokenBlacklistService;
+
+    @Mock
+    private WsTicketService wsTicketService;
+
+    @Mock
+    private HospitalUserDetailsService hospitalUserDetailsService;
+
     @InjectMocks
     private JwtAuthenticationFilter filter;
 
@@ -109,5 +118,24 @@ class JwtAuthenticationFilterTest {
         verify(tokenProvider, times(2)).getUsernameFromJWT(GHOST_TOKEN);
         verify(chain, never()).doFilter(any(), any());
         assertThat(secondResponse.getStatus()).isEqualTo(SC_UNAUTHORIZED);
+    }
+
+    @Test
+    void shouldRejectBlacklistedToken() throws Exception {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRequestURI(API_PATIENTS);
+        request.addHeader(AUTH_HEADER, BEARER_PREFIX + GHOST_TOKEN);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        FilterChain chain = mock(FilterChain.class);
+
+        when(tokenProvider.validateToken(GHOST_TOKEN)).thenReturn(true);
+        when(tokenProvider.getUsernameFromJWT(GHOST_TOKEN)).thenReturn("user1");
+        when(tokenProvider.getJtiFromToken(GHOST_TOKEN)).thenReturn("blacklisted-jti");
+        when(tokenBlacklistService.isBlacklisted("blacklisted-jti")).thenReturn(true);
+
+        filter.doFilter(request, response, chain);
+
+        verify(chain, never()).doFilter(any(), any());
+        assertThat(response.getStatus()).isEqualTo(SC_UNAUTHORIZED);
     }
 }

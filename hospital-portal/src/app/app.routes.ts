@@ -14,6 +14,15 @@ export const routes: Routes = [
     loadComponent: () => import('./login/login').then((m) => m.Login),
   },
   {
+    path: 'mfa-challenge',
+    loadComponent: () => import('./mfa/mfa-challenge').then((m) => m.MfaChallengeComponent),
+  },
+  {
+    path: 'mfa-enroll',
+    canActivate: [AuthGuard],
+    loadComponent: () => import('./mfa/mfa-enroll').then((m) => m.MfaEnrollComponent),
+  },
+  {
     path: 'reset-password',
     loadComponent: () =>
       import('./reset-password/reset-password').then((m) => m.ResetPasswordComponent),

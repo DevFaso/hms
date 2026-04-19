@@ -91,6 +91,7 @@ public class UserServiceImpl implements UserService {
     private final HospitalRepository hospitalRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final AuditEventLogService auditEventLogService;
+    private final PasswordHistoryService passwordHistoryService;
     private final StaffRepository staffRepository;
     private final JwtTokenProvider jwtTokenProvider;
     private final PatientRepository patientRepository;
@@ -770,11 +771,23 @@ public class UserServiceImpl implements UserService {
             if (jwt == null || jwt.isBlank())
                 return null;
 
-            io.jsonwebtoken.Claims claims = io.jsonwebtoken.Jwts.parser()
-                    .verifyWith(jwtTokenProvider.getSecretKey())
-                    .build()
-                    .parseSignedClaims(jwt)
-                    .getPayload();
+            io.jsonwebtoken.Claims claims;
+            java.security.Key vk = jwtTokenProvider.getVerificationKey();
+            if (vk instanceof javax.crypto.SecretKey sk) {
+                claims = io.jsonwebtoken.Jwts.parser()
+                        .verifyWith(sk)
+                        .build()
+                        .parseSignedClaims(jwt)
+                        .getPayload();
+            } else if (vk instanceof java.security.PublicKey pk) {
+                claims = io.jsonwebtoken.Jwts.parser()
+                        .verifyWith(pk)
+                        .build()
+                        .parseSignedClaims(jwt)
+                        .getPayload();
+            } else {
+                return null;
+            }
 
             Object hId = claims.get("primaryHospitalId");
             if (hId == null) {
@@ -1098,12 +1111,17 @@ public class UserServiceImpl implements UserService {
     public void changeOwnPassword(UUID userId, String newPassword) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException(USER_NOT_FOUND_PREFIX + userId));
-        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        String encodedPassword = passwordEncoder.encode(newPassword);
+        user.setPasswordHash(encodedPassword);
         user.setPasswordChangedAt(LocalDateTime.now());
         user.setForcePasswordChange(false);
         user.setPasswordRotationWarningAt(null);
         user.setPasswordRotationForcedAt(null);
         userRepository.save(user);
+
+        // Record in password history for reuse prevention
+        passwordHistoryService.recordPassword(userId, encodedPassword);
+
         log.info("🔑 [CHANGE-PWD] Password updated and forcePasswordChange cleared for user={}", userId);
     }
 

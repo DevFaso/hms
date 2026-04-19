@@ -1,0 +1,162 @@
+.mfa-enroll-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  padding: 2rem;
+}
+
+.mfa-card {
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  max-width: 480px;
+  width: 100%;
+  padding: 2.5rem;
+}
+
+.mfa-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+
+  svg {
+    color: #2563eb;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    color: #1e293b;
+    margin-top: 0.75rem;
+  }
+}
+
+.error-banner {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+.step-content {
+  text-align: center;
+
+  p {
+    color: #475569;
+    margin-bottom: 1.25rem;
+    line-height: 1.6;
+  }
+}
+
+.qr-container {
+  display: flex;
+  justify-content: center;
+  margin: 1.5rem 0;
+
+  img {
+    border: 4px solid #e2e8f0;
+    border-radius: 12px;
+  }
+}
+
+.manual-entry {
+  font-size: 0.875rem;
+}
+
+.secret-code {
+  display: block;
+  background: #f1f5f9;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 0.9rem;
+  letter-spacing: 2px;
+  margin-top: 0.5rem;
+  word-break: break-all;
+  user-select: all;
+}
+
+.verify-form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.totp-input {
+  font-size: 2rem;
+  text-align: center;
+  letter-spacing: 0.5rem;
+  width: 200px;
+  padding: 0.75rem;
+  border: 2px solid #cbd5e1;
+  border-radius: 10px;
+  outline: none;
+  font-family: 'Fira Code', monospace;
+
+  &:focus {
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  }
+}
+
+.backup-codes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  margin: 1.25rem 0;
+}
+
+.backup-code {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.5rem;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+}
+
+.backup-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 1rem;
+}
+
+.btn-primary {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover:not(:disabled) {
+    background: #1d4ed8;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.btn-secondary {
+  background: #f1f5f9;
+  color: #334155;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.75rem 1.5rem;
+  font-size: 1rem;
+  cursor: pointer;
+
+  &:hover {
+    background: #e2e8f0;
+  }
+}

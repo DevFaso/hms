@@ -540,4 +540,24 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V43: Password history for security hardening
+         ================================================================= -->
+    <changeSet id="V43-password-history" author="hms-team" runOnChange="false">
+        <sqlFile path="V43__password_history.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V44: MFA TOTP secret and backup codes
+         ================================================================= -->
+    <changeSet id="V44-mfa-totp-backup-codes" author="hms-team" runOnChange="false">
+        <sqlFile path="V44__mfa_totp_backup_codes.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>
