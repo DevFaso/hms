@@ -541,19 +541,83 @@
     </changeSet>
 
     <!-- =================================================================
-         V43: Pharmacy Module — Phase 1 Foundation
-         - Seeds 4 new pharmacy roles (PHARMACY_VERIFIER, INVENTORY_CLERK,
-           STORE_MANAGER, CLAIMS_REVIEWER)
-         - Adds pharmacy_license / facility_code to pharmacy_fills
-         - Creates medication_catalog_items, pharmacies, inventory_items,
-           stock_lots, stock_transactions, dispenses tables in clinical
-         - Creates pharmacy_payments, pharmacy_claims tables in billing
+         V43a: Password history for security hardening
+         ================================================================= -->
+    <changeSet id="V43-password-history" author="hms-team" runOnChange="false">
+        <sqlFile path="V43__password_history.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V43b: Pharmacy Module — Phase 1 Foundation
          ================================================================= -->
     <changeSet id="V43-pharmacy-module-phase1" author="hms-team" runOnChange="false">
         <sqlFile path="V43__pharmacy_module_phase1.sql"
                  relativeToChangelogFile="true"
                  splitStatements="true"
                  stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V44: MFA TOTP secret and backup codes
+         ================================================================= -->
+    <changeSet id="V44-mfa-totp-backup-codes" author="hms-team" runOnChange="false">
+        <sqlFile path="V44__mfa_totp_backup_codes.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V45: Pharmacy medication catalog
+         ================================================================= -->
+    <changeSet id="V45-pharmacy-medication-catalog" author="hms-team" runOnChange="false">
+        <sqlFile path="V45__pharmacy_medication_catalog.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V46: Pharmacy registry
+         ================================================================= -->
+    <changeSet id="V46-pharmacy-registry" author="hms-team" runOnChange="false">
+        <sqlFile path="V46__pharmacy_registry.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V47: Pharmacy inventory
+         ================================================================= -->
+    <changeSet id="V47-pharmacy-inventory" author="hms-team" runOnChange="false">
+        <sqlFile path="V47__pharmacy_inventory.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V48: Pharmacy dispense
+         ================================================================= -->
+    <changeSet id="V48-pharmacy-dispense" author="hms-team" runOnChange="false">
+        <sqlFile path="V48__pharmacy_dispense.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V49: Pharmacy payment claims
+         ================================================================= -->
+    <changeSet id="V49-pharmacy-payment-claims" author="hms-team" runOnChange="false">
+        <sqlFile path="V49__pharmacy_payment_claims.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
     </changeSet>
 
 </databaseChangeLog>

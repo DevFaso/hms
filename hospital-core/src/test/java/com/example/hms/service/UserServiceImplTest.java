@@ -68,6 +68,7 @@ class UserServiceImplTest {
     @Mock private JwtTokenProvider jwtTokenProvider;
     @Mock private PatientRepository patientRepository;
     @Mock private PatientHospitalRegistrationRepository patientHospitalRegistrationRepository;
+    @Mock private PasswordHistoryService passwordHistoryService;
 
     @InjectMocks
     private UserServiceImpl userService;

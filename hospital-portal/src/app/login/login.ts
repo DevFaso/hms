@@ -190,6 +190,9 @@ export class Login implements OnInit {
         hospitalIds?: string[];
         roleSelectionRequired?: boolean;
         availableRoles?: string[];
+        mfaRequired?: boolean;
+        mfaEnrolled?: boolean;
+        mfaToken?: string;
       }>('/auth/login', payload)
       .subscribe({
         next: (res) => {
@@ -198,6 +201,28 @@ export class Login implements OnInit {
             this.availableRoles = res.availableRoles;
             this.roleSelectionMode = true;
             this.loading = false;
+            return;
+          }
+
+          // ── MFA gate (T-33): redirect to challenge or enrollment ──
+          if (res?.mfaRequired) {
+            this.loading = false;
+            if (res.mfaEnrolled) {
+              this.router.navigateByUrl('/mfa-challenge', {
+                state: {
+                  mfaToken: res.mfaToken,
+                  mfaEnrolled: true,
+                  username: res.username ?? this.username,
+                },
+              });
+            } else {
+              // User needs to enroll — store the MFA token temporarily so
+              // the enrollment page can authenticate with it.
+              if (res.mfaToken) {
+                this.auth.setToken(res.mfaToken, false);
+              }
+              this.router.navigateByUrl('/mfa-enroll');
+            }
             return;
           }
 

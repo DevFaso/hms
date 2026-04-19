@@ -36,6 +36,7 @@ spring:
     properties:
       hibernate:
         '[format_sql]': false
+        '[hbm2ddl.create_namespaces]': true
 
   # ---- Schema init (runs BEFORE Hibernate DDL, creates custom schemas) ----
   sql:

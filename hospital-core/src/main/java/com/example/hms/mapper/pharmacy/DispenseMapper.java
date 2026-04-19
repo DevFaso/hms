@@ -5,7 +5,7 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.Prescription;
 import com.example.hms.model.User;
 import com.example.hms.model.pharmacy.Dispense;
-import com.example.hms.model.pharmacy.MedicationCatalogItem;
+import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.StockLot;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;

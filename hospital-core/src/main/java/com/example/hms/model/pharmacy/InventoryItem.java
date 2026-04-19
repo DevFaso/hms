@@ -1,6 +1,7 @@
 package com.example.hms.model.pharmacy;
 
 import com.example.hms.model.BaseEntity;
+import com.example.hms.model.medication.MedicationCatalogItem;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
