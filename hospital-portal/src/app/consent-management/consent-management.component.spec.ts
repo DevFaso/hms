@@ -91,7 +91,11 @@ describe('ConsentManagementComponent', () => {
   });
 
   it('calls listConsents on init', () => {
-    expect(sharingStub.listConsents).toHaveBeenCalledWith({ page: 0, size: 20, toHospitalId: 'h1' });
+    expect(sharingStub.listConsents).toHaveBeenCalledWith({
+      page: 0,
+      size: 20,
+      toHospitalId: 'h1',
+    });
   });
 
   it('populates consents signal from response', () => {
