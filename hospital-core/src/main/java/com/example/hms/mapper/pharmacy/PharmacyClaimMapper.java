@@ -49,7 +49,7 @@ public class PharmacyClaimMapper {
             .hospital(hospital)
             .coverageReference(dto.getCoverageReference())
             .claimStatus(dto.getClaimStatus() != null
-                ? PharmacyClaimStatus.valueOf(dto.getClaimStatus()) : PharmacyClaimStatus.DRAFT)
+                ? dto.getClaimStatus() : PharmacyClaimStatus.DRAFT)
             .amount(dto.getAmount())
             .currency(dto.getCurrency() != null ? dto.getCurrency() : "XOF")
             .rejectionReason(dto.getRejectionReason())

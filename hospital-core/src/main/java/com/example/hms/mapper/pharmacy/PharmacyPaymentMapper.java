@@ -1,6 +1,5 @@
 package com.example.hms.mapper.pharmacy;
 
-import com.example.hms.enums.PharmacyPaymentMethod;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Patient;
 import com.example.hms.model.User;
@@ -47,7 +46,7 @@ public class PharmacyPaymentMapper {
             .dispense(dispense)
             .patient(patient)
             .hospital(hospital)
-            .paymentMethod(PharmacyPaymentMethod.valueOf(dto.getPaymentMethod()))
+            .paymentMethod(dto.getPaymentMethod())
             .amount(dto.getAmount())
             .currency(dto.getCurrency() != null ? dto.getCurrency() : "XOF")
             .referenceNumber(dto.getReferenceNumber())

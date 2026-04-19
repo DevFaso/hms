@@ -15,4 +15,6 @@ public interface PharmacyRepository extends JpaRepository<Pharmacy, UUID> {
     Page<Pharmacy> findByHospitalIdAndActiveTrue(UUID hospitalId, Pageable pageable);
 
     List<Pharmacy> findByHospitalIdAndActiveTrue(UUID hospitalId);
+
+    List<Pharmacy> findByHospitalIdAndActiveTrueOrderByNameAsc(UUID hospitalId);
 }

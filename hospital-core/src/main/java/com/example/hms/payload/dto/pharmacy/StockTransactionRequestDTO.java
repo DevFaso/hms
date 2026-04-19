@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.pharmacy;
 
+import com.example.hms.enums.StockTransactionType;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -26,7 +27,7 @@ public class StockTransactionRequestDTO {
     private UUID stockLotId;
 
     @NotNull(message = "Transaction type is required")
-    private String transactionType;
+    private StockTransactionType transactionType;
 
     @NotNull(message = "Quantity is required")
     private BigDecimal quantity;

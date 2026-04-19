@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.pharmacy;
 
+import com.example.hms.enums.PharmacyClaimStatus;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -32,7 +33,7 @@ public class PharmacyClaimRequestDTO {
     @Size(max = 255)
     private String coverageReference;
 
-    private String claimStatus;
+    private PharmacyClaimStatus claimStatus;
 
     @NotNull(message = "Claim amount is required")
     private BigDecimal amount;

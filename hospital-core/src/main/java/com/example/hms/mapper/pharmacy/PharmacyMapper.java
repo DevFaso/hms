@@ -49,7 +49,7 @@ public class PharmacyMapper {
             .hospital(hospital)
             .name(dto.getName())
             .pharmacyType(dto.getPharmacyType() != null
-                ? PharmacyType.valueOf(dto.getPharmacyType()) : PharmacyType.HOSPITAL_DISPENSARY)
+                ? dto.getPharmacyType() : PharmacyType.HOSPITAL_DISPENSARY)
             .licenseNumber(dto.getLicenseNumber())
             .facilityCode(dto.getFacilityCode())
             .phoneNumber(dto.getPhoneNumber())
@@ -61,10 +61,10 @@ public class PharmacyMapper {
             .postalCode(dto.getPostalCode())
             .country(dto.getCountry() != null ? dto.getCountry() : "Burkina Faso")
             .fulfillmentMode(dto.getFulfillmentMode() != null
-                ? PharmacyFulfillmentMode.valueOf(dto.getFulfillmentMode()) : PharmacyFulfillmentMode.OUTPATIENT_HOSPITAL)
+                ? dto.getFulfillmentMode() : PharmacyFulfillmentMode.OUTPATIENT_HOSPITAL)
             .npi(dto.getNpi())
             .ncpdp(dto.getNcpdp())
-            .active(dto.getActive() != null ? dto.getActive() : true)
+            .active(dto.getActive() == null || dto.getActive())
             .build();
     }
 
@@ -73,7 +73,7 @@ public class PharmacyMapper {
             entity.setName(dto.getName());
         }
         if (dto.getPharmacyType() != null) {
-            entity.setPharmacyType(PharmacyType.valueOf(dto.getPharmacyType()));
+            entity.setPharmacyType(dto.getPharmacyType());
         }
         if (dto.getLicenseNumber() != null) {
             entity.setLicenseNumber(dto.getLicenseNumber());
@@ -87,6 +87,22 @@ public class PharmacyMapper {
         if (dto.getEmail() != null) {
             entity.setEmail(dto.getEmail());
         }
+        if (dto.getFulfillmentMode() != null) {
+            entity.setFulfillmentMode(dto.getFulfillmentMode());
+        }
+        if (dto.getNpi() != null) {
+            entity.setNpi(dto.getNpi());
+        }
+        if (dto.getNcpdp() != null) {
+            entity.setNcpdp(dto.getNcpdp());
+        }
+        if (dto.getActive() != null) {
+            entity.setActive(dto.getActive());
+        }
+        updateAddress(entity, dto);
+    }
+
+    private void updateAddress(Pharmacy entity, PharmacyRequestDTO dto) {
         if (dto.getAddressLine1() != null) {
             entity.setAddressLine1(dto.getAddressLine1());
         }
@@ -104,18 +120,6 @@ public class PharmacyMapper {
         }
         if (dto.getCountry() != null) {
             entity.setCountry(dto.getCountry());
-        }
-        if (dto.getFulfillmentMode() != null) {
-            entity.setFulfillmentMode(PharmacyFulfillmentMode.valueOf(dto.getFulfillmentMode()));
-        }
-        if (dto.getNpi() != null) {
-            entity.setNpi(dto.getNpi());
-        }
-        if (dto.getNcpdp() != null) {
-            entity.setNcpdp(dto.getNcpdp());
-        }
-        if (dto.getActive() != null) {
-            entity.setActive(dto.getActive());
         }
     }
 }

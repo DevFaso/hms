@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.pharmacy;
 
+import com.example.hms.enums.DispenseStatus;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -57,7 +58,7 @@ public class DispenseRequestDTO {
     @Size(max = 500)
     private String substitutionReason;
 
-    private String status;
+    private DispenseStatus status;
 
     @Size(max = 1000)
     private String notes;

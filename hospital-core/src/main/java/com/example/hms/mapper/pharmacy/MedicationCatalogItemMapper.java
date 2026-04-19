@@ -48,7 +48,7 @@ public class MedicationCatalogItemMapper {
             .unit(dto.getUnit())
             .rxnormCode(dto.getRxnormCode())
             .description(dto.getDescription())
-            .active(dto.getActive() != null ? dto.getActive() : true)
+            .active(dto.getActive() == null || dto.getActive())
             .build();
     }
 

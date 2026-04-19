@@ -48,7 +48,7 @@ public class InventoryItemMapper {
             .reorderThreshold(dto.getReorderThreshold() != null ? dto.getReorderThreshold() : BigDecimal.ZERO)
             .reorderQuantity(dto.getReorderQuantity() != null ? dto.getReorderQuantity() : BigDecimal.ZERO)
             .unit(dto.getUnit())
-            .active(dto.getActive() != null ? dto.getActive() : true)
+            .active(dto.getActive() == null || dto.getActive())
             .build();
     }
 

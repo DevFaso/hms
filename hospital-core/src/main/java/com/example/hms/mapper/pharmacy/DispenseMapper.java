@@ -68,10 +68,9 @@ public class DispenseMapper {
             .quantityRequested(dto.getQuantityRequested())
             .quantityDispensed(dto.getQuantityDispensed())
             .unit(dto.getUnit())
-            .substitution(dto.getSubstitution() != null ? dto.getSubstitution() : false)
+            .substitution(Boolean.TRUE.equals(dto.getSubstitution()))
             .substitutionReason(dto.getSubstitutionReason())
-            .status(dto.getStatus() != null
-                ? DispenseStatus.valueOf(dto.getStatus()) : DispenseStatus.COMPLETED)
+            .status(dto.getStatus() != null ? dto.getStatus() : DispenseStatus.COMPLETED)
             .notes(dto.getNotes())
             .build();
     }

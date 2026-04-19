@@ -1,5 +1,6 @@
 package com.example.hms.payload.dto.pharmacy;
 
+import com.example.hms.enums.PharmacyPaymentMethod;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -30,7 +31,7 @@ public class PharmacyPaymentRequestDTO {
     private UUID hospitalId;
 
     @NotNull(message = "Payment method is required")
-    private String paymentMethod;
+    private PharmacyPaymentMethod paymentMethod;
 
     @NotNull(message = "Amount is required")
     private BigDecimal amount;

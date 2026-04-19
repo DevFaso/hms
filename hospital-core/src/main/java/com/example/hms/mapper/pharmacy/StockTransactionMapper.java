@@ -1,6 +1,5 @@
 package com.example.hms.mapper.pharmacy;
 
-import com.example.hms.enums.StockTransactionType;
 import com.example.hms.model.User;
 import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.model.pharmacy.StockLot;
@@ -41,7 +40,7 @@ public class StockTransactionMapper {
         return StockTransaction.builder()
             .inventoryItem(inventoryItem)
             .stockLot(stockLot)
-            .transactionType(StockTransactionType.valueOf(dto.getTransactionType()))
+            .transactionType(dto.getTransactionType())
             .quantity(dto.getQuantity())
             .reason(dto.getReason())
             .referenceId(dto.getReferenceId())

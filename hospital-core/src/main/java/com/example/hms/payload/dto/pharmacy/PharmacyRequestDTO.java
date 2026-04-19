@@ -1,5 +1,7 @@
 package com.example.hms.payload.dto.pharmacy;
 
+import com.example.hms.enums.PharmacyFulfillmentMode;
+import com.example.hms.enums.PharmacyType;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -27,7 +29,7 @@ public class PharmacyRequestDTO {
     @Size(max = 255)
     private String name;
 
-    private String pharmacyType;
+    private PharmacyType pharmacyType;
 
     @Size(max = 50)
     private String licenseNumber;
@@ -59,7 +61,7 @@ public class PharmacyRequestDTO {
     @Size(max = 60)
     private String country;
 
-    private String fulfillmentMode;
+    private PharmacyFulfillmentMode fulfillmentMode;
 
     @Size(max = 50)
     private String npi;

@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.PharmacyFulfillmentMode;
+import com.example.hms.enums.PharmacyType;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Hospital;
@@ -54,14 +55,18 @@ public class PharmacyDirectoryServiceImpl implements PharmacyDirectoryService {
 
         Map<UUID, PharmacyLocationResponseDTO> options = new LinkedHashMap<>();
         addPreferredPharmacy(options, patient);
-        addRegisteredPharmacies(options, hospitalId);
-        addHospitalDispensary(options, hospital);
+        List<Pharmacy> registered = addRegisteredPharmacies(options, hospitalId);
+        boolean hasDispensary = registered.stream()
+            .anyMatch(p -> p.getPharmacyType() == PharmacyType.HOSPITAL_DISPENSARY);
+        if (!hasDispensary) {
+            addHospitalDispensary(options, hospital);
+        }
 
         return List.copyOf(options.values());
     }
 
-    private void addRegisteredPharmacies(Map<UUID, PharmacyLocationResponseDTO> store, UUID hospitalId) {
-        List<Pharmacy> pharmacies = pharmacyRepository.findByHospitalIdAndActiveTrue(hospitalId);
+    private List<Pharmacy> addRegisteredPharmacies(Map<UUID, PharmacyLocationResponseDTO> store, UUID hospitalId) {
+        List<Pharmacy> pharmacies = pharmacyRepository.findByHospitalIdAndActiveTrueOrderByNameAsc(hospitalId);
         for (Pharmacy p : pharmacies) {
             store.putIfAbsent(p.getId(), PharmacyLocationResponseDTO.builder()
                 .id(p.getId())
@@ -74,6 +79,7 @@ public class PharmacyDirectoryServiceImpl implements PharmacyDirectoryService {
                 .supportsControlledSubstances(Boolean.FALSE)
                 .build());
         }
+        return pharmacies;
     }
 
     private void addPreferredPharmacy(Map<UUID, PharmacyLocationResponseDTO> store, Patient patient) {
