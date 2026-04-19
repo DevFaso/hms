@@ -825,6 +825,80 @@ export const routes: Routes = [
           ),
       },
 
+      // Pharmacy Module
+      {
+        path: 'medication-catalog',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_DOCTOR',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/medication-catalog').then((m) => m.MedicationCatalogComponent),
+      },
+      {
+        path: 'pharmacy-registry',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/pharmacy-registry').then((m) => m.PharmacyRegistryComponent),
+      },
+      {
+        path: 'pharmacy/inventory',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_INVENTORY_CLERK',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/inventory-dashboard').then((m) => m.InventoryDashboardComponent),
+      },
+      {
+        path: 'pharmacy/goods-receipt',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_INVENTORY_CLERK',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/goods-receipt').then((m) => m.GoodsReceiptComponent),
+      },
+      {
+        path: 'pharmacy/stock-adjustment',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_INVENTORY_CLERK',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/stock-adjustment').then((m) => m.StockAdjustmentComponent),
+      },
+
       // Administration
       {
         path: 'admin',

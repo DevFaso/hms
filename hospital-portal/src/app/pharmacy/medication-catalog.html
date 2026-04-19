@@ -1,0 +1,246 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'PHARMACY.CATALOG_TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PHARMACY.CATALOG_SUBTITLE' | translate }}</p>
+    </div>
+    <button class="btn-primary" (click)="openCreate()">
+      <span class="material-symbols-outlined">add</span>
+      {{ 'PHARMACY.NEW_MEDICATION' | translate }}
+    </button>
+  </div>
+
+  <div class="search-bar">
+    <span class="material-symbols-outlined search-icon">search</span>
+    <input
+      type="text"
+      [placeholder]="'PHARMACY.SEARCH_MEDICATIONS' | translate"
+      [(ngModel)]="searchTerm"
+      (keyup.enter)="onSearch()"
+      (ngModelChange)="onSearch()"
+    />
+  </div>
+
+  @if (loading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'COMMON.LOADING' | translate }}</p>
+    </div>
+  }
+
+  @if (!loading() && filtered().length > 0) {
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>{{ 'PHARMACY.NAME_FR' | translate }}</th>
+            <th>{{ 'PHARMACY.GENERIC_NAME' | translate }}</th>
+            <th>{{ 'PHARMACY.FORM' | translate }}</th>
+            <th>{{ 'PHARMACY.STRENGTH' | translate }}</th>
+            <th>{{ 'PHARMACY.ATC_CODE' | translate }}</th>
+            <th>{{ 'PHARMACY.CATEGORY' | translate }}</th>
+            <th>{{ 'COMMON.STATUS' | translate }}</th>
+            <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of filtered(); track item.id) {
+            <tr>
+              <td>
+                <div class="med-name">{{ item.nameFr }}</div>
+                @if (item.essentialList) {
+                  <span class="badge badge-essential">Essential</span>
+                }
+                @if (item.controlled) {
+                  <span class="badge badge-controlled">Controlled</span>
+                }
+              </td>
+              <td>{{ item.genericName }}</td>
+              <td>{{ item.form ?? '—' }}</td>
+              <td>{{ item.strength ? item.strength + ' ' + (item.strengthUnit ?? '') : '—' }}</td>
+              <td><span class="code-chip">{{ item.atcCode ?? '—' }}</span></td>
+              <td>{{ item.category ?? '—' }}</td>
+              <td>
+                <span class="status-badge" [class.active]="item.active">
+                  {{ item.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
+                </span>
+              </td>
+              <td>
+                <div class="action-group">
+                  <button class="action-link" [title]="'COMMON.EDIT' | translate" (click)="openEdit(item)">
+                    <span class="material-symbols-outlined">edit</span>
+                  </button>
+                  <button class="action-link danger" [title]="'COMMON.DELETE' | translate" (click)="confirmDelete(item)">
+                    <span class="material-symbols-outlined">delete</span>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    @if (totalPages > 1) {
+      <div class="pagination">
+        <button class="btn-secondary btn-sm" [disabled]="currentPage === 0" (click)="prevPage()">
+          <span class="material-symbols-outlined">chevron_left</span>
+        </button>
+        <span class="page-info">{{ currentPage + 1 }} / {{ totalPages }}</span>
+        <button class="btn-secondary btn-sm" [disabled]="currentPage >= totalPages - 1" (click)="nextPage()">
+          <span class="material-symbols-outlined">chevron_right</span>
+        </button>
+      </div>
+    }
+  }
+
+  @if (!loading() && filtered().length === 0) {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">medication</span>
+      <h3>{{ 'PHARMACY.NO_MEDICATIONS' | translate }}</h3>
+      <p>{{ searchTerm ? ('COMMON.TRY_ADJUSTING' | translate) : ('PHARMACY.CREATE_FIRST_MED' | translate) }}</p>
+    </div>
+  }
+
+  <!-- Create / Edit Modal -->
+  @if (showModal()) {
+    <div class="modal-backdrop" (click)="closeModal()" (keydown.escape)="closeModal()" role="presentation" tabindex="-1">
+      <dialog class="modal modal-lg" [open]="showModal()" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()" tabindex="-1">
+        <div class="modal-header">
+          <h2>{{ editing() ? ('PHARMACY.EDIT_MEDICATION' | translate) : ('PHARMACY.NEW_MEDICATION' | translate) }}</h2>
+          <button class="modal-close" (click)="closeModal()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <form (ngSubmit)="submitForm()">
+          <div class="modal-body">
+            <div class="form-row">
+              <div class="field">
+                <label for="nameFr">{{ 'PHARMACY.NAME_FR' | translate }} *</label>
+                <input id="nameFr" type="text" [(ngModel)]="form.nameFr" name="nameFr" required placeholder="e.g., Amoxicilline" />
+              </div>
+              <div class="field">
+                <label for="genericName">{{ 'PHARMACY.GENERIC_NAME' | translate }} *</label>
+                <input id="genericName" type="text" [(ngModel)]="form.genericName" name="genericName" required placeholder="e.g., Amoxicillin" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="brandName">{{ 'PHARMACY.BRAND_NAME' | translate }}</label>
+                <input id="brandName" type="text" [(ngModel)]="form.brandName" name="brandName" />
+              </div>
+              <div class="field">
+                <label for="atcCode">{{ 'PHARMACY.ATC_CODE' | translate }}</label>
+                <input id="atcCode" type="text" [(ngModel)]="form.atcCode" name="atcCode" placeholder="e.g., J01CA04" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="medForm">{{ 'PHARMACY.FORM' | translate }}</label>
+                <select id="medForm" [(ngModel)]="form.form" name="form">
+                  <option value="">— Select —</option>
+                  <option value="TABLET">Tablet</option>
+                  <option value="CAPSULE">Capsule</option>
+                  <option value="SYRUP">Syrup</option>
+                  <option value="INJECTION">Injection</option>
+                  <option value="CREAM">Cream</option>
+                  <option value="OINTMENT">Ointment</option>
+                  <option value="DROPS">Drops</option>
+                  <option value="SUSPENSION">Suspension</option>
+                  <option value="POWDER">Powder</option>
+                  <option value="INHALER">Inhaler</option>
+                  <option value="SUPPOSITORY">Suppository</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="strength">{{ 'PHARMACY.STRENGTH' | translate }}</label>
+                <div class="input-group">
+                  <input id="strength" type="text" [(ngModel)]="form.strength" name="strength" placeholder="e.g., 500" />
+                  <input type="text" [(ngModel)]="form.strengthUnit" name="strengthUnit" placeholder="mg" class="unit-input" />
+                </div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="route">{{ 'PHARMACY.ROUTE' | translate }}</label>
+                <select id="route" [(ngModel)]="form.route" name="route">
+                  <option value="">— Select —</option>
+                  <option value="ORAL">Oral</option>
+                  <option value="INTRAVENOUS">Intravenous</option>
+                  <option value="INTRAMUSCULAR">Intramuscular</option>
+                  <option value="SUBCUTANEOUS">Subcutaneous</option>
+                  <option value="TOPICAL">Topical</option>
+                  <option value="INHALATION">Inhalation</option>
+                  <option value="RECTAL">Rectal</option>
+                  <option value="OPHTHALMIC">Ophthalmic</option>
+                  <option value="OTIC">Otic</option>
+                  <option value="NASAL">Nasal</option>
+                  <option value="OTHER">Other</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="category">{{ 'PHARMACY.CATEGORY' | translate }}</label>
+                <input id="category" type="text" [(ngModel)]="form.category" name="category" placeholder="e.g., Antibiotic" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="field">
+                <label for="rxnormCode">RxNorm Code</label>
+                <input id="rxnormCode" type="text" [(ngModel)]="form.rxnormCode" name="rxnormCode" />
+              </div>
+              <div class="field checkbox-group">
+                <label class="toggle-label">
+                  <input type="checkbox" [(ngModel)]="form.essentialList" name="essentialList" />
+                  {{ 'PHARMACY.ESSENTIAL_LIST' | translate }}
+                </label>
+                <label class="toggle-label">
+                  <input type="checkbox" [(ngModel)]="form.controlled" name="controlled" />
+                  {{ 'PHARMACY.CONTROLLED' | translate }}
+                </label>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="description">{{ 'COMMON.DESCRIPTION' | translate }}</label>
+              <textarea id="description" [(ngModel)]="form.description" name="description" rows="3"></textarea>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeModal()">{{ 'COMMON.CANCEL' | translate }}</button>
+            <button type="submit" class="btn-primary" [disabled]="saving()">
+              {{ saving() ? (editing() ? ('COMMON.SAVING' | translate) : ('COMMON.CREATING' | translate)) : (editing() ? ('COMMON.SAVE_CHANGES' | translate) : ('COMMON.CREATE' | translate)) }}
+            </button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+  }
+
+  <!-- Delete Confirmation -->
+  @if (showDeleteConfirm()) {
+    <div class="modal-backdrop" (click)="cancelDelete()" (keydown.escape)="cancelDelete()" role="presentation" tabindex="-1">
+      <dialog class="modal" [open]="showDeleteConfirm()" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()" tabindex="-1">
+        <div class="modal-header">
+          <h2>{{ 'COMMON.DELETE' | translate }}</h2>
+          <button class="modal-close" (click)="cancelDelete()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="delete-warning">{{ 'PHARMACY.DELETE_MED_CONFIRM' | translate }} <strong>{{ deletingItem()?.nameFr }}</strong>?</p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">{{ 'COMMON.CANCEL' | translate }}</button>
+          <button type="button" class="btn-danger" [disabled]="deleting()" (click)="executeDelete()">
+            {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
+          </button>
+        </div>
+      </dialog>
+    </div>
+  }
+</div>

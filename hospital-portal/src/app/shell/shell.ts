@@ -400,6 +400,50 @@ export class ShellComponent implements OnInit, OnDestroy {
         route: '/audit-logs',
       });
     }
+    // Pharmacy Module
+    if (
+      this.hasAnyRole([
+        'ROLE_PHARMACIST',
+        'ROLE_INVENTORY_CLERK',
+        'ROLE_STORE_MANAGER',
+        'ROLE_HOSPITAL_ADMIN',
+        'ROLE_SUPER_ADMIN',
+      ])
+    ) {
+      items.push(
+        {
+          icon: 'medication',
+          label: 'Medication Catalog',
+          translationKey: 'NAV.MEDICATION_CATALOG',
+          route: '/medication-catalog',
+        },
+        {
+          icon: 'local_pharmacy',
+          label: 'Pharmacy Registry',
+          translationKey: 'NAV.PHARMACY_REGISTRY',
+          route: '/pharmacy-registry',
+        },
+        {
+          icon: 'inventory_2',
+          label: 'Inventory',
+          translationKey: 'NAV.PHARMACY_INVENTORY',
+          route: '/pharmacy/inventory',
+        },
+        {
+          icon: 'add_box',
+          label: 'Goods Receipt',
+          translationKey: 'NAV.GOODS_RECEIPT',
+          route: '/pharmacy/goods-receipt',
+        },
+        {
+          icon: 'swap_vert',
+          label: 'Stock Adjustment',
+          translationKey: 'NAV.STOCK_ADJUSTMENT',
+          route: '/pharmacy/stock-adjustment',
+        },
+      );
+    }
+
     if (this.hasAnyRole(['ROLE_HOSPITAL_ADMIN', 'ROLE_ADMIN', 'ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'])) {
       items.push({
         icon: 'handshake',

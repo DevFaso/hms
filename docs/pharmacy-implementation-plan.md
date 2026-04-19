@@ -404,47 +404,47 @@ Tél: +226 XX XX XX XX
 
 ## 4. Implementation Task List
 
-### Phase 1 — Foundation (Weeks 1–6)
+### Phase 1 — Foundation (Weeks 1–6) ✅ COMPLETE
 
-| # | Task | Layer | Stories | Est |
+| # | Task | Layer | Stories | Status |
 |---|---|---|---|---|
-| T-1 | Define & review pharmacy domain model (ERD, FHIR profiles, security threat model) | Architecture | All | 1w |
-| T-2 | DB migration: `medication_catalog_item` table | DB + Entity | US-1.1 | 2d |
-| T-3 | DB migration: `pharmacy` table (registry) | DB + Entity | US-1.2 | 2d |
-| T-4 | DB migration: `inventory_item`, `stock_lot`, `stock_transaction` tables | DB + Entity | US-2.1–2.4 | 3d |
-| T-5 | DB migration: `dispense` table | DB + Entity | US-3.1–3.5 | 2d |
-| T-6 | DB migration: `pharmacy_payment`, `pharmacy_claim` tables | DB + Entity | US-5.1, US-6.1 | 2d |
-| T-7 | Add new roles to `SecurityConstants.java`: `ROLE_PHARMACY_VERIFIER`, `ROLE_INVENTORY_CLERK`, `ROLE_STORE_MANAGER`, `ROLE_CLAIMS_REVIEWER` | Backend | US-8.2 | 1d |
-| T-8 | ✅ ~~Expand `PharmacyFulfillmentMode` enum with `OUTPATIENT_HOSPITAL`, `PARTNER_PHARMACY`, `MOBILE_OUTREACH`~~ | Backend | US-1.3 | 1d |
-| T-9 | Make NPI/DEA/NCPDP optional in `PharmacyFillRequestDTO`; add local identifier fields | Backend | US-9.1 | 1d |
-| T-10 | Replace hardcoded mail-order in `PharmacyDirectoryServiceImpl` with pharmacy registry lookup | Backend | US-1.2, I-8 | 2d |
+| T-1 | ✅ ~~Define & review pharmacy domain model (ERD, FHIR profiles, security threat model)~~ | Architecture | All | Done |
+| T-2 | ✅ ~~DB migration: `medication_catalog_item` table~~ | DB + Entity | US-1.1 | Done (V43, V45) |
+| T-3 | ✅ ~~DB migration: `pharmacy` table (registry)~~ | DB + Entity | US-1.2 | Done (V43, V46) |
+| T-4 | ✅ ~~DB migration: `inventory_item`, `stock_lot`, `stock_transaction` tables~~ | DB + Entity | US-2.1–2.4 | Done (V43) |
+| T-5 | ✅ ~~DB migration: `dispense` table~~ | DB + Entity | US-3.1–3.5 | Done (V43) |
+| T-6 | ✅ ~~DB migration: `pharmacy_payment`, `pharmacy_claim` tables~~ | DB + Entity | US-5.1, US-6.1 | Done (V43) |
+| T-7 | ✅ ~~Add new roles to `SecurityConstants.java`~~ | Backend | US-8.2 | Done |
+| T-8 | ✅ ~~Expand `PharmacyFulfillmentMode` enum~~ | Backend | US-1.3 | Done |
+| T-9 | ✅ ~~Make NPI/DEA/NCPDP optional; add local identifier fields~~ | Backend | US-9.1 | Done |
+| T-10 | ✅ ~~Replace hardcoded mail-order with pharmacy registry lookup~~ | Backend | US-1.2, I-8 | Done |
 
-### Phase 2 — Medication Catalog & Pharmacy Registry (Weeks 3–8)
+### Phase 2 — Medication Catalog & Pharmacy Registry (Weeks 3–8) — IN PROGRESS
 
-| # | Task | Layer | Stories | Est |
+| # | Task | Layer | Stories | Status |
 |---|---|---|---|---|
-| T-11 | ✅ ~~`MedicationCatalogItem` entity, repository, service, controller, DTO, mapper~~ | Full-stack BE | US-1.1 | 3d |
-| T-12 | ✅ ~~`Pharmacy` entity, repository, service, controller, DTO, mapper~~ | Full-stack BE | US-1.2 | 3d |
-| T-13 | Medication catalog admin UI (Angular) | Frontend | US-1.1 | 3d |
-| T-14 | Pharmacy registry admin UI (Angular) | Frontend | US-1.2 | 3d |
-| T-15 | Refactor prescription creation to reference `medicationCatalogItemId` | Full-stack | US-1.1 | 3d |
-| T-16 | Refactor refill request to reference `pharmacyId` instead of free-text | Full-stack | US-1.2 | 2d |
-| T-17 | ✅ ~~Unit + integration tests for catalog & registry~~ | Tests | US-1.1, 1.2 | 2d |
+| T-11 | ✅ ~~`MedicationCatalogItem` entity, repository, service, controller, DTO, mapper~~ | Full-stack BE | US-1.1 | Done |
+| T-12 | ✅ ~~`Pharmacy` entity, repository, service, controller, DTO, mapper~~ | Full-stack BE | US-1.2 | Done |
+| T-13 | ✅ ~~Medication catalog admin UI (Angular)~~ | Frontend | US-1.1 | Done |
+| T-14 | ✅ ~~Pharmacy registry admin UI (Angular)~~ | Frontend | US-1.2 | Done |
+| T-15 | Refactor prescription creation to reference `medicationCatalogItemId` | Full-stack | US-1.1 | ❌ Not started |
+| T-16 | Refactor refill request to reference `pharmacyId` instead of free-text | Full-stack | US-1.2 | ❌ Not started |
+| T-17 | ✅ ~~Unit + integration tests for catalog & registry~~ | Tests | US-1.1, 1.2 | Done |
 
-### Phase 3 — Inventory & Stock Management (Weeks 6–14)
+### Phase 3 — Inventory & Stock Management (Weeks 6–14) — IN PROGRESS
 
-| # | Task | Layer | Stories | Est |
+| # | Task | Layer | Stories | Status |
 |---|---|---|---|---|
-| T-18 | `InventoryItem` service + controller + DTO + mapper | Full-stack BE | US-2.2 | 3d |
-| T-19 | `StockLot` service (goods receipt, expiry validation) | Backend | US-2.1 | 3d |
-| T-20 | `StockTransaction` service (receipt, adjust, transfer, return) | Backend | US-2.3 | 3d |
-| T-21 | Reorder-threshold alert logic + notification | Backend | US-2.2 | 2d |
-| T-22 | Stock expiry report query + endpoint | Backend | US-2.4 | 2d |
-| T-23 | Inventory dashboard UI (stock levels, alerts, expiry report) | Frontend | US-2.2, 2.4 | 4d |
-| T-24 | Goods receipt UI | Frontend | US-2.1 | 3d |
-| T-25 | Stock adjustment UI | Frontend | US-2.3 | 2d |
-| T-26 | Audit events for all stock transactions | Backend | US-8.1 | 2d |
-| T-27 | Tests: inventory service, stock lot, transactions | Tests | US-2.x | 3d |
+| T-18 | ✅ ~~`InventoryItem` service + controller + DTO + mapper~~ | Full-stack BE | US-2.2 | Done |
+| T-19 | ✅ ~~`StockLot` service (goods receipt, expiry validation)~~ | Backend | US-2.1 | Done |
+| T-20 | ✅ ~~`StockTransaction` service (receipt, adjust, transfer, return)~~ | Backend | US-2.3 | Done |
+| T-21 | ✅ ~~Reorder-threshold alert logic + notification~~ | Backend | US-2.2 | Done |
+| T-22 | ✅ ~~Stock expiry report query + endpoint~~ | Backend | US-2.4 | Done |
+| T-23 | ✅ ~~Inventory dashboard UI (stock levels, alerts, expiry report)~~ | Frontend | US-2.2, 2.4 | Done |
+| T-24 | ✅ ~~Goods receipt UI~~ | Frontend | US-2.1 | Done |
+| T-25 | ✅ ~~Stock adjustment UI~~ | Frontend | US-2.3 | Done |
+| T-26 | ✅ ~~Audit events for all stock transactions~~ | Backend | US-8.1 | Done |
+| T-27 | Tests: inventory service, stock lot, transactions | Tests | US-2.x | ❌ Not started |
 
 ### Phase 4 — Dispensing Workflow (Weeks 10–18)
 
