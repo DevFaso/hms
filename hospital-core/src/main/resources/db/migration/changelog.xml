@@ -540,4 +540,20 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V43: Pharmacy Module — Phase 1 Foundation
+         - Seeds 4 new pharmacy roles (PHARMACY_VERIFIER, INVENTORY_CLERK,
+           STORE_MANAGER, CLAIMS_REVIEWER)
+         - Adds pharmacy_license / facility_code to pharmacy_fills
+         - Creates medication_catalog_items, pharmacies, inventory_items,
+           stock_lots, stock_transactions, dispenses tables in clinical
+         - Creates pharmacy_payments, pharmacy_claims tables in billing
+         ================================================================= -->
+    <changeSet id="V43-pharmacy-module-phase1" author="hms-team" runOnChange="false">
+        <sqlFile path="V43__pharmacy_module_phase1.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

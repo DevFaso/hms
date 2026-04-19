@@ -29,6 +29,12 @@ public class SecurityConstants {
     public static final String ROLE_SUPPORT_STAFF = "ROLE_SUPPORT_STAFF";
     public static final String ROLE_IT_STAFF = "ROLE_IT_STAFF";
 
+    // Pharmacy sub-roles
+    public static final String ROLE_PHARMACY_VERIFIER = "ROLE_PHARMACY_VERIFIER";
+    public static final String ROLE_INVENTORY_CLERK = "ROLE_INVENTORY_CLERK";
+    public static final String ROLE_STORE_MANAGER = "ROLE_STORE_MANAGER";
+    public static final String ROLE_CLAIMS_REVIEWER = "ROLE_CLAIMS_REVIEWER";
+
     // Billing permission constants (used as granted authorities)
     public static final String BILLING_VIEW_SUMMARY = "BILLING_VIEW_SUMMARY";
     public static final String BILLING_VIEW_DETAIL = "BILLING_VIEW_DETAIL";
