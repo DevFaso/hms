@@ -5,11 +5,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { RoleContextService } from '../core/role-context.service';
-import {
-  PharmacyService,
-  PharmacyRequest,
-  PharmacyResponse,
-} from '../services/pharmacy.service';
+import { PharmacyService, PharmacyRequest, PharmacyResponse } from '../services/pharmacy.service';
 
 @Component({
   selector: 'app-pharmacy-registry',

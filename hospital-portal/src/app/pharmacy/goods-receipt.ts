@@ -59,36 +59,32 @@ export class GoodsReceiptComponent implements OnInit {
   }
 
   private loadInventoryItems(): void {
-    this.svc
-      .listInventoryByPharmacy(this.selectedPharmacyId, 0, 200)
-      .subscribe({
-        next: (res) => {
-          this.inventoryItems.set(res?.data?.content ?? []);
-        },
-      });
+    this.svc.listInventoryByPharmacy(this.selectedPharmacyId, 0, 200).subscribe({
+      next: (res) => {
+        this.inventoryItems.set(res?.data?.content ?? []);
+      },
+    });
   }
 
   private loadRecentLots(): void {
     this.lotsLoading.set(true);
     // Load lots for each inventory item — for display we use the first inventory item
     // In practice, get the most recent stock lots across items for this pharmacy
-    this.svc
-      .listInventoryByPharmacy(this.selectedPharmacyId, 0, 10)
-      .subscribe({
-        next: (res) => {
-          const items = res?.data?.content ?? [];
-          if (items.length > 0) {
-            // Load lots from the first few items
-            this.loadLotsForItems(items.slice(0, 5));
-          } else {
-            this.recentLots.set([]);
-            this.lotsLoading.set(false);
-          }
-        },
-        error: () => {
+    this.svc.listInventoryByPharmacy(this.selectedPharmacyId, 0, 10).subscribe({
+      next: (res) => {
+        const items = res?.data?.content ?? [];
+        if (items.length > 0) {
+          // Load lots from the first few items
+          this.loadLotsForItems(items.slice(0, 5));
+        } else {
+          this.recentLots.set([]);
           this.lotsLoading.set(false);
-        },
-      });
+        }
+      },
+      error: () => {
+        this.lotsLoading.set(false);
+      },
+    });
   }
 
   private loadLotsForItems(items: InventoryItemResponse[]): void {
@@ -103,9 +99,7 @@ export class GoodsReceiptComponent implements OnInit {
           remaining--;
           if (remaining === 0) {
             // Sort by received date desc
-            allLots.sort((a, b) =>
-              (b.receivedDate ?? '').localeCompare(a.receivedDate ?? '')
-            );
+            allLots.sort((a, b) => (b.receivedDate ?? '').localeCompare(a.receivedDate ?? ''));
             this.recentLots.set(allLots.slice(0, 20));
             this.lotsLoading.set(false);
           }
@@ -143,21 +137,19 @@ export class GoodsReceiptComponent implements OnInit {
 
     this.saving.set(true);
     const req = { ...this.form, inventoryItemId: this.selectedInventoryItemId };
-    this.svc
-      .receiveStock(req)
-      .subscribe({
-        next: () => {
-          this.toast.success('Stock lot received successfully');
-          this.closeForm();
-          this.saving.set(false);
-          this.loadRecentLots();
-          this.loadInventoryItems();
-        },
-        error: (err) => {
-          this.toast.error(err?.error?.message ?? 'Failed to receive stock');
-          this.saving.set(false);
-        },
-      });
+    this.svc.receiveStock(req).subscribe({
+      next: () => {
+        this.toast.success('Stock lot received successfully');
+        this.closeForm();
+        this.saving.set(false);
+        this.loadRecentLots();
+        this.loadInventoryItems();
+      },
+      error: (err) => {
+        this.toast.error(err?.error?.message ?? 'Failed to receive stock');
+        this.saving.set(false);
+      },
+    });
   }
 
   getItemName(item: InventoryItemResponse): string {

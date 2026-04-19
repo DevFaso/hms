@@ -5,7 +5,11 @@
       <p class="page-subtitle">{{ 'PHARMACY.STOCK_ADJUSTMENT_SUBTITLE' | translate }}</p>
     </div>
     <div class="header-actions">
-      <select class="pharmacy-select" [(ngModel)]="selectedPharmacyId" (ngModelChange)="onPharmacyChange()">
+      <select
+        class="pharmacy-select"
+        [(ngModel)]="selectedPharmacyId"
+        (ngModelChange)="onPharmacyChange()"
+      >
         @for (p of pharmacies(); track p.id) {
           <option [value]="p.id">{{ p.name }}</option>
         }
@@ -20,7 +24,10 @@
   <!-- Record Transaction Form -->
   @if (showForm()) {
     <div class="form-card">
-      <h3><span class="material-symbols-outlined">swap_vert</span> {{ 'PHARMACY.NEW_TRANSACTION' | translate }}</h3>
+      <h3>
+        <span class="material-symbols-outlined">swap_vert</span>
+        {{ 'PHARMACY.NEW_TRANSACTION' | translate }}
+      </h3>
       <form (ngSubmit)="submitForm()">
         <div class="form-row">
           <div class="field">
@@ -28,7 +35,9 @@
             <select id="txItem" [(ngModel)]="form.inventoryItemId" name="inventoryItemId" required>
               <option value="">— Select Item —</option>
               @for (item of inventoryItems(); track item.id) {
-                <option [value]="item.id">{{ getItemName(item) }} (Qty: {{ item.quantityOnHand }})</option>
+                <option [value]="item.id">
+                  {{ getItemName(item) }} (Qty: {{ item.quantityOnHand }})
+                </option>
               }
             </select>
           </div>
@@ -45,18 +54,35 @@
         <div class="form-row">
           <div class="field">
             <label for="txQty">{{ 'PHARMACY.QUANTITY' | translate }} *</label>
-            <input id="txQty" type="number" [(ngModel)]="form.quantity" name="quantity" min="1" required />
+            <input
+              id="txQty"
+              type="number"
+              [(ngModel)]="form.quantity"
+              name="quantity"
+              min="1"
+              required
+            />
           </div>
         </div>
         <div class="field">
           <label for="txReason">{{ 'PHARMACY.REASON' | translate }}</label>
-          <textarea id="txReason" [(ngModel)]="form.reason" name="reason" rows="2" placeholder="e.g., Physical count discrepancy"></textarea>
+          <textarea
+            id="txReason"
+            [(ngModel)]="form.reason"
+            name="reason"
+            rows="2"
+            placeholder="e.g., Physical count discrepancy"
+          ></textarea>
         </div>
         <div class="form-actions">
-          <button type="button" class="btn-secondary" (click)="closeForm()">{{ 'COMMON.CANCEL' | translate }}</button>
+          <button type="button" class="btn-secondary" (click)="closeForm()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
           <button type="submit" class="btn-primary" [disabled]="saving()">
             <span class="material-symbols-outlined">check</span>
-            {{ saving() ? ('COMMON.SAVING' | translate) : ('PHARMACY.RECORD_TRANSACTION' | translate) }}
+            {{
+              saving() ? ('COMMON.SAVING' | translate) : ('PHARMACY.RECORD_TRANSACTION' | translate)
+            }}
           </button>
         </div>
       </form>
@@ -76,7 +102,10 @@
 
   <!-- Transactions List -->
   @if (txLoading()) {
-    <div class="loading-state"><div class="spinner"></div><p>{{ 'COMMON.LOADING' | translate }}</p></div>
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'COMMON.LOADING' | translate }}</p>
+    </div>
   } @else if (transactions().length > 0) {
     <div class="table-wrap">
       <table class="data-table">
@@ -100,7 +129,13 @@
               </td>
               <td>
                 <span class="tx-qty" [class]="getTypeClass(tx.transactionType)">
-                  {{ ['RECEIVE','ADJUSTMENT_IN','RETURN','TRANSFER_IN'].includes(tx.transactionType) ? '+' : '-' }}{{ tx.quantity }}
+                  {{
+                    ['RECEIVE', 'ADJUSTMENT_IN', 'RETURN', 'TRANSFER_IN'].includes(
+                      tx.transactionType
+                    )
+                      ? '+'
+                      : '-'
+                  }}{{ tx.quantity }}
                 </span>
               </td>
               <td>
@@ -111,7 +146,7 @@
                 }
               </td>
               <td class="reason-cell">{{ tx.reason ?? '—' }}</td>
-              <td>{{ tx.createdAt | date:'medium' }}</td>
+              <td>{{ tx.createdAt | date: 'medium' }}</td>
               <td>{{ tx.performedBy ?? '—' }}</td>
             </tr>
           }

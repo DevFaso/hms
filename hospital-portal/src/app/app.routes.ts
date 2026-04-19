@@ -830,12 +830,7 @@ export const routes: Routes = [
         path: 'medication-catalog',
         canActivate: [RoleGuard],
         data: {
-          roles: [
-            'ROLE_PHARMACIST',
-            'ROLE_DOCTOR',
-            'ROLE_HOSPITAL_ADMIN',
-            'ROLE_SUPER_ADMIN',
-          ],
+          roles: ['ROLE_PHARMACIST', 'ROLE_DOCTOR', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
           import('./pharmacy/medication-catalog').then((m) => m.MedicationCatalogComponent),
@@ -844,11 +839,7 @@ export const routes: Routes = [
         path: 'pharmacy-registry',
         canActivate: [RoleGuard],
         data: {
-          roles: [
-            'ROLE_PHARMACIST',
-            'ROLE_HOSPITAL_ADMIN',
-            'ROLE_SUPER_ADMIN',
-          ],
+          roles: ['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
         },
         loadComponent: () =>
           import('./pharmacy/pharmacy-registry').then((m) => m.PharmacyRegistryComponent),

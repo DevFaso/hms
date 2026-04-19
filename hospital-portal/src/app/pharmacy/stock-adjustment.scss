@@ -98,8 +98,12 @@
   font-weight: 700;
   font-size: 0.9375rem;
 
-  &.tx-in { color: #059669; }
-  &.tx-out { color: #ef4444; }
+  &.tx-in {
+    color: #059669;
+  }
+  &.tx-out {
+    color: #ef4444;
+  }
 }
 
 .code-chip {

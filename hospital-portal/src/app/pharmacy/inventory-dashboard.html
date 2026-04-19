@@ -5,7 +5,11 @@
       <p class="page-subtitle">{{ 'PHARMACY.INVENTORY_SUBTITLE' | translate }}</p>
     </div>
     <div class="header-actions">
-      <select class="pharmacy-select" [(ngModel)]="selectedPharmacyId" (ngModelChange)="onPharmacyChange()">
+      <select
+        class="pharmacy-select"
+        [(ngModel)]="selectedPharmacyId"
+        (ngModelChange)="onPharmacyChange()"
+      >
         @for (p of pharmacies(); track p.id) {
           <option [value]="p.id">{{ p.name }}</option>
         }
@@ -39,7 +43,10 @@
   <!-- Stock Levels Tab -->
   @if (activeTab() === 'stock') {
     @if (stockLoading()) {
-      <div class="loading-state"><div class="spinner"></div><p>{{ 'COMMON.LOADING' | translate }}</p></div>
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
     } @else if (inventoryItems().length > 0) {
       <div class="table-wrap">
         <table class="data-table">
@@ -58,7 +65,9 @@
               <tr>
                 <td class="med-name">{{ item.medicationName ?? item.medicationCode ?? '—' }}</td>
                 <td>
-                  <span class="qty" [class]="getStockStatusClass(item)">{{ item.quantityOnHand }}</span>
+                  <span class="qty" [class]="getStockStatusClass(item)">{{
+                    item.quantityOnHand
+                  }}</span>
                 </td>
                 <td>{{ item.reorderThreshold }}</td>
                 <td>{{ item.reorderQuantity }}</td>
@@ -79,7 +88,11 @@
             <span class="material-symbols-outlined">chevron_left</span>
           </button>
           <span class="page-info">{{ currentPage + 1 }} / {{ totalPages }}</span>
-          <button class="btn-secondary btn-sm" [disabled]="currentPage >= totalPages - 1" (click)="nextPage()">
+          <button
+            class="btn-secondary btn-sm"
+            [disabled]="currentPage >= totalPages - 1"
+            (click)="nextPage()"
+          >
             <span class="material-symbols-outlined">chevron_right</span>
           </button>
         </div>
@@ -102,7 +115,10 @@
       </button>
     </div>
     @if (alertsLoading()) {
-      <div class="loading-state"><div class="spinner"></div><p>{{ 'COMMON.LOADING' | translate }}</p></div>
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
     } @else if (alertItems().length > 0) {
       <div class="alert-grid">
         @for (item of alertItems(); track item.id) {
@@ -143,7 +159,10 @@
       </select>
     </div>
     @if (expiryLoading()) {
-      <div class="loading-state"><div class="spinner"></div><p>{{ 'COMMON.LOADING' | translate }}</p></div>
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
     } @else if (expiringLots().length > 0) {
       <div class="table-wrap">
         <table class="data-table">
@@ -158,14 +177,24 @@
           </thead>
           <tbody>
             @for (lot of expiringLots(); track lot.id) {
-              <tr [class.expired]="getDaysUntilExpiry(lot.expiryDate) <= 0" [class.expiring-soon]="getDaysUntilExpiry(lot.expiryDate) > 0 && getDaysUntilExpiry(lot.expiryDate) <= 30">
-                <td><span class="code-chip">{{ lot.lotNumber }}</span></td>
-                <td>{{ lot.expiryDate | date:'mediumDate' }}</td>
+              <tr
+                [class.expired]="getDaysUntilExpiry(lot.expiryDate) <= 0"
+                [class.expiring-soon]="
+                  getDaysUntilExpiry(lot.expiryDate) > 0 && getDaysUntilExpiry(lot.expiryDate) <= 30
+                "
+              >
+                <td>
+                  <span class="code-chip">{{ lot.lotNumber }}</span>
+                </td>
+                <td>{{ lot.expiryDate | date: 'mediumDate' }}</td>
                 <td>
                   @if (getDaysUntilExpiry(lot.expiryDate) <= 0) {
                     <span class="expiry-badge expired">EXPIRED</span>
                   } @else {
-                    <span class="expiry-badge" [class.urgent]="getDaysUntilExpiry(lot.expiryDate) <= 30">
+                    <span
+                      class="expiry-badge"
+                      [class.urgent]="getDaysUntilExpiry(lot.expiryDate) <= 30"
+                    >
                       {{ getDaysUntilExpiry(lot.expiryDate) }} days
                     </span>
                   }
@@ -188,8 +217,20 @@
 
   <!-- Create Inventory Item Modal -->
   @if (showCreateModal()) {
-    <div class="modal-backdrop" (click)="closeCreateModal()" (keydown.escape)="closeCreateModal()" role="presentation" tabindex="-1">
-      <dialog class="modal modal-lg" [open]="showCreateModal()" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()" tabindex="-1">
+    <div
+      class="modal-backdrop"
+      (click)="closeCreateModal()"
+      (keydown.escape)="closeCreateModal()"
+      role="presentation"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal modal-lg"
+        [open]="showCreateModal()"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+        tabindex="-1"
+      >
         <div class="modal-header">
           <h2>{{ 'PHARMACY.ADD_ITEM' | translate }}</h2>
           <button class="modal-close" (click)="closeCreateModal()">
@@ -200,7 +241,12 @@
           <div class="modal-body">
             <div class="field">
               <label for="ciMed">{{ 'PHARMACY.MEDICATION' | translate }} *</label>
-              <select id="ciMed" [(ngModel)]="createForm.medicationCatalogItemId" name="medicationCatalogItemId" required>
+              <select
+                id="ciMed"
+                [(ngModel)]="createForm.medicationCatalogItemId"
+                name="medicationCatalogItemId"
+                required
+              >
                 <option value="">— Select Medication —</option>
                 @for (m of medications(); track m.id) {
                   <option [value]="m.id">{{ m.nameFr }} ({{ m.genericName }})</option>
@@ -210,26 +256,52 @@
             <div class="form-row">
               <div class="field">
                 <label for="ciQty">{{ 'PHARMACY.QTY_ON_HAND' | translate }}</label>
-                <input id="ciQty" type="number" [(ngModel)]="createForm.quantityOnHand" name="quantityOnHand" min="0" />
+                <input
+                  id="ciQty"
+                  type="number"
+                  [(ngModel)]="createForm.quantityOnHand"
+                  name="quantityOnHand"
+                  min="0"
+                />
               </div>
               <div class="field">
                 <label for="ciUnit">{{ 'PHARMACY.UNIT' | translate }}</label>
-                <input id="ciUnit" type="text" [(ngModel)]="createForm.unit" name="unit" placeholder="e.g., TABLET" />
+                <input
+                  id="ciUnit"
+                  type="text"
+                  [(ngModel)]="createForm.unit"
+                  name="unit"
+                  placeholder="e.g., TABLET"
+                />
               </div>
             </div>
             <div class="form-row">
               <div class="field">
                 <label for="ciThreshold">{{ 'PHARMACY.REORDER_THRESHOLD' | translate }}</label>
-                <input id="ciThreshold" type="number" [(ngModel)]="createForm.reorderThreshold" name="reorderThreshold" min="0" />
+                <input
+                  id="ciThreshold"
+                  type="number"
+                  [(ngModel)]="createForm.reorderThreshold"
+                  name="reorderThreshold"
+                  min="0"
+                />
               </div>
               <div class="field">
                 <label for="ciReorderQty">{{ 'PHARMACY.REORDER_QTY' | translate }}</label>
-                <input id="ciReorderQty" type="number" [(ngModel)]="createForm.reorderQuantity" name="reorderQuantity" min="0" />
+                <input
+                  id="ciReorderQty"
+                  type="number"
+                  [(ngModel)]="createForm.reorderQuantity"
+                  name="reorderQuantity"
+                  min="0"
+                />
               </div>
             </div>
           </div>
           <div class="modal-actions">
-            <button type="button" class="btn-secondary" (click)="closeCreateModal()">{{ 'COMMON.CANCEL' | translate }}</button>
+            <button type="button" class="btn-secondary" (click)="closeCreateModal()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
             <button type="submit" class="btn-primary" [disabled]="saving()">
               {{ saving() ? ('COMMON.CREATING' | translate) : ('COMMON.CREATE' | translate) }}
             </button>

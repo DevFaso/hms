@@ -208,9 +208,7 @@ export class PharmacyService {
     return this.http.get<MedicationCatalogItemResponse>(`/medication-catalog/${id}`);
   }
 
-  createMedication(
-    req: MedicationCatalogItemRequest,
-  ): Observable<MedicationCatalogItemResponse> {
+  createMedication(req: MedicationCatalogItemRequest): Observable<MedicationCatalogItemResponse> {
     return this.http.post<MedicationCatalogItemResponse>('/medication-catalog', req);
   }
 
@@ -255,10 +253,7 @@ export class PharmacyService {
 
   // ── Inventory Items ──
 
-  listInventoryItems(
-    page = 0,
-    size = 20,
-  ): Observable<ApiResponse<Page<InventoryItemResponse>>> {
+  listInventoryItems(page = 0, size = 20): Observable<ApiResponse<Page<InventoryItemResponse>>> {
     const params = new HttpParams().set('page', page).set('size', size);
     return this.http.get<ApiResponse<Page<InventoryItemResponse>>>('/pharmacy/inventory/items', {
       params,
@@ -281,9 +276,7 @@ export class PharmacyService {
     return this.http.get<ApiResponse<InventoryItemResponse>>(`/pharmacy/inventory/items/${id}`);
   }
 
-  createInventoryItem(
-    req: InventoryItemRequest,
-  ): Observable<ApiResponse<InventoryItemResponse>> {
+  createInventoryItem(req: InventoryItemRequest): Observable<ApiResponse<InventoryItemResponse>> {
     return this.http.post<ApiResponse<InventoryItemResponse>>('/pharmacy/inventory/items', req);
   }
 
@@ -335,10 +328,7 @@ export class PharmacyService {
     );
   }
 
-  getExpiringSoon(
-    pharmacyId: string,
-    daysAhead = 90,
-  ): Observable<ApiResponse<StockLotResponse[]>> {
+  getExpiringSoon(pharmacyId: string, daysAhead = 90): Observable<ApiResponse<StockLotResponse[]>> {
     const params = new HttpParams().set('daysAhead', daysAhead);
     return this.http.get<ApiResponse<StockLotResponse[]>>(
       `/pharmacy/inventory/lots/expiring/${pharmacyId}`,
@@ -354,19 +344,14 @@ export class PharmacyService {
     );
   }
 
-  getReorderAlertsByPharmacy(
-    pharmacyId: string,
-  ): Observable<ApiResponse<InventoryItemResponse[]>> {
+  getReorderAlertsByPharmacy(pharmacyId: string): Observable<ApiResponse<InventoryItemResponse[]>> {
     return this.http.get<ApiResponse<InventoryItemResponse[]>>(
       `/pharmacy/inventory/reorder-alerts/pharmacy/${pharmacyId}`,
     );
   }
 
   triggerReorderAlerts(): Observable<ApiResponse<string>> {
-    return this.http.post<ApiResponse<string>>(
-      '/pharmacy/inventory/reorder-alerts/trigger',
-      {},
-    );
+    return this.http.post<ApiResponse<string>>('/pharmacy/inventory/reorder-alerts/trigger', {});
   }
 
   // ── Stock Transactions ──

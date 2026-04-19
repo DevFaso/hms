@@ -41,13 +41,20 @@
               <span class="type-chip">{{ p.pharmacyType }}</span>
             }
             @if (p.licenseNumber) {
-              <p class="pharmacy-detail"><span class="material-symbols-outlined">badge</span> {{ p.licenseNumber }}</p>
+              <p class="pharmacy-detail">
+                <span class="material-symbols-outlined">badge</span> {{ p.licenseNumber }}
+              </p>
             }
             @if (p.city || p.region) {
-              <p class="pharmacy-detail"><span class="material-symbols-outlined">location_on</span> {{ p.city }}{{ p.region ? ', ' + p.region : '' }}</p>
+              <p class="pharmacy-detail">
+                <span class="material-symbols-outlined">location_on</span> {{ p.city
+                }}{{ p.region ? ', ' + p.region : '' }}
+              </p>
             }
             @if (p.phoneNumber) {
-              <p class="pharmacy-detail"><span class="material-symbols-outlined">phone</span> {{ p.phoneNumber }}</p>
+              <p class="pharmacy-detail">
+                <span class="material-symbols-outlined">phone</span> {{ p.phoneNumber }}
+              </p>
             }
           </div>
           <div class="pharmacy-meta">
@@ -61,7 +68,11 @@
               <button class="action-link" [title]="'COMMON.EDIT' | translate" (click)="openEdit(p)">
                 <span class="material-symbols-outlined">edit</span>
               </button>
-              <button class="action-link danger" [title]="'COMMON.DELETE' | translate" (click)="confirmDelete(p)">
+              <button
+                class="action-link danger"
+                [title]="'COMMON.DELETE' | translate"
+                (click)="confirmDelete(p)"
+              >
                 <span class="material-symbols-outlined">delete</span>
               </button>
             </div>
@@ -76,7 +87,11 @@
           <span class="material-symbols-outlined">chevron_left</span>
         </button>
         <span class="page-info">{{ currentPage + 1 }} / {{ totalPages }}</span>
-        <button class="btn-secondary btn-sm" [disabled]="currentPage >= totalPages - 1" (click)="nextPage()">
+        <button
+          class="btn-secondary btn-sm"
+          [disabled]="currentPage >= totalPages - 1"
+          (click)="nextPage()"
+        >
           <span class="material-symbols-outlined">chevron_right</span>
         </button>
       </div>
@@ -87,16 +102,40 @@
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">local_pharmacy</span>
       <h3>{{ 'PHARMACY.NO_PHARMACIES' | translate }}</h3>
-      <p>{{ searchTerm ? ('COMMON.TRY_ADJUSTING' | translate) : ('PHARMACY.CREATE_FIRST_PHARMACY' | translate) }}</p>
+      <p>
+        {{
+          searchTerm
+            ? ('COMMON.TRY_ADJUSTING' | translate)
+            : ('PHARMACY.CREATE_FIRST_PHARMACY' | translate)
+        }}
+      </p>
     </div>
   }
 
   <!-- Create / Edit Modal -->
   @if (showModal()) {
-    <div class="modal-backdrop" (click)="closeModal()" (keydown.escape)="closeModal()" role="presentation" tabindex="-1">
-      <dialog class="modal modal-lg" [open]="showModal()" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()" tabindex="-1">
+    <div
+      class="modal-backdrop"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+      role="presentation"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal modal-lg"
+        [open]="showModal()"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+        tabindex="-1"
+      >
         <div class="modal-header">
-          <h2>{{ editing() ? ('PHARMACY.EDIT_PHARMACY' | translate) : ('PHARMACY.NEW_PHARMACY' | translate) }}</h2>
+          <h2>
+            {{
+              editing()
+                ? ('PHARMACY.EDIT_PHARMACY' | translate)
+                : ('PHARMACY.NEW_PHARMACY' | translate)
+            }}
+          </h2>
           <button class="modal-close" (click)="closeModal()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -123,7 +162,14 @@
               </div>
               <div class="field">
                 <label for="pName">{{ 'PHARMACY.PHARMACY_NAME' | translate }} *</label>
-                <input id="pName" type="text" [(ngModel)]="form.name" name="name" required placeholder="e.g., Pharmacie Centrale" />
+                <input
+                  id="pName"
+                  type="text"
+                  [(ngModel)]="form.name"
+                  name="name"
+                  required
+                  placeholder="e.g., Pharmacie Centrale"
+                />
               </div>
             </div>
 
@@ -152,18 +198,34 @@
             <div class="form-row">
               <div class="field">
                 <label for="pLicense">{{ 'PHARMACY.LICENSE' | translate }}</label>
-                <input id="pLicense" type="text" [(ngModel)]="form.licenseNumber" name="licenseNumber" />
+                <input
+                  id="pLicense"
+                  type="text"
+                  [(ngModel)]="form.licenseNumber"
+                  name="licenseNumber"
+                />
               </div>
               <div class="field">
                 <label for="pFacilityCode">{{ 'PHARMACY.FACILITY_CODE' | translate }}</label>
-                <input id="pFacilityCode" type="text" [(ngModel)]="form.facilityCode" name="facilityCode" />
+                <input
+                  id="pFacilityCode"
+                  type="text"
+                  [(ngModel)]="form.facilityCode"
+                  name="facilityCode"
+                />
               </div>
             </div>
 
             <div class="form-row">
               <div class="field">
                 <label for="pPhone">{{ 'PATIENTS.PHONE' | translate }}</label>
-                <input id="pPhone" type="tel" [(ngModel)]="form.phoneNumber" name="phoneNumber" placeholder="+22625000001" />
+                <input
+                  id="pPhone"
+                  type="tel"
+                  [(ngModel)]="form.phoneNumber"
+                  name="phoneNumber"
+                  placeholder="+22625000001"
+                />
               </div>
               <div class="field">
                 <label for="pEmail">{{ 'PATIENTS.EMAIL' | translate }}</label>
@@ -174,7 +236,12 @@
             <div class="form-row">
               <div class="field">
                 <label for="pAddr1">{{ 'PHARMACY.ADDRESS' | translate }}</label>
-                <input id="pAddr1" type="text" [(ngModel)]="form.addressLine1" name="addressLine1" />
+                <input
+                  id="pAddr1"
+                  type="text"
+                  [(ngModel)]="form.addressLine1"
+                  name="addressLine1"
+                />
               </div>
               <div class="field">
                 <label for="pCity">{{ 'PHARMACY.CITY' | translate }}</label>
@@ -203,9 +270,19 @@
             }
           </div>
           <div class="modal-actions">
-            <button type="button" class="btn-secondary" (click)="closeModal()">{{ 'COMMON.CANCEL' | translate }}</button>
+            <button type="button" class="btn-secondary" (click)="closeModal()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
             <button type="submit" class="btn-primary" [disabled]="saving()">
-              {{ saving() ? (editing() ? ('COMMON.SAVING' | translate) : ('COMMON.CREATING' | translate)) : (editing() ? ('COMMON.SAVE_CHANGES' | translate) : ('COMMON.CREATE' | translate)) }}
+              {{
+                saving()
+                  ? editing()
+                    ? ('COMMON.SAVING' | translate)
+                    : ('COMMON.CREATING' | translate)
+                  : editing()
+                    ? ('COMMON.SAVE_CHANGES' | translate)
+                    : ('COMMON.CREATE' | translate)
+              }}
             </button>
           </div>
         </form>
@@ -215,8 +292,20 @@
 
   <!-- Delete Confirmation -->
   @if (showDeleteConfirm()) {
-    <div class="modal-backdrop" (click)="cancelDelete()" (keydown.escape)="cancelDelete()" role="presentation" tabindex="-1">
-      <dialog class="modal" [open]="showDeleteConfirm()" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()" tabindex="-1">
+    <div
+      class="modal-backdrop"
+      (click)="cancelDelete()"
+      (keydown.escape)="cancelDelete()"
+      role="presentation"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal"
+        [open]="showDeleteConfirm()"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+        tabindex="-1"
+      >
         <div class="modal-header">
           <h2>{{ 'COMMON.DELETE' | translate }}</h2>
           <button class="modal-close" (click)="cancelDelete()">
@@ -224,11 +313,22 @@
           </button>
         </div>
         <div class="modal-body">
-          <p class="delete-warning">{{ 'PHARMACY.DELETE_PHARMACY_CONFIRM' | translate }} <strong>{{ deletingItem()?.name }}</strong>?</p>
+          <p class="delete-warning">
+            {{ 'PHARMACY.DELETE_PHARMACY_CONFIRM' | translate }}
+            <strong>{{ deletingItem()?.name }}</strong
+            >?
+          </p>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="cancelDelete()">{{ 'COMMON.CANCEL' | translate }}</button>
-          <button type="button" class="btn-danger" [disabled]="deleting()" (click)="executeDelete()">
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-danger"
+            [disabled]="deleting()"
+            (click)="executeDelete()"
+          >
             {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
           </button>
         </div>

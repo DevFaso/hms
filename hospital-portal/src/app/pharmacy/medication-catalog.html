@@ -58,19 +58,31 @@
               <td>{{ item.genericName }}</td>
               <td>{{ item.form ?? '—' }}</td>
               <td>{{ item.strength ? item.strength + ' ' + (item.strengthUnit ?? '') : '—' }}</td>
-              <td><span class="code-chip">{{ item.atcCode ?? '—' }}</span></td>
+              <td>
+                <span class="code-chip">{{ item.atcCode ?? '—' }}</span>
+              </td>
               <td>{{ item.category ?? '—' }}</td>
               <td>
                 <span class="status-badge" [class.active]="item.active">
-                  {{ item.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
+                  {{
+                    item.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate)
+                  }}
                 </span>
               </td>
               <td>
                 <div class="action-group">
-                  <button class="action-link" [title]="'COMMON.EDIT' | translate" (click)="openEdit(item)">
+                  <button
+                    class="action-link"
+                    [title]="'COMMON.EDIT' | translate"
+                    (click)="openEdit(item)"
+                  >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
-                  <button class="action-link danger" [title]="'COMMON.DELETE' | translate" (click)="confirmDelete(item)">
+                  <button
+                    class="action-link danger"
+                    [title]="'COMMON.DELETE' | translate"
+                    (click)="confirmDelete(item)"
+                  >
                     <span class="material-symbols-outlined">delete</span>
                   </button>
                 </div>
@@ -87,7 +99,11 @@
           <span class="material-symbols-outlined">chevron_left</span>
         </button>
         <span class="page-info">{{ currentPage + 1 }} / {{ totalPages }}</span>
-        <button class="btn-secondary btn-sm" [disabled]="currentPage >= totalPages - 1" (click)="nextPage()">
+        <button
+          class="btn-secondary btn-sm"
+          [disabled]="currentPage >= totalPages - 1"
+          (click)="nextPage()"
+        >
           <span class="material-symbols-outlined">chevron_right</span>
         </button>
       </div>
@@ -98,16 +114,40 @@
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">medication</span>
       <h3>{{ 'PHARMACY.NO_MEDICATIONS' | translate }}</h3>
-      <p>{{ searchTerm ? ('COMMON.TRY_ADJUSTING' | translate) : ('PHARMACY.CREATE_FIRST_MED' | translate) }}</p>
+      <p>
+        {{
+          searchTerm
+            ? ('COMMON.TRY_ADJUSTING' | translate)
+            : ('PHARMACY.CREATE_FIRST_MED' | translate)
+        }}
+      </p>
     </div>
   }
 
   <!-- Create / Edit Modal -->
   @if (showModal()) {
-    <div class="modal-backdrop" (click)="closeModal()" (keydown.escape)="closeModal()" role="presentation" tabindex="-1">
-      <dialog class="modal modal-lg" [open]="showModal()" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()" tabindex="-1">
+    <div
+      class="modal-backdrop"
+      (click)="closeModal()"
+      (keydown.escape)="closeModal()"
+      role="presentation"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal modal-lg"
+        [open]="showModal()"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+        tabindex="-1"
+      >
         <div class="modal-header">
-          <h2>{{ editing() ? ('PHARMACY.EDIT_MEDICATION' | translate) : ('PHARMACY.NEW_MEDICATION' | translate) }}</h2>
+          <h2>
+            {{
+              editing()
+                ? ('PHARMACY.EDIT_MEDICATION' | translate)
+                : ('PHARMACY.NEW_MEDICATION' | translate)
+            }}
+          </h2>
           <button class="modal-close" (click)="closeModal()">
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -117,11 +157,25 @@
             <div class="form-row">
               <div class="field">
                 <label for="nameFr">{{ 'PHARMACY.NAME_FR' | translate }} *</label>
-                <input id="nameFr" type="text" [(ngModel)]="form.nameFr" name="nameFr" required placeholder="e.g., Amoxicilline" />
+                <input
+                  id="nameFr"
+                  type="text"
+                  [(ngModel)]="form.nameFr"
+                  name="nameFr"
+                  required
+                  placeholder="e.g., Amoxicilline"
+                />
               </div>
               <div class="field">
                 <label for="genericName">{{ 'PHARMACY.GENERIC_NAME' | translate }} *</label>
-                <input id="genericName" type="text" [(ngModel)]="form.genericName" name="genericName" required placeholder="e.g., Amoxicillin" />
+                <input
+                  id="genericName"
+                  type="text"
+                  [(ngModel)]="form.genericName"
+                  name="genericName"
+                  required
+                  placeholder="e.g., Amoxicillin"
+                />
               </div>
             </div>
 
@@ -132,7 +186,13 @@
               </div>
               <div class="field">
                 <label for="atcCode">{{ 'PHARMACY.ATC_CODE' | translate }}</label>
-                <input id="atcCode" type="text" [(ngModel)]="form.atcCode" name="atcCode" placeholder="e.g., J01CA04" />
+                <input
+                  id="atcCode"
+                  type="text"
+                  [(ngModel)]="form.atcCode"
+                  name="atcCode"
+                  placeholder="e.g., J01CA04"
+                />
               </div>
             </div>
 
@@ -158,8 +218,20 @@
               <div class="field">
                 <label for="strength">{{ 'PHARMACY.STRENGTH' | translate }}</label>
                 <div class="input-group">
-                  <input id="strength" type="text" [(ngModel)]="form.strength" name="strength" placeholder="e.g., 500" />
-                  <input type="text" [(ngModel)]="form.strengthUnit" name="strengthUnit" placeholder="mg" class="unit-input" />
+                  <input
+                    id="strength"
+                    type="text"
+                    [(ngModel)]="form.strength"
+                    name="strength"
+                    placeholder="e.g., 500"
+                  />
+                  <input
+                    type="text"
+                    [(ngModel)]="form.strengthUnit"
+                    name="strengthUnit"
+                    placeholder="mg"
+                    class="unit-input"
+                  />
                 </div>
               </div>
             </div>
@@ -184,14 +256,25 @@
               </div>
               <div class="field">
                 <label for="category">{{ 'PHARMACY.CATEGORY' | translate }}</label>
-                <input id="category" type="text" [(ngModel)]="form.category" name="category" placeholder="e.g., Antibiotic" />
+                <input
+                  id="category"
+                  type="text"
+                  [(ngModel)]="form.category"
+                  name="category"
+                  placeholder="e.g., Antibiotic"
+                />
               </div>
             </div>
 
             <div class="form-row">
               <div class="field">
                 <label for="rxnormCode">RxNorm Code</label>
-                <input id="rxnormCode" type="text" [(ngModel)]="form.rxnormCode" name="rxnormCode" />
+                <input
+                  id="rxnormCode"
+                  type="text"
+                  [(ngModel)]="form.rxnormCode"
+                  name="rxnormCode"
+                />
               </div>
               <div class="field checkbox-group">
                 <label class="toggle-label">
@@ -207,13 +290,28 @@
 
             <div class="field">
               <label for="description">{{ 'COMMON.DESCRIPTION' | translate }}</label>
-              <textarea id="description" [(ngModel)]="form.description" name="description" rows="3"></textarea>
+              <textarea
+                id="description"
+                [(ngModel)]="form.description"
+                name="description"
+                rows="3"
+              ></textarea>
             </div>
           </div>
           <div class="modal-actions">
-            <button type="button" class="btn-secondary" (click)="closeModal()">{{ 'COMMON.CANCEL' | translate }}</button>
+            <button type="button" class="btn-secondary" (click)="closeModal()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
             <button type="submit" class="btn-primary" [disabled]="saving()">
-              {{ saving() ? (editing() ? ('COMMON.SAVING' | translate) : ('COMMON.CREATING' | translate)) : (editing() ? ('COMMON.SAVE_CHANGES' | translate) : ('COMMON.CREATE' | translate)) }}
+              {{
+                saving()
+                  ? editing()
+                    ? ('COMMON.SAVING' | translate)
+                    : ('COMMON.CREATING' | translate)
+                  : editing()
+                    ? ('COMMON.SAVE_CHANGES' | translate)
+                    : ('COMMON.CREATE' | translate)
+              }}
             </button>
           </div>
         </form>
@@ -223,8 +321,20 @@
 
   <!-- Delete Confirmation -->
   @if (showDeleteConfirm()) {
-    <div class="modal-backdrop" (click)="cancelDelete()" (keydown.escape)="cancelDelete()" role="presentation" tabindex="-1">
-      <dialog class="modal" [open]="showDeleteConfirm()" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()" tabindex="-1">
+    <div
+      class="modal-backdrop"
+      (click)="cancelDelete()"
+      (keydown.escape)="cancelDelete()"
+      role="presentation"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal"
+        [open]="showDeleteConfirm()"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+        tabindex="-1"
+      >
         <div class="modal-header">
           <h2>{{ 'COMMON.DELETE' | translate }}</h2>
           <button class="modal-close" (click)="cancelDelete()">
@@ -232,11 +342,22 @@
           </button>
         </div>
         <div class="modal-body">
-          <p class="delete-warning">{{ 'PHARMACY.DELETE_MED_CONFIRM' | translate }} <strong>{{ deletingItem()?.nameFr }}</strong>?</p>
+          <p class="delete-warning">
+            {{ 'PHARMACY.DELETE_MED_CONFIRM' | translate }}
+            <strong>{{ deletingItem()?.nameFr }}</strong
+            >?
+          </p>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="cancelDelete()">{{ 'COMMON.CANCEL' | translate }}</button>
-          <button type="button" class="btn-danger" [disabled]="deleting()" (click)="executeDelete()">
+          <button type="button" class="btn-secondary" (click)="cancelDelete()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="button"
+            class="btn-danger"
+            [disabled]="deleting()"
+            (click)="executeDelete()"
+          >
             {{ deleting() ? ('COMMON.DELETING' | translate) : ('COMMON.DELETE' | translate) }}
           </button>
         </div>

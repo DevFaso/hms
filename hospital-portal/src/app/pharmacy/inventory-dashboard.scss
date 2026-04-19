@@ -75,9 +75,15 @@
   font-weight: 700;
   font-size: 0.9375rem;
 
-  &.stock-ok { color: #059669; }
-  &.stock-low { color: #f59e0b; }
-  &.stock-out { color: #ef4444; }
+  &.stock-ok {
+    color: #059669;
+  }
+  &.stock-low {
+    color: #f59e0b;
+  }
+  &.stock-out {
+    color: #ef4444;
+  }
 }
 
 .stock-badge {

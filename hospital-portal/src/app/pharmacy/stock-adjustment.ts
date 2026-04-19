@@ -73,13 +73,11 @@ export class StockAdjustmentComponent implements OnInit {
   }
 
   private loadInventoryItems(): void {
-    this.svc
-      .listInventoryByPharmacy(this.selectedPharmacyId, 0, 200)
-      .subscribe({
-        next: (res) => {
-          this.inventoryItems.set(res?.data?.content ?? []);
-        },
-      });
+    this.svc.listInventoryByPharmacy(this.selectedPharmacyId, 0, 200).subscribe({
+      next: (res) => {
+        this.inventoryItems.set(res?.data?.content ?? []);
+      },
+    });
   }
 
   loadTransactions(): void {
