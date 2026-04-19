@@ -164,6 +164,7 @@ export class GoodsReceiptComponent implements OnInit {
       initialQuantity: 0,
       supplier: '',
       unitCost: 0,
+      receivedDate: new Date().toISOString().split('T')[0],
     };
   }
 }

@@ -26,7 +26,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -46,6 +45,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -232,7 +232,7 @@ class StockTransactionServiceImplTest {
                     .performedByUser(user)
                     .build();
             tx.setId(transactionId);
-            when(stockTransactionMapper.toEntity(eq(dto), eq(inventoryItem), eq(stockLot), eq(user)))
+            when(stockTransactionMapper.toEntity(dto, inventoryItem, stockLot, user))
                     .thenReturn(tx);
             when(stockTransactionRepository.save(tx)).thenReturn(tx);
 
@@ -261,7 +261,7 @@ class StockTransactionServiceImplTest {
                     .performedByUser(user)
                     .build();
             tx.setId(transactionId);
-            when(stockTransactionMapper.toEntity(eq(dto), eq(inventoryItem), eq(stockLot), eq(user)))
+            when(stockTransactionMapper.toEntity(dto, inventoryItem, stockLot, user))
                     .thenReturn(tx);
             when(stockTransactionRepository.save(tx)).thenReturn(tx);
 
@@ -310,7 +310,7 @@ class StockTransactionServiceImplTest {
                     .performedByUser(user)
                     .build();
             tx.setId(transactionId);
-            when(stockTransactionMapper.toEntity(eq(dto), eq(inventoryItem), eq(stockLot), eq(user)))
+            when(stockTransactionMapper.toEntity(dto, inventoryItem, stockLot, user))
                     .thenReturn(tx);
             when(stockTransactionRepository.save(tx)).thenReturn(tx);
 
@@ -401,7 +401,7 @@ class StockTransactionServiceImplTest {
                     .performedByUser(user)
                     .build();
             tx.setId(transactionId);
-            when(stockTransactionMapper.toEntity(eq(dto), eq(inventoryItem), eq(null), eq(user)))
+            when(stockTransactionMapper.toEntity(eq(dto), eq(inventoryItem), isNull(), eq(user)))
                     .thenReturn(tx);
             when(stockTransactionRepository.save(tx)).thenReturn(tx);
             when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);
@@ -659,7 +659,7 @@ class StockTransactionServiceImplTest {
                     .performedByUser(user)
                     .build();
             tx.setId(transactionId);
-            when(stockTransactionMapper.toEntity(eq(dto), eq(inventoryItem), eq(stockLot), eq(user)))
+            when(stockTransactionMapper.toEntity(dto, inventoryItem, stockLot, user))
                     .thenReturn(tx);
             when(stockTransactionRepository.save(tx)).thenReturn(tx);
             when(inventoryItemRepository.save(inventoryItem)).thenReturn(inventoryItem);

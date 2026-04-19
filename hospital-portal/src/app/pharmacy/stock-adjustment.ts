@@ -32,17 +32,7 @@ export class StockAdjustmentComponent implements OnInit {
 
   // Filter
   filterType = '';
-  transactionTypes = [
-    'RECEIVE',
-    'DISPENSE',
-    'ADJUSTMENT_IN',
-    'ADJUSTMENT_OUT',
-    'RETURN',
-    'EXPIRED',
-    'DAMAGED',
-    'TRANSFER_IN',
-    'TRANSFER_OUT',
-  ];
+  transactionTypes = ['RECEIPT', 'DISPENSE', 'ADJUSTMENT', 'TRANSFER', 'RETURN'];
 
   // Form
   showForm = signal(false);
@@ -138,7 +128,8 @@ export class StockAdjustmentComponent implements OnInit {
   }
 
   getTypeClass(type: string): string {
-    if (['RECEIVE', 'ADJUSTMENT_IN', 'RETURN', 'TRANSFER_IN'].includes(type)) return 'tx-in';
+    if (['RECEIPT', 'RETURN'].includes(type)) return 'tx-in';
+    if (['ADJUSTMENT'].includes(type)) return 'tx-neutral';
     return 'tx-out';
   }
 

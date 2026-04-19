@@ -28,7 +28,6 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -77,7 +76,7 @@ class PharmacyServiceImplTest {
     @Test
     void create_success() {
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(mapper.toEntity(eq(requestDTO), eq(hospital))).thenReturn(pharmacy);
+        when(mapper.toEntity(requestDTO, hospital)).thenReturn(pharmacy);
         when(pharmacyRepository.save(any(Pharmacy.class))).thenReturn(pharmacy);
         when(mapper.toResponseDTO(pharmacy)).thenReturn(responseDTO);
 

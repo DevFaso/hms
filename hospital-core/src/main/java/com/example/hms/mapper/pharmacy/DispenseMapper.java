@@ -15,6 +15,16 @@ import org.springframework.stereotype.Component;
 @Component
 public class DispenseMapper {
 
+    public record DispenseContext(
+            Prescription prescription,
+            Patient patient,
+            Pharmacy pharmacy,
+            StockLot stockLot,
+            User dispensedByUser,
+            User verifiedByUser,
+            MedicationCatalogItem medicationCatalogItem
+    ) {}
+
     public DispenseResponseDTO toResponseDTO(Dispense entity) {
         if (entity == null) {
             return null;
@@ -44,26 +54,19 @@ public class DispenseMapper {
             .build();
     }
 
-    public Dispense toEntity(DispenseRequestDTO dto,
-                             Prescription prescription,
-                             Patient patient,
-                             Pharmacy pharmacy,
-                             StockLot stockLot,
-                             User dispensedByUser,
-                             User verifiedByUser,
-                             MedicationCatalogItem medicationCatalogItem) {
+    public Dispense toEntity(DispenseRequestDTO dto, DispenseContext ctx) {
         if (dto == null) {
             return null;
         }
 
         return Dispense.builder()
-            .prescription(prescription)
-            .patient(patient)
-            .pharmacy(pharmacy)
-            .stockLot(stockLot)
-            .dispensedByUser(dispensedByUser)
-            .verifiedByUser(verifiedByUser)
-            .medicationCatalogItem(medicationCatalogItem)
+            .prescription(ctx.prescription())
+            .patient(ctx.patient())
+            .pharmacy(ctx.pharmacy())
+            .stockLot(ctx.stockLot())
+            .dispensedByUser(ctx.dispensedByUser())
+            .verifiedByUser(ctx.verifiedByUser())
+            .medicationCatalogItem(ctx.medicationCatalogItem())
             .medicationName(dto.getMedicationName())
             .quantityRequested(dto.getQuantityRequested())
             .quantityDispensed(dto.getQuantityDispensed())

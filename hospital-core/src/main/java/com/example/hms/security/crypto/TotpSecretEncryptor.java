@@ -10,6 +10,7 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.Base64;
 
@@ -59,7 +60,7 @@ public class TotpSecretEncryptor implements AttributeConverter<String, String> {
 
             Cipher cipher = Cipher.getInstance(ALGORITHM);
             cipher.init(Cipher.ENCRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
-            byte[] encrypted = cipher.doFinal(attribute.getBytes());
+            byte[] encrypted = cipher.doFinal(attribute.getBytes(StandardCharsets.UTF_8));
 
             ByteBuffer buffer = ByteBuffer.allocate(iv.length + encrypted.length);
             buffer.put(iv);
@@ -91,7 +92,7 @@ public class TotpSecretEncryptor implements AttributeConverter<String, String> {
 
             Cipher cipher = Cipher.getInstance(ALGORITHM);
             cipher.init(Cipher.DECRYPT_MODE, keySpec, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
-            return new String(cipher.doFinal(ciphertext));
+            return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
         } catch (Exception e) {
             throw new IllegalStateException("Failed to decrypt TOTP secret", e);
         }
@@ -99,11 +100,20 @@ public class TotpSecretEncryptor implements AttributeConverter<String, String> {
 
     private static byte[] hexStringToBytes(String hex) {
         String s = hex.trim();
+        if (s.length() % 2 != 0) {
+            throw new IllegalArgumentException(
+                    "TOTP encryption key hex string must have even length, got " + s.length());
+        }
         int len = s.length() / 2;
         byte[] out = new byte[len];
         for (int i = 0; i < len; i++) {
-            out[i] = (byte) ((Character.digit(s.charAt(i * 2), 16) << 4)
-                    + Character.digit(s.charAt(i * 2 + 1), 16));
+            int hi = Character.digit(s.charAt(i * 2), 16);
+            int lo = Character.digit(s.charAt(i * 2 + 1), 16);
+            if (hi == -1 || lo == -1) {
+                throw new IllegalArgumentException(
+                        "TOTP encryption key contains invalid hex character at position " + (i * 2));
+            }
+            out[i] = (byte) ((hi << 4) + lo);
         }
         return out;
     }

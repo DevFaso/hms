@@ -37,6 +37,5 @@ public class StockTransactionRequestDTO {
 
     private UUID referenceId;
 
-    @NotNull(message = "Performed-by user ID is required")
     private UUID performedBy;
 }
