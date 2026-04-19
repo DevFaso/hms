@@ -20,8 +20,8 @@
     @if (step() === 'start') {
       <div class="step-content">
         <p>
-          Your account requires multi-factor authentication. Set up a TOTP authenticator app
-          (e.g. Google Authenticator, Authy) to secure your account.
+          Your account requires multi-factor authentication. Set up a TOTP authenticator app (e.g.
+          Google Authenticator, Authy) to secure your account.
         </p>
         <button class="btn-primary" (click)="startEnrollment()" [disabled]="loading()">
           {{ loading() ? 'Setting up…' : 'Begin Setup' }}

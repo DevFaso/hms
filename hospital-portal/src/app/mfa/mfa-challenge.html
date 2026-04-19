@@ -9,7 +9,9 @@
       </svg>
       <h1>Verify Your Identity</h1>
       @if (username) {
-        <p class="subtitle">Signed in as <strong>{{ username }}</strong></p>
+        <p class="subtitle">
+          Signed in as <strong>{{ username }}</strong>
+        </p>
       }
     </div>
 
@@ -23,8 +25,8 @@
       <!-- User has MFA required but not enrolled — redirect to enrollment -->
       <div class="step-content">
         <p>
-          Your account requires multi-factor authentication, but you haven't set it up yet.
-          Please enroll now.
+          Your account requires multi-factor authentication, but you haven't set it up yet. Please
+          enroll now.
         </p>
         <button class="btn-primary" (click)="backToLogin()">Back to Login</button>
       </div>
