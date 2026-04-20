@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
+import { MfaService, MfaEnrollmentResponse } from '../auth/mfa.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule } from '@ngx-translate/core';
 import {
@@ -26,6 +27,7 @@ type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
 })
 export class ProfileComponent implements OnInit {
   private readonly auth = inject(AuthService);
+  private readonly mfaService = inject(MfaService);
   private readonly profileService = inject(ProfileService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
@@ -189,6 +191,68 @@ export class ProfileComponent implements OnInit {
     const years = Math.floor(months / 12);
     return `${years} year${years > 1 ? 's' : ''}`;
   });
+
+  /* ── Inline MFA Enrollment ── */
+  mfaStep = signal<'idle' | 'qr' | 'verify' | 'backup'>('idle');
+  mfaLoading = signal(false);
+  mfaError = signal('');
+  mfaEnrollment = signal<MfaEnrollmentResponse | null>(null);
+  mfaTotpCode = '';
+
+  startMfaEnrollment(): void {
+    this.mfaLoading.set(true);
+    this.mfaError.set('');
+    this.mfaService.enroll().subscribe({
+      next: (res) => {
+        this.mfaEnrollment.set(res);
+        this.mfaStep.set('qr');
+        this.mfaLoading.set(false);
+      },
+      error: (err) => {
+        this.mfaError.set(err?.error?.message ?? 'Failed to start MFA enrollment.');
+        this.mfaLoading.set(false);
+      },
+    });
+  }
+
+  verifyMfaCode(): void {
+    if (!this.mfaTotpCode || this.mfaTotpCode.length < 6) {
+      this.mfaError.set('Please enter a valid 6-digit code.');
+      return;
+    }
+    this.mfaLoading.set(true);
+    this.mfaError.set('');
+    this.mfaService.verifyEnrollment(this.mfaTotpCode).subscribe({
+      next: () => {
+        this.mfaStep.set('backup');
+        this.mfaLoading.set(false);
+        this.toast.success('MFA enrolled successfully!');
+        // Refresh credential health to update the MFA status display
+        this.profileService.getCredentialHealth().subscribe({
+          next: (creds) => this.credentials.set(creds),
+        });
+      },
+      error: (err) => {
+        this.mfaError.set(err?.error?.message ?? 'Invalid code. Please try again.');
+        this.mfaLoading.set(false);
+      },
+    });
+  }
+
+  finishMfaEnrollment(): void {
+    this.mfaStep.set('idle');
+    this.mfaEnrollment.set(null);
+    this.mfaTotpCode = '';
+    this.mfaError.set('');
+  }
+
+  copyMfaBackupCodes(): void {
+    const codes = this.mfaEnrollment()?.backupCodes ?? [];
+    navigator.clipboard.writeText(codes.join('\n')).catch(() => {
+      /* ignore */
+    });
+    this.toast.success('Backup codes copied to clipboard.');
+  }
 
   /* ── Lifecycle ── */
   ngOnInit(): void {

@@ -502,7 +502,74 @@
               <h3>{{ 'PROFILE.MFA' | translate }}</h3>
             </div>
             <div class="card-body">
-              @if (credentials()?.mfaEnrollments?.length) {
+              @if (mfaError()) {
+                <div class="mfa-error" role="alert">{{ mfaError() }}</div>
+              }
+
+              <!-- Inline enrollment: QR step -->
+              @if (mfaStep() === 'qr') {
+                <div class="mfa-enroll-inline">
+                  <p>
+                    Scan this QR code with your authenticator app (Google Authenticator, Authy,
+                    etc.):
+                  </p>
+                  <div class="qr-container">
+                    <img
+                      [src]="mfaEnrollment()!.qrCodeDataUrl"
+                      alt="TOTP QR Code"
+                      width="180"
+                      height="180"
+                    />
+                  </div>
+                  <p class="manual-entry">
+                    Or enter this secret manually:
+                    <code class="secret-code">{{ mfaEnrollment()!.secret }}</code>
+                  </p>
+                  <button class="btn-primary" (click)="mfaStep.set('verify')">Next</button>
+                </div>
+              }
+
+              <!-- Inline enrollment: Verify step -->
+              @else if (mfaStep() === 'verify') {
+                <div class="mfa-enroll-inline">
+                  <p>Enter the 6-digit code from your authenticator app to verify:</p>
+                  <form (ngSubmit)="verifyMfaCode()" class="mfa-verify-form">
+                    <input
+                      type="text"
+                      [(ngModel)]="mfaTotpCode"
+                      name="mfaTotpCode"
+                      maxlength="6"
+                      placeholder="000000"
+                      class="totp-input"
+                      autocomplete="one-time-code"
+                      inputmode="numeric"
+                    />
+                    <button class="btn-primary" type="submit" [disabled]="mfaLoading()">
+                      {{ mfaLoading() ? 'Verifying…' : 'Verify' }}
+                    </button>
+                  </form>
+                </div>
+              }
+
+              <!-- Inline enrollment: Backup codes step -->
+              @else if (mfaStep() === 'backup') {
+                <div class="mfa-enroll-inline">
+                  <h4>Backup Codes</h4>
+                  <p>Save these codes in a safe place. Each can only be used once.</p>
+                  <div class="backup-codes-grid">
+                    @for (code of mfaEnrollment()!.backupCodes; track code) {
+                      <code class="backup-code">{{ code }}</code>
+                    }
+                  </div>
+                  <div class="backup-actions">
+                    <button class="btn-secondary" (click)="copyMfaBackupCodes()">Copy Codes</button>
+                    <button class="btn-primary" (click)="finishMfaEnrollment()">Done</button>
+                  </div>
+                </div>
+              }
+
+              <!-- Default: show existing enrollments or empty state -->
+              @else if (credentials()?.mfaEnrollments?.length) {
                 <div class="mfa-list">
                   @for (mfa of credentials()!.mfaEnrollments; track mfa.id ?? mfa.method) {
                     <div class="mfa-item">
@@ -535,6 +602,14 @@
                   <span class="material-symbols-outlined">phonelink_lock</span>
                   <p>{{ 'PROFILE.NO_MFA' | translate }}</p>
                   <span class="hint">{{ 'PROFILE.ADD_MFA_HINT' | translate }}</span>
+                  <button
+                    class="btn-primary mfa-setup-btn"
+                    (click)="startMfaEnrollment()"
+                    [disabled]="mfaLoading()"
+                  >
+                    <span class="material-symbols-outlined">security</span>
+                    {{ mfaLoading() ? 'Setting up…' : 'Set Up TOTP' }}
+                  </button>
                 </div>
               }
             </div>

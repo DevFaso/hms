@@ -19,7 +19,6 @@ export const routes: Routes = [
   },
   {
     path: 'mfa-enroll',
-    canActivate: [AuthGuard],
     loadComponent: () => import('./mfa/mfa-enroll').then((m) => m.MfaEnrollComponent),
   },
   {
