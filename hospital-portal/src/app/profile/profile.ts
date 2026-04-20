@@ -159,7 +159,7 @@ export class ProfileComponent implements OnInit {
     let score = 20; // base: account active
     if (!c.forcePasswordChange) score += 20;
     if (c.hasPrimaryMfa) score += 30;
-    if (c.hasPrimaryRecoveryContact) score += 20;
+    if (c.verifiedRecoveryContacts > 0) score += 20;
     if (c.verifiedMfaCount > 0) score += 10;
     return Math.min(score, 100);
   });

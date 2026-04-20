@@ -329,11 +329,11 @@
                     </div>
                     <div
                       class="check-item"
-                      [class.checked]="credentials()?.hasPrimaryRecoveryContact"
+                      [class.checked]="(credentials()?.verifiedRecoveryContacts ?? 0) > 0"
                     >
                       <span class="material-symbols-outlined">
                         {{
-                          credentials()?.hasPrimaryRecoveryContact
+                          (credentials()?.verifiedRecoveryContacts ?? 0) > 0
                             ? 'check_circle'
                             : 'radio_button_unchecked'
                         }}
