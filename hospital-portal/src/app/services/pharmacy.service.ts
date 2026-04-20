@@ -541,10 +541,7 @@ export class PharmacyService {
 
   // ── Dispensing ──
 
-  getDispenseWorkQueue(
-    page = 0,
-    size = 20,
-  ): Observable<ApiResponse<Page<WorkQueuePrescription>>> {
+  getDispenseWorkQueue(page = 0, size = 20): Observable<ApiResponse<Page<WorkQueuePrescription>>> {
     const params = new HttpParams().set('page', page).set('size', size);
     return this.http.get<ApiResponse<Page<WorkQueuePrescription>>>(
       '/pharmacy/dispense/work-queue',
