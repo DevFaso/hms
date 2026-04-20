@@ -54,10 +54,11 @@ export interface CredentialHealth {
 export interface MfaEnrollment {
   id?: string;
   method: string;
-  destination?: string;
-  verified: boolean;
-  primary: boolean;
-  createdAt?: string;
+  channel?: string;
+  enabled: boolean;
+  primaryFactor: boolean;
+  enrolledAt?: string;
+  lastVerifiedAt?: string;
 }
 
 export interface RecoveryContact {
@@ -65,8 +66,9 @@ export interface RecoveryContact {
   contactType: string;
   contactValue: string;
   verified: boolean;
-  primary: boolean;
-  createdAt?: string;
+  verifiedAt?: string;
+  primaryContact: boolean;
+  notes?: string;
 }
 
 export interface Assignment {
@@ -173,8 +175,30 @@ export class ProfileService {
 
   /** PUT /auth/credentials/recovery — update recovery contacts */
   updateRecoveryContacts(
-    contacts: { contactType: string; contactValue: string; primary?: boolean }[],
+    contacts: {
+      contactType: string;
+      contactValue: string;
+      primaryContact?: boolean;
+      notes?: string;
+    }[],
   ): Observable<RecoveryContact[]> {
     return this.http.put<RecoveryContact[]>('/auth/credentials/recovery', contacts);
+  }
+
+  /** POST /auth/credentials/recovery/:id/send-code — send verification code */
+  sendRecoveryVerificationCode(
+    contactId: string,
+  ): Observable<{ message: string; contactType: string }> {
+    return this.http.post<{ message: string; contactType: string }>(
+      `/auth/credentials/recovery/${contactId}/send-code`,
+      {},
+    );
+  }
+
+  /** POST /auth/credentials/recovery/:id/verify — verify recovery contact with code */
+  verifyRecoveryContact(contactId: string, code: string): Observable<RecoveryContact> {
+    return this.http.post<RecoveryContact>(`/auth/credentials/recovery/${contactId}/verify`, {
+      code,
+    });
   }
 }

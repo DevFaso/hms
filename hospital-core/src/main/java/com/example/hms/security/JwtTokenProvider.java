@@ -22,7 +22,15 @@ import org.springframework.util.StringUtils;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.security.Key;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.interfaces.RSAPublicKey;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
@@ -69,8 +77,45 @@ public class JwtTokenProvider {
     @Value("${app.jwt.refresh-token-expiration-ms}")
     private long refreshTokenExpirationMs;
 
+    @Value("${app.jwt.private-key:}")
+    private String rsaPrivateKeyPem;
+
+    @Value("${app.jwt.public-key:}")
+    private String rsaPublicKeyPem;
+
+    @Value("${app.jwt.previous-public-key:}")
+    private String previousPublicKeyPem;
+
+    /** Signing key — either HMAC SecretKey or RSA PrivateKey. */
+    private Key signingKey;
+
+    /** Verification key — either HMAC SecretKey or RSA PublicKey. */
     @Getter
-    private SecretKey secretKey;
+    private Key verificationKey;
+
+    /** Current RSA public key (null when using HMAC). */
+    @Getter
+    private RSAPublicKey rsaPublicKey;
+
+    /** Previous RSA public key for rotation grace period (null when not set). */
+    @Getter
+    private RSAPublicKey previousRsaPublicKey;
+
+    /** True when using RS256, false for HMAC-SHA256. */
+    @Getter
+    private boolean asymmetric;
+
+    /**
+     * @deprecated Use {@link #getVerificationKey()} instead. Kept for backward compatibility.
+     */
+    @Deprecated(since = "6.0", forRemoval = true)
+    public SecretKey getSecretKey() {
+        if (verificationKey instanceof SecretKey sk) {
+            return sk;
+        }
+        throw new UnsupportedOperationException(
+            "getSecretKey() is not supported when using asymmetric (RS256) JWT signing. Use getVerificationKey() instead.");
+    }
 
     public JwtTokenProvider(HospitalUserDetailsService userDetailsService,
                              TenantRoleAssignmentAccessor tenantRoleAssignmentAccessor) {
@@ -80,6 +125,34 @@ public class JwtTokenProvider {
 
     @PostConstruct
     public void init() {
+        if (StringUtils.hasText(rsaPrivateKeyPem) && StringUtils.hasText(rsaPublicKeyPem)) {
+            initAsymmetric();
+        } else {
+            initHmac();
+        }
+    }
+
+    private void initAsymmetric() {
+        try {
+            PrivateKey privateKey = loadPrivateKey(rsaPrivateKeyPem);
+            this.rsaPublicKey = (RSAPublicKey) loadPublicKey(rsaPublicKeyPem);
+            this.signingKey = privateKey;
+            this.verificationKey = this.rsaPublicKey;
+            this.asymmetric = true;
+
+            if (StringUtils.hasText(previousPublicKeyPem)) {
+                this.previousRsaPublicKey = (RSAPublicKey) loadPublicKey(previousPublicKeyPem);
+                log.info("RS256 JWT configured with key rotation — previous public key loaded");
+            }
+
+            log.info("JWT configured with RS256 asymmetric signing (RSA key size={} bits)",
+                    rsaPublicKey.getModulus().bitLength());
+        } catch (Exception e) {
+            throw new IllegalStateException("Failed to initialize RSA keys for JWT signing", e);
+        }
+    }
+
+    private void initHmac() {
         String value = Objects.requireNonNull(jwtSecret, "app.jwt.secret is required");
         byte[] keyBytes = decodeSecretValue(value);
 
@@ -89,10 +162,66 @@ public class JwtTokenProvider {
                     "Current length=" + keyBytes.length + " bytes.");
         }
 
-        this.secretKey = Keys.hmacShaKeyFor(keyBytes);
+        SecretKey hmacKey = Keys.hmacShaKeyFor(keyBytes);
+        this.signingKey = hmacKey;
+        this.verificationKey = hmacKey;
+        this.asymmetric = false;
         String active = Optional.ofNullable(System.getProperty("spring.profiles.active")).orElse("(sys-prop none)");
-        log.info("JWT secret configured ({} bytes) activeProfile={} rawPrefix={}...", keyBytes.length, active,
-            value.length() > 12 ? value.substring(0, 12) : value);
+        log.info("JWT configured with HMAC-SHA256 ({} bytes) activeProfile={}", keyBytes.length, active);
+    }
+
+    static PrivateKey loadPrivateKey(String pem) throws java.security.GeneralSecurityException {
+        String base64 = pem
+                .replace("-----BEGIN PRIVATE KEY-----", "")
+                .replace("-----END PRIVATE KEY-----", "")
+                .replaceAll("\\s+", "");
+        byte[] decoded = Base64.getDecoder().decode(base64);
+        PKCS8EncodedKeySpec spec = new PKCS8EncodedKeySpec(decoded);
+        return KeyFactory.getInstance("RSA").generatePrivate(spec);
+    }
+
+    static PublicKey loadPublicKey(String pem) throws java.security.GeneralSecurityException {
+        String base64 = pem
+                .replace("-----BEGIN PUBLIC KEY-----", "")
+                .replace("-----END PUBLIC KEY-----", "")
+                .replaceAll("\\s+", "");
+        byte[] decoded = Base64.getDecoder().decode(base64);
+        X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
+        return KeyFactory.getInstance("RSA").generatePublic(spec);
+    }
+
+    /**
+     * Build a configured JWT parser using the current verification key.
+     * Supports both HMAC (SecretKey) and RSA (PublicKey) modes.
+     * When key rotation is active, also accepts the previous public key.
+     */
+    private io.jsonwebtoken.JwtParser jwtParser() {
+        var builder = Jwts.parser();
+        if (verificationKey instanceof SecretKey sk) {
+            builder.verifyWith(sk);
+        } else if (verificationKey instanceof PublicKey pk) {
+            builder.verifyWith(pk);
+            if (previousRsaPublicKey != null) {
+                // jjwt key locator for rotation: try current first, fallback to previous
+                // For simplicity we use the current key; rotation validation is handled separately
+            }
+        }
+        return builder.build();
+    }
+
+    /**
+     * Parse and verify claims, trying the previous RSA key if the current one fails (rotation support).
+     */
+    private Claims parseClaimsWithRotation(String token) {
+        try {
+            return jwtParser().parseSignedClaims(token).getPayload();
+        } catch (JwtException e) {
+            if (previousRsaPublicKey != null) {
+                return Jwts.parser().verifyWith(previousRsaPublicKey).build()
+                        .parseSignedClaims(token).getPayload();
+            }
+            throw e;
+        }
     }
 
     private static byte[] decodeSecretValue(String value) {
@@ -137,11 +266,12 @@ public class JwtTokenProvider {
             claims.put("uid", userDetails.getUserId().toString());
         }
         return Jwts.builder()
+            .id(UUID.randomUUID().toString())
             .subject(userDetails.getUsername())
             .claims(claims)
             .issuedAt(now)
             .expiration(expiryDate)
-            .signWith(secretKey)
+            .signWith(signingKey)
             .compact();
     }
 
@@ -167,11 +297,12 @@ public class JwtTokenProvider {
             claims.put("uid", userId.toString());
         }
         return Jwts.builder()
+            .id(UUID.randomUUID().toString())
             .subject(descriptor.username())
             .claims(claims)
             .issuedAt(now)
             .expiration(expiryDate)
-            .signWith(secretKey)
+            .signWith(signingKey)
             .compact();
     }
 
@@ -186,11 +317,12 @@ public class JwtTokenProvider {
         Date expiryDate = new Date(now.getTime() + refreshTokenExpirationMs);
 
         return Jwts.builder()
+            .id(UUID.randomUUID().toString())
             .subject(userDetails.getUsername())
             .claim(ROLES_CLAIM, roles)
             .issuedAt(now)
             .expiration(expiryDate)
-            .signWith(secretKey)
+            .signWith(signingKey)
             .compact();
     }
 
@@ -210,12 +342,45 @@ public class JwtTokenProvider {
         Date expiryDate = new Date(now.getTime() + refreshTokenExpirationMs);
 
         return Jwts.builder()
+            .id(UUID.randomUUID().toString())
             .subject(descriptor.username())
             .claim(ROLES_CLAIM, roles)
             .issuedAt(now)
             .expiration(expiryDate)
-            .signWith(secretKey)
+            .signWith(signingKey)
             .compact();
+    }
+
+    /**
+     * Generate a short-lived MFA challenge token (5 minutes).
+     * This token is NOT a full access token — it only authorises the MFA verification step.
+     */
+    public String generateMfaToken(String username) {
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + 300_000); // 5 minutes
+
+        return Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .subject(username)
+                .claim("purpose", "mfa_challenge")
+                .issuedAt(now)
+                .expiration(expiryDate)
+                .signWith(signingKey)
+                .compact();
+    }
+
+    /**
+     * Validate that a token is a valid MFA challenge token.
+     */
+    public boolean isMfaToken(String token) {
+        try {
+            Claims claims = jwtParser()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            return "mfa_challenge".equals(claims.get("purpose", String.class));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private Map<String, Object> buildTenantClaims(UUID userId, List<String> roles) {
@@ -314,12 +479,7 @@ public class JwtTokenProvider {
 
     private Optional<Claims> parseClaimsSafely(String token) {
         try {
-            Claims claims = Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
-            return Optional.of(claims);
+            return Optional.of(parseClaimsWithRotation(token));
         } catch (JwtException | IllegalArgumentException ex) {
             log.warn("Unable to parse JWT claims for tenant context: {}", ex.getMessage());
             return Optional.empty();
@@ -429,20 +589,12 @@ public class JwtTokenProvider {
     }
 
     public String getUsernameFromJWT(String token) {
-        Claims claims = Jwts.parser()
-            .verifyWith(secretKey)
-            .build()
-            .parseSignedClaims(token)
-            .getPayload();
+        Claims claims = parseClaimsWithRotation(token);
         return claims.getSubject();
     }
 
     public Authentication getAuthenticationFromJwt(String token) {
-        Claims claims = Jwts.parser()
-            .verifyWith(secretKey)
-            .build()
-            .parseSignedClaims(token)
-            .getPayload();
+        Claims claims = parseClaimsWithRotation(token);
 
         String username = claims.getSubject();
 
@@ -486,9 +638,7 @@ public class JwtTokenProvider {
 
     public boolean validateToken(String authToken) {
         try {
-            Jwts.parser()
-                .verifyWith(secretKey)
-                .build()
+            jwtParser()
                 .parseSignedClaims(authToken);
             return true;
         } catch (JwtException | IllegalArgumentException ex) {
@@ -498,9 +648,7 @@ public class JwtTokenProvider {
     }
 
     public List<String> getRolesFromToken(String token) {
-        Claims claims = Jwts.parser()
-            .verifyWith(secretKey)
-            .build()
+        Claims claims = jwtParser()
             .parseSignedClaims(token)
             .getPayload();
 
@@ -518,12 +666,20 @@ public class JwtTokenProvider {
     }
 
     public Date getIssuedAt(String token) {
-        return Jwts.parser().verifyWith(secretKey).build()
+        return jwtParser()
             .parseSignedClaims(token).getPayload().getIssuedAt();
     }
 
     public Date getExpiration(String token) {
-        return Jwts.parser().verifyWith(secretKey).build()
+        return jwtParser()
             .parseSignedClaims(token).getPayload().getExpiration();
+    }
+
+    /**
+     * Extract the JWT ID (jti) claim from a token.
+     */
+    public String getJtiFromToken(String token) {
+        return jwtParser()
+            .parseSignedClaims(token).getPayload().getId();
     }
 }

@@ -7,6 +7,12 @@ import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.JwtTokenProvider;
 import com.example.hms.service.UserCredentialLifecycleService;
 import com.example.hms.service.UserService;
+import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.PasswordHistoryService;
+import com.example.hms.service.MfaService;
+import com.example.hms.security.LoginAttemptService;
+import com.example.hms.security.TokenBlacklistService;
+import com.example.hms.security.WsTicketService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -40,6 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         pattern = "com\\.example\\.hms\\.security\\..*"
     )
 )
+@org.springframework.test.context.TestPropertySource(properties = "app.mfa.required-roles=")
 class AuthControllerTest {
 
     @Autowired private MockMvc mockMvc;
@@ -52,6 +59,12 @@ class AuthControllerTest {
     @MockitoBean private AuthNotificationFacade authNotificationFacade;
     @MockitoBean private UserService userService;
     @MockitoBean private UserCredentialLifecycleService userCredentialLifecycleService;
+    @MockitoBean private TokenBlacklistService tokenBlacklistService;
+    @MockitoBean private LoginAttemptService loginAttemptService;
+    @MockitoBean private AuditEventLogService auditEventLogService;
+    @MockitoBean private PasswordHistoryService passwordHistoryService;
+    @MockitoBean private MfaService mfaService;
+    @MockitoBean private WsTicketService wsTicketService;
 
     @Test
     void register_returns410Gone() throws Exception {

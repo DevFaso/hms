@@ -329,11 +329,11 @@
                     </div>
                     <div
                       class="check-item"
-                      [class.checked]="credentials()?.hasPrimaryRecoveryContact"
+                      [class.checked]="(credentials()?.verifiedRecoveryContacts ?? 0) > 0"
                     >
                       <span class="material-symbols-outlined">
                         {{
-                          credentials()?.hasPrimaryRecoveryContact
+                          (credentials()?.verifiedRecoveryContacts ?? 0) > 0
                             ? 'check_circle'
                             : 'radio_button_unchecked'
                         }}
@@ -502,7 +502,74 @@
               <h3>{{ 'PROFILE.MFA' | translate }}</h3>
             </div>
             <div class="card-body">
-              @if (credentials()?.mfaEnrollments?.length) {
+              @if (mfaError()) {
+                <div class="mfa-error" role="alert">{{ mfaError() }}</div>
+              }
+
+              <!-- Inline enrollment: QR step -->
+              @if (mfaStep() === 'qr') {
+                <div class="mfa-enroll-inline">
+                  <p>
+                    Scan this QR code with your authenticator app (Google Authenticator, Authy,
+                    etc.):
+                  </p>
+                  <div class="qr-container">
+                    <img
+                      [src]="mfaEnrollment()!.qrCodeDataUrl"
+                      alt="TOTP QR Code"
+                      width="180"
+                      height="180"
+                    />
+                  </div>
+                  <p class="manual-entry">
+                    Or enter this secret manually:
+                    <code class="secret-code">{{ mfaEnrollment()!.secret }}</code>
+                  </p>
+                  <button class="btn-primary" (click)="mfaStep.set('verify')">Next</button>
+                </div>
+              }
+
+              <!-- Inline enrollment: Verify step -->
+              @else if (mfaStep() === 'verify') {
+                <div class="mfa-enroll-inline">
+                  <p>Enter the 6-digit code from your authenticator app to verify:</p>
+                  <form (ngSubmit)="verifyMfaCode()" class="mfa-verify-form">
+                    <input
+                      type="text"
+                      [(ngModel)]="mfaTotpCode"
+                      name="mfaTotpCode"
+                      maxlength="6"
+                      placeholder="000000"
+                      class="totp-input"
+                      autocomplete="one-time-code"
+                      inputmode="numeric"
+                    />
+                    <button class="btn-primary" type="submit" [disabled]="mfaLoading()">
+                      {{ mfaLoading() ? 'Verifying…' : 'Verify' }}
+                    </button>
+                  </form>
+                </div>
+              }
+
+              <!-- Inline enrollment: Backup codes step -->
+              @else if (mfaStep() === 'backup') {
+                <div class="mfa-enroll-inline">
+                  <h4>Backup Codes</h4>
+                  <p>Save these codes in a safe place. Each can only be used once.</p>
+                  <div class="backup-codes-grid">
+                    @for (code of mfaEnrollment()!.backupCodes; track code) {
+                      <code class="backup-code">{{ code }}</code>
+                    }
+                  </div>
+                  <div class="backup-actions">
+                    <button class="btn-secondary" (click)="copyMfaBackupCodes()">Copy Codes</button>
+                    <button class="btn-primary" (click)="finishMfaEnrollment()">Done</button>
+                  </div>
+                </div>
+              }
+
+              <!-- Default: show existing enrollments or empty state -->
+              @else if (credentials()?.mfaEnrollments?.length) {
                 <div class="mfa-list">
                   @for (mfa of credentials()!.mfaEnrollments; track mfa.id ?? mfa.method) {
                     <div class="mfa-item">
@@ -511,19 +578,19 @@
                       </span>
                       <div class="mfa-details">
                         <span class="mfa-method">{{ mfa.method }}</span>
-                        @if (mfa.destination) {
-                          <span class="mfa-dest">{{ mfa.destination }}</span>
+                        @if (mfa.channel) {
+                          <span class="mfa-dest">{{ mfa.channel }}</span>
                         }
                       </div>
                       <div class="mfa-badges">
-                        @if (mfa.verified) {
+                        @if (mfa.lastVerifiedAt) {
                           <span class="badge-verified">{{ 'PROFILE.VERIFIED' | translate }}</span>
                         } @else {
                           <span class="badge-unverified">{{
                             'PROFILE.UNVERIFIED' | translate
                           }}</span>
                         }
-                        @if (mfa.primary) {
+                        @if (mfa.primaryFactor) {
                           <span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
                         }
                       </div>
@@ -535,6 +602,14 @@
                   <span class="material-symbols-outlined">phonelink_lock</span>
                   <p>{{ 'PROFILE.NO_MFA' | translate }}</p>
                   <span class="hint">{{ 'PROFILE.ADD_MFA_HINT' | translate }}</span>
+                  <button
+                    class="btn-primary mfa-setup-btn"
+                    (click)="startMfaEnrollment()"
+                    [disabled]="mfaLoading()"
+                  >
+                    <span class="material-symbols-outlined">security</span>
+                    {{ mfaLoading() ? 'Setting up…' : 'Set Up TOTP' }}
+                  </button>
                 </div>
               }
             </div>
@@ -547,37 +622,160 @@
               <h3>{{ 'PROFILE.RECOVERY_CONTACTS' | translate }}</h3>
             </div>
             <div class="card-body">
-              @if (credentials()?.recoveryContacts?.length) {
-                <div class="recovery-list">
-                  @for (rc of credentials()!.recoveryContacts; track rc.id ?? rc.contactValue) {
-                    <div class="recovery-item">
-                      <span class="material-symbols-outlined recovery-icon">
-                        {{ rc.contactType === 'EMAIL' ? 'mail' : 'phone' }}
-                      </span>
-                      <div class="recovery-details">
-                        <span class="recovery-type">{{ rc.contactType }}</span>
-                        <span class="recovery-value">{{ rc.contactValue }}</span>
-                      </div>
-                      <div class="recovery-badges">
-                        @if (rc.verified) {
-                          <span class="badge-verified">{{ 'PROFILE.VERIFIED' | translate }}</span>
-                        } @else {
-                          <span class="badge-unverified">{{
-                            'PROFILE.UNVERIFIED' | translate
-                          }}</span>
-                        }
-                        @if (rc.primary) {
-                          <span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
-                        }
-                      </div>
-                    </div>
+              @if (showAddRecovery()) {
+                <!-- Add Recovery Contact Form -->
+                <div class="recovery-form">
+                  <h4>Add Recovery Contact</h4>
+                  <div class="form-row">
+                    <label class="form-label" for="recovery-type">Type</label>
+                    <select
+                      id="recovery-type"
+                      class="form-control"
+                      [ngModel]="newRecoveryType()"
+                      (ngModelChange)="newRecoveryType.set($event)"
+                    >
+                      <option value="EMAIL">Email</option>
+                      <option value="PHONE">Phone</option>
+                    </select>
+                  </div>
+                  <div class="form-row">
+                    <label class="form-label" for="recovery-value">{{
+                      newRecoveryType() === 'EMAIL' ? 'Email Address' : 'Phone Number'
+                    }}</label>
+                    <input
+                      id="recovery-value"
+                      class="form-control"
+                      [type]="newRecoveryType() === 'EMAIL' ? 'email' : 'tel'"
+                      [placeholder]="
+                        newRecoveryType() === 'EMAIL' ? 'recovery@example.com' : '+1234567890'
+                      "
+                      [ngModel]="newRecoveryValue()"
+                      (ngModelChange)="newRecoveryValue.set($event)"
+                    />
+                  </div>
+                  <div class="form-row">
+                    <label class="form-label">
+                      <input
+                        type="checkbox"
+                        [ngModel]="newRecoveryPrimary()"
+                        (ngModelChange)="newRecoveryPrimary.set($event)"
+                      />
+                      Set as primary contact
+                    </label>
+                  </div>
+                  @if (recoveryError()) {
+                    <div class="form-error">{{ recoveryError() }}</div>
                   }
+                  <div class="form-actions">
+                    <button
+                      class="btn-primary"
+                      (click)="saveRecoveryContact()"
+                      [disabled]="recoverySaving()"
+                    >
+                      {{ recoverySaving() ? 'Saving…' : 'Save' }}
+                    </button>
+                    <button class="btn-secondary" (click)="cancelAddRecovery()">Cancel</button>
+                  </div>
                 </div>
               } @else {
-                <div class="empty-security-state">
-                  <span class="material-symbols-outlined">contact_phone</span>
-                  <p>{{ 'PROFILE.NO_RECOVERY_CONTACTS' | translate }}</p>
-                  <span class="hint">{{ 'PROFILE.ADD_RECOVERY_HINT' | translate }}</span>
+                @if (credentials()?.recoveryContacts?.length) {
+                  <div class="recovery-list">
+                    @for (rc of credentials()!.recoveryContacts; track rc.id ?? rc.contactValue) {
+                      <div class="recovery-item">
+                        <span class="material-symbols-outlined recovery-icon">
+                          {{ rc.contactType === 'EMAIL' ? 'mail' : 'phone' }}
+                        </span>
+                        <div class="recovery-details">
+                          <span class="recovery-type">{{ rc.contactType }}</span>
+                          <span class="recovery-value">{{ rc.contactValue }}</span>
+                        </div>
+                        <div class="recovery-badges">
+                          @if (rc.verified) {
+                            <span class="badge-verified">{{ 'PROFILE.VERIFIED' | translate }}</span>
+                          } @else {
+                            <span class="badge-unverified">{{
+                              'PROFILE.UNVERIFIED' | translate
+                            }}</span>
+                            @if (verifyingContactId() !== rc.id) {
+                              <button
+                                class="btn-sm-primary"
+                                (click)="sendVerificationCode(rc)"
+                                [disabled]="verificationSending()"
+                              >
+                                Verify
+                              </button>
+                            }
+                          }
+                          @if (rc.primaryContact) {
+                            <span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
+                          }
+                        </div>
+                        <button
+                          class="btn-icon-danger"
+                          title="Remove"
+                          (click)="removeRecoveryContact(rc)"
+                          [disabled]="recoverySaving()"
+                        >
+                          <span class="material-symbols-outlined">delete</span>
+                        </button>
+                      </div>
+                      @if (verifyingContactId() === rc.id && verificationCodeSent()) {
+                        <div class="verification-form">
+                          <p class="verification-hint">
+                            Enter the 6-digit code sent to <strong>{{ rc.contactValue }}</strong>
+                          </p>
+                          <div class="form-row">
+                            <label class="form-label" for="verification-code"
+                              >Verification Code</label
+                            >
+                            <input
+                              id="verification-code"
+                              class="form-control verification-input"
+                              type="text"
+                              maxlength="6"
+                              placeholder="000000"
+                              [ngModel]="verificationCode()"
+                              (ngModelChange)="verificationCode.set($event)"
+                            />
+                          </div>
+                          @if (verificationError()) {
+                            <div class="form-error">{{ verificationError() }}</div>
+                          }
+                          <div class="form-actions">
+                            <button
+                              class="btn-primary"
+                              (click)="submitVerificationCode()"
+                              [disabled]="verificationSending() || verificationCode().length < 6"
+                            >
+                              {{ verificationSending() ? 'Verifying…' : 'Confirm' }}
+                            </button>
+                            <button class="btn-secondary" (click)="cancelVerification()">
+                              Cancel
+                            </button>
+                            <button
+                              class="btn-link"
+                              (click)="sendVerificationCode(rc)"
+                              [disabled]="verificationSending()"
+                            >
+                              Resend Code
+                            </button>
+                          </div>
+                        </div>
+                      }
+                    }
+                  </div>
+                } @else {
+                  <div class="empty-security-state">
+                    <span class="material-symbols-outlined">contact_phone</span>
+                    <p>{{ 'PROFILE.NO_RECOVERY_CONTACTS' | translate }}</p>
+                    <span class="hint">{{ 'PROFILE.ADD_RECOVERY_HINT' | translate }}</span>
+                  </div>
+                }
+                <div class="card-actions">
+                  <button class="btn-primary" (click)="openAddRecovery()">
+                    <span class="material-symbols-outlined">add</span>
+                    Add Contact
+                  </button>
                 </div>
               }
             </div>

@@ -277,6 +277,7 @@ public class SecurityConfig {
                 // -------------------- Public / Health --------------------
                 .requestMatchers("/error").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
+                .requestMatchers("/.well-known/jwks.json").permitAll()
 
                 // Feature flags
                 .requestMatchers(HttpMethod.PUT, API_FEATURE_FLAGS, API_FEATURE_FLAGS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)

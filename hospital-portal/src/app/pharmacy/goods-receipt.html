@@ -1,0 +1,171 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'PHARMACY.GOODS_RECEIPT_TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PHARMACY.GOODS_RECEIPT_SUBTITLE' | translate }}</p>
+    </div>
+    <div class="header-actions">
+      <select
+        class="pharmacy-select"
+        [(ngModel)]="selectedPharmacyId"
+        (ngModelChange)="onPharmacyChange()"
+      >
+        @for (p of pharmacies(); track p.id) {
+          <option [value]="p.id">{{ p.name }}</option>
+        }
+      </select>
+      <button class="btn-primary" (click)="openReceiveForm()">
+        <span class="material-symbols-outlined">add_box</span>
+        {{ 'PHARMACY.RECEIVE_STOCK' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Receive Form -->
+  @if (showForm()) {
+    <div class="receive-card">
+      <h3>
+        <span class="material-symbols-outlined">inventory</span>
+        {{ 'PHARMACY.RECEIVE_STOCK' | translate }}
+      </h3>
+      <form (ngSubmit)="submitForm()">
+        <div class="form-row">
+          <div class="field">
+            <label for="grItem">{{ 'PHARMACY.INVENTORY_ITEM' | translate }} *</label>
+            <select
+              id="grItem"
+              [(ngModel)]="selectedInventoryItemId"
+              name="inventoryItemId"
+              required
+            >
+              <option value="">— Select Inventory Item —</option>
+              @for (item of inventoryItems(); track item.id) {
+                <option [value]="item.id">
+                  {{ getItemName(item) }} (Qty: {{ item.quantityOnHand }})
+                </option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="grLot">{{ 'PHARMACY.LOT_NUMBER' | translate }} *</label>
+            <input
+              id="grLot"
+              type="text"
+              [(ngModel)]="form.lotNumber"
+              name="lotNumber"
+              required
+              placeholder="e.g., LOT-2025-001"
+            />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="grExpiry">{{ 'PHARMACY.EXPIRY_DATE' | translate }} *</label>
+            <input
+              id="grExpiry"
+              type="date"
+              [(ngModel)]="form.expiryDate"
+              name="expiryDate"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="grQty">{{ 'PHARMACY.QUANTITY_RECEIVED' | translate }} *</label>
+            <input
+              id="grQty"
+              type="number"
+              [(ngModel)]="form.initialQuantity"
+              name="initialQuantity"
+              min="1"
+              required
+            />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="grSupplier">{{ 'PHARMACY.SUPPLIER' | translate }}</label>
+            <input
+              id="grSupplier"
+              type="text"
+              [(ngModel)]="form.supplier"
+              name="supplier"
+              placeholder="e.g., CAMEG"
+            />
+          </div>
+          <div class="field">
+            <label for="grCost">{{ 'PHARMACY.UNIT_COST' | translate }} (FCFA)</label>
+            <input
+              id="grCost"
+              type="number"
+              [(ngModel)]="form.unitCost"
+              name="unitCost"
+              min="0"
+              step="0.01"
+            />
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="closeForm()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button type="submit" class="btn-primary" [disabled]="saving()">
+            <span class="material-symbols-outlined">check</span>
+            {{
+              saving() ? ('COMMON.SAVING' | translate) : ('PHARMACY.CONFIRM_RECEIPT' | translate)
+            }}
+          </button>
+        </div>
+      </form>
+    </div>
+  }
+
+  <!-- Recent Lots -->
+  <h3 class="section-title">{{ 'PHARMACY.RECENT_LOTS' | translate }}</h3>
+  @if (lotsLoading()) {
+    <div class="loading-state">
+      <div class="spinner"></div>
+      <p>{{ 'COMMON.LOADING' | translate }}</p>
+    </div>
+  } @else if (recentLots().length > 0) {
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>{{ 'PHARMACY.LOT_NUMBER' | translate }}</th>
+            <th>{{ 'PHARMACY.RECEIVED_DATE' | translate }}</th>
+            <th>{{ 'PHARMACY.EXPIRY_DATE' | translate }}</th>
+            <th>{{ 'PHARMACY.QTY_RECEIVED_LABEL' | translate }}</th>
+            <th>{{ 'PHARMACY.REMAINING_QTY' | translate }}</th>
+            <th>{{ 'PHARMACY.SUPPLIER' | translate }}</th>
+            <th>{{ 'PHARMACY.UNIT_COST' | translate }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (lot of recentLots(); track lot.id) {
+            <tr>
+              <td>
+                <span class="code-chip">{{ lot.lotNumber }}</span>
+              </td>
+              <td>{{ lot.receivedDate | date: 'mediumDate' }}</td>
+              <td>{{ lot.expiryDate | date: 'mediumDate' }}</td>
+              <td>{{ lot.initialQuantity }}</td>
+              <td>
+                <span [class.low-qty]="lot.remainingQuantity < 10">{{
+                  lot.remainingQuantity
+                }}</span>
+              </td>
+              <td>{{ lot.supplier ?? '—' }}</td>
+              <td>{{ lot.unitCost ? (lot.unitCost | number: '1.0-0') + ' FCFA' : '—' }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  } @else {
+    <div class="empty-state">
+      <span class="material-symbols-outlined empty-icon">inventory</span>
+      <h3>{{ 'PHARMACY.NO_LOTS' | translate }}</h3>
+      <p>{{ 'PHARMACY.RECEIVE_FIRST_LOT' | translate }}</p>
+    </div>
+  }
+</div>

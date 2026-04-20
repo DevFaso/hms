@@ -1,0 +1,313 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'PHARMACY.INVENTORY_TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PHARMACY.INVENTORY_SUBTITLE' | translate }}</p>
+    </div>
+    <div class="header-actions">
+      <select
+        class="pharmacy-select"
+        [(ngModel)]="selectedPharmacyId"
+        (ngModelChange)="onPharmacyChange()"
+      >
+        @for (p of pharmacies(); track p.id) {
+          <option [value]="p.id">{{ p.name }}</option>
+        }
+      </select>
+      <button class="btn-primary" (click)="openCreateItem()">
+        <span class="material-symbols-outlined">add</span>
+        {{ 'PHARMACY.ADD_ITEM' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn" [class.active]="activeTab() === 'stock'" (click)="setTab('stock')">
+      <span class="material-symbols-outlined">inventory_2</span>
+      {{ 'PHARMACY.STOCK_LEVELS' | translate }}
+    </button>
+    <button class="tab-btn" [class.active]="activeTab() === 'alerts'" (click)="setTab('alerts')">
+      <span class="material-symbols-outlined">warning</span>
+      {{ 'PHARMACY.REORDER_ALERTS' | translate }}
+      @if (alertItems().length > 0) {
+        <span class="alert-count">{{ alertItems().length }}</span>
+      }
+    </button>
+    <button class="tab-btn" [class.active]="activeTab() === 'expiry'" (click)="setTab('expiry')">
+      <span class="material-symbols-outlined">event_busy</span>
+      {{ 'PHARMACY.EXPIRY_REPORT' | translate }}
+    </button>
+  </div>
+
+  <!-- Stock Levels Tab -->
+  @if (activeTab() === 'stock') {
+    @if (stockLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    } @else if (inventoryItems().length > 0) {
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>{{ 'PHARMACY.MEDICATION' | translate }}</th>
+              <th>{{ 'PHARMACY.QTY_ON_HAND' | translate }}</th>
+              <th>{{ 'PHARMACY.REORDER_THRESHOLD' | translate }}</th>
+              <th>{{ 'PHARMACY.REORDER_QTY' | translate }}</th>
+              <th>{{ 'PHARMACY.UNIT' | translate }}</th>
+              <th>{{ 'COMMON.STATUS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of inventoryItems(); track item.id) {
+              <tr>
+                <td class="med-name">{{ item.medicationName ?? item.medicationCode ?? '—' }}</td>
+                <td>
+                  <span class="qty" [class]="getStockStatusClass(item)">{{
+                    item.quantityOnHand
+                  }}</span>
+                </td>
+                <td>{{ item.reorderThreshold }}</td>
+                <td>{{ item.reorderQuantity }}</td>
+                <td>{{ item.unit ?? '—' }}</td>
+                <td>
+                  <span class="stock-badge" [class]="getStockStatusClass(item)">
+                    {{ getStockStatusLabel(item) }}
+                  </span>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      @if (totalPages > 1) {
+        <div class="pagination">
+          <button class="btn-secondary btn-sm" [disabled]="currentPage === 0" (click)="prevPage()">
+            <span class="material-symbols-outlined">chevron_left</span>
+          </button>
+          <span class="page-info">{{ currentPage + 1 }} / {{ totalPages }}</span>
+          <button
+            class="btn-secondary btn-sm"
+            [disabled]="currentPage >= totalPages - 1"
+            (click)="nextPage()"
+          >
+            <span class="material-symbols-outlined">chevron_right</span>
+          </button>
+        </div>
+      }
+    } @else {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">inventory_2</span>
+        <h3>{{ 'PHARMACY.NO_INVENTORY' | translate }}</h3>
+        <p>{{ 'PHARMACY.ADD_FIRST_ITEM' | translate }}</p>
+      </div>
+    }
+  }
+
+  <!-- Reorder Alerts Tab -->
+  @if (activeTab() === 'alerts') {
+    <div class="alerts-header">
+      <button class="btn-secondary" (click)="triggerReorderAlerts()">
+        <span class="material-symbols-outlined">notifications_active</span>
+        {{ 'PHARMACY.TRIGGER_ALERTS' | translate }}
+      </button>
+    </div>
+    @if (alertsLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    } @else if (alertItems().length > 0) {
+      <div class="alert-grid">
+        @for (item of alertItems(); track item.id) {
+          <div class="alert-card">
+            <div class="alert-icon-wrap">
+              <span class="material-symbols-outlined">warning</span>
+            </div>
+            <div class="alert-info">
+              <h4>{{ item.medicationName ?? item.medicationCode ?? 'Unknown' }}</h4>
+              <p class="alert-detail">
+                <strong>{{ item.quantityOnHand }}</strong> {{ item.unit ?? 'units' }} remaining
+                (threshold: {{ item.reorderThreshold }})
+              </p>
+              <p class="alert-detail reorder">Reorder qty: {{ item.reorderQuantity }}</p>
+            </div>
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">check_circle</span>
+        <h3>{{ 'PHARMACY.NO_ALERTS' | translate }}</h3>
+        <p>{{ 'PHARMACY.ALL_STOCKED' | translate }}</p>
+      </div>
+    }
+  }
+
+  <!-- Expiry Report Tab -->
+  @if (activeTab() === 'expiry') {
+    <div class="expiry-controls">
+      <label for="expiryDays">{{ 'PHARMACY.DAYS_AHEAD' | translate }}:</label>
+      <select id="expiryDays" [(ngModel)]="daysAhead" (ngModelChange)="loadExpiringLots()">
+        <option [ngValue]="30">30</option>
+        <option [ngValue]="60">60</option>
+        <option [ngValue]="90">90</option>
+        <option [ngValue]="180">180</option>
+        <option [ngValue]="365">365</option>
+      </select>
+    </div>
+    @if (expiryLoading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    } @else if (expiringLots().length > 0) {
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>{{ 'PHARMACY.LOT_NUMBER' | translate }}</th>
+              <th>{{ 'PHARMACY.EXPIRY_DATE' | translate }}</th>
+              <th>{{ 'PHARMACY.DAYS_REMAINING' | translate }}</th>
+              <th>{{ 'PHARMACY.REMAINING_QTY' | translate }}</th>
+              <th>{{ 'PHARMACY.SUPPLIER' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (lot of expiringLots(); track lot.id) {
+              <tr
+                [class.expired]="getDaysUntilExpiry(lot.expiryDate) <= 0"
+                [class.expiring-soon]="
+                  getDaysUntilExpiry(lot.expiryDate) > 0 && getDaysUntilExpiry(lot.expiryDate) <= 30
+                "
+              >
+                <td>
+                  <span class="code-chip">{{ lot.lotNumber }}</span>
+                </td>
+                <td>{{ lot.expiryDate | date: 'mediumDate' }}</td>
+                <td>
+                  @if (getDaysUntilExpiry(lot.expiryDate) <= 0) {
+                    <span class="expiry-badge expired">EXPIRED</span>
+                  } @else {
+                    <span
+                      class="expiry-badge"
+                      [class.urgent]="getDaysUntilExpiry(lot.expiryDate) <= 30"
+                    >
+                      {{ getDaysUntilExpiry(lot.expiryDate) }} days
+                    </span>
+                  }
+                </td>
+                <td>{{ lot.remainingQuantity }}</td>
+                <td>{{ lot.supplier ?? '—' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    } @else {
+      <div class="empty-state">
+        <span class="material-symbols-outlined empty-icon">check_circle</span>
+        <h3>{{ 'PHARMACY.NO_EXPIRING' | translate }}</h3>
+        <p>{{ 'PHARMACY.NO_EXPIRING_DESC' | translate }}</p>
+      </div>
+    }
+  }
+
+  <!-- Create Inventory Item Modal -->
+  @if (showCreateModal()) {
+    <div
+      class="modal-backdrop"
+      (click)="closeCreateModal()"
+      (keydown.escape)="closeCreateModal()"
+      role="presentation"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal modal-lg"
+        [open]="showCreateModal()"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+        tabindex="-1"
+      >
+        <div class="modal-header">
+          <h2>{{ 'PHARMACY.ADD_ITEM' | translate }}</h2>
+          <button class="modal-close" (click)="closeCreateModal()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <form (ngSubmit)="submitCreateForm()">
+          <div class="modal-body">
+            <div class="field">
+              <label for="ciMed">{{ 'PHARMACY.MEDICATION' | translate }} *</label>
+              <select
+                id="ciMed"
+                [(ngModel)]="createForm.medicationCatalogItemId"
+                name="medicationCatalogItemId"
+                required
+              >
+                <option value="">— Select Medication —</option>
+                @for (m of medications(); track m.id) {
+                  <option [value]="m.id">{{ m.nameFr }} ({{ m.genericName }})</option>
+                }
+              </select>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label for="ciQty">{{ 'PHARMACY.QTY_ON_HAND' | translate }}</label>
+                <input
+                  id="ciQty"
+                  type="number"
+                  [(ngModel)]="createForm.quantityOnHand"
+                  name="quantityOnHand"
+                  min="0"
+                />
+              </div>
+              <div class="field">
+                <label for="ciUnit">{{ 'PHARMACY.UNIT' | translate }}</label>
+                <input
+                  id="ciUnit"
+                  type="text"
+                  [(ngModel)]="createForm.unit"
+                  name="unit"
+                  placeholder="e.g., TABLET"
+                />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label for="ciThreshold">{{ 'PHARMACY.REORDER_THRESHOLD' | translate }}</label>
+                <input
+                  id="ciThreshold"
+                  type="number"
+                  [(ngModel)]="createForm.reorderThreshold"
+                  name="reorderThreshold"
+                  min="0"
+                />
+              </div>
+              <div class="field">
+                <label for="ciReorderQty">{{ 'PHARMACY.REORDER_QTY' | translate }}</label>
+                <input
+                  id="ciReorderQty"
+                  type="number"
+                  [(ngModel)]="createForm.reorderQuantity"
+                  name="reorderQuantity"
+                  min="0"
+                />
+              </div>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeCreateModal()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button type="submit" class="btn-primary" [disabled]="saving()">
+              {{ saving() ? ('COMMON.CREATING' | translate) : ('COMMON.CREATE' | translate) }}
+            </button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+  }
+</div>

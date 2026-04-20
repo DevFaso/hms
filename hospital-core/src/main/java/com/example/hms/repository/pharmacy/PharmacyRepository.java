@@ -1,0 +1,35 @@
+package com.example.hms.repository.pharmacy;
+
+import com.example.hms.model.pharmacy.Pharmacy;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface PharmacyRepository extends JpaRepository<Pharmacy, UUID> {
+
+    Page<Pharmacy> findByHospitalIdAndActiveTrue(UUID hospitalId, Pageable pageable);
+
+    List<Pharmacy> findByHospitalIdAndActiveTrue(UUID hospitalId);
+
+    List<Pharmacy> findByHospitalIdAndActiveTrueOrderByNameAsc(UUID hospitalId);
+
+    @Query("SELECT p FROM Pharmacy p WHERE p.hospital.id = :hospitalId AND p.active = true " +
+           "AND (LOWER(p.name) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR LOWER(p.city) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<Pharmacy> searchByHospital(
+            @Param("hospitalId") UUID hospitalId,
+            @Param("search") String search,
+            Pageable pageable);
+
+    Optional<Pharmacy> findByIdAndHospital_Id(UUID id, UUID hospitalId);
+
+    Optional<Pharmacy> findByLicenseNumberAndHospital_Id(String licenseNumber, UUID hospitalId);
+}

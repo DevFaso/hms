@@ -147,6 +147,14 @@ public class PharmacyFill extends BaseEntity {
     @Column(name = "pharmacy_ncpdp", length = 20)
     private String pharmacyNcpdp; // NCPDP - pharmacy identifier
 
+    @Size(max = 50)
+    @Column(name = "pharmacy_license", length = 50)
+    private String pharmacyLicense; // Local license number (e.g. Burkina Faso pharmacy license)
+
+    @Size(max = 50)
+    @Column(name = "facility_code", length = 50)
+    private String facilityCode; // National facility code (code CNES / code d'établissement)
+
     @Size(max = 120)
     @Column(name = "pharmacy_phone", length = 120)
     private String pharmacyPhone;

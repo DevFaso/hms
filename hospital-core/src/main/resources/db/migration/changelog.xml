@@ -540,4 +540,84 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V43a: Password history for security hardening
+         ================================================================= -->
+    <changeSet id="V43-password-history" author="hms-team" runOnChange="false">
+        <sqlFile path="V43__password_history.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V43b: Pharmacy Module — Phase 1 Foundation
+         ================================================================= -->
+    <changeSet id="V43-pharmacy-module-phase1" author="hms-team" runOnChange="false">
+        <sqlFile path="V43__pharmacy_module_phase1.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V44: MFA TOTP secret and backup codes
+         ================================================================= -->
+    <changeSet id="V44-mfa-totp-backup-codes" author="hms-team" runOnChange="false">
+        <sqlFile path="V44__mfa_totp_backup_codes.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V45: Pharmacy medication catalog
+         ================================================================= -->
+    <changeSet id="V45-pharmacy-medication-catalog" author="hms-team" runOnChange="false">
+        <sqlFile path="V45__pharmacy_medication_catalog.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V46: Pharmacy registry
+         ================================================================= -->
+    <changeSet id="V46-pharmacy-registry" author="hms-team" runOnChange="false">
+        <sqlFile path="V46__pharmacy_registry.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V47–V49: Reserved for future pharmacy phases (dispense, inventory, claims).
+         Empty SQL files exist but are not included until populated.
+         ================================================================= -->
+
+    <!-- =================================================================
+         V50: Schema fixes (Copilot review)
+         - mfa_backup_codes: add missing updated_at column
+         - Drop orphaned hospital.pharmacies table
+         ================================================================= -->
+    <changeSet id="V50-schema-fixes" author="hms-team" runOnChange="false">
+        <sqlFile path="V50__schema_fixes.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V51: Recovery contact verification
+         Add verification_code_hash, expiry, and attempt tracking columns
+         to user_recovery_contacts for proper email/phone verification flow.
+         Resets any previously auto-verified contacts.
+         ================================================================= -->
+    <changeSet id="V51-recovery-contact-verification" author="hms-team" runOnChange="false">
+        <sqlFile path="V51__recovery_contact_verification.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

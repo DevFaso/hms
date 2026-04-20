@@ -137,6 +137,33 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
+                  @if (r.status === 'DRAFT') {
+                    <button
+                      class="action-link submit"
+                      (click)="submitReferral(r)"
+                      title="Submit referral"
+                    >
+                      <span class="material-symbols-outlined">send</span>
+                    </button>
+                  }
+                  @if (r.status === 'SUBMITTED') {
+                    <button
+                      class="action-link acknowledge"
+                      (click)="openAcknowledge(r)"
+                      title="Acknowledge referral"
+                    >
+                      <span class="material-symbols-outlined">task_alt</span>
+                    </button>
+                  }
+                  @if (['ACKNOWLEDGED', 'IN_PROGRESS'].includes(r.status)) {
+                    <button
+                      class="action-link complete"
+                      (click)="openComplete(r)"
+                      title="Complete referral"
+                    >
+                      <span class="material-symbols-outlined">check_circle</span>
+                    </button>
+                  }
                   @if (!['COMPLETED', 'CANCELLED'].includes(r.status)) {
                     <button
                       class="action-link delete"
@@ -254,6 +281,66 @@
               <p>{{ ref.clinicalIndication }}</p>
             </div>
           }
+          @if (ref.completionSummary) {
+            <div class="detail-notes">
+              <span class="field-label">Completion Summary</span>
+              <p>{{ ref.completionSummary }}</p>
+            </div>
+          }
+          @if (ref.followUpRecommendations) {
+            <div class="detail-notes">
+              <span class="field-label">Follow-Up Recommendations</span>
+              <p>{{ ref.followUpRecommendations }}</p>
+            </div>
+          }
+          @if (ref.acknowledgementNotes) {
+            <div class="detail-notes">
+              <span class="field-label">Acknowledgement Notes</span>
+              <p>{{ ref.acknowledgementNotes }}</p>
+            </div>
+          }
+          @if (ref.cancellationReason) {
+            <div class="detail-notes">
+              <span class="field-label">Cancellation Reason</span>
+              <p>{{ ref.cancellationReason }}</p>
+            </div>
+          }
+
+          <!-- Detail Panel Actions -->
+          <div class="detail-actions">
+            @if (ref.status === 'DRAFT') {
+              <button
+                class="btn-primary"
+                (click)="submitReferral(ref)"
+                [disabled]="actionLoading()"
+              >
+                <span class="material-symbols-outlined">send</span>
+                {{ actionLoading() ? 'Submitting…' : 'Submit Referral' }}
+              </button>
+            }
+            @if (ref.status === 'SUBMITTED') {
+              <button
+                class="btn-primary"
+                (click)="openAcknowledge(ref)"
+                [disabled]="actionLoading()"
+              >
+                <span class="material-symbols-outlined">task_alt</span>
+                Acknowledge
+              </button>
+            }
+            @if (['ACKNOWLEDGED', 'IN_PROGRESS'].includes(ref.status)) {
+              <button class="btn-primary" (click)="openComplete(ref)" [disabled]="actionLoading()">
+                <span class="material-symbols-outlined">check_circle</span>
+                Complete
+              </button>
+            }
+            @if (!['COMPLETED', 'CANCELLED'].includes(ref.status)) {
+              <button class="btn-danger" (click)="confirmCancel(ref)">
+                <span class="material-symbols-outlined">cancel</span>
+                Cancel
+              </button>
+            }
+          </div>
         </div>
       </div>
     </div>
@@ -530,6 +617,103 @@
               ? ('COMMON.CANCELLING' | translate)
               : ('REFERRALS.CANCEL_REFERRAL' | translate)
           }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Acknowledge Referral Modal -->
+  @if (showAcknowledgeModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeAcknowledgeModal()"
+      (keydown.escape)="closeAcknowledgeModal()"
+    ></div>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Acknowledge Referral</h2>
+        <button class="modal-close" (click)="closeAcknowledgeModal()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>
+          Acknowledge the referral for <strong>{{ acknowledgingRef()?.patientName }}</strong> ({{
+            acknowledgingRef()?.targetSpecialty
+          }}). You will be assigned as the receiving provider.
+        </p>
+        <div class="field">
+          <label for="ack-notes">Acknowledgement Notes *</label>
+          <textarea
+            id="ack-notes"
+            [(ngModel)]="acknowledgeNotes"
+            rows="3"
+            placeholder="Enter acknowledgement notes…"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeAcknowledgeModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          (click)="executeAcknowledge()"
+          [disabled]="actionLoading() || !acknowledgeNotes.trim()"
+        >
+          {{ actionLoading() ? 'Acknowledging…' : 'Acknowledge' }}
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Complete Referral Modal -->
+  @if (showCompleteModal()) {
+    <div
+      class="modal-backdrop"
+      tabindex="-1"
+      (click)="closeCompleteModal()"
+      (keydown.escape)="closeCompleteModal()"
+    ></div>
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Complete Referral</h2>
+        <button class="modal-close" (click)="closeCompleteModal()" title="Close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p>
+          Mark the referral for <strong>{{ completingRef()?.patientName }}</strong> ({{
+            completingRef()?.targetSpecialty
+          }}) as completed.
+        </p>
+        <div class="field">
+          <label for="complete-summary">Completion Summary *</label>
+          <textarea
+            id="complete-summary"
+            [(ngModel)]="completeSummary"
+            rows="3"
+            placeholder="Enter completion summary…"
+          ></textarea>
+        </div>
+        <div class="field">
+          <label for="complete-followup">Follow-Up Recommendations</label>
+          <textarea
+            id="complete-followup"
+            [(ngModel)]="completeFollowUp"
+            rows="2"
+            placeholder="Optional follow-up recommendations…"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeCompleteModal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          (click)="executeComplete()"
+          [disabled]="actionLoading() || !completeSummary.trim()"
+        >
+          {{ actionLoading() ? 'Completing…' : 'Complete' }}
         </button>
       </div>
     </div>
