@@ -1,6 +1,5 @@
 package com.example.hms.service.pharmacy;
 
-import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
@@ -14,7 +13,6 @@ import com.example.hms.model.pharmacy.Dispense;
 import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.StockLot;
-import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
 import com.example.hms.repository.MedicationCatalogItemRepository;
@@ -449,7 +447,8 @@ class DispenseServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
 
-            assertThatThrownBy(() -> service.createDispense(buildRequest()))
+            DispenseRequestDTO dto = buildRequest();
+            assertThatThrownBy(() -> service.createDispense(dto))
                     .isInstanceOf(ResourceNotFoundException.class);
         }
 

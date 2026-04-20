@@ -65,6 +65,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             PrescriptionStatus.TRANSMITTED
     );
 
+    private static final String PRESCRIPTION_PREFIX = "Prescription ";
+
     @Override
     @Transactional(readOnly = true)
     public StockCheckResultDTO checkStock(UUID prescriptionId) {
@@ -168,7 +170,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
 
         logAudit(AuditEventType.PRESCRIPTION_SENT_TO_PARTNER,
-                "Prescription " + prescriptionId + " routed to partner pharmacy " + targetPharmacy.getName(),
+                PRESCRIPTION_PREFIX + prescriptionId + " routed to partner pharmacy " + targetPharmacy.getName(),
                 prescriptionId.toString());
 
         return routingMapper.toResponseDTO(saved);
@@ -199,7 +201,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
 
         logAudit(AuditEventType.PRESCRIPTION_PRINTED,
-                "Prescription " + prescriptionId + " printed for patient",
+                PRESCRIPTION_PREFIX + prescriptionId + " printed for patient",
                 prescriptionId.toString());
 
         return routingMapper.toResponseDTO(saved);
@@ -231,7 +233,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         PrescriptionRoutingDecision saved = routingDecisionRepository.save(decision);
 
         logAudit(AuditEventType.PRESCRIPTION_BACKORDER,
-                "Prescription " + prescriptionId + " placed on back order"
+                PRESCRIPTION_PREFIX + prescriptionId + " placed on back order"
                         + (estimatedRestockDate != null ? ", estimated restock: " + estimatedRestockDate : ""),
                 prescriptionId.toString());
 

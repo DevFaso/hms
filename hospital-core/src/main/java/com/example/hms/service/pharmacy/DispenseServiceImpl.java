@@ -76,6 +76,41 @@ public class DispenseServiceImpl implements DispenseService {
         // Validate quantities at the boundary (positive, dispensed <= requested)
         validateQuantities(dto.getQuantityRequested(), dto.getQuantityDispensed());
 
+        Prescription prescription = loadAndValidatePrescription(dto, hospitalId);
+
+        Patient patient = patientRepository.findById(dto.getPatientId())
+                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+
+        Pharmacy pharmacy = pharmacyRepository.findById(dto.getPharmacyId())
+                .orElseThrow(() -> new ResourceNotFoundException("Pharmacy not found"));
+        enforceHospitalScope(pharmacy);
+
+        ActorPair actors = resolveActors(dto);
+
+        MedicationCatalogItem catalogItem = resolveCatalogItem(dto);
+
+        StockLot stockLot = consumeStockLotIfPresent(dto, pharmacy, prescription, actors.dispensedBy());
+
+        // Build and save the dispense record
+        DispenseMapper.DispenseContext ctx = new DispenseMapper.DispenseContext(
+                prescription, patient, pharmacy, stockLot,
+                actors.dispensedBy(), actors.verifiedBy(), catalogItem);
+        Dispense dispense = dispenseMapper.toEntity(dto, ctx);
+        dispense.setDispensedAt(LocalDateTime.now());
+        Dispense saved = dispenseRepository.save(dispense);
+
+        // Update prescription status based on cumulative dispensed quantity (supports partial fills)
+        updatePrescriptionStatusFromHistory(prescription);
+
+        logAudit(AuditEventType.DISPENSE_CREATED,
+                "Dispensed " + dto.getQuantityDispensed() + " " + (dto.getUnit() != null ? dto.getUnit() : "units")
+                        + " of " + dto.getMedicationName() + " to patient " + patient.getId(),
+                saved.getId().toString());
+
+        return dispenseMapper.toResponseDTO(saved);
+    }
+
+    private Prescription loadAndValidatePrescription(DispenseRequestDTO dto, UUID hospitalId) {
         Prescription prescription = prescriptionRepository.findById(dto.getPrescriptionId())
                 .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
 
@@ -94,13 +129,10 @@ public class DispenseServiceImpl implements DispenseService {
                 || !prescription.getPatient().getId().equals(dto.getPatientId())) {
             throw new BusinessException("Patient does not match prescription");
         }
-        Patient patient = patientRepository.findById(dto.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+        return prescription;
+    }
 
-        Pharmacy pharmacy = pharmacyRepository.findById(dto.getPharmacyId())
-                .orElseThrow(() -> new ResourceNotFoundException("Pharmacy not found"));
-        enforceHospitalScope(pharmacy);
-
+    private ActorPair resolveActors(DispenseRequestDTO dto) {
         // Actor identity comes from the authenticated principal, not the request body.
         UUID currentUserId = roleValidator.getCurrentUserId();
         if (currentUserId == null) {
@@ -109,8 +141,7 @@ public class DispenseServiceImpl implements DispenseService {
         User dispensedByUser = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Authenticated user not found"));
 
-        // verifiedBy (if present) must match the authenticated user; separate verifier workflows
-        // should use a dedicated verify endpoint rather than trusting the client-supplied id.
+        // verifiedBy (if present) must match the authenticated user
         User verifiedByUser = null;
         if (dto.getVerifiedBy() != null) {
             if (!currentUserId.equals(dto.getVerifiedBy())) {
@@ -118,75 +149,61 @@ public class DispenseServiceImpl implements DispenseService {
             }
             verifiedByUser = dispensedByUser;
         }
+        return new ActorPair(dispensedByUser, verifiedByUser);
+    }
 
-        MedicationCatalogItem catalogItem = dto.getMedicationCatalogItemId() != null
-                ? medicationCatalogItemRepository.findById(dto.getMedicationCatalogItemId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Medication catalog item not found"))
-                : null;
+    private MedicationCatalogItem resolveCatalogItem(DispenseRequestDTO dto) {
+        if (dto.getMedicationCatalogItemId() == null) {
+            return null;
+        }
+        return medicationCatalogItemRepository.findById(dto.getMedicationCatalogItemId())
+                .orElseThrow(() -> new ResourceNotFoundException("Medication catalog item not found"));
+    }
 
-        StockLot stockLot = null;
-        if (dto.getStockLotId() != null) {
-            stockLot = stockLotRepository.findById(dto.getStockLotId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Stock lot not found"));
+    private StockLot consumeStockLotIfPresent(DispenseRequestDTO dto, Pharmacy pharmacy,
+                                              Prescription prescription, User performer) {
+        if (dto.getStockLotId() == null) {
+            return null;
+        }
+        StockLot stockLot = stockLotRepository.findById(dto.getStockLotId())
+                .orElseThrow(() -> new ResourceNotFoundException("Stock lot not found"));
 
-            // The lot must belong to the target pharmacy (and therefore to the active hospital)
-            InventoryItem inventoryItem = stockLot.getInventoryItem();
-            if (inventoryItem == null
-                    || inventoryItem.getPharmacy() == null
-                    || !pharmacy.getId().equals(inventoryItem.getPharmacy().getId())) {
-                throw new BusinessException("Stock lot does not belong to the selected pharmacy");
-            }
-
-            // Validate sufficient lot stock
-            if (stockLot.getRemainingQuantity().compareTo(dto.getQuantityDispensed()) < 0) {
-                throw new BusinessException("Insufficient lot stock: "
-                        + stockLot.getRemainingQuantity() + " remaining, requested "
-                        + dto.getQuantityDispensed());
-            }
-
-            // Decrement stock lot
-            stockLot.setRemainingQuantity(
-                    stockLot.getRemainingQuantity().subtract(dto.getQuantityDispensed()));
-            stockLotRepository.save(stockLot);
-
-            // Decrement inventory item
-            if (inventoryItem.getQuantityOnHand().compareTo(dto.getQuantityDispensed()) < 0) {
-                throw new BusinessException("Insufficient inventory stock");
-            }
-            inventoryItem.setQuantityOnHand(
-                    inventoryItem.getQuantityOnHand().subtract(dto.getQuantityDispensed()));
-            inventoryItemRepository.save(inventoryItem);
-
-            // Record stock transaction
-            StockTransaction tx = StockTransaction.builder()
-                    .inventoryItem(inventoryItem)
-                    .stockLot(stockLot)
-                    .transactionType(StockTransactionType.DISPENSE)
-                    .quantity(dto.getQuantityDispensed())
-                    .reason("Dispense for prescription " + prescription.getId())
-                    .performedByUser(dispensedByUser)
-                    .build();
-            stockTransactionRepository.save(tx);
+        // The lot must belong to the target pharmacy (and therefore to the active hospital)
+        InventoryItem inventoryItem = stockLot.getInventoryItem();
+        if (inventoryItem == null
+                || inventoryItem.getPharmacy() == null
+                || !pharmacy.getId().equals(inventoryItem.getPharmacy().getId())) {
+            throw new BusinessException("Stock lot does not belong to the selected pharmacy");
         }
 
-        // Build and save the dispense record
-        DispenseMapper.DispenseContext ctx = new DispenseMapper.DispenseContext(
-                prescription, patient, pharmacy, stockLot,
-                dispensedByUser, verifiedByUser, catalogItem);
-        Dispense dispense = dispenseMapper.toEntity(dto, ctx);
-        dispense.setDispensedAt(LocalDateTime.now());
-        Dispense saved = dispenseRepository.save(dispense);
+        BigDecimal requested = dto.getQuantityDispensed();
+        if (stockLot.getRemainingQuantity().compareTo(requested) < 0) {
+            throw new BusinessException("Insufficient lot stock: "
+                    + stockLot.getRemainingQuantity() + " remaining, requested " + requested);
+        }
 
-        // Update prescription status based on cumulative dispensed quantity (supports partial fills)
-        updatePrescriptionStatusFromHistory(prescription);
+        stockLot.setRemainingQuantity(stockLot.getRemainingQuantity().subtract(requested));
+        stockLotRepository.save(stockLot);
 
-        logAudit(AuditEventType.DISPENSE_CREATED,
-                "Dispensed " + dto.getQuantityDispensed() + " " + (dto.getUnit() != null ? dto.getUnit() : "units")
-                        + " of " + dto.getMedicationName() + " to patient " + patient.getId(),
-                saved.getId().toString());
+        if (inventoryItem.getQuantityOnHand().compareTo(requested) < 0) {
+            throw new BusinessException("Insufficient inventory stock");
+        }
+        inventoryItem.setQuantityOnHand(inventoryItem.getQuantityOnHand().subtract(requested));
+        inventoryItemRepository.save(inventoryItem);
 
-        return dispenseMapper.toResponseDTO(saved);
+        StockTransaction tx = StockTransaction.builder()
+                .inventoryItem(inventoryItem)
+                .stockLot(stockLot)
+                .transactionType(StockTransactionType.DISPENSE)
+                .quantity(requested)
+                .reason("Dispense for prescription " + prescription.getId())
+                .performedByUser(performer)
+                .build();
+        stockTransactionRepository.save(tx);
+        return stockLot;
     }
+
+    private record ActorPair(User dispensedBy, User verifiedBy) {}
 
     @Override
     @Transactional(readOnly = true)
