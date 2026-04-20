@@ -66,8 +66,9 @@ export interface RecoveryContact {
   contactType: string;
   contactValue: string;
   verified: boolean;
-  primary: boolean;
-  createdAt?: string;
+  verifiedAt?: string;
+  primaryContact: boolean;
+  notes?: string;
 }
 
 export interface Assignment {
@@ -174,7 +175,12 @@ export class ProfileService {
 
   /** PUT /auth/credentials/recovery — update recovery contacts */
   updateRecoveryContacts(
-    contacts: { contactType: string; contactValue: string; primary?: boolean }[],
+    contacts: {
+      contactType: string;
+      contactValue: string;
+      primaryContact?: boolean;
+      notes?: string;
+    }[],
   ): Observable<RecoveryContact[]> {
     return this.http.put<RecoveryContact[]>('/auth/credentials/recovery', contacts);
   }

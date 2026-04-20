@@ -868,6 +868,101 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
   }
 }
 
+.btn-icon-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: $radius-sm;
+  background: transparent;
+  color: $text-muted;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  .material-symbols-outlined {
+    font-size: 18px;
+  }
+
+  &:hover:not(:disabled) {
+    background: $danger-light;
+    color: $danger;
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+}
+
+.card-actions {
+  margin-top: 16px;
+  display: flex;
+  gap: 8px;
+}
+
+.recovery-form {
+  padding: 8px 0;
+
+  h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 16px;
+    color: $text-primary;
+  }
+
+  .form-row {
+    margin-bottom: 12px;
+  }
+
+  .form-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: $text-secondary;
+    margin-bottom: 4px;
+
+    input[type='checkbox'] {
+      margin: 0;
+    }
+  }
+
+  .form-control {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid $border;
+    border-radius: $radius-sm;
+    font-size: 0.9rem;
+    transition: border-color 0.2s;
+
+    &:focus {
+      outline: none;
+      border-color: $primary;
+    }
+  }
+
+  select.form-control {
+    appearance: auto;
+  }
+
+  .form-error {
+    background: $danger-light;
+    color: $danger;
+    padding: 8px 12px;
+    border-radius: $radius-sm;
+    font-size: 0.85rem;
+    margin-bottom: 12px;
+  }
+
+  .form-actions {
+    border-top: none;
+    padding-top: 4px;
+  }
+}
+
 .badge-verified {
   font-size: 0.7rem;
   font-weight: 600;

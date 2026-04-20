@@ -14,6 +14,7 @@ import {
   Assignment,
   AuditEvent,
   ProfileUpdateRequest,
+  RecoveryContact,
 } from '../services/profile.service';
 
 type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
@@ -252,6 +253,92 @@ export class ProfileComponent implements OnInit {
       /* ignore */
     });
     this.toast.success('Backup codes copied to clipboard.');
+  }
+
+  /* ── Recovery Contacts ── */
+  showAddRecovery = signal(false);
+  newRecoveryType = signal<'EMAIL' | 'PHONE'>('EMAIL');
+  newRecoveryValue = signal('');
+  newRecoveryPrimary = signal(false);
+  recoverySaving = signal(false);
+  recoveryError = signal('');
+
+  openAddRecovery(): void {
+    this.showAddRecovery.set(true);
+    this.newRecoveryType.set('EMAIL');
+    this.newRecoveryValue.set('');
+    this.newRecoveryPrimary.set(false);
+    this.recoveryError.set('');
+  }
+
+  cancelAddRecovery(): void {
+    this.showAddRecovery.set(false);
+    this.recoveryError.set('');
+  }
+
+  saveRecoveryContact(): void {
+    const value = this.newRecoveryValue().trim();
+    if (!value) {
+      this.recoveryError.set('Please enter a contact value.');
+      return;
+    }
+    this.recoverySaving.set(true);
+    this.recoveryError.set('');
+
+    const existing = (this.credentials()?.recoveryContacts ?? []).map((rc) => ({
+      contactType: rc.contactType,
+      contactValue: rc.contactValue,
+      primaryContact: this.newRecoveryPrimary() ? false : rc.primaryContact,
+    }));
+
+    const payload = [
+      ...existing,
+      {
+        contactType: this.newRecoveryType(),
+        contactValue: value,
+        primaryContact: this.newRecoveryPrimary(),
+      },
+    ];
+
+    this.profileService.updateRecoveryContacts(payload).subscribe({
+      next: () => {
+        this.recoverySaving.set(false);
+        this.showAddRecovery.set(false);
+        this.toast.success('Recovery contact added.');
+        this.profileService.getCredentialHealth().subscribe({
+          next: (creds) => this.credentials.set(creds),
+        });
+      },
+      error: (err) => {
+        this.recoverySaving.set(false);
+        this.recoveryError.set(err?.error?.message ?? 'Failed to save recovery contact.');
+      },
+    });
+  }
+
+  removeRecoveryContact(contact: RecoveryContact): void {
+    this.recoverySaving.set(true);
+    const remaining = (this.credentials()?.recoveryContacts ?? [])
+      .filter((rc) => rc.id !== contact.id)
+      .map((rc) => ({
+        contactType: rc.contactType,
+        contactValue: rc.contactValue,
+        primaryContact: rc.primaryContact,
+      }));
+
+    this.profileService.updateRecoveryContacts(remaining).subscribe({
+      next: () => {
+        this.recoverySaving.set(false);
+        this.toast.success('Recovery contact removed.');
+        this.profileService.getCredentialHealth().subscribe({
+          next: (creds) => this.credentials.set(creds),
+        });
+      },
+      error: (err) => {
+        this.recoverySaving.set(false);
+        this.toast.error(err?.error?.message ?? 'Failed to remove contact.');
+      },
+    });
   }
 
   /* ── Lifecycle ── */
