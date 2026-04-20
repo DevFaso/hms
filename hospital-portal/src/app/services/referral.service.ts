@@ -6,9 +6,12 @@ export type ReferralStatus =
   | 'DRAFT'
   | 'SUBMITTED'
   | 'ACKNOWLEDGED'
+  | 'SCHEDULED'
   | 'IN_PROGRESS'
   | 'COMPLETED'
   | 'CANCELLED'
+  | 'REJECTED'
+  | 'EXPIRED'
   | 'OVERDUE';
 
 export interface ReferralResponse {
@@ -44,6 +47,9 @@ export interface ReferralResponse {
   acknowledgementNotes: string;
   scheduledAppointmentAt: string;
   completedAt: string;
+  completionSummary: string;
+  followUpRecommendations: string;
+  cancellationReason: string;
   cancelledAt: string;
   createdAt: string;
   updatedAt: string;
@@ -88,16 +94,26 @@ export class ReferralService {
     return this.http.post<ReferralResponse>(`${this.baseUrl}/${id}/submit`, {});
   }
 
-  acknowledge(id: string): Observable<ReferralResponse> {
-    return this.http.post<ReferralResponse>(`${this.baseUrl}/${id}/acknowledge`, {});
+  acknowledge(
+    id: string,
+    notes: string,
+    receivingProviderId: string,
+  ): Observable<ReferralResponse> {
+    return this.http.post<ReferralResponse>(`${this.baseUrl}/${id}/acknowledge`, null, {
+      params: { notes, receivingProviderId },
+    });
   }
 
-  complete(id: string, data: Record<string, unknown>): Observable<ReferralResponse> {
-    return this.http.post<ReferralResponse>(`${this.baseUrl}/${id}/complete`, data);
+  complete(id: string, summary: string, followUp?: string): Observable<ReferralResponse> {
+    const params: Record<string, string> = { summary };
+    if (followUp) params['followUp'] = followUp;
+    return this.http.post<ReferralResponse>(`${this.baseUrl}/${id}/complete`, null, { params });
   }
 
-  cancel(id: string, reason: string): Observable<ReferralResponse> {
-    return this.http.post<ReferralResponse>(`${this.baseUrl}/${id}/cancel`, { reason });
+  cancel(id: string, reason: string): Observable<void> {
+    return this.http.post<void>(`${this.baseUrl}/${id}/cancel`, null, {
+      params: { reason },
+    });
   }
 
   getByPatient(patientId: string): Observable<ReferralResponse[]> {

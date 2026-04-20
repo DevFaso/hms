@@ -325,6 +325,42 @@
 .action-link.delete:hover {
   background: #fef2f2;
 }
+.action-link.submit {
+  color: #2563eb;
+}
+.action-link.submit:hover {
+  background: #eff6ff;
+}
+.action-link.acknowledge {
+  color: #059669;
+}
+.action-link.acknowledge:hover {
+  background: #ecfdf5;
+}
+.action-link.complete {
+  color: #059669;
+}
+.action-link.complete:hover {
+  background: #ecfdf5;
+}
+.detail-actions {
+  display: flex;
+  gap: 12px;
+  padding-top: 20px;
+  margin-top: 20px;
+  border-top: 1px solid #e5e7eb;
+  flex-wrap: wrap;
+
+  .btn-primary,
+  .btn-danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    .material-symbols-outlined {
+      font-size: 18px;
+    }
+  }
+}
 .modal-backdrop {
   position: fixed;
   inset: 0;

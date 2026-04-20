@@ -62,6 +62,17 @@ export class ReferralsComponent implements OnInit {
   deletingRef = signal<ReferralResponse | null>(null);
   deleting = signal(false);
 
+  /* ── Status transition modals ── */
+  showAcknowledgeModal = signal(false);
+  acknowledgingRef = signal<ReferralResponse | null>(null);
+  acknowledgeNotes = '';
+  actionLoading = signal(false);
+
+  showCompleteModal = signal(false);
+  completingRef = signal<ReferralResponse | null>(null);
+  completeSummary = '';
+  completeFollowUp = '';
+
   urgencies = ['ROUTINE', 'PRIORITY', 'URGENT', 'EMERGENCY'];
 
   referralTypes = [
@@ -312,6 +323,83 @@ export class ReferralsComponent implements OnInit {
       error: () => {
         this.toast.error('Cancel failed');
         this.deleting.set(false);
+      },
+    });
+  }
+
+  /* ── Submit DRAFT → SUBMITTED ── */
+  submitReferral(r: ReferralResponse): void {
+    this.actionLoading.set(true);
+    this.referralService.submit(r.id).subscribe({
+      next: () => {
+        this.toast.success('Referral submitted');
+        this.actionLoading.set(false);
+        this.load();
+        this.closeDetail();
+      },
+      error: () => {
+        this.toast.error('Submit failed');
+        this.actionLoading.set(false);
+      },
+    });
+  }
+
+  /* ── Acknowledge SUBMITTED → ACKNOWLEDGED ── */
+  openAcknowledge(r: ReferralResponse): void {
+    this.acknowledgingRef.set(r);
+    this.acknowledgeNotes = '';
+    this.showAcknowledgeModal.set(true);
+  }
+  closeAcknowledgeModal(): void {
+    this.showAcknowledgeModal.set(false);
+    this.acknowledgingRef.set(null);
+  }
+  executeAcknowledge(): void {
+    const ref = this.acknowledgingRef();
+    if (!ref) return;
+    const providerId = this.auth.getUserProfile()?.staffId ?? '';
+    this.actionLoading.set(true);
+    this.referralService.acknowledge(ref.id, this.acknowledgeNotes, providerId).subscribe({
+      next: () => {
+        this.toast.success('Referral acknowledged');
+        this.closeAcknowledgeModal();
+        this.actionLoading.set(false);
+        this.load();
+        this.closeDetail();
+      },
+      error: () => {
+        this.toast.error('Acknowledge failed');
+        this.actionLoading.set(false);
+      },
+    });
+  }
+
+  /* ── Complete ACKNOWLEDGED/IN_PROGRESS → COMPLETED ── */
+  openComplete(r: ReferralResponse): void {
+    this.completingRef.set(r);
+    this.completeSummary = '';
+    this.completeFollowUp = '';
+    this.showCompleteModal.set(true);
+  }
+  closeCompleteModal(): void {
+    this.showCompleteModal.set(false);
+    this.completingRef.set(null);
+  }
+  executeComplete(): void {
+    const ref = this.completingRef();
+    if (!ref) return;
+    this.actionLoading.set(true);
+    this.referralService.complete(ref.id, this.completeSummary, this.completeFollowUp).subscribe({
+      next: () => {
+        this.toast.success('Referral completed');
+        this.closeCompleteModal();
+        this.actionLoading.set(false);
+        this.load();
+        this.closeDetail();
+      },
+      error: () => {
+        this.toast.error('Complete failed');
+        this.actionLoading.set(false);
       },
     });
   }
