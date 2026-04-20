@@ -81,6 +81,8 @@ public enum AuditEventType {
     STOCK_TRANSFER,
     STOCK_RETURN,
     STOCK_REORDER_ALERT,
+    DISPENSE_CREATED,
+    DISPENSE_CANCELLED,
 
     // Security & platform configuration
     SECURITY_POLICY_UPDATED,

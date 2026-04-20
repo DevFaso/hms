@@ -41,4 +41,8 @@ public interface PrescriptionRepository extends JpaRepository<Prescription, UUID
 
     /** Count prescriptions by prescribing staff and status (e.g. PENDING_CLARIFICATION). */
     long countByStaff_IdAndStatus(UUID staffId, PrescriptionStatus status);
+
+    /** Pharmacist work queue: dispensable prescriptions at a hospital, ordered by creation date. */
+    @EntityGraph(attributePaths = {"patient", "staff", "staff.user", "encounter", "encounter.hospital"})
+    Page<Prescription> findByHospital_IdAndStatusIn(UUID hospitalId, List<PrescriptionStatus> statuses, Pageable pageable);
 }

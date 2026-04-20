@@ -1366,7 +1366,8 @@
     "PHARMACY_REGISTRY": "Registre des Pharmacies",
     "PHARMACY_INVENTORY": "Inventaire Pharmacie",
     "GOODS_RECEIPT": "Réception de Marchandises",
-    "STOCK_ADJUSTMENT": "Ajustement de Stock"
+    "STOCK_ADJUSTMENT": "Ajustement de Stock",
+    "DISPENSING": "Dispensation"
   },
   "NOTIFICATIONS": {
     "ALL": "Tout",
@@ -3533,6 +3534,30 @@
     "DATE": "Date",
     "PERFORMED_BY": "Effectuée par",
     "NO_TRANSACTIONS": "Aucune transaction",
-    "RECORD_FIRST_TRANSACTION": "Enregistrez votre première transaction de stock"
+    "RECORD_FIRST_TRANSACTION": "Enregistrez votre première transaction de stock",
+    "DISPENSING_TITLE": "Dispensation de médicaments",
+    "DISPENSING_SUBTITLE": "Dispensez les ordonnances aux patients",
+    "DISPENSE_MEDICATION": "Dispenser le médicament",
+    "PRESCRIPTION": "Ordonnance",
+    "PATIENT": "Patient",
+    "MEDICATION": "Médicament",
+    "DOSAGE": "Posologie",
+    "STATUS": "Statut",
+    "PRESCRIBER": "Prescripteur",
+    "QTY_REQUESTED": "Qté demandée",
+    "QTY_DISPENSED": "Qté dispensée",
+    "UNIT": "Unité",
+    "STOCK_LOT": "Lot de stock",
+    "NO_LOT": "Aucun lot sélectionné",
+    "SUBSTITUTION": "Substitution",
+    "SUBSTITUTION_REASON": "Raison de substitution",
+    "NOTES": "Notes",
+    "DISPENSE": "Dispenser",
+    "WORK_QUEUE": "File d'attente",
+    "NO_PENDING_RX": "Aucune ordonnance en attente de dispensation",
+    "RECENT_DISPENSES": "Dispensations récentes",
+    "NO_DISPENSES_YET": "Aucune dispensation enregistrée",
+    "DISPENSED_BY": "Dispensé par",
+    "DISPENSED_AT": "Dispensé le"
   }
 }

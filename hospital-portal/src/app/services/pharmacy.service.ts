@@ -180,6 +180,51 @@ export interface ApiResponse<T> {
   status?: string;
 }
 
+/* ───────────────────────────── Dispensing ───────────────────────────── */
+
+export interface DispenseRequest {
+  prescriptionId: string;
+  patientId: string;
+  pharmacyId: string;
+  dispensedBy: string;
+  verifiedBy?: string;
+  medicationCatalogItemId?: string;
+  stockLotId?: string;
+  medicationName: string;
+  quantityRequested: number;
+  quantityDispensed: number;
+  unit?: string;
+  substitution?: boolean;
+  substitutionReason?: string;
+  notes?: string;
+}
+
+export interface DispenseResponse {
+  id: string;
+  prescriptionId: string;
+  patientId: string;
+  patientName?: string;
+  pharmacyId: string;
+  pharmacyName?: string;
+  stockLotId?: string;
+  dispensedById: string;
+  dispensedByName?: string;
+  verifiedById?: string;
+  verifiedByName?: string;
+  medicationCatalogItemId?: string;
+  medicationName: string;
+  quantityRequested: number;
+  quantityDispensed: number;
+  unit?: string;
+  substitution: boolean;
+  substitutionReason?: string;
+  status: string;
+  notes?: string;
+  dispensedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /* ───────────────────────────── Service ───────────────────────────── */
 
 @Injectable({ providedIn: 'root' })
@@ -424,5 +469,67 @@ export class PharmacyService {
       `/pharmacy/stock-transactions/pharmacy/${pharmacyId}/type/${type}`,
       { params },
     );
+  }
+
+  // ── Dispensing ──
+
+  getDispenseWorkQueue(
+    page = 0,
+    size = 20,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ): Observable<ApiResponse<Page<any>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return this.http.get<ApiResponse<Page<any>>>('/pharmacy/dispense/work-queue', {
+      params,
+    });
+  }
+
+  createDispense(req: DispenseRequest): Observable<ApiResponse<DispenseResponse>> {
+    return this.http.post<ApiResponse<DispenseResponse>>('/pharmacy/dispense', req);
+  }
+
+  getDispense(id: string): Observable<ApiResponse<DispenseResponse>> {
+    return this.http.get<ApiResponse<DispenseResponse>>(`/pharmacy/dispense/${id}`);
+  }
+
+  listDispensesByPrescription(
+    prescriptionId: string,
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<DispenseResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<DispenseResponse>>>(
+      `/pharmacy/dispense/prescription/${prescriptionId}`,
+      { params },
+    );
+  }
+
+  listDispensesByPatient(
+    patientId: string,
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<DispenseResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<DispenseResponse>>>(
+      `/pharmacy/dispense/patient/${patientId}`,
+      { params },
+    );
+  }
+
+  listDispensesByPharmacy(
+    pharmacyId: string,
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<DispenseResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<DispenseResponse>>>(
+      `/pharmacy/dispense/pharmacy/${pharmacyId}`,
+      { params },
+    );
+  }
+
+  cancelDispense(id: string): Observable<ApiResponse<DispenseResponse>> {
+    return this.http.post<ApiResponse<DispenseResponse>>(`/pharmacy/dispense/${id}/cancel`, {});
   }
 }

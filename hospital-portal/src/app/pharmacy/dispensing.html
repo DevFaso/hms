@@ -1,0 +1,258 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'PHARMACY.DISPENSING_TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PHARMACY.DISPENSING_SUBTITLE' | translate }}</p>
+    </div>
+    <div class="header-actions">
+      <select
+        class="pharmacy-select"
+        [(ngModel)]="selectedPharmacyId"
+        (ngModelChange)="onPharmacyChange()"
+      >
+        @for (p of pharmacies(); track p.id) {
+          <option [value]="p.id">{{ p.name }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  <!-- Dispensing Form (slide-in when a prescription is selected) -->
+  @if (showForm()) {
+    <div class="form-card">
+      <div class="form-header">
+        <h3>
+          <span class="material-symbols-outlined">medication</span>
+          {{ 'PHARMACY.DISPENSE_MEDICATION' | translate }}
+        </h3>
+        <button class="btn-text" (click)="closeForm()">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+
+      <div class="rx-summary">
+        <span class="rx-label">{{ 'PHARMACY.PRESCRIPTION' | translate }}:</span>
+        <strong>{{ selectedPrescription?.medicationName }}</strong>
+        <span class="rx-meta">
+          {{ selectedPrescription?.dosage }} · {{ selectedPrescription?.frequency }}
+        </span>
+        <span class="rx-meta">
+          {{ 'PHARMACY.PATIENT' | translate }}: {{ selectedPrescription?.patient?.firstName }}
+          {{ selectedPrescription?.patient?.lastName }}
+        </span>
+      </div>
+
+      <form (ngSubmit)="submitDispense()">
+        <div class="form-row">
+          <div class="field">
+            <label for="qtyRequested">{{ 'PHARMACY.QTY_REQUESTED' | translate }} *</label>
+            <input
+              id="qtyRequested"
+              type="number"
+              min="0"
+              step="0.01"
+              [(ngModel)]="form.quantityRequested"
+              name="quantityRequested"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="qtyDispensed">{{ 'PHARMACY.QTY_DISPENSED' | translate }} *</label>
+            <input
+              id="qtyDispensed"
+              type="number"
+              min="0"
+              step="0.01"
+              [(ngModel)]="form.quantityDispensed"
+              name="quantityDispensed"
+              required
+            />
+          </div>
+          <div class="field">
+            <label for="unit">{{ 'PHARMACY.UNIT' | translate }}</label>
+            <input
+              id="unit"
+              type="text"
+              [(ngModel)]="form.unit"
+              name="unit"
+              placeholder="e.g. tablets, ml"
+            />
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="stockLot">{{ 'PHARMACY.STOCK_LOT' | translate }}</label>
+            <select id="stockLot" [(ngModel)]="form.stockLotId" name="stockLotId">
+              <option value="">— {{ 'PHARMACY.NO_LOT' | translate }} —</option>
+              @for (item of inventoryItems(); track item.id) {
+                <option [value]="item.id">
+                  {{ item.medicationName }} ({{ item.quantityOnHand }} avail.)
+                </option>
+              }
+            </select>
+          </div>
+          <div class="field checkbox-field">
+            <label>
+              <input type="checkbox" [(ngModel)]="form.substitution" name="substitution" />
+              {{ 'PHARMACY.SUBSTITUTION' | translate }}
+            </label>
+          </div>
+        </div>
+
+        @if (form.substitution) {
+          <div class="form-row">
+            <div class="field full-width">
+              <label for="subReason">{{ 'PHARMACY.SUBSTITUTION_REASON' | translate }}</label>
+              <input
+                id="subReason"
+                type="text"
+                [(ngModel)]="form.substitutionReason"
+                name="substitutionReason"
+              />
+            </div>
+          </div>
+        }
+
+        <div class="form-row">
+          <div class="field full-width">
+            <label for="notes">{{ 'PHARMACY.NOTES' | translate }}</label>
+            <textarea id="notes" [(ngModel)]="form.notes" name="notes" rows="2"></textarea>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn-secondary" (click)="closeForm()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="submit"
+            class="btn-primary"
+            [disabled]="saving() || form.quantityDispensed <= 0"
+          >
+            @if (saving()) {
+              <span class="spinner"></span>
+            }
+            {{ 'PHARMACY.DISPENSE' | translate }}
+          </button>
+        </div>
+      </form>
+    </div>
+  }
+
+  <!-- Work Queue -->
+  <div class="section-card">
+    <h2 class="section-title">
+      <span class="material-symbols-outlined">assignment</span>
+      {{ 'PHARMACY.WORK_QUEUE' | translate }}
+    </h2>
+
+    @if (queueLoading()) {
+      <div class="loading-bar"></div>
+    } @else if (workQueue().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined">check_circle</span>
+        <p>{{ 'PHARMACY.NO_PENDING_RX' | translate }}</p>
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>{{ 'PHARMACY.PATIENT' | translate }}</th>
+              <th>{{ 'PHARMACY.MEDICATION' | translate }}</th>
+              <th>{{ 'PHARMACY.DOSAGE' | translate }}</th>
+              <th>{{ 'PHARMACY.QUANTITY' | translate }}</th>
+              <th>{{ 'PHARMACY.STATUS' | translate }}</th>
+              <th>{{ 'PHARMACY.PRESCRIBER' | translate }}</th>
+              <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (rx of workQueue(); track rx.id) {
+              <tr>
+                <td>{{ rx.patient?.firstName }} {{ rx.patient?.lastName }}</td>
+                <td>{{ rx.medicationName }}</td>
+                <td>{{ rx.dosage }}</td>
+                <td>{{ rx.quantity }} {{ rx.quantityUnit }}</td>
+                <td>
+                  <span class="badge badge-info">{{ rx.status }}</span>
+                </td>
+                <td>{{ rx.staff?.user?.firstName }} {{ rx.staff?.user?.lastName }}</td>
+                <td>
+                  <button class="btn-action" (click)="selectPrescription(rx)">
+                    <span class="material-symbols-outlined">medication</span>
+                    {{ 'PHARMACY.DISPENSE' | translate }}
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination -->
+      <div class="pagination">
+        <button class="btn-text" [disabled]="queuePage === 0" (click)="prevPage()">
+          <span class="material-symbols-outlined">chevron_left</span>
+        </button>
+        <span class="page-info">{{ queuePage + 1 }} / {{ queueTotalPages || 1 }}</span>
+        <button class="btn-text" [disabled]="queuePage >= queueTotalPages - 1" (click)="nextPage()">
+          <span class="material-symbols-outlined">chevron_right</span>
+        </button>
+      </div>
+    }
+  </div>
+
+  <!-- Recent Dispenses -->
+  <div class="section-card">
+    <h2 class="section-title">
+      <span class="material-symbols-outlined">history</span>
+      {{ 'PHARMACY.RECENT_DISPENSES' | translate }}
+    </h2>
+
+    @if (dispensesLoading()) {
+      <div class="loading-bar"></div>
+    } @else if (recentDispenses().length === 0) {
+      <div class="empty-state">
+        <span class="material-symbols-outlined">info</span>
+        <p>{{ 'PHARMACY.NO_DISPENSES_YET' | translate }}</p>
+      </div>
+    } @else {
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>{{ 'PHARMACY.MEDICATION' | translate }}</th>
+              <th>{{ 'PHARMACY.QTY_DISPENSED' | translate }}</th>
+              <th>{{ 'PHARMACY.STATUS' | translate }}</th>
+              <th>{{ 'PHARMACY.DISPENSED_BY' | translate }}</th>
+              <th>{{ 'PHARMACY.DISPENSED_AT' | translate }}</th>
+              <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (d of recentDispenses(); track d.id) {
+              <tr>
+                <td>{{ d.medicationName }}</td>
+                <td>{{ d.quantityDispensed }} {{ d.unit }}</td>
+                <td>
+                  <span class="badge" [ngClass]="getStatusClass(d.status)">{{ d.status }}</span>
+                </td>
+                <td>{{ d.dispensedByName }}</td>
+                <td>{{ d.dispensedAt | date: 'short' }}</td>
+                <td>
+                  @if (d.status !== 'CANCELLED') {
+                    <button class="btn-action danger" (click)="cancelDispense(d.id)">
+                      <span class="material-symbols-outlined">cancel</span>
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</div>
