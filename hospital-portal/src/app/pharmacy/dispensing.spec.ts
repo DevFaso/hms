@@ -33,7 +33,7 @@ describe('DispensingComponent', () => {
           quantity: 30,
           status: 'SIGNED',
           patient: { id: 'pat-1', firstName: 'John', lastName: 'Doe' },
-          staff: { user: { firstName: 'Dr.', lastName: 'Smith' } },
+          staff: { id: 'staff-1', user: { id: 'user-1', firstName: 'Dr.', lastName: 'Smith' } },
         },
       ],
       totalElements: 1,
