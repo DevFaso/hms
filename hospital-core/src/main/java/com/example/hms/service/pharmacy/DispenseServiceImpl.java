@@ -20,6 +20,7 @@ import com.example.hms.model.pharmacy.StockTransaction;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
+import com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.PrescriptionRepository;
 import com.example.hms.repository.UserRepository;
@@ -70,13 +71,29 @@ public class DispenseServiceImpl implements DispenseService {
     @Override
     @Transactional
     public DispenseResponseDTO createDispense(DispenseRequestDTO dto) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+
+        // Validate quantities at the boundary (positive, dispensed <= requested)
+        validateQuantities(dto.getQuantityRequested(), dto.getQuantityDispensed());
+
         Prescription prescription = prescriptionRepository.findById(dto.getPrescriptionId())
-                .orElseThrow(() -> new ResourceNotFoundException("Prescription not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+
+        // Tenant isolation: prescription must belong to the active hospital
+        if (prescription.getHospital() == null
+                || !hospitalId.equals(prescription.getHospital().getId())) {
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
 
         if (!DISPENSABLE_STATUSES.contains(prescription.getStatus())) {
             throw new BusinessException("Prescription is not in a dispensable state: " + prescription.getStatus());
         }
 
+        // The patient must match the prescription's patient — do not trust DTO in isolation
+        if (prescription.getPatient() == null
+                || !prescription.getPatient().getId().equals(dto.getPatientId())) {
+            throw new BusinessException("Patient does not match prescription");
+        }
         Patient patient = patientRepository.findById(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
 
@@ -84,13 +101,23 @@ public class DispenseServiceImpl implements DispenseService {
                 .orElseThrow(() -> new ResourceNotFoundException("Pharmacy not found"));
         enforceHospitalScope(pharmacy);
 
-        User dispensedByUser = userRepository.findById(dto.getDispensedBy())
-                .orElseThrow(() -> new ResourceNotFoundException("Dispensed-by user not found"));
+        // Actor identity comes from the authenticated principal, not the request body.
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BusinessException("Unable to determine current user");
+        }
+        User dispensedByUser = userRepository.findById(currentUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Authenticated user not found"));
 
-        User verifiedByUser = dto.getVerifiedBy() != null
-                ? userRepository.findById(dto.getVerifiedBy())
-                    .orElseThrow(() -> new ResourceNotFoundException("Verified-by user not found"))
-                : null;
+        // verifiedBy (if present) must match the authenticated user; separate verifier workflows
+        // should use a dedicated verify endpoint rather than trusting the client-supplied id.
+        User verifiedByUser = null;
+        if (dto.getVerifiedBy() != null) {
+            if (!currentUserId.equals(dto.getVerifiedBy())) {
+                throw new BusinessException("verifiedBy must match the authenticated user");
+            }
+            verifiedByUser = dispensedByUser;
+        }
 
         MedicationCatalogItem catalogItem = dto.getMedicationCatalogItemId() != null
                 ? medicationCatalogItemRepository.findById(dto.getMedicationCatalogItemId())
@@ -101,6 +128,14 @@ public class DispenseServiceImpl implements DispenseService {
         if (dto.getStockLotId() != null) {
             stockLot = stockLotRepository.findById(dto.getStockLotId())
                     .orElseThrow(() -> new ResourceNotFoundException("Stock lot not found"));
+
+            // The lot must belong to the target pharmacy (and therefore to the active hospital)
+            InventoryItem inventoryItem = stockLot.getInventoryItem();
+            if (inventoryItem == null
+                    || inventoryItem.getPharmacy() == null
+                    || !pharmacy.getId().equals(inventoryItem.getPharmacy().getId())) {
+                throw new BusinessException("Stock lot does not belong to the selected pharmacy");
+            }
 
             // Validate sufficient lot stock
             if (stockLot.getRemainingQuantity().compareTo(dto.getQuantityDispensed()) < 0) {
@@ -115,7 +150,6 @@ public class DispenseServiceImpl implements DispenseService {
             stockLotRepository.save(stockLot);
 
             // Decrement inventory item
-            InventoryItem inventoryItem = stockLot.getInventoryItem();
             if (inventoryItem.getQuantityOnHand().compareTo(dto.getQuantityDispensed()) < 0) {
                 throw new BusinessException("Insufficient inventory stock");
             }
@@ -143,8 +177,8 @@ public class DispenseServiceImpl implements DispenseService {
         dispense.setDispensedAt(LocalDateTime.now());
         Dispense saved = dispenseRepository.save(dispense);
 
-        // Update prescription status based on dispensed quantity
-        updatePrescriptionStatus(prescription, dto.getQuantityRequested(), dto.getQuantityDispensed());
+        // Update prescription status based on cumulative dispensed quantity (supports partial fills)
+        updatePrescriptionStatusFromHistory(prescription);
 
         logAudit(AuditEventType.DISPENSE_CREATED,
                 "Dispensed " + dto.getQuantityDispensed() + " " + (dto.getUnit() != null ? dto.getUnit() : "units")
@@ -166,6 +200,14 @@ public class DispenseServiceImpl implements DispenseService {
     @Override
     @Transactional(readOnly = true)
     public Page<DispenseResponseDTO> listByPrescription(UUID prescriptionId, Pageable pageable) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        // Validate the prescription belongs to the caller's hospital before returning any history
+        Prescription prescription = prescriptionRepository.findById(prescriptionId)
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+        if (prescription.getHospital() == null
+                || !hospitalId.equals(prescription.getHospital().getId())) {
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
         return dispenseRepository.findByPrescriptionId(prescriptionId, pageable)
                 .map(dispenseMapper::toResponseDTO);
     }
@@ -173,8 +215,13 @@ public class DispenseServiceImpl implements DispenseService {
     @Override
     @Transactional(readOnly = true)
     public Page<DispenseResponseDTO> listByPatient(UUID patientId, Pageable pageable) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        // Filter out any dispense whose pharmacy is outside the caller's active hospital
         return dispenseRepository.findByPatientId(patientId, pageable)
-                .map(dispenseMapper::toResponseDTO);
+                .map(d -> {
+                    enforceHospitalScope(d.getPharmacy(), hospitalId);
+                    return dispenseMapper.toResponseDTO(d);
+                });
     }
 
     @Override
@@ -228,6 +275,9 @@ public class DispenseServiceImpl implements DispenseService {
 
         Dispense saved = dispenseRepository.save(dispense);
 
+        // Recompute the prescription status from remaining non-cancelled dispenses
+        updatePrescriptionStatusFromHistory(dispense.getPrescription());
+
         logAudit(AuditEventType.DISPENSE_CANCELLED,
                 "Cancelled dispense of " + dispense.getQuantityDispensed() + " "
                         + dispense.getMedicationName(),
@@ -236,21 +286,98 @@ public class DispenseServiceImpl implements DispenseService {
         return dispenseMapper.toResponseDTO(saved);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        return prescriptionRepository
+                .findByHospital_IdAndStatusIn(hospitalId,
+                        java.util.List.copyOf(DISPENSABLE_STATUSES), pageable)
+                .map(this::toWorkQueueDTO);
+    }
+
     // ── Private helpers ──
 
-    private void updatePrescriptionStatus(Prescription prescription,
-                                          BigDecimal quantityRequested, BigDecimal quantityDispensed) {
-        if (quantityDispensed.compareTo(quantityRequested) >= 0) {
-            prescription.setStatus(PrescriptionStatus.DISPENSED);
-        } else {
-            prescription.setStatus(PrescriptionStatus.PARTIALLY_FILLED);
+    private void validateQuantities(BigDecimal requested, BigDecimal dispensed) {
+        if (requested == null || requested.signum() <= 0) {
+            throw new BusinessException("Quantity requested must be greater than zero");
         }
-        prescriptionRepository.save(prescription);
+        if (dispensed == null || dispensed.signum() <= 0) {
+            throw new BusinessException("Quantity dispensed must be greater than zero");
+        }
+        if (dispensed.compareTo(requested) > 0) {
+            throw new BusinessException("Quantity dispensed cannot exceed quantity requested");
+        }
+    }
+
+    private void updatePrescriptionStatusFromHistory(Prescription prescription) {
+        BigDecimal requested = prescription.getQuantity() != null
+                ? prescription.getQuantity() : BigDecimal.ZERO;
+        BigDecimal dispensedToDate = dispenseRepository
+                .sumQuantityDispensedForPrescription(prescription.getId(), DispenseStatus.CANCELLED);
+        if (dispensedToDate == null) {
+            dispensedToDate = BigDecimal.ZERO;
+        }
+
+        PrescriptionStatus nextStatus;
+        if (dispensedToDate.signum() <= 0) {
+            // All dispenses cancelled — return to a dispensable state
+            nextStatus = PrescriptionStatus.SIGNED;
+        } else if (requested.signum() > 0 && dispensedToDate.compareTo(requested) >= 0) {
+            nextStatus = PrescriptionStatus.DISPENSED;
+        } else {
+            nextStatus = PrescriptionStatus.PARTIALLY_FILLED;
+        }
+
+        if (prescription.getStatus() != nextStatus) {
+            prescription.setStatus(nextStatus);
+            prescriptionRepository.save(prescription);
+        }
+    }
+
+    private WorkQueuePrescriptionDTO toWorkQueueDTO(Prescription p) {
+        WorkQueuePrescriptionDTO.Patient patient = null;
+        if (p.getPatient() != null) {
+            patient = WorkQueuePrescriptionDTO.Patient.builder()
+                    .id(p.getPatient().getId())
+                    .firstName(p.getPatient().getFirstName())
+                    .lastName(p.getPatient().getLastName())
+                    .build();
+        }
+        WorkQueuePrescriptionDTO.Staff staff = null;
+        if (p.getStaff() != null) {
+            WorkQueuePrescriptionDTO.StaffUser staffUser = null;
+            if (p.getStaff().getUser() != null) {
+                staffUser = WorkQueuePrescriptionDTO.StaffUser.builder()
+                        .id(p.getStaff().getUser().getId())
+                        .firstName(p.getStaff().getUser().getFirstName())
+                        .lastName(p.getStaff().getUser().getLastName())
+                        .build();
+            }
+            staff = WorkQueuePrescriptionDTO.Staff.builder()
+                    .id(p.getStaff().getId())
+                    .user(staffUser)
+                    .build();
+        }
+        return WorkQueuePrescriptionDTO.builder()
+                .id(p.getId())
+                .medicationName(p.getMedicationName())
+                .dosage(p.getDosage())
+                .quantity(p.getQuantity())
+                .quantityUnit(p.getQuantityUnit())
+                .status(p.getStatus() != null ? p.getStatus().name() : null)
+                .createdAt(p.getCreatedAt())
+                .patient(patient)
+                .staff(staff)
+                .build();
     }
 
     private void enforceHospitalScope(Pharmacy pharmacy) {
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null && pharmacy.getHospital() != null
+        enforceHospitalScope(pharmacy, roleValidator.requireActiveHospitalId());
+    }
+
+    private void enforceHospitalScope(Pharmacy pharmacy, UUID hospitalId) {
+        if (hospitalId != null && pharmacy != null && pharmacy.getHospital() != null
                 && !pharmacy.getHospital().getId().equals(hospitalId)) {
             throw new ResourceNotFoundException("Pharmacy not found");
         }

@@ -225,6 +225,30 @@ export interface DispenseResponse {
   updatedAt: string;
 }
 
+/** Work-queue prescription — minimal projection returned by GET /pharmacy/dispense/work-queue. */
+export interface WorkQueuePrescription {
+  id: string;
+  medicationName: string;
+  dosage?: string;
+  quantity?: number;
+  quantityUnit?: string;
+  status: string;
+  createdAt?: string;
+  patient?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+  };
+  staff?: {
+    id: string;
+    user?: {
+      id: string;
+      firstName?: string;
+      lastName?: string;
+    };
+  };
+}
+
 /* ───────────────────────────── Stock-Out Routing ───────────────────────────── */
 
 export interface StockCheckResult {
@@ -520,13 +544,12 @@ export class PharmacyService {
   getDispenseWorkQueue(
     page = 0,
     size = 20,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Observable<ApiResponse<Page<any>>> {
+  ): Observable<ApiResponse<Page<WorkQueuePrescription>>> {
     const params = new HttpParams().set('page', page).set('size', size);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return this.http.get<ApiResponse<Page<any>>>('/pharmacy/dispense/work-queue', {
-      params,
-    });
+    return this.http.get<ApiResponse<Page<WorkQueuePrescription>>>(
+      '/pharmacy/dispense/work-queue',
+      { params },
+    );
   }
 
   createDispense(req: DispenseRequest): Observable<ApiResponse<DispenseResponse>> {

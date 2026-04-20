@@ -94,6 +94,7 @@ class StockOutRoutingServiceImplTest {
         prescription.setQuantity(BigDecimal.TEN);
         prescription.setPatient(patient);
         prescription.setStatus(PrescriptionStatus.SIGNED);
+        prescription.setHospital(hospital);
 
         catalogItem = MedicationCatalogItem.builder()
                 .hospital(hospital)
@@ -140,12 +141,10 @@ class StockOutRoutingServiceImplTest {
         when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
         when(medicationCatalogItemRepository.findByHospitalIdAndCode(hospitalId, "AMOX500"))
                 .thenReturn(Optional.of(catalogItem));
-        when(pharmacyRepository.findByHospitalIdAndPharmacyTypeAndActiveTrue(
-                hospitalId, PharmacyType.HOSPITAL_DISPENSARY)).thenReturn(List.of(dispensary));
+        when(inventoryItemRepository.findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
+                hospitalId, medicationId)).thenReturn(List.of(dispensaryInventory, partnerInventory));
         when(pharmacyRepository.findByHospitalIdAndPharmacyTypeAndActiveTrue(
                 hospitalId, PharmacyType.PARTNER_PHARMACY)).thenReturn(List.of(partnerPharmacy));
-        when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(dispensaryId, medicationId))
-                .thenReturn(Optional.of(dispensaryInventory));
         when(inventoryItemRepository.findByPharmacyIdAndMedicationCatalogItemId(partnerId, medicationId))
                 .thenReturn(Optional.of(partnerInventory));
 

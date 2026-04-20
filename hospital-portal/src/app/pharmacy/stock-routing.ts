@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import {
   PharmacyService,
@@ -20,6 +20,7 @@ import {
 export class StockRoutingComponent {
   private readonly svc = inject(PharmacyService);
   private readonly toast = inject(ToastService);
+  private readonly translate = inject(TranslateService);
 
   // Prescription lookup
   prescriptionId = '';
@@ -46,6 +47,8 @@ export class StockRoutingComponent {
 
   checkStock(): void {
     if (!this.prescriptionId.trim()) return;
+    // Reset pagination whenever a new prescription is checked
+    this.decisionsPage = 0;
     this.checking.set(true);
     this.stockResult.set(null);
     this.svc.checkStock(this.prescriptionId).subscribe({
@@ -55,7 +58,7 @@ export class StockRoutingComponent {
         this.loadDecisions();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message || 'PHARMACY.STOCK_CHECK_FAILED');
+        this.toast.error(this.errorMessage(err, 'PHARMACY.STOCK_CHECK_FAILED'));
         this.checking.set(false);
       },
     });
@@ -102,13 +105,13 @@ export class StockRoutingComponent {
       })
       .subscribe({
         next: () => {
-          this.toast.success('PHARMACY.ROUTED_TO_PARTNER');
+          this.toast.success(this.translate.instant('PHARMACY.ROUTED_TO_PARTNER'));
           this.saving.set(false);
           this.closePartnerForm();
           this.checkStock();
         },
         error: (err) => {
-          this.toast.error(err?.error?.message || 'PHARMACY.ROUTING_FAILED');
+          this.toast.error(this.errorMessage(err, 'PHARMACY.ROUTING_FAILED'));
           this.saving.set(false);
         },
       });
@@ -120,12 +123,12 @@ export class StockRoutingComponent {
     this.saving.set(true);
     this.svc.printForPatient(this.prescriptionId).subscribe({
       next: () => {
-        this.toast.success('PHARMACY.PRINTED_FOR_PATIENT');
+        this.toast.success(this.translate.instant('PHARMACY.PRINTED_FOR_PATIENT'));
         this.saving.set(false);
         this.checkStock();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message || 'PHARMACY.ROUTING_FAILED');
+        this.toast.error(this.errorMessage(err, 'PHARMACY.ROUTING_FAILED'));
         this.saving.set(false);
       },
     });
@@ -146,13 +149,13 @@ export class StockRoutingComponent {
     this.saving.set(true);
     this.svc.backOrder(this.prescriptionId, this.estimatedRestockDate || undefined).subscribe({
       next: () => {
-        this.toast.success('PHARMACY.BACK_ORDER_PLACED');
+        this.toast.success(this.translate.instant('PHARMACY.BACK_ORDER_PLACED'));
         this.saving.set(false);
         this.closeBackOrderForm();
         this.checkStock();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message || 'PHARMACY.ROUTING_FAILED');
+        this.toast.error(this.errorMessage(err, 'PHARMACY.ROUTING_FAILED'));
         this.saving.set(false);
       },
     });
@@ -164,12 +167,16 @@ export class StockRoutingComponent {
     this.saving.set(true);
     this.svc.partnerRespond(decisionId, accepted).subscribe({
       next: () => {
-        this.toast.success(accepted ? 'PHARMACY.PARTNER_ACCEPTED' : 'PHARMACY.PARTNER_REJECTED');
+        this.toast.success(
+          this.translate.instant(
+            accepted ? 'PHARMACY.PARTNER_ACCEPTED' : 'PHARMACY.PARTNER_REJECTED',
+          ),
+        );
         this.saving.set(false);
         this.loadDecisions();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message || 'PHARMACY.ROUTING_FAILED');
+        this.toast.error(this.errorMessage(err, 'PHARMACY.ROUTING_FAILED'));
         this.saving.set(false);
       },
     });
@@ -179,15 +186,24 @@ export class StockRoutingComponent {
     this.saving.set(true);
     this.svc.confirmPartnerDispense(decisionId).subscribe({
       next: () => {
-        this.toast.success('PHARMACY.PARTNER_DISPENSED');
+        this.toast.success(this.translate.instant('PHARMACY.PARTNER_DISPENSED'));
         this.saving.set(false);
         this.loadDecisions();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message || 'PHARMACY.ROUTING_FAILED');
+        this.toast.error(this.errorMessage(err, 'PHARMACY.ROUTING_FAILED'));
         this.saving.set(false);
       },
     });
+  }
+
+  /**
+   * Prefer server-provided error text; fall back to a translated i18n key so
+   * we never display raw keys like 'PHARMACY.ROUTING_FAILED' to the user.
+   */
+  private errorMessage(err: unknown, fallbackKey: string): string {
+    const serverMessage = (err as { error?: { message?: string } })?.error?.message;
+    return serverMessage || this.translate.instant(fallbackKey);
   }
 
   // ── Pagination ──

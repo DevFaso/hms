@@ -9,6 +9,7 @@ import {
   InventoryItemResponse,
   DispenseRequest,
   DispenseResponse,
+  WorkQueuePrescription,
 } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 
@@ -25,8 +26,7 @@ export class DispensingComponent implements OnInit {
   private readonly toast = inject(ToastService);
 
   // Work queue
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  workQueue = signal<any[]>([]);
+  workQueue = signal<WorkQueuePrescription[]>([]);
   queueLoading = signal(false);
   queuePage = 0;
   queueTotalPages = 0;
@@ -41,8 +41,7 @@ export class DispensingComponent implements OnInit {
   // Dispensing form
   showForm = signal(false);
   saving = signal(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  selectedPrescription: any = null;
+  selectedPrescription: WorkQueuePrescription | null = null;
   form: DispenseRequest = this.emptyForm();
 
   // Recent dispenses
@@ -95,6 +94,8 @@ export class DispensingComponent implements OnInit {
       },
       error: () => {
         this.dispensesLoading.set(false);
+        this.recentDispenses.set([]);
+        this.toast.error('Failed to load recent dispenses');
       },
     });
   }
@@ -110,13 +111,15 @@ export class DispensingComponent implements OnInit {
   }
 
   onPharmacyChange(): void {
+    // Reset pagination and close any in-progress form — context is tied to pharmacy.
+    this.queuePage = 0;
+    this.closeForm();
     this.loadWorkQueue();
     this.loadRecentDispenses();
     this.loadInventory();
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  selectPrescription(rx: any): void {
+  selectPrescription(rx: WorkQueuePrescription): void {
     this.selectedPrescription = rx;
     this.form = this.emptyForm();
     this.form.prescriptionId = rx.id;

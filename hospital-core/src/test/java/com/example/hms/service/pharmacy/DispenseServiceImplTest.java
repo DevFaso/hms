@@ -101,9 +101,12 @@ class DispenseServiceImplTest {
         prescription.setId(prescriptionId);
         prescription.setStatus(PrescriptionStatus.SIGNED);
         prescription.setMedicationName("Amoxicillin");
+        prescription.setQuantity(BigDecimal.TEN);
 
         patient = new Patient();
         patient.setId(patientId);
+        prescription.setHospital(hospital);
+        prescription.setPatient(patient);
 
         user = new User();
         user.setId(userId);
@@ -167,6 +170,8 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
@@ -196,6 +201,8 @@ class DispenseServiceImplTest {
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
@@ -215,6 +222,7 @@ class DispenseServiceImplTest {
             prescription.setStatus(PrescriptionStatus.DRAFT);
             DispenseRequestDTO dto = buildRequest();
 
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.createDispense(dto))
@@ -233,6 +241,7 @@ class DispenseServiceImplTest {
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
 
@@ -267,6 +276,8 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.valueOf(5));
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
@@ -317,6 +328,8 @@ class DispenseServiceImplTest {
             Dispense d = buildDispense(DispenseStatus.COMPLETED);
             DispenseResponseDTO dto = DispenseResponseDTO.builder().id(dispenseId).build();
 
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
             when(dispenseRepository.findByPrescriptionId(prescriptionId, pageable))
                     .thenReturn(new PageImpl<>(List.of(d)));
             when(dispenseMapper.toResponseDTO(d)).thenReturn(dto);

@@ -41,7 +41,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -70,29 +69,23 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     @Transactional(readOnly = true)
     public StockCheckResultDTO checkStock(UUID prescriptionId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        Prescription prescription = findPrescription(prescriptionId);
-
-        // Find hospital dispensary pharmacies
-        List<Pharmacy> dispensaries = pharmacyRepository.findByHospitalIdAndPharmacyTypeAndActiveTrue(
-                hospitalId, PharmacyType.HOSPITAL_DISPENSARY);
+        Prescription prescription = findPrescription(prescriptionId, hospitalId);
 
         // Find the medication catalog item for this prescription
         MedicationCatalogItem catalogItem = resolveCatalogItem(prescription, hospitalId);
 
         BigDecimal totalOnHand = BigDecimal.ZERO;
-        String dispensaryName = null;
-        UUID dispensaryId = null;
 
+        // Single query for hospital-wide on-hand stock avoids N+1 across dispensaries.
         if (catalogItem != null) {
-            for (Pharmacy dispensary : dispensaries) {
-                Optional<InventoryItem> inv = inventoryItemRepository
-                        .findByPharmacyIdAndMedicationCatalogItemId(dispensary.getId(), catalogItem.getId());
-                if (inv.isPresent() && inv.get().isActive()) {
-                    totalOnHand = totalOnHand.add(inv.get().getQuantityOnHand());
-                    if (dispensaryName == null) {
-                        dispensaryName = dispensary.getName();
-                        dispensaryId = dispensary.getId();
-                    }
+            List<InventoryItem> items = inventoryItemRepository
+                    .findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
+                            hospitalId, catalogItem.getId());
+            for (InventoryItem item : items) {
+                if (item.getPharmacy() != null
+                        && item.getPharmacy().getPharmacyType() == PharmacyType.HOSPITAL_DISPENSARY
+                        && item.getQuantityOnHand() != null) {
+                    totalOnHand = totalOnHand.add(item.getQuantityOnHand());
                 }
             }
         }
@@ -122,10 +115,12 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             }
         }
 
+        // pharmacyName/pharmacyId are intentionally null: quantityOnHand is the aggregate
+        // across all hospital dispensaries. A per-dispensary breakdown is out of scope.
         return StockCheckResultDTO.builder()
                 .medicationName(prescription.getMedicationName())
-                .pharmacyName(dispensaryName)
-                .pharmacyId(dispensaryId)
+                .pharmacyName(null)
+                .pharmacyId(null)
                 .quantityOnHand(totalOnHand)
                 .sufficient(sufficient)
                 .partnerPharmacies(partnerOptions)
@@ -136,7 +131,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     @Transactional
     public RoutingDecisionResponseDTO routeToPartner(UUID prescriptionId, RoutingDecisionRequestDTO dto) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
-        Prescription prescription = findPrescription(prescriptionId);
+        Prescription prescription = findPrescription(prescriptionId, hospitalId);
         validateRoutableStatus(prescription);
 
         UUID targetPharmacyId = dto.getTargetPharmacyId();
@@ -149,6 +144,9 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         if (!targetPharmacy.getHospital().getId().equals(hospitalId)) {
             throw new ResourceNotFoundException("Target pharmacy not found");
+        }
+        if (targetPharmacy.getPharmacyType() != PharmacyType.PARTNER_PHARMACY) {
+            throw new BusinessException("Target pharmacy must be a PARTNER_PHARMACY for partner routing");
         }
 
         User currentUser = resolveCurrentUser();
@@ -179,8 +177,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     @Override
     @Transactional
     public RoutingDecisionResponseDTO printForPatient(UUID prescriptionId) {
-        roleValidator.requireActiveHospitalId();
-        Prescription prescription = findPrescription(prescriptionId);
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        Prescription prescription = findPrescription(prescriptionId, hospitalId);
         validateRoutableStatus(prescription);
 
         User currentUser = resolveCurrentUser();
@@ -210,8 +208,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     @Override
     @Transactional
     public RoutingDecisionResponseDTO backOrder(UUID prescriptionId, LocalDate estimatedRestockDate) {
-        roleValidator.requireActiveHospitalId();
-        Prescription prescription = findPrescription(prescriptionId);
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        Prescription prescription = findPrescription(prescriptionId, hospitalId);
         validateRoutableStatus(prescription);
 
         User currentUser = resolveCurrentUser();
@@ -243,9 +241,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     @Override
     @Transactional
     public RoutingDecisionResponseDTO partnerRespond(UUID routingDecisionId, boolean accepted) {
-        roleValidator.requireActiveHospitalId();
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
         PrescriptionRoutingDecision decision = routingDecisionRepository.findById(routingDecisionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Routing decision not found"));
+        enforceDecisionHospitalScope(decision, hospitalId);
 
         if (decision.getRoutingType() != RoutingType.PARTNER) {
             throw new BusinessException("Only PARTNER routing decisions can receive partner responses");
@@ -278,9 +277,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     @Override
     @Transactional
     public RoutingDecisionResponseDTO confirmPartnerDispense(UUID routingDecisionId) {
-        roleValidator.requireActiveHospitalId();
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
         PrescriptionRoutingDecision decision = routingDecisionRepository.findById(routingDecisionId)
                 .orElseThrow(() -> new ResourceNotFoundException("Routing decision not found"));
+        enforceDecisionHospitalScope(decision, hospitalId);
 
         if (decision.getRoutingType() != RoutingType.PARTNER) {
             throw new BusinessException("Only PARTNER routing decisions can confirm dispense");
@@ -306,6 +306,9 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     @Override
     @Transactional(readOnly = true)
     public Page<RoutingDecisionResponseDTO> listByPrescription(UUID prescriptionId, Pageable pageable) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        // Enforce scope on the prescription before returning history
+        findPrescription(prescriptionId, hospitalId);
         return routingDecisionRepository.findByPrescriptionId(prescriptionId, pageable)
                 .map(routingMapper::toResponseDTO);
     }
@@ -313,15 +316,32 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     @Override
     @Transactional(readOnly = true)
     public Page<RoutingDecisionResponseDTO> listByPatient(UUID patientId, Pageable pageable) {
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
         return routingDecisionRepository.findByDecidedForPatientId(patientId, pageable)
-                .map(routingMapper::toResponseDTO);
+                .map(d -> {
+                    enforceDecisionHospitalScope(d, hospitalId);
+                    return routingMapper.toResponseDTO(d);
+                });
     }
 
     // ── Private helpers ──
 
-    private Prescription findPrescription(UUID prescriptionId) {
-        return prescriptionRepository.findById(prescriptionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Prescription not found"));
+    private Prescription findPrescription(UUID prescriptionId, UUID hospitalId) {
+        Prescription prescription = prescriptionRepository.findById(prescriptionId)
+                .orElseThrow(() -> new ResourceNotFoundException("prescription.notfound"));
+        if (prescription.getHospital() == null
+                || !hospitalId.equals(prescription.getHospital().getId())) {
+            throw new ResourceNotFoundException("prescription.notfound");
+        }
+        return prescription;
+    }
+
+    private void enforceDecisionHospitalScope(PrescriptionRoutingDecision decision, UUID hospitalId) {
+        if (decision.getPrescription() == null
+                || decision.getPrescription().getHospital() == null
+                || !hospitalId.equals(decision.getPrescription().getHospital().getId())) {
+            throw new ResourceNotFoundException("Routing decision not found");
+        }
     }
 
     private void validateRoutableStatus(Prescription prescription) {
