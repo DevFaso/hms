@@ -462,22 +462,22 @@ Tél: +226 XX XX XX XX
 | T-36 | ✅ ~~Audit events for dispense, override, dual-approval~~ | Backend | US-8.1 | Done |
 | T-37 | ✅ ~~Tests: dispense service, CDS checks, dual-approval~~ | Tests | US-3.x | Done |
 
-### Phase 4b — Stock-Out Routing & Cross-Tier Handoff (Weeks 14–20)
+### Phase 4b — Stock-Out Routing & Cross-Tier Handoff (Weeks 14–20) 🔄 IN PROGRESS
 
-| # | Task | Layer | Stories | Est |
+| # | Task | Layer | Stories | Status |
 |---|---|---|---|---|
-| T-37a | Add new prescription statuses (`REQUIRES_EXTERNAL_FILL`, `SENT_TO_PARTNER`, `PARTNER_ACCEPTED`, `PARTNER_REJECTED`, `PARTNER_DISPENSED`, `PENDING_STOCK`, `PARTIALLY_FILLED`, `PRINTED_FOR_PATIENT`) | Backend | US-3b.1 | 2d |
-| T-37b | Stock-out detection service: auto-check stock on dispense initiation, flag `REQUIRES_EXTERNAL_FILL` | Backend | US-3b.1 | 3d |
-| T-37c | Partner formulary matching: query partner pharmacies by medication, rank by patient pref + proximity | Backend | US-3b.2 | 3d |
-| T-37d | Routing decision service: record patient's choice (partner/print/back-order), update Rx status | Backend | US-3b.3 | 2d |
-| T-37e | Split-fill logic: partial dispense at Tier 1 + external routing for remainder | Backend | US-3b.4 | 3d |
-| T-37f | Back-order / `PENDING_STOCK` flow: link to purchase order, auto-notify on restock | Backend | US-3b.5 | 2d |
-| T-37g | Unified medication history: accept Tier 2 confirmations + Tier 3 patient self-reports | Backend | US-3b.6 | 3d |
-| T-37h | Stock-out routing UI: pharmacist sees options, patient selects destination | Frontend | US-3b.1–3 | 4d |
-| T-37i | Split-fill UI: show what was dispensed vs. what's pending | Frontend | US-3b.4 | 2d |
-| T-37j | Prescription print/PDF generator (French, legal format) | Frontend | US-7.5, US-3b.3 | 3d |
-| T-37k | Patient portal: self-report external fill | Frontend | US-3b.6 | 2d |
-| T-37l | Tests: stock-out routing, split-fill, partner matching, unified history | Tests | US-3b.x | 3d |
+| T-37a | ✅ ~~Add new prescription statuses (`REQUIRES_EXTERNAL_FILL`, `SENT_TO_PARTNER`, `PARTNER_ACCEPTED`, `PARTNER_REJECTED`, `PARTNER_DISPENSED`, `PENDING_STOCK`, `PARTIALLY_FILLED`, `PRINTED_FOR_PATIENT`)~~ | Backend | US-3b.1 | Done (already in PrescriptionStatus enum) |
+| T-37b | ✅ ~~Stock-out detection service: auto-check stock on dispense initiation, flag `REQUIRES_EXTERNAL_FILL`~~ | Backend | US-3b.1 | Done |
+| T-37c | ✅ ~~Partner formulary matching: query partner pharmacies by medication, rank by patient pref + proximity~~ | Backend | US-3b.2 | Done |
+| T-37d | ✅ ~~Routing decision service: record patient's choice (partner/print/back-order), update Rx status~~ | Backend | US-3b.3 | Done |
+| T-37e | Split-fill logic: partial dispense at Tier 1 + external routing for remainder | Backend | US-3b.4 | ❌ Not started |
+| T-37f | Back-order / `PENDING_STOCK` flow: link to purchase order, auto-notify on restock | Backend | US-3b.5 | ❌ Not started |
+| T-37g | Unified medication history: accept Tier 2 confirmations + Tier 3 patient self-reports | Backend | US-3b.6 | ❌ Not started |
+| T-37h | ✅ ~~Stock-out routing UI: pharmacist sees options, patient selects destination~~ | Frontend | US-3b.1–3 | Done |
+| T-37i | Split-fill UI: show what was dispensed vs. what's pending | Frontend | US-3b.4 | ❌ Not started |
+| T-37j | Prescription print/PDF generator (French, legal format) | Frontend | US-7.5, US-3b.3 | ❌ Not started |
+| T-37k | Patient portal: self-report external fill | Frontend | US-3b.6 | ❌ Not started |
+| T-37l | Tests: stock-out routing, split-fill, partner matching, unified history | Tests | US-3b.x | 🔄 In progress |
 
 ### Phase 5 — Patient Communication & Payment (Weeks 18–24)
 

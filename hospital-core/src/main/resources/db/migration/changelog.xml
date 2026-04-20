@@ -608,13 +608,25 @@
     </changeSet>
 
     <!-- =================================================================
-         V51: Recovery contact verification
-         Add verification_code_hash, expiry, and attempt tracking columns
-         to user_recovery_contacts for proper email/phone verification flow.
-         Resets any previously auto-verified contacts.
+         V51: Recovery contact verification fields
+         - Add verification_code_hash, verification_code_expires_at,
+           verification_attempts to security.user_recovery_contacts
+         - Reset auto-verified contacts pending proper verification
          ================================================================= -->
     <changeSet id="V51-recovery-contact-verification" author="hms-team" runOnChange="false">
         <sqlFile path="V51__recovery_contact_verification.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V52: Prescription routing decisions (Phase 4b stock-out routing)
+         - Create clinical.prescription_routing_decisions table
+         - Indexes: prescription_id, patient_id, status
+         ================================================================= -->
+    <changeSet id="V52-prescription-routing-decisions" author="hms-team" runOnChange="false">
+        <sqlFile path="V52__prescription_routing_decisions.sql"
                  relativeToChangelogFile="true"
                  splitStatements="true"
                  stripComments="true"/>
