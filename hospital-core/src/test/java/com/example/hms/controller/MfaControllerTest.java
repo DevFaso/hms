@@ -103,7 +103,7 @@ class MfaControllerTest {
 
         when(mfaService.enrollTotp(any(User.class))).thenReturn(result);
 
-        mockMvc.perform(post("/api/auth/mfa/enroll"))
+        mockMvc.perform(post("/auth/mfa/enroll"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.secret").value("BASE32SECRET"))
                 .andExpect(jsonPath("$.otpauthUri").isNotEmpty())
@@ -117,7 +117,7 @@ class MfaControllerTest {
     void verifyEnrollment_validCode_returnsSuccess() throws Exception {
         when(mfaService.verifyEnrollment(USER_ID, "123456")).thenReturn(true);
 
-        mockMvc.perform(post("/api/auth/mfa/verify-enrollment")
+        mockMvc.perform(post("/auth/mfa/verify-enrollment")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"code\":\"123456\"}"))
                 .andExpect(status().isOk())
@@ -128,7 +128,7 @@ class MfaControllerTest {
     void verifyEnrollment_invalidCode_returnsBadRequest() throws Exception {
         when(mfaService.verifyEnrollment(USER_ID, "000000")).thenReturn(false);
 
-        mockMvc.perform(post("/api/auth/mfa/verify-enrollment")
+        mockMvc.perform(post("/auth/mfa/verify-enrollment")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"code\":\"000000\"}"))
                 .andExpect(status().isBadRequest())
@@ -141,7 +141,7 @@ class MfaControllerTest {
     void status_returnsMfaEnabled() throws Exception {
         when(mfaService.isMfaEnabled(USER_ID)).thenReturn(true);
 
-        mockMvc.perform(get("/api/auth/mfa/status"))
+        mockMvc.perform(get("/auth/mfa/status"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mfaEnabled").value(true));
     }
@@ -150,7 +150,7 @@ class MfaControllerTest {
     void status_returnsMfaDisabled() throws Exception {
         when(mfaService.isMfaEnabled(USER_ID)).thenReturn(false);
 
-        mockMvc.perform(get("/api/auth/mfa/status"))
+        mockMvc.perform(get("/auth/mfa/status"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.mfaEnabled").value(false));
     }
@@ -167,7 +167,7 @@ class MfaControllerTest {
         when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class))).thenReturn("refresh-jwt");
         when(jwtTokenProvider.resolvePreferredRole(any())).thenReturn("ROLE_DOCTOR");
 
-        mockMvc.perform(post("/api/auth/mfa/verify")
+        mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
                 .andExpect(status().isOk())
@@ -179,7 +179,7 @@ class MfaControllerTest {
     void verifyMfa_invalidMfaToken_returns401() throws Exception {
         when(jwtTokenProvider.isMfaToken("expired-token")).thenReturn(false);
 
-        mockMvc.perform(post("/api/auth/mfa/verify")
+        mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"expired-token\",\"code\":\"654321\"}"))
                 .andExpect(status().isUnauthorized())
@@ -193,7 +193,7 @@ class MfaControllerTest {
         when(mfaService.verifyCode(USER_ID, "999999")).thenReturn(false);
         when(mfaService.verifyBackupCode(USER_ID, "999999")).thenReturn(false);
 
-        mockMvc.perform(post("/api/auth/mfa/verify")
+        mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"999999\"}"))
                 .andExpect(status().isUnauthorized())
@@ -211,7 +211,7 @@ class MfaControllerTest {
         when(jwtTokenProvider.generateRefreshToken(any(TokenUserDescriptor.class))).thenReturn("refresh-jwt");
         when(jwtTokenProvider.resolvePreferredRole(any())).thenReturn("ROLE_DOCTOR");
 
-        mockMvc.perform(post("/api/auth/mfa/verify")
+        mockMvc.perform(post("/auth/mfa/verify")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"BACKUP01\"}"))
                 .andExpect(status().isOk())
