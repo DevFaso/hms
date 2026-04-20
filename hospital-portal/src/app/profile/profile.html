@@ -578,19 +578,19 @@
                       </span>
                       <div class="mfa-details">
                         <span class="mfa-method">{{ mfa.method }}</span>
-                        @if (mfa.destination) {
-                          <span class="mfa-dest">{{ mfa.destination }}</span>
+                        @if (mfa.channel) {
+                          <span class="mfa-dest">{{ mfa.channel }}</span>
                         }
                       </div>
                       <div class="mfa-badges">
-                        @if (mfa.verified) {
+                        @if (mfa.lastVerifiedAt) {
                           <span class="badge-verified">{{ 'PROFILE.VERIFIED' | translate }}</span>
                         } @else {
                           <span class="badge-unverified">{{
                             'PROFILE.UNVERIFIED' | translate
                           }}</span>
                         }
-                        @if (mfa.primary) {
+                        @if (mfa.primaryFactor) {
                           <span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
                         }
                       </div>

@@ -54,10 +54,11 @@ export interface CredentialHealth {
 export interface MfaEnrollment {
   id?: string;
   method: string;
-  destination?: string;
-  verified: boolean;
-  primary: boolean;
-  createdAt?: string;
+  channel?: string;
+  enabled: boolean;
+  primaryFactor: boolean;
+  enrolledAt?: string;
+  lastVerifiedAt?: string;
 }
 
 export interface RecoveryContact {
