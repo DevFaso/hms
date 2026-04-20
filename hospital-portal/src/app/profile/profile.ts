@@ -263,6 +263,13 @@ export class ProfileComponent implements OnInit {
   recoverySaving = signal(false);
   recoveryError = signal('');
 
+  /* ── Recovery Contact Verification ── */
+  verifyingContactId = signal<string | null>(null);
+  verificationCode = signal('');
+  verificationSending = signal(false);
+  verificationError = signal('');
+  verificationCodeSent = signal(false);
+
   openAddRecovery(): void {
     this.showAddRecovery.set(true);
     this.newRecoveryType.set('EMAIL');
@@ -288,7 +295,6 @@ export class ProfileComponent implements OnInit {
     const existing = (this.credentials()?.recoveryContacts ?? []).map((rc) => ({
       contactType: rc.contactType,
       contactValue: rc.contactValue,
-      verified: rc.verified,
       primaryContact: this.newRecoveryPrimary() ? false : rc.primaryContact,
     }));
 
@@ -297,7 +303,6 @@ export class ProfileComponent implements OnInit {
       {
         contactType: this.newRecoveryType(),
         contactValue: value,
-        verified: true,
         primaryContact: this.newRecoveryPrimary(),
       },
     ];
@@ -325,7 +330,6 @@ export class ProfileComponent implements OnInit {
       .map((rc) => ({
         contactType: rc.contactType,
         contactValue: rc.contactValue,
-        verified: rc.verified,
         primaryContact: rc.primaryContact,
       }));
 
@@ -342,6 +346,59 @@ export class ProfileComponent implements OnInit {
         this.toast.error(err?.error?.message ?? 'Failed to remove contact.');
       },
     });
+  }
+
+  sendVerificationCode(contact: RecoveryContact): void {
+    if (!contact.id) return;
+    this.verifyingContactId.set(contact.id);
+    this.verificationCode.set('');
+    this.verificationError.set('');
+    this.verificationSending.set(true);
+    this.verificationCodeSent.set(false);
+
+    this.profileService.sendRecoveryVerificationCode(contact.id).subscribe({
+      next: () => {
+        this.verificationSending.set(false);
+        this.verificationCodeSent.set(true);
+        this.toast.success('Verification code sent to ' + contact.contactValue);
+      },
+      error: (err) => {
+        this.verificationSending.set(false);
+        this.verificationError.set(err?.error?.message ?? 'Failed to send verification code.');
+      },
+    });
+  }
+
+  submitVerificationCode(): void {
+    const contactId = this.verifyingContactId();
+    const code = this.verificationCode().trim();
+    if (!contactId || !code) return;
+
+    this.verificationSending.set(true);
+    this.verificationError.set('');
+
+    this.profileService.verifyRecoveryContact(contactId, code).subscribe({
+      next: () => {
+        this.verificationSending.set(false);
+        this.verifyingContactId.set(null);
+        this.verificationCodeSent.set(false);
+        this.toast.success('Recovery contact verified!');
+        this.profileService.getCredentialHealth().subscribe({
+          next: (creds) => this.credentials.set(creds),
+        });
+      },
+      error: (err) => {
+        this.verificationSending.set(false);
+        this.verificationError.set(err?.error?.message ?? 'Verification failed.');
+      },
+    });
+  }
+
+  cancelVerification(): void {
+    this.verifyingContactId.set(null);
+    this.verificationCode.set('');
+    this.verificationError.set('');
+    this.verificationCodeSent.set(false);
   }
 
   /* ── Lifecycle ── */

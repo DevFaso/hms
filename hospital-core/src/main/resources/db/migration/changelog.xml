@@ -607,4 +607,17 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V51: Recovery contact verification
+         Add verification_code_hash, expiry, and attempt tracking columns
+         to user_recovery_contacts for proper email/phone verification flow.
+         Resets any previously auto-verified contacts.
+         ================================================================= -->
+    <changeSet id="V51-recovery-contact-verification" author="hms-team" runOnChange="false">
+        <sqlFile path="V51__recovery_contact_verification.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

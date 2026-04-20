@@ -16,6 +16,7 @@ import com.example.hms.payload.dto.credential.UserMfaEnrollmentDTO;
 import com.example.hms.payload.dto.credential.UserMfaEnrollmentRequestDTO;
 import com.example.hms.payload.dto.credential.UserRecoveryContactDTO;
 import com.example.hms.payload.dto.credential.UserRecoveryContactRequestDTO;
+import com.example.hms.payload.dto.credential.VerifyRecoveryContactRequest;
 import com.example.hms.controller.support.AuthNotificationFacade;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -52,6 +53,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.AuthorityUtils;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -865,6 +867,30 @@ public class AuthController {
         }
         List<UserRecoveryContactDTO> response = userCredentialLifecycleService.upsertRecoveryContacts(userId, payload);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/credentials/recovery/{contactId}/send-code")
+    public ResponseEntity<java.util.Map<String, String>> sendRecoveryContactVerificationCode(
+            @PathVariable UUID contactId) {
+        UUID userId = resolveCurrentUserId();
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String contactType = userCredentialLifecycleService.sendRecoveryContactVerificationCode(userId, contactId);
+        return ResponseEntity.ok(java.util.Map.of("message", "Verification code sent", "contactType", contactType));
+    }
+
+    @PostMapping("/credentials/recovery/{contactId}/verify")
+    public ResponseEntity<UserRecoveryContactDTO> verifyRecoveryContact(
+            @PathVariable UUID contactId,
+            @Valid @RequestBody VerifyRecoveryContactRequest request) {
+        UUID userId = resolveCurrentUserId();
+        if (userId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        UserRecoveryContactDTO dto = userCredentialLifecycleService.verifyRecoveryContact(
+                userId, contactId, request.getCode());
+        return ResponseEntity.ok(dto);
     }
 
     private UUID resolveCurrentUserId() {

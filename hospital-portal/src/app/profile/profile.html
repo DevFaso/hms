@@ -696,6 +696,15 @@
                             <span class="badge-unverified">{{
                               'PROFILE.UNVERIFIED' | translate
                             }}</span>
+                            @if (verifyingContactId() !== rc.id) {
+                              <button
+                                class="btn-sm-primary"
+                                (click)="sendVerificationCode(rc)"
+                                [disabled]="verificationSending()"
+                              >
+                                Verify
+                              </button>
+                            }
                           }
                           @if (rc.primaryContact) {
                             <span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
@@ -710,6 +719,49 @@
                           <span class="material-symbols-outlined">delete</span>
                         </button>
                       </div>
+                      @if (verifyingContactId() === rc.id && verificationCodeSent()) {
+                        <div class="verification-form">
+                          <p class="verification-hint">
+                            Enter the 6-digit code sent to <strong>{{ rc.contactValue }}</strong>
+                          </p>
+                          <div class="form-row">
+                            <label class="form-label" for="verification-code"
+                              >Verification Code</label
+                            >
+                            <input
+                              id="verification-code"
+                              class="form-control verification-input"
+                              type="text"
+                              maxlength="6"
+                              placeholder="000000"
+                              [ngModel]="verificationCode()"
+                              (ngModelChange)="verificationCode.set($event)"
+                            />
+                          </div>
+                          @if (verificationError()) {
+                            <div class="form-error">{{ verificationError() }}</div>
+                          }
+                          <div class="form-actions">
+                            <button
+                              class="btn-primary"
+                              (click)="submitVerificationCode()"
+                              [disabled]="verificationSending() || verificationCode().length < 6"
+                            >
+                              {{ verificationSending() ? 'Verifying…' : 'Confirm' }}
+                            </button>
+                            <button class="btn-secondary" (click)="cancelVerification()">
+                              Cancel
+                            </button>
+                            <button
+                              class="btn-link"
+                              (click)="sendVerificationCode(rc)"
+                              [disabled]="verificationSending()"
+                            >
+                              Resend Code
+                            </button>
+                          </div>
+                        </div>
+                      }
                     }
                   </div>
                 } @else {

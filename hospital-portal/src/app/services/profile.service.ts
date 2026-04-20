@@ -178,11 +178,27 @@ export class ProfileService {
     contacts: {
       contactType: string;
       contactValue: string;
-      verified?: boolean;
       primaryContact?: boolean;
       notes?: string;
     }[],
   ): Observable<RecoveryContact[]> {
     return this.http.put<RecoveryContact[]>('/auth/credentials/recovery', contacts);
+  }
+
+  /** POST /auth/credentials/recovery/:id/send-code — send verification code */
+  sendRecoveryVerificationCode(
+    contactId: string,
+  ): Observable<{ message: string; contactType: string }> {
+    return this.http.post<{ message: string; contactType: string }>(
+      `/auth/credentials/recovery/${contactId}/send-code`,
+      {},
+    );
+  }
+
+  /** POST /auth/credentials/recovery/:id/verify — verify recovery contact with code */
+  verifyRecoveryContact(contactId: string, code: string): Observable<RecoveryContact> {
+    return this.http.post<RecoveryContact>(`/auth/credentials/recovery/${contactId}/verify`, {
+      code,
+    });
   }
 }
