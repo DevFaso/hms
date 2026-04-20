@@ -224,4 +224,292 @@ class StockOutRoutingServiceImplTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("ACCEPTED status");
     }
+
+    @Test
+    @DisplayName("checkStock should report sufficient when dispensary stock meets need")
+    void checkStockShouldReportSufficient() {
+        InventoryItem dispensaryInventory = InventoryItem.builder()
+                .pharmacy(dispensary)
+                .medicationCatalogItem(catalogItem)
+                .quantityOnHand(BigDecimal.valueOf(50))
+                .active(true)
+                .build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(medicationCatalogItemRepository.findByHospitalIdAndCode(hospitalId, "AMOX500"))
+                .thenReturn(Optional.of(catalogItem));
+        when(inventoryItemRepository.findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
+                hospitalId, medicationId)).thenReturn(List.of(dispensaryInventory));
+
+        StockCheckResultDTO result = service.checkStock(prescriptionId);
+
+        assertThat(result.isSufficient()).isTrue();
+        assertThat(result.getPartnerPharmacies()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("checkStock should throw when prescription belongs to other hospital")
+    void checkStockShouldRejectCrossHospital() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        prescription.setHospital(other);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+        assertThatThrownBy(() -> service.checkStock(prescriptionId))
+                .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("routeToPartner should reject non-routable prescription status")
+    void routeToPartnerShouldRejectNonRoutableStatus() {
+        prescription.setStatus(PrescriptionStatus.DISPENSED);
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId)
+                .targetPharmacyId(partnerId)
+                .build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+        assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("not in a routable state");
+    }
+
+    @Test
+    @DisplayName("routeToPartner should reject null target pharmacy")
+    void routeToPartnerShouldRejectNullTarget() {
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId)
+                .build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+        assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Target pharmacy ID");
+    }
+
+    @Test
+    @DisplayName("routeToPartner should reject non-partner pharmacy")
+    void routeToPartnerShouldRejectNonPartnerType() {
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId)
+                .targetPharmacyId(dispensaryId)
+                .build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(pharmacyRepository.findById(dispensaryId)).thenReturn(Optional.of(dispensary));
+
+        assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("PARTNER_PHARMACY");
+    }
+
+    @Test
+    @DisplayName("routeToPartner should reject target pharmacy from other hospital")
+    void routeToPartnerShouldRejectCrossHospitalTarget() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        Pharmacy crossHospitalPartner = Pharmacy.builder()
+                .hospital(other)
+                .pharmacyType(PharmacyType.PARTNER_PHARMACY)
+                .build();
+        crossHospitalPartner.setId(partnerId);
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId)
+                .targetPharmacyId(partnerId)
+                .build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(pharmacyRepository.findById(partnerId)).thenReturn(Optional.of(crossHospitalPartner));
+
+        assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("printForPatient should update status and persist decision")
+    void printForPatientShouldSucceed() {
+        RoutingDecisionResponseDTO response = RoutingDecisionResponseDTO.builder()
+                .routingType("PRINT").build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(routingMapper.toResponseDTO(any())).thenReturn(response);
+
+        RoutingDecisionResponseDTO result = service.printForPatient(prescriptionId);
+
+        assertThat(result.getRoutingType()).isEqualTo("PRINT");
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PRINTED_FOR_PATIENT);
+        verify(prescriptionRepository).save(prescription);
+    }
+
+    @Test
+    @DisplayName("backOrder should update status and persist decision")
+    void backOrderShouldSucceed() {
+        RoutingDecisionResponseDTO response = RoutingDecisionResponseDTO.builder()
+                .routingType("BACKORDER").build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.of(currentUser));
+        when(routingDecisionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(routingMapper.toResponseDTO(any())).thenReturn(response);
+
+        RoutingDecisionResponseDTO result = service.backOrder(prescriptionId, java.time.LocalDate.now().plusDays(7));
+
+        assertThat(result.getRoutingType()).isEqualTo("BACKORDER");
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_STOCK);
+        verify(prescriptionRepository).save(prescription);
+    }
+
+    @Test
+    @DisplayName("partnerRespond should accept and update statuses")
+    void partnerRespondShouldAccept() {
+        PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                .prescription(prescription)
+                .targetPharmacy(partnerPharmacy)
+                .decidedByUser(currentUser)
+                .decidedForPatient(patient)
+                .routingType(RoutingType.PARTNER)
+                .status(RoutingDecisionStatus.PENDING)
+                .build();
+        UUID decisionId = UUID.randomUUID();
+        decision.setId(decisionId);
+        RoutingDecisionResponseDTO response = RoutingDecisionResponseDTO.builder()
+                .status("ACCEPTED").build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(routingDecisionRepository.findById(decisionId)).thenReturn(Optional.of(decision));
+        when(routingDecisionRepository.save(any())).thenReturn(decision);
+        when(routingMapper.toResponseDTO(decision)).thenReturn(response);
+
+        RoutingDecisionResponseDTO result = service.partnerRespond(decisionId, true);
+
+        assertThat(result.getStatus()).isEqualTo("ACCEPTED");
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.ACCEPTED);
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_ACCEPTED);
+    }
+
+    @Test
+    @DisplayName("partnerRespond should reject and update statuses")
+    void partnerRespondShouldReject() {
+        PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                .prescription(prescription)
+                .targetPharmacy(partnerPharmacy)
+                .decidedByUser(currentUser)
+                .decidedForPatient(patient)
+                .routingType(RoutingType.PARTNER)
+                .status(RoutingDecisionStatus.PENDING)
+                .build();
+        UUID decisionId = UUID.randomUUID();
+        decision.setId(decisionId);
+        RoutingDecisionResponseDTO response = RoutingDecisionResponseDTO.builder()
+                .status("REJECTED").build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(routingDecisionRepository.findById(decisionId)).thenReturn(Optional.of(decision));
+        when(routingDecisionRepository.save(any())).thenReturn(decision);
+        when(routingMapper.toResponseDTO(decision)).thenReturn(response);
+
+        service.partnerRespond(decisionId, false);
+
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.REJECTED);
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_REJECTED);
+    }
+
+    @Test
+    @DisplayName("partnerRespond should reject non-PARTNER routing type")
+    void partnerRespondShouldRejectNonPartnerRoutingType() {
+        PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                .prescription(prescription)
+                .routingType(RoutingType.PRINT)
+                .status(RoutingDecisionStatus.PENDING)
+                .build();
+        UUID decisionId = UUID.randomUUID();
+        decision.setId(decisionId);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(routingDecisionRepository.findById(decisionId)).thenReturn(Optional.of(decision));
+
+        assertThatThrownBy(() -> service.partnerRespond(decisionId, true))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("PARTNER routing");
+    }
+
+    @Test
+    @DisplayName("confirmPartnerDispense should update status when accepted")
+    void confirmPartnerDispenseShouldSucceed() {
+        PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                .prescription(prescription)
+                .targetPharmacy(partnerPharmacy)
+                .routingType(RoutingType.PARTNER)
+                .status(RoutingDecisionStatus.ACCEPTED)
+                .build();
+        UUID decisionId = UUID.randomUUID();
+        decision.setId(decisionId);
+        RoutingDecisionResponseDTO response = RoutingDecisionResponseDTO.builder()
+                .status("COMPLETED").build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(routingDecisionRepository.findById(decisionId)).thenReturn(Optional.of(decision));
+        when(routingDecisionRepository.save(any())).thenReturn(decision);
+        when(routingMapper.toResponseDTO(decision)).thenReturn(response);
+
+        service.confirmPartnerDispense(decisionId);
+
+        assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.COMPLETED);
+        assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_DISPENSED);
+    }
+
+    @Test
+    @DisplayName("listByPrescription should enforce scope and map")
+    void listByPrescriptionShouldMap() {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10);
+        PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                .prescription(prescription)
+                .build();
+        RoutingDecisionResponseDTO dto = RoutingDecisionResponseDTO.builder().build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(routingDecisionRepository.findByPrescriptionId(prescriptionId, pageable))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(decision)));
+        when(routingMapper.toResponseDTO(decision)).thenReturn(dto);
+
+        org.springframework.data.domain.Page<RoutingDecisionResponseDTO> page =
+                service.listByPrescription(prescriptionId, pageable);
+        assertThat(page.getContent()).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("listByPatient should enforce scope and map")
+    void listByPatientShouldMap() {
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(0, 10);
+        UUID patientQueryId = UUID.randomUUID();
+        PrescriptionRoutingDecision decision = PrescriptionRoutingDecision.builder()
+                .prescription(prescription)
+                .build();
+        RoutingDecisionResponseDTO dto = RoutingDecisionResponseDTO.builder().build();
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(routingDecisionRepository.findByDecidedForPatientId(patientQueryId, pageable))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(decision)));
+        when(routingMapper.toResponseDTO(decision)).thenReturn(dto);
+
+        org.springframework.data.domain.Page<RoutingDecisionResponseDTO> page =
+                service.listByPatient(patientQueryId, pageable);
+        assertThat(page.getContent()).hasSize(1);
+    }
 }
