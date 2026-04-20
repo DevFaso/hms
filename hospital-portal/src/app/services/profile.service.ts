@@ -178,6 +178,7 @@ export class ProfileService {
     contacts: {
       contactType: string;
       contactValue: string;
+      verified?: boolean;
       primaryContact?: boolean;
       notes?: string;
     }[],

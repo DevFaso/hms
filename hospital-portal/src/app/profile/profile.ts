@@ -288,6 +288,7 @@ export class ProfileComponent implements OnInit {
     const existing = (this.credentials()?.recoveryContacts ?? []).map((rc) => ({
       contactType: rc.contactType,
       contactValue: rc.contactValue,
+      verified: rc.verified,
       primaryContact: this.newRecoveryPrimary() ? false : rc.primaryContact,
     }));
 
@@ -296,6 +297,7 @@ export class ProfileComponent implements OnInit {
       {
         contactType: this.newRecoveryType(),
         contactValue: value,
+        verified: true,
         primaryContact: this.newRecoveryPrimary(),
       },
     ];
@@ -323,6 +325,7 @@ export class ProfileComponent implements OnInit {
       .map((rc) => ({
         contactType: rc.contactType,
         contactValue: rc.contactValue,
+        verified: rc.verified,
         primaryContact: rc.primaryContact,
       }));
 
