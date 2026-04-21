@@ -16,9 +16,7 @@
   </header>
 
   <p *ngIf="loading()" class="hint">Chargement…</p>
-  <p *ngIf="!loading() && filtered().length === 0" class="hint">
-    Aucune demande à afficher.
-  </p>
+  <p *ngIf="!loading() && filtered().length === 0" class="hint">Aucune demande à afficher.</p>
 
   <table *ngIf="filtered().length > 0" class="claims__table">
     <thead>
