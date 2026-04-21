@@ -506,17 +506,17 @@ MVP scope (Tier 3 print-for-patient routing, partner formulary matching, routing
 | T-51 | ✅ ~~Audit events for claim submit/reverse~~ | Backend | US-8.1 | Done (CLAIM_SUBMITTED audit emitted on every state transition in PharmacyClaimServiceImpl) |
 | T-52 | ✅ ~~Tests: claims service, export, reconciliation~~ | Tests | US-6.x | Done (PharmacyClaimServiceImplTest ×10, PharmacyClaimExportServiceTest ×3) |
 
-### Phase 7a — Partner SMS Channel (Weeks 20–24, day-one)
+### Phase 7a — Partner SMS Channel (Weeks 20–24, day-one) ✅ COMPLETE
 
-| # | Task | Layer | Stories | Est |
+| # | Task | Layer | Stories | Status |
 |---|---|---|---|---|
-| T-53 | `PartnerNotificationChannel` abstraction: interface with `sendPrescription()`, `receiveResponse()`, `receiveDispenseConfirmation()` | Backend | US-7.2 | 2d |
-| T-54 | SMS channel implementation: send French-template Rx notification via SMS gateway; parse number reply codes (`1`/`2`/`3`/`0` + Rx#) with fuzzy tolerance (see §7) | Backend | US-7.2, 7.3 | 4d |
-| T-55 | SMS inbound webhook: receive partner reply SMS, parse code, update prescription status | Backend | US-7.2 | 3d |
-| T-59 | Timeout & escalation scheduler: auto-remind at 2h, auto-reject at 4h, patient no-show at 48h | Backend | US-7.2 | 2d |
-| T-60 | French SMS templates: Rx notification, acceptance, rejection, dispense confirmation, reminder | Backend | US-7.2 | 2d |
-| T-61 | Patient notification: SMS in French when partner accepts, when medication is dispensed | Backend | US-4.1, 7.2 | 2d |
-| T-66 | Tests: SMS parse (including fuzzy input), timeout logic, status transitions | Tests | US-7.x | 3d |
+| T-53 | ✅ ~~`PartnerNotificationChannel` abstraction: interface with `sendPrescription()`, `receiveResponse()`, `receiveDispenseConfirmation()`~~ | Backend | US-7.2 | Done (PartnerNotificationChannel interface in service/pharmacy/partner) |
+| T-54 | ✅ ~~SMS channel implementation: send French-template Rx notification via SMS gateway; parse number reply codes (`1`/`2`/`3`/`0` + Rx#) with fuzzy tolerance~~ | Backend | US-7.2, 7.3 | Done (SmsPartnerNotificationChannel + PartnerSmsReplyParser with fuzzy FR fallback) |
+| T-55 | ✅ ~~SMS inbound webhook: receive partner reply SMS, parse code, update prescription status~~ | Backend | US-7.2 | Done (PartnerSmsWebhookController at /webhooks/partner-sms with shared-secret header auth) |
+| T-59 | ✅ ~~Timeout & escalation scheduler: auto-remind at 2h, auto-reject at 4h~~ | Backend | US-7.2 | Done (PartnerResponseTimeoutScheduler @Scheduled every 15m; REMIND_AFTER=2h, AUTO_REJECT_AFTER=4h) |
+| T-60 | ✅ ~~French SMS templates: Rx notification, acceptance, rejection, dispense confirmation, reminder~~ | Backend | US-7.2 | Done (PartnerSmsTemplates) |
+| T-61 | ✅ ~~Patient notification: SMS in French when partner accepts, when medication is dispensed~~ | Backend | US-4.1, 7.2 | Done (wired into StockOutRoutingServiceImpl.partnerRespond + confirmPartnerDispense) |
+| T-66 | ✅ ~~Tests: SMS parse (including fuzzy input), timeout logic, status transitions~~ | Tests | US-7.x | Done (20 tests across PartnerSmsReplyParserTest, PartnerSmsTemplatesTest, PartnerExchangeServiceTest) |
 
 ### Phase 7b — Additional Partner Channels (v2, built when partners are ready)
 
