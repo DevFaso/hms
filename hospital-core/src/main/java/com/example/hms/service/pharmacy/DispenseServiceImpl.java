@@ -79,10 +79,10 @@ public class DispenseServiceImpl implements DispenseService {
         Prescription prescription = loadAndValidatePrescription(dto, hospitalId);
 
         Patient patient = patientRepository.findById(dto.getPatientId())
-                .orElseThrow(() -> new ResourceNotFoundException("Patient not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notfound", dto.getPatientId()));
 
         Pharmacy pharmacy = pharmacyRepository.findById(dto.getPharmacyId())
-                .orElseThrow(() -> new ResourceNotFoundException("Pharmacy not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
         enforceHospitalScope(pharmacy);
 
         ActorPair actors = resolveActors(dto);
@@ -138,8 +138,15 @@ public class DispenseServiceImpl implements DispenseService {
         if (currentUserId == null) {
             throw new BusinessException("Unable to determine current user");
         }
+
+        // If the client supplies dispensedBy, it must match the authenticated user.
+        // This prevents one staff member from recording a dispense under another's identity.
+        if (dto.getDispensedBy() != null && !currentUserId.equals(dto.getDispensedBy())) {
+            throw new BusinessException("dispensedBy must match the authenticated user");
+        }
+
         User dispensedByUser = userRepository.findById(currentUserId)
-                .orElseThrow(() -> new ResourceNotFoundException("Authenticated user not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
 
         // verifiedBy (if present) must match the authenticated user
         User verifiedByUser = null;
@@ -157,7 +164,7 @@ public class DispenseServiceImpl implements DispenseService {
             return null;
         }
         return medicationCatalogItemRepository.findById(dto.getMedicationCatalogItemId())
-                .orElseThrow(() -> new ResourceNotFoundException("Medication catalog item not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
     }
 
     private StockLot consumeStockLotIfPresent(DispenseRequestDTO dto, Pharmacy pharmacy,
@@ -166,7 +173,7 @@ public class DispenseServiceImpl implements DispenseService {
             return null;
         }
         StockLot stockLot = stockLotRepository.findById(dto.getStockLotId())
-                .orElseThrow(() -> new ResourceNotFoundException("Stock lot not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("stocklot.notfound"));
 
         // The lot must belong to the target pharmacy (and therefore to the active hospital)
         InventoryItem inventoryItem = stockLot.getInventoryItem();
@@ -209,7 +216,7 @@ public class DispenseServiceImpl implements DispenseService {
     @Transactional(readOnly = true)
     public DispenseResponseDTO getDispense(UUID id) {
         Dispense dispense = dispenseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Dispense record not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
         enforceHospitalScope(dispense.getPharmacy());
         return dispenseMapper.toResponseDTO(dispense);
     }
@@ -245,7 +252,7 @@ public class DispenseServiceImpl implements DispenseService {
     @Transactional(readOnly = true)
     public Page<DispenseResponseDTO> listByPharmacy(UUID pharmacyId, Pageable pageable) {
         Pharmacy pharmacy = pharmacyRepository.findById(pharmacyId)
-                .orElseThrow(() -> new ResourceNotFoundException("Pharmacy not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
         enforceHospitalScope(pharmacy);
         return dispenseRepository.findByPharmacyId(pharmacyId, pageable)
                 .map(dispenseMapper::toResponseDTO);
@@ -255,7 +262,7 @@ public class DispenseServiceImpl implements DispenseService {
     @Transactional
     public DispenseResponseDTO cancelDispense(UUID id) {
         Dispense dispense = dispenseRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("Dispense record not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
         enforceHospitalScope(dispense.getPharmacy());
 
         if (dispense.getStatus() == DispenseStatus.CANCELLED) {
@@ -385,7 +392,6 @@ public class DispenseServiceImpl implements DispenseService {
                 .status(p.getStatus() != null ? p.getStatus().name() : null)
                 .createdAt(p.getCreatedAt())
                 .frequency(p.getFrequency())
-                .frequency(p.getFrequency())
                 .patient(patient)
                 .staff(staff)
                 .build();
@@ -398,7 +404,7 @@ public class DispenseServiceImpl implements DispenseService {
     private void enforceHospitalScope(Pharmacy pharmacy, UUID hospitalId) {
         if (hospitalId != null && pharmacy != null && pharmacy.getHospital() != null
                 && !pharmacy.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException("Pharmacy not found");
+            throw new ResourceNotFoundException("pharmacy.notfound");
         }
     }
 
@@ -408,7 +414,7 @@ public class DispenseServiceImpl implements DispenseService {
             throw new BusinessException("Unable to determine current user");
         }
         return userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
     }
 
     private void logAudit(AuditEventType eventType, String description, String resourceId) {

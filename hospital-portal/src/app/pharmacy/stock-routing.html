@@ -40,7 +40,9 @@
       </div>
       <div class="stock-info">
         <span class="label">{{ 'PHARMACY.PHARMACY_NAME' | translate }}:</span>
-        <span class="value">{{ stockResult()!.pharmacyName }}</span>
+        <span class="value">{{
+          stockResult()!.pharmacyName ?? ('PHARMACY.ALL_DISPENSARIES' | translate)
+        }}</span>
       </div>
       <div class="stock-info">
         <span class="label">{{ 'PHARMACY.QTY_ON_HAND' | translate }}:</span>

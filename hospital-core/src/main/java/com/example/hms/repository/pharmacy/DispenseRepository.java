@@ -23,7 +23,8 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
 
     /**
      * Sum of dispensed quantities for a prescription, excluding the given status
-     * (typically CANCELLED). Returns {@code null} when no rows match.
+     * (typically CANCELLED). Returns {@code BigDecimal.ZERO} when no rows match,
+     * never {@code null}, thanks to the {@code COALESCE(..., 0)} in the query.
      */
     @Query("SELECT COALESCE(SUM(d.quantityDispensed), 0) FROM Dispense d "
          + "WHERE d.prescription.id = :prescriptionId AND d.status <> :excludedStatus")
