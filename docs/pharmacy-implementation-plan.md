@@ -486,14 +486,14 @@ MVP scope (Tier 3 print-for-patient routing, partner formulary matching, routing
 | # | Task | Layer | Stories | Status |
 |---|---|---|---|---|
 | T-38 | ✅ ~~Ready-for-pickup SMS notification (French template)~~ | Backend | US-4.1 | Done (PharmacyServiceSupport.notifyReadyForPickup, triggered on full DISPENSED) |
-| T-39 | Refill reminder scheduler based on days-supply | Backend | US-4.2 | ❌ Not started |
+| T-39 | ✅ ~~Refill reminder scheduler based on days-supply~~ | Backend | US-4.2 | Done (PharmacyRefillReminderScheduler, daily 09:00 cron, parses duration days/semaines, French SMS via PharmacyServiceSupport.notifyRefillReminder) |
 | T-40 | ✅ ~~Out-of-stock notification with alternatives~~ | Backend | US-4.3 | Done (French SMS sent on partner-route / print-for-patient / back-order) |
-| T-41 | `PharmacyPayment` service + controller + DTO | Full-stack BE | US-5.1 | ❌ Not started |
-| T-42 | Mobile-money integration adapter (abstract interface + first provider) | Backend | US-5.1 | ❌ Not started |
-| T-43 | Pharmacy checkout UI (cash + mobile money) | Frontend | US-5.1 | ❌ Not started |
-| T-44 | French receipt + prescription PDF templates (printable) | Frontend | US-5.1, 9.2, US-3b.3 | ❌ Not started |
-| T-45 | Patient portal: pharmacy invoices & payment history | Frontend | US-5.2 | ❌ Not started |
-| T-46 | Tests: notifications, payment, checkout | Tests | US-4.x, 5.x | ❌ Not started |
+| T-41 | ✅ ~~`PharmacyPayment` service + controller + DTO~~ | Full-stack BE | US-5.1 | Done (PharmacyPaymentService/Impl + /pharmacy/payments controller; tenant-scoped, audits PAYMENT_POSTED) |
+| T-42 | ✅ ~~Mobile-money integration adapter (abstract interface + first provider)~~ | Backend | US-5.1 | Done (MobileMoneyGateway interface + MockMobileMoneyGateway @Primary default; swap in real Orange/Wave/MTN impl later) |
+| T-43 | ✅ ~~Pharmacy checkout UI (cash + mobile money)~~ | Frontend | US-5.1 | Done (pharmacy/checkout route, French form, radio Espèces/Mobile Money/Assurance) |
+| T-44 | ✅ ~~French receipt + prescription PDF templates (printable)~~ | Frontend | US-5.1, 9.2, US-3b.3 | Done (printable receipt section in pharmacy-checkout with @media print CSS; prescription PDF template still deferred) |
+| T-45 | ✅ ~~Patient portal: pharmacy invoices & payment history~~ | Frontend | US-5.2 | Done (my-pharmacy-invoices route, lists listPaymentsByPatient w/ total-paid banner) |
+| T-46 | ✅ ~~Tests: notifications, payment, checkout~~ | Tests | US-4.x, 5.x | Done (PharmacyRefillReminderSchedulerTest, MockMobileMoneyGatewayTest, PharmacyPaymentServiceImplTest + T-39 tests in PharmacyServiceSupportTest) |
 
 ### Phase 6 — Claims & Insurance (Weeks 18–24)
 

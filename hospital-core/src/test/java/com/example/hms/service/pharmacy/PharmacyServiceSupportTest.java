@@ -147,4 +147,34 @@ class PharmacyServiceSupportTest {
 
         verify(smsService).send(anyString(), anyString());
     }
+
+    @Test
+    @DisplayName("T-39: refill reminder SMS includes patient first name, days left and medication")
+    void refillReminderIncludesDetails() {
+        support.notifyRefillReminder(patient(), "Amoxicilline", 3);
+
+        verify(smsService).send(eq("+22670000000"), contains("Bonjour Awa"));
+        verify(smsService).send(anyString(), contains("3 jours"));
+        verify(smsService).send(anyString(), contains("Amoxicilline"));
+    }
+
+    @Test
+    @DisplayName("T-39: refill reminder is no-op when patient has no phone")
+    void refillReminderNoopWhenNoPhone() {
+        Patient p = patient();
+        p.setPhoneNumberPrimary(null);
+        support.notifyRefillReminder(p, "Med", 3);
+        verifyNoInteractions(smsService);
+    }
+
+    @Test
+    @DisplayName("T-39: refill reminder swallows SMS failure")
+    void refillReminderSwallowsFailure() {
+        doThrow(new RuntimeException("provider down"))
+                .when(smsService).send(anyString(), anyString());
+
+        support.notifyRefillReminder(patient(), "Med", 3);
+
+        verify(smsService).send(anyString(), anyString());
+    }
 }

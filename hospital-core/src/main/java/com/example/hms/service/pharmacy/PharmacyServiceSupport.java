@@ -127,4 +127,35 @@ class PharmacyServiceSupport {
                     patient.getId(), e.getMessage());
         }
     }
+
+    /**
+     * T-39: Send a French refill reminder SMS to the patient, indicating how many
+     * days of treatment remain. No-op when SMS service / patient / phone is missing.
+     * Failures are swallowed.
+     *
+     * <p>Template (French):
+     * <code>Bonjour {firstName}, il vous reste environ {daysLeft} jours de traitement
+     * ({medication}). Pensez à renouveler votre ordonnance. Merci.</code>
+     */
+    void notifyRefillReminder(Patient patient, String medicationName, int daysLeft) {
+        if (smsService == null || patient == null) {
+            return;
+        }
+        String phone = patient.getPhoneNumberPrimary();
+        if (phone == null || phone.isBlank()) {
+            return;
+        }
+        String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
+        String medication = medicationName != null ? medicationName : "";
+        String message = String.format(
+                "Bonjour %s, il vous reste environ %d jours de traitement (%s). "
+                        + "Pensez à renouveler votre ordonnance. Merci.",
+                firstName, daysLeft, medication).trim();
+        try {
+            smsService.send(phone, message);
+        } catch (Exception e) {
+            log.warn("Failed to send refill reminder SMS to patient {}: {}",
+                    patient.getId(), e.getMessage());
+        }
+    }
 }

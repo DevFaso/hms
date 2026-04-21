@@ -1,0 +1,53 @@
+.total-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--primary-bg, #eef5ff);
+  color: var(--primary-fg, #0a2b55);
+  padding: 0.75rem 1.25rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+}
+
+.loading,
+.empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-muted, #777);
+}
+
+.payment-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  .payment-item {
+    background: #fff;
+    border: 1px solid var(--border-color, #e0e0e0);
+    border-radius: 8px;
+    padding: 0.85rem 1rem;
+    margin-bottom: 0.5rem;
+
+    .row-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 600;
+    }
+
+    .row-meta {
+      display: flex;
+      gap: 1rem;
+      margin-top: 0.35rem;
+      font-size: 0.9rem;
+      color: var(--text-muted, #666);
+    }
+
+    .notes {
+      margin: 0.35rem 0 0;
+      font-style: italic;
+      color: var(--text-muted, #777);
+    }
+  }
+}

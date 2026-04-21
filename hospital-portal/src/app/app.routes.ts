@@ -101,6 +101,16 @@ export const routes: Routes = [
           ),
       },
       {
+        // T-45: patient portal pharmacy invoice & payment history
+        path: 'my-pharmacy-invoices',
+        canActivate: [RoleGuard],
+        data: { roles: ['ROLE_PATIENT'] },
+        loadComponent: () =>
+          import('./patient-portal/my-pharmacy-invoices/my-pharmacy-invoices.component').then(
+            (m) => m.MyPharmacyInvoicesComponent,
+          ),
+      },
+      {
         path: 'my-visits',
         canActivate: [RoleGuard],
         data: { roles: ['ROLE_PATIENT'] },
@@ -914,6 +924,22 @@ export const routes: Routes = [
         },
         loadComponent: () =>
           import('./pharmacy/stock-routing').then((m) => m.StockRoutingComponent),
+      },
+      {
+        // T-43/T-44: pharmacy checkout & French printable receipt
+        path: 'pharmacy/checkout',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_CASHIER',
+            'ROLE_BILLING_SPECIALIST',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/pharmacy-checkout').then((m) => m.PharmacyCheckoutComponent),
       },
 
       // Administration
