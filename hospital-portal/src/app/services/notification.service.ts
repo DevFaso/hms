@@ -96,8 +96,24 @@ export class NotificationService {
     const token = this.auth.getToken();
     if (!token || this.auth.isExpired(token)) return;
 
-    const sockUrl = `/api/ws-chat?token=${encodeURIComponent(token)}`;
     const generation = ++this.connectGeneration;
+
+    // T-38: exchange JWT for a single-use WebSocket ticket, then hand it to SockJS.
+    this.http.post<{ ticket: string }>('/auth/ws-ticket', {}).subscribe({
+      next: (res) => {
+        if (generation !== this.connectGeneration) return;
+        const ticket = res?.ticket;
+        if (!ticket) return;
+        this.activateStompWithTicket(ticket, generation);
+      },
+      error: () => {
+        // Ticket issuance failed — skip WebSocket silently; REST flows still work.
+      },
+    });
+  }
+
+  private activateStompWithTicket(ticket: string, generation: number): void {
+    const sockUrl = `/api/ws-chat?ticket=${encodeURIComponent(ticket)}`;
 
     void import('sockjs-client')
       .then((mod) => {
