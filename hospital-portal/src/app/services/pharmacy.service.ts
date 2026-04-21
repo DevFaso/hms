@@ -327,6 +327,39 @@ export interface PharmacyPaymentResponse {
   updatedAt: string;
 }
 
+/* ───────────────────────────── Pharmacy Claims (T-47/T-48/T-49) ───────────────────────────── */
+
+export type PharmacyClaimStatus = 'DRAFT' | 'SUBMITTED' | 'ACCEPTED' | 'REJECTED' | 'PAID';
+
+export interface PharmacyClaimRequest {
+  dispenseId: string;
+  patientId: string;
+  hospitalId: string;
+  coverageReference?: string;
+  claimStatus?: PharmacyClaimStatus;
+  amount: number;
+  currency?: string;
+  notes?: string;
+  rejectionReason?: string;
+}
+
+export interface PharmacyClaimResponse {
+  id: string;
+  dispenseId: string;
+  patientId: string;
+  hospitalId: string;
+  coverageReference?: string;
+  claimStatus: PharmacyClaimStatus;
+  amount: number;
+  currency: string;
+  submittedAt?: string;
+  submittedBy?: string;
+  rejectionReason?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /* ───────────────────────────── Service ───────────────────────────── */
 
 @Injectable({ providedIn: 'root' })
@@ -745,5 +778,76 @@ export class PharmacyService {
       `/pharmacy/payments/patient/${patientId}`,
       { params },
     );
+  }
+
+  // ── Pharmacy Claims (T-47/T-48/T-49) ──
+
+  createClaim(req: PharmacyClaimRequest): Observable<ApiResponse<PharmacyClaimResponse>> {
+    return this.http.post<ApiResponse<PharmacyClaimResponse>>('/pharmacy/claims', req);
+  }
+
+  submitClaim(id: string): Observable<ApiResponse<PharmacyClaimResponse>> {
+    return this.http.post<ApiResponse<PharmacyClaimResponse>>(`/pharmacy/claims/${id}/submit`, {});
+  }
+
+  acceptClaim(id: string, notes?: string): Observable<ApiResponse<PharmacyClaimResponse>> {
+    return this.http.post<ApiResponse<PharmacyClaimResponse>>(
+      `/pharmacy/claims/${id}/accept`,
+      { notes: notes ?? null },
+    );
+  }
+
+  rejectClaim(id: string, rejectionReason: string): Observable<ApiResponse<PharmacyClaimResponse>> {
+    return this.http.post<ApiResponse<PharmacyClaimResponse>>(
+      `/pharmacy/claims/${id}/reject`,
+      { rejectionReason },
+    );
+  }
+
+  payClaim(id: string, notes?: string): Observable<ApiResponse<PharmacyClaimResponse>> {
+    return this.http.post<ApiResponse<PharmacyClaimResponse>>(
+      `/pharmacy/claims/${id}/pay`,
+      { notes: notes ?? null },
+    );
+  }
+
+  getClaim(id: string): Observable<ApiResponse<PharmacyClaimResponse>> {
+    return this.http.get<ApiResponse<PharmacyClaimResponse>>(`/pharmacy/claims/${id}`);
+  }
+
+  listClaimsByHospital(
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<PharmacyClaimResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<PharmacyClaimResponse>>>('/pharmacy/claims', { params });
+  }
+
+  listClaimsByPatient(
+    patientId: string,
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<PharmacyClaimResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<PharmacyClaimResponse>>>(
+      `/pharmacy/claims/patient/${patientId}`,
+      { params },
+    );
+  }
+
+  exportClaimsCsv(statuses: PharmacyClaimStatus[] = []): Observable<Blob> {
+    let params = new HttpParams();
+    for (const s of statuses) {
+      params = params.append('status', s);
+    }
+    return this.http.get('/pharmacy/claims/export/csv', { params, responseType: 'blob' });
+  }
+
+  exportClaimsFhir(statuses: PharmacyClaimStatus[] = []): Observable<Blob> {
+    let params = new HttpParams();
+    for (const s of statuses) {
+      params = params.append('status', s);
+    }
+    return this.http.get('/pharmacy/claims/export/fhir', { params, responseType: 'blob' });
   }
 }
