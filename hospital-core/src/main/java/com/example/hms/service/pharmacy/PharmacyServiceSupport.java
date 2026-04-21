@@ -6,8 +6,11 @@ import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.User;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
+import com.example.hms.model.Patient;
+import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.SmsService;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +31,7 @@ class PharmacyServiceSupport {
     private final RoleValidator roleValidator;
     private final UserRepository userRepository;
     private final AuditEventLogService auditEventLogService;
+    private final SmsService smsService;
 
     /**
      * Resolve the authenticated user, or throw if unavailable / not persisted.
@@ -58,6 +62,38 @@ class PharmacyServiceSupport {
                     .build());
         } catch (Exception e) {
             log.warn("Failed to log audit event {}: {}", eventType, e.getMessage());
+        }
+    }
+
+    /**
+     * Send a French ready-for-pickup SMS to the patient. Failures are swallowed so
+     * they do not roll back the dispense transaction. No-op if SMS service is
+     * unavailable, the patient has no primary phone number, or the medication name
+     * is blank.
+     *
+     * <p>Template (French):
+     * <code>Bonjour {firstName}, votre ordonnance ({medication}) est prête
+     * à être récupérée à {pharmacy}. Merci.</code>
+     */
+    void notifyReadyForPickup(Patient patient, Pharmacy pharmacy, String medicationName) {
+        if (smsService == null || patient == null) {
+            return;
+        }
+        String phone = patient.getPhoneNumberPrimary();
+        if (phone == null || phone.isBlank()) {
+            return;
+        }
+        String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
+        String medication = medicationName != null ? medicationName : "";
+        String pharmacyName = (pharmacy != null && pharmacy.getName() != null) ? pharmacy.getName() : "";
+        String message = String.format(
+                "Bonjour %s, votre ordonnance (%s) est prête à être récupérée à %s. Merci.",
+                firstName, medication, pharmacyName).trim();
+        try {
+            smsService.send(phone, message);
+        } catch (Exception e) {
+            log.warn("Failed to send ready-for-pickup SMS to patient {}: {}",
+                    patient.getId(), e.getMessage());
         }
     }
 }

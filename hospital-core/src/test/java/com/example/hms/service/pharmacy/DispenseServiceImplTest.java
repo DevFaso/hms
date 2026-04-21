@@ -285,6 +285,60 @@ class DispenseServiceImplTest {
 
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTIALLY_FILLED);
         }
+
+        @Test
+        @DisplayName("T-38: should send ready-for-pickup SMS when Rx is fully DISPENSED")
+        void shouldSendReadyForPickupSmsOnFullDispense() {
+            DispenseRequestDTO dto = buildRequest();
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
+                    .id(dispenseId).medicationName("Amoxicillin").status("COMPLETED").build();
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISPENSED);
+            verify(support).notifyReadyForPickup(patient, pharmacy, "Amoxicillin");
+        }
+
+        @Test
+        @DisplayName("T-38: should NOT send ready-for-pickup SMS on partial fill")
+        void shouldNotSendSmsOnPartialFill() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setQuantityDispensed(BigDecimal.valueOf(5));
+            Dispense entity = buildDispense(DispenseStatus.PARTIAL);
+            DispenseResponseDTO responseDTO = DispenseResponseDTO.builder()
+                    .id(dispenseId).status("PARTIAL").build();
+
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.valueOf(5));
+            when(prescriptionRepository.save(any())).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            verify(support, never()).notifyReadyForPickup(any(), any(), any());
+        }
     }
 
     @Nested
