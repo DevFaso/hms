@@ -791,34 +791,28 @@ export class PharmacyService {
   }
 
   acceptClaim(id: string, notes?: string): Observable<ApiResponse<PharmacyClaimResponse>> {
-    return this.http.post<ApiResponse<PharmacyClaimResponse>>(
-      `/pharmacy/claims/${id}/accept`,
-      { notes: notes ?? null },
-    );
+    return this.http.post<ApiResponse<PharmacyClaimResponse>>(`/pharmacy/claims/${id}/accept`, {
+      notes: notes ?? null,
+    });
   }
 
   rejectClaim(id: string, rejectionReason: string): Observable<ApiResponse<PharmacyClaimResponse>> {
-    return this.http.post<ApiResponse<PharmacyClaimResponse>>(
-      `/pharmacy/claims/${id}/reject`,
-      { rejectionReason },
-    );
+    return this.http.post<ApiResponse<PharmacyClaimResponse>>(`/pharmacy/claims/${id}/reject`, {
+      rejectionReason,
+    });
   }
 
   payClaim(id: string, notes?: string): Observable<ApiResponse<PharmacyClaimResponse>> {
-    return this.http.post<ApiResponse<PharmacyClaimResponse>>(
-      `/pharmacy/claims/${id}/pay`,
-      { notes: notes ?? null },
-    );
+    return this.http.post<ApiResponse<PharmacyClaimResponse>>(`/pharmacy/claims/${id}/pay`, {
+      notes: notes ?? null,
+    });
   }
 
   getClaim(id: string): Observable<ApiResponse<PharmacyClaimResponse>> {
     return this.http.get<ApiResponse<PharmacyClaimResponse>>(`/pharmacy/claims/${id}`);
   }
 
-  listClaimsByHospital(
-    page = 0,
-    size = 20,
-  ): Observable<ApiResponse<Page<PharmacyClaimResponse>>> {
+  listClaimsByHospital(page = 0, size = 20): Observable<ApiResponse<Page<PharmacyClaimResponse>>> {
     const params = new HttpParams().set('page', page).set('size', size);
     return this.http.get<ApiResponse<Page<PharmacyClaimResponse>>>('/pharmacy/claims', { params });
   }
