@@ -441,6 +441,18 @@ export class ShellComponent implements OnInit, OnDestroy {
           translationKey: 'NAV.STOCK_ADJUSTMENT',
           route: '/pharmacy/stock-adjustment',
         },
+        {
+          icon: 'medication',
+          label: 'Dispensing',
+          translationKey: 'NAV.DISPENSING',
+          route: '/pharmacy/dispensing',
+        },
+        {
+          icon: 'alt_route',
+          label: 'Stock Routing',
+          translationKey: 'NAV.STOCK_ROUTING',
+          route: '/pharmacy/stock-routing',
+        },
       );
     }
 

@@ -3362,7 +3362,7 @@
 
       <!-- Health Summary highlights (if data loaded) -->
       @if (healthSummary(); as hs) {
-        @if (hs.allergies?.length || hs.activeDiagnoses?.length) {
+        @if (hs.allergies.length || hs.activeDiagnoses.length) {
           <section class="card patient-card patient-card-wide">
             <div class="card-head">
               <div class="card-title-group">
@@ -3373,7 +3373,7 @@
               </div>
             </div>
             <div class="patient-card-body health-glance-grid">
-              @if (hs.allergies?.length) {
+              @if (hs.allergies.length) {
                 <div class="health-glance-section">
                   <h4 class="hg-label">
                     <span class="material-symbols-outlined" style="font-size: 16px; color: #dc2626"
@@ -3388,7 +3388,7 @@
                   </div>
                 </div>
               }
-              @if (hs.activeDiagnoses?.length) {
+              @if (hs.activeDiagnoses.length) {
                 <div class="health-glance-section">
                   <h4 class="hg-label">
                     <span class="material-symbols-outlined" style="font-size: 16px; color: #2563eb"
