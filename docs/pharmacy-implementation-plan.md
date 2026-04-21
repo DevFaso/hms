@@ -1,5 +1,27 @@
 # Pharmacy Module — Understanding, User Stories & Implementation Plan
 
+> ## 🟢 STATUS: MVP COMPLETE (April 2026)
+>
+> All MVP phases are shipped and validated. Deferred phases are explicitly scoped.
+>
+> | Phase | Scope | Status |
+> |---|---|---|
+> | **Phase 1** | Foundation (DB, enums, RBAC, skeletons) | ✅ Complete |
+> | **Phase 2** | Medication Catalog & Pharmacy Registry | ✅ Complete |
+> | **Phase 3** | Inventory & Stock Management (Tier 1) | ✅ Complete |
+> | **Phase 4** | Dispensing Workflow (Tier 1) | ✅ Complete |
+> | **Phase 4b** | Stock-Out Routing (Tier 2/3 handoff) | ✅ MVP Complete |
+> | **Phase 5** | Patient Communication & Payment | ✅ Complete |
+> | **Phase 6** | Claims & Insurance (AMU CSV + FHIR export) | ✅ Complete |
+> | **Phase 7a** | Partner SMS Channel (Tier 2 inbound/outbound) | ✅ Complete |
+> | **Phase 7b** | WhatsApp / Partner Portal / REST API | 🕒 Deferred v2 |
+> | **Phase 7c** | FHIR / OpenHIM interoperability | 🕒 Deferred v3 |
+> | **Phase 8** | Localization, Offline & Hardening | ✅ MVP Complete |
+>
+> **Validated:** backend `:hospital-core:test` BUILD SUCCESSFUL · frontend build + lint clean · French i18n in place · audit + security reviews documented in `docs/pharmacy-runbook.md`.
+>
+> **Intentionally deferred (documented with mitigations):** T-68 offline dispense queue (paper fallback), T-71 dedicated Playwright E2E suite (covered by integration tests), T-72 performance testing (needs load infra), Phase 7b/7c partner channels (SMS covers day-one partners).
+
 ## 0a. MVP vs Full Vision — What ships first
 
 Not everything in this plan ships at once. The table below separates **what must work on launch day** from what comes later. If a feature isn't in the MVP, it's not forgotten — it's just sequenced realistically.

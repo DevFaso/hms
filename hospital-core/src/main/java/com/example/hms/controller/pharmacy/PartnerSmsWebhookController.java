@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.Map;
 import java.util.Optional;
 
@@ -61,10 +63,13 @@ public class PartnerSmsWebhookController {
     }
 
     private boolean authorized(String signature) {
-        if (configuredSecret == null || configuredSecret.isBlank()) {
+        if (configuredSecret == null || configuredSecret.isBlank() || signature == null) {
             return false;
         }
-        return configuredSecret.equals(signature);
+        // Constant-time comparison to mitigate timing side-channels.
+        byte[] expected = configuredSecret.getBytes(StandardCharsets.UTF_8);
+        byte[] provided = signature.getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(expected, provided);
     }
 
     /** Minimal payload accepted from SMS gateways. */

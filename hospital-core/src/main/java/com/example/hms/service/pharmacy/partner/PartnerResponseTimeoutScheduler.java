@@ -2,6 +2,7 @@ package com.example.hms.service.pharmacy.partner;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
  * property (defaults to {@code true}).
  */
 @Component
+@ConditionalOnProperty(name = "pharmacy.partner.scheduler.enabled", havingValue = "true", matchIfMissing = true)
 @RequiredArgsConstructor
 @Slf4j
 public class PartnerResponseTimeoutScheduler {

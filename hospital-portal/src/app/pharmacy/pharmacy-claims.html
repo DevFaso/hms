@@ -4,7 +4,7 @@
     <div class="claims__actions">
       <label class="filter">
         Statut :
-        <select [(ngModel)]="filter" name="filter">
+        <select [ngModel]="filter()" (ngModelChange)="filter.set($event)" name="filter">
           <option value="ALL">Tous</option>
           <option *ngFor="let o of statusOptions" [value]="o.value">{{ o.labelFr }}</option>
         </select>

@@ -186,22 +186,32 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
     @Override
     @Transactional(readOnly = true)
     public Page<PharmacyClaimResponseDTO> listByDispense(UUID dispenseId, Pageable pageable) {
-        roleValidator.requireActiveHospitalId();
-        return claimRepository.findByDispenseId(dispenseId, pageable).map(claimMapper::toResponseDTO);
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            return claimRepository.findByDispenseId(dispenseId, pageable).map(claimMapper::toResponseDTO);
+        }
+        return claimRepository.findByDispenseIdAndHospitalId(dispenseId, hospitalId, pageable)
+                .map(claimMapper::toResponseDTO);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<PharmacyClaimResponseDTO> listByPatient(UUID patientId, Pageable pageable) {
-        roleValidator.requireActiveHospitalId();
-        return claimRepository.findByPatientId(patientId, pageable).map(claimMapper::toResponseDTO);
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            return claimRepository.findByPatientId(patientId, pageable).map(claimMapper::toResponseDTO);
+        }
+        return claimRepository.findByPatientIdAndHospitalId(patientId, hospitalId, pageable)
+                .map(claimMapper::toResponseDTO);
     }
 
     private PharmacyClaim loadInScope(UUID id) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         PharmacyClaim claim = claimRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("pharmacy.claim.notfound"));
-        if (claim.getHospital() == null || !hospitalId.equals(claim.getHospital().getId())) {
+        // SUPER_ADMIN without an active hospital may read across hospitals; otherwise enforce tenant scope.
+        if (hospitalId != null
+                && (claim.getHospital() == null || !hospitalId.equals(claim.getHospital().getId()))) {
             throw new ResourceNotFoundException("pharmacy.claim.notfound");
         }
         return claim;

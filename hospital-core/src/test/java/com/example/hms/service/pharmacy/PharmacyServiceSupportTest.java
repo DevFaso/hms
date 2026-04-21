@@ -101,10 +101,11 @@ class PharmacyServiceSupportTest {
     }
 
     @Test
-    @DisplayName("handles null pharmacy and null medication gracefully")
+    @DisplayName("no-op when medication name is null or blank")
     void handlesNulls() {
         support.notifyReadyForPickup(patient(), null, null);
-        verify(smsService).send(eq("+22670000000"), anyString());
+        support.notifyReadyForPickup(patient(), pharmacy("X"), "   ");
+        verifyNoInteractions(smsService);
     }
 
     @Test

@@ -1,7 +1,6 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
-import { TranslateModule } from '@ngx-translate/core';
-import { AuthService } from '../../auth/auth.service';
+import { PatientPortalService } from '../../services/patient-portal.service';
 import { PharmacyService, PharmacyPaymentResponse } from '../../services/pharmacy.service';
 
 /**
@@ -13,13 +12,13 @@ import { PharmacyService, PharmacyPaymentResponse } from '../../services/pharmac
 @Component({
   selector: 'app-my-pharmacy-invoices',
   standalone: true,
-  imports: [CommonModule, DatePipe, DecimalPipe, TranslateModule],
+  imports: [CommonModule, DatePipe, DecimalPipe],
   templateUrl: './my-pharmacy-invoices.component.html',
   styleUrls: ['./my-pharmacy-invoices.component.scss', '../patient-portal-pages.scss'],
 })
 export class MyPharmacyInvoicesComponent implements OnInit {
   private readonly svc = inject(PharmacyService);
-  private readonly auth = inject(AuthService);
+  private readonly portal = inject(PatientPortalService);
 
   payments = signal<PharmacyPaymentResponse[]>([]);
   loading = signal(true);
@@ -36,17 +35,24 @@ export class MyPharmacyInvoicesComponent implements OnInit {
   }
 
   private load(): void {
-    const patientId = this.auth.getUserId();
-    if (!patientId) {
-      this.loading.set(false);
-      return;
-    }
-    this.svc.listPaymentsByPatient(patientId, 0, 50).subscribe({
-      next: (res) => {
-        const items = res?.data?.content ?? [];
-        this.payments.set(items);
-        this.totalPaid.set(items.reduce((sum, p) => sum + (p.amount ?? 0), 0));
-        this.loading.set(false);
+    // Resolve the real Patient UUID via the portal profile; AuthService.getUserId()
+    // returns the User UUID which is distinct from the Patient entity id.
+    this.portal.getMyProfile().subscribe({
+      next: (profile) => {
+        const patientId = profile?.patientId;
+        if (!patientId) {
+          this.loading.set(false);
+          return;
+        }
+        this.svc.listPaymentsByPatient(patientId, 0, 50).subscribe({
+          next: (res) => {
+            const items = res?.data?.content ?? [];
+            this.payments.set(items);
+            this.totalPaid.set(items.reduce((sum, p) => sum + (p.amount ?? 0), 0));
+            this.loading.set(false);
+          },
+          error: () => this.loading.set(false),
+        });
       },
       error: () => this.loading.set(false),
     });
