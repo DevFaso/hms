@@ -92,6 +92,10 @@ export class AuthService {
       } else {
         sessionStorage.setItem(ACCESS_TOKEN_KEY, token);
       }
+      // Clear any stale idle-lock flag from a prior session so the new
+      // login does not land on the lock screen instead of the dashboard.
+      sessionStorage.removeItem('hms_idle_locked');
+      sessionStorage.removeItem('hms_lock_ts');
     } catch {
       // Storage not available
     }

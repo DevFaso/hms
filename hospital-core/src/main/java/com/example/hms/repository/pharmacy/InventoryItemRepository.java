@@ -28,4 +28,6 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
     List<InventoryItem> findBelowReorderThresholdByHospital(@Param("hospitalId") UUID hospitalId);
 
     Page<InventoryItem> findByPharmacyHospitalIdAndActiveTrue(UUID hospitalId, Pageable pageable);
+
+    List<InventoryItem> findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(UUID hospitalId, UUID medicationCatalogItemId);
 }

@@ -888,6 +888,33 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./pharmacy/stock-adjustment').then((m) => m.StockAdjustmentComponent),
       },
+      {
+        path: 'pharmacy/dispensing',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_PHARMACY_VERIFIER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () => import('./pharmacy/dispensing').then((m) => m.DispensingComponent),
+      },
+      {
+        path: 'pharmacy/stock-routing',
+        canActivate: [RoleGuard],
+        data: {
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_PHARMACY_VERIFIER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        loadComponent: () =>
+          import('./pharmacy/stock-routing').then((m) => m.StockRoutingComponent),
+      },
 
       // Administration
       {

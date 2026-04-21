@@ -266,11 +266,11 @@
           @for (c of filteredConsents(); track c.id) {
             <tr class="data-row">
               <td>
-                <div class="cell-primary">{{ c.patient?.firstName }} {{ c.patient?.lastName }}</div>
-                <div class="cell-secondary small">{{ c.patient?.id }}</div>
+                <div class="cell-primary">{{ c.patient.firstName }} {{ c.patient.lastName }}</div>
+                <div class="cell-secondary small">{{ c.patient.id }}</div>
               </td>
-              <td>{{ c.fromHospital?.name || '--' }}</td>
-              <td>{{ c.toHospital?.name || '--' }}</td>
+              <td>{{ c.fromHospital.name || '--' }}</td>
+              <td>{{ c.toHospital.name || '--' }}</td>
               <td>
                 <span class="type-badge type-{{ (c.consentType || 'TREATMENT').toLowerCase() }}">
                   {{ 'CONSENT.TYPE.' + (c.consentType || 'TREATMENT') | translate }}

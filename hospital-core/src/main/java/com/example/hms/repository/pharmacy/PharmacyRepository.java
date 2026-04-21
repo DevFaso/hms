@@ -1,5 +1,6 @@
 package com.example.hms.repository.pharmacy;
 
+import com.example.hms.enums.PharmacyType;
 import com.example.hms.model.pharmacy.Pharmacy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -32,4 +33,6 @@ public interface PharmacyRepository extends JpaRepository<Pharmacy, UUID> {
     Optional<Pharmacy> findByIdAndHospital_Id(UUID id, UUID hospitalId);
 
     Optional<Pharmacy> findByLicenseNumberAndHospital_Id(String licenseNumber, UUID hospitalId);
+
+    List<Pharmacy> findByHospitalIdAndPharmacyTypeAndActiveTrue(UUID hospitalId, PharmacyType pharmacyType);
 }
