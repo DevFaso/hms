@@ -164,4 +164,64 @@ class PharmacyRefillReminderSchedulerTest {
         d.setStatus(DispenseStatus.COMPLETED);
         return d;
     }
+
+    @Test
+    @DisplayName("skips dispense with null prescription")
+    void skipsNullPrescription() {
+        Dispense d = dispenseFor(null, patient(), LocalDateTime.now().minusDays(7));
+
+        when(dispenseRepository.findByStatusAndDispensedAtBetween(any(), any(), any()))
+                .thenReturn(List.of(d));
+
+        scheduler.sendDailyRefillReminders();
+
+        verify(support, never()).notifyRefillReminder(any(), anyString(), anyInt());
+    }
+
+    @Test
+    @DisplayName("skips dispense with null dispensedAt")
+    void skipsNullDispensedAt() {
+        Prescription rx = prescriptionWithDuration("10 days");
+        Dispense d = dispenseFor(rx, patient(), null);
+
+        when(dispenseRepository.findByStatusAndDispensedAtBetween(any(), any(), any()))
+                .thenReturn(List.of(d));
+
+        scheduler.sendDailyRefillReminders();
+
+        verify(support, never()).notifyRefillReminder(any(), anyString(), anyInt());
+    }
+
+    @Test
+    @DisplayName("skips dispense whose duration is at or below leadDays")
+    void skipsDurationBelowLeadDays() {
+        Prescription rx = prescriptionWithDuration("3 days");
+        Dispense d = dispenseFor(rx, patient(), LocalDateTime.now());
+
+        when(dispenseRepository.findByStatusAndDispensedAtBetween(any(), any(), any()))
+                .thenReturn(List.of(d));
+
+        scheduler.sendDailyRefillReminders();
+
+        verify(support, never()).notifyRefillReminder(any(), anyString(), anyInt());
+    }
+
+    @Test
+    @DisplayName("continues processing when one dispense throws")
+    void continuesAfterException() {
+        Patient p = patient();
+        Prescription good = prescriptionWithDuration("10 days");
+        Dispense goodDispense = dispenseFor(good, p, LocalDateTime.now().minusDays(7));
+
+        org.mockito.Mockito.doThrow(new RuntimeException("sms boom"))
+                .when(support).notifyRefillReminder(any(), anyString(), anyInt());
+
+        when(dispenseRepository.findByStatusAndDispensedAtBetween(any(), any(), any()))
+                .thenReturn(List.of(goodDispense));
+
+        // Must not throw
+        scheduler.sendDailyRefillReminders();
+
+        verify(support).notifyRefillReminder(any(), anyString(), anyInt());
+    }
 }
