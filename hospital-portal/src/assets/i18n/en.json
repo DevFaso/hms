@@ -1367,7 +1367,8 @@
     "PHARMACY_REGISTRY": "Pharmacy Registry",
     "PHARMACY_INVENTORY": "Pharmacy Inventory",
     "GOODS_RECEIPT": "Goods Receipt",
-    "STOCK_ADJUSTMENT": "Stock Adjustment"
+    "STOCK_ADJUSTMENT": "Stock Adjustment",
+    "DISPENSING": "Dispensing"
   },
   "NOTIFICATIONS": {
     "ALL": "All",
@@ -3588,6 +3589,30 @@
     "DATE": "Date",
     "PERFORMED_BY": "Performed by",
     "NO_TRANSACTIONS": "No transactions",
-    "RECORD_FIRST_TRANSACTION": "Record your first stock transaction"
+    "RECORD_FIRST_TRANSACTION": "Record your first stock transaction",
+    "DISPENSING_TITLE": "Medication Dispensing",
+    "DISPENSING_SUBTITLE": "Dispense prescriptions to patients",
+    "DISPENSE_MEDICATION": "Dispense Medication",
+    "PRESCRIPTION": "Prescription",
+    "PATIENT": "Patient",
+    "MEDICATION": "Medication",
+    "DOSAGE": "Dosage",
+    "STATUS": "Status",
+    "PRESCRIBER": "Prescriber",
+    "QTY_REQUESTED": "Qty Requested",
+    "QTY_DISPENSED": "Qty Dispensed",
+    "UNIT": "Unit",
+    "STOCK_LOT": "Stock Lot",
+    "NO_LOT": "No lot selected",
+    "SUBSTITUTION": "Substitution",
+    "SUBSTITUTION_REASON": "Substitution Reason",
+    "NOTES": "Notes",
+    "DISPENSE": "Dispense",
+    "WORK_QUEUE": "Work Queue",
+    "NO_PENDING_RX": "No pending prescriptions to dispense",
+    "RECENT_DISPENSES": "Recent Dispenses",
+    "NO_DISPENSES_YET": "No dispenses recorded yet",
+    "DISPENSED_BY": "Dispensed By",
+    "DISPENSED_AT": "Dispensed At"
   }
 }
