@@ -384,6 +384,8 @@ public class DispenseServiceImpl implements DispenseService {
                 .quantityUnit(p.getQuantityUnit())
                 .status(p.getStatus() != null ? p.getStatus().name() : null)
                 .createdAt(p.getCreatedAt())
+                .frequency(p.getFrequency())
+                .frequency(p.getFrequency())
                 .patient(patient)
                 .staff(staff)
                 .build();

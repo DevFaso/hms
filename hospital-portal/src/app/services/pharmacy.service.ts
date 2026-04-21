@@ -230,6 +230,7 @@ export interface WorkQueuePrescription {
   id: string;
   medicationName: string;
   dosage?: string;
+  frequency?: string;
   quantity?: number;
   quantityUnit?: string;
   status: string;

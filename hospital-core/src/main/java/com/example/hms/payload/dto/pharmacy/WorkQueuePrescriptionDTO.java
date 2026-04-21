@@ -27,6 +27,7 @@ public class WorkQueuePrescriptionDTO {
     private UUID id;
     private String medicationName;
     private String dosage;
+    private String frequency;
     private BigDecimal quantity;
     private String quantityUnit;
     private String status;
