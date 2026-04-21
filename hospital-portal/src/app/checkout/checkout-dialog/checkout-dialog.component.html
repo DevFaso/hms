@@ -22,7 +22,7 @@
       <form class="dialog-body" (ngSubmit)="submit()">
         @if (encounter) {
           <div class="patient-banner">
-            <strong>{{ encounter.patientName ?? encounter.patientFullName }}</strong>
+            <strong>{{ encounter.patientName }}</strong>
             <span class="encounter-badge">{{ encounter.status }}</span>
           </div>
         }
@@ -170,7 +170,7 @@
             </div>
           }
 
-          @if (avs()!.dischargeDiagnoses?.length) {
+          @if (avs()!.dischargeDiagnoses.length) {
             <div>
               <dt>{{ 'CHECKOUT.AVS_DIAGNOSES' | translate }}</dt>
               <dd>

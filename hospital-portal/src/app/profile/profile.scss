@@ -1,3 +1,4 @@
+@use 'sass:color';
 /* ─── Profile Page Styles ─── */
 $primary: #2563eb;
 $primary-dark: #1d4ed8;
@@ -511,7 +512,7 @@ $shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.12);
     letter-spacing: 0.02em;
     background: $primary-light;
     color: $primary-dark;
-    border: 1px solid darken($primary-light, 8%);
+    border: 1px solid color.adjust($primary-light, $lightness: -8%);
   }
 }
 

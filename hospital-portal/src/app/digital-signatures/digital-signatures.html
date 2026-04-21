@@ -166,7 +166,7 @@
               </div>
               <div class="detail-item">
                 <span class="detail-label">{{ 'SIGNATURES.VERIFICATIONS' | translate }}</span>
-                <span>{{ selectedSignature()!.verificationCount ?? 0 }}</span>
+                <span>{{ selectedSignature()!.verificationCount }}</span>
               </div>
               @if (selectedSignature()!.signatureNotes) {
                 <div class="detail-item full">

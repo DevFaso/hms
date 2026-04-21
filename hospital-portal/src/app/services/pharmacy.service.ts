@@ -225,6 +225,75 @@ export interface DispenseResponse {
   updatedAt: string;
 }
 
+/** Work-queue prescription — minimal projection returned by GET /pharmacy/dispense/work-queue. */
+export interface WorkQueuePrescription {
+  id: string;
+  medicationName: string;
+  dosage?: string;
+  frequency?: string;
+  quantity?: number;
+  quantityUnit?: string;
+  status: string;
+  createdAt?: string;
+  patient?: {
+    id: string;
+    firstName?: string;
+    lastName?: string;
+  };
+  staff?: {
+    id: string;
+    user?: {
+      id: string;
+      firstName?: string;
+      lastName?: string;
+    };
+  };
+}
+
+/* ───────────────────────────── Stock-Out Routing ───────────────────────────── */
+
+export interface StockCheckResult {
+  medicationName: string;
+  pharmacyName: string;
+  pharmacyId: string;
+  quantityOnHand: number;
+  sufficient: boolean;
+  partnerPharmacies: PartnerOption[];
+}
+
+export interface PartnerOption {
+  pharmacyId: string;
+  pharmacyName: string;
+  pharmacyType: string;
+  city: string;
+  phoneNumber: string;
+  hasOnFormulary: boolean;
+}
+
+export interface RoutingDecisionRequest {
+  prescriptionId: string;
+  routingType: string;
+  targetPharmacyId?: string;
+  reason?: string;
+  estimatedRestockDate?: string;
+}
+
+export interface RoutingDecisionResponse {
+  id: string;
+  prescriptionId: string;
+  routingType: string;
+  targetPharmacyId?: string;
+  targetPharmacyName?: string;
+  decidedByUserId: string;
+  patientId: string;
+  reason?: string;
+  estimatedRestockDate?: string;
+  status: string;
+  decidedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /* ───────────────────────────── Service ───────────────────────────── */
 
 @Injectable({ providedIn: 'root' })
@@ -473,16 +542,12 @@ export class PharmacyService {
 
   // ── Dispensing ──
 
-  getDispenseWorkQueue(
-    page = 0,
-    size = 20,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): Observable<ApiResponse<Page<any>>> {
+  getDispenseWorkQueue(page = 0, size = 20): Observable<ApiResponse<Page<WorkQueuePrescription>>> {
     const params = new HttpParams().set('page', page).set('size', size);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return this.http.get<ApiResponse<Page<any>>>('/pharmacy/dispense/work-queue', {
-      params,
-    });
+    return this.http.get<ApiResponse<Page<WorkQueuePrescription>>>(
+      '/pharmacy/dispense/work-queue',
+      { params },
+    );
   }
 
   createDispense(req: DispenseRequest): Observable<ApiResponse<DispenseResponse>> {
@@ -531,5 +596,87 @@ export class PharmacyService {
 
   cancelDispense(id: string): Observable<ApiResponse<DispenseResponse>> {
     return this.http.post<ApiResponse<DispenseResponse>>(`/pharmacy/dispense/${id}/cancel`, {});
+  }
+
+  // ── Stock-Out Routing ──
+
+  checkStock(prescriptionId: string): Observable<ApiResponse<StockCheckResult>> {
+    return this.http.get<ApiResponse<StockCheckResult>>(
+      `/pharmacy/routing/stock-check/${prescriptionId}`,
+    );
+  }
+
+  routeToPartner(req: RoutingDecisionRequest): Observable<ApiResponse<RoutingDecisionResponse>> {
+    return this.http.post<ApiResponse<RoutingDecisionResponse>>(
+      '/pharmacy/routing/route-to-partner',
+      req,
+    );
+  }
+
+  printForPatient(prescriptionId: string): Observable<ApiResponse<RoutingDecisionResponse>> {
+    return this.http.post<ApiResponse<RoutingDecisionResponse>>(
+      `/pharmacy/routing/print-for-patient/${prescriptionId}`,
+      {},
+    );
+  }
+
+  backOrder(
+    prescriptionId: string,
+    estimatedRestockDate?: string,
+  ): Observable<ApiResponse<RoutingDecisionResponse>> {
+    let params = new HttpParams();
+    if (estimatedRestockDate) {
+      params = params.set('estimatedRestockDate', estimatedRestockDate);
+    }
+    return this.http.post<ApiResponse<RoutingDecisionResponse>>(
+      `/pharmacy/routing/back-order/${prescriptionId}`,
+      {},
+      { params },
+    );
+  }
+
+  partnerRespond(
+    routingDecisionId: string,
+    accepted: boolean,
+  ): Observable<ApiResponse<RoutingDecisionResponse>> {
+    const params = new HttpParams().set('accepted', accepted);
+    return this.http.post<ApiResponse<RoutingDecisionResponse>>(
+      `/pharmacy/routing/partner-respond/${routingDecisionId}`,
+      {},
+      { params },
+    );
+  }
+
+  confirmPartnerDispense(
+    routingDecisionId: string,
+  ): Observable<ApiResponse<RoutingDecisionResponse>> {
+    return this.http.post<ApiResponse<RoutingDecisionResponse>>(
+      `/pharmacy/routing/partner-dispense-confirm/${routingDecisionId}`,
+      {},
+    );
+  }
+
+  listRoutingDecisionsByPrescription(
+    prescriptionId: string,
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<RoutingDecisionResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<RoutingDecisionResponse>>>(
+      `/pharmacy/routing/decisions/prescription/${prescriptionId}`,
+      { params },
+    );
+  }
+
+  listRoutingDecisionsByPatient(
+    patientId: string,
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<RoutingDecisionResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<RoutingDecisionResponse>>>(
+      `/pharmacy/routing/decisions/patient/${patientId}`,
+      { params },
+    );
   }
 }

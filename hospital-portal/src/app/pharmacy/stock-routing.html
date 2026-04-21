@@ -1,0 +1,256 @@
+<div class="page-container">
+  <div class="page-header">
+    <h1>{{ 'PHARMACY.STOCK_ROUTING' | translate }}</h1>
+    <p class="subtitle">{{ 'PHARMACY.STOCK_ROUTING_DESC' | translate }}</p>
+  </div>
+
+  <!-- Prescription lookup -->
+  <div class="form-card">
+    <h2>{{ 'PHARMACY.CHECK_STOCK' | translate }}</h2>
+    <label class="sr-only" for="prescriptionIdInput">
+      {{ 'PHARMACY.PRESCRIPTION_ID' | translate }}
+    </label>
+    <div class="lookup-row">
+      <input
+        id="prescriptionIdInput"
+        type="text"
+        class="form-control"
+        [(ngModel)]="prescriptionId"
+        [placeholder]="'PHARMACY.PRESCRIPTION_ID' | translate"
+        (keyup.enter)="checkStock()"
+      />
+      <button
+        class="btn btn-primary"
+        (click)="checkStock()"
+        [disabled]="checking() || !prescriptionId.trim()"
+      >
+        <span *ngIf="checking()" class="spinner"></span>
+        {{ 'PHARMACY.CHECK' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Stock check result -->
+  <div class="form-card" *ngIf="stockResult()">
+    <h2>{{ 'PHARMACY.STOCK_RESULT' | translate }}</h2>
+    <div class="stock-summary">
+      <div class="stock-info">
+        <span class="label">{{ 'PHARMACY.MEDICATION' | translate }}:</span>
+        <span class="value">{{ stockResult()!.medicationName }}</span>
+      </div>
+      <div class="stock-info">
+        <span class="label">{{ 'PHARMACY.PHARMACY_NAME' | translate }}:</span>
+        <span class="value">{{ stockResult()!.pharmacyName }}</span>
+      </div>
+      <div class="stock-info">
+        <span class="label">{{ 'PHARMACY.QTY_ON_HAND' | translate }}:</span>
+        <span class="value" [class.text-danger]="!stockResult()!.sufficient">
+          {{ stockResult()!.quantityOnHand }}
+        </span>
+      </div>
+      <div class="stock-info">
+        <span class="label">{{ 'PHARMACY.STATUS' | translate }}:</span>
+        <span
+          class="badge"
+          [class.badge-success]="stockResult()!.sufficient"
+          [class.badge-danger]="!stockResult()!.sufficient"
+        >
+          {{
+            stockResult()!.sufficient
+              ? ('PHARMACY.IN_STOCK' | translate)
+              : ('PHARMACY.OUT_OF_STOCK' | translate)
+          }}
+        </span>
+      </div>
+    </div>
+
+    <!-- Routing options (only when out of stock) -->
+    <div class="routing-options" *ngIf="!stockResult()!.sufficient">
+      <h3>{{ 'PHARMACY.ROUTING_OPTIONS' | translate }}</h3>
+      <div class="option-buttons">
+        <button class="btn btn-warning" (click)="openBackOrderForm()" [disabled]="saving()">
+          {{ 'PHARMACY.BACK_ORDER' | translate }}
+        </button>
+        <button class="btn btn-secondary" (click)="printForPatient()" [disabled]="saving()">
+          {{ 'PHARMACY.PRINT_FOR_PATIENT' | translate }}
+        </button>
+      </div>
+
+      <!-- Partner pharmacies list -->
+      <div class="partner-list" *ngIf="stockResult()!.partnerPharmacies.length > 0">
+        <h4>{{ 'PHARMACY.PARTNER_PHARMACIES' | translate }}</h4>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>{{ 'PHARMACY.PHARMACY_NAME' | translate }}</th>
+              <th>{{ 'PHARMACY.CITY' | translate }}</th>
+              <th>{{ 'PHARMACY.PHONE' | translate }}</th>
+              <th>{{ 'PHARMACY.FORMULARY' | translate }}</th>
+              <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let partner of stockResult()!.partnerPharmacies">
+              <td>{{ partner.pharmacyName }}</td>
+              <td>{{ partner.city }}</td>
+              <td>{{ partner.phoneNumber }}</td>
+              <td>
+                <span
+                  class="badge"
+                  [class.badge-success]="partner.hasOnFormulary"
+                  [class.badge-secondary]="!partner.hasOnFormulary"
+                >
+                  {{
+                    partner.hasOnFormulary
+                      ? ('PHARMACY.ON_FORMULARY' | translate)
+                      : ('PHARMACY.NOT_ON_FORMULARY' | translate)
+                  }}
+                </span>
+              </td>
+              <td>
+                <button
+                  class="btn btn-sm btn-primary"
+                  (click)="openPartnerForm(partner)"
+                  [disabled]="saving() || !partner.hasOnFormulary"
+                >
+                  {{ 'PHARMACY.ROUTE_HERE' | translate }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="no-partners" *ngIf="stockResult()!.partnerPharmacies.length === 0">
+        <p>{{ 'PHARMACY.NO_PARTNER_PHARMACIES' | translate }}</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Partner routing form (slide-in) -->
+  <div class="form-card slide-in" *ngIf="showPartnerForm()">
+    <h2>{{ 'PHARMACY.ROUTE_TO_PARTNER' | translate }}</h2>
+    <div class="partner-detail">
+      <span class="label">{{ 'PHARMACY.PARTNER' | translate }}:</span>
+      <span class="value">{{ selectedPartner()?.pharmacyName }}</span>
+    </div>
+    <div class="form-group">
+      <label for="routingReason">{{ 'PHARMACY.REASON' | translate }}</label>
+      <textarea
+        id="routingReason"
+        class="form-control"
+        [(ngModel)]="routingReason"
+        rows="3"
+        [placeholder]="'PHARMACY.ROUTING_REASON_HINT' | translate"
+      ></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-secondary" (click)="closePartnerForm()" [disabled]="saving()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button class="btn btn-primary" (click)="submitRouteToPartner()" [disabled]="saving()">
+        <span *ngIf="saving()" class="spinner"></span>
+        {{ 'PHARMACY.SEND_TO_PARTNER' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Back-order form (slide-in) -->
+  <div class="form-card slide-in" *ngIf="showBackOrderForm()">
+    <h2>{{ 'PHARMACY.BACK_ORDER' | translate }}</h2>
+    <div class="form-group">
+      <label for="estimatedRestockDate">{{ 'PHARMACY.ESTIMATED_RESTOCK_DATE' | translate }}</label>
+      <input
+        id="estimatedRestockDate"
+        type="date"
+        class="form-control"
+        [(ngModel)]="estimatedRestockDate"
+      />
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-secondary" (click)="closeBackOrderForm()" [disabled]="saving()">
+        {{ 'COMMON.CANCEL' | translate }}
+      </button>
+      <button class="btn btn-warning" (click)="submitBackOrder()" [disabled]="saving()">
+        <span *ngIf="saving()" class="spinner"></span>
+        {{ 'PHARMACY.PLACE_BACK_ORDER' | translate }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Routing decisions history -->
+  <div class="form-card" *ngIf="decisions().length > 0">
+    <h2>{{ 'PHARMACY.ROUTING_HISTORY' | translate }}</h2>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>{{ 'PHARMACY.TYPE' | translate }}</th>
+          <th>{{ 'PHARMACY.TARGET' | translate }}</th>
+          <th>{{ 'PHARMACY.STATUS' | translate }}</th>
+          <th>{{ 'PHARMACY.REASON' | translate }}</th>
+          <th>{{ 'PHARMACY.DECIDED_AT' | translate }}</th>
+          <th>{{ 'COMMON.ACTIONS' | translate }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let d of decisions()">
+          <td>
+            <span class="badge" [ngClass]="routingTypeBadgeClass(d.routingType)">
+              {{ d.routingType }}
+            </span>
+          </td>
+          <td>{{ d.targetPharmacyName || '—' }}</td>
+          <td>
+            <span class="badge" [ngClass]="statusBadgeClass(d.status)">
+              {{ d.status }}
+            </span>
+          </td>
+          <td>{{ d.reason || '—' }}</td>
+          <td>{{ d.decidedAt | date: 'short' }}</td>
+          <td>
+            <ng-container *ngIf="d.status === 'PENDING' && d.routingType === 'PARTNER'">
+              <button
+                class="btn btn-sm btn-success"
+                (click)="respondToPartner(d.id, true)"
+                [disabled]="saving()"
+              >
+                {{ 'PHARMACY.ACCEPT' | translate }}
+              </button>
+              <button
+                class="btn btn-sm btn-danger"
+                (click)="respondToPartner(d.id, false)"
+                [disabled]="saving()"
+              >
+                {{ 'PHARMACY.REJECT' | translate }}
+              </button>
+            </ng-container>
+            <ng-container *ngIf="d.status === 'ACCEPTED' && d.routingType === 'PARTNER'">
+              <button
+                class="btn btn-sm btn-success"
+                (click)="confirmPartnerDispense(d.id)"
+                [disabled]="saving()"
+              >
+                {{ 'PHARMACY.CONFIRM_DISPENSE' | translate }}
+              </button>
+            </ng-container>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- Pagination -->
+    <div class="pagination" *ngIf="decisionsTotalPages > 1">
+      <button class="btn btn-sm" (click)="prevPage()" [disabled]="decisionsPage === 0">
+        {{ 'COMMON.PREVIOUS' | translate }}
+      </button>
+      <span class="page-info">{{ decisionsPage + 1 }} / {{ decisionsTotalPages }}</span>
+      <button
+        class="btn btn-sm"
+        (click)="nextPage()"
+        [disabled]="decisionsPage >= decisionsTotalPages - 1"
+      >
+        {{ 'COMMON.NEXT' | translate }}
+      </button>
+    </div>
+  </div>
+</div>

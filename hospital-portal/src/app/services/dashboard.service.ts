@@ -30,10 +30,10 @@ export interface RecentAuditEvent {
   id: string;
   eventType: string;
   status: string;
-  entityType: string;
+  entityType: string | null;
   resourceId: string;
-  resourceName: string;
-  userName: string;
+  resourceName: string | null;
+  userName: string | null;
   roleName: string;
   hospitalName: string;
   eventTimestamp: string;
@@ -260,9 +260,9 @@ export interface HospitalAdminAuditSnippet {
   id: string;
   eventType: string;
   status: string;
-  entityType: string;
-  resourceName: string;
-  userName: string;
+  entityType: string | null;
+  resourceName: string | null;
+  userName: string | null;
   eventTimestamp: string;
 }
 
@@ -307,7 +307,7 @@ export interface InvoiceAgingBuckets {
 
 export interface IntegrationStatusRow {
   serviceType: string;
-  provider: string;
+  provider: string | null;
   status: string;
   enabled: boolean;
   baseUrl: string;

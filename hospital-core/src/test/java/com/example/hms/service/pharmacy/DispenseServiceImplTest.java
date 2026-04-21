@@ -1,6 +1,5 @@
 package com.example.hms.service.pharmacy;
 
-import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.DispenseStatus;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
@@ -14,7 +13,6 @@ import com.example.hms.model.pharmacy.Dispense;
 import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.StockLot;
-import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
 import com.example.hms.repository.MedicationCatalogItemRepository;
@@ -101,9 +99,12 @@ class DispenseServiceImplTest {
         prescription.setId(prescriptionId);
         prescription.setStatus(PrescriptionStatus.SIGNED);
         prescription.setMedicationName("Amoxicillin");
+        prescription.setQuantity(BigDecimal.TEN);
 
         patient = new Patient();
         patient.setId(patientId);
+        prescription.setHospital(hospital);
+        prescription.setPatient(patient);
 
         user = new User();
         user.setId(userId);
@@ -167,6 +168,8 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
@@ -196,6 +199,8 @@ class DispenseServiceImplTest {
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.TEN);
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
@@ -215,6 +220,7 @@ class DispenseServiceImplTest {
             prescription.setStatus(PrescriptionStatus.DRAFT);
             DispenseRequestDTO dto = buildRequest();
 
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
 
             assertThatThrownBy(() -> service.createDispense(dto))
@@ -233,6 +239,7 @@ class DispenseServiceImplTest {
             when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
             when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
 
@@ -267,6 +274,8 @@ class DispenseServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseStatus.CANCELLED))
+                    .thenReturn(BigDecimal.valueOf(5));
             when(prescriptionRepository.save(any())).thenReturn(prescription);
             when(dispenseMapper.toResponseDTO(entity)).thenReturn(responseDTO);
             when(roleValidator.getCurrentUserId()).thenReturn(userId);
@@ -317,6 +326,8 @@ class DispenseServiceImplTest {
             Dispense d = buildDispense(DispenseStatus.COMPLETED);
             DispenseResponseDTO dto = DispenseResponseDTO.builder().id(dispenseId).build();
 
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
             when(dispenseRepository.findByPrescriptionId(prescriptionId, pageable))
                     .thenReturn(new PageImpl<>(List.of(d)));
             when(dispenseMapper.toResponseDTO(d)).thenReturn(dto);
@@ -382,6 +393,171 @@ class DispenseServiceImplTest {
             assertThatThrownBy(() -> service.cancelDispense(dispenseId))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("Only completed or partial");
+        }
+    }
+
+    @Nested
+    @DisplayName("createDispense validation")
+    class CreateDispenseValidation {
+
+        @Test
+        @DisplayName("should reject zero quantity requested")
+        void shouldRejectZeroQuantityRequested() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            DispenseRequestDTO dto = buildRequest();
+            dto.setQuantityRequested(BigDecimal.ZERO);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("Quantity requested");
+        }
+
+        @Test
+        @DisplayName("should reject zero quantity dispensed")
+        void shouldRejectZeroQuantityDispensed() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            DispenseRequestDTO dto = buildRequest();
+            dto.setQuantityDispensed(BigDecimal.ZERO);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("Quantity dispensed must");
+        }
+
+        @Test
+        @DisplayName("should reject dispensed greater than requested")
+        void shouldRejectDispensedGreaterThanRequested() {
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            DispenseRequestDTO dto = buildRequest();
+            dto.setQuantityRequested(BigDecimal.valueOf(5));
+            dto.setQuantityDispensed(BigDecimal.TEN);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("cannot exceed");
+        }
+
+        @Test
+        @DisplayName("should reject when prescription hospital != active hospital")
+        void shouldRejectCrossHospital() {
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            prescription.setHospital(other);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            DispenseRequestDTO dto = buildRequest();
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(ResourceNotFoundException.class);
+        }
+
+        @Test
+        @DisplayName("should reject when dto.patientId != prescription.patient")
+        void shouldRejectPatientMismatch() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setPatientId(UUID.randomUUID());
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("Patient does not match");
+        }
+
+        @Test
+        @DisplayName("should reject when verifiedBy != authenticated user")
+        void shouldRejectVerifierMismatch() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setVerifiedBy(UUID.randomUUID());
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("verifiedBy");
+        }
+
+        @Test
+        @DisplayName("should reject when stockLot belongs to another pharmacy")
+        void shouldRejectStockLotFromOtherPharmacy() {
+            Pharmacy otherPharmacy = Pharmacy.builder().hospital(hospital).build();
+            otherPharmacy.setId(UUID.randomUUID());
+            inventoryItem.setPharmacy(otherPharmacy);
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("does not belong");
+        }
+    }
+
+    @Nested
+    @DisplayName("listByPatient / listByPharmacy / getWorkQueue")
+    class ListAndQueue {
+
+        @Test
+        @DisplayName("listByPatient should map dispenses in scope")
+        void listByPatientShouldMap() {
+            Pageable pageable = PageRequest.of(0, 20);
+            Dispense d = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO dto = DispenseResponseDTO.builder().id(dispenseId).build();
+
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.findByPatientId(patientId, pageable))
+                    .thenReturn(new PageImpl<>(List.of(d)));
+            when(dispenseMapper.toResponseDTO(d)).thenReturn(dto);
+
+            Page<DispenseResponseDTO> result = service.listByPatient(patientId, pageable);
+            assertThat(result.getContent()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("listByPharmacy should enforce scope and map")
+        void listByPharmacyShouldMap() {
+            Pageable pageable = PageRequest.of(0, 20);
+            Dispense d = buildDispense(DispenseStatus.COMPLETED);
+            DispenseResponseDTO dto = DispenseResponseDTO.builder().id(dispenseId).build();
+
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.findByPharmacyId(pharmacyId, pageable))
+                    .thenReturn(new PageImpl<>(List.of(d)));
+            when(dispenseMapper.toResponseDTO(d)).thenReturn(dto);
+
+            Page<DispenseResponseDTO> result = service.listByPharmacy(pharmacyId, pageable);
+            assertThat(result.getContent()).hasSize(1);
+        }
+
+        @Test
+        @DisplayName("getWorkQueue should return mapped DTOs")
+        void getWorkQueueShouldMap() {
+            Pageable pageable = PageRequest.of(0, 20);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByHospital_IdAndStatusIn(
+                    eq(hospitalId), any(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(prescription)));
+
+            Page<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> result =
+                    service.getWorkQueue(pageable);
+            assertThat(result.getContent()).hasSize(1);
+            assertThat(result.getContent().get(0).getId()).isEqualTo(prescriptionId);
+            assertThat(result.getContent().get(0).getPatient().getId()).isEqualTo(patientId);
         }
     }
 }

@@ -1,12 +1,10 @@
 package com.example.hms.controller.pharmacy;
 
-import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.payload.dto.ApiResponseWrapper;
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
-import com.example.hms.repository.PrescriptionRepository;
+import com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO;
 import com.example.hms.service.pharmacy.DispenseService;
-import com.example.hms.utility.RoleValidator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -24,7 +22,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -34,26 +31,15 @@ import java.util.UUID;
 public class DispenseController {
 
     private final DispenseService dispenseService;
-    private final PrescriptionRepository prescriptionRepository;
-    private final RoleValidator roleValidator;
-
-    private static final List<PrescriptionStatus> DISPENSABLE_STATUSES = List.of(
-            PrescriptionStatus.SIGNED,
-            PrescriptionStatus.TRANSMITTED,
-            PrescriptionStatus.PARTIALLY_FILLED
-    );
 
     @GetMapping("/work-queue")
     @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Pharmacist work queue",
             description = "Paginated list of prescriptions ready for dispensing at the current hospital")
     @ApiResponse(responseCode = "200", description = "Work queue retrieved")
-    public ResponseEntity<ApiResponseWrapper<Page<?>>> getWorkQueue(
+    public ResponseEntity<ApiResponseWrapper<Page<WorkQueuePrescriptionDTO>>> getWorkQueue(
             @PageableDefault(size = 20, sort = "createdAt") Pageable pageable) {
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-        var page = prescriptionRepository.findByHospital_IdAndStatusIn(
-                hospitalId, DISPENSABLE_STATUSES, pageable);
-        return ResponseEntity.ok(ApiResponseWrapper.success(page));
+        return ResponseEntity.ok(ApiResponseWrapper.success(dispenseService.getWorkQueue(pageable)));
     }
 
     @PostMapping

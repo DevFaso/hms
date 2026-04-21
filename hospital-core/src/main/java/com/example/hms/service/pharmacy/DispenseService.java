@@ -2,6 +2,7 @@ package com.example.hms.service.pharmacy;
 
 import com.example.hms.payload.dto.pharmacy.DispenseRequestDTO;
 import com.example.hms.payload.dto.pharmacy.DispenseResponseDTO;
+import com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -20,4 +21,7 @@ public interface DispenseService {
     Page<DispenseResponseDTO> listByPharmacy(UUID pharmacyId, Pageable pageable);
 
     DispenseResponseDTO cancelDispense(UUID id);
+
+    /** Paginated list of prescriptions ready to dispense at the caller's active hospital. */
+    Page<WorkQueuePrescriptionDTO> getWorkQueue(Pageable pageable);
 }
