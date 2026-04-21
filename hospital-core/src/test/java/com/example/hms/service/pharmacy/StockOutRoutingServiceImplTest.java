@@ -57,6 +57,7 @@ class StockOutRoutingServiceImplTest {
     @Mock private PrescriptionRoutingMapper routingMapper;
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private PharmacyServiceSupport support;
 
     @InjectMocks
     private StockOutRoutingServiceImpl service;

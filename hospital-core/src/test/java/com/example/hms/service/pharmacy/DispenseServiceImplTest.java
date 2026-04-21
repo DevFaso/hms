@@ -67,6 +67,7 @@ class DispenseServiceImplTest {
     @Mock private DispenseMapper dispenseMapper;
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private PharmacyServiceSupport support;
 
     @InjectMocks
     private DispenseServiceImpl service;

@@ -1,7 +1,6 @@
 package com.example.hms.service.pharmacy;
 
 import com.example.hms.enums.AuditEventType;
-import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.PharmacyType;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.enums.RoutingDecisionStatus;
@@ -16,7 +15,6 @@ import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.model.pharmacy.Pharmacy;
 import com.example.hms.model.pharmacy.PrescriptionRoutingDecision;
-import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.pharmacy.PartnerOptionDTO;
 import com.example.hms.payload.dto.pharmacy.RoutingDecisionRequestDTO;
 import com.example.hms.payload.dto.pharmacy.RoutingDecisionResponseDTO;
@@ -27,7 +25,6 @@ import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.pharmacy.InventoryItemRepository;
 import com.example.hms.repository.pharmacy.PharmacyRepository;
 import com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository;
-import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -57,7 +54,9 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     private final UserRepository userRepository;
     private final PrescriptionRoutingMapper routingMapper;
     private final RoleValidator roleValidator;
-    private final AuditEventLogService auditEventLogService;
+    private final PharmacyServiceSupport support;
+
+    private static final String AUDIT_ENTITY = "PRESCRIPTION_ROUTING";
 
     private static final Set<PrescriptionStatus> ROUTABLE_STATUSES = Set.of(
             PrescriptionStatus.REQUIRES_EXTERNAL_FILL,
@@ -371,18 +370,6 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     }
 
     private void logAudit(AuditEventType eventType, String description, String resourceId) {
-        try {
-            UUID userId = roleValidator.getCurrentUserId();
-            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                    .userId(userId)
-                    .eventType(eventType)
-                    .eventDescription(description)
-                    .status(AuditStatus.SUCCESS)
-                    .resourceId(resourceId)
-                    .entityType("PRESCRIPTION_ROUTING")
-                    .build());
-        } catch (Exception e) {
-            log.warn("Failed to log audit event {}: {}", eventType, e.getMessage());
-        }
+        support.logAudit(eventType, description, resourceId, AUDIT_ENTITY);
     }
 }
