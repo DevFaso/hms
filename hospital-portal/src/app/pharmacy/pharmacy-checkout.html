@@ -47,7 +47,12 @@
     </div>
     <div class="form-row" *ngIf="paymentMethod !== 'CASH'">
       <label for="ref">Référence</label>
-      <input id="ref" type="text" [(ngModel)]="referenceNumber" placeholder="Transaction / police" />
+      <input
+        id="ref"
+        type="text"
+        [(ngModel)]="referenceNumber"
+        placeholder="Transaction / police"
+      />
     </div>
     <div class="form-row">
       <label for="notes">Notes</label>
