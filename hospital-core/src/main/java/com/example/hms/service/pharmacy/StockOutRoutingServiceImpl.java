@@ -142,10 +142,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         }
 
         Pharmacy targetPharmacy = pharmacyRepository.findById(targetPharmacyId)
-                .orElseThrow(() -> new ResourceNotFoundException("Target pharmacy not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("pharmacy.notfound"));
 
         if (!targetPharmacy.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException("Target pharmacy not found");
+            throw new ResourceNotFoundException("pharmacy.notfound");
         }
         if (targetPharmacy.getPharmacyType() != PharmacyType.PARTNER_PHARMACY) {
             throw new BusinessException("Target pharmacy must be a PARTNER_PHARMACY for partner routing");
@@ -245,7 +245,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     public RoutingDecisionResponseDTO partnerRespond(UUID routingDecisionId, boolean accepted) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         PrescriptionRoutingDecision decision = routingDecisionRepository.findById(routingDecisionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Routing decision not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("routing.decision.notfound"));
         enforceDecisionHospitalScope(decision, hospitalId);
 
         if (decision.getRoutingType() != RoutingType.PARTNER) {
@@ -281,7 +281,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     public RoutingDecisionResponseDTO confirmPartnerDispense(UUID routingDecisionId) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         PrescriptionRoutingDecision decision = routingDecisionRepository.findById(routingDecisionId)
-                .orElseThrow(() -> new ResourceNotFoundException("Routing decision not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("routing.decision.notfound"));
         enforceDecisionHospitalScope(decision, hospitalId);
 
         if (decision.getRoutingType() != RoutingType.PARTNER) {
@@ -342,7 +342,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         if (decision.getPrescription() == null
                 || decision.getPrescription().getHospital() == null
                 || !hospitalId.equals(decision.getPrescription().getHospital().getId())) {
-            throw new ResourceNotFoundException("Routing decision not found");
+            throw new ResourceNotFoundException("routing.decision.notfound");
         }
     }
 
@@ -367,7 +367,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             throw new BusinessException("Unable to determine current user");
         }
         return userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("Current user not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));
     }
 
     private void logAudit(AuditEventType eventType, String description, String resourceId) {

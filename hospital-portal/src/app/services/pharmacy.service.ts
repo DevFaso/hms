@@ -254,8 +254,10 @@ export interface WorkQueuePrescription {
 
 export interface StockCheckResult {
   medicationName: string;
-  pharmacyName: string;
-  pharmacyId: string;
+  /** Null when `quantityOnHand` is an aggregate across all hospital dispensaries. */
+  pharmacyName: string | null;
+  /** Null when `quantityOnHand` is an aggregate across all hospital dispensaries. */
+  pharmacyId: string | null;
   quantityOnHand: number;
   sufficient: boolean;
   partnerPharmacies: PartnerOption[];
