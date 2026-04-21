@@ -263,4 +263,283 @@ class PharmacyClaimServiceImplTest {
         c.setId(UUID.randomUUID());
         return c;
     }
+
+    @Test
+    @DisplayName("createClaim: rejects null DTO")
+    void rejectsNullDto() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.createClaim(null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("required");
+    }
+
+    @Test
+    @DisplayName("createClaim: rejects hospital mismatch")
+    void rejectsHospitalMismatch() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        PharmacyClaimRequestDTO dto = request();
+        dto.setHospitalId(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.createClaim(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("hospital");
+    }
+
+    @Test
+    @DisplayName("createClaim: rejects dispense not found")
+    void rejectsDispenseNotFound() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createClaim(request()))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("createClaim: rejects dispense whose patient does not match")
+    void rejectsPatientMismatchOnCreate() {
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        dispense.setPatient(other);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+
+        assertThatThrownBy(() -> service.createClaim(request()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Patient");
+    }
+
+    @Test
+    @DisplayName("createClaim: rejects dispense with null patient")
+    void rejectsNullPatient() {
+        dispense.setPatient(null);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+
+        assertThatThrownBy(() -> service.createClaim(request()))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("createClaim: rejects dispense with null pharmacy")
+    void rejectsNullPharmacy() {
+        dispense.setPharmacy(null);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+
+        assertThatThrownBy(() -> service.createClaim(request()))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("createClaim: rejects when patient record is missing")
+    void rejectsPatientRepoMissing() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createClaim(request()))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("createClaim: rejects when hospital record is missing")
+    void rejectsHospitalRepoMissing() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.createClaim(request()))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("createClaim: defaults claim status to DRAFT when mapper returns null status")
+    void defaultsStatusToDraft() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        PharmacyClaim entity = PharmacyClaim.builder()
+                .amount(new BigDecimal("5000"))
+                .currency("XOF")
+                .hospital(hospital)
+                .claimStatus(null)
+                .build();
+        when(claimMapper.toEntity(any(), any(), any(), any())).thenReturn(entity);
+        when(claimRepository.save(any())).thenAnswer(inv -> {
+            PharmacyClaim c = inv.getArgument(0);
+            c.setId(UUID.randomUUID());
+            return c;
+        });
+        when(claimMapper.toResponseDTO(any())).thenReturn(PharmacyClaimResponseDTO.builder().build());
+
+        service.createClaim(request());
+
+        verify(claimRepository).save(org.mockito.ArgumentMatchers.argThat(
+                c -> c.getClaimStatus() == PharmacyClaimStatus.DRAFT));
+    }
+
+    @Test
+    @DisplayName("submitClaim: rejects when current user id is null")
+    void submitRejectsWhenCurrentUserIdNull() {
+        PharmacyClaim existing = draftClaim();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
+        when(roleValidator.getCurrentUserId()).thenReturn(null);
+
+        assertThatThrownBy(() -> service.submitClaim(UUID.randomUUID()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("current user");
+    }
+
+    @Test
+    @DisplayName("submitClaim: rejects when user record is missing")
+    void submitRejectsWhenUserMissing() {
+        PharmacyClaim existing = draftClaim();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(userRepository.findById(userId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.submitClaim(UUID.randomUUID()))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("markRejected: transitions SUBMITTED -> REJECTED with reason")
+    void rejectSucceedsWithReason() {
+        PharmacyClaim existing = draftClaim();
+        existing.setClaimStatus(PharmacyClaimStatus.SUBMITTED);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
+        when(claimRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(claimMapper.toResponseDTO(any())).thenReturn(PharmacyClaimResponseDTO.builder().build());
+
+        service.markRejected(UUID.randomUUID(), "missing coverage");
+
+        assertThat(existing.getClaimStatus()).isEqualTo(PharmacyClaimStatus.REJECTED);
+        assertThat(existing.getRejectionReason()).isEqualTo("missing coverage");
+    }
+
+    @Test
+    @DisplayName("markRejected: rejects null reason")
+    void rejectRequiresNonNullReason() {
+        assertThatThrownBy(() -> service.markRejected(UUID.randomUUID(), null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("reason");
+    }
+
+    @Test
+    @DisplayName("markAccepted: null notes leaves original notes untouched")
+    void acceptWithNullNotesDoesNotUpdateNotes() {
+        PharmacyClaim existing = draftClaim();
+        existing.setClaimStatus(PharmacyClaimStatus.SUBMITTED);
+        existing.setNotes("original");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
+        when(claimRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(claimMapper.toResponseDTO(any())).thenReturn(PharmacyClaimResponseDTO.builder().build());
+
+        service.markAccepted(UUID.randomUUID(), null);
+
+        assertThat(existing.getClaimStatus()).isEqualTo(PharmacyClaimStatus.ACCEPTED);
+        assertThat(existing.getNotes()).isEqualTo("original");
+    }
+
+    @Test
+    @DisplayName("markAccepted: blank notes leaves original notes untouched")
+    void acceptWithBlankNotes() {
+        PharmacyClaim existing = draftClaim();
+        existing.setClaimStatus(PharmacyClaimStatus.SUBMITTED);
+        existing.setNotes("original");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
+        when(claimRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(claimMapper.toResponseDTO(any())).thenReturn(PharmacyClaimResponseDTO.builder().build());
+
+        service.markAccepted(UUID.randomUUID(), "   ");
+
+        assertThat(existing.getNotes()).isEqualTo("original");
+    }
+
+    @Test
+    @DisplayName("markAccepted: rejects transition from DRAFT")
+    void acceptRejectsFromDraft() {
+        PharmacyClaim existing = draftClaim();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.markAccepted(UUID.randomUUID(), null))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("loadInScope: rejects claim with null hospital")
+    void loadRejectsNullHospital() {
+        PharmacyClaim existing = draftClaim();
+        existing.setHospital(null);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> service.getClaim(UUID.randomUUID()))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("loadInScope: rejects when claim is not found")
+    void loadRejectsNotFound() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(claimRepository.findById(any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getClaim(UUID.randomUUID()))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("getClaim: happy path returns response DTO")
+    void getClaimHappyPath() {
+        PharmacyClaim existing = draftClaim();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
+        when(claimMapper.toResponseDTO(existing))
+                .thenReturn(PharmacyClaimResponseDTO.builder().build());
+
+        assertThat(service.getClaim(UUID.randomUUID())).isNotNull();
+    }
+
+    @Test
+    @DisplayName("listByHospital: delegates with active hospital id")
+    void listByHospitalDelegates() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(claimRepository.findByHospitalId(any(), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+
+        assertThat(service.listByHospital(org.springframework.data.domain.PageRequest.of(0, 10)))
+                .isNotNull();
+    }
+
+    @Test
+    @DisplayName("listByDispense: delegates to repository")
+    void listByDispenseDelegates() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(claimRepository.findByDispenseId(any(), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+
+        assertThat(service.listByDispense(UUID.randomUUID(),
+                org.springframework.data.domain.PageRequest.of(0, 10))).isNotNull();
+    }
+
+    @Test
+    @DisplayName("listByPatient: delegates to repository")
+    void listByPatientDelegates() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(claimRepository.findByPatientId(any(), any()))
+                .thenReturn(org.springframework.data.domain.Page.empty());
+
+        assertThat(service.listByPatient(UUID.randomUUID(),
+                org.springframework.data.domain.PageRequest.of(0, 10))).isNotNull();
+    }
 }
