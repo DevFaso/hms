@@ -116,4 +116,35 @@ class PharmacyServiceSupportTest {
         // No exception, no interactions expected on any collaborator
         verify(smsService, never()).send(any(), any());
     }
+
+    @Test
+    @DisplayName("T-40: out-of-stock SMS includes patient, medication and routing message")
+    void outOfStockSmsIncludesRoutingMessage() {
+        support.notifyOutOfStock(patient(), "Paracétamol", "Elle a été envoyée à Pharmacie X.");
+
+        verify(smsService).send(eq("+22670000000"), contains("Bonjour Awa"));
+        verify(smsService).send(anyString(), contains("Paracétamol"));
+        verify(smsService).send(anyString(), contains("Pharmacie X"));
+        verify(smsService).send(anyString(), contains("n'est pas disponible"));
+    }
+
+    @Test
+    @DisplayName("T-40: out-of-stock SMS is no-op when patient has no phone")
+    void outOfStockNoopWhenNoPhone() {
+        Patient p = patient();
+        p.setPhoneNumberPrimary(null);
+        support.notifyOutOfStock(p, "Med", "msg");
+        verifyNoInteractions(smsService);
+    }
+
+    @Test
+    @DisplayName("T-40: out-of-stock swallows SMS failure")
+    void outOfStockSwallowsFailure() {
+        doThrow(new RuntimeException("provider down"))
+                .when(smsService).send(anyString(), anyString());
+
+        support.notifyOutOfStock(patient(), "Med", "msg");
+
+        verify(smsService).send(anyString(), anyString());
+    }
 }

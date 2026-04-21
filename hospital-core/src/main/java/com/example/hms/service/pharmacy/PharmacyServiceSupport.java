@@ -96,4 +96,35 @@ class PharmacyServiceSupport {
                     patient.getId(), e.getMessage());
         }
     }
+
+    /**
+     * Send a French out-of-stock SMS to the patient, explaining where their
+     * medication will be filled. Safe to call with any routing type; the
+     * message wording adapts. Failures are swallowed.
+     *
+     * @param routingMessage the routing-specific French sentence to append,
+     *                       e.g. "Elle a été envoyée à {partner}." or
+     *                       "Veuillez l'apporter dans une pharmacie de votre choix."
+     */
+    void notifyOutOfStock(Patient patient, String medicationName, String routingMessage) {
+        if (smsService == null || patient == null) {
+            return;
+        }
+        String phone = patient.getPhoneNumberPrimary();
+        if (phone == null || phone.isBlank()) {
+            return;
+        }
+        String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
+        String medication = medicationName != null ? medicationName : "";
+        String suffix = routingMessage != null ? routingMessage : "";
+        String message = String.format(
+                "Bonjour %s, le médicament (%s) n'est pas disponible à la pharmacie de l'hôpital. %s",
+                firstName, medication, suffix).trim();
+        try {
+            smsService.send(phone, message);
+        } catch (Exception e) {
+            log.warn("Failed to send out-of-stock SMS to patient {}: {}",
+                    patient.getId(), e.getMessage());
+        }
+    }
 }
