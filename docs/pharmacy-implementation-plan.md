@@ -535,17 +535,17 @@ MVP scope (Tier 3 print-for-patient routing, partner formulary matching, routing
 | T-64 | FHIR REST endpoints (`/fhir/MedicationRequest`, `/fhir/MedicationDispense`) | Backend | US-8.1 | 3d |
 | T-65 | OpenHIM mediator setup & configuration | Infra | US-8.2 | 4d |
 
-### Phase 8 — Localization, Offline & Hardening (Weeks 30–36)
+### Phase 8 — Localization, Offline & Hardening (Weeks 30–36) ✅ MVP COMPLETE
 
-| # | Task | Layer | Stories | Est |
-|---|---|---|---|---|
-| T-67 | French i18n for all pharmacy UI components | Frontend | US-10.2 | 3d |
-| T-68 | Offline dispense queue (local storage + sync) | Full-stack | US-9.3 | 5d |
-| T-69 | Comprehensive pharmacy audit event coverage review | Backend | US-9.1 | 2d |
-| T-70 | Security review: RBAC, controlled-substance, encryption, consent | Security | US-9.x | 3d |
-| T-71 | End-to-end tests (prescription → dispense → payment → claim) | Tests | All | 4d |
-| T-72 | Performance testing: stock queries, dispense throughput | Tests | All | 2d |
-| T-73 | Documentation: API docs, pharmacy user guide (French), runbook | Docs | All | 3d |
+| # | Task | Layer | Stories | Est | Status |
+|---|---|---|---|---|---|
+| T-67 | French i18n for all pharmacy UI components | Frontend | US-10.2 | 3d | ✅ Done — dosage forms, routes, pharmacy types, badges, checkout labels localized |
+| T-68 | Offline dispense queue (local storage + sync) | Full-stack | US-9.3 | 5d | 🕒 Deferred v2 — paper fallback documented in runbook §8 |
+| T-69 | Comprehensive pharmacy audit event coverage review | Backend | US-9.1 | 2d | ✅ Done — matrix documented in runbook §6; all critical events covered |
+| T-70 | Security review: RBAC, controlled-substance, encryption, consent | Security | US-9.x | 3d | ✅ Done — summary in runbook §7 |
+| T-71 | End-to-end tests (prescription → dispense → payment → claim) | Tests | All | 4d | 🕒 Deferred v2 — happy-path covered by existing integration tests |
+| T-72 | Performance testing: stock queries, dispense throughput | Tests | All | 2d | 🕒 Deferred v2 — requires dedicated load-test infra |
+| T-73 | Documentation: API docs, pharmacy user guide (French), runbook | Docs | All | 3d | ✅ Done — see `docs/pharmacy-runbook.md` |
 
 ---
 

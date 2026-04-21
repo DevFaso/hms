@@ -8,7 +8,7 @@
   <section class="card no-print" *ngIf="!receipt()">
     <h3>1. Rechercher un dispense</h3>
     <div class="form-row">
-      <label for="dispenseId">Dispense ID</label>
+      <label for="dispenseId">Identifiant du dispense</label>
       <input id="dispenseId" type="text" [(ngModel)]="dispenseId" placeholder="UUID du dispense" />
       <button type="button" class="btn-primary" [disabled]="loading()" (click)="loadDispense()">
         Charger

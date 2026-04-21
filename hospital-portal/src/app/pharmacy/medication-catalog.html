@@ -49,10 +49,10 @@
               <td>
                 <div class="med-name">{{ item.nameFr }}</div>
                 @if (item.essentialList) {
-                  <span class="badge badge-essential">Essential</span>
+                  <span class="badge badge-essential">Essentiel</span>
                 }
                 @if (item.controlled) {
-                  <span class="badge badge-controlled">Controlled</span>
+                  <span class="badge badge-controlled">Contrôlé</span>
                 }
               </td>
               <td>{{ item.genericName }}</td>
@@ -200,19 +200,19 @@
               <div class="field">
                 <label for="medForm">{{ 'PHARMACY.FORM' | translate }}</label>
                 <select id="medForm" [(ngModel)]="form.form" name="form">
-                  <option value="">— Select —</option>
-                  <option value="TABLET">Tablet</option>
-                  <option value="CAPSULE">Capsule</option>
-                  <option value="SYRUP">Syrup</option>
+                  <option value="">— Choisir —</option>
+                  <option value="TABLET">Comprimé</option>
+                  <option value="CAPSULE">Gélule</option>
+                  <option value="SYRUP">Sirop</option>
                   <option value="INJECTION">Injection</option>
-                  <option value="CREAM">Cream</option>
-                  <option value="OINTMENT">Ointment</option>
-                  <option value="DROPS">Drops</option>
+                  <option value="CREAM">Crème</option>
+                  <option value="OINTMENT">Pommade</option>
+                  <option value="DROPS">Gouttes</option>
                   <option value="SUSPENSION">Suspension</option>
-                  <option value="POWDER">Powder</option>
-                  <option value="INHALER">Inhaler</option>
-                  <option value="SUPPOSITORY">Suppository</option>
-                  <option value="OTHER">Other</option>
+                  <option value="POWDER">Poudre</option>
+                  <option value="INHALER">Inhalateur</option>
+                  <option value="SUPPOSITORY">Suppositoire</option>
+                  <option value="OTHER">Autre</option>
                 </select>
               </div>
               <div class="field">
@@ -223,7 +223,7 @@
                     type="text"
                     [(ngModel)]="form.strength"
                     name="strength"
-                    placeholder="e.g., 500"
+                    placeholder="ex. 500"
                   />
                   <input
                     type="text"
@@ -240,18 +240,18 @@
               <div class="field">
                 <label for="route">{{ 'PHARMACY.ROUTE' | translate }}</label>
                 <select id="route" [(ngModel)]="form.route" name="route">
-                  <option value="">— Select —</option>
-                  <option value="ORAL">Oral</option>
-                  <option value="INTRAVENOUS">Intravenous</option>
-                  <option value="INTRAMUSCULAR">Intramuscular</option>
-                  <option value="SUBCUTANEOUS">Subcutaneous</option>
-                  <option value="TOPICAL">Topical</option>
+                  <option value="">— Choisir —</option>
+                  <option value="ORAL">Orale</option>
+                  <option value="INTRAVENOUS">Intraveineuse</option>
+                  <option value="INTRAMUSCULAR">Intramusculaire</option>
+                  <option value="SUBCUTANEOUS">Sous-cutanée</option>
+                  <option value="TOPICAL">Topique</option>
                   <option value="INHALATION">Inhalation</option>
-                  <option value="RECTAL">Rectal</option>
-                  <option value="OPHTHALMIC">Ophthalmic</option>
-                  <option value="OTIC">Otic</option>
-                  <option value="NASAL">Nasal</option>
-                  <option value="OTHER">Other</option>
+                  <option value="RECTAL">Rectale</option>
+                  <option value="OPHTHALMIC">Ophtalmique</option>
+                  <option value="OTIC">Auriculaire</option>
+                  <option value="NASAL">Nasale</option>
+                  <option value="OTHER">Autre</option>
                 </select>
               </div>
               <div class="field">
@@ -261,14 +261,14 @@
                   type="text"
                   [(ngModel)]="form.category"
                   name="category"
-                  placeholder="e.g., Antibiotic"
+                  placeholder="ex. Antibiotique"
                 />
               </div>
             </div>
 
             <div class="form-row">
               <div class="field">
-                <label for="rxnormCode">RxNorm Code</label>
+                <label for="rxnormCode">Code RxNorm</label>
                 <input
                   id="rxnormCode"
                   type="text"
