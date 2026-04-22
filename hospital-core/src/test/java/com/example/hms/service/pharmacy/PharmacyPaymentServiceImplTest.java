@@ -1,0 +1,259 @@
+package com.example.hms.service.pharmacy;
+
+import com.example.hms.enums.PharmacyPaymentMethod;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.mapper.pharmacy.PharmacyPaymentMapper;
+import com.example.hms.model.Hospital;
+import com.example.hms.model.Patient;
+import com.example.hms.model.User;
+import com.example.hms.model.pharmacy.Dispense;
+import com.example.hms.model.pharmacy.Pharmacy;
+import com.example.hms.model.pharmacy.PharmacyPayment;
+import com.example.hms.payload.dto.pharmacy.PharmacyPaymentRequestDTO;
+import com.example.hms.payload.dto.pharmacy.PharmacyPaymentResponseDTO;
+import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.PatientRepository;
+import com.example.hms.repository.UserRepository;
+import com.example.hms.repository.pharmacy.DispenseRepository;
+import com.example.hms.repository.pharmacy.PharmacyPaymentRepository;
+import com.example.hms.service.pharmacy.payment.MobileMoneyGateway;
+import com.example.hms.utility.RoleValidator;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.util.Optional;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+/**
+ * T-41: pharmacy payment service unit tests. Covers validation, tenant isolation,
+ * cash vs mobile-money dispatch, and gateway failure handling.
+ */
+@ExtendWith(MockitoExtension.class)
+@DisplayName("PharmacyPaymentServiceImpl")
+class PharmacyPaymentServiceImplTest {
+
+    @Mock private PharmacyPaymentRepository paymentRepository;
+    @Mock private DispenseRepository dispenseRepository;
+    @Mock private PatientRepository patientRepository;
+    @Mock private HospitalRepository hospitalRepository;
+    @Mock private UserRepository userRepository;
+    @Mock private PharmacyPaymentMapper paymentMapper;
+    @Mock private MobileMoneyGateway mobileMoneyGateway;
+    @Mock private RoleValidator roleValidator;
+    @Mock private PharmacyServiceSupport support;
+
+    @InjectMocks private PharmacyPaymentServiceImpl service;
+
+    private UUID hospitalId;
+    private UUID dispenseId;
+    private UUID patientId;
+    private UUID userId;
+    private Hospital hospital;
+    private Patient patient;
+    private Pharmacy pharmacy;
+    private Dispense dispense;
+    private User user;
+
+    @BeforeEach
+    void setUp() {
+        hospitalId = UUID.randomUUID();
+        dispenseId = UUID.randomUUID();
+        patientId = UUID.randomUUID();
+        userId = UUID.randomUUID();
+
+        hospital = new Hospital();
+        hospital.setId(hospitalId);
+
+        patient = new Patient();
+        patient.setId(patientId);
+        patient.setFirstName("Awa");
+        patient.setPhoneNumberPrimary("+22670000000");
+
+        pharmacy = new Pharmacy();
+        pharmacy.setId(UUID.randomUUID());
+        pharmacy.setHospital(hospital);
+
+        dispense = new Dispense();
+        dispense.setId(dispenseId);
+        dispense.setPatient(patient);
+        dispense.setPharmacy(pharmacy);
+        dispense.setMedicationName("Amoxicilline 500mg");
+
+        user = new User();
+        user.setId(userId);
+    }
+
+    private PharmacyPaymentRequestDTO request(PharmacyPaymentMethod method) {
+        return PharmacyPaymentRequestDTO.builder()
+                .dispenseId(dispenseId)
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .paymentMethod(method)
+                .amount(new BigDecimal("2500"))
+                .currency("XOF")
+                .receivedBy(userId)
+                .build();
+    }
+
+    @Test
+    @DisplayName("cash payment: persists record and does not call mobile-money gateway")
+    void cashPaymentSucceeds() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(paymentMapper.toEntity(any(), any(), any(), any(), any()))
+                .thenReturn(new PharmacyPayment());
+        when(paymentRepository.save(any())).thenAnswer(inv -> {
+            PharmacyPayment p = inv.getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(paymentMapper.toResponseDTO(any()))
+                .thenReturn(PharmacyPaymentResponseDTO.builder().build());
+
+        PharmacyPaymentResponseDTO result = service.createPayment(dto);
+
+        assertThat(result).isNotNull();
+        verify(mobileMoneyGateway, never()).charge(any());
+        verify(paymentRepository).save(any());
+    }
+
+    @Test
+    @DisplayName("mobile-money payment: charges gateway and stores provider reference")
+    void mobileMoneyPaymentUsesGateway() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.MOBILE_MONEY);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(mobileMoneyGateway.charge(any())).thenReturn(
+                new MobileMoneyGateway.MobileMoneyCharge(
+                        "MOCK-abc", "COMPLETED", new BigDecimal("2500"), "XOF"));
+        when(paymentMapper.toEntity(any(), any(), any(), any(), any()))
+                .thenReturn(new PharmacyPayment());
+        when(paymentRepository.save(any())).thenAnswer(inv -> {
+            PharmacyPayment p = inv.getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(paymentMapper.toResponseDTO(any()))
+                .thenReturn(PharmacyPaymentResponseDTO.builder().build());
+
+        service.createPayment(dto);
+
+        verify(mobileMoneyGateway).charge(any());
+        verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(
+                p -> "MOCK-abc".equals(p.getReferenceNumber())));
+    }
+
+    @Test
+    @DisplayName("mobile-money payment: gateway failure surfaces as BusinessException")
+    void mobileMoneyGatewayFailureThrowsBusinessException() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.MOBILE_MONEY);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(mobileMoneyGateway.charge(any()))
+                .thenThrow(new MobileMoneyGateway.MobileMoneyException("declined"));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("declined");
+
+        verify(paymentRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("mobile-money payment: rejects patient with no phone on file")
+    void mobileMoneyRejectsPatientWithoutPhone() {
+        patient.setPhoneNumberPrimary(null);
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.MOBILE_MONEY);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("phone");
+        verify(mobileMoneyGateway, never()).charge(any());
+    }
+
+    @Test
+    @DisplayName("rejects non-positive amount")
+    void rejectsZeroAmount() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        PharmacyPaymentRequestDTO dto = PharmacyPaymentRequestDTO.builder()
+                .dispenseId(dispenseId)
+                .patientId(patientId)
+                .hospitalId(hospitalId)
+                .paymentMethod(PharmacyPaymentMethod.CASH)
+                .amount(BigDecimal.ZERO)
+                .receivedBy(userId)
+                .build();
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("positive");
+    }
+
+    @Test
+    @DisplayName("rejects cross-hospital dispense (tenant isolation)")
+    void rejectsCrossHospitalDispense() {
+        Hospital other = new Hospital();
+        other.setId(UUID.randomUUID());
+        pharmacy.setHospital(other);
+
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("rejects dispense whose patient does not match the request")
+    void rejectsPatientMismatch() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        dispense.setPatient(other);
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Patient");
+    }
+}

@@ -296,6 +296,37 @@ export interface RoutingDecisionResponse {
   updatedAt: string;
 }
 
+/* ───────────────────────────── Pharmacy Payments (T-41) ───────────────────────────── */
+
+export type PharmacyPaymentMethod = 'CASH' | 'MOBILE_MONEY' | 'INSURANCE';
+
+export interface PharmacyPaymentRequest {
+  dispenseId: string;
+  patientId: string;
+  hospitalId: string;
+  paymentMethod: PharmacyPaymentMethod;
+  amount: number;
+  currency?: string;
+  referenceNumber?: string;
+  receivedBy: string;
+  notes?: string;
+}
+
+export interface PharmacyPaymentResponse {
+  id: string;
+  dispenseId: string;
+  patientId: string;
+  hospitalId: string;
+  paymentMethod: PharmacyPaymentMethod;
+  amount: number;
+  currency: string;
+  referenceNumber?: string;
+  receivedBy: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 /* ───────────────────────────── Service ───────────────────────────── */
 
 @Injectable({ providedIn: 'root' })
@@ -678,6 +709,40 @@ export class PharmacyService {
     const params = new HttpParams().set('page', page).set('size', size);
     return this.http.get<ApiResponse<Page<RoutingDecisionResponse>>>(
       `/pharmacy/routing/decisions/patient/${patientId}`,
+      { params },
+    );
+  }
+
+  // ── Pharmacy Payments (T-41) ──
+
+  createPayment(req: PharmacyPaymentRequest): Observable<ApiResponse<PharmacyPaymentResponse>> {
+    return this.http.post<ApiResponse<PharmacyPaymentResponse>>('/pharmacy/payments', req);
+  }
+
+  getPayment(id: string): Observable<ApiResponse<PharmacyPaymentResponse>> {
+    return this.http.get<ApiResponse<PharmacyPaymentResponse>>(`/pharmacy/payments/${id}`);
+  }
+
+  listPaymentsByDispense(
+    dispenseId: string,
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<PharmacyPaymentResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<PharmacyPaymentResponse>>>(
+      `/pharmacy/payments/dispense/${dispenseId}`,
+      { params },
+    );
+  }
+
+  listPaymentsByPatient(
+    patientId: string,
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<PharmacyPaymentResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<PharmacyPaymentResponse>>>(
+      `/pharmacy/payments/patient/${patientId}`,
       { params },
     );
   }

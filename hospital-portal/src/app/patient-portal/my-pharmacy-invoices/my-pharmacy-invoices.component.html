@@ -1,0 +1,31 @@
+<section class="patient-page">
+  <header>
+    <h2>{{ 'patientPortal.pharmacyInvoices.title' | translate }}</h2>
+    <p class="subtitle">{{ 'patientPortal.pharmacyInvoices.subtitle' | translate }}</p>
+  </header>
+
+  <div class="total-banner" *ngIf="!loading()">
+    <span>Total payé</span>
+    <strong>{{ totalPaid() | number: '1.0-0' }} XOF</strong>
+  </div>
+
+  <div class="loading" *ngIf="loading()">Chargement…</div>
+
+  <div class="empty" *ngIf="!loading() && payments().length === 0">
+    Aucun paiement de pharmacie pour le moment.
+  </div>
+
+  <ul class="payment-list" *ngIf="payments().length > 0">
+    <li *ngFor="let p of payments()" class="payment-item">
+      <div class="row-top">
+        <span class="date">{{ p.createdAt | date: 'dd/MM/yyyy HH:mm' }}</span>
+        <span class="amount">{{ p.amount | number: '1.0-0' }} {{ p.currency }}</span>
+      </div>
+      <div class="row-meta">
+        <span class="method">{{ methodLabel(p.paymentMethod) }}</span>
+        <span class="ref" *ngIf="p.referenceNumber">Réf: {{ p.referenceNumber }}</span>
+      </div>
+      <p class="notes" *ngIf="p.notes">{{ p.notes }}</p>
+    </li>
+  </ul>
+</section>

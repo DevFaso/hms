@@ -172,6 +172,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 PRESCRIPTION_PREFIX + prescriptionId + " routed to partner pharmacy " + targetPharmacy.getName(),
                 prescriptionId.toString());
 
+        // T-40: notify patient the medication is unavailable at hospital; routed to partner
+        support.notifyOutOfStock(patient, prescription.getMedicationName(),
+                "Elle a \u00e9t\u00e9 envoy\u00e9e \u00e0 " + targetPharmacy.getName() + ".");
+
         return routingMapper.toResponseDTO(saved);
     }
 
@@ -202,6 +206,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         logAudit(AuditEventType.PRESCRIPTION_PRINTED,
                 PRESCRIPTION_PREFIX + prescriptionId + " printed for patient",
                 prescriptionId.toString());
+
+        // T-40: notify patient the medication is unavailable; Rx printed for any pharmacy
+        support.notifyOutOfStock(patient, prescription.getMedicationName(),
+                "Veuillez apporter l'ordonnance imprim\u00e9e \u00e0 une pharmacie de votre choix.");
 
         return routingMapper.toResponseDTO(saved);
     }
@@ -235,6 +243,12 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 PRESCRIPTION_PREFIX + prescriptionId + " placed on back order"
                         + (estimatedRestockDate != null ? ", estimated restock: " + estimatedRestockDate : ""),
                 prescriptionId.toString());
+
+        // T-40: notify patient the medication is unavailable; back-ordered with optional restock date
+        String suffix = estimatedRestockDate != null
+                ? "Nous vous contacterons d\u00e8s sa disponibilit\u00e9 (estim\u00e9e au " + estimatedRestockDate + ")."
+                : "Nous vous contacterons d\u00e8s sa disponibilit\u00e9.";
+        support.notifyOutOfStock(patient, prescription.getMedicationName(), suffix);
 
         return routingMapper.toResponseDTO(saved);
     }
