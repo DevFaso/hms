@@ -92,7 +92,7 @@ class PharmacyRefillReminderSchedulerTest {
 
         scheduler.sendDailyRefillReminders();
 
-        verify(support).notifyRefillReminder(eq(patient), eq(d.getMedicationName()), eq(3));
+        verify(support).notifyRefillReminder(patient, d.getMedicationName(), 3);
     }
 
     @Test

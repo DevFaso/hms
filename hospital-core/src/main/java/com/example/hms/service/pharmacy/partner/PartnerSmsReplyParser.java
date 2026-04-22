@@ -75,7 +75,7 @@ public class PartnerSmsReplyParser {
 
     private static String extractToken(String lower) {
         // Strip the leading single-digit action code if present so it's not picked as the token.
-        String stripped = lower.replaceAll("^\\s*[0-9]\\b", " ").trim();
+        String stripped = lower.replaceAll("^\\s*\\d\\b", " ").trim();
         Matcher m = TOKEN_PATTERN.matcher(stripped);
         while (m.find()) {
             String candidate = m.group(1);

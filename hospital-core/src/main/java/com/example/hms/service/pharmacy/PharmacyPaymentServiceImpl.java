@@ -56,11 +56,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     public PharmacyPaymentResponseDTO createPayment(PharmacyPaymentRequestDTO dto) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
 
-        validateRequest(dto);
-
-        if (!hospitalId.equals(dto.getHospitalId())) {
-            throw new BusinessException("Payment hospital does not match the active hospital");
-        }
+        validateCreateRequest(dto, hospitalId);
 
         Dispense dispense = dispenseRepository.findById(dto.getDispenseId())
                 .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
@@ -154,7 +150,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         return paymentRepository.findByPatientId(patientId, pageable).map(paymentMapper::toResponseDTO);
     }
 
-    private void validateRequest(PharmacyPaymentRequestDTO dto) {
+    private void validateCreateRequest(PharmacyPaymentRequestDTO dto, UUID hospitalId) {
         if (dto == null) {
             throw new BusinessException("Payment request is required");
         }
@@ -163,6 +159,13 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         }
         if (dto.getPaymentMethod() == null) {
             throw new BusinessException("Payment method is required");
+        }
+        // SUPER_ADMIN may have no active hospital; require one for payment creation.
+        if (hospitalId == null) {
+            throw new BusinessException("Active hospital context is required to record payments");
+        }
+        if (!hospitalId.equals(dto.getHospitalId())) {
+            throw new BusinessException("Payment hospital does not match the active hospital");
         }
     }
 }
