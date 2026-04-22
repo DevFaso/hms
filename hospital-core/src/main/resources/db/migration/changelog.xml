@@ -658,4 +658,20 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V55: S-05 Phase 2 (slice 3) — encrypt Patient PHI free-text fields
+         - Widen address, address_line1/2, emergency_contact_*, allergies,
+           medical_history_summary, care_team_notes, chronic_conditions to
+           TEXT to fit AES-256-GCM Base64 ciphertext.
+         - Phone numbers and email are deliberately NOT encrypted because
+           they are used in LIKE / equality lookups, unique constraints, and
+           an index.
+         ================================================================= -->
+    <changeSet id="V55-encrypt-patient-phi" author="hms-team" runOnChange="false">
+        <sqlFile path="V55__encrypt_patient_phi.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

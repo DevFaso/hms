@@ -1,8 +1,10 @@
 package com.example.hms.security;
 
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import javax.crypto.SecretKey;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,9 +13,19 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 /** Unit tests for {@link EncryptionKeyHolder} — security task S-05. */
 class EncryptionKeyHolderTest {
 
+    private SecretKey originalKey;
+
+    @BeforeEach
+    void snapshot() {
+        // Capture any Spring-installed key so we can restore it after the test.
+        originalKey = EncryptionKeyHolder.getKeyForTesting();
+    }
+
     @AfterEach
     void resetState() {
-        EncryptionKeyHolder.setKeyForTesting(null);
+        // Restore the pre-test key so that downstream integration tests in the
+        // same JVM still have access to the Spring-managed encryption key.
+        EncryptionKeyHolder.setKeyForTesting(originalKey);
     }
 
     @Test

@@ -91,17 +91,18 @@
 - Wiring contract tests for all three fields in [PrescriptionEncryptionWiringTest.java](hospital-core/src/test/java/com/example/hms/model/PrescriptionEncryptionWiringTest.java).
 - Verified no repository or specification queries reference these fields (full grep across `hospital-core/src/main` returned zero matches), so encryption cannot break a `LIKE`/`=` lookup.
 
+**Phase 2 — slice 3 delivered on `feature/security-v1`:**
+
+- [Patient](hospital-core/src/main/java/com/example/hms/model/Patient.java) PHI free-text fields annotated with `@Convert(converter = EncryptedStringConverter.class)`: `address`, `addressLine1`, `addressLine2`, `emergencyContactName`, `emergencyContactPhone`, `emergencyContactRelationship`, `allergies`, `medicalHistorySummary`, `careTeamNotes`, `chronicConditions`. Columns widened to `TEXT` via [V55__encrypt_patient_phi.sql](hospital-core/src/main/resources/db/migration/V55__encrypt_patient_phi.sql). All `@Size` constraints preserved on the entity fields.
+- **Deliberately NOT encrypted in this slice:** `phoneNumberPrimary`, `phoneNumberSecondary`, `email`. Audit found these are used in `PatientRepository.findByPhoneNumberPrimary`, `findByPhoneNumberSecondary`, `findByEmailContainingIgnoreCase`, the `LIKE :phonePattern` / `LIKE :emailPattern` search query, the `idx_patient_email` index, and `unique = true` constraints on both `email` and `phone_number_primary`. AppointmentRepository also has `WHERE p.phoneNumberPrimary = :phone`. Encrypting any of these would break appointment booking and patient search end-to-end.
+- Wiring contract test [PatientEncryptionWiringTest.java](hospital-core/src/test/java/com/example/hms/model/PatientEncryptionWiringTest.java) covers both directions: 10 parameterised tests assert the annotation IS present on the encrypted fields, and 3 assert it is NOT present on the queried lookup fields (documents the deliberate exclusion).
+
 **Important caveat — column-width change is required for every encrypted field.** AES-GCM ciphertext (Base64) grows from `N` chars to roughly `ceil((N + 28) * 4 / 3)` chars. A `varchar(N)` column will not hold the encrypted form of an `N`-char input. Each Phase 2 slice **must** ship a Liquibase migration widening the column to `TEXT`.
 
-**Phase 2 — slices still pending (one PR each):**
+**Future encryption work (deferred — requires query-rewrite or blind-index design):**
 
-- `Patient` contact fields (`phoneNumber`, `address`, `emergencyContactPhone`, …) — high-risk: needs careful audit because `phoneNumber` may be used in lookup queries that would break under encryption (encrypted columns cannot be searched with `LIKE` / equality on plaintext). Confirm no `findByPhoneNumber` / `LIKE :phone` repository methods exist before annotating.
-- Reconcile duplicate `Patient` package candidates (`com.example.hms.model.Patient` vs `com.example.hms.patient.model.Patient`) before annotating either.
-
-**Files for remaining Phase 2 slices:**
-
-- `hospital-core/src/main/java/com/example/hms/model/Patient.java`
-- `hospital-core/src/main/java/com/example/hms/patient/model/Patient.java`
+- Encrypting `Patient.email` / `phoneNumberPrimary` requires either (a) a deterministic encryption scheme that preserves equality but is significantly weaker than AES-GCM, or (b) a separate blind-index column (HMAC-SHA-256 of normalised value) plus rewriting every `findByEmail*` / `findByPhoneNumber*` lookup. Out of scope for the current security sprint — track as a follow-up.
+- The duplicate `com.example.hms.patient.model.Patient` (entity name `PatientV2`) appears to be an unfinished refactor and was not touched. Its fields have no `@Size` constraints suggesting it is not yet wired into a repository — should be reconciled before any further Patient-side change.
 
 ---
 

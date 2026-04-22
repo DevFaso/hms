@@ -24,9 +24,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class EncryptedStringConverterTest {
 
     private EncryptedStringConverter converter;
+    private SecretKey originalKey;
 
     @BeforeEach
     void setUp() throws Exception {
+        originalKey = EncryptionKeyHolder.getKeyForTesting();
         KeyGenerator gen = KeyGenerator.getInstance("AES");
         gen.init(256);
         EncryptionKeyHolder.setKeyForTesting(gen.generateKey());
@@ -35,7 +37,11 @@ class EncryptedStringConverterTest {
 
     @AfterEach
     void tearDown() {
-        EncryptionKeyHolder.setKeyForTesting(null);
+        // Restore whatever key was in place before this test (typically the
+        // Spring-managed key installed by EncryptionKeyHolder.@PostConstruct
+        // for downstream integration tests). Never leave the static state
+        // null when other test classes may depend on it.
+        EncryptionKeyHolder.setKeyForTesting(originalKey);
     }
 
     @Test

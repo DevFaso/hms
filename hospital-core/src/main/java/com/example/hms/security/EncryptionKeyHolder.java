@@ -79,4 +79,13 @@ public class EncryptionKeyHolder {
         keyRef = key;
         configuredFlag = key != null;
     }
+
+    /**
+     * Test-only accessor for snapshot/restore patterns. Returns the key
+     * currently held in the static slot (which may be a Spring-managed key
+     * installed by {@link #init()} or a previously-installed test key).
+     */
+    static SecretKey getKeyForTesting() {
+        return keyRef;
+    }
 }

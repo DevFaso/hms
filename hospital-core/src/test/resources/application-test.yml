@@ -85,3 +85,8 @@ app:
     platform-registry-topic: test-platform-registry-topic
   security:
     totp-encryption-key: "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+  encryption:
+    # Test-only AES-256 key (Base64-encoded 32-byte zero key). Required for the
+    # EncryptedStringConverter applied to PHI columns on Patient, Prescription,
+    # and Dispense. NEVER use this key in any non-test environment.
+    key: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
