@@ -359,7 +359,6 @@ export interface PharmacyClaimResponse {
   createdAt: string;
   updatedAt: string;
 }
-
 /* ───────────────────────────── Service ───────────────────────────── */
 
 @Injectable({ providedIn: 'root' })
