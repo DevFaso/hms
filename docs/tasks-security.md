@@ -68,7 +68,7 @@
 
 ---
 
-### 🚧 S-05 · Add field-level encryption for PHI
+### ✅ S-05 · Add field-level encryption for PHI
 
 **Phase 1 (infrastructure) delivered on `feature/security-v1`** — converter + key holder are merged but no entity is annotated yet. Per-entity rollout follows in dedicated PRs so each migration can be reviewed and rolled out independently.
 
@@ -99,9 +99,10 @@
 
 **Important caveat — column-width change is required for every encrypted field.** AES-GCM ciphertext (Base64) grows from `N` chars to roughly `ceil((N + 28) * 4 / 3)` chars. A `varchar(N)` column will not hold the encrypted form of an `N`-char input. Each Phase 2 slice **must** ship a Liquibase migration widening the column to `TEXT`.
 
-**Future encryption work (deferred — requires query-rewrite or blind-index design):**
+**Future encryption work (accepted residual risk — not planned):**
 
-- Encrypting `Patient.email` / `phoneNumberPrimary` requires either (a) a deterministic encryption scheme that preserves equality but is significantly weaker than AES-GCM, or (b) a separate blind-index column (HMAC-SHA-256 of normalised value) plus rewriting every `findByEmail*` / `findByPhoneNumber*` lookup. Out of scope for the current security sprint — track as a follow-up.
+- `Patient.email`, `Patient.phoneNumberPrimary`, and `Patient.phoneNumberSecondary` remain plaintext. Audit identified two incompatible usage classes: (a) exact-match lookups (`findByEmail`, `findByPhoneNumberPrimary`, `AppointmentRepository` phone lookups, unique constraints on `email` and `phone_number_primary`, `idx_patient_email`) and (b) partial-match searches (`findByEmailContainingIgnoreCase`, `searchPatientsExtended` `LIKE :emailPattern` / `LIKE :phonePattern`). Blind-index HMAC would support (a) but not (b); deterministic encryption has the same limitation and weaker crypto than AES-GCM. Encrypting these fields would require removing the partial-search feature from the staff patient-search UI, which is core to day-to-day workflows.
+- **Decision:** accept the residual risk. Compensating controls: TLS in transit, infrastructure-level encryption at rest (Railway/Postgres volume + backup encryption), row-level tenant scoping, access-controlled endpoints, and audit logging of patient-record access. Field-level encryption already applied to the 10 higher-sensitivity free-text PHI columns (address, allergies, medical history, care team notes, emergency contact details, chronic conditions) where the genuinely sensitive data lives.
 - The duplicate `com.example.hms.patient.model.Patient` (entity name `PatientV2`) appears to be an unfinished refactor and was not touched. Its fields have no `@Size` constraints suggesting it is not yet wired into a repository — should be reconciled before any further Patient-side change.
 
 ---
