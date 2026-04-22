@@ -1,0 +1,54 @@
+<section class="claims">
+  <header class="claims__header">
+    <h1>Demandes de remboursement (AMU / Assurance)</h1>
+    <div class="claims__actions">
+      <label class="filter">
+        Statut :
+        <select [(ngModel)]="filter" name="filter">
+          <option value="ALL">Tous</option>
+          <option *ngFor="let o of statusOptions" [value]="o.value">{{ o.labelFr }}</option>
+        </select>
+      </label>
+      <button type="button" (click)="load()" [disabled]="loading()">Actualiser</button>
+      <button type="button" (click)="exportCsv()">Exporter CSV</button>
+      <button type="button" (click)="exportFhir()">Exporter FHIR</button>
+    </div>
+  </header>
+
+  <p *ngIf="loading()" class="hint">Chargement…</p>
+  <p *ngIf="!loading() && filtered().length === 0" class="hint">Aucune demande à afficher.</p>
+
+  <table *ngIf="filtered().length > 0" class="claims__table">
+    <thead>
+      <tr>
+        <th>Créé le</th>
+        <th>Patient</th>
+        <th>Référence couverture</th>
+        <th>Montant</th>
+        <th>Statut</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let c of filtered()">
+        <td>{{ c.createdAt | date: 'dd/MM/yyyy' }}</td>
+        <td class="muted">{{ c.patientId.substring(0, 8) }}…</td>
+        <td>{{ c.coverageReference || '—' }}</td>
+        <td>{{ c.amount | number: '1.0-2' }} {{ c.currency }}</td>
+        <td>
+          <span class="badge" [attr.data-status]="c.claimStatus">
+            {{ statusLabel(c.claimStatus) }}
+          </span>
+        </td>
+        <td class="actions">
+          <button *ngIf="c.claimStatus === 'DRAFT'" (click)="submit(c)">Soumettre</button>
+          <button *ngIf="c.claimStatus === 'SUBMITTED'" (click)="accept(c)">Accepter</button>
+          <button *ngIf="c.claimStatus === 'SUBMITTED'" (click)="reject(c)" class="danger">
+            Rejeter
+          </button>
+          <button *ngIf="c.claimStatus === 'ACCEPTED'" (click)="pay(c)">Marquer payé</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</section>

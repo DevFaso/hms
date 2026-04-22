@@ -481,7 +481,7 @@ MVP scope (Tier 3 print-for-patient routing, partner formulary matching, routing
 | T-37k | Patient portal: self-report external fill | Frontend | US-3b.6 | 🕒 Deferred (v2) |
 | T-37l | ✅ ~~Tests: stock-out routing, partner matching, routing decisions~~ | Tests | US-3b.x | Done (DispenseServiceImplTest, StockOutRoutingServiceImplTest) |
 
-### Phase 5 — Patient Communication & Payment (Weeks 18–24) 🔄 IN PROGRESS
+### Phase 5 — Patient Communication & Payment (Weeks 18–24) ✅ COMPLETE
 
 | # | Task | Layer | Stories | Status |
 |---|---|---|---|---|
@@ -495,16 +495,16 @@ MVP scope (Tier 3 print-for-patient routing, partner formulary matching, routing
 | T-45 | ✅ ~~Patient portal: pharmacy invoices & payment history~~ | Frontend | US-5.2 | Done (my-pharmacy-invoices route, lists listPaymentsByPatient w/ total-paid banner) |
 | T-46 | ✅ ~~Tests: notifications, payment, checkout~~ | Tests | US-4.x, 5.x | Done (PharmacyRefillReminderSchedulerTest, MockMobileMoneyGatewayTest, PharmacyPaymentServiceImplTest + T-39 tests in PharmacyServiceSupportTest) |
 
-### Phase 6 — Claims & Insurance (Weeks 18–24)
+### Phase 6 — Claims & Insurance (Weeks 18–24) ✅ COMPLETE
 
-| # | Task | Layer | Stories | Est |
+| # | Task | Layer | Stories | Status |
 |---|---|---|---|---|
-| T-47 | `PharmacyClaim` entity, service, controller, DTO, mapper | Full-stack BE | US-6.1 | 3d |
-| T-48 | Claim batch-file export (CSV + FHIR Claim) | Backend | US-6.1 | 3d |
-| T-49 | Claim status tracking + reconciliation endpoint | Backend | US-6.2 | 3d |
-| T-50 | Claims management UI | Frontend | US-6.1, 6.2 | 3d |
-| T-51 | Audit events for claim submit/reverse | Backend | US-8.1 | 1d |
-| T-52 | Tests: claims service, export, reconciliation | Tests | US-6.x | 2d |
+| T-47 | ✅ ~~`PharmacyClaim` entity, service, controller, DTO, mapper~~ | Full-stack BE | US-6.1 | Done (PharmacyClaimService/Impl + /pharmacy/claims controller; tenant-scoped) |
+| T-48 | ✅ ~~Claim batch-file export (CSV + FHIR Claim)~~ | Backend | US-6.1 | Done (PharmacyClaimExportService; /pharmacy/claims/export/csv and /export/fhir) |
+| T-49 | ✅ ~~Claim status tracking + reconciliation endpoint~~ | Backend | US-6.2 | Done (submit / accept / reject / pay endpoints with enforced state transitions) |
+| T-50 | ✅ ~~Claims management UI~~ | Frontend | US-6.1, 6.2 | Done (/pharmacy/claims route; French status badges, lifecycle actions, CSV+FHIR export) |
+| T-51 | ✅ ~~Audit events for claim submit/reverse~~ | Backend | US-8.1 | Done (CLAIM_SUBMITTED audit emitted on every state transition in PharmacyClaimServiceImpl) |
+| T-52 | ✅ ~~Tests: claims service, export, reconciliation~~ | Tests | US-6.x | Done (PharmacyClaimServiceImplTest ×10, PharmacyClaimExportServiceTest ×3) |
 
 ### Phase 7a — Partner SMS Channel (Weeks 20–24, day-one)
 
