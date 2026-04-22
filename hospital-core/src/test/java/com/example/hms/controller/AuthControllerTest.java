@@ -11,6 +11,7 @@ import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.PasswordHistoryService;
 import com.example.hms.service.MfaService;
 import com.example.hms.security.LoginAttemptService;
+import com.example.hms.security.RefreshTokenCookieService;
 import com.example.hms.security.TokenBlacklistService;
 import com.example.hms.security.WsTicketService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -65,6 +66,7 @@ class AuthControllerTest {
     @MockitoBean private PasswordHistoryService passwordHistoryService;
     @MockitoBean private MfaService mfaService;
     @MockitoBean private WsTicketService wsTicketService;
+    @MockitoBean private RefreshTokenCookieService refreshTokenCookieService;
 
     @Test
     void register_returns410Gone() throws Exception {
@@ -536,5 +538,82 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.refreshToken").value("new.refresh.token"))
                 .andExpect(jsonPath("$.accessTokenExpiresAt").value(accessExp))
                 .andExpect(jsonPath("$.refreshTokenExpiresAt").value(refreshExp));
+    }
+
+    // ───────────────────────────── S-01: refresh-token cookie ─────────────────────────────
+
+    @Test
+    void logout_clearsRefreshCookieViaCookieService() throws Exception {
+        mockMvc.perform(post("/auth/logout"))
+                .andExpect(status().isOk());
+
+        org.mockito.Mockito.verify(refreshTokenCookieService)
+                .clear(org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void refreshToken_prefersCookieOverBody() throws Exception {
+        // Setup minimal happy path with cookie carrying the refresh token,
+        // body present but with a *different* value to prove cookie wins.
+        java.util.UUID userId = java.util.UUID.randomUUID();
+        com.example.hms.model.User activeUser = com.example.hms.model.User.builder()
+                .username("doctor@example.com")
+                .build();
+        org.springframework.test.util.ReflectionTestUtils.setField(activeUser, "id", userId);
+
+        com.example.hms.model.Role role = com.example.hms.model.Role.builder()
+                .code("ROLE_DOCTOR").build();
+        com.example.hms.model.UserRoleHospitalAssignment assignment =
+                com.example.hms.model.UserRoleHospitalAssignment.builder()
+                        .user(activeUser).role(role).active(true)
+                        .assignedAt(java.time.LocalDateTime.now()).build();
+
+        long nowMs = System.currentTimeMillis();
+        when(refreshTokenCookieService.read(org.mockito.ArgumentMatchers.any()))
+                .thenReturn("cookie.refresh.token");
+        when(jwtTokenProvider.validateToken("cookie.refresh.token")).thenReturn(true);
+        when(jwtTokenProvider.getUsernameFromJWT("cookie.refresh.token"))
+                .thenReturn("doctor@example.com");
+        when(userRepository.findByUsername("doctor@example.com"))
+                .thenReturn(java.util.Optional.of(activeUser));
+        when(assignmentRepository.findByUser(activeUser))
+                .thenReturn(java.util.Set.of(assignment));
+        when(assignmentRepository.findAllDetailedByUserId(userId))
+                .thenReturn(java.util.List.of(assignment));
+        when(jwtTokenProvider.generateAccessToken(
+                org.mockito.ArgumentMatchers.any(
+                        com.example.hms.security.TokenUserDescriptor.class)))
+                .thenReturn("new.access.token");
+        when(jwtTokenProvider.generateRefreshToken(
+                org.mockito.ArgumentMatchers.any(
+                        org.springframework.security.authentication.UsernamePasswordAuthenticationToken.class)))
+                .thenReturn("new.refresh.token");
+        when(jwtTokenProvider.getExpiration("new.access.token"))
+                .thenReturn(new java.util.Date(nowMs + 86_400_000L));
+        when(jwtTokenProvider.getExpiration("new.refresh.token"))
+                .thenReturn(new java.util.Date(nowMs + 7 * 86_400_000L));
+
+        mockMvc.perform(post("/auth/token/refresh")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .cookie(new jakarta.servlet.http.Cookie("hms_refresh", "cookie.refresh.token"))
+                        .content("{\"refreshToken\":\"body.refresh.token\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.accessToken").value("new.access.token"));
+
+        // The cookie value, not the body value, must have been validated
+        org.mockito.Mockito.verify(jwtTokenProvider).validateToken("cookie.refresh.token");
+        // Rotation must have written a fresh cookie back to the response
+        org.mockito.Mockito.verify(refreshTokenCookieService)
+                .write(org.mockito.ArgumentMatchers.any(),
+                        org.mockito.ArgumentMatchers.eq("new.refresh.token"),
+                        org.mockito.ArgumentMatchers.anyLong());
+    }
+
+    @Test
+    void refreshToken_missingCookieAndBody_returns401() throws Exception {
+        when(refreshTokenCookieService.read(org.mockito.ArgumentMatchers.any())).thenReturn(null);
+
+        mockMvc.perform(post("/auth/token/refresh"))
+                .andExpect(status().isUnauthorized());
     }
 }

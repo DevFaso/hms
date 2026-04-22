@@ -1,42 +1,44 @@
 # Security Hardening Tasks
 
 > Code-verified findings. Each task names the exact file(s) to change.
+>
+> **Status legend:** ✅ done · 🚧 in progress · ⏸ deferred · ⏳ pending
 
 ---
 
 ## Priority 1 — Critical (before any external integration)
 
-### S-01 · Move tokens out of browser storage
+### ✅ S-01 · Move tokens out of browser storage
 
-**File:** `hospital-portal/src/app/auth/auth.service.ts`
+**Delivered on branch `feature/security-v1` (this commit).**
 
-**Finding (confirmed):** `setToken()` writes to `localStorage` (remember=true) or `sessionStorage` (remember=false).
-`setRefreshToken()` does the same. Both are readable by any JavaScript on the page — XSS = full account takeover.
-
-**Fix:**
-- Replace `localStorage`/`sessionStorage` token writes with an HttpOnly secure cookie via a BFF endpoint, or OIDC Authorization Code + PKCE with server-side session.
-- Remove `ACCESS_TOKEN_KEY` and `REFRESH_TOKEN_KEY` constants and all read/write calls against them.
-- `getToken()` should read from a cookie or delegate to the BFF session endpoint.
-
----
-
-### S-02 · Replace in-memory token blacklist with Redis
-
-**Files:**
-- `hospital-core/src/main/java/com/example/hms/security/InMemoryTokenBlacklistService.java` → replace
-- `hospital-core/src/main/java/com/example/hms/config/SecurityConfig.java` → rewire bean
-
-**Finding (confirmed):** Class javadoc explicitly states: _"state is lost on restart and not shared across instances."_
-
-**Fix:**
-- Create `RedisTokenBlacklistService implements TokenBlacklistService` using `RedisTemplate<String, Long>`.
-- Use `redisTemplate.opsForValue().set(jti, expirationMs, ttl, TimeUnit.MILLISECONDS)` — Redis TTL replaces the `evictExpired()` scheduled method.
-- Mark `InMemoryTokenBlacklistService` `@ConditionalOnMissingBean` or remove it.
-- Redis is already in the stack (`docker-compose.yml`).
+- Backend now sets an HttpOnly `Secure` `SameSite=Strict` cookie named `hms_refresh` scoped to `/api/auth` on login (`AuthController.authenticateUser`), MFA verify (`MfaController.verifyMfa`), and refresh (`AuthController.refreshToken`); cleared on logout.
+- New helper [RefreshTokenCookieService.java](hospital-core/src/main/java/com/example/hms/security/RefreshTokenCookieService.java) encapsulates write/read/clear; flags `app.auth.refresh-cookie.secure` and `app.auth.refresh-cookie.same-site` in [application.properties](hospital-core/src/main/resources/application.properties) allow per-env toggling.
+- Refresh endpoint now reads the cookie first and falls back to body — body-based legacy clients keep working during rollout.
+- Frontend `auth.service.ts`: `setRefreshToken()` is now a no-op that purges any legacy storage; `refreshTokenRequest()` sends `withCredentials: true` (legacy localStorage refresh, if present, is forwarded once and then purged).
+- Interceptors gate refresh attempts on `getUserProfile()` (cookie-based proof of session) in addition to legacy storage.
+- New tests:
+  - 8 unit tests in [RefreshTokenCookieServiceTest.java](hospital-core/src/test/java/com/example/hms/security/RefreshTokenCookieServiceTest.java) (HttpOnly/Secure/SameSite/path/maxAge flags, dev mode, blank/null cookie handling).
+  - 3 new MockMvc tests in [AuthControllerTest.java](hospital-core/src/test/java/com/example/hms/controller/AuthControllerTest.java) (logout clears cookie, refresh prefers cookie over body, missing cookie + body returns 401).
+  - 5 specs in [auth.service.spec.ts](hospital-portal/src/app/auth/auth.service.spec.ts) (no storage writes, legacy purge, withCredentials, body-omission).
+- Full hospital-core test suite + 567 frontend tests pass; ESLint + Prettier clean.
+- Keycloak migration (S-03) supersedes this when delivered.
 
 ---
 
-### S-03 · Migrate to Keycloak OIDC — make app a resource server ⚠️ Peer review required
+### ✅ S-02 · Replace in-memory token blacklist with Redis
+
+**Delivered on branch `feature/security-v1` (commit `de307b31`).**
+
+- New [RedisTokenBlacklistService.java](hospital-core/src/main/java/com/example/hms/security/RedisTokenBlacklistService.java) using `StringRedisTemplate` + Redis TTL (no scheduled evictor required).
+- [InMemoryTokenBlacklistService.java](hospital-core/src/main/java/com/example/hms/security/InMemoryTokenBlacklistService.java) gated by `@ConditionalOnProperty(app.redis.token-blacklist.enabled=false, matchIfMissing=true)` — opts in via env var in prod.
+- `spring-boot-starter-data-redis` added in `hospital-core/build.gradle`.
+- `redis` service added to `docker-compose.yml` for local dev.
+- 7 unit tests in [RedisTokenBlacklistServiceTest.java](hospital-core/src/test/java/com/example/hms/security/RedisTokenBlacklistServiceTest.java).
+
+---
+
+### ⏸ S-03 · Migrate to Keycloak OIDC — make app a resource server ⚠️ Peer review required
 
 **Files:**
 - `hospital-core/src/main/java/com/example/hms/config/SecurityConfig.java`
@@ -56,29 +58,17 @@
 
 ## Priority 2 — Major (before go-live)
 
-### S-04 · Fix frontend role drift in `permission.service.ts`
+### ✅ S-04 · Fix frontend role drift in `permission.service.ts`
 
-**Files:**
-- `hospital-portal/src/app/core/permission.service.ts`
-- `hospital-portal/src/app/app.routes.ts`
+**Delivered on branch `feature/security-v1` (commit `de307b31`).**
 
-**Finding (confirmed — worse than originally reported):**
-
-| Role | In routes | In `permission.service.ts` |
-|---|---|---|
-| `ROLE_STORE_MANAGER` | inventory, goods-receipt, stock-adjustment | **MISSING** |
-| `ROLE_INVENTORY_CLERK` | inventory, goods-receipt, stock-adjustment | **MISSING** |
-| `ROLE_PHARMACY_VERIFIER` | dispensing, stock-routing | **MISSING** |
-| `ROLE_PHARMACIST` | all 9 pharmacy routes | Only 5 generic permissions — no stock, no routing |
-
-**Fix:**
-- Add `ROLE_STORE_MANAGER`, `ROLE_INVENTORY_CLERK`, and `ROLE_PHARMACY_VERIFIER` permission blocks.
-- Expand `ROLE_PHARMACIST` to include: `Manage Inventory`, `Receive Goods`, `Adjust Stock`, `Route Stock`, `View Pharmacy Registry`.
-- Add `ROLE_CLAIMS_REVIEWER` block for the `/pharmacy/claims` route.
+- Added `ROLE_STORE_MANAGER`, `ROLE_INVENTORY_CLERK`, `ROLE_PHARMACY_VERIFIER`, `ROLE_CLAIMS_REVIEWER` blocks in [permission.service.ts](hospital-portal/src/app/core/permission.service.ts).
+- Expanded `ROLE_PHARMACIST` with `Manage Inventory`, `Receive Goods`, `Adjust Stock`, `Route Stock`, `Verify Dispense`, `View/Manage Medication Catalog`, `View Pharmacy Registry/Checkout/Claims`.
+- 10 new regression tests in [permission.service.spec.ts](hospital-portal/src/app/core/permission.service.spec.ts) including negative cases (e.g. `ROLE_STORE_MANAGER` cannot `Dispense Medications`).
 
 ---
 
-### S-05 · Add field-level encryption for PHI
+### ⏸ S-05 · Add field-level encryption for PHI
 
 **Files:**
 - `hospital-core/src/main/java/com/example/hms/model/Patient.java`
@@ -94,25 +84,26 @@
 
 ---
 
-### S-06 · Audit and remove hardcoded secrets
+### ✅ S-06 · Audit and remove hardcoded secrets
 
-**Files:** `hospital-core/src/main/resources/application.properties`, `docker-compose.yml`, `.env` files
+**Delivered on branch `feature/security-v1` (commit `de307b31`).**
 
-**Fix:**
-- Audit for plaintext `app.jwt.secret`, DB credentials, SMS provider API keys.
-- Replace all with `${ENV_VAR}` placeholders.
-- Confirm Railway deployment reads from environment variables, not committed config files.
+**Audit result:**
+- `application.properties` already routes every secret through env vars (`${JWT_SECRET:…}`, `${MAIL_PASS:}`, `${JWT_PRIVATE_KEY:}`, `${JWT_PUBLIC_KEY:}`, `${JWT_PREVIOUS_PUBLIC_KEY:}`).
+- The one risk was the HMAC dev fallback `dev-secret-change-me-in-production-minimum-256-bits-long!!` being inherited in prod if `JWT_SECRET` was unset.
+- `docker-compose.yml` credentials reviewed — local dev only, not used on Railway/prod.
+
+**Fix:** [application-prod.yml](hospital-core/src/main/resources/application-prod.yml) now overrides `app.jwt.secret: ${JWT_SECRET}` with **no default** — prod boot fails fast when the env var is missing, preventing silent startup with the committed dev secret.
 
 ---
 
 ## Priority 3 — Pre-external-integration gate
 
-### S-07 · Confirm `ROLE_CLAIMS_REVIEWER` in `SecurityConstants`
+### ✅ S-07 · Confirm `ROLE_CLAIMS_REVIEWER` in `SecurityConstants`
 
-**Files:**
-- `hospital-core/src/main/java/com/example/hms/config/SecurityConstants.java`
-- `hospital-portal/src/app/core/permission.service.ts`
+**Delivered on branch `feature/security-v1` (commit `de307b31`).**
 
-**Fix:**
-- Verify `ROLE_CLAIMS_REVIEWER` constant exists in `SecurityConstants.java`.
-- Add `ROLE_CLAIMS_REVIEWER` permission block to `permission.service.ts` with claim-review permissions.
+- Verified constant at [SecurityConstants.java:36](hospital-core/src/main/java/com/example/hms/config/SecurityConstants.java#L36).
+- Verified seeded by Liquibase migration `V43__pharmacy_module_phase1.sql`.
+- Verified used by route guard in [app.routes.ts](hospital-portal/src/app/app.routes.ts#L952).
+- Added `ROLE_CLAIMS_REVIEWER` block to [permission.service.ts](hospital-portal/src/app/core/permission.service.ts) with claim-review + billing-view permissions.

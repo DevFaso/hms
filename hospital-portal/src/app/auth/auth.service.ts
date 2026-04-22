@@ -112,6 +112,17 @@ export class AuthService {
   }
 
   // ---------- Refresh Token ----------
+  // S-01: refresh token now lives in an HttpOnly cookie (`hms_refresh`)
+  // set by the backend. JavaScript cannot read it, which mitigates XSS
+  // theft. The accessor methods below remain for backward compatibility
+  // (they still purge any legacy localStorage value left over from a
+  // previous session) but no new refresh tokens are written to storage.
+
+  /**
+   * @deprecated S-01: refresh tokens are no longer accessible from JS.
+   * Returns any value left over from a pre-S-01 session so the next
+   * refresh call can use it once and migrate to the cookie.
+   */
   getRefreshToken(): string | null {
     if (!this.isBrowser) return null;
     try {
@@ -123,17 +134,15 @@ export class AuthService {
     }
   }
 
-  setRefreshToken(token: string, remember = true): void {
-    if (!this.isBrowser) return;
-    try {
-      if (remember) {
-        localStorage.setItem(REFRESH_TOKEN_KEY, token);
-      } else {
-        sessionStorage.setItem(REFRESH_TOKEN_KEY, token);
-      }
-    } catch {
-      // Storage not available
-    }
+  /**
+   * @deprecated S-01: no-op. The refresh token is delivered exclusively
+   * via an HttpOnly cookie. Any legacy storage is wiped so future calls
+   * always rely on the cookie.
+   */
+  setRefreshToken(_token: string, _remember = true): void {
+    // Intentionally do not persist the refresh token to web storage.
+    // Wipe any legacy value so subsequent reads see only the cookie.
+    this.clearRefreshToken();
   }
 
   clearRefreshToken(): void {
@@ -147,23 +156,24 @@ export class AuthService {
   }
 
   /**
-   * Call POST /api/auth/token/refresh with the stored refresh token.
-   * Returns an Observable of the new token pair.
+   * Call POST /api/auth/token/refresh.
    *
-   * Uses a window-relative absolute URL so the request bypasses the
-   * apiPrefixInterceptor (which would add a double /api prefix).
-   * Note: Angular interceptors still run for same-origin absolute URLs,
-   * so the csrfInterceptor will execute — this is harmless since the
-   * endpoint is authenticated by the signed refresh-token body.
+   * <p>S-01: the refresh token is sent automatically by the browser as the
+   * HttpOnly `hms_refresh` cookie (scoped to /api/auth). We pass
+   * `withCredentials: true` so cross-origin cookies are included.
+   *
+   * <p>If a legacy localStorage refresh token still exists from a pre-S-01
+   * session, it is forwarded once in the body so the backend can rotate it
+   * and switch the user over to the cookie-based flow.
    */
   refreshTokenRequest(): Observable<{ accessToken: string; refreshToken: string }> {
-    const refreshToken = this.getRefreshToken();
-    // Build an absolute URL at runtime so we always resolve against the current
-    // origin without duplicating the /api prefix that apiPrefixInterceptor adds.
+    const legacyRefreshToken = this.getRefreshToken();
     const baseUrl = this.isBrowser ? `${globalThis.location.origin}/api` : '/api';
+    const body = legacyRefreshToken ? { refreshToken: legacyRefreshToken } : {};
     return this.http.post<{ accessToken: string; refreshToken: string }>(
       `${baseUrl}/auth/token/refresh`,
-      { refreshToken },
+      body,
+      { withCredentials: true },
     );
   }
 

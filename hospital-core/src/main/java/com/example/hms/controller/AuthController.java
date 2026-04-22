@@ -25,6 +25,7 @@ import com.example.hms.security.LoginAttemptService;
 import com.example.hms.service.PasswordHistoryService;
 import com.example.hms.service.MfaService;
 import com.example.hms.security.WsTicketService;
+import com.example.hms.security.RefreshTokenCookieService;
 import com.example.hms.security.TokenBlacklistService;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.UserCredentialLifecycleService;
@@ -90,6 +91,7 @@ public class AuthController {
     private final PasswordHistoryService passwordHistoryService;
     private final MfaService mfaService;
     private final WsTicketService wsTicketService;
+    private final RefreshTokenCookieService refreshTokenCookieService;
     private final String frontendBaseUrl;
     private final List<String> mfaRequiredRoles;
 
@@ -106,6 +108,7 @@ public class AuthController {
             PasswordHistoryService passwordHistoryService,
             MfaService mfaService,
             WsTicketService wsTicketService,
+            RefreshTokenCookieService refreshTokenCookieService,
             @Value("${app.frontend.base-url}") String frontendBaseUrl,
             @Value("${app.mfa.required-roles:}") List<String> mfaRequiredRoles) {
         this.userRepository = userRepository;
@@ -121,6 +124,7 @@ public class AuthController {
         this.passwordHistoryService = passwordHistoryService;
         this.mfaService = mfaService;
         this.wsTicketService = wsTicketService;
+        this.refreshTokenCookieService = refreshTokenCookieService;
         this.frontendBaseUrl = frontendBaseUrl;
         this.mfaRequiredRoles = mfaRequiredRoles;
     }
@@ -165,7 +169,8 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<Object> authenticateUser(
-            @Parameter(description = "Login request payload", required = true) @Valid @RequestBody LoginRequest loginRequest) {
+            @Parameter(description = "Login request payload", required = true) @Valid @RequestBody LoginRequest loginRequest,
+            HttpServletResponse httpResponse) {
         long start = System.nanoTime();
         log.info("🔐 [LOGIN] Attempting login for user='{}' at {}", loginRequest.getUsername(),
                 java.time.Instant.now());
@@ -319,6 +324,8 @@ public class AuthController {
 
             long elapsedMs = (System.nanoTime() - start) / 1_000_000;
             log.info("🔐 [LOGIN] Success user='{}' effectiveRoles={} in {}ms", loginRequest.getUsername(), effectiveRoles, elapsedMs);
+            // S-01: deliver refresh token via HttpOnly cookie (in addition to JSON body during rollout)
+            writeRefreshCookie(httpResponse, refreshToken);
             return ResponseEntity.ok(body);
 
         } catch (BadCredentialsException ex) {
@@ -437,7 +444,7 @@ public class AuthController {
     @PostMapping("/logout")
     @Operation(summary = "Logout current user", description = "Clears authentication context on the server side (stateless JWT requires client to discard tokens).")
     @ApiResponse(responseCode = "200", description = "Logout successful", content = @Content(schema = @Schema(implementation = MessageResponse.class)))
-    public ResponseEntity<Object> logout(HttpServletRequest request) {
+    public ResponseEntity<Object> logout(HttpServletRequest request, HttpServletResponse response) {
         // Blacklist the current access token so it cannot be reused
         String bearerToken = request.getHeader("Authorization");
         String username = null;
@@ -463,6 +470,8 @@ public class AuthController {
                 log.debug("[LOGOUT] Could not extract jti from token: {}", ex.getMessage());
             }
         }
+        // S-01: clear the HttpOnly refresh-token cookie
+        refreshTokenCookieService.clear(response);
         SecurityContextHolder.clearContext();
         return ResponseEntity.ok(new MessageResponse("Logged out successfully."));
     }
@@ -486,11 +495,18 @@ public class AuthController {
     @ApiResponse(responseCode = "200", description = "Tokens refreshed")
     @ApiResponse(responseCode = "401", description = "Refresh token missing, invalid, or expired")
     public ResponseEntity<Object> refreshToken(
-            @RequestBody(required = false) java.util.Map<String, String> body) {
+            @RequestBody(required = false) java.util.Map<String, String> body,
+            HttpServletRequest request,
+            HttpServletResponse response) {
 
-        String refreshToken = body != null ? body.get("refreshToken") : null;
+        // S-01: prefer the HttpOnly refresh cookie over a body-borne refresh token.
+        // Body-based refresh remains supported as a legacy fallback during rollout.
+        String refreshToken = refreshTokenCookieService.read(request);
+        if (refreshToken == null) {
+            refreshToken = body != null ? body.get("refreshToken") : null;
+        }
         if (refreshToken == null || refreshToken.isBlank()) {
-            log.warn("🔄 [REFRESH] Missing refreshToken in request body");
+            log.warn("🔄 [REFRESH] Missing refresh token (cookie + body both empty)");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                     .body(new MessageResponse("Refresh token is required."));
         }
@@ -562,6 +578,9 @@ public class AuthController {
 
         // Include fresh hospital context so the frontend can re-hydrate
         var hospitalContext = resolveHospitalContext(user.getId());
+
+        // S-01: rotate the HttpOnly refresh-token cookie
+        writeRefreshCookie(response, newRefreshToken);
 
         return ResponseEntity.ok(JwtResponse.builder()
                 .accessToken(newAccessToken)
@@ -950,6 +969,24 @@ public class AuthController {
             return false;
         }
         return roles.stream().anyMatch(mfaRequiredRoles::contains);
+    }
+
+    /**
+     * S-01: writes the refresh token into an HttpOnly cookie so it is not
+     * accessible from browser JavaScript. MaxAge is derived from the token's
+     * own {@code exp} claim so the cookie expires in lockstep with the JWT.
+     */
+    private void writeRefreshCookie(HttpServletResponse response, String refreshToken) {
+        if (response == null || refreshToken == null || refreshToken.isBlank()) {
+            return;
+        }
+        try {
+            long expMs = jwtTokenProvider.getExpiration(refreshToken).getTime();
+            long maxAgeMs = Math.max(0L, expMs - System.currentTimeMillis());
+            refreshTokenCookieService.write(response, refreshToken, maxAgeMs);
+        } catch (Exception ex) {
+            log.warn("Failed to set refresh cookie: {}", ex.getMessage());
+        }
     }
 
     private HospitalContext resolveHospitalContext(UUID userId) {
