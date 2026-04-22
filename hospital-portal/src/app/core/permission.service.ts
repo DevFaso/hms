@@ -276,7 +276,58 @@ export class PermissionService {
       'View Dashboard',
       'View Prescriptions',
       'Dispense Medications',
+      'Verify Dispense',
       'View Patient Records',
+      'View Notifications',
+      // Medication catalog
+      'View Medication Catalog',
+      'Manage Medication Catalog',
+      // Pharmacy registry
+      'View Pharmacy Registry',
+      // Inventory + stock
+      'View Inventory',
+      'Manage Inventory',
+      'Receive Goods',
+      'Adjust Stock',
+      'Route Stock',
+      // Pharmacy financials (read + checkout)
+      'View Pharmacy Checkout',
+      'View Pharmacy Claims',
+    ],
+    // ── Pharmacy sub-roles (backend: SecurityConstants) ─────────────
+    ROLE_STORE_MANAGER: [
+      'View Dashboard',
+      'View Medication Catalog',
+      'View Pharmacy Registry',
+      'View Inventory',
+      'Manage Inventory',
+      'Receive Goods',
+      'Adjust Stock',
+      'View Notifications',
+    ],
+    ROLE_INVENTORY_CLERK: [
+      'View Dashboard',
+      'View Medication Catalog',
+      'View Inventory',
+      'Receive Goods',
+      'Adjust Stock',
+      'View Notifications',
+    ],
+    ROLE_PHARMACY_VERIFIER: [
+      'View Dashboard',
+      'View Prescriptions',
+      'Dispense Medications',
+      'Verify Dispense',
+      'Route Stock',
+      'View Patient Records',
+      'View Notifications',
+    ],
+    ROLE_CLAIMS_REVIEWER: [
+      'View Dashboard',
+      'View Pharmacy Claims',
+      'Manage Pharmacy Claims',
+      'View Billing',
+      'View Billing Summary',
       'View Notifications',
     ],
     ROLE_RADIOLOGIST: [

@@ -55,6 +55,23 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Redis (token blacklist, shared across instances) ──────
+  # Enable in the backend with REDIS_TOKEN_BLACKLIST_ENABLED=true and
+  # REDIS_HOST=redis. No auth is configured here — treat as local/dev only.
+  redis:
+    image: redis:7-alpine
+    container_name: hms-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # ── Prometheus ──────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:v2.53.0
@@ -90,6 +107,7 @@ volumes:
   pgdata_uat:
   prometheus_data:
   grafana_data:
+  redis_data:
   # Named volume for backend uploaded files (profile images, attachments, etc.).
   # To use this locally, mount it in your backend service:
   #   volumes:

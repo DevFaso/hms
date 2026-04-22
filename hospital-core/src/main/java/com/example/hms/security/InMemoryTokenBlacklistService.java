@@ -1,6 +1,7 @@
 package com.example.hms.security;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -11,12 +12,20 @@ import java.util.concurrent.ConcurrentHashMap;
  * In-memory token blacklist backed by a {@link ConcurrentHashMap}.
  * Expired entries are evicted every 5 minutes by a scheduled task.
  *
- * <p><strong>Limitation:</strong> state is lost on restart and not shared
- * across instances.  Replace with a Redis-backed implementation when
- * horizontal scaling is required.
+ * <p><strong>Default fallback only.</strong> Active when
+ * {@code app.redis.token-blacklist.enabled} is {@code false} or unset.
+ *
+ * <p><strong>Limitation:</strong> state is lost on restart and is not shared
+ * across instances. Production deployments must enable the Redis-backed
+ * implementation ({@link RedisTokenBlacklistService}) by setting
+ * {@code app.redis.token-blacklist.enabled=true}.
  */
 @Slf4j
 @Service
+@ConditionalOnProperty(
+        name = "app.redis.token-blacklist.enabled",
+        havingValue = "false",
+        matchIfMissing = true)
 public class InMemoryTokenBlacklistService implements TokenBlacklistService {
 
     /** jti → expiration epoch-millis */

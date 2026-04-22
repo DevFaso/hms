@@ -65,6 +65,12 @@ app:
     enabled: false
     synthetic:
       enabled: false
+  # ─── JWT (production: no defaults — env vars are required) ────────────────
+  # JWT_SECRET must be set in Railway env. No dev-default fallback here — the
+  # application fails fast at startup rather than boot with the committed
+  # development secret defined in application.properties.
+  jwt:
+    secret: ${JWT_SECRET}
   security:
     totp-encryption-key: ${TOTP_ENCRYPTION_KEY}
   # Frontend base URL used in emails, activation links, and onboarding flows.
