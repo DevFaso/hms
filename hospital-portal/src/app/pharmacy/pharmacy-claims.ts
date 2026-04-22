@@ -136,6 +136,7 @@ export class PharmacyClaimsComponent implements OnInit {
     a.href = url;
     a.download = filename;
     a.click();
-    URL.revokeObjectURL(url);
+    // Defer revoke so Safari/WebKit has time to start reading the blob.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 }

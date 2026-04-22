@@ -62,8 +62,8 @@
 
 - Cycle : `DRAFT → SUBMITTED → ACCEPTED → PAID` (ou `REJECTED`).
 - Tenant-scoped : chaque requête est validée contre l'hôpital actif de l'utilisateur.
-- Export CSV : `GET /pharmacy/claims/export/csv?statuses=SUBMITTED,ACCEPTED`
-- Export FHIR : `GET /pharmacy/claims/export/fhir?statuses=...`
+- Export CSV : `GET /pharmacy/claims/export/csv?status=SUBMITTED&status=ACCEPTED`
+- Export FHIR : `GET /pharmacy/claims/export/fhir?status=SUBMITTED&status=ACCEPTED`
 - Tous les changements de statut émettent un événement d'audit `CLAIM_SUBMITTED`.
 
 ## 6. Couverture audit (T-69)

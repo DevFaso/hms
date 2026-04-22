@@ -569,7 +569,7 @@ class PharmacyPaymentServiceImplTest {
     void listByDispenseDelegates() {
         UUID id = UUID.randomUUID();
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(paymentRepository.findByDispenseId(eq(id), any()))
+        when(paymentRepository.findByDispenseIdAndHospital_Id(eq(id), any(), any()))
                 .thenReturn(org.springframework.data.domain.Page.empty());
 
         assertThat(service.listByDispense(id, org.springframework.data.domain.PageRequest.of(0, 10)))
@@ -581,7 +581,7 @@ class PharmacyPaymentServiceImplTest {
     void listByPatientDelegates() {
         UUID id = UUID.randomUUID();
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(paymentRepository.findByPatientId(eq(id), any()))
+        when(paymentRepository.findByPatientIdAndHospital_Id(eq(id), any(), any()))
                 .thenReturn(org.springframework.data.domain.Page.empty());
 
         assertThat(service.listByPatient(id, org.springframework.data.domain.PageRequest.of(0, 10)))

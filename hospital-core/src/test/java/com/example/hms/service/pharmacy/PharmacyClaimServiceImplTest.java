@@ -542,7 +542,7 @@ class PharmacyClaimServiceImplTest {
     @DisplayName("listByDispense: delegates to repository")
     void listByDispenseDelegates() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(claimRepository.findByDispenseId(any(), any()))
+        when(claimRepository.findByDispenseIdAndHospitalId(any(), any(), any()))
                 .thenReturn(org.springframework.data.domain.Page.empty());
 
         assertThat(service.listByDispense(UUID.randomUUID(),
@@ -553,7 +553,7 @@ class PharmacyClaimServiceImplTest {
     @DisplayName("listByPatient: delegates to repository")
     void listByPatientDelegates() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(claimRepository.findByPatientId(any(), any()))
+        when(claimRepository.findByPatientIdAndHospitalId(any(), any(), any()))
                 .thenReturn(org.springframework.data.domain.Page.empty());
 
         assertThat(service.listByPatient(UUID.randomUUID(),

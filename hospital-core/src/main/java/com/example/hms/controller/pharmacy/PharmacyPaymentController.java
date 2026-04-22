@@ -70,10 +70,12 @@ public class PharmacyPaymentController {
                 pharmacyPaymentService.listByDispense(dispenseId, pageable)));
     }
 
+    // PATIENT role intentionally excluded: PATIENT callers use the patient-portal `/me` flow
+    // which resolves the patient ID from the JWT, preventing IDOR via arbitrary {patientId}.
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'CASHIER', 'BILLING_SPECIALIST', 'PATIENT', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'CASHIER', 'BILLING_SPECIALIST', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "List payments by patient",
-            description = "Paginated list of payments for a patient — powers the patient portal invoice view")
+            description = "Paginated list of payments for a patient \u2014 staff-facing invoice view")
     @ApiResponse(responseCode = "200", description = "Payments retrieved")
     public ResponseEntity<ApiResponseWrapper<Page<PharmacyPaymentResponseDTO>>> listByPatient(
             @PathVariable UUID patientId,

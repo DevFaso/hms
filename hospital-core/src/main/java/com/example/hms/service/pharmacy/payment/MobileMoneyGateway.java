@@ -7,7 +7,7 @@ import java.math.BigDecimal;
  * Moov Money, Airtel Money...). Implementations charge a patient's mobile-money
  * wallet and return a provider-specific transaction reference.
  *
- * <p>The MVP ships a mock adapter that always succeeds and returns a deterministic
+ * <p>The MVP ships a mock adapter that always succeeds and returns a generated
  * reference. Real providers are added by creating additional {@link MobileMoneyGateway}
  * beans and selecting one by {@link #providerCode()}.
  */

@@ -2,7 +2,6 @@ package com.example.hms.service.pharmacy.payment;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
@@ -18,8 +17,7 @@ import java.util.UUID;
  * it throws {@link MobileMoneyException} just like a real provider would.
  */
 @Component
-@Primary
-@ConditionalOnMissingBean(name = "realMobileMoneyGateway")
+@ConditionalOnMissingBean(value = MobileMoneyGateway.class, ignored = MockMobileMoneyGateway.class)
 @Slf4j
 public class MockMobileMoneyGateway implements MobileMoneyGateway {
 
@@ -42,8 +40,16 @@ public class MockMobileMoneyGateway implements MobileMoneyGateway {
             throw new MobileMoneyException("amount must be positive");
         }
         String ref = "MOCK-" + UUID.randomUUID();
-        log.info("Mock mobile-money charge: phone={}, amount={} {}, ref={}",
-                request.customerPhone(), request.amount(), request.currency(), ref);
+        // Mask the customer phone to avoid leaking PII to centralized logs.
+        log.debug("Mock mobile-money charge: phone={}, amount={} {}, ref={}",
+                maskPhone(request.customerPhone()), request.amount(), request.currency(), ref);
         return new MobileMoneyCharge(ref, "COMPLETED", request.amount(), request.currency());
+    }
+
+    private static String maskPhone(String phone) {
+        if (phone == null || phone.length() < 4) {
+            return "****";
+        }
+        return "***" + phone.substring(phone.length() - 2);
     }
 }

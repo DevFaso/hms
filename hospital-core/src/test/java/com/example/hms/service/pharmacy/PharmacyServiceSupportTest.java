@@ -1,7 +1,12 @@
 package com.example.hms.service.pharmacy;
 
+import com.example.hms.enums.AuditEventType;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Patient;
+import com.example.hms.model.User;
 import com.example.hms.model.pharmacy.Pharmacy;
+import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.SmsService;
@@ -13,8 +18,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
@@ -23,6 +31,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("PharmacyServiceSupport")
@@ -101,10 +110,11 @@ class PharmacyServiceSupportTest {
     }
 
     @Test
-    @DisplayName("handles null pharmacy and null medication gracefully")
+    @DisplayName("no-op when medication name is null or blank")
     void handlesNulls() {
         support.notifyReadyForPickup(patient(), null, null);
-        verify(smsService).send(eq("+22670000000"), anyString());
+        support.notifyReadyForPickup(patient(), pharmacy("X"), "   ");
+        verifyNoInteractions(smsService);
     }
 
     @Test
@@ -175,6 +185,144 @@ class PharmacyServiceSupportTest {
 
         support.notifyRefillReminder(patient(), "Med", 3);
 
+        verify(smsService).send(anyString(), anyString());
+    }
+
+    // ---------- Additional branch coverage ----------
+
+    @Test
+    @DisplayName("resolveCurrentUser: throws BusinessException when user id is null")
+    void resolveCurrentUserThrowsWhenIdNull() {
+        when(roleValidator.getCurrentUserId()).thenReturn(null);
+        assertThatThrownBy(() -> support.resolveCurrentUser())
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("resolveCurrentUser: throws ResourceNotFoundException when user not in repo")
+    void resolveCurrentUserThrowsWhenMissing() {
+        UUID id = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(id);
+        when(userRepository.findById(id)).thenReturn(Optional.empty());
+        assertThatThrownBy(() -> support.resolveCurrentUser())
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("resolveCurrentUser: returns user on happy path")
+    void resolveCurrentUserReturnsUser() {
+        UUID id = UUID.randomUUID();
+        User u = new User();
+        u.setId(id);
+        when(roleValidator.getCurrentUserId()).thenReturn(id);
+        when(userRepository.findById(id)).thenReturn(Optional.of(u));
+        assertThat(support.resolveCurrentUser()).isSameAs(u);
+    }
+
+    @Test
+    @DisplayName("logAudit: delegates to audit service with SUCCESS status")
+    void logAuditDelegates() {
+        UUID userId = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        support.logAudit(AuditEventType.DISPENSE_CREATED, "desc", "res-1", "Dispense");
+        verify(auditEventLogService).logEvent(any(AuditEventRequestDTO.class));
+    }
+
+    @Test
+    @DisplayName("logAudit: swallows audit-service failure")
+    void logAuditSwallowsFailure() {
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        doThrow(new RuntimeException("audit down"))
+                .when(auditEventLogService).logEvent(any());
+        // Must not throw
+        support.logAudit(AuditEventType.DISPENSE_CREATED, "d", "r", "e");
+        verify(auditEventLogService).logEvent(any());
+    }
+
+    @Test
+    @DisplayName("notifyReadyForPickup: uses empty first name when null")
+    void pickupEmptyFirstName() {
+        Patient p = patient();
+        p.setFirstName(null);
+        support.notifyReadyForPickup(p, pharmacy("X"), "Med");
+        verify(smsService).send(anyString(), contains("(Med)"));
+    }
+
+    @Test
+    @DisplayName("notifyReadyForPickup: handles null pharmacy name")
+    void pickupNullPharmacyName() {
+        Pharmacy ph = new Pharmacy();
+        ph.setId(UUID.randomUUID());
+        ph.setName(null);
+        support.notifyReadyForPickup(patient(), ph, "Med");
+        verify(smsService).send(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("notifyOutOfStock: no-op when patient is null")
+    void outOfStockNullPatient() {
+        support.notifyOutOfStock(null, "Med", "msg");
+        verifyNoInteractions(smsService);
+    }
+
+    @Test
+    @DisplayName("notifyOutOfStock: no-op when smsService is null")
+    void outOfStockNullSmsService() {
+        PharmacyServiceSupport s = new PharmacyServiceSupport(
+                roleValidator, userRepository, auditEventLogService, null);
+        s.notifyOutOfStock(patient(), "Med", "msg");
+        verify(smsService, never()).send(any(), any());
+    }
+
+    @Test
+    @DisplayName("notifyOutOfStock: no-op when phone is blank")
+    void outOfStockBlankPhone() {
+        Patient p = patient();
+        p.setPhoneNumberPrimary("  ");
+        support.notifyOutOfStock(p, "Med", "msg");
+        verifyNoInteractions(smsService);
+    }
+
+    @Test
+    @DisplayName("notifyOutOfStock: handles null firstName, null medication, null routing")
+    void outOfStockHandlesAllNulls() {
+        Patient p = patient();
+        p.setFirstName(null);
+        support.notifyOutOfStock(p, null, null);
+        verify(smsService).send(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("notifyRefillReminder: no-op when patient is null")
+    void refillReminderNullPatient() {
+        support.notifyRefillReminder(null, "Med", 3);
+        verifyNoInteractions(smsService);
+    }
+
+    @Test
+    @DisplayName("notifyRefillReminder: no-op when smsService is null")
+    void refillReminderNullSmsService() {
+        PharmacyServiceSupport s = new PharmacyServiceSupport(
+                roleValidator, userRepository, auditEventLogService, null);
+        s.notifyRefillReminder(patient(), "Med", 3);
+        verify(smsService, never()).send(any(), any());
+    }
+
+    @Test
+    @DisplayName("notifyRefillReminder: no-op when phone is blank")
+    void refillReminderBlankPhone() {
+        Patient p = patient();
+        p.setPhoneNumberPrimary("  ");
+        support.notifyRefillReminder(p, "Med", 3);
+        verifyNoInteractions(smsService);
+    }
+
+    @Test
+    @DisplayName("notifyRefillReminder: handles null firstName and null medication")
+    void refillReminderHandlesNulls() {
+        Patient p = patient();
+        p.setFirstName(null);
+        support.notifyRefillReminder(p, null, 7);
         verify(smsService).send(anyString(), anyString());
     }
 }

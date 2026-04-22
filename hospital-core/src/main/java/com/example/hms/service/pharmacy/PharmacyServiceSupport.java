@@ -79,12 +79,15 @@ class PharmacyServiceSupport {
         if (smsService == null || patient == null) {
             return;
         }
+        if (medicationName == null || medicationName.isBlank()) {
+            return;
+        }
         String phone = patient.getPhoneNumberPrimary();
         if (phone == null || phone.isBlank()) {
             return;
         }
         String firstName = patient.getFirstName() != null ? patient.getFirstName() : "";
-        String medication = medicationName != null ? medicationName : "";
+        String medication = medicationName;
         String pharmacyName = (pharmacy != null && pharmacy.getName() != null) ? pharmacy.getName() : "";
         String message = String.format(
                 "Bonjour %s, votre ordonnance (%s) est prête à être récupérée à %s. Merci.",

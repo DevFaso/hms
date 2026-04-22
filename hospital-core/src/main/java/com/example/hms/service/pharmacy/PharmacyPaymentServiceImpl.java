@@ -130,7 +130,9 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         PharmacyPayment entity = paymentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("pharmacy.payment.notfound"));
-        if (entity.getHospital() == null || !hospitalId.equals(entity.getHospital().getId())) {
+        // SUPER_ADMIN with no active hospital may read across hospitals; otherwise enforce scope.
+        if (hospitalId != null
+                && (entity.getHospital() == null || !hospitalId.equals(entity.getHospital().getId()))) {
             throw new ResourceNotFoundException("pharmacy.payment.notfound");
         }
         return paymentMapper.toResponseDTO(entity);
@@ -139,15 +141,24 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     @Override
     @Transactional(readOnly = true)
     public Page<PharmacyPaymentResponseDTO> listByDispense(UUID dispenseId, Pageable pageable) {
-        roleValidator.requireActiveHospitalId();
-        return paymentRepository.findByDispenseId(dispenseId, pageable).map(paymentMapper::toResponseDTO);
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            // SUPER_ADMIN unscoped read (no active hospital).
+            return paymentRepository.findByDispenseId(dispenseId, pageable).map(paymentMapper::toResponseDTO);
+        }
+        return paymentRepository.findByDispenseIdAndHospital_Id(dispenseId, hospitalId, pageable)
+                .map(paymentMapper::toResponseDTO);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<PharmacyPaymentResponseDTO> listByPatient(UUID patientId, Pageable pageable) {
-        roleValidator.requireActiveHospitalId();
-        return paymentRepository.findByPatientId(patientId, pageable).map(paymentMapper::toResponseDTO);
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            return paymentRepository.findByPatientId(patientId, pageable).map(paymentMapper::toResponseDTO);
+        }
+        return paymentRepository.findByPatientIdAndHospital_Id(patientId, hospitalId, pageable)
+                .map(paymentMapper::toResponseDTO);
     }
 
     private void validateCreateRequest(PharmacyPaymentRequestDTO dto, UUID hospitalId) {

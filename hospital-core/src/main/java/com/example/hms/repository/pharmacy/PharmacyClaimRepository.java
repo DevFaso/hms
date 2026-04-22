@@ -17,6 +17,10 @@ public interface PharmacyClaimRepository extends JpaRepository<PharmacyClaim, UU
 
     Page<PharmacyClaim> findByPatientId(UUID patientId, Pageable pageable);
 
+    Page<PharmacyClaim> findByDispenseIdAndHospitalId(UUID dispenseId, UUID hospitalId, Pageable pageable);
+
+    Page<PharmacyClaim> findByPatientIdAndHospitalId(UUID patientId, UUID hospitalId, Pageable pageable);
+
     Page<PharmacyClaim> findByHospitalId(UUID hospitalId, Pageable pageable);
 
     Page<PharmacyClaim> findByHospitalIdAndClaimStatus(UUID hospitalId,
