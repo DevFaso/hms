@@ -137,8 +137,9 @@ class PharmacyClaimServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        PharmacyClaimRequestDTO dto = request();
 
-        assertThatThrownBy(() -> service.createClaim(request()))
+        assertThatThrownBy(() -> service.createClaim(dto))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -179,8 +180,9 @@ class PharmacyClaimServiceImplTest {
         existing.setClaimStatus(PharmacyClaimStatus.SUBMITTED);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
+        UUID claimId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.submitClaim(UUID.randomUUID()))
+        assertThatThrownBy(() -> service.submitClaim(claimId))
                 .isInstanceOf(BusinessException.class);
         verify(claimRepository, never()).save(any());
     }
@@ -204,7 +206,8 @@ class PharmacyClaimServiceImplTest {
     @Test
     @DisplayName("markRejected: requires a reason")
     void rejectRequiresReason() {
-        assertThatThrownBy(() -> service.markRejected(UUID.randomUUID(), " "))
+        UUID claimId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.markRejected(claimId, " "))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("reason");
     }
@@ -231,8 +234,9 @@ class PharmacyClaimServiceImplTest {
         existing.setClaimStatus(PharmacyClaimStatus.SUBMITTED);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
+        UUID claimId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.markPaid(UUID.randomUUID(), null))
+        assertThatThrownBy(() -> service.markPaid(claimId, null))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -246,8 +250,9 @@ class PharmacyClaimServiceImplTest {
 
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
+        UUID claimId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.getClaim(UUID.randomUUID()))
+        assertThatThrownBy(() -> service.getClaim(claimId))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -291,8 +296,9 @@ class PharmacyClaimServiceImplTest {
     void rejectsDispenseNotFound() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.empty());
+        PharmacyClaimRequestDTO dto = request();
 
-        assertThatThrownBy(() -> service.createClaim(request()))
+        assertThatThrownBy(() -> service.createClaim(dto))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -304,8 +310,9 @@ class PharmacyClaimServiceImplTest {
         dispense.setPatient(other);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        PharmacyClaimRequestDTO dto = request();
 
-        assertThatThrownBy(() -> service.createClaim(request()))
+        assertThatThrownBy(() -> service.createClaim(dto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Patient");
     }
@@ -316,8 +323,9 @@ class PharmacyClaimServiceImplTest {
         dispense.setPatient(null);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        PharmacyClaimRequestDTO dto = request();
 
-        assertThatThrownBy(() -> service.createClaim(request()))
+        assertThatThrownBy(() -> service.createClaim(dto))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -327,8 +335,9 @@ class PharmacyClaimServiceImplTest {
         dispense.setPharmacy(null);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        PharmacyClaimRequestDTO dto = request();
 
-        assertThatThrownBy(() -> service.createClaim(request()))
+        assertThatThrownBy(() -> service.createClaim(dto))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -338,8 +347,9 @@ class PharmacyClaimServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        PharmacyClaimRequestDTO dto = request();
 
-        assertThatThrownBy(() -> service.createClaim(request()))
+        assertThatThrownBy(() -> service.createClaim(dto))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -350,8 +360,9 @@ class PharmacyClaimServiceImplTest {
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        PharmacyClaimRequestDTO dto = request();
 
-        assertThatThrownBy(() -> service.createClaim(request()))
+        assertThatThrownBy(() -> service.createClaim(dto))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -389,8 +400,9 @@ class PharmacyClaimServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
         when(roleValidator.getCurrentUserId()).thenReturn(null);
+        UUID claimId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.submitClaim(UUID.randomUUID()))
+        assertThatThrownBy(() -> service.submitClaim(claimId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("current user");
     }
@@ -403,8 +415,9 @@ class PharmacyClaimServiceImplTest {
         when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
+        UUID claimId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.submitClaim(UUID.randomUUID()))
+        assertThatThrownBy(() -> service.submitClaim(claimId))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -427,7 +440,8 @@ class PharmacyClaimServiceImplTest {
     @Test
     @DisplayName("markRejected: rejects null reason")
     void rejectRequiresNonNullReason() {
-        assertThatThrownBy(() -> service.markRejected(UUID.randomUUID(), null))
+        UUID claimId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.markRejected(claimId, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("reason");
     }
@@ -471,8 +485,9 @@ class PharmacyClaimServiceImplTest {
         PharmacyClaim existing = draftClaim();
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
+        UUID claimId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.markAccepted(UUID.randomUUID(), null))
+        assertThatThrownBy(() -> service.markAccepted(claimId, null))
                 .isInstanceOf(BusinessException.class);
     }
 
@@ -483,8 +498,9 @@ class PharmacyClaimServiceImplTest {
         existing.setHospital(null);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(claimRepository.findById(any())).thenReturn(Optional.of(existing));
+        UUID claimId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.getClaim(UUID.randomUUID()))
+        assertThatThrownBy(() -> service.getClaim(claimId))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -493,8 +509,9 @@ class PharmacyClaimServiceImplTest {
     void loadRejectsNotFound() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(claimRepository.findById(any())).thenReturn(Optional.empty());
+        UUID claimId = UUID.randomUUID();
 
-        assertThatThrownBy(() -> service.getClaim(UUID.randomUUID()))
+        assertThatThrownBy(() -> service.getClaim(claimId))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 

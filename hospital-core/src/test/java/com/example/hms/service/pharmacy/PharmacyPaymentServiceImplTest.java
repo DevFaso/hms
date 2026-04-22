@@ -319,8 +319,9 @@ class PharmacyPaymentServiceImplTest {
     void rejectsDispenseNotFound() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.empty());
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
 
-        assertThatThrownBy(() -> service.createPayment(request(PharmacyPaymentMethod.CASH)))
+        assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -330,8 +331,9 @@ class PharmacyPaymentServiceImplTest {
         dispense.setPatient(null);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
 
-        assertThatThrownBy(() -> service.createPayment(request(PharmacyPaymentMethod.CASH)))
+        assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("Patient");
     }
@@ -342,8 +344,9 @@ class PharmacyPaymentServiceImplTest {
         dispense.setPharmacy(null);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
 
-        assertThatThrownBy(() -> service.createPayment(request(PharmacyPaymentMethod.CASH)))
+        assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -353,8 +356,9 @@ class PharmacyPaymentServiceImplTest {
         pharmacy.setHospital(null);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
 
-        assertThatThrownBy(() -> service.createPayment(request(PharmacyPaymentMethod.CASH)))
+        assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -364,8 +368,9 @@ class PharmacyPaymentServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.empty());
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
 
-        assertThatThrownBy(() -> service.createPayment(request(PharmacyPaymentMethod.CASH)))
+        assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -376,8 +381,9 @@ class PharmacyPaymentServiceImplTest {
         when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.empty());
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
 
-        assertThatThrownBy(() -> service.createPayment(request(PharmacyPaymentMethod.CASH)))
+        assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -389,8 +395,9 @@ class PharmacyPaymentServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(roleValidator.getCurrentUserId()).thenReturn(null);
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
 
-        assertThatThrownBy(() -> service.createPayment(request(PharmacyPaymentMethod.CASH)))
+        assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("current user");
     }
@@ -421,8 +428,9 @@ class PharmacyPaymentServiceImplTest {
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(roleValidator.getCurrentUserId()).thenReturn(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.empty());
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
 
-        assertThatThrownBy(() -> service.createPayment(request(PharmacyPaymentMethod.CASH)))
+        assertThatThrownBy(() -> service.createPayment(dto))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 

@@ -16,25 +16,27 @@ package com.example.hms.service.pharmacy.partner;
  */
 public final class PartnerSmsTemplates {
 
+    private static final String RX_PREFIX = "HMS Rx ";
+
     private PartnerSmsTemplates() {
     }
 
     /** Outbound: new prescription offered to a partner pharmacy. */
     public static String prescriptionOffer(String refToken, String medicationName, String patientInitials) {
-        return "HMS Rx " + refToken + " : " + medicationName
+        return RX_PREFIX + refToken + " : " + medicationName
                 + " pour " + patientInitials
                 + ". Répondez 1 pour accepter, 2 pour refuser.";
     }
 
     /** Outbound: reminder if no reply received in 2 hours. */
     public static String reminder(String refToken) {
-        return "HMS Rx " + refToken + " : rappel, aucune réponse reçue."
+        return RX_PREFIX + refToken + " : rappel, aucune réponse reçue."
                 + " Répondez 1 pour accepter, 2 pour refuser.";
     }
 
     /** Outbound: auto-rejection notice after timeout expiry. */
     public static String autoRejected(String refToken) {
-        return "HMS Rx " + refToken + " : délai dépassé, ordonnance refermée."
+        return RX_PREFIX + refToken + " : délai dépassé, ordonnance refermée."
                 + " Merci.";
     }
 

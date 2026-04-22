@@ -153,7 +153,7 @@ class PartnerExchangeServiceBranchesTest {
         assertThat(r.autoRejected()).isEqualTo(1);
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.REJECTED);
         verify(prescriptionRepository, never()).save(any());
-        verify(channel).sendAutoRejected(eq(decision), eq(partner));
+        verify(channel).sendAutoRejected(decision, partner);
     }
 
     @Test

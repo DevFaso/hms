@@ -13,8 +13,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -25,7 +23,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -158,8 +155,8 @@ class PartnerExchangeServiceTest {
         PartnerExchangeService.TimeoutSweepResult r = service.sweepTimeouts();
 
         assertThat(r.reminded()).isEqualTo(1);
-        assertThat(r.autoRejected()).isEqualTo(0);
-        verify(channel).sendReminder(eq(decision), eq(partner));
+        assertThat(r.autoRejected()).isZero();
+        verify(channel).sendReminder(decision, partner);
     }
 
     @Test
@@ -177,6 +174,6 @@ class PartnerExchangeServiceTest {
         assertThat(r.autoRejected()).isEqualTo(1);
         assertThat(decision.getStatus()).isEqualTo(RoutingDecisionStatus.REJECTED);
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PARTNER_REJECTED);
-        verify(channel).sendAutoRejected(eq(decision), eq(partner));
+        verify(channel).sendAutoRejected(decision, partner);
     }
 }

@@ -1,7 +1,6 @@
 package com.example.hms.service.pharmacy;
 
 import com.example.hms.enums.DispenseStatus;
-import com.example.hms.model.Prescription;
 import com.example.hms.model.pharmacy.Dispense;
 import com.example.hms.repository.pharmacy.DispenseRepository;
 import lombok.RequiredArgsConstructor;
@@ -61,7 +60,6 @@ public class PharmacyRefillReminderScheduler {
         for (Dispense d : recent) {
             try {
                 if (shouldRemindToday(d, today)) {
-                    Prescription rx = d.getPrescription();
                     support.notifyRefillReminder(
                             d.getPatient(),
                             d.getMedicationName(),
