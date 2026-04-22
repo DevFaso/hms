@@ -645,4 +645,17 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V54: S-05 Phase 2 (slice 2) — encrypt Prescription PHI fields
+         - Widen notes / override_reason / instructions to TEXT to fit
+           AES-256-GCM Base64 ciphertext (entity still enforces @Size on
+           plaintext input).
+         ================================================================= -->
+    <changeSet id="V54-encrypt-prescription-phi" author="hms-team" runOnChange="false">
+        <sqlFile path="V54__encrypt_prescription_phi.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

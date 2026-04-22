@@ -80,23 +80,28 @@
 - 5 unit tests in [EncryptionKeyHolderTest.java](hospital-core/src/test/java/com/example/hms/security/EncryptionKeyHolderTest.java) covering empty/blank/valid/wrong-length/invalid-Base64 keys.
 - Full hospital-core test suite passes (BUILD SUCCESSFUL).
 
-**Phase 2 — slice 1 delivered on `feature/security-v1`:**
+**Phase 2 — slice 1 delivered on `feature/security-v1` (commit `329bff14`):**
 
-- [Dispense.notes](hospital-core/src/main/java/com/example/hms/model/pharmacy/Dispense.java) annotated with `@Convert(converter = EncryptedStringConverter.class)`. Column changed to `TEXT` via [V53__encrypt_dispense_notes.sql](hospital-core/src/main/resources/db/migration/V53__encrypt_dispense_notes.sql) so AES-GCM ciphertext (Base64, ~37% inflation + 28-byte IV/tag overhead) fits without truncation. `@Size(max = 1000)` is preserved on the entity field, so plaintext input limits are unchanged for end users.
-- Wiring contract test in [DispenseEncryptionWiringTest.java](hospital-core/src/test/java/com/example/hms/model/pharmacy/DispenseEncryptionWiringTest.java) asserts the `@Convert` annotation stays on the field; converter cryptographic correctness is covered by the Phase 1 unit-test suite.
-- Full `hospital-core` test suite: BUILD SUCCESSFUL.
+- [Dispense.notes](hospital-core/src/main/java/com/example/hms/model/pharmacy/Dispense.java) annotated with `@Convert(converter = EncryptedStringConverter.class)`. Column changed to `TEXT` via [V53__encrypt_dispense_notes.sql](hospital-core/src/main/resources/db/migration/V53__encrypt_dispense_notes.sql). `@Size(max = 1000)` preserved on the entity field, so plaintext input limits are unchanged for end users.
+- Wiring contract test in [DispenseEncryptionWiringTest.java](hospital-core/src/test/java/com/example/hms/model/pharmacy/DispenseEncryptionWiringTest.java).
 
-**Important caveat — column-width change is required for every encrypted field.** Initial estimates assumed column types could stay as-is, but AES-GCM ciphertext (Base64) grows from `N` chars to roughly `ceil((N + 28) * 4 / 3)` chars. A `varchar(N)` column will not hold the encrypted form of an `N`-char input. Each Phase 2 slice **must** ship a Liquibase migration widening the column to `TEXT`.
+**Phase 2 — slice 2 delivered on `feature/security-v1`:**
+
+- [Prescription.instructions](hospital-core/src/main/java/com/example/hms/model/Prescription.java), `Prescription.overrideReason`, and `Prescription.notes` annotated with `@Convert(converter = EncryptedStringConverter.class)`. Columns widened to `TEXT` via [V54__encrypt_prescription_phi.sql](hospital-core/src/main/resources/db/migration/V54__encrypt_prescription_phi.sql). `@Size` constraints (2048 / 1024 / 1024) preserved on the entity fields.
+- Wiring contract tests for all three fields in [PrescriptionEncryptionWiringTest.java](hospital-core/src/test/java/com/example/hms/model/PrescriptionEncryptionWiringTest.java).
+- Verified no repository or specification queries reference these fields (full grep across `hospital-core/src/main` returned zero matches), so encryption cannot break a `LIKE`/`=` lookup.
+
+**Important caveat — column-width change is required for every encrypted field.** AES-GCM ciphertext (Base64) grows from `N` chars to roughly `ceil((N + 28) * 4 / 3)` chars. A `varchar(N)` column will not hold the encrypted form of an `N`-char input. Each Phase 2 slice **must** ship a Liquibase migration widening the column to `TEXT`.
 
 **Phase 2 — slices still pending (one PR each):**
 
-- `Prescription.notes` (`varchar(1024)` → `TEXT`), `Prescription.instructions` (`varchar(2048)` → `TEXT`), `Prescription.overrideReason` (`varchar(1024)` → `TEXT`).
 - `Patient` contact fields (`phoneNumber`, `address`, `emergencyContactPhone`, …) — high-risk: needs careful audit because `phoneNumber` may be used in lookup queries that would break under encryption (encrypted columns cannot be searched with `LIKE` / equality on plaintext). Confirm no `findByPhoneNumber` / `LIKE :phone` repository methods exist before annotating.
+- Reconcile duplicate `Patient` package candidates (`com.example.hms.model.Patient` vs `com.example.hms.patient.model.Patient`) before annotating either.
 
 **Files for remaining Phase 2 slices:**
 
-- `hospital-core/src/main/java/com/example/hms/model/Prescription.java`
-- `hospital-core/src/main/java/com/example/hms/model/Patient.java` *(plus `hospital-core/src/main/java/com/example/hms/patient/model/Patient.java` — duplicate-package candidate, needs reconciliation first)*
+- `hospital-core/src/main/java/com/example/hms/model/Patient.java`
+- `hospital-core/src/main/java/com/example/hms/patient/model/Patient.java`
 
 ---
 
