@@ -72,10 +72,11 @@ class PharmacyClaimExportServiceTest {
         String csv = new String(service.exportCsv(List.of(PharmacyClaimStatus.SUBMITTED)),
                 StandardCharsets.UTF_8);
 
-        assertThat(csv).startsWith("id,dispense_id,patient_id,hospital_id,");
-        assertThat(csv).contains("2500,XOF");
-        // The note contains a comma so must be quoted.
-        assertThat(csv).contains("\"Prescription #12, comma in text\"");
+        assertThat(csv)
+                .startsWith("id,dispense_id,patient_id,hospital_id,")
+                .contains("2500,XOF")
+                // The note contains a comma so must be quoted.
+                .contains("\"Prescription #12, comma in text\"");
     }
 
     @Test
@@ -89,19 +90,21 @@ class PharmacyClaimExportServiceTest {
         String json = new String(service.exportFhirBundle(List.of(PharmacyClaimStatus.SUBMITTED)),
                 StandardCharsets.UTF_8);
 
-        assertThat(json).startsWith("{\"resourceType\":\"Bundle\"");
-        assertThat(json).contains("\"resourceType\":\"Claim\"");
-        assertThat(json).contains("\"status\":\"active\"");
-        assertThat(json).contains("\"currency\":\"XOF\"");
-        assertThat(json).contains("\"value\":2500");
+        assertThat(json)
+                .startsWith("{\"resourceType\":\"Bundle\"")
+                .contains("\"resourceType\":\"Claim\"")
+                .contains("\"status\":\"active\"")
+                .contains("\"currency\":\"XOF\"")
+                .contains("\"value\":2500");
     }
 
     @Test
     @DisplayName("Rejects export when no statuses requested")
     void rejectsEmptyStatusList() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        List<PharmacyClaimStatus> empty = List.of();
 
-        assertThatThrownBy(() -> service.exportCsv(List.of()))
+        assertThatThrownBy(() -> service.exportCsv(empty))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("status");
     }
@@ -156,8 +159,9 @@ class PharmacyClaimExportServiceTest {
                 StandardCharsets.UTF_8);
 
         // Should not throw, and should contain the claim id plus many empty fields.
-        assertThat(csv).contains(bare.getId().toString());
-        assertThat(csv).contains(",,,,");
+        assertThat(csv)
+                .contains(bare.getId().toString())
+                .contains(",,,,");
     }
 
     @Test
@@ -235,9 +239,10 @@ class PharmacyClaimExportServiceTest {
                         PharmacyClaimStatus.PAID)),
                 StandardCharsets.UTF_8);
 
-        assertThat(json).contains("\"status\":\"draft\"");
-        assertThat(json).contains("\"status\":\"cancelled\"");
-        assertThat(json).contains("\"status\":\"active\"");
+        assertThat(json)
+                .contains("\"status\":\"draft\"")
+                .contains("\"status\":\"cancelled\"")
+                .contains("\"status\":\"active\"");
         // Multiple entries separated by comma
         assertThat(json.split("\"resourceType\":\"Claim\"")).hasSizeGreaterThan(2);
     }
@@ -261,12 +266,13 @@ class PharmacyClaimExportServiceTest {
         String json = new String(service.exportFhirBundle(List.of(PharmacyClaimStatus.DRAFT)),
                 StandardCharsets.UTF_8);
 
-        assertThat(json).contains("\"status\":\"draft\"");
-        assertThat(json).contains("\"value\":0");
-        assertThat(json).contains("\"currency\":\"XOF\"");
-        // References still emitted (with empty ids)
-        assertThat(json).contains("\"Patient/\"");
-        assertThat(json).contains("\"Organization/\"");
+        assertThat(json)
+                .contains("\"status\":\"draft\"")
+                .contains("\"value\":0")
+                .contains("\"currency\":\"XOF\"")
+                // References still emitted (with empty ids)
+                .contains("\"Patient/\"")
+                .contains("\"Organization/\"");
     }
 
     @Test
