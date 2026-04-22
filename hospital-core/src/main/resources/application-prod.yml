@@ -73,6 +73,12 @@ app:
     secret: ${JWT_SECRET}
   security:
     totp-encryption-key: ${TOTP_ENCRYPTION_KEY}
+  # ─── PHI field-level encryption (S-05) ────────────────────────────────────
+  # APP_ENCRYPTION_KEY must be a Base64-encoded 32 bytes. No default — prod
+  # boot fails fast if the env var is missing rather than running with PHI
+  # encryption silently disabled.
+  encryption:
+    key: ${APP_ENCRYPTION_KEY}
   # Frontend base URL used in emails, activation links, and onboarding flows.
   # Set FRONTEND_BASE_URL=https://hms.bitnesttechs.com in Railway env vars.
   frontend:

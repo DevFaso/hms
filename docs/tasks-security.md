@@ -68,19 +68,28 @@
 
 ---
 
-### ⏸ S-05 · Add field-level encryption for PHI
+### 🚧 S-05 · Add field-level encryption for PHI
 
-**Files:**
+**Phase 1 (infrastructure) delivered on `feature/security-v1`** — converter + key holder are merged but no entity is annotated yet. Per-entity rollout follows in dedicated PRs so each migration can be reviewed and rolled out independently.
+
+- New [EncryptedStringConverter.java](hospital-core/src/main/java/com/example/hms/security/EncryptedStringConverter.java) — AES-256-GCM, per-row random IV, version-prefixed wire format `gcm1:<base64(iv||ciphertext+tag)>`. Legacy plaintext rows (no prefix) are returned as-is so a rolling migration can encrypt new writes while old reads still work.
+- New [EncryptionKeyHolder.java](hospital-core/src/main/java/com/example/hms/security/EncryptionKeyHolder.java) — loads `app.encryption.key` (Base64, 32 bytes) at startup; fails fast on bad length or invalid Base64.
+- [application.properties](hospital-core/src/main/resources/application.properties): `app.encryption.key=${APP_ENCRYPTION_KEY:}` — empty in dev, converter inactive but loaded.
+- [application-prod.yml](hospital-core/src/main/resources/application-prod.yml): `app.encryption.key: ${APP_ENCRYPTION_KEY}` — no default → prod boot fails fast if the env var is missing.
+- 12 unit tests in [EncryptedStringConverterTest.java](hospital-core/src/test/java/com/example/hms/security/EncryptedStringConverterTest.java) covering round-trip, IV randomness, null/blank pass-through, legacy plaintext compatibility, tampered/truncated ciphertext detection, missing-key fail-fast, Unicode preservation, and wrong-key authentication-tag failure.
+- 5 unit tests in [EncryptionKeyHolderTest.java](hospital-core/src/test/java/com/example/hms/security/EncryptionKeyHolderTest.java) covering empty/blank/valid/wrong-length/invalid-Base64 keys.
+- Full hospital-core test suite passes (BUILD SUCCESSFUL).
+
+**Phase 2 (entity rollout — pending, one PR per group):**
+- `Patient` contact fields (`phoneNumber`, `address`, `emergencyContactPhone`, …)
+- `Prescription` notes
+- `Dispense.notes`
+- Each follow-up PR adds `@Convert(converter = EncryptedStringConverter.class)` to one entity, ships a Liquibase changelog noting the field as encrypted (column type unchanged — ciphertext is Base64 text), and includes an integration test asserting round-trip persistence through the repository.
+
+**Files for Phase 2:**
 - `hospital-core/src/main/java/com/example/hms/model/Patient.java`
 - `hospital-core/src/main/java/com/example/hms/model/pharmacy/Dispense.java`
 - `hospital-core/src/main/java/com/example/hms/model/Prescription.java`
-- New: `hospital-core/src/main/java/com/example/hms/security/EncryptedStringConverter.java`
-
-**Finding:** No `@Convert` with encryption, no JPA `AttributeConverter`, no column-level encryption on any PHI field.
-
-**Fix:**
-- Implement `AttributeConverter<String, String>` backed by AES-GCM with key sourced from `@Value("${app.encryption.key}")` — never hardcoded.
-- Apply to patient contact fields, `Dispense.notes`, prescription notes.
 
 ---
 
