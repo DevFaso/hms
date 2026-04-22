@@ -632,4 +632,17 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V53: S-05 Phase 2 (slice 1) — encrypt clinical.dispenses.notes
+         - Widen notes from VARCHAR(1000) to TEXT to fit AES-256-GCM
+           Base64 ciphertext (entity still enforces @Size(max=1000) on
+           plaintext input).
+         ================================================================= -->
+    <changeSet id="V53-encrypt-dispense-notes" author="hms-team" runOnChange="false">
+        <sqlFile path="V53__encrypt_dispense_notes.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

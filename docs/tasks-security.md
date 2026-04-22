@@ -80,16 +80,23 @@
 - 5 unit tests in [EncryptionKeyHolderTest.java](hospital-core/src/test/java/com/example/hms/security/EncryptionKeyHolderTest.java) covering empty/blank/valid/wrong-length/invalid-Base64 keys.
 - Full hospital-core test suite passes (BUILD SUCCESSFUL).
 
-**Phase 2 (entity rollout — pending, one PR per group):**
-- `Patient` contact fields (`phoneNumber`, `address`, `emergencyContactPhone`, …)
-- `Prescription` notes
-- `Dispense.notes`
-- Each follow-up PR adds `@Convert(converter = EncryptedStringConverter.class)` to one entity, ships a Liquibase changelog noting the field as encrypted (column type unchanged — ciphertext is Base64 text), and includes an integration test asserting round-trip persistence through the repository.
+**Phase 2 — slice 1 delivered on `feature/security-v1`:**
 
-**Files for Phase 2:**
-- `hospital-core/src/main/java/com/example/hms/model/Patient.java`
-- `hospital-core/src/main/java/com/example/hms/model/pharmacy/Dispense.java`
+- [Dispense.notes](hospital-core/src/main/java/com/example/hms/model/pharmacy/Dispense.java) annotated with `@Convert(converter = EncryptedStringConverter.class)`. Column changed to `TEXT` via [V53__encrypt_dispense_notes.sql](hospital-core/src/main/resources/db/migration/V53__encrypt_dispense_notes.sql) so AES-GCM ciphertext (Base64, ~37% inflation + 28-byte IV/tag overhead) fits without truncation. `@Size(max = 1000)` is preserved on the entity field, so plaintext input limits are unchanged for end users.
+- Wiring contract test in [DispenseEncryptionWiringTest.java](hospital-core/src/test/java/com/example/hms/model/pharmacy/DispenseEncryptionWiringTest.java) asserts the `@Convert` annotation stays on the field; converter cryptographic correctness is covered by the Phase 1 unit-test suite.
+- Full `hospital-core` test suite: BUILD SUCCESSFUL.
+
+**Important caveat — column-width change is required for every encrypted field.** Initial estimates assumed column types could stay as-is, but AES-GCM ciphertext (Base64) grows from `N` chars to roughly `ceil((N + 28) * 4 / 3)` chars. A `varchar(N)` column will not hold the encrypted form of an `N`-char input. Each Phase 2 slice **must** ship a Liquibase migration widening the column to `TEXT`.
+
+**Phase 2 — slices still pending (one PR each):**
+
+- `Prescription.notes` (`varchar(1024)` → `TEXT`), `Prescription.instructions` (`varchar(2048)` → `TEXT`), `Prescription.overrideReason` (`varchar(1024)` → `TEXT`).
+- `Patient` contact fields (`phoneNumber`, `address`, `emergencyContactPhone`, …) — high-risk: needs careful audit because `phoneNumber` may be used in lookup queries that would break under encryption (encrypted columns cannot be searched with `LIKE` / equality on plaintext). Confirm no `findByPhoneNumber` / `LIKE :phone` repository methods exist before annotating.
+
+**Files for remaining Phase 2 slices:**
+
 - `hospital-core/src/main/java/com/example/hms/model/Prescription.java`
+- `hospital-core/src/main/java/com/example/hms/model/Patient.java` *(plus `hospital-core/src/main/java/com/example/hms/patient/model/Patient.java` — duplicate-package candidate, needs reconciliation first)*
 
 ---
 
