@@ -59,6 +59,7 @@ class StockOutRoutingServiceImplTest {
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private PharmacyServiceSupport support;
+    @Mock private com.example.hms.service.pharmacy.partner.PartnerNotificationChannel partnerChannel;
 
     @InjectMocks
     private StockOutRoutingServiceImpl service;

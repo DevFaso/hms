@@ -240,7 +240,9 @@ public class SecurityConfig {
                     // File uploads from mobile apps (multipart — no XSRF token)
                     new AntPathRequestMatcher("/files/**"),
                     // Appointment booking from mobile apps (Bearer JWT, no cookies)
-                    new AntPathRequestMatcher("/appointments/**")
+                    new AntPathRequestMatcher("/appointments/**"),
+                    // Partner pharmacy SMS webhook (T-55) — shared-secret header auth, no cookies
+                    new AntPathRequestMatcher("/webhooks/partner-sms", "POST")
                 )
             )
             .exceptionHandling(ex -> ex
@@ -278,6 +280,9 @@ public class SecurityConfig {
                 .requestMatchers("/error").permitAll()
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                 .requestMatchers("/.well-known/jwks.json").permitAll()
+                // Partner pharmacy SMS webhook — authenticated inside the controller
+                // via the X-HMS-Partner-Signature shared-secret header (T-55).
+                .requestMatchers(HttpMethod.POST, "/webhooks/partner-sms").permitAll()
 
                 // Feature flags
                 .requestMatchers(HttpMethod.PUT, API_FEATURE_FLAGS, API_FEATURE_FLAGS_PATTERN).hasAuthority(ROLE_SUPER_ADMIN)

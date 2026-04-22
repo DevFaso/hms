@@ -55,6 +55,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     private final PrescriptionRoutingMapper routingMapper;
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
+    private final com.example.hms.service.pharmacy.partner.PartnerNotificationChannel partnerChannel;
 
     private static final String AUDIT_ENTITY = "PRESCRIPTION_ROUTING";
 
@@ -176,6 +177,13 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         support.notifyOutOfStock(patient, prescription.getMedicationName(),
                 "Elle a \u00e9t\u00e9 envoy\u00e9e \u00e0 " + targetPharmacy.getName() + ".");
 
+        // T-54: notify the partner pharmacy via SMS (best-effort, never fails the routing)
+        try {
+            partnerChannel.sendPrescriptionOffer(saved, prescription, targetPharmacy);
+        } catch (Exception ex) {
+            log.warn("Partner outbound SMS failed for decision {}: {}", saved.getId(), ex.getMessage());
+        }
+
         return routingMapper.toResponseDTO(saved);
     }
 
@@ -286,6 +294,15 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                         + " prescription " + prescription.getId(),
                 routingDecisionId.toString());
 
+        // T-61: notify the patient when the partner accepts
+        if (accepted) {
+            try {
+                partnerChannel.notifyPatientAccepted(prescription.getPatient(), decision.getTargetPharmacy());
+            } catch (Exception ex) {
+                log.warn("Patient accept SMS failed: {}", ex.getMessage());
+            }
+        }
+
         return routingMapper.toResponseDTO(saved);
     }
 
@@ -314,6 +331,13 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         logAudit(AuditEventType.PRESCRIPTION_SENT_TO_PARTNER,
                 "Partner pharmacy confirmed dispense for prescription " + prescription.getId(),
                 routingDecisionId.toString());
+
+        // T-61: notify the patient their medication has been dispensed by the partner
+        try {
+            partnerChannel.notifyPatientDispensed(prescription.getPatient(), decision.getTargetPharmacy());
+        } catch (Exception ex) {
+            log.warn("Patient dispense SMS failed: {}", ex.getMessage());
+        }
 
         return routingMapper.toResponseDTO(saved);
     }
