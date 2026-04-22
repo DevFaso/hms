@@ -17,7 +17,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -81,8 +80,9 @@ class SmsPartnerNotificationChannelTest {
     @DisplayName("buildRefToken returns first 8 chars uppercased")
     void buildRefTokenNormal() {
         String token = channel.buildRefToken(decision);
-        assertThat(token).hasSize(8);
-        assertThat(token).isEqualTo(decisionId.toString().substring(0, 8).toUpperCase());
+        assertThat(token)
+                .hasSize(8)
+                .isEqualTo(decisionId.toString().substring(0, 8).toUpperCase());
     }
 
     @Test

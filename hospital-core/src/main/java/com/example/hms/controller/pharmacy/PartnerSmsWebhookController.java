@@ -34,6 +34,7 @@ import java.util.Optional;
 public class PartnerSmsWebhookController {
 
     static final String SIGNATURE_HEADER = "X-HMS-Partner-Signature";
+    private static final String STATUS_KEY = "status";
 
     private final PartnerExchangeService exchangeService;
 
@@ -48,16 +49,16 @@ public class PartnerSmsWebhookController {
 
         if (!authorized(signature)) {
             log.warn("Rejected partner-SMS webhook: bad signature");
-            return ResponseEntity.status(401).body(Map.of("status", "unauthorized"));
+            return ResponseEntity.status(401).body(Map.of(STATUS_KEY, "unauthorized"));
         }
         String body = payload != null ? payload.body() : null;
         Optional<PrescriptionRoutingDecision> result = exchangeService.handleInboundReply(body);
         return result
                 .<ResponseEntity<Map<String, Object>>>map(d -> ResponseEntity.ok(Map.of(
-                        "status", "applied",
+                        STATUS_KEY, "applied",
                         "routingDecisionId", d.getId(),
                         "decisionStatus", d.getStatus().name())))
-                .orElseGet(() -> ResponseEntity.ok(Map.of("status", "ignored")));
+                .orElseGet(() -> ResponseEntity.ok(Map.of(STATUS_KEY, "ignored")));
     }
 
     private boolean authorized(String signature) {
