@@ -38,9 +38,27 @@
 
 ---
 
-### ⏸ S-03 · Migrate to Keycloak OIDC — make app a resource server ⚠️ Peer review required
+### 🚧 S-03 · Migrate to Keycloak OIDC — make app a resource server ⚠️ Peer review required
 
-**Files:**
+**Phase 1 (additive resource-server) delivered on `feature/security-v1`.** The app now accepts Keycloak-issued JWTs alongside its own internally-issued tokens when `OIDC_ISSUER_URI` is set. With the env var unset (current state in dev/prod), behaviour is identical to the pre-S-03 baseline — the OIDC stack is not loaded.
+
+**Phase 1 deliverables:**
+
+- New [OidcResourceServerConfig.java](hospital-core/src/main/java/com/example/hms/config/OidcResourceServerConfig.java) — `@ConditionalOnExpression("'${app.auth.oidc.issuer-uri:}' != ''")` so the entire OIDC bean graph is absent when the env var is empty. Provides `JwtDecoder` (auto-discovered from issuer URI's `/.well-known/openid-configuration` JWKS endpoint) and an optional strict `aud` validator (`AudienceValidator`) gated by `app.auth.oidc.audience`.
+- New [KeycloakJwtAuthenticationConverter.java](hospital-core/src/main/java/com/example/hms/security/oidc/KeycloakJwtAuthenticationConverter.java) — maps Keycloak `realm_access.roles` and `resource_access.<client>.roles` to Spring `ROLE_*` authorities (uppercases + prefixes if needed), de-duplicating across realm/client. Resolves principal name from `preferred_username` → `email` → `sub`.
+- New [IssuerAwareBearerTokenResolver.java](hospital-core/src/main/java/com/example/hms/security/oidc/IssuerAwareBearerTokenResolver.java) — wraps `DefaultBearerTokenResolver`. After extracting the bearer token, parses the JWT (without signature verification) and reads the `iss` claim; only returns the token to the resource-server filter when `iss` matches the configured Keycloak issuer URI. Internal tokens (which currently have no `iss` claim) and tokens from other issuers fall through to the existing `JwtAuthenticationFilter`.
+- [SecurityConfig.java](hospital-core/src/main/java/com/example/hms/config/SecurityConfig.java) — injects the OIDC beans via `ObjectProvider` (optional). When both `JwtDecoder` and `BearerTokenResolver` are present, calls `.oauth2ResourceServer(oauth -> oauth.bearerTokenResolver(resolver).jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(converter)))`. When absent (default), no resource-server filter is added — the existing `JwtAuthenticationFilter` remains the sole authenticator.
+- [application.properties](hospital-core/src/main/resources/application.properties) — `app.auth.oidc.issuer-uri=${OIDC_ISSUER_URI:}` and `app.auth.oidc.audience=${OIDC_AUDIENCE:}`. Empty defaults keep dev unchanged.
+- 7 unit tests in [KeycloakJwtAuthenticationConverterTest.java](hospital-core/src/test/java/com/example/hms/security/oidc/KeycloakJwtAuthenticationConverterTest.java) (realm + client role mapping, role-prefix normalisation, missing/malformed claims, principal-name fallback chain).
+- 7 unit tests in [IssuerAwareBearerTokenResolverTest.java](hospital-core/src/test/java/com/example/hms/security/oidc/IssuerAwareBearerTokenResolverTest.java) (issuer match returns token, mismatch/missing/blank issuer returns null, unparseable token swallowed, delegate exception swallowed).
+- 3 unit tests in [OidcResourceServerConfigAudienceValidatorTest.java](hospital-core/src/test/java/com/example/hms/config/OidcResourceServerConfigAudienceValidatorTest.java) (audience present/absent/missing).
+- Full hospital-core test suite passes (3962 tests, BUILD SUCCESSFUL).
+
+**Phases 2–4 (deferred — require deployed Keycloak realm and infra peer review):**
+
+These phases retire the app's own token-issuance code and rewire role/hospital scoping through OIDC claims. They cannot be merged until a Keycloak realm is provisioned, clients are registered, and all front-ends + mobile apps are migrated to obtain tokens from Keycloak rather than `POST /auth/login`. See the original phased plan below.
+
+**Files (phases 2–4):**
 - `hospital-core/src/main/java/com/example/hms/config/SecurityConfig.java`
 - `hospital-core/src/main/java/com/example/hms/security/JwtAuthenticationFilter.java`
 - `hospital-core/src/main/java/com/example/hms/security/JwtTokenProvider.java`
@@ -48,11 +66,11 @@
 
 **Finding (confirmed):** `JwtTokenProvider` exposes `generateAccessToken()`, `generateRefreshToken()`, and `generateMfaToken()` — the app is its own token issuer. Token lifecycle, hospital scoping, role expansion, and MFA are all custom application responsibilities.
 
-**Fix (phased):**
-1. Add `spring-boot-starter-oauth2-resource-server`. In `SecurityConfig` add `.oauth2ResourceServer(oauth -> oauth.jwt(...))` alongside existing filter chain so Keycloak-issued tokens are accepted while existing tokens still work.
-2. Retire `JwtAuthenticationFilter` once all clients issue tokens via Keycloak. Keep as compatibility shim during transition.
-3. Remove `generateAccessToken()` / `generateRefreshToken()` from `JwtTokenProvider`. Retain `generateMfaToken()` only if internal WebSocket ticket issuance still requires it.
-4. Update `RoleValidator` to source `primaryHospitalId` and roles from OIDC token claims instead of the custom claim model.
+**Phased rollout:**
+1. ✅ **Phase 1 (delivered above):** Add `spring-boot-starter-oauth2-resource-server`. In `SecurityConfig` add `.oauth2ResourceServer(oauth -> oauth.jwt(...))` alongside existing filter chain so Keycloak-issued tokens are accepted while existing tokens still work.
+2. ⏸ **Phase 2:** Migrate front-ends and mobile clients to obtain access tokens from Keycloak via Authorization Code + PKCE. Once all clients have cut over and `JwtAuthenticationFilter` no longer sees internal tokens in production for one full rotation cycle, retire it (or keep as a compatibility shim during a final transition window).
+3. ⏸ **Phase 3:** Remove `generateAccessToken()` / `generateRefreshToken()` from `JwtTokenProvider`. Retain `generateMfaToken()` only if internal WebSocket ticket issuance still requires it (audit `WsTicketService` first).
+4. ⏸ **Phase 4:** Update `RoleValidator` to source `primaryHospitalId` and roles from OIDC token claims (custom Keycloak claim mapper or JWT realm/client roles) instead of the custom JwtTokenProvider claim model. Coordinate with the Keycloak realm owner on claim names and protocol mappers.
 
 ---
 
