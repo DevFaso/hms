@@ -58,9 +58,12 @@ register `https://hms.example.com/app/oauth/callback`.
 
 1. Update this file.
 2. Update `keycloak/realm-export.json` to match exactly.
-3. On dev: `docker compose --profile keycloak restart keycloak` (re-imports the realm).
-4. On UAT/prod: re-import the realm via the admin console or API. Realm
-   import is partial — use `Overwrite` strategy when re-importing.
-5. Deploy client apps. A mismatch between app-side config and the
+3. **On dev: do NOT rely on `docker compose --profile keycloak restart keycloak` to apply changes.** `--import-realm` is one-shot \u2014 it only imports when the realm does not already exist, so a restart alone will not update redirect URIs in an existing dev realm.
+4. On dev, apply the change one of two ways:
+   - **Partial import** via the admin console (**Realm Settings \u2192 Action \u2192 Partial Import \u2192 Overwrite**), or
+   - **Wipe the realm DB** (`docker compose --profile keycloak rm -sf keycloak keycloak-db && docker volume rm hms_keycloak_pgdata`) and bring the stack back up so `--import-realm` runs from scratch.
+5. On UAT/prod: re-import the realm via the admin console or API. Realm
+   import is partial \u2014 use `Overwrite` strategy when re-importing.
+6. Deploy client apps. A mismatch between app-side config and the
    realm's registered redirect URIs causes Keycloak to show
    `Invalid parameter: redirect_uri`.

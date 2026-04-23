@@ -1,4 +1,5 @@
 {
+  "_comment": "HMS realm — infra-as-code. SAFE TO IMPORT IN ANY ENVIRONMENT (dev/UAT/prod). Realm role list MUST mirror hospital-core/src/main/java/com/example/hms/config/SecurityConstants.java. Dev seed users live in keycloak/realm-export.dev-users.json (partial-import only, never apply to UAT/prod).",
   "realm": "hms",
   "displayName": "HMS — Hospital Management System",
   "enabled": true,
@@ -43,31 +44,34 @@
   },
 
   "roles": {
+    "_comment": "Mirror of SecurityConstants.java — 26 ROLE_* authorities. Keep in sync; mismatches cause silent 403s when clients switch to Keycloak-issued tokens.",
     "realm": [
-      { "name": "ROLE_SUPER_ADMIN",        "description": "Platform super administrator (no tenant scope)" },
-      { "name": "ROLE_HOSPITAL_ADMIN",     "description": "Hospital-scoped administrator" },
-      { "name": "ROLE_DOCTOR",             "description": "Physician / attending provider" },
-      { "name": "ROLE_NURSE",              "description": "Registered nurse" },
-      { "name": "ROLE_RECEPTIONIST",       "description": "Front-desk / registration" },
-      { "name": "ROLE_PHARMACIST",         "description": "Pharmacy dispensing" },
-      { "name": "ROLE_LAB_SCIENTIST",      "description": "Lab technician / scientist" },
-      { "name": "ROLE_RADIOLOGIST",        "description": "Imaging / radiology" },
-      { "name": "ROLE_FINANCE",            "description": "Finance / accounting" },
-      { "name": "ROLE_BILLING_CLERK",      "description": "Billing clerk" },
-      { "name": "ROLE_PATIENT",            "description": "Patient portal user" },
-      { "name": "ROLE_MIDWIFE",            "description": "Midwifery staff" },
-      { "name": "ROLE_DIETICIAN",          "description": "Nutrition / dietetics" },
-      { "name": "ROLE_PHYSIOTHERAPIST",    "description": "Physiotherapy" },
-      { "name": "ROLE_SOCIAL_WORKER",      "description": "Medical social worker" },
-      { "name": "ROLE_MEDICAL_RECORDS",    "description": "HIM / medical records" },
-      { "name": "ROLE_IT_ADMIN",           "description": "IT administrator" },
-      { "name": "ROLE_QUALITY_OFFICER",    "description": "Quality / compliance" },
-      { "name": "ROLE_STAFF",              "description": "Generic staff (baseline)" },
-      { "name": "ROLE_RESEARCHER",         "description": "De-identified research access" },
-      { "name": "ROLE_STORE_MANAGER",      "description": "Pharmacy store manager" },
-      { "name": "ROLE_INVENTORY_CLERK",    "description": "Pharmacy inventory clerk" },
-      { "name": "ROLE_PHARMACY_VERIFIER",  "description": "Pharmacy dispense verifier" },
-      { "name": "ROLE_CLAIMS_REVIEWER",    "description": "Insurance claims reviewer" }
+      { "name": "ROLE_SUPER_ADMIN",          "description": "Platform super administrator (no tenant scope)" },
+      { "name": "ROLE_HOSPITAL_ADMIN",       "description": "Hospital-scoped administrator" },
+      { "name": "ROLE_DOCTOR",               "description": "Physician / attending provider" },
+      { "name": "ROLE_NURSE",                "description": "Registered nurse" },
+      { "name": "ROLE_PATIENT",              "description": "Patient portal user" },
+      { "name": "ROLE_RECEPTIONIST",         "description": "Front-desk / registration" },
+      { "name": "ROLE_STAFF",                "description": "Generic staff (baseline)" },
+      { "name": "ROLE_LAB_SCIENTIST",        "description": "Lab scientist" },
+      { "name": "ROLE_LAB_DIRECTOR",         "description": "Lab director" },
+      { "name": "ROLE_QUALITY_MANAGER",      "description": "Quality / compliance manager" },
+      { "name": "ROLE_PHARMACIST",           "description": "Pharmacy dispensing" },
+      { "name": "ROLE_LAB_TECHNICIAN",       "description": "Lab technician" },
+      { "name": "ROLE_LAB_MANAGER",          "description": "Lab manager" },
+      { "name": "ROLE_ACCOUNTANT",           "description": "Finance / accounting" },
+      { "name": "ROLE_RADIOLOGIST",          "description": "Imaging / radiology" },
+      { "name": "ROLE_SURGEON",              "description": "Surgeon" },
+      { "name": "ROLE_DENTIST",              "description": "Dentist" },
+      { "name": "ROLE_MIDWIFE",              "description": "Midwifery staff" },
+      { "name": "ROLE_BILLING_SPECIALIST",   "description": "Billing specialist" },
+      { "name": "ROLE_ADMINISTRATIVE_STAFF", "description": "Administrative staff" },
+      { "name": "ROLE_SUPPORT_STAFF",        "description": "Support staff" },
+      { "name": "ROLE_IT_STAFF",             "description": "IT staff" },
+      { "name": "ROLE_PHARMACY_VERIFIER",    "description": "Pharmacy dispense verifier" },
+      { "name": "ROLE_INVENTORY_CLERK",      "description": "Pharmacy inventory clerk" },
+      { "name": "ROLE_STORE_MANAGER",        "description": "Pharmacy store manager" },
+      { "name": "ROLE_CLAIMS_REVIEWER",      "description": "Insurance claims reviewer" }
     ]
   },
 
@@ -169,7 +173,7 @@
       "serviceAccountsEnabled": false,
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:4200/##http://localhost:4200/login##https://uat.hms.example.com/*##https://hms.example.com/*",
+        "post.logout.redirect.uris": "http://localhost:4200/login##https://uat.hms.example.com/login##https://hms.example.com/login",
         "access.token.lifespan": "900"
       },
       "redirectUris": [
@@ -227,63 +231,6 @@
       ],
       "webOrigins": [],
       "defaultClientScopes": ["profile", "email", "roles", "hms-claims"]
-    }
-  ],
-
-  "users": [
-    {
-      "username": "dev.admin",
-      "email": "dev.admin@hms.local",
-      "enabled": true,
-      "emailVerified": true,
-      "firstName": "Dev",
-      "lastName": "Admin",
-      "attributes": {
-        "hospital_id": ["00000000-0000-0000-0000-000000000000"]
-      },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "DevAdmin#2026",
-          "temporary": true
-        }
-      ],
-      "realmRoles": ["ROLE_SUPER_ADMIN", "ROLE_STAFF"]
-    },
-    {
-      "username": "dev.doctor",
-      "email": "dev.doctor@hms.local",
-      "enabled": true,
-      "emailVerified": true,
-      "firstName": "Dev",
-      "lastName": "Doctor",
-      "attributes": {
-        "hospital_id": ["11111111-1111-1111-1111-111111111111"]
-      },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "DevDoctor#2026",
-          "temporary": true
-        }
-      ],
-      "realmRoles": ["ROLE_DOCTOR", "ROLE_STAFF"]
-    },
-    {
-      "username": "dev.patient",
-      "email": "dev.patient@hms.local",
-      "enabled": true,
-      "emailVerified": true,
-      "firstName": "Dev",
-      "lastName": "Patient",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "DevPatient#2026",
-          "temporary": true
-        }
-      ],
-      "realmRoles": ["ROLE_PATIENT"]
     }
   ]
 }

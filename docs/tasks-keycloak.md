@@ -22,7 +22,7 @@
 - Provision Keycloak (local + Railway prod).
 - Register realm `hms` with the four clients in
   [keycloak-migration.md §1](keycloak-migration.md#1-keycloak-realm-design).
-- Migrate all 20 HMS roles to Keycloak realm roles; map hospital scope.
+- Migrate all 26 HMS roles (per `SecurityConstants.java`) to Keycloak realm roles; map hospital scope.
 - Cut over Angular portal, Android, iOS to Auth Code + PKCE against Keycloak.
 - Retire `JwtTokenProvider.generateAccessToken/generateRefreshToken`.
 - Source `primaryHospitalId` + roles in `RoleValidator` from OIDC claims.

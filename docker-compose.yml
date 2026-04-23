@@ -100,13 +100,17 @@ services:
   # Realm is imported from keycloak/realm-export.json on first boot.
   # Production deployment is a managed Railway service, NOT this container.
   keycloak:
-    image: quay.io/keycloak/keycloak:26.0
+    image: quay.io/keycloak/keycloak:26.0.7
     container_name: hms-keycloak
     profiles: ["keycloak"]
     command: ["start-dev", "--import-realm"]
     environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # Override these locally via a (gitignored) `.env` file at the repo root
+      # before running `docker compose --profile keycloak up`. The defaults are
+      # only safe on a single-developer machine that is NOT exposed on a shared
+      # network. See keycloak/README.md.
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_DB: postgres
       KC_DB_URL_HOST: keycloak-db
       KC_DB_URL_DATABASE: keycloak
@@ -124,7 +128,9 @@ services:
       keycloak-db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      # Keycloak's UBI image ships bash; pin to it explicitly because the
+      # /dev/tcp redirection used below is bash-specific.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
       interval: 15s
       timeout: 5s
       retries: 10
