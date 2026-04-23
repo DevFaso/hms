@@ -103,8 +103,13 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         const isRefreshCall = req.url.includes('/auth/token/refresh');
         const isVerifyPassword = req.url.includes('/auth/verify-password');
 
-        if (!isRefreshCall && !isVerifyPassword && auth.getRefreshToken()) {
-          // We have a refresh token — attempt silent renewal and replay.
+        if (
+          !isRefreshCall &&
+          !isVerifyPassword &&
+          (auth.getRefreshToken() || auth.getUserProfile())
+        ) {
+          // We either have a legacy refresh token in storage OR a recorded
+          // session profile (S-01 cookie-based refresh). Attempt silent renewal.
           return tryRefreshAndRetry(req, next, auth, router);
         }
 

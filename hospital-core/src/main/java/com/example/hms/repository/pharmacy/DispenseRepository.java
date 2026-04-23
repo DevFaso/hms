@@ -10,6 +10,8 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -20,6 +22,13 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     Page<Dispense> findByPatientId(UUID patientId, Pageable pageable);
 
     Page<Dispense> findByPharmacyId(UUID pharmacyId, Pageable pageable);
+
+    /**
+     * T-39: dispenses completed within a time window — used by the refill reminder scheduler
+     * to find patients whose supply is running out.
+     */
+    List<Dispense> findByStatusAndDispensedAtBetween(
+            DispenseStatus status, LocalDateTime from, LocalDateTime to);
 
     /**
      * Sum of dispensed quantities for a prescription, excluding the given status

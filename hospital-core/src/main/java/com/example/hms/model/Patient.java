@@ -1,10 +1,12 @@
 package com.example.hms.model;
 
+import com.example.hms.security.EncryptedStringConverter;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.tenant.TenantEntityListener;
 import com.example.hms.security.tenant.TenantScoped;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.ForeignKey;
 import jakarta.persistence.EntityListeners;
@@ -76,15 +78,18 @@ public class Patient extends BaseEntity implements TenantScoped {
     @Column(name = "gender", length = 10)
     private String gender;
 
-    @Column(name = "address", length = 1024)
+    @Column(name = "address", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String address;
 
     @Size(max = 255)
-    @Column(name = "address_line1", length = 255)
+    @Column(name = "address_line1", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String addressLine1;
 
     @Size(max = 255)
-    @Column(name = "address_line2", length = 255)
+    @Column(name = "address_line2", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String addressLine2;
 
     @Size(max = 100) @Column(name = "city", length = 100)
@@ -112,15 +117,18 @@ public class Patient extends BaseEntity implements TenantScoped {
     private String email;
 
     @Size(max = 100)
-    @Column(name = "emergency_contact_name", length = 100)
+    @Column(name = "emergency_contact_name", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String emergencyContactName;
 
     @Size(max = 20)
-    @Column(name = "emergency_contact_phone", length = 20)
+    @Column(name = "emergency_contact_phone", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String emergencyContactPhone;
 
     @Size(max = 50)
-    @Column(name = "emergency_contact_relationship", length = 50)
+    @Column(name = "emergency_contact_relationship", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String emergencyContactRelationship;
 
     @Size(max = 5)
@@ -128,11 +136,13 @@ public class Patient extends BaseEntity implements TenantScoped {
     private String bloodType;
 
     @Size(max = 2048)
-    @Column(name = "allergies", length = 2048)
+    @Column(name = "allergies", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String allergies;
 
     @Size(max = 2048)
-    @Column(name = "medical_history_summary", length = 2048)
+    @Column(name = "medical_history_summary", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String medicalHistorySummary;
 
     @Size(max = 255)
@@ -140,11 +150,13 @@ public class Patient extends BaseEntity implements TenantScoped {
     private String preferredPharmacy;
 
     @Size(max = 2000)
-    @Column(name = "care_team_notes", length = 2000)
+    @Column(name = "care_team_notes", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String careTeamNotes;
 
     @Size(max = 2048)
-    @Column(name = "chronic_conditions", length = 2048)
+    @Column(name = "chronic_conditions", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String chronicConditions;
 
     /** Resuscitation status, e.g. FULL_CODE, DNR, DNI, COMFORT_ONLY. */

@@ -55,6 +55,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
     private final PrescriptionRoutingMapper routingMapper;
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
+    private final com.example.hms.service.pharmacy.partner.PartnerNotificationChannel partnerChannel;
 
     private static final String AUDIT_ENTITY = "PRESCRIPTION_ROUTING";
 
@@ -172,6 +173,17 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 PRESCRIPTION_PREFIX + prescriptionId + " routed to partner pharmacy " + targetPharmacy.getName(),
                 prescriptionId.toString());
 
+        // T-40: notify patient the medication is unavailable at hospital; routed to partner
+        support.notifyOutOfStock(patient, prescription.getMedicationName(),
+                "Elle a \u00e9t\u00e9 envoy\u00e9e \u00e0 " + targetPharmacy.getName() + ".");
+
+        // T-54: notify the partner pharmacy via SMS (best-effort, never fails the routing)
+        try {
+            partnerChannel.sendPrescriptionOffer(saved, prescription, targetPharmacy);
+        } catch (Exception ex) {
+            log.warn("Partner outbound SMS failed for decision {}: {}", saved.getId(), ex.getMessage());
+        }
+
         return routingMapper.toResponseDTO(saved);
     }
 
@@ -202,6 +214,10 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         logAudit(AuditEventType.PRESCRIPTION_PRINTED,
                 PRESCRIPTION_PREFIX + prescriptionId + " printed for patient",
                 prescriptionId.toString());
+
+        // T-40: notify patient the medication is unavailable; Rx printed for any pharmacy
+        support.notifyOutOfStock(patient, prescription.getMedicationName(),
+                "Veuillez apporter l'ordonnance imprim\u00e9e \u00e0 une pharmacie de votre choix.");
 
         return routingMapper.toResponseDTO(saved);
     }
@@ -235,6 +251,12 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 PRESCRIPTION_PREFIX + prescriptionId + " placed on back order"
                         + (estimatedRestockDate != null ? ", estimated restock: " + estimatedRestockDate : ""),
                 prescriptionId.toString());
+
+        // T-40: notify patient the medication is unavailable; back-ordered with optional restock date
+        String suffix = estimatedRestockDate != null
+                ? "Nous vous contacterons d\u00e8s sa disponibilit\u00e9 (estim\u00e9e au " + estimatedRestockDate + ")."
+                : "Nous vous contacterons d\u00e8s sa disponibilit\u00e9.";
+        support.notifyOutOfStock(patient, prescription.getMedicationName(), suffix);
 
         return routingMapper.toResponseDTO(saved);
     }
@@ -272,6 +294,15 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                         + " prescription " + prescription.getId(),
                 routingDecisionId.toString());
 
+        // T-61: notify the patient when the partner accepts
+        if (accepted) {
+            try {
+                partnerChannel.notifyPatientAccepted(prescription.getPatient(), decision.getTargetPharmacy());
+            } catch (Exception ex) {
+                log.warn("Patient accept SMS failed: {}", ex.getMessage());
+            }
+        }
+
         return routingMapper.toResponseDTO(saved);
     }
 
@@ -300,6 +331,13 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
         logAudit(AuditEventType.PRESCRIPTION_SENT_TO_PARTNER,
                 "Partner pharmacy confirmed dispense for prescription " + prescription.getId(),
                 routingDecisionId.toString());
+
+        // T-61: notify the patient their medication has been dispensed by the partner
+        try {
+            partnerChannel.notifyPatientDispensed(prescription.getPatient(), decision.getTargetPharmacy());
+        } catch (Exception ex) {
+            log.warn("Patient dispense SMS failed: {}", ex.getMessage());
+        }
 
         return routingMapper.toResponseDTO(saved);
     }

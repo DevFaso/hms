@@ -137,4 +137,60 @@ describe('PermissionService', () => {
     setup(['ROLE_LAB_MANAGER']);
     expect(service.hasPermission('Access Nurse Station')).toBeFalse();
   });
+
+  // ── Pharmacy roles (S-04 / S-07) ────────────────────────────────
+
+  it('ROLE_PHARMACIST should have Manage Inventory and Route Stock', () => {
+    setup(['ROLE_PHARMACIST']);
+    expect(service.hasPermission('Manage Inventory')).toBeTrue();
+    expect(service.hasPermission('Route Stock')).toBeTrue();
+    expect(service.hasPermission('Receive Goods')).toBeTrue();
+    expect(service.hasPermission('Adjust Stock')).toBeTrue();
+  });
+
+  it('ROLE_STORE_MANAGER should have Manage Inventory', () => {
+    setup(['ROLE_STORE_MANAGER']);
+    expect(service.hasPermission('Manage Inventory')).toBeTrue();
+    expect(service.hasPermission('Receive Goods')).toBeTrue();
+    expect(service.hasPermission('Adjust Stock')).toBeTrue();
+  });
+
+  it('ROLE_STORE_MANAGER should NOT have Dispense Medications', () => {
+    setup(['ROLE_STORE_MANAGER']);
+    expect(service.hasPermission('Dispense Medications')).toBeFalse();
+  });
+
+  it('ROLE_INVENTORY_CLERK should have Receive Goods and Adjust Stock', () => {
+    setup(['ROLE_INVENTORY_CLERK']);
+    expect(service.hasPermission('Receive Goods')).toBeTrue();
+    expect(service.hasPermission('Adjust Stock')).toBeTrue();
+  });
+
+  it('ROLE_INVENTORY_CLERK should NOT have Manage Inventory', () => {
+    setup(['ROLE_INVENTORY_CLERK']);
+    expect(service.hasPermission('Manage Inventory')).toBeFalse();
+  });
+
+  it('ROLE_PHARMACY_VERIFIER should have Dispense Medications and Verify Dispense', () => {
+    setup(['ROLE_PHARMACY_VERIFIER']);
+    expect(service.hasPermission('Dispense Medications')).toBeTrue();
+    expect(service.hasPermission('Verify Dispense')).toBeTrue();
+    expect(service.hasPermission('Route Stock')).toBeTrue();
+  });
+
+  it('ROLE_PHARMACY_VERIFIER should NOT have Manage Inventory', () => {
+    setup(['ROLE_PHARMACY_VERIFIER']);
+    expect(service.hasPermission('Manage Inventory')).toBeFalse();
+  });
+
+  it('ROLE_CLAIMS_REVIEWER should have View Pharmacy Claims and Manage Pharmacy Claims', () => {
+    setup(['ROLE_CLAIMS_REVIEWER']);
+    expect(service.hasPermission('View Pharmacy Claims')).toBeTrue();
+    expect(service.hasPermission('Manage Pharmacy Claims')).toBeTrue();
+  });
+
+  it('ROLE_CLAIMS_REVIEWER should NOT have Dispense Medications', () => {
+    setup(['ROLE_CLAIMS_REVIEWER']);
+    expect(service.hasPermission('Dispense Medications')).toBeFalse();
+  });
 });

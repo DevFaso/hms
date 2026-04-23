@@ -11,11 +11,13 @@ import com.example.hms.payload.dto.mfa.MfaVerifyRequest;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.security.JwtTokenProvider;
+import com.example.hms.security.RefreshTokenCookieService;
 import com.example.hms.security.TokenUserDescriptor;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.service.MfaService;
 import com.example.hms.service.UserCredentialLifecycleService;
 import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -47,6 +49,7 @@ public class MfaController {
     private final JwtTokenProvider jwtTokenProvider;
     private final UserCredentialLifecycleService userCredentialLifecycleService;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final RefreshTokenCookieService refreshTokenCookieService;
 
     /**
      * Start TOTP enrollment — returns secret, otpauth URI, and backup codes.
@@ -126,7 +129,8 @@ public class MfaController {
      * Returns full JWT pair on success.
      */
     @PostMapping("/verify")
-    public ResponseEntity<Object> verifyMfa(@Valid @RequestBody MfaLoginVerifyRequest request) {
+    public ResponseEntity<Object> verifyMfa(@Valid @RequestBody MfaLoginVerifyRequest request,
+                                            HttpServletResponse httpResponse) {
         // Validate the mfaToken
         if (!jwtTokenProvider.isMfaToken(request.mfaToken())) {
             return ResponseEntity.status(401)
@@ -198,6 +202,15 @@ public class MfaController {
                 .forcePasswordChange(user.isForcePasswordChange())
                 .forceUsernameChange(user.isForceUsernameChange())
                 .build();
+
+        // S-01: deliver refresh token via HttpOnly cookie
+        try {
+            long expMs = jwtTokenProvider.getExpiration(refreshToken).getTime();
+            refreshTokenCookieService.write(httpResponse, refreshToken,
+                    Math.max(0L, expMs - System.currentTimeMillis()));
+        } catch (Exception ex) {
+            log.warn("[MFA] Failed to set refresh cookie: {}", ex.getMessage());
+        }
 
         return ResponseEntity.ok(body);
     }
