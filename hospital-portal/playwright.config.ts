@@ -21,8 +21,16 @@ export default defineConfig({
   expect: { timeout: 10_000 },
 
   reporter: process.env.CI
-    ? [['list'], ['html', { open: 'never' }], ['json', { outputFile: 'playwright-report/results.json' }]]
-    : [['list'], ['html', { open: 'on-failure' }], ['json', { outputFile: 'playwright-report/results.json' }]],
+    ? [
+        ['list'],
+        ['html', { open: 'never' }],
+        ['json', { outputFile: 'playwright-report/results.json' }],
+      ]
+    : [
+        ['list'],
+        ['html', { open: 'on-failure' }],
+        ['json', { outputFile: 'playwright-report/results.json' }],
+      ],
 
   use: {
     headless: true,
@@ -49,14 +57,20 @@ export default defineConfig({
         storageState: STORAGE_STATE,
       },
       dependencies: ['setup'],
-      testIgnore: [/global-setup\.ts/, /auth\.spec\.ts/, /smoke\.spec\.ts/, /mobile\.spec\.ts/],
+      testIgnore: [
+        /global-setup\.ts/,
+        /auth\.spec\.ts/,
+        /keycloak-login\.spec\.ts/,
+        /smoke\.spec\.ts/,
+        /mobile\.spec\.ts/,
+      ],
     },
 
     /* ── Unauthenticated tests ─────────── */
     {
       name: 'no-auth',
       use: { ...devices['Desktop Chrome'] },
-      testMatch: /auth\.spec\.ts/,
+      testMatch: [/auth\.spec\.ts/, /keycloak-login\.spec\.ts/],
     },
 
     /* ── Smoke (staging/prod) ──────────── */

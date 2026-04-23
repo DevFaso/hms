@@ -6,6 +6,7 @@ import { Router, RouterModule } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 
 import { AuthService, type LoginUserProfile } from '../auth/auth.service';
+import { OidcAuthService } from '../auth/oidc-auth.service';
 import { RoleContextService } from '../core/role-context.service';
 
 @Component({
@@ -56,9 +57,22 @@ export class Login implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
   private readonly auth = inject(AuthService);
+  private readonly oidcAuth = inject(OidcAuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly isBrowser = isPlatformBrowser(this.platformId);
+
+  /** KC-2b: true when the env enables Keycloak/OIDC login. */
+  get oidcLoginEnabled(): boolean {
+    return this.oidcAuth.isEnabled();
+  }
+
+  /** KC-2b: kick off Authorization Code + PKCE — browser navigates to Keycloak. */
+  loginWithKeycloak(): void {
+    if (!this.isBrowser || !this.oidcLoginEnabled) return;
+    this.error = '';
+    this.oidcAuth.login();
+  }
 
   ngOnInit(): void {
     if (!this.isBrowser) return;
