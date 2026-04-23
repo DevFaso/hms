@@ -1,0 +1,23 @@
+# Railway service config for the production Keycloak instance.
+#
+# Provisioning steps live in README.md in this folder. This file is the
+# single source of truth for Keycloak's deploy settings; Railway will pick
+# it up when the "hms-keycloak" service's config path is set to
+# `keycloak/prod/railway.toml` in the Railway dashboard.
+
+[build]
+builder = "dockerfile"
+dockerfilePath = "keycloak/prod/Dockerfile"
+
+[deploy]
+# Keycloak's built-in readiness probe. `KC_HEALTH_ENABLED=true` is set in
+# the Dockerfile.
+healthcheckPath = "/health/ready"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[deploy.healthcheck]
+path = "/health/ready"
+interval = 30
+timeout = 30
