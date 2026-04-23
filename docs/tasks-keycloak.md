@@ -132,6 +132,13 @@ there is no hard cutover.
   receives tokens and can call a protected endpoint.
 - Token refresh works after access token expires.
 
+**Status**: 🚧 scaffolding shipped on `feature/keycloak-kc3-mobile-appauth`.
+AppAuth 0.11.1 added, `KeycloakAuthService` + `FeatureFlagManager`
+(DataStore, default OFF) wired, `TokenStorage` extended with OIDC keys,
+`AuthInterceptor` prefers OIDC access token over the legacy token, and
+the SSO button is rendered flag-gated on the login screen. Live
+instrumented test against sandbox Keycloak awaits P-2.
+
 ### 2.4 iOS — AppAuth-iOS
 
 - Files in `patient-ios-app/`:
@@ -144,6 +151,15 @@ there is no hard cutover.
 **Acceptance**
 - SFSafariViewController login succeeds against dev Keycloak.
 - API calls on protected endpoints return 200.
+
+**Status**: 🚧 scaffolding shipped on `feature/keycloak-kc3-mobile-appauth`.
+AppAuth-iOS SPM dep added via `project.yml`, `KeycloakAuthService` +
+`FeatureFlags` (default OFF) wired, `KeychainHelper` extended with
+OIDC keys, `APIClient` prefers OIDC token and drives OIDC refresh, SSO
+button rendered flag-gated on the login screen, and the OAuth redirect
+URL scheme is registered in `Info.plist`. `MediHubPatientTests` target
+created with smoke tests for `KeycloakConfig` and `FeatureFlags`. Live
+XCTest UI flow against sandbox Keycloak awaits P-2.
 
 ### 2.5 One-shot user migration
 
@@ -293,7 +309,7 @@ there is no hard cutover.
 | KC-1 | P-1, P-3, P-4, P-5 complete; realm export in repo; dev stack boots Keycloak; OIDC discovery verified. | ✅ shipped on `feature/keycloak-kc1-infra` (commit `2fb3efa0`) |
 | KC-2a | Phase 2.1 backend integration test — Nimbus RSA fixture + 4-case `OidcResourceServerIntegrationTest` proving both OIDC and legacy tokens route correctly through `IssuerAwareBearerTokenResolver`. | ✅ shipped on `feature/keycloak-kc2a-integration-test` (commit `840ca2dc`, Copilot review fixes `d8423d99`) |
 | KC-2b | Phase 2.2 — Angular portal PKCE via `angular-oauth2-oidc`. SSO button on login page (flag-gated), `OidcAuthService` driver, role-context hydration from Keycloak claims, default-OFF + live-Keycloak Playwright specs. | ✅ shipped on `feature/keycloak-kc2b-portal-pkce` (commits `18c007bf` slice 1, `a570db9a` slice 2, `5720e01c` review fixes, slice 3 follows) |
-| KC-3 | Phase 2.3 (Android) + 2.4 (iOS). | 🚧 next |
+| KC-3 | Phase 2.3 (Android) + 2.4 (iOS). | 🚧 scaffolding shipped on `feature/keycloak-kc3-mobile-appauth` — AppAuth-Android + AppAuth-iOS wired, flag-gated SSO button default-OFF; live flows await P-2 |
 | KC-4 | Phase 2.5 user migration + P-6 + 2.6 prod soak. | ⏳ (also blocked by P-2) |
 | KC-5 | Phase 3 (retire internal issuer). | ⏳ blocked by KC-4 soak |
 | KC-6 | Phase 4 (RoleValidator from claims) + reconciliation job. | ⏳ blocked by KC-5 |
