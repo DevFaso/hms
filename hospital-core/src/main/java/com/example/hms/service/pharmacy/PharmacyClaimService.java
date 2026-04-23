@@ -30,4 +30,12 @@ public interface PharmacyClaimService {
     Page<PharmacyClaimResponseDTO> listByDispense(UUID dispenseId, Pageable pageable);
 
     Page<PharmacyClaimResponseDTO> listByPatient(UUID patientId, Pageable pageable);
+
+    /**
+     * Patient self-service variant: lists pharmacy claims for the given patient
+     * ID without going through staff hospital-scope validation. Callers MUST have
+     * already verified that the {@code patientId} belongs to the authenticated
+     * patient (e.g. via {@code PatientPortalService.resolvePatientId(auth)}).
+     */
+    Page<PharmacyClaimResponseDTO> listByPatientForSelf(UUID patientId, Pageable pageable);
 }

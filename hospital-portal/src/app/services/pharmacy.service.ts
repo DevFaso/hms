@@ -779,6 +779,21 @@ export class PharmacyService {
     );
   }
 
+  /**
+   * Patient self-service: fetch the authenticated patient's own pharmacy
+   * payments. Backend resolves patientId from the JWT — no id in the URL.
+   */
+  listMyPharmacyPayments(
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<PharmacyPaymentResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<PharmacyPaymentResponse>>>(
+      '/me/patient/pharmacy/payments',
+      { params },
+    );
+  }
+
   // ── Pharmacy Claims (T-47/T-48/T-49) ──
 
   createClaim(req: PharmacyClaimRequest): Observable<ApiResponse<PharmacyClaimResponse>> {

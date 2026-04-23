@@ -16,8 +16,9 @@ import { ToastService } from '../core/toast.service';
  * T-43 / T-44: pharmacy checkout and French printable receipt.
  *
  * Pharmacist enters a dispense ID, selects payment method (Espèces / Mobile Money / Assurance),
- * posts to the backend, and the printable receipt slides in. Patient-facing text is in French;
- * UI labels go through ngx-translate.
+ * posts to the backend, and the printable receipt slides in. Patient-facing text
+ * is in French and is hardcoded in the template for now; moving copy to
+ * ngx-translate keys is a follow-up task.
  */
 @Component({
   selector: 'app-pharmacy-checkout',

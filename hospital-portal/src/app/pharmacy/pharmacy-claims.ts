@@ -1,5 +1,5 @@
 import { CommonModule, DatePipe, DecimalPipe } from '@angular/common';
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   PharmacyClaimResponse,
@@ -60,13 +60,11 @@ export class PharmacyClaimsComponent implements OnInit {
     });
   }
 
-  filtered(): PharmacyClaimResponse[] {
+  filtered = computed<PharmacyClaimResponse[]>(() => {
     const f = this.filter();
-    if (f === 'ALL') {
-      return this.claims();
-    }
-    return this.claims().filter((c) => c.claimStatus === f);
-  }
+    const all = this.claims();
+    return f === 'ALL' ? all : all.filter((c) => c.claimStatus === f);
+  });
 
   statusLabel(s: PharmacyClaimStatus): string {
     return this.statusOptions.find((o) => o.value === s)?.labelFr ?? s;

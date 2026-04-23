@@ -161,6 +161,18 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 .map(paymentMapper::toResponseDTO);
     }
 
+    /**
+     * Patient self-service read path: does NOT call {@link RoleValidator#requireActiveHospitalId()}
+     * because a patient caller has no staff hospital assignment. The caller (patient portal
+     * controller) is responsible for verifying that {@code patientId} is the authenticated
+     * patient's own ID before invoking this method.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PharmacyPaymentResponseDTO> listByPatientForSelf(UUID patientId, Pageable pageable) {
+        return paymentRepository.findByPatientId(patientId, pageable).map(paymentMapper::toResponseDTO);
+    }
+
     private void validateCreateRequest(PharmacyPaymentRequestDTO dto, UUID hospitalId) {
         if (dto == null) {
             throw new BusinessException("Payment request is required");

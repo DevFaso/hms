@@ -38,9 +38,13 @@ import com.example.hms.payload.dto.portal.PreCheckInResponseDTO;
 import com.example.hms.payload.dto.portal.QuestionnaireDTO;
 import com.example.hms.payload.dto.portal.ProxyGrantRequestDTO;
 import com.example.hms.payload.dto.portal.ProxyResponseDTO;
+import com.example.hms.payload.dto.pharmacy.PharmacyClaimResponseDTO;
+import com.example.hms.payload.dto.pharmacy.PharmacyPaymentResponseDTO;
 import com.example.hms.service.NotificationService;
 import com.example.hms.service.PatientDocumentService;
 import com.example.hms.service.PatientPortalService;
+import com.example.hms.service.pharmacy.PharmacyClaimService;
+import com.example.hms.service.pharmacy.PharmacyPaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -88,6 +92,8 @@ public class PatientPortalController {
     private final PatientPortalService portalService;
     private final PatientDocumentService documentService;
     private final NotificationService notificationService;
+    private final PharmacyPaymentService pharmacyPaymentService;
+    private final PharmacyClaimService pharmacyClaimService;
 
     // ── Profile ──────────────────────────────────────────────────────────
 
@@ -729,5 +735,32 @@ public class PatientPortalController {
     public ResponseEntity<ApiResponseWrapper<com.example.hms.payload.dto.medicalhistory.SocialHistoryResponseDTO>> getMySocialHistory(
             Authentication auth) {
         return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMySocialHistory(auth)));
+    }
+
+    // ── Pharmacy payments / claims (patient self-service) ────────────────
+    // IDOR-safe: patient ID is resolved from the JWT via portalService.resolvePatientId(auth).
+    // The staff-facing endpoints in PharmacyPaymentController / PharmacyClaimController
+    // explicitly exclude ROLE_PATIENT; patients must use these /me/patient routes instead.
+
+    @Operation(summary = "List my pharmacy payments (self-service)")
+    @GetMapping("/pharmacy/payments")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Page<PharmacyPaymentResponseDTO>>> getMyPharmacyPayments(
+            Authentication auth,
+            @PageableDefault(size = 20) Pageable pageable) {
+        UUID patientId = portalService.resolvePatientId(auth);
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                pharmacyPaymentService.listByPatientForSelf(patientId, pageable)));
+    }
+
+    @Operation(summary = "List my pharmacy insurance claims (self-service)")
+    @GetMapping("/pharmacy/claims")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<Page<PharmacyClaimResponseDTO>>> getMyPharmacyClaims(
+            Authentication auth,
+            @PageableDefault(size = 20) Pageable pageable) {
+        UUID patientId = portalService.resolvePatientId(auth);
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                pharmacyClaimService.listByPatientForSelf(patientId, pageable)));
     }
 }
