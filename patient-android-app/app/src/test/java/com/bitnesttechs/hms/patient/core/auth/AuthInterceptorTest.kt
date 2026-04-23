@@ -3,6 +3,7 @@ package com.bitnesttechs.hms.patient.core.auth
 import com.squareup.moshi.Moshi
 import io.mockk.every
 import io.mockk.mockk
+import javax.inject.Provider
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Protocol
@@ -20,6 +21,7 @@ import org.junit.Test
 class AuthInterceptorTest {
 
     private val moshi = Moshi.Builder().build()
+    private val keycloakProvider: Provider<KeycloakAuthService> = Provider { mockk(relaxed = true) }
 
     @Test
     fun `prefers OIDC token over legacy token`() {
@@ -28,7 +30,7 @@ class AuthInterceptorTest {
         every { storage.accessToken } returns "legacy-abc"
         every { storage.refreshToken } returns null
 
-        val interceptor = AuthInterceptor(storage, moshi)
+        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider)
         val header = captureAuthHeader(interceptor)
 
         assertEquals("Bearer oidc-xyz", header)
@@ -41,7 +43,7 @@ class AuthInterceptorTest {
         every { storage.accessToken } returns "legacy-abc"
         every { storage.refreshToken } returns null
 
-        val interceptor = AuthInterceptor(storage, moshi)
+        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider)
         val header = captureAuthHeader(interceptor)
 
         assertEquals("Bearer legacy-abc", header)
@@ -54,7 +56,7 @@ class AuthInterceptorTest {
         every { storage.accessToken } returns null
         every { storage.refreshToken } returns null
 
-        val interceptor = AuthInterceptor(storage, moshi)
+        val interceptor = AuthInterceptor(storage, moshi, keycloakProvider)
         val header = captureAuthHeader(interceptor)
 
         assertEquals(null, header)

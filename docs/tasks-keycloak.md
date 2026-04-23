@@ -55,7 +55,7 @@
 | P-3 | Author `keycloak/realm-export.json` (realm `hms`, 4 clients, 24 roles, TOTP policy, token lifetimes per design doc). Commit to repo so the realm is infra-as-code. | ✅ KC-1 | Backend | 2.x |
 | P-4 | Decide redirect/post-logout URI matrix per environment (dev/uat/prod) for all 3 client apps. Record in `keycloak/redirect-uris.md`. | ✅ KC-1 | Backend + mobile leads | 2.2, 2.3, 2.4 |
 | P-5 | Decide claim names: `preferred_username`, `email`, custom `hospital_id`, custom `role_assignments` (array of `{hospitalId,role}`). Write the protocol mapper JSON into the realm export. | ✅ KC-1 (mappers shipped in `hms-claims` client scope) | Backend | 2.1, 4.1 |
-| P-6 | User provisioning strategy: one-shot migration script that reads `users` + `staff` + `role_assignments` tables and calls Keycloak admin API to create users with temporary passwords + forced reset. | ⏳ KC-4 | Backend | 2.5 |
+| P-6 | User provisioning strategy: one-shot migration script that reads `users` + `staff` + `role_assignments` tables and calls Keycloak admin API to create users with temporary passwords + forced reset. | ✅ KC-4 slice 1 (see [`scripts/keycloak-migration/`](../scripts/keycloak-migration/) + [runbook](runbooks/keycloak-migration-runbook.md)); live run blocked by P-2 | Backend | 2.5 |
 | P-7 | Peer review checkpoint 1: architecture + realm export signed off before any client code changes. | ⏳ (PR open on `feature/keycloak-kc1-infra`) | Reviewer | Phase 2 |
 
 ---
@@ -135,9 +135,13 @@ there is no hard cutover.
 **Status**: 🚧 scaffolding shipped on `feature/keycloak-kc3-mobile-appauth`.
 AppAuth 0.11.1 added, `KeycloakAuthService` + `FeatureFlagManager`
 (DataStore, default OFF) wired, `TokenStorage` extended with OIDC keys,
-`AuthInterceptor` prefers OIDC access token over the legacy token, and
-the SSO button is rendered flag-gated on the login screen. Live
-instrumented test against sandbox Keycloak awaits P-2.
+`AuthInterceptor` prefers OIDC access token over the legacy token and
+refreshes via `KeycloakAuthService.freshAccessToken()` on 401 (KC-4 review
+fix), and the SSO button is rendered flag-gated on the login screen.
+`AuthInterceptorTest` updated to exercise the new `Provider<KeycloakAuthService>`
+constructor wiring (KC-4 hardening). Live instrumented test against sandbox
+Keycloak documented in [`docs/kc3-mobile-test-notes.md`](kc3-mobile-test-notes.md);
+wiring deferred until P-2 makes a Keycloak reachable from CI.
 
 ### 2.4 iOS — AppAuth-iOS
 
@@ -155,27 +159,38 @@ instrumented test against sandbox Keycloak awaits P-2.
 **Status**: 🚧 scaffolding shipped on `feature/keycloak-kc3-mobile-appauth`.
 AppAuth-iOS SPM dep added via `project.yml`, `KeycloakAuthService` +
 `FeatureFlags` (default OFF) wired, `KeychainHelper` extended with
-OIDC keys, `APIClient` prefers OIDC token and drives OIDC refresh, SSO
-button rendered flag-gated on the login screen, and the OAuth redirect
-URL scheme is registered in `Info.plist`. `MediHubPatientTests` target
-created with smoke tests for `KeycloakConfig` and `FeatureFlags`. Live
-XCTest UI flow against sandbox Keycloak awaits P-2.
+OIDC keys, `APIClient` prefers OIDC token and drives OIDC refresh with
+the double-optional flattening fix (KC-4 review), `AuthManager.logout`
+delegates OIDC keychain clear to the service (single source of truth),
+SSO button rendered flag-gated on the login screen, and the OAuth
+redirect URL scheme is registered in `Info.plist`. `MediHubPatientTests`
+target created with smoke tests for `KeycloakConfig` and `FeatureFlags`;
+`KeycloakConfigTests` now captures and restores env vars in tearDown
+(KC-4 hardening). Live XCTest UI flow against sandbox Keycloak
+documented in [`docs/kc3-mobile-test-notes.md`](kc3-mobile-test-notes.md);
+wiring deferred until P-2 makes a Keycloak reachable from CI.
 
-### 2.5 One-shot user migration
+### 2.5 One-shot user migration (✅ KC-4 slice 1 — live run awaits P-2)
 
-- New `scripts/migrate-users-to-keycloak.ts` (or Python) that:
-  - Reads the current `users` + `role_assignments` tables.
-  - Calls Keycloak admin REST API (`/admin/realms/hms/users`) to create
-    accounts, assign realm roles, set `hospital_id` attribute.
-  - Forces password reset email for each user.
-- Idempotent: re-running skips existing users.
-- Dry-run mode that logs the plan without writing.
+- [`scripts/keycloak-migration/`](../scripts/keycloak-migration/):
+  - `src/db.ts` — reads `security.users` (active, not-deleted) joined to
+    `security.user_role_hospital_assignment` → `security.roles`. ✅
+  - `src/keycloak.ts` — minimal Keycloak admin REST client
+    (token, findUser, createUser, resolveRealmRoles, assignRealmRoles,
+    execute-actions-email). ✅
+  - `src/runner.ts` — idempotent per-user loop, `buildUserPayload`
+    emits `hospital_id` + `role_assignments` attributes expected by the
+    `hms-claims` protocol mappers. ✅
+  - `src/migrate.ts` — CLI entry, `--dry-run` flag, exits 1 on any failure. ✅
+  - 22 Node-native unit tests (mocked `pg` + `fetch`). ✅
+- Runbook: [`docs/runbooks/keycloak-migration-runbook.md`](runbooks/keycloak-migration-runbook.md). ✅
 
 **Acceptance**
-- Migration against the dev DB creates N users in dev Keycloak.
-- Re-running is a no-op.
-- Prod migration runbook documented in
-  `docs/runbooks/keycloak-migration-runbook.md`.
+- `npm run lint` + `npm test` green (22/22). ✅
+- Dry-run mode logs the plan without writing. ✅
+- Re-running is idempotent (pre-existing usernames are skipped). ✅
+- Migration against the dev DB creates N users in dev Keycloak. ⏳ awaits P-2
+- Prod migration runbook documented. ✅
 
 ### 2.6 Rollout window
 
@@ -309,8 +324,8 @@ XCTest UI flow against sandbox Keycloak awaits P-2.
 | KC-1 | P-1, P-3, P-4, P-5 complete; realm export in repo; dev stack boots Keycloak; OIDC discovery verified. | ✅ shipped on `feature/keycloak-kc1-infra` (commit `2fb3efa0`) |
 | KC-2a | Phase 2.1 backend integration test — Nimbus RSA fixture + 4-case `OidcResourceServerIntegrationTest` proving both OIDC and legacy tokens route correctly through `IssuerAwareBearerTokenResolver`. | ✅ shipped on `feature/keycloak-kc2a-integration-test` (commit `840ca2dc`, Copilot review fixes `d8423d99`) |
 | KC-2b | Phase 2.2 — Angular portal PKCE via `angular-oauth2-oidc`. SSO button on login page (flag-gated), `OidcAuthService` driver, role-context hydration from Keycloak claims, default-OFF + live-Keycloak Playwright specs. | ✅ shipped on `feature/keycloak-kc2b-portal-pkce` (commits `18c007bf` slice 1, `a570db9a` slice 2, `5720e01c` review fixes, slice 3 follows) |
-| KC-3 | Phase 2.3 (Android) + 2.4 (iOS). | 🚧 scaffolding shipped on `feature/keycloak-kc3-mobile-appauth` — AppAuth-Android + AppAuth-iOS wired, flag-gated SSO button default-OFF; live flows await P-2 |
-| KC-4 | Phase 2.5 user migration + P-6 + 2.6 prod soak. | ⏳ (also blocked by P-2) |
+| KC-3 | Phase 2.3 (Android) + 2.4 (iOS). | 🚧 scaffolding + Copilot-review fixes shipped on `feature/keycloak-kc3-mobile-appauth`. Unit tests re-wired for the new `Provider<KeycloakAuthService>` dependency; live instrumented flows deferred to [`docs/kc3-mobile-test-notes.md`](kc3-mobile-test-notes.md) (P-2). |
+| KC-4 | Phase 2.5 user migration + P-6 + 2.6 prod soak. | 🚧 slice 1 shipped on `feature/keycloak-kc4-user-migration` — migration script + 22 unit tests + runbook. 2.6 prod soak still blocked by P-2. |
 | KC-5 | Phase 3 (retire internal issuer). | ⏳ blocked by KC-4 soak |
 | KC-6 | Phase 4 (RoleValidator from claims) + reconciliation job. | ⏳ blocked by KC-5 |
 
