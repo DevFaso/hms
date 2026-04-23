@@ -34,6 +34,28 @@ android {
         // TODO: revert to production before Play Store release
         // buildConfigField("String", "API_BASE_URL", "\"https://hms-production.up.railway.app/api\"")
         buildConfigField("String", "API_BASE_URL", "\"https://api.hms.dev.bitnesttechs.com/api\"")
+
+        // Keycloak / OIDC config (KC-3). SSO is OFF by default until prod Keycloak is
+        // provisioned (tasks-keycloak.md P-2). Override via local.properties or CI env.
+        val keycloakIssuer = localProps.getProperty("KEYCLOAK_ISSUER", "")
+        val keycloakClientId = localProps.getProperty("KEYCLOAK_CLIENT_ID", "hms-patient-android")
+        val keycloakRedirectScheme = localProps.getProperty(
+            "KEYCLOAK_REDIRECT_SCHEME",
+            "com.bitnesttechs.hms.patient"
+        )
+        val keycloakRedirectUri = localProps.getProperty(
+            "KEYCLOAK_REDIRECT_URI",
+            "$keycloakRedirectScheme:/oauth2redirect"
+        )
+        val keycloakSsoEnabled = localProps.getProperty("KEYCLOAK_SSO_ENABLED", "false")
+        buildConfigField("String", "KEYCLOAK_ISSUER", "\"$keycloakIssuer\"")
+        buildConfigField("String", "KEYCLOAK_CLIENT_ID", "\"$keycloakClientId\"")
+        buildConfigField("String", "KEYCLOAK_REDIRECT_URI", "\"$keycloakRedirectUri\"")
+        buildConfigField("Boolean", "KEYCLOAK_SSO_ENABLED_DEFAULT", keycloakSsoEnabled)
+
+        // AppAuth redirect scheme consumed by net.openid.appauth.RedirectUriReceiverActivity
+        // via manifest placeholder. Must match the scheme portion of KEYCLOAK_REDIRECT_URI.
+        manifestPlaceholders["appAuthRedirectScheme"] = keycloakRedirectScheme
     }
 
     signingConfigs {
@@ -123,8 +145,26 @@ dependencies {
     // Serialization
     implementation(libs.kotlinx.serialization.json)
 
+    // OIDC / OAuth2 (Keycloak SSO — KC-3)
+    implementation(libs.appauth)
+
+    // DataStore-backed feature flags
+    implementation(libs.datastore.preferences)
+
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    // Unit tests (JVM)
+    testImplementation(libs.junit)
+    testImplementation(libs.mockk)
+    testImplementation(libs.coroutines.test)
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.test.ext.junit)
+
+    // Instrumented tests
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.mockk.android)
 }
 
 // Allow references to generated code

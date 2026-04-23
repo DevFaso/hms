@@ -42,7 +42,12 @@ class AuthInterceptor @Inject constructor(
     }
 
     override fun intercept(chain: Interceptor.Chain): Response {
-        val accessToken = tokenStorage.accessToken
+        // Prefer the Keycloak OIDC access token when a Keycloak session is active
+        // (KC-3). Falls back to the legacy username/password access token otherwise.
+        val oidcToken = tokenStorage.oidcAccessToken
+        val legacyToken = tokenStorage.accessToken
+        val accessToken = oidcToken ?: legacyToken
+        val usingOidc = oidcToken != null
         val request = chain.request().newBuilder().apply {
             if (accessToken != null) {
                 header("Authorization", "Bearer $accessToken")
@@ -51,10 +56,13 @@ class AuthInterceptor @Inject constructor(
 
         val response = chain.proceed(request)
 
-        // Auto-refresh on 401
-        if (response.code == 401 && tokenStorage.refreshToken != null) {
+        // Auto-refresh on 401 — only for the legacy (password grant) flow.
+        // OIDC refresh is handled by AppAuth's AuthState#performActionWithFreshTokens
+        // inside KeycloakAuthService, so we do not attempt a legacy refresh when the
+        // current token came from OIDC.
+        if (!usingOidc && response.code == 401 && tokenStorage.refreshToken != null) {
             response.close()
-            val tokenBefore = accessToken
+            val tokenBefore = legacyToken
             val refreshed = runBlocking(Dispatchers.IO) {
                 refreshMutex.withLock {
                     // If another thread already refreshed while we waited, skip
