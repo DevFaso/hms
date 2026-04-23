@@ -145,7 +145,11 @@ final class APIClient {
         // the legacy refresh flow only applies to the password-grant path.
         if http.statusCode == 401, requiresAuth {
             if usingOidc {
-                if let fresh = try? await KeycloakAuthService.shared.freshAccessToken() {
+                // `freshAccessToken()` returns `String?` and may throw, so `try?`
+                // produces `String??`. Flatten so we correctly distinguish
+                // "refresh succeeded with a token" from "no token".
+                let refreshed = (try? await KeycloakAuthService.shared.freshAccessToken()) ?? nil
+                if let fresh = refreshed {
                     request.setValue("Bearer \(fresh)", forHTTPHeaderField: "Authorization")
                 } else {
                     await AuthManager.shared.logout()

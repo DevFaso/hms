@@ -72,7 +72,8 @@ final class AuthManager: ObservableObject {
         }
         KeychainHelper.shared.accessToken = nil
         KeychainHelper.shared.refreshToken = nil
-        KeychainHelper.shared.clearOidc()
+        // `KeycloakAuthService.clear()` also clears the OIDC keychain entries;
+        // keep logout delegating through the service so the two paths cannot drift.
         KeycloakAuthService.shared.clear()
         currentUser = nil
         isAuthenticated = false

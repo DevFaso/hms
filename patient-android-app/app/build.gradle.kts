@@ -47,7 +47,13 @@ android {
             "KEYCLOAK_REDIRECT_URI",
             "$keycloakRedirectScheme:/oauth2redirect"
         )
-        val keycloakSsoEnabled = localProps.getProperty("KEYCLOAK_SSO_ENABLED", "false")
+        val keycloakSsoEnabledRaw = localProps.getProperty("KEYCLOAK_SSO_ENABLED", "false")
+        // Normalize to a strict "true"/"false" literal — values like "1"/"yes"/"on"
+        // (common in CI envs) would otherwise break the generated BuildConfig field.
+        val keycloakSsoEnabled = when (keycloakSsoEnabledRaw.trim().lowercase()) {
+            "true", "1", "yes", "on" -> "true"
+            else -> "false"
+        }
         buildConfigField("String", "KEYCLOAK_ISSUER", "\"$keycloakIssuer\"")
         buildConfigField("String", "KEYCLOAK_CLIENT_ID", "\"$keycloakClientId\"")
         buildConfigField("String", "KEYCLOAK_REDIRECT_URI", "\"$keycloakRedirectUri\"")

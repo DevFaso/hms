@@ -6,9 +6,41 @@ import XCTest
 /// `MEDIHUB_KEYCLOAK_E2E=1` (mirrors the KC-2b Angular E2E pattern).
 final class KeycloakConfigTests: XCTestCase {
 
+    // Capture pre-test env values so tearDown can restore them and avoid
+    // leaking mutations into other tests (parallel execution, custom schemes).
+    private var savedIssuer: String?
+    private var savedRedirectURI: String?
+    private var savedClientID: String?
+
+    override func setUp() {
+        super.setUp()
+        savedIssuer = Self.getenvString("MEDIHUB_KEYCLOAK_ISSUER")
+        savedRedirectURI = Self.getenvString("MEDIHUB_KEYCLOAK_REDIRECT_URI")
+        savedClientID = Self.getenvString("MEDIHUB_KEYCLOAK_CLIENT_ID")
+    }
+
+    override func tearDown() {
+        Self.restoreEnv("MEDIHUB_KEYCLOAK_ISSUER", savedIssuer)
+        Self.restoreEnv("MEDIHUB_KEYCLOAK_REDIRECT_URI", savedRedirectURI)
+        Self.restoreEnv("MEDIHUB_KEYCLOAK_CLIENT_ID", savedClientID)
+        super.tearDown()
+    }
+
+    private static func getenvString(_ name: String) -> String? {
+        guard let raw = getenv(name) else { return nil }
+        return String(cString: raw)
+    }
+
+    private static func restoreEnv(_ name: String, _ value: String?) {
+        if let value = value {
+            setenv(name, value, 1)
+        } else {
+            unsetenv(name)
+        }
+    }
+
     func testIsConfiguredFalseWhenIssuerBlank() {
         setenv("MEDIHUB_KEYCLOAK_ISSUER", "", 1)
-        defer { unsetenv("MEDIHUB_KEYCLOAK_ISSUER") }
         XCTAssertFalse(KeycloakConfig.isConfigured)
     }
 
