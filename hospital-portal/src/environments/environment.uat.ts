@@ -12,6 +12,7 @@ export const environment = {
     clientId: 'hms-portal',
     redirectUri: 'https://uat.hms.example.com/login',
     postLogoutRedirectUri: 'https://uat.hms.example.com/login',
-    scope: 'openid profile email roles hms-claims offline_access',
+    scope: 'openid profile email roles hms-claims',
+    remember: false,
   },
 };

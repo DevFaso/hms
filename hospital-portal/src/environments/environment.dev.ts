@@ -11,6 +11,7 @@ export const environment = {
     clientId: 'hms-portal',
     redirectUri: 'http://localhost:4200/login',
     postLogoutRedirectUri: 'http://localhost:4200/login',
-    scope: 'openid profile email roles hms-claims offline_access',
+    scope: 'openid profile email roles hms-claims',
+    remember: false,
   },
 };

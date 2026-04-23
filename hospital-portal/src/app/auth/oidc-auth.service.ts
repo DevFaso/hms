@@ -4,6 +4,7 @@ import { AuthConfig, OAuthService } from 'angular-oauth2-oidc';
 
 import { environment } from '../../environments/environment';
 import { AuthService, LoginUserProfile } from './auth.service';
+import { RoleContextService } from '../core/role-context.service';
 
 /**
  * KC-2b — Keycloak / OIDC Authorization Code + PKCE driver for the portal.
@@ -27,6 +28,7 @@ import { AuthService, LoginUserProfile } from './auth.service';
 export class OidcAuthService {
   private readonly oauth = inject(OAuthService);
   private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
   private readonly platformId = inject(PLATFORM_ID);
   private readonly isBrowser = isPlatformBrowser(this.platformId);
 
@@ -117,7 +119,10 @@ export class OidcAuthService {
     const accessToken = this.oauth.getAccessToken();
     if (!accessToken) return;
 
-    this.auth.setToken(accessToken, /* remember */ true);
+    // Default false — token lives in sessionStorage and dies with the tab.
+    // Opt in via `environment.oidc.remember = true` for trusted workstations.
+    const remember = environment.oidc?.remember === true;
+    this.auth.setToken(accessToken, remember);
 
     const claims = this.oauth.getIdentityClaims() as Record<string, unknown> | null;
     if (!claims) return;
@@ -128,6 +133,9 @@ export class OidcAuthService {
       .filter((r): r is string => typeof r === 'string')
       .map((r) => (r.startsWith('ROLE_') ? r : `ROLE_${r}`));
 
+    const primaryHospitalId =
+      (claims['hospital_id'] as string) ?? (claims['primaryHospitalId'] as string) ?? undefined;
+
     const profile: LoginUserProfile = {
       id: (claims['sub'] as string) ?? '',
       username: (claims['preferred_username'] as string) ?? (claims['email'] as string) ?? '',
@@ -136,9 +144,20 @@ export class OidcAuthService {
       lastName: (claims['family_name'] as string) ?? undefined,
       roles,
       active: true,
-      primaryHospitalId: (claims['hospital_id'] as string) ?? undefined,
+      primaryHospitalId,
     };
 
     this.auth.setUserProfile(profile);
+
+    // Mirror the bootstrap logic in AppComponent so role guards and the
+    // X-Hospital-Id interceptor work immediately after Keycloak redirect.
+    this.roleContext.setRoles(roles);
+    const permittedIds = this.auth.getPermittedHospitalIds();
+    this.roleContext.setPermittedHospitalIds(permittedIds);
+    if (permittedIds.length === 1) {
+      this.roleContext.activeHospitalId = permittedIds[0];
+    } else if (permittedIds.length > 1 && primaryHospitalId) {
+      this.roleContext.activeHospitalId = primaryHospitalId;
+    }
   }
 }

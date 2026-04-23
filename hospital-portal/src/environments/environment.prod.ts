@@ -13,6 +13,9 @@ export const environment = {
     clientId: 'hms-portal',
     redirectUri: 'https://hms.example.com/login',
     postLogoutRedirectUri: 'https://hms.example.com/login',
-    scope: 'openid profile email roles hms-claims offline_access',
+    // No `offline_access` — keep refresh tokens out of the browser. With short
+    // access-token TTL + silent refresh this gives a balance of UX and safety.
+    scope: 'openid profile email roles hms-claims',
+    remember: false,
   },
 };

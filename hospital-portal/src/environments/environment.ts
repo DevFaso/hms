@@ -14,6 +14,12 @@ export const environment = {
     clientId: 'hms-portal',
     redirectUri: 'http://localhost:4200/login',
     postLogoutRedirectUri: 'http://localhost:4200/login',
-    scope: 'openid profile email roles hms-claims offline_access',
+    // No `offline_access` — refresh tokens are intentionally avoided in the
+    // SPA. Silent refresh via the OIDC iframe + short-lived access tokens.
+    scope: 'openid profile email roles hms-claims',
+    // When false (default), the OIDC access token is mirrored into
+    // sessionStorage so it dies with the tab. Set true only on trusted
+    // workstations where 'remember me' semantics are desired.
+    remember: false,
   },
 };
