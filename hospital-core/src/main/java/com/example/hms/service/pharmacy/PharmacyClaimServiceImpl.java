@@ -58,6 +58,10 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         validateRequest(dto);
 
+        // SUPER_ADMIN may have no active hospital; require one to create a claim.
+        if (hospitalId == null) {
+            throw new BusinessException("Active hospital context is required to create a claim");
+        }
         if (!hospitalId.equals(dto.getHospitalId())) {
             throw new BusinessException("Claim hospital does not match the active hospital");
         }
@@ -180,6 +184,10 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
     @Transactional(readOnly = true)
     public Page<PharmacyClaimResponseDTO> listByHospital(Pageable pageable) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId == null) {
+            // SUPER_ADMIN unscoped read — return claims across hospitals.
+            return claimRepository.findAll(pageable).map(claimMapper::toResponseDTO);
+        }
         return claimRepository.findByHospitalId(hospitalId, pageable).map(claimMapper::toResponseDTO);
     }
 
@@ -203,6 +211,18 @@ public class PharmacyClaimServiceImpl implements PharmacyClaimService {
         }
         return claimRepository.findByPatientIdAndHospitalId(patientId, hospitalId, pageable)
                 .map(claimMapper::toResponseDTO);
+    }
+
+    /**
+     * Patient self-service read path: does NOT call {@link RoleValidator#requireActiveHospitalId()}
+     * because a patient caller has no staff hospital assignment. The caller (patient portal
+     * controller) is responsible for verifying that {@code patientId} is the authenticated
+     * patient's own ID before invoking this method.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<PharmacyClaimResponseDTO> listByPatientForSelf(UUID patientId, Pageable pageable) {
+        return claimRepository.findByPatientId(patientId, pageable).map(claimMapper::toResponseDTO);
     }
 
     private PharmacyClaim loadInScope(UUID id) {

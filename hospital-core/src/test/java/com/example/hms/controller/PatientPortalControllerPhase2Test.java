@@ -16,6 +16,8 @@ import com.example.hms.payload.dto.portal.RescheduleAppointmentRequestDTO;
 import com.example.hms.service.NotificationService;
 import com.example.hms.service.PatientDocumentService;
 import com.example.hms.service.PatientPortalService;
+import com.example.hms.service.pharmacy.PharmacyClaimService;
+import com.example.hms.service.pharmacy.PharmacyPaymentService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
@@ -94,6 +96,16 @@ class PatientPortalControllerPhase2Test {
         @Bean
         public NotificationService notificationService() {
             return mock(NotificationService.class);
+        }
+
+        @Bean
+        public PharmacyPaymentService pharmacyPaymentService() {
+            return mock(PharmacyPaymentService.class);
+        }
+
+        @Bean
+        public PharmacyClaimService pharmacyClaimService() {
+            return mock(PharmacyClaimService.class);
         }
     }
 

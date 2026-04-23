@@ -97,8 +97,25 @@ public class SmsPartnerNotificationChannel implements PartnerNotificationChannel
             sms.send(phone, message);
         } catch (Exception ex) {
             // Never fail the business flow because the SMS gateway is transiently unavailable.
-            log.warn("Partner SMS failed for {}: {}", phone, ex.getMessage());
+            // Mask the destination number to avoid leaking patient/partner phone numbers into logs.
+            log.warn("Partner SMS failed for {}: {}", maskPhone(phone), ex.getMessage());
         }
+    }
+
+    /**
+     * Mask all but the last 4 digits of a phone number for safe logging.
+     * Returns {@code ""} for null/blank input.
+     */
+    static String maskPhone(String phone) {
+        if (phone == null || phone.isBlank()) {
+            return "";
+        }
+        String trimmed = phone.trim();
+        if (trimmed.length() <= 4) {
+            return "****";
+        }
+        String tail = trimmed.substring(trimmed.length() - 4);
+        return "****" + tail;
     }
 
     private static String patientPhone(Patient p) {

@@ -3,11 +3,13 @@ package com.example.hms.config;
 import com.example.hms.security.JwtAuthenticationEntryPoint;
 import com.example.hms.security.JwtAuthenticationFilter;
 import com.example.hms.security.HospitalUserDetailsService;
+import com.example.hms.security.oidc.KeycloakJwtAuthenticationConverter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,6 +27,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.authority.mapping.GrantedAuthoritiesMapper;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -117,6 +121,16 @@ public class SecurityConfig {
     private final HospitalUserDetailsService userDetailsService;
     private final JwtAuthenticationEntryPoint unauthorizedHandler;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+
+    /**
+     * Optional Keycloak resource-server beans (S-03 phase 1). Present only when
+     * {@code app.auth.oidc.issuer-uri} is set (see {@code OidcResourceServerConfig}).
+     * When absent, the resource-server stack is not wired into the filter chain
+     * and behaviour is identical to the pre-S-03 baseline.
+     */
+    private final ObjectProvider<JwtDecoder> oidcJwtDecoderProvider;
+    private final ObjectProvider<BearerTokenResolver> oidcBearerTokenResolverProvider;
+    private final KeycloakJwtAuthenticationConverter oidcJwtAuthenticationConverter;
 
     @Value("${app.cors.allowed-origins:http://localhost:4200}")
     private String allowedOrigins;
@@ -581,6 +595,25 @@ public class SecurityConfig {
                 .policy(org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN)
             )
         );
+
+        // ── Optional Keycloak resource-server stack (S-03 phase 1) ──────────
+        // Activated only when app.auth.oidc.issuer-uri is configured. The
+        // IssuerAwareBearerTokenResolver routes only Keycloak-issued tokens
+        // (matched by `iss` claim) to this filter, so the existing custom
+        // JwtAuthenticationFilter continues to handle internal HMAC/RSA tokens
+        // unchanged.
+        JwtDecoder oidcDecoder = oidcJwtDecoderProvider.getIfAvailable();
+        BearerTokenResolver oidcResolver = oidcBearerTokenResolverProvider.getIfAvailable();
+        if (oidcDecoder != null && oidcResolver != null) {
+            SEC_LOG.info("[OIDC] Keycloak resource-server is enabled — accepting JWTs alongside internal tokens");
+            http.oauth2ResourceServer(oauth -> oauth
+                .bearerTokenResolver(oidcResolver)
+                .jwt(jwt -> jwt
+                    .decoder(oidcDecoder)
+                    .jwtAuthenticationConverter(oidcJwtAuthenticationConverter)
+                )
+            );
+        }
 
         return http.build();
     }

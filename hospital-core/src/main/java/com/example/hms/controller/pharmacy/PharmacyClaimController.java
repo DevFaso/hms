@@ -118,8 +118,11 @@ public class PharmacyClaimController {
                 claimService.listByDispense(dispenseId, pageable)));
     }
 
+    // PATIENT role intentionally excluded: patient-scoped reads are served from
+    // /me/patient/pharmacy/claims which resolves the patient from the JWT,
+    // preventing IDOR via arbitrary {patientId}.
     @GetMapping("/patient/{patientId}")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'BILLING_SPECIALIST', 'CLAIMS_REVIEWER', 'PATIENT', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @PreAuthorize(CLAIMS_ROLES)
     public ResponseEntity<ApiResponseWrapper<Page<PharmacyClaimResponseDTO>>> listByPatient(
             @PathVariable UUID patientId,
             @PageableDefault(size = 20) Pageable pageable) {

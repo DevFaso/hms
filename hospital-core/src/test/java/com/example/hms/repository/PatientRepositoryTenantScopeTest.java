@@ -6,6 +6,7 @@ import com.example.hms.model.Organization;
 import com.example.hms.model.Patient;
 import com.example.hms.model.PatientHospitalRegistration;
 import com.example.hms.model.User;
+import com.example.hms.security.EncryptionKeyHolder;
 import com.example.hms.security.context.HospitalContext;
 import com.example.hms.security.context.HospitalContextHolder;
 import com.example.hms.security.tenant.TenantContextAccessor;
@@ -29,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
 @ActiveProfiles("test")
-@Import(TenantContextAccessor.class)
+@Import({TenantContextAccessor.class, EncryptionKeyHolder.class})
 class PatientRepositoryTenantScopeTest {
 
     @Autowired

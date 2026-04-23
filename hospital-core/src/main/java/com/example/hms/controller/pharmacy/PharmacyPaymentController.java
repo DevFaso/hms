@@ -25,8 +25,11 @@ import java.util.UUID;
 
 /**
  * T-41: pharmacy payment checkout endpoints. Supports recording cash, mobile-money,
- * and insurance payments against a {@code Dispense}. Read endpoints also power
- * the patient portal invoice view (T-45).
+ * and insurance payments against a {@code Dispense}. Read endpoints in this controller
+ * are staff-facing payment history and invoice views; the patient portal invoice view
+ * (T-45) is served from {@code /me/patient/pharmacy/payments} in
+ * {@link com.example.hms.controller.PatientPortalController} which resolves the patient
+ * from the JWT (prevents IDOR).
  */
 @RestController
 @RequestMapping("/pharmacy/payments")

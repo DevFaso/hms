@@ -14,8 +14,11 @@ function handleExpiredToken(
   next: HttpHandlerFn,
   expiredToken: string,
 ): Observable<HttpEvent<unknown>> {
-  if (!auth.getRefreshToken()) {
-    // No way to renew — hard logout.
+  if (!auth.getRefreshToken() && !auth.getUserProfile()) {
+    // No legacy refresh token AND no recorded user profile — we have no
+    // evidence of a session, so the cookie won't help either. Hard logout.
+    // (S-01: refresh token now lives in an HttpOnly cookie that JS cannot read,
+    //  so we use the persisted user profile as proof of an active session.)
     auth.logout();
     void router.navigate(['/login']);
     return EMPTY;
