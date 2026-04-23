@@ -8,8 +8,11 @@
 > **Status legend:** ✅ done · 🚧 in progress · ⏸ blocked · ⏳ pending
 >
 > **Current state:** Phase 1 (resource-server wiring) is ✅ merged on
-> `develop`/`uat`/`main`. Everything below is ⏳ pending and requires
-> infrastructure + peer review before the first PR lands.
+> `develop`/`uat`/`main`. **Sprint KC-1 (infra foundation) is ✅ shipped
+> on `feature/keycloak-kc1-infra`** — dev docker-compose profile,
+> `keycloak/realm-export.json`, redirect URI matrix, README. Remaining
+> phases (2.x onward) are ⏳ pending and still require P-2 (prod
+> Keycloak on Railway) + P-6/P-7 sign-off before the first client PR.
 
 ---
 
@@ -34,15 +37,15 @@
 
 ## Cross-cutting prerequisites (block Phase 2)
 
-| # | Task | Owner | Blocks |
-|---|------|-------|--------|
-| P-1 | Provision Keycloak **dev** instance via `docker-compose.yml` (new `keycloak` + `keycloak_db` services, PostgreSQL storage). | Backend/DevOps | 2.x |
-| P-2 | Provision Keycloak **prod** instance on Railway (managed Postgres, HTTPS, admin console behind VPN or IP allow-list). | DevOps | 2.x |
-| P-3 | Author `keycloak/realm-export.json` (realm `hms`, 4 clients, 20 roles, TOTP required for admin roles, token lifetimes per design doc). Commit to repo so the realm is infra-as-code. | Backend | 2.x |
-| P-4 | Decide redirect/post-logout URI matrix per environment (dev/uat/prod) for all 3 client apps. Record in `keycloak/redirect-uris.md`. | Backend + mobile leads | 2.2, 2.3, 2.4 |
-| P-5 | Decide claim names: `preferred_username`, `email`, custom `hospital_id`, custom `role_assignments` (array of `{hospitalId,role}`). Write the protocol mapper JSON into the realm export. | Backend | 2.1, 4.1 |
-| P-6 | User provisioning strategy: one-shot migration script that reads `users` + `staff` + `role_assignments` tables and calls Keycloak admin API to create users with temporary passwords + forced reset. | Backend | 2.5 |
-| P-7 | Peer review checkpoint 1: architecture + realm export signed off before any client code changes. | Reviewer | Phase 2 |
+| # | Task | Status | Owner | Blocks |
+|---|------|--------|-------|--------|
+| P-1 | Provision Keycloak **dev** instance via `docker-compose.yml` (new `keycloak` + `keycloak-db` services, PostgreSQL storage). | ✅ KC-1 | Backend/DevOps | 2.x |
+| P-2 | Provision Keycloak **prod** instance on Railway (managed Postgres, HTTPS, admin console behind VPN or IP allow-list). | ⏳ | DevOps | 2.x |
+| P-3 | Author `keycloak/realm-export.json` (realm `hms`, 4 clients, 24 roles, TOTP policy, token lifetimes per design doc). Commit to repo so the realm is infra-as-code. | ✅ KC-1 | Backend | 2.x |
+| P-4 | Decide redirect/post-logout URI matrix per environment (dev/uat/prod) for all 3 client apps. Record in `keycloak/redirect-uris.md`. | ✅ KC-1 | Backend + mobile leads | 2.2, 2.3, 2.4 |
+| P-5 | Decide claim names: `preferred_username`, `email`, custom `hospital_id`, custom `role_assignments` (array of `{hospitalId,role}`). Write the protocol mapper JSON into the realm export. | ✅ KC-1 (mappers shipped in `hms-claims` client scope) | Backend | 2.1, 4.1 |
+| P-6 | User provisioning strategy: one-shot migration script that reads `users` + `staff` + `role_assignments` tables and calls Keycloak admin API to create users with temporary passwords + forced reset. | ⏳ KC-4 | Backend | 2.5 |
+| P-7 | Peer review checkpoint 1: architecture + realm export signed off before any client code changes. | ⏳ (PR open on `feature/keycloak-kc1-infra`) | Reviewer | Phase 2 |
 
 ---
 
@@ -262,14 +265,14 @@ there is no hard cutover.
 
 ## Sprint slicing (suggested)
 
-| Sprint | Goal |
-|--------|------|
-| KC-1 | P-1..P-7 complete; realm export in repo; dev stack boots Keycloak. |
-| KC-2 | Phase 2.1 (backend strict OIDC) + 2.2 (Angular portal). UAT rollout begins. |
-| KC-3 | Phase 2.3 (Android) + 2.4 (iOS). |
-| KC-4 | Phase 2.5 user migration + 2.6 prod soak. |
-| KC-5 | Phase 3 (retire internal issuer). |
-| KC-6 | Phase 4 (RoleValidator from claims) + reconciliation job. |
+| Sprint | Goal | Status |
+|--------|------|--------|
+| KC-1 | P-1, P-3, P-4, P-5 complete; realm export in repo; dev stack boots Keycloak; OIDC discovery verified. | ✅ shipped on `feature/keycloak-kc1-infra` (commit `2fb3efa0`) |
+| KC-2 | Phase 2.1 (backend Testcontainers integration test proving both OIDC and legacy tokens authenticate) + 2.2 (Angular portal PKCE). UAT rollout begins. | 🚧 next |
+| KC-3 | Phase 2.3 (Android) + 2.4 (iOS). | ⏳ |
+| KC-4 | Phase 2.5 user migration + P-6 + 2.6 prod soak. | ⏳ |
+| KC-5 | Phase 3 (retire internal issuer). | ⏳ blocked by KC-4 soak |
+| KC-6 | Phase 4 (RoleValidator from claims) + reconciliation job. | ⏳ blocked by KC-5 |
 
 ---
 
