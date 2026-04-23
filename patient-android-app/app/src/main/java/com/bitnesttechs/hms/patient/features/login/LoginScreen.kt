@@ -1,6 +1,8 @@
 package com.bitnesttechs.hms.patient.features.login
 
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.compose.animation.AnimatedVisibility
@@ -49,12 +51,23 @@ fun LoginScreen(
     viewModel: LoginViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val ssoEnabled by viewModel.ssoEnabled.collectAsState()
     val context = LocalContext.current
 
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
+
+    // Launcher for the AppAuth custom-tab authorization flow (KC-3).
+    val ssoLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val data = result.data
+        if (data != null) {
+            viewModel.completeSsoLogin(data)
+        }
+    }
 
     // Check saved credentials for biometric button
     val hasSavedCredentials = remember { tokenStorage.savedUsername != null }
@@ -223,6 +236,21 @@ fun LoginScreen(
                             Icon(Icons.Default.Fingerprint, null, tint = BrandBlue)
                             Spacer(Modifier.width(8.dp))
                             Text(stringResource(R.string.biometric_sign_in), color = BrandBlue)
+                        }
+                    }
+
+                    // SSO (Keycloak) button — flag-gated, hidden until KC-3 goes live
+                    AnimatedVisibility(visible = ssoEnabled) {
+                        OutlinedButton(
+                            onClick = { viewModel.startSsoLogin { ssoLauncher.launch(it) } },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(52.dp),
+                            enabled = !uiState.isLoading
+                        ) {
+                            Icon(Icons.Default.Lock, null, tint = BrandBlue)
+                            Spacer(Modifier.width(8.dp))
+                            Text(stringResource(R.string.sso_sign_in), color = BrandBlue)
                         }
                     }
 
