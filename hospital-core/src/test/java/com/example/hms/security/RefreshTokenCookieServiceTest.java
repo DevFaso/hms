@@ -26,12 +26,13 @@ class RefreshTokenCookieServiceTest {
         verify(response).addHeader(eq("Set-Cookie"), captor.capture());
 
         String setCookie = captor.getValue();
-        assertThat(setCookie).contains("hms_refresh=rt-value");
-        assertThat(setCookie).contains("HttpOnly");
-        assertThat(setCookie).contains("Secure");
-        assertThat(setCookie).contains("SameSite=Strict");
-        assertThat(setCookie).contains("Path=/api/auth");
-        assertThat(setCookie).contains("Max-Age=60");
+        assertThat(setCookie)
+                .contains("hms_refresh=rt-value")
+                .contains("HttpOnly")
+                .contains("Secure")
+                .contains("SameSite=Strict")
+                .contains("Path=/api/auth")
+                .contains("Max-Age=60");
     }
 
     @Test
@@ -56,8 +57,9 @@ class RefreshTokenCookieServiceTest {
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(response).addHeader(eq("Set-Cookie"), captor.capture());
         String setCookie = captor.getValue();
-        assertThat(setCookie).doesNotContain("Secure");
-        assertThat(setCookie).contains("SameSite=Lax");
+        assertThat(setCookie)
+                .doesNotContain("Secure")
+                .contains("SameSite=Lax");
     }
 
     @Test
@@ -109,11 +111,12 @@ class RefreshTokenCookieServiceTest {
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(response).addHeader(eq("Set-Cookie"), captor.capture());
         String setCookie = captor.getValue();
-        assertThat(setCookie).contains("hms_refresh=");
-        assertThat(setCookie).contains("Max-Age=0");
-        assertThat(setCookie).contains("HttpOnly");
-        assertThat(setCookie).contains("Secure");
-        assertThat(setCookie).contains("SameSite=Strict");
-        assertThat(setCookie).contains("Path=/api/auth");
+        assertThat(setCookie)
+                .contains("hms_refresh=")
+                .contains("Max-Age=0")
+                .contains("HttpOnly")
+                .contains("Secure")
+                .contains("SameSite=Strict")
+                .contains("Path=/api/auth");
     }
 }

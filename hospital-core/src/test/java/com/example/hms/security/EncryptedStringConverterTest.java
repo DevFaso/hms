@@ -49,8 +49,9 @@ class EncryptedStringConverterTest {
         String original = "John Q. Patient — DOB 1980-01-15, MRN 0001234";
         String encrypted = converter.convertToDatabaseColumn(original);
 
-        assertThat(encrypted).isNotEqualTo(original);
-        assertThat(encrypted).startsWith("gcm1:");
+        assertThat(encrypted)
+                .isNotEqualTo(original)
+                .startsWith("gcm1:");
         assertThat(converter.convertToEntityAttribute(encrypted)).isEqualTo(original);
     }
 
@@ -76,8 +77,8 @@ class EncryptedStringConverterTest {
 
     @Test
     void empty_isPassedThroughWithoutEncryption() {
-        assertThat(converter.convertToDatabaseColumn("")).isEqualTo("");
-        assertThat(converter.convertToEntityAttribute("")).isEqualTo("");
+        assertThat(converter.convertToDatabaseColumn("")).isEmpty();
+        assertThat(converter.convertToEntityAttribute("")).isEmpty();
     }
 
     @Test
@@ -133,9 +134,9 @@ class EncryptedStringConverterTest {
     void missingKey_doesNotBlockNullOrEmptyOrLegacyReads() {
         EncryptionKeyHolder.setKeyForTesting(null);
         assertThat(converter.convertToDatabaseColumn(null)).isNull();
-        assertThat(converter.convertToDatabaseColumn("")).isEqualTo("");
+        assertThat(converter.convertToDatabaseColumn("")).isEmpty();
         assertThat(converter.convertToEntityAttribute(null)).isNull();
-        assertThat(converter.convertToEntityAttribute("")).isEqualTo("");
+        assertThat(converter.convertToEntityAttribute("")).isEmpty();
         assertThat(converter.convertToEntityAttribute("legacy-plaintext"))
                 .isEqualTo("legacy-plaintext");
     }

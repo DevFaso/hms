@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.util.Base64;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Holds the symmetric AES-256 key used by {@link EncryptedStringConverter}.
@@ -31,8 +32,13 @@ public class EncryptionKeyHolder {
     /** Base64-encoded 256-bit (32 byte) AES key, or empty string if not configured. */
     private final String configuredKey;
 
-    private static volatile SecretKey keyRef;
-    private static volatile boolean configuredFlag;
+    /**
+     * Thread-safe holder for the loaded AES key. Used through an
+     * {@link AtomicReference} so the static accessor contract is visible to
+     * JPA {@code AttributeConverter} instances across threads without
+     * relying on bare {@code volatile} fields.
+     */
+    private static final AtomicReference<SecretKey> KEY_REF = new AtomicReference<>();
 
     public EncryptionKeyHolder(@Value("${app.encryption.key:}") String configuredKey) {
         this.configuredKey = configuredKey == null ? "" : configuredKey.trim();
@@ -41,8 +47,7 @@ public class EncryptionKeyHolder {
     @PostConstruct
     void init() {
         if (configuredKey.isEmpty()) {
-            keyRef = null;
-            configuredFlag = false;
+            KEY_REF.set(null);
             return;
         }
         byte[] decoded;
@@ -57,18 +62,17 @@ public class EncryptionKeyHolder {
                     "app.encryption.key must decode to exactly 32 bytes (256 bits); got "
                             + decoded.length);
         }
-        keyRef = new SecretKeySpec(decoded, "AES");
-        configuredFlag = true;
+        KEY_REF.set(new SecretKeySpec(decoded, "AES"));
     }
 
     /** @return the loaded AES key, or {@code null} if the property was empty. */
     public static SecretKey getKey() {
-        return keyRef;
+        return KEY_REF.get();
     }
 
     /** @return {@code true} when an encryption key has been configured. */
     public static boolean isConfigured() {
-        return configuredFlag;
+        return KEY_REF.get() != null;
     }
 
     /**
@@ -76,8 +80,7 @@ public class EncryptionKeyHolder {
      * Production code should always rely on {@link #init()}.
      */
     static void setKeyForTesting(SecretKey key) {
-        keyRef = key;
-        configuredFlag = key != null;
+        KEY_REF.set(key);
     }
 
     /**
@@ -86,6 +89,6 @@ public class EncryptionKeyHolder {
      * installed by {@link #init()} or a previously-installed test key).
      */
     static SecretKey getKeyForTesting() {
-        return keyRef;
+        return KEY_REF.get();
     }
 }
