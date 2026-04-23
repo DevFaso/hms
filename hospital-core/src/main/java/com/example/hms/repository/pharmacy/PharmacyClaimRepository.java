@@ -1,11 +1,13 @@
 package com.example.hms.repository.pharmacy;
 
+import com.example.hms.enums.PharmacyClaimStatus;
 import com.example.hms.model.pharmacy.PharmacyClaim;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -14,4 +16,17 @@ public interface PharmacyClaimRepository extends JpaRepository<PharmacyClaim, UU
     Page<PharmacyClaim> findByDispenseId(UUID dispenseId, Pageable pageable);
 
     Page<PharmacyClaim> findByPatientId(UUID patientId, Pageable pageable);
+
+    Page<PharmacyClaim> findByDispenseIdAndHospitalId(UUID dispenseId, UUID hospitalId, Pageable pageable);
+
+    Page<PharmacyClaim> findByPatientIdAndHospitalId(UUID patientId, UUID hospitalId, Pageable pageable);
+
+    Page<PharmacyClaim> findByHospitalId(UUID hospitalId, Pageable pageable);
+
+    Page<PharmacyClaim> findByHospitalIdAndClaimStatus(UUID hospitalId,
+                                                        PharmacyClaimStatus status,
+                                                        Pageable pageable);
+
+    List<PharmacyClaim> findByHospitalIdAndClaimStatusIn(UUID hospitalId,
+                                                         List<PharmacyClaimStatus> statuses);
 }

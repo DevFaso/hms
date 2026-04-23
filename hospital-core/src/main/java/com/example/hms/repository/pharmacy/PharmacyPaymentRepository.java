@@ -14,4 +14,8 @@ public interface PharmacyPaymentRepository extends JpaRepository<PharmacyPayment
     Page<PharmacyPayment> findByDispenseId(UUID dispenseId, Pageable pageable);
 
     Page<PharmacyPayment> findByPatientId(UUID patientId, Pageable pageable);
+
+    Page<PharmacyPayment> findByDispenseIdAndHospital_Id(UUID dispenseId, UUID hospitalId, Pageable pageable);
+
+    Page<PharmacyPayment> findByPatientIdAndHospital_Id(UUID patientId, UUID hospitalId, Pageable pageable);
 }

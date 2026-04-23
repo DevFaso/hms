@@ -1,0 +1,110 @@
+<div class="pharmacy-checkout">
+  <header class="page-header no-print">
+    <h2>Encaissement pharmacie</h2>
+    <p class="subtitle">Recherche de dispense et enregistrement du paiement</p>
+  </header>
+
+  <!-- Lookup card -->
+  <section class="card no-print" *ngIf="!receipt()">
+    <h3>1. Rechercher un dispense</h3>
+    <div class="form-row">
+      <label for="dispenseId">Identifiant du dispense</label>
+      <input id="dispenseId" type="text" [(ngModel)]="dispenseId" placeholder="UUID du dispense" />
+      <button type="button" class="btn-primary" [disabled]="loading()" (click)="loadDispense()">
+        Charger
+      </button>
+    </div>
+
+    <div class="dispense-summary" *ngIf="dispense() as d">
+      <dl>
+        <dt>Médicament</dt>
+        <dd>{{ d.medicationName }}</dd>
+        <dt>Quantité délivrée</dt>
+        <dd>{{ d.quantityDispensed }} {{ d.unit }}</dd>
+        <dt>Patient</dt>
+        <dd>{{ d.patientId }}</dd>
+        <dt>Pharmacie</dt>
+        <dd>{{ d.pharmacyId }}</dd>
+      </dl>
+    </div>
+  </section>
+
+  <!-- Payment form -->
+  <section class="card no-print" *ngIf="dispense() && !receipt()">
+    <h3>2. Enregistrer le paiement</h3>
+    <div class="form-row">
+      <label for="amount">Montant (XOF)</label>
+      <input id="amount" type="number" min="0" [(ngModel)]="amount" />
+    </div>
+    <div class="form-row">
+      <span class="form-label">Mode de paiement</span>
+      <div class="radio-group">
+        <label *ngFor="let m of methods" class="radio">
+          <input type="radio" name="method" [value]="m.value" [(ngModel)]="paymentMethod" />
+          {{ m.labelFr }}
+        </label>
+      </div>
+    </div>
+    <div class="form-row" *ngIf="paymentMethod !== 'CASH'">
+      <label for="ref">Référence</label>
+      <input
+        id="ref"
+        type="text"
+        [(ngModel)]="referenceNumber"
+        placeholder="Transaction / police"
+      />
+    </div>
+    <div class="form-row">
+      <label for="notes">Notes</label>
+      <textarea id="notes" [(ngModel)]="notes" rows="2"></textarea>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn-primary" [disabled]="loading()" (click)="submit()">
+        Valider le paiement
+      </button>
+    </div>
+  </section>
+
+  <!-- ========= Printable French receipt (T-44) ========= -->
+  <section class="receipt" *ngIf="receipt() as r">
+    <header class="receipt-header">
+      <h1>Reçu de pharmacie</h1>
+      <p class="receipt-meta">
+        Nº {{ r.id }}<br />
+        Émis le : {{ r.createdAt | date: 'dd/MM/yyyy HH:mm' }}
+      </p>
+    </header>
+
+    <div class="receipt-body">
+      <dl>
+        <dt>Dispense</dt>
+        <dd>{{ r.dispenseId }}</dd>
+        <dt>Médicament</dt>
+        <dd>{{ dispense()?.medicationName }}</dd>
+        <dt>Patient</dt>
+        <dd>{{ r.patientId }}</dd>
+        <dt>Mode de paiement</dt>
+        <dd>{{ methodLabel(r.paymentMethod) }}</dd>
+        <dt *ngIf="r.referenceNumber">Référence</dt>
+        <dd *ngIf="r.referenceNumber">{{ r.referenceNumber }}</dd>
+      </dl>
+
+      <div class="total-row">
+        <span>Total payé</span>
+        <span class="amount">{{ r.amount | number: '1.0-0' }} {{ r.currency }}</span>
+      </div>
+
+      <p class="notes" *ngIf="r.notes">{{ r.notes }}</p>
+    </div>
+
+    <footer class="receipt-footer">
+      <p>Merci de votre confiance. Conservez ce reçu pour vos dossiers médicaux.</p>
+      <p class="signature">Signature du pharmacien : ____________________</p>
+    </footer>
+
+    <div class="actions no-print">
+      <button type="button" class="btn-primary" (click)="printReceipt()">Imprimer</button>
+      <button type="button" class="btn-secondary" (click)="reset()">Nouveau paiement</button>
+    </div>
+  </section>
+</div>

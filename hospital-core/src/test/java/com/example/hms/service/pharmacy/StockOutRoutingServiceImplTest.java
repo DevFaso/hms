@@ -41,6 +41,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -58,6 +59,7 @@ class StockOutRoutingServiceImplTest {
     @Mock private RoleValidator roleValidator;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private PharmacyServiceSupport support;
+    @Mock private com.example.hms.service.pharmacy.partner.PartnerNotificationChannel partnerChannel;
 
     @InjectMocks
     private StockOutRoutingServiceImpl service;
@@ -202,6 +204,9 @@ class StockOutRoutingServiceImplTest {
         assertThat(prescription.getPharmacyName()).isEqualTo("Partner Pharmacy");
         verify(prescriptionRepository).save(prescription);
         verify(routingDecisionRepository).save(decision);
+        // T-40: patient notified out-of-stock with partner routing suffix
+        verify(support).notifyOutOfStock(eq(patient), eq(prescription.getMedicationName()),
+                contains("Partner Pharmacy"));
     }
 
     @Test
@@ -353,6 +358,9 @@ class StockOutRoutingServiceImplTest {
         assertThat(result.getRoutingType()).isEqualTo("PRINT");
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PRINTED_FOR_PATIENT);
         verify(prescriptionRepository).save(prescription);
+        // T-40: patient notified out-of-stock with print-for-patient suffix
+        verify(support).notifyOutOfStock(eq(patient), eq(prescription.getMedicationName()),
+                contains("pharmacie de votre choix"));
     }
 
     @Test
@@ -373,6 +381,9 @@ class StockOutRoutingServiceImplTest {
         assertThat(result.getRoutingType()).isEqualTo("BACKORDER");
         assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_STOCK);
         verify(prescriptionRepository).save(prescription);
+        // T-40: patient notified out-of-stock with back-order suffix including restock date
+        verify(support).notifyOutOfStock(eq(patient), eq(prescription.getMedicationName()),
+                contains("estim\u00e9e au"));
     }
 
     @Test

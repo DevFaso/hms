@@ -296,6 +296,69 @@ export interface RoutingDecisionResponse {
   updatedAt: string;
 }
 
+/* ───────────────────────────── Pharmacy Payments (T-41) ───────────────────────────── */
+
+export type PharmacyPaymentMethod = 'CASH' | 'MOBILE_MONEY' | 'INSURANCE';
+
+export interface PharmacyPaymentRequest {
+  dispenseId: string;
+  patientId: string;
+  hospitalId: string;
+  paymentMethod: PharmacyPaymentMethod;
+  amount: number;
+  currency?: string;
+  referenceNumber?: string;
+  receivedBy: string;
+  notes?: string;
+}
+
+export interface PharmacyPaymentResponse {
+  id: string;
+  dispenseId: string;
+  patientId: string;
+  hospitalId: string;
+  paymentMethod: PharmacyPaymentMethod;
+  amount: number;
+  currency: string;
+  referenceNumber?: string;
+  receivedBy: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/* ───────────────────────────── Pharmacy Claims (T-47/T-48/T-49) ───────────────────────────── */
+
+export type PharmacyClaimStatus = 'DRAFT' | 'SUBMITTED' | 'ACCEPTED' | 'REJECTED' | 'PAID';
+
+export interface PharmacyClaimRequest {
+  dispenseId: string;
+  patientId: string;
+  hospitalId: string;
+  coverageReference?: string;
+  claimStatus?: PharmacyClaimStatus;
+  amount: number;
+  currency?: string;
+  notes?: string;
+  rejectionReason?: string;
+}
+
+export interface PharmacyClaimResponse {
+  id: string;
+  dispenseId: string;
+  patientId: string;
+  hospitalId: string;
+  coverageReference?: string;
+  claimStatus: PharmacyClaimStatus;
+  amount: number;
+  currency: string;
+  submittedAt?: string;
+  submittedBy?: string;
+  rejectionReason?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 /* ───────────────────────────── Service ───────────────────────────── */
 
 @Injectable({ providedIn: 'root' })
@@ -680,5 +743,119 @@ export class PharmacyService {
       `/pharmacy/routing/decisions/patient/${patientId}`,
       { params },
     );
+  }
+
+  // ── Pharmacy Payments (T-41) ──
+
+  createPayment(req: PharmacyPaymentRequest): Observable<ApiResponse<PharmacyPaymentResponse>> {
+    return this.http.post<ApiResponse<PharmacyPaymentResponse>>('/pharmacy/payments', req);
+  }
+
+  getPayment(id: string): Observable<ApiResponse<PharmacyPaymentResponse>> {
+    return this.http.get<ApiResponse<PharmacyPaymentResponse>>(`/pharmacy/payments/${id}`);
+  }
+
+  listPaymentsByDispense(
+    dispenseId: string,
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<PharmacyPaymentResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<PharmacyPaymentResponse>>>(
+      `/pharmacy/payments/dispense/${dispenseId}`,
+      { params },
+    );
+  }
+
+  listPaymentsByPatient(
+    patientId: string,
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<PharmacyPaymentResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<PharmacyPaymentResponse>>>(
+      `/pharmacy/payments/patient/${patientId}`,
+      { params },
+    );
+  }
+
+  /**
+   * Patient self-service: fetch the authenticated patient's own pharmacy
+   * payments. Backend resolves patientId from the JWT — no id in the URL.
+   */
+  listMyPharmacyPayments(
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<PharmacyPaymentResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<PharmacyPaymentResponse>>>(
+      '/me/patient/pharmacy/payments',
+      { params },
+    );
+  }
+
+  // ── Pharmacy Claims (T-47/T-48/T-49) ──
+
+  createClaim(req: PharmacyClaimRequest): Observable<ApiResponse<PharmacyClaimResponse>> {
+    return this.http.post<ApiResponse<PharmacyClaimResponse>>('/pharmacy/claims', req);
+  }
+
+  submitClaim(id: string): Observable<ApiResponse<PharmacyClaimResponse>> {
+    return this.http.post<ApiResponse<PharmacyClaimResponse>>(`/pharmacy/claims/${id}/submit`, {});
+  }
+
+  acceptClaim(id: string, notes?: string): Observable<ApiResponse<PharmacyClaimResponse>> {
+    return this.http.post<ApiResponse<PharmacyClaimResponse>>(`/pharmacy/claims/${id}/accept`, {
+      notes: notes ?? null,
+    });
+  }
+
+  rejectClaim(id: string, rejectionReason: string): Observable<ApiResponse<PharmacyClaimResponse>> {
+    return this.http.post<ApiResponse<PharmacyClaimResponse>>(`/pharmacy/claims/${id}/reject`, {
+      rejectionReason,
+    });
+  }
+
+  payClaim(id: string, notes?: string): Observable<ApiResponse<PharmacyClaimResponse>> {
+    return this.http.post<ApiResponse<PharmacyClaimResponse>>(`/pharmacy/claims/${id}/pay`, {
+      notes: notes ?? null,
+    });
+  }
+
+  getClaim(id: string): Observable<ApiResponse<PharmacyClaimResponse>> {
+    return this.http.get<ApiResponse<PharmacyClaimResponse>>(`/pharmacy/claims/${id}`);
+  }
+
+  listClaimsByHospital(page = 0, size = 20): Observable<ApiResponse<Page<PharmacyClaimResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<PharmacyClaimResponse>>>('/pharmacy/claims', { params });
+  }
+
+  listClaimsByPatient(
+    patientId: string,
+    page = 0,
+    size = 20,
+  ): Observable<ApiResponse<Page<PharmacyClaimResponse>>> {
+    const params = new HttpParams().set('page', page).set('size', size);
+    return this.http.get<ApiResponse<Page<PharmacyClaimResponse>>>(
+      `/pharmacy/claims/patient/${patientId}`,
+      { params },
+    );
+  }
+
+  exportClaimsCsv(statuses: PharmacyClaimStatus[] = []): Observable<Blob> {
+    let params = new HttpParams();
+    for (const s of statuses) {
+      params = params.append('status', s);
+    }
+    return this.http.get('/pharmacy/claims/export/csv', { params, responseType: 'blob' });
+  }
+
+  exportClaimsFhir(statuses: PharmacyClaimStatus[] = []): Observable<Blob> {
+    let params = new HttpParams();
+    for (const s of statuses) {
+      params = params.append('status', s);
+    }
+    return this.http.get('/pharmacy/claims/export/fhir', { params, responseType: 'blob' });
   }
 }

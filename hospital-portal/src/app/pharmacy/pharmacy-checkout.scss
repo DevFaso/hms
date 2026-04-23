@@ -1,0 +1,190 @@
+.pharmacy-checkout {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 1.5rem;
+
+  .page-header {
+    margin-bottom: 1.5rem;
+
+    h2 {
+      margin: 0;
+    }
+
+    .subtitle {
+      color: var(--text-muted, #666);
+      margin: 0.25rem 0 0;
+    }
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid var(--border-color, #e0e0e0);
+    border-radius: 8px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1rem;
+
+    h3 {
+      margin-top: 0;
+    }
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 200px 1fr auto;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 0.75rem;
+
+    label {
+      font-weight: 500;
+    }
+
+    input,
+    textarea {
+      grid-column: 2;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--border-color, #ccc);
+      border-radius: 4px;
+      font: inherit;
+    }
+
+    button {
+      grid-column: 3;
+    }
+  }
+
+  .radio-group {
+    grid-column: 2;
+    display: flex;
+    gap: 1rem;
+
+    .radio {
+      display: inline-flex;
+      gap: 0.4rem;
+      align-items: center;
+      font-weight: normal;
+    }
+  }
+
+  .dispense-summary dl,
+  .receipt-body dl {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 0.4rem 1rem;
+    margin: 0;
+
+    dt {
+      font-weight: 600;
+    }
+
+    dd {
+      margin: 0;
+    }
+  }
+
+  .actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+    margin-top: 1rem;
+  }
+
+  .btn-primary {
+    background: var(--primary, #0066cc);
+    color: #fff;
+    border: 0;
+    padding: 0.5rem 1.25rem;
+    border-radius: 4px;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+
+  .btn-secondary {
+    background: #fff;
+    color: var(--primary, #0066cc);
+    border: 1px solid var(--primary, #0066cc);
+    padding: 0.5rem 1.25rem;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  /* ─── Receipt ─── */
+  .receipt {
+    background: #fff;
+    border: 1px solid var(--border-color, #e0e0e0);
+    border-radius: 8px;
+    padding: 2rem;
+    max-width: 600px;
+    margin: 1rem auto;
+    font-family: 'Courier New', monospace;
+
+    .receipt-header {
+      text-align: center;
+      border-bottom: 1px dashed #999;
+      padding-bottom: 1rem;
+      margin-bottom: 1rem;
+
+      h1 {
+        margin: 0;
+        font-size: 1.5rem;
+      }
+
+      .receipt-meta {
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
+      }
+    }
+
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 1.2rem;
+      font-weight: 700;
+      padding: 0.75rem 0;
+      border-top: 1px solid #333;
+      border-bottom: 3px double #333;
+      margin-top: 1rem;
+
+      .amount {
+        font-family: inherit;
+      }
+    }
+
+    .notes {
+      font-style: italic;
+      margin-top: 1rem;
+    }
+
+    .receipt-footer {
+      text-align: center;
+      margin-top: 1.5rem;
+      font-size: 0.85rem;
+
+      .signature {
+        margin-top: 2rem;
+      }
+    }
+  }
+}
+
+/* ─── Print rules (T-44) ─── */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .pharmacy-checkout {
+    padding: 0;
+  }
+
+  .receipt {
+    border: 0 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0.5rem !important;
+  }
+}

@@ -69,6 +69,9 @@ class MfaControllerTest {
     @MockitoBean
     private UserRoleHospitalAssignmentRepository assignmentRepository;
 
+    @MockitoBean
+    private com.example.hms.security.RefreshTokenCookieService refreshTokenCookieService;
+
     private static final UUID USER_ID = UUID.randomUUID();
     private static final String USERNAME = "doctor@hms.com";
     private User testUser;

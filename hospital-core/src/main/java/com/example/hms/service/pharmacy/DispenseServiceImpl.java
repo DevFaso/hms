@@ -101,6 +101,11 @@ public class DispenseServiceImpl implements DispenseService {
         // Update prescription status based on cumulative dispensed quantity (supports partial fills)
         updatePrescriptionStatusFromHistory(prescription);
 
+        // T-38: Ready-for-pickup SMS (French) — only when the Rx is now fully DISPENSED
+        if (prescription.getStatus() == PrescriptionStatus.DISPENSED) {
+            support.notifyReadyForPickup(patient, pharmacy, dto.getMedicationName());
+        }
+
         logAudit(AuditEventType.DISPENSE_CREATED,
                 "Dispensed " + dto.getQuantityDispensed() + " " + (dto.getUnit() != null ? dto.getUnit() : "units")
                         + " of " + dto.getMedicationName() + " to patient " + patient.getId(),

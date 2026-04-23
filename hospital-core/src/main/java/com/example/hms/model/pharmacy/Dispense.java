@@ -6,7 +6,9 @@ import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.Patient;
 import com.example.hms.model.User;
 import com.example.hms.model.Prescription;
+import com.example.hms.security.EncryptedStringConverter;
 import jakarta.persistence.Column;
+import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -127,7 +129,8 @@ public class Dispense extends BaseEntity {
     private DispenseStatus status = DispenseStatus.COMPLETED;
 
     @Size(max = 1000)
-    @Column(name = "notes", length = 1000)
+    @Column(name = "notes", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
     private String notes;
 
     @NotNull
