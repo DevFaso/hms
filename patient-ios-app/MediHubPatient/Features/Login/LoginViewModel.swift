@@ -1,5 +1,6 @@
 import Foundation
 import LocalAuthentication
+import UIKit
 
 @MainActor
 final class LoginViewModel: ObservableObject {
@@ -10,11 +11,16 @@ final class LoginViewModel: ObservableObject {
     @Published var showUsernameForm: Bool = false
     @Published var biometricAvailable: Bool = false
     @Published var biometricType: String = "Biometrics"
+    /// KC-3 — reflects `FeatureFlags.keycloakSsoEnabled` at init time. The
+    /// SSO button stays hidden until both the flag is ON and the build has a
+    /// non-empty issuer configured.
+    @Published var ssoEnabled: Bool = false
 
     private let authManager = AuthManager.shared
 
     init() {
         checkBiometricAvailability()
+        ssoEnabled = FeatureFlags.keycloakSsoEnabled
     }
 
     // MARK: - Biometric check
@@ -84,6 +90,31 @@ final class LoginViewModel: ObservableObject {
                 try await authManager.login(username: username, password: password)
             } catch {
                 errorMessage = error.localizedDescription
+            }
+            isLoading = false
+        }
+    }
+
+    // MARK: - SSO (KC-3)
+
+    /// Launches the Keycloak Authorization Code + PKCE flow from the given
+    /// presenter. The caller is responsible for resolving the top
+    /// `UIViewController` (e.g. via a SwiftUI `UIViewControllerRepresentable`
+    /// or the key-window root VC).
+    func loginWithSSO(presenter: UIViewController) {
+        isLoading = true
+        errorMessage = nil
+        Task {
+            do {
+                try await KeycloakAuthService.shared.login(presenting: presenter)
+                authManager.completeSsoSession()
+            } catch {
+                // Ignore user-cancel — AppAuth returns domain == OIDOAuthTokenError etc.
+                let ns = error as NSError
+                let userCancelled = ns.code == -3 // OIDErrorCode.userCanceledAuthorizationFlow
+                if !userCancelled {
+                    errorMessage = error.localizedDescription
+                }
             }
             isLoading = false
         }

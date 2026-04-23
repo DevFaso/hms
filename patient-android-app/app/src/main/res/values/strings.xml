@@ -14,6 +14,7 @@
     <string name="sign_in">Sign In</string>
     <string name="forgot_password">Forgot Password?</string>
     <string name="biometric_sign_in">Sign in with Biometrics</string>
+    <string name="sso_sign_in">Sign in with SSO</string>
     <string name="biometric_prompt_title">Verify your identity</string>
     <string name="biometric_prompt_subtitle">Use your fingerprint or face to sign in</string>
     <string name="biometric_prompt_cancel">Cancel</string>
