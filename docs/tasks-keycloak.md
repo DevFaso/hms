@@ -10,9 +10,14 @@
 > **Current state:** Phase 1 (resource-server wiring) is ✅ merged on
 > `develop`/`uat`/`main`. **Sprint KC-1 (infra foundation) is ✅ shipped
 > on `feature/keycloak-kc1-infra`** — dev docker-compose profile,
-> `keycloak/realm-export.json`, redirect URI matrix, README. Remaining
-> phases (2.x onward) are ⏳ pending and still require P-2 (prod
-> Keycloak on Railway) + P-6/P-7 sign-off before the first client PR.
+> `keycloak/realm-export.json`, redirect URI matrix, README. **Sprint
+> KC-2a (backend OIDC integration test with Nimbus-minted RSA JWTs) is
+> ✅ shipped on `feature/keycloak-kc2a-integration-test`** —
+> `KeycloakJwtFixture` + `OidcResourceServerIntegrationTest` (4 tests:
+> happy-path, unknown-issuer routes to legacy filter, missing-audience
+> rejected, no-bearer 401). **Sprint KC-2b (Angular portal PKCE) is
+> 🚧 in progress.** Phases 2.3+ remain ⏳ pending and still require P-2
+> (prod Keycloak on Railway) + P-6/P-7 sign-off before deployment.
 
 ---
 
@@ -55,21 +60,24 @@ Keycloak becomes the sole token issuer for **new** sessions. Internal
 tokens from `JwtTokenProvider` continue to work during the rollout so
 there is no hard cutover.
 
-### 2.1 Backend — enable strict OIDC, keep legacy filter
+### 2.1 Backend — enable strict OIDC, keep legacy filter (✅ KC-2a)
 
 - File: `hospital-core/src/main/java/com/example/hms/config/SecurityConfig.java`
 - File: `hospital-core/src/main/resources/application-prod.yml`
-- Set `OIDC_ISSUER_URI` + `OIDC_AUDIENCE` on Railway.
+- Set `OIDC_ISSUER_URI` + `OIDC_AUDIENCE` on Railway. (⏳ awaits P-2)
 - Add integration test that hits a protected endpoint with a
-  Keycloak-issued JWT (mock authorization server in tests).
+  Keycloak-issued JWT (mock authorization server in tests). (✅ see
+  `hospital-core/src/test/java/com/example/hms/integration/OidcResourceServerIntegrationTest.java`
+  + `hospital-core/src/test/java/com/example/hms/security/oidc/KeycloakJwtFixture.java`)
 - Verify `IssuerAwareBearerTokenResolver` still routes legacy tokens
-  to `JwtAuthenticationFilter`.
+  to `JwtAuthenticationFilter`. (✅ covered by
+  `unknownIssuerIsRoutedToLegacyFilterAndRejected`)
 
 **Acceptance**
-- `app-prod` boots with OIDC beans active.
-- Keycloak JWT → `@PreAuthorize("hasRole('DOCTOR')")` endpoint returns 200.
-- Internal JWT on same endpoint still returns 200.
-- Integration test covers both paths.
+- `app-prod` boots with OIDC beans active. (⏳ awaits P-2)
+- Keycloak JWT → `@PreAuthorize("hasRole('DOCTOR')")` endpoint returns 200. (⏳ awaits P-2)
+- Internal JWT on same endpoint still returns 200. (⏳ awaits P-2)
+- Integration test covers both paths. (✅ 4 tests passing)
 
 ### 2.2 Angular portal — PKCE with `angular-oauth2-oidc`
 
@@ -268,9 +276,10 @@ there is no hard cutover.
 | Sprint | Goal | Status |
 |--------|------|--------|
 | KC-1 | P-1, P-3, P-4, P-5 complete; realm export in repo; dev stack boots Keycloak; OIDC discovery verified. | ✅ shipped on `feature/keycloak-kc1-infra` (commit `2fb3efa0`) |
-| KC-2 | Phase 2.1 (backend Testcontainers integration test proving both OIDC and legacy tokens authenticate) + 2.2 (Angular portal PKCE). UAT rollout begins. | 🚧 next |
+| KC-2a | Phase 2.1 backend integration test — Nimbus RSA fixture + 4-case `OidcResourceServerIntegrationTest` proving both OIDC and legacy tokens route correctly through `IssuerAwareBearerTokenResolver`. | ✅ shipped on `feature/keycloak-kc2a-integration-test` (commit `840ca2dc`, Copilot review fixes `d8423d99`) |
+| KC-2b | Phase 2.2 — Angular portal PKCE via `angular-oauth2-oidc`. Replace password form with Keycloak redirect, silent refresh, updated specs + E2E. | 🚧 in progress |
 | KC-3 | Phase 2.3 (Android) + 2.4 (iOS). | ⏳ |
-| KC-4 | Phase 2.5 user migration + P-6 + 2.6 prod soak. | ⏳ |
+| KC-4 | Phase 2.5 user migration + P-6 + 2.6 prod soak. | ⏳ (also blocked by P-2) |
 | KC-5 | Phase 3 (retire internal issuer). | ⏳ blocked by KC-4 soak |
 | KC-6 | Phase 4 (RoleValidator from claims) + reconciliation job. | ⏳ blocked by KC-5 |
 
