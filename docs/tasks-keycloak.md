@@ -16,8 +16,14 @@
 > `KeycloakJwtFixture` + `OidcResourceServerIntegrationTest` (4 tests:
 > happy-path, unknown-issuer routes to legacy filter, missing-audience
 > rejected, no-bearer 401). **Sprint KC-2b (Angular portal PKCE) is
-> 🚧 in progress.** Phases 2.3+ remain ⏳ pending and still require P-2
-> (prod Keycloak on Railway) + P-6/P-7 sign-off before deployment.
+> ✅ shipped on `feature/keycloak-kc2b-portal-pkce`** — `OidcAuthService`
+> Auth-Code+PKCE driver, flag-gated SSO button on the login page,
+> `RoleContextService` hydrated from Keycloak claims, sessionStorage
+> by default (configurable via `environment.oidc.remember`), and a
+> Playwright E2E spec covering the safe-default OFF state plus an
+> opt-in live-Keycloak happy path. Phases 2.3+ remain ⏳ pending and
+> still require P-2 (prod Keycloak on Railway) + P-6/P-7 sign-off
+> before deployment.
 
 ---
 
@@ -79,28 +85,37 @@ there is no hard cutover.
 - Internal JWT on same endpoint still returns 200. (⏳ awaits P-2)
 - Integration test covers both paths. (✅ 4 tests passing)
 
-### 2.2 Angular portal — PKCE with `angular-oauth2-oidc`
+### 2.2 Angular portal — PKCE with `angular-oauth2-oidc` (✅ KC-2b)
 
 - Files:
-  - `hospital-portal/package.json` (add `angular-oauth2-oidc`).
-  - `hospital-portal/src/app/auth/auth.service.ts` (replace
-    `POST /auth/login` with Auth Code + PKCE).
-  - `hospital-portal/src/app/interceptors/auth.interceptor.ts`
-    (send bearer from `OAuthService.getAccessToken()`).
-  - `hospital-portal/src/environments/environment*.ts` (issuer URI +
-    client ID per env).
-- Remove password form; redirect `/login` to Keycloak.
-- Silent refresh via hidden iframe or refresh token rotation.
-- Update all 5 auth specs in `auth.service.spec.ts` + add 3 new specs
-  for PKCE happy-path, silent refresh, logout.
-- E2E (`hospital-portal/e2e/`): update login flow to drive Keycloak
-  login page (use service account for CI).
+  - `hospital-portal/package.json` (added `angular-oauth2-oidc@^19.0.0`). ✅
+  - `hospital-portal/src/app/auth/oidc-auth.service.ts` (new — wraps
+    `OAuthService`, drives Auth Code + PKCE, hydrates legacy
+    `AuthService` + `RoleContextService` from claims, configurable
+    storage via `environment.oidc.remember`). ✅
+  - `hospital-portal/src/app/auth/auth.service.ts` (added Keycloak
+    `realm_access.roles` shape + `hospital_id` claim fallbacks so
+    existing `hasAnyRole()` and role guards keep working). ✅
+  - `hospital-portal/src/app/login/login.{ts,html,scss}` (added
+    flag-gated "Continue with Single Sign-On" button; legacy form
+    stays visible during rollout). ✅
+  - `hospital-portal/src/environments/environment*.ts` (added `oidc`
+    block per env, `enabled: false` by default; `offline_access` scope
+    intentionally omitted to keep refresh tokens out of the browser). ✅
+  - `hospital-portal/src/app/app.config.ts` (`provideOAuthClient()` +
+    `provideAppInitializer(() => inject(OidcAuthService).initialize())`). ✅
+- 9 new specs in `oidc-auth.service.spec.ts` + `login.spec.ts`
+  cover disabled no-op, hydrate-on-success, discovery failure
+  tolerance, login()/logout() flag gates, and the SSO button. ✅
+- E2E: `e2e/keycloak-login.spec.ts` (2 default-OFF safety specs +
+  1 opt-in live-Keycloak happy path gated by `KEYCLOAK_E2E=1`). ✅
 
 **Acceptance**
-- `npm run test -- --watch=false` green.
-- `npm run lint` + `format:check` clean.
+- `npm run test -- --watch=false` green (579/579 specs). ✅
+- `npm run lint` + `format:check` clean. ✅
 - Manual: log in via Keycloak, land on dashboard, token auto-refreshes
-  once within session.
+  once within session. ⏳ awaits a reachable Keycloak (KEYCLOAK_E2E=1
+  spec is in place; runs locally against the docker-compose profile).
 
 ### 2.3 Android — AppAuth-Android
 
@@ -277,8 +292,8 @@ there is no hard cutover.
 |--------|------|--------|
 | KC-1 | P-1, P-3, P-4, P-5 complete; realm export in repo; dev stack boots Keycloak; OIDC discovery verified. | ✅ shipped on `feature/keycloak-kc1-infra` (commit `2fb3efa0`) |
 | KC-2a | Phase 2.1 backend integration test — Nimbus RSA fixture + 4-case `OidcResourceServerIntegrationTest` proving both OIDC and legacy tokens route correctly through `IssuerAwareBearerTokenResolver`. | ✅ shipped on `feature/keycloak-kc2a-integration-test` (commit `840ca2dc`, Copilot review fixes `d8423d99`) |
-| KC-2b | Phase 2.2 — Angular portal PKCE via `angular-oauth2-oidc`. Replace password form with Keycloak redirect, silent refresh, updated specs + E2E. | 🚧 in progress |
-| KC-3 | Phase 2.3 (Android) + 2.4 (iOS). | ⏳ |
+| KC-2b | Phase 2.2 — Angular portal PKCE via `angular-oauth2-oidc`. SSO button on login page (flag-gated), `OidcAuthService` driver, role-context hydration from Keycloak claims, default-OFF + live-Keycloak Playwright specs. | ✅ shipped on `feature/keycloak-kc2b-portal-pkce` (commits `18c007bf` slice 1, `a570db9a` slice 2, `5720e01c` review fixes, slice 3 follows) |
+| KC-3 | Phase 2.3 (Android) + 2.4 (iOS). | 🚧 next |
 | KC-4 | Phase 2.5 user migration + P-6 + 2.6 prod soak. | ⏳ (also blocked by P-2) |
 | KC-5 | Phase 3 (retire internal issuer). | ⏳ blocked by KC-4 soak |
 | KC-6 | Phase 4 (RoleValidator from claims) + reconciliation job. | ⏳ blocked by KC-5 |

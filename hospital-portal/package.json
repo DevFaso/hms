@@ -53,6 +53,7 @@
     "@ngx-translate/core": "17.0.0",
     "@ngx-translate/http-loader": "17.0.0",
     "@stomp/stompjs": "7.1.1",
+    "angular-oauth2-oidc": "^19.0.0",
     "express": "5.2.1",
     "rxjs": "7.8.2",
     "sockjs-client": "1.6.1",
