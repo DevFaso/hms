@@ -130,8 +130,7 @@ export class OidcAuthService {
 
     const profile: LoginUserProfile = {
       id: (claims['sub'] as string) ?? '',
-      username:
-        (claims['preferred_username'] as string) ?? (claims['email'] as string) ?? '',
+      username: (claims['preferred_username'] as string) ?? (claims['email'] as string) ?? '',
       email: (claims['email'] as string) ?? '',
       firstName: (claims['given_name'] as string) ?? undefined,
       lastName: (claims['family_name'] as string) ?? undefined,
