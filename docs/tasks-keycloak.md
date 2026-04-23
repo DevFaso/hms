@@ -51,7 +51,7 @@
 | # | Task | Status | Owner | Blocks |
 |---|------|--------|-------|--------|
 | P-1 | Provision Keycloak **dev** instance via `docker-compose.yml` (new `keycloak` + `keycloak-db` services, PostgreSQL storage). | ✅ KC-1 | Backend/DevOps | 2.x |
-| P-2 | Provision Keycloak **prod** instance on Railway (managed Postgres, HTTPS, admin console behind VPN or IP allow-list). | ⏳ | DevOps | 2.x |
+| P-2 | Provision Keycloak **prod** instance on Railway (managed Postgres, HTTPS, admin console behind VPN or IP allow-list). | 🚧 infra-as-code shipped (see [`keycloak/prod/`](../keycloak/prod/) — Dockerfile, railway.toml, runbook); Railway dashboard provisioning awaits DevOps | DevOps | 2.x |
 | P-3 | Author `keycloak/realm-export.json` (realm `hms`, 4 clients, 24 roles, TOTP policy, token lifetimes per design doc). Commit to repo so the realm is infra-as-code. | ✅ KC-1 | Backend | 2.x |
 | P-4 | Decide redirect/post-logout URI matrix per environment (dev/uat/prod) for all 3 client apps. Record in `keycloak/redirect-uris.md`. | ✅ KC-1 | Backend + mobile leads | 2.2, 2.3, 2.4 |
 | P-5 | Decide claim names: `preferred_username`, `email`, custom `hospital_id`, custom `role_assignments` (array of `{hospitalId,role}`). Write the protocol mapper JSON into the realm export. | ✅ KC-1 (mappers shipped in `hms-claims` client scope) | Backend | 2.1, 4.1 |
@@ -195,10 +195,14 @@ wiring deferred until P-2 makes a Keycloak reachable from CI.
 ### 2.6 Rollout window
 
 - Deploy backend + clients to `uat` behind a feature flag
-  `app.auth.oidc.required=false`.
+  `app.auth.oidc.required=false`. ✅ flag shipped KC-5 prep
 - Announce cutover date; run user migration.
 - Flip `app.auth.oidc.required=true` in UAT; verify no traffic hits
-  `JwtAuthenticationFilter` for 24 h.
+  `JwtAuthenticationFilter` for 24 h. When the flag is on, the legacy
+  issuer endpoints (`POST /auth/login`, `POST /auth/token/refresh`)
+  return **410 Gone** — already-issued tokens keep validating until
+  they expire naturally, so the cutover is soft and reversible by
+  flipping the flag back.
 - Repeat in prod with a 1-week soak before Phase 3.
 
 ---
@@ -326,7 +330,7 @@ wiring deferred until P-2 makes a Keycloak reachable from CI.
 | KC-2b | Phase 2.2 — Angular portal PKCE via `angular-oauth2-oidc`. SSO button on login page (flag-gated), `OidcAuthService` driver, role-context hydration from Keycloak claims, default-OFF + live-Keycloak Playwright specs. | ✅ shipped on `feature/keycloak-kc2b-portal-pkce` (commits `18c007bf` slice 1, `a570db9a` slice 2, `5720e01c` review fixes, slice 3 follows) |
 | KC-3 | Phase 2.3 (Android) + 2.4 (iOS). | 🚧 scaffolding + Copilot-review fixes shipped on `feature/keycloak-kc3-mobile-appauth`. Unit tests re-wired for the new `Provider<KeycloakAuthService>` dependency; live instrumented flows deferred to [`docs/kc3-mobile-test-notes.md`](kc3-mobile-test-notes.md) (P-2). |
 | KC-4 | Phase 2.5 user migration + P-6 + 2.6 prod soak. | 🚧 slice 1 shipped on `feature/keycloak-kc4-user-migration` — migration script + 22 unit tests + runbook. 2.6 prod soak still blocked by P-2. |
-| KC-5 | Phase 3 (retire internal issuer). | ⏳ blocked by KC-4 soak |
+| KC-5 | Phase 3 (retire internal issuer). | 🚧 prep shipped on `feature/keycloak-kc5-prod-infra-and-phase3-prep` — `app.auth.oidc.required` soak flag + P-2 Railway infra-as-code. Physical deletion of `JwtTokenProvider` / `JwtAuthenticationFilter` still blocked by KC-4 prod soak. |
 | KC-6 | Phase 4 (RoleValidator from claims) + reconciliation job. | ⏳ blocked by KC-5 |
 
 ---
