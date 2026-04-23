@@ -1,0 +1,25 @@
+{
+  "name": "hms-keycloak-migration",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KC-4 / P-6 — one-shot migration of HMS users + role assignments into a Keycloak realm.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "migrate": "tsx src/migrate.ts",
+    "migrate:dry-run": "tsx src/migrate.ts --dry-run",
+    "test": "tsx --test src/__tests__/*.test.ts",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "pg": "8.13.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.5",
+    "@types/pg": "8.11.10",
+    "tsx": "4.19.2",
+    "typescript": "5.7.3"
+  }
+}
