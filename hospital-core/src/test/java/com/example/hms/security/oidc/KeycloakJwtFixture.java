@@ -138,8 +138,11 @@ public final class KeycloakJwtFixture {
             if (clientRoles == null) {
                 clientRoles = Map.of();
             }
-            if (ttl == null || ttl.isZero() || ttl.isNegative()) {
+            if (ttl == null) {
                 ttl = Duration.ofMinutes(15);
+            } else if (ttl.isZero() || ttl.isNegative()) {
+                throw new IllegalArgumentException(
+                        "ttl must be positive when provided; pass null to accept the 15-minute default");
             }
         }
 

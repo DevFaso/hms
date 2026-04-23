@@ -71,12 +71,15 @@ class OidcResourceServerIntegrationTest extends BaseIT {
                         .header(AUTHORIZATION, "Bearer " + token))
                 .andReturn();
 
+        // The probe path is intentionally unmapped, so a fully-authenticated request
+        // that survives the security filter chain MUST surface as 404 from Spring MVC.
+        // 401 == OIDC auth failed, 403 == AccessDecisionManager denied,
+        // 5xx == anything else broke. Only 404 proves the JWT was accepted AND the
+        // request reached the dispatcher.
         assertThat(result.getResponse().getStatus())
-                .as("Valid Keycloak JWT must reach Spring MVC dispatch (401 == auth failed)")
-                .isNotEqualTo(401);
-        assertThat(result.getResponse().getStatus())
-                .as("Valid Keycloak JWT must not be denied by AccessDecisionManager (403)")
-                .isNotEqualTo(403);
+                .as("Valid Keycloak JWT must authenticate and reach Spring MVC dispatch, "
+                        + "yielding 404 for the unmapped probe path")
+                .isEqualTo(404);
     }
 
     @Test
