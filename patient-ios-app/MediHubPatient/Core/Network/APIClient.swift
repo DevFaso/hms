@@ -118,9 +118,15 @@ final class APIClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        // Inject Bearer token
+        // Inject Bearer token — prefer Keycloak OIDC access token when a
+        // Keycloak session is active (KC-3). Falls back to the legacy
+        // username/password access token otherwise.
+        var usingOidc = false
         if requiresAuth {
-            if let token = KeychainHelper.shared.accessToken {
+            if let oidc = KeychainHelper.shared.oidcAccessToken {
+                request.setValue("Bearer \(oidc)", forHTTPHeaderField: "Authorization")
+                usingOidc = true
+            } else if let token = KeychainHelper.shared.accessToken {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
         }
@@ -134,12 +140,26 @@ final class APIClient {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw APIError.unknown }
 
-        // Handle 401 — attempt token refresh once
+        // Handle 401 — attempt token refresh once. OIDC refresh is driven
+        // by AppAuth's `OIDAuthState.performAction` inside KeycloakAuthService;
+        // the legacy refresh flow only applies to the password-grant path.
         if http.statusCode == 401, requiresAuth {
-            try await AuthManager.shared.refreshTokens()
-            // Retry with new token
-            if let token = KeychainHelper.shared.accessToken {
-                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            if usingOidc {
+                // `freshAccessToken()` returns `String?` and may throw, so `try?`
+                // produces `String??`. Flatten so we correctly distinguish
+                // "refresh succeeded with a token" from "no token".
+                let refreshed = (try? await KeycloakAuthService.shared.freshAccessToken()) ?? nil
+                if let fresh = refreshed {
+                    request.setValue("Bearer \(fresh)", forHTTPHeaderField: "Authorization")
+                } else {
+                    await AuthManager.shared.logout()
+                    throw APIError.unauthorized
+                }
+            } else {
+                try await AuthManager.shared.refreshTokens()
+                if let token = KeychainHelper.shared.accessToken {
+                    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+                }
             }
             let (retryData, retryResponse) = try await session.data(for: request)
             guard let retryHttp = retryResponse as? HTTPURLResponse else { throw APIError.unknown }

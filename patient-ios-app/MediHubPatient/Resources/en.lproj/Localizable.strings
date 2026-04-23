@@ -14,6 +14,7 @@
 "sign_in" = "Log In";
 "forgot_password" = "Forgot password?";
 "biometric_sign_in" = "Log in with %@";
+"sso_sign_in" = "Sign in with SSO";
 "use_username" = "Use username instead";
 "use_biometric" = "Use %@ instead";
 

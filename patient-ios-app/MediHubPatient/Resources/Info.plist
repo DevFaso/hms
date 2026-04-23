@@ -18,5 +18,21 @@
 	<string>1.0</string>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>com.bitnesttechs.hms.patient.native.oauth</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- Keycloak OIDC redirect URI scheme (KC-3). Must match
+				     MEDIHUB_KEYCLOAK_REDIRECT_URI and the redirect URI
+				     configured on the Keycloak `hms-patient-ios` client. -->
+				<string>com.bitnesttechs.hms.patient.native</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
