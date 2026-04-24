@@ -119,12 +119,14 @@ public class User extends BaseEntity {
     // NOTE: @NotFound is incompatible with orphanRemoval; orphan deletion is handled by
     // the owning side (Staff.user / Patient.user). ALL cascade operations except orphanRemoval
     // are kept so test fixtures that build User → Patient/Staff graphs still work.
-    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY,
+    // FETCH: @NotFound forces EAGER loading (HHH000491 warning when LAZY is requested).
+    // Declared EAGER here so the code matches Hibernate's runtime behavior; silences the warning.
+    @OneToOne(mappedBy = "user", fetch = FetchType.EAGER,
               cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REFRESH, CascadeType.DETACH, CascadeType.REMOVE})
     @NotFound(action = NotFoundAction.IGNORE)
     private Patient patientProfile;
 
-    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY,
+    @OneToOne(mappedBy = "user", fetch = FetchType.EAGER,
               cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REFRESH, CascadeType.DETACH, CascadeType.REMOVE})
     @NotFound(action = NotFoundAction.IGNORE)
     private Staff staffProfile;
