@@ -11,6 +11,11 @@
   "editUsernameAllowed": false,
   "bruteForceProtected": true,
   "permanentLockout": false,
+  "userManagedAccessAllowed": false,
+  "attributes": {
+    "userProfileEnabled": "true",
+    "unmanagedAttributePolicy": "ENABLED"
+  },
   "maxFailureWaitSeconds": 900,
   "minimumQuickLoginWaitSeconds": 60,
   "waitIncrementSeconds": 60,
@@ -75,6 +80,70 @@
 
   "clientScopes": [
     {
+      "name": "hms-profile",
+      "description": "HMS identity-link claims (appUserId, staffId, patientId) + aud=hms-backend",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-hms-backend",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "hms-backend",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "app_user_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "app_user_id",
+            "claim.name": "appUserId",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "staff_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "staff_id",
+            "claim.name": "staffId",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "patient_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "patient_id",
+            "claim.name": "patientId",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
       "name": "hms-claims",
       "description": "HMS custom claims (hospital_id, role_assignments)",
       "protocol": "openid-connect",
@@ -135,7 +204,8 @@
     "email",
     "roles",
     "web-origins",
-    "hms-claims"
+    "hms-claims",
+    "hms-profile"
   ],
 
   "clients": [
@@ -153,10 +223,20 @@
       "secret": "REPLACE_ME_hms_backend_secret",
       "redirectUris": [],
       "webOrigins": [],
-      "defaultClientScopes": ["profile", "email", "roles", "hms-claims"],
+      "defaultClientScopes": ["profile", "email", "roles", "hms-claims", "hms-profile"],
       "attributes": {
         "access.token.lifespan": "900"
-      }
+      },
+      "roles": [
+        { "name": "pharmacy.dispense",       "description": "Dispense a prescription line" },
+        { "name": "pharmacy.stock.adjust",   "description": "Record stock adjustment with reason" },
+        { "name": "pharmacy.goods.receive",  "description": "Receive a goods delivery" },
+        { "name": "pharmacy.route.partner",  "description": "Route stock to a partner pharmacy" },
+        { "name": "pharmacy.claim.submit",   "description": "Submit an insurance claim" },
+        { "name": "pharmacy.claim.reverse",  "description": "Reverse a submitted claim" },
+        { "name": "billing.refund",          "description": "Issue a billing refund" },
+        { "name": "audit.view",              "description": "View audit log" }
+      ]
     },
     {
       "clientId": "hms-portal",
@@ -184,7 +264,7 @@
         "https://uat.hms.example.com",
         "https://hms.example.com"
       ],
-      "defaultClientScopes": ["profile", "email", "roles", "web-origins", "hms-claims"]
+      "defaultClientScopes": ["profile", "email", "roles", "web-origins", "hms-claims", "hms-profile"]
     },
     {
       "clientId": "hms-android",
@@ -206,7 +286,7 @@
         "com.example.hms.patient://oauth/callback"
       ],
       "webOrigins": [],
-      "defaultClientScopes": ["profile", "email", "roles", "hms-claims"]
+      "defaultClientScopes": ["profile", "email", "roles", "hms-claims", "hms-profile"]
     },
     {
       "clientId": "hms-ios",
@@ -228,7 +308,7 @@
         "com.example.hms.patient://oauth/callback"
       ],
       "webOrigins": [],
-      "defaultClientScopes": ["profile", "email", "roles", "hms-claims"]
+      "defaultClientScopes": ["profile", "email", "roles", "hms-claims", "hms-profile"]
     }
   ]
 }
