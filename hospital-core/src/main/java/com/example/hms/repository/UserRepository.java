@@ -71,6 +71,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("select u from User u where u.id = :id and u.isDeleted = false")
     Optional<User> findByIdWithRolesAndProfiles(@Param("id") UUID id);
 
+    /* ---------- OIDC / Keycloak identity link ---------- */
+    Optional<User> findByKeycloakSubject(String keycloakSubject);
+
     /* Keep this for places you already use it */
     @EntityGraph(attributePaths = { "userRoles", "userRoles.role", "staffProfile" })
     Optional<User> findWithRolesById(UUID id);
