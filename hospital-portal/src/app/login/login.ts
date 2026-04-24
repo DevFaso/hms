@@ -3,9 +3,14 @@ import { HttpClient } from '@angular/common/http';
 import { Component, inject, OnInit, PLATFORM_ID } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
+import { catchError, of } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
 
-import { AuthService, type LoginUserProfile } from '../auth/auth.service';
+import {
+  AuthService,
+  type LoginUserProfile,
+  type SessionBootstrapResponse,
+} from '../auth/auth.service';
 import { OidcAuthService } from '../auth/oidc-auth.service';
 import { RoleContextService } from '../core/role-context.service';
 
@@ -257,62 +262,109 @@ export class Login implements OnInit {
             this.auth.setRefreshToken(res.refreshToken, this.remember);
           }
 
-          // Hydrate role context immediately so the interceptor sends X-Hospital-Id
-          // on all subsequent requests (including the very first one after redirect).
+          // Seed role context from JWT immediately so the bootstrap HTTP call
+          // (which includes an Authorization header) is authenticated.
           const jwtRoles = this.auth.getRoles();
           this.roleContext.setRoles(jwtRoles);
-
-          // For multi-role users the JWT now contains only the chosen role.
-          // For single-role users setRoles() already sets activeRole automatically.
           if (jwtRoles.length === 1) {
             this.roleContext.activeRole = jwtRoles[0];
           }
 
-          // Prefer hospital IDs from the response body (authoritative, fresh from DB)
-          // over JWT claims (which may be stale if assignment changed since last login).
-          const bodyHospitalIds = (res.hospitalIds ?? []).filter((v) => !!v);
-          const permittedIds =
-            bodyHospitalIds.length > 0 ? bodyHospitalIds : this.auth.getPermittedHospitalIds();
-          this.roleContext.setPermittedHospitalIds(permittedIds);
+          // ── Session bootstrap (Task 6): fetch authoritative context from DB ──
+          // Replaces client-side JWT decoding for hospital_id resolution.
+          // Falls back to login-response data gracefully if bootstrap fails.
+          this.auth
+            .sessionBootstrap()
+            .pipe(catchError(() => of(null)))
+            .subscribe((bootstrap: SessionBootstrapResponse | null) => {
+              const forcePasswordChange = res.forcePasswordChange ?? false;
+              const forceUsernameChange = res.forceUsernameChange ?? false;
 
-          // Non-admin staff always resolve to exactly one hospital (their primary).
-          // Admin roles with a single hospital also get locked here.
-          if (permittedIds.length === 1) {
-            this.roleContext.activeHospitalId = permittedIds[0];
-          } else if (res.primaryHospitalId) {
-            // Multi-hospital admin: pre-select the primary hospital
-            this.roleContext.activeHospitalId = res.primaryHospitalId;
-          }
+              if (bootstrap) {
+                // Authoritative data from DB — use this in preference to JWT/login body
+                const bsRoles = bootstrap.roles ?? jwtRoles;
+                this.roleContext.setRoles(bsRoles);
+                if (bsRoles.length === 1) {
+                  this.roleContext.activeRole = bsRoles[0];
+                }
 
-          if (res.id && res.username) {
-            const profile: LoginUserProfile = {
-              id: res.id,
-              username: res.username,
-              email: res.email ?? '',
-              firstName: res.firstName,
-              lastName: res.lastName,
-              phoneNumber: res.phoneNumber,
-              profileImageUrl: res.profilePictureUrl,
-              roles: res.roles ?? [],
-              profileType: res.profileType,
-              licenseNumber: res.licenseNumber,
-              staffId: res.staffId,
-              roleName: res.roleName,
-              active: res.active ?? true,
-              forcePasswordChange: res.forcePasswordChange,
-              forceUsernameChange: res.forceUsernameChange,
-              primaryHospitalId: res.primaryHospitalId,
-              primaryHospitalName: res.primaryHospitalName,
-              hospitalIds: res.hospitalIds,
-            };
-            this.auth.setUserProfile(profile);
-          }
+                const permittedIds = (bootstrap.permittedHospitalIds ?? []).filter((v) => !!v);
+                this.roleContext.setPermittedHospitalIds(permittedIds);
 
-          // Redirect to account setup page if user must change credentials
-          const needsSetup = res.forcePasswordChange || res.forceUsernameChange;
-          const dest = needsSetup ? '/account-setup' : this.auth.resolveLandingPath();
-          void this.router.navigateByUrl(dest);
-          this.loading = false;
+                if (permittedIds.length === 1) {
+                  this.roleContext.activeHospitalId = permittedIds[0];
+                } else if (bootstrap.primaryHospitalId) {
+                  this.roleContext.activeHospitalId = bootstrap.primaryHospitalId;
+                }
+
+                const profile: LoginUserProfile = {
+                  id: bootstrap.userId,
+                  username: bootstrap.username,
+                  email: bootstrap.email ?? '',
+                  firstName: bootstrap.firstName,
+                  lastName: bootstrap.lastName,
+                  profileImageUrl: bootstrap.profileImageUrl,
+                  roles: bsRoles,
+                  profileType: bootstrap.staffId
+                    ? 'STAFF'
+                    : bootstrap.patientId
+                      ? 'PATIENT'
+                      : undefined,
+                  staffId: bootstrap.staffId,
+                  roleName: bootstrap.staffRoleCode,
+                  active: true,
+                  forcePasswordChange,
+                  forceUsernameChange,
+                  primaryHospitalId: bootstrap.primaryHospitalId,
+                  primaryHospitalName: bootstrap.primaryHospitalName,
+                  hospitalIds: permittedIds,
+                };
+                this.auth.setUserProfile(profile);
+              } else {
+                // Bootstrap unavailable — fall back to login-response data
+                const bodyHospitalIds = (res.hospitalIds ?? []).filter((v) => !!v);
+                const permittedIds =
+                  bodyHospitalIds.length > 0
+                    ? bodyHospitalIds
+                    : this.auth.getPermittedHospitalIds();
+                this.roleContext.setPermittedHospitalIds(permittedIds);
+
+                if (permittedIds.length === 1) {
+                  this.roleContext.activeHospitalId = permittedIds[0];
+                } else if (res.primaryHospitalId) {
+                  this.roleContext.activeHospitalId = res.primaryHospitalId;
+                }
+
+                if (res.id && res.username) {
+                  const profile: LoginUserProfile = {
+                    id: res.id,
+                    username: res.username,
+                    email: res.email ?? '',
+                    firstName: res.firstName,
+                    lastName: res.lastName,
+                    phoneNumber: res.phoneNumber,
+                    profileImageUrl: res.profilePictureUrl,
+                    roles: jwtRoles,
+                    profileType: res.profileType,
+                    licenseNumber: res.licenseNumber,
+                    staffId: res.staffId,
+                    roleName: res.roleName,
+                    active: res.active ?? true,
+                    forcePasswordChange,
+                    forceUsernameChange,
+                    primaryHospitalId: res.primaryHospitalId,
+                    primaryHospitalName: res.primaryHospitalName,
+                    hospitalIds: res.hospitalIds,
+                  };
+                  this.auth.setUserProfile(profile);
+                }
+              }
+
+              const needsSetup = forcePasswordChange || forceUsernameChange;
+              const dest = needsSetup ? '/account-setup' : this.auth.resolveLandingPath();
+              void this.router.navigateByUrl(dest);
+              this.loading = false;
+            });
         },
         error: (err) => {
           this.loading = false;
