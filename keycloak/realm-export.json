@@ -1,5 +1,4 @@
 {
-  "_comment": "HMS realm — infra-as-code. SAFE TO IMPORT IN ANY ENVIRONMENT (dev/UAT/prod). Realm role list MUST mirror hospital-core/src/main/java/com/example/hms/config/SecurityConstants.java. Dev seed users live in keycloak/realm-export.dev-users.json (partial-import only, never apply to UAT/prod).",
   "realm": "hms",
   "displayName": "HMS — Hospital Management System",
   "enabled": true,
@@ -44,7 +43,6 @@
   },
 
   "roles": {
-    "_comment": "Mirror of SecurityConstants.java — 26 ROLE_* authorities. Keep in sync; mismatches cause silent 403s when clients switch to Keycloak-issued tokens.",
     "realm": [
       { "name": "ROLE_SUPER_ADMIN",          "description": "Platform super administrator (no tenant scope)" },
       { "name": "ROLE_HOSPITAL_ADMIN",       "description": "Hospital-scoped administrator" },
