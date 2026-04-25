@@ -141,9 +141,8 @@ describe('AuthService — sessionBootstrap', () => {
       },
     });
 
-    httpMock.expectOne((r) => r.url === 'auth/session/bootstrap').flush(
-      { message: 'Unauthorized' },
-      { status: 401, statusText: 'Unauthorized' },
-    );
+    httpMock
+      .expectOne((r) => r.url === 'auth/session/bootstrap')
+      .flush({ message: 'Unauthorized' }, { status: 401, statusText: 'Unauthorized' });
   });
 });
