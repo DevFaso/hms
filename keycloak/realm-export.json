@@ -1,5 +1,4 @@
 {
-  "_comment": "HMS realm — infra-as-code. SAFE TO IMPORT IN ANY ENVIRONMENT (dev/UAT/prod). Realm role list MUST mirror hospital-core/src/main/java/com/example/hms/config/SecurityConstants.java. Dev seed users live in keycloak/realm-export.dev-users.json (partial-import only, never apply to UAT/prod).",
   "realm": "hms",
   "displayName": "HMS — Hospital Management System",
   "enabled": true,
@@ -12,6 +11,11 @@
   "editUsernameAllowed": false,
   "bruteForceProtected": true,
   "permanentLockout": false,
+  "userManagedAccessAllowed": false,
+  "attributes": {
+    "userProfileEnabled": "true",
+    "unmanagedAttributePolicy": "ENABLED"
+  },
   "maxFailureWaitSeconds": 900,
   "minimumQuickLoginWaitSeconds": 60,
   "waitIncrementSeconds": 60,
@@ -44,7 +48,6 @@
   },
 
   "roles": {
-    "_comment": "Mirror of SecurityConstants.java — 26 ROLE_* authorities. Keep in sync; mismatches cause silent 403s when clients switch to Keycloak-issued tokens.",
     "realm": [
       { "name": "ROLE_SUPER_ADMIN",          "description": "Platform super administrator (no tenant scope)" },
       { "name": "ROLE_HOSPITAL_ADMIN",       "description": "Hospital-scoped administrator" },
@@ -76,6 +79,70 @@
   },
 
   "clientScopes": [
+    {
+      "name": "hms-profile",
+      "description": "HMS identity-link claims (appUserId, staffId, patientId) + aud=hms-backend",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-hms-backend",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "hms-backend",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "app_user_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "app_user_id",
+            "claim.name": "appUserId",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "staff_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "staff_id",
+            "claim.name": "staffId",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "patient_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "patient_id",
+            "claim.name": "patientId",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
     {
       "name": "hms-claims",
       "description": "HMS custom claims (hospital_id, role_assignments)",
@@ -137,7 +204,8 @@
     "email",
     "roles",
     "web-origins",
-    "hms-claims"
+    "hms-claims",
+    "hms-profile"
   ],
 
   "clients": [
@@ -155,7 +223,7 @@
       "secret": "REPLACE_ME_hms_backend_secret",
       "redirectUris": [],
       "webOrigins": [],
-      "defaultClientScopes": ["profile", "email", "roles", "hms-claims"],
+      "defaultClientScopes": ["profile", "email", "roles", "hms-claims", "hms-profile"],
       "attributes": {
         "access.token.lifespan": "900"
       }
@@ -186,7 +254,7 @@
         "https://uat.hms.example.com",
         "https://hms.example.com"
       ],
-      "defaultClientScopes": ["profile", "email", "roles", "web-origins", "hms-claims"]
+      "defaultClientScopes": ["profile", "email", "roles", "web-origins", "hms-claims", "hms-profile"]
     },
     {
       "clientId": "hms-android",
@@ -208,7 +276,7 @@
         "com.example.hms.patient://oauth/callback"
       ],
       "webOrigins": [],
-      "defaultClientScopes": ["profile", "email", "roles", "hms-claims"]
+      "defaultClientScopes": ["profile", "email", "roles", "hms-claims", "hms-profile"]
     },
     {
       "clientId": "hms-ios",
@@ -230,7 +298,7 @@
         "com.example.hms.patient://oauth/callback"
       ],
       "webOrigins": [],
-      "defaultClientScopes": ["profile", "email", "roles", "hms-claims"]
+      "defaultClientScopes": ["profile", "email", "roles", "hms-claims", "hms-profile"]
     }
   ]
 }

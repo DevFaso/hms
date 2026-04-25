@@ -19,6 +19,7 @@ import lombok.Setter;
 import lombok.ToString;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -100,6 +101,26 @@ public class User extends BaseEntity {
 
     @Column(name = "password_rotation_forced_at")
     private LocalDateTime passwordRotationForcedAt;
+
+    /** Keycloak subject claim ('sub') linking this user to an OIDC identity. */
+    @Column(name = "keycloak_subject", unique = true, length = 128)
+    private String keycloakSubject;
+
+    /** Keycloak realm name, e.g. 'hms' or 'hms-dev'. */
+    @Column(name = "keycloak_realm", length = 100)
+    private String keycloakRealm;
+
+    /**
+     * Authentication source: 'internal' (legacy password auth), 'keycloak', or 'saml'.
+     * Determines which auth path the resource server trusts for this user.
+     */
+    @Builder.Default
+    @Column(name = "auth_source", nullable = false, length = 32)
+    private String authSource = "internal";
+
+    /** Timestamp of the user's most recent OIDC login, updated by the bootstrap endpoint. */
+    @Column(name = "last_oidc_login_at")
+    private OffsetDateTime lastOidcLoginAt;
 
     /** Explicit user↔role join table */
     @Builder.Default

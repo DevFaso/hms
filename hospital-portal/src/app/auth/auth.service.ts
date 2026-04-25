@@ -9,6 +9,35 @@ const ACCESS_TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'auth_refresh_token';
 const USER_PROFILE_KEY = 'user_profile';
 
+/**
+ * Authoritative session context returned by GET /api/auth/session/bootstrap.
+ * Replaces client-side JWT claim decoding for hospital/permission resolution.
+ */
+export interface SessionBootstrapResponse {
+  userId: string;
+  username: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  profileImageUrl?: string;
+  /** 'internal' | 'keycloak' | 'saml' */
+  authSource: string;
+  roles: string[];
+  superAdmin: boolean;
+  hospitalAdmin: boolean;
+  primaryHospitalId?: string;
+  primaryHospitalName?: string;
+  permittedHospitalIds?: string[];
+  /** Null when the user has no staff record */
+  staffId?: string;
+  staffRoleCode?: string;
+  departmentId?: string;
+  departmentName?: string;
+  /** Null when the user has no patient record */
+  patientId?: string;
+  lastOidcLoginAt?: string;
+}
+
 export interface LoginUserProfile {
   id: string;
   username: string;
@@ -399,6 +428,17 @@ export class AuthService {
 
   resolveLandingPath(): string {
     return '/dashboard';
+  }
+
+  /**
+   * Calls GET /api/auth/session/bootstrap to retrieve authoritative session
+   * context (roles, hospital, staff/patient profile) from the DB.
+   *
+   * Should be called once after a successful login so all hospital-context
+   * decisions use DB data rather than stale JWT claims.
+   */
+  sessionBootstrap(): Observable<SessionBootstrapResponse> {
+    return this.http.get<SessionBootstrapResponse>('auth/session/bootstrap');
   }
 
   logout(): void {

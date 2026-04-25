@@ -1,5 +1,6 @@
 package com.example.hms.controller;
 
+import com.example.hms.service.AuthBootstrapService;
 import com.example.hms.controller.support.AuthNotificationFacade;
 import com.example.hms.payload.dto.LoginRequest;
 import com.example.hms.repository.UserRepository;
@@ -67,6 +68,7 @@ class AuthControllerTest {
     @MockitoBean private MfaService mfaService;
     @MockitoBean private WsTicketService wsTicketService;
     @MockitoBean private RefreshTokenCookieService refreshTokenCookieService;
+    @MockitoBean private AuthBootstrapService authBootstrapService;
 
     @Test
     void register_returns410Gone() throws Exception {

@@ -71,6 +71,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("select u from User u where u.id = :id and u.isDeleted = false")
     Optional<User> findByIdWithRolesAndProfiles(@Param("id") UUID id);
 
+    /* ---------- OIDC / Keycloak identity link ---------- */
+    Optional<User> findByKeycloakSubject(String keycloakSubject);
+
     /* Keep this for places you already use it */
     @EntityGraph(attributePaths = { "userRoles", "userRoles.role", "staffProfile" })
     Optional<User> findWithRolesById(UUID id);
@@ -78,9 +81,10 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     /* ---------- Search & paging ---------- */
 
 
-    @Query("""
+    @Query(value = """
         SELECT u FROM User u
-        WHERE ( :name IS NULL
+        WHERE u.isDeleted = false
+          AND ( :name IS NULL
                 OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :name, '%'))
                 OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', :name, '%'))
                 OR LOWER(u.username)               LIKE LOWER(CONCAT('%', :name, '%'))
@@ -99,7 +103,34 @@ public interface UserRepository extends JpaRepository<User, UUID> {
                 OR EXISTS (
                     SELECT 1 FROM UserRole ur
                     JOIN ur.role r2
-                    WHERE ur.user = u
+                    WHERE ur.id.userId = u.id
+                      AND (LOWER(r2.code) = LOWER(:role) OR LOWER(r2.name) = LOWER(:role))
+                )
+              )
+        """,
+        countQuery = """
+        SELECT COUNT(u) FROM User u
+        WHERE u.isDeleted = false
+          AND ( :name IS NULL
+                OR LOWER(COALESCE(u.firstName, '')) LIKE LOWER(CONCAT('%', :name, '%'))
+                OR LOWER(COALESCE(u.lastName,  '')) LIKE LOWER(CONCAT('%', :name, '%'))
+                OR LOWER(u.username)               LIKE LOWER(CONCAT('%', :name, '%'))
+              )
+          AND ( :email IS NULL
+                OR LOWER(u.email) LIKE LOWER(CONCAT('%', :email, '%'))
+              )
+          AND ( :role IS NULL
+                OR EXISTS (
+                    SELECT 1 FROM UserRoleHospitalAssignment a
+                    JOIN a.role r
+                    WHERE a.user = u
+                      AND a.active = true
+                      AND (LOWER(r.code) = LOWER(:role) OR LOWER(r.name) = LOWER(:role))
+                )
+                OR EXISTS (
+                    SELECT 1 FROM UserRole ur
+                    JOIN ur.role r2
+                    WHERE ur.id.userId = u.id
                       AND (LOWER(r2.code) = LOWER(:role) OR LOWER(r2.name) = LOWER(:role))
                 )
               )
