@@ -122,6 +122,7 @@ services:
       KC_HEALTH_ENABLED: "true"
     ports:
       - "8081:8080"
+      - "9000:9000"
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
     depends_on:
@@ -130,7 +131,7 @@ services:
     healthcheck:
       # Keycloak's UBI image ships bash; pin to it explicitly because the
       # /dev/tcp redirection used below is bash-specific.
-      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8080 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
       interval: 15s
       timeout: 5s
       retries: 10

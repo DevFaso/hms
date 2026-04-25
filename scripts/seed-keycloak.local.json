@@ -1,0 +1,36 @@
+{
+  "_comment": "Seed data for LOCAL dockerized Keycloak (http://localhost:8081). Hospital UUIDs below are placeholders for local dev — replace with real rows from your local `hospital` table if you run joins against it.",
+  "baseUrl": "http://localhost:8081",
+  "realm": "hms",
+  "adminUser": "admin",
+  "adminPassword": "TODO_LOCAL_KEYCLOAK_ADMIN_PASSWORD",
+  "hospitals": {
+    "A": "513df1b3-e036-442a-8bca-f4c4b6faa09f",
+    "B": "9ee57cac-193c-41e6-86c6-a8db507b0d68",
+    "C": "a51582fb-7810-4aed-b614-d4d694a5d640",
+    "D": "82430285-ef9e-4a2f-88d1-f4963c73cbe5"
+  },
+  "users": [
+    {
+      "username": "dev.doctor",
+      "email": "dev.doctor@hms.local",
+      "firstName": "Dev",
+      "lastName": "Doctor",
+      "password": "TODO_LOCAL_DEV_DOCTOR_PASSWORD",
+      "roles": ["ROLE_DOCTOR", "ROLE_STAFF"],
+      "hospital": "A",
+      "roleAssignments": ["DOCTOR@{A}"]
+    },
+    {
+      "username": "tchico1er",
+      "email": "tchico1er@hms.local",
+      "firstName": "Platform",
+      "lastName": "SuperAdmin",
+      "password": "TODO_LOCAL_SUPER_ADMIN_PASSWORD",
+      "roles": ["ROLE_SUPER_ADMIN", "ROLE_STAFF"],
+      "clientRoles": {
+        "hms-backend": ["audit.view"]
+      }
+    }
+  ]
+}

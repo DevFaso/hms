@@ -281,6 +281,7 @@ public class SecurityConfig {
                 .requestMatchers("/auth/logout").authenticated()
                 .requestMatchers("/auth/verify-password").authenticated()
                 .requestMatchers("/auth/me/**").authenticated()
+                .requestMatchers("/auth/session/bootstrap").authenticated()
 
                 // Public auth endpoints (login, register, csrf-token bootstrap, etc.)
                 .requestMatchers("/auth/csrf-token").permitAll()
