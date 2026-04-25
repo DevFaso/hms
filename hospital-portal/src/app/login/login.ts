@@ -262,8 +262,8 @@ export class Login implements OnInit {
             this.auth.setRefreshToken(res.refreshToken, this.remember);
           }
 
-          // Seed role context from JWT immediately so the bootstrap HTTP call
-          // (which includes an Authorization header) is authenticated.
+          // Seed role context from JWT immediately so the UI has provisional
+          // role information before the session bootstrap response arrives.
           const jwtRoles = this.auth.getRoles();
           this.roleContext.setRoles(jwtRoles);
           if (jwtRoles.length === 1) {

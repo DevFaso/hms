@@ -109,10 +109,10 @@ describe('AuthService — sessionBootstrap', () => {
     sessionStorage.clear();
   });
 
-  it('sends GET to /api/auth/session/bootstrap', () => {
+  it('sends GET to the relative session bootstrap endpoint', () => {
     service.sessionBootstrap().subscribe();
 
-    const req = httpMock.expectOne((r) => r.url.endsWith('/api/auth/session/bootstrap'));
+    const req = httpMock.expectOne((r) => r.url === 'auth/session/bootstrap');
     expect(req.request.method).toBe('GET');
     req.flush(mockBootstrapResponse);
   });
@@ -130,9 +130,7 @@ describe('AuthService — sessionBootstrap', () => {
       done();
     });
 
-    httpMock
-      .expectOne((r) => r.url.endsWith('/api/auth/session/bootstrap'))
-      .flush(mockBootstrapResponse);
+    httpMock.expectOne((r) => r.url === 'auth/session/bootstrap').flush(mockBootstrapResponse);
   });
 
   it('propagates an HTTP error so the caller can handle it', (done) => {
@@ -143,8 +141,9 @@ describe('AuthService — sessionBootstrap', () => {
       },
     });
 
-    httpMock
-      .expectOne((r) => r.url.endsWith('/api/auth/session/bootstrap'))
-      .flush({ message: 'Unauthorized' }, { status: 401, statusText: 'Unauthorized' });
+    httpMock.expectOne((r) => r.url === 'auth/session/bootstrap').flush(
+      { message: 'Unauthorized' },
+      { status: 401, statusText: 'Unauthorized' },
+    );
   });
 });

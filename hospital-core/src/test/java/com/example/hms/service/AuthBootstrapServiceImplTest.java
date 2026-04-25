@@ -13,6 +13,7 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.security.auth.TenantRoleAssignment;
 import com.example.hms.security.auth.TenantRoleAssignmentAccessor;
+import com.example.hms.utility.MessageUtil;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -22,8 +23,12 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.context.support.StaticMessageSource;
 
+import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -60,6 +65,13 @@ class AuthBootstrapServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        StaticMessageSource messageSource = new StaticMessageSource();
+        String userNotFoundByUsername = "User not found with username: {0}";
+        messageSource.addMessage("user.notFoundByUsername", Locale.ENGLISH, userNotFoundByUsername);
+        messageSource.addMessage("user.notFoundByUsername", Locale.getDefault(), userNotFoundByUsername);
+        messageSource.addMessage("user.notFoundByUsername", LocaleContextHolder.getLocale(), userNotFoundByUsername);
+        MessageUtil.setMessageSource(messageSource);
+
         hospital = new Hospital();
         hospital.setId(HOSPITAL_ID);
         hospital.setName("General Hospital");
@@ -175,9 +187,11 @@ class AuthBootstrapServiceImplTest {
             ArgumentCaptor<User> captor = ArgumentCaptor.forClass(User.class);
             verify(userRepository).save(captor.capture());
             assertThat(captor.getValue().getLastOidcLoginAt()).isNotNull();
+            assertThat(captor.getValue().getLastOidcLoginAt().getOffset()).isEqualTo(ZoneOffset.UTC);
 
             assertThat(result.getAuthSource()).isEqualTo("keycloak");
-            assertThat(result.getLastOidcLoginAt()).isNotNull();
+            assertThat(result.getLastOidcLoginAt())
+                    .isEqualTo(captor.getValue().getLastOidcLoginAt().toInstant());
         }
     }
 
@@ -245,7 +259,7 @@ class AuthBootstrapServiceImplTest {
 
             assertThatThrownBy(() -> service.resolveCurrentSession("ghost"))
                     .isInstanceOf(ResourceNotFoundException.class)
-                    .hasMessageContaining("ghost");
+                    .hasMessage("User not found with username: ghost");
         }
     }
 

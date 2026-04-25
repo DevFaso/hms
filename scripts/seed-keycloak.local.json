@@ -3,7 +3,7 @@
   "baseUrl": "http://localhost:8081",
   "realm": "hms",
   "adminUser": "admin",
-  "adminPassword": "admin",
+  "adminPassword": "TODO_LOCAL_KEYCLOAK_ADMIN_PASSWORD",
   "hospitals": {
     "A": "513df1b3-e036-442a-8bca-f4c4b6faa09f",
     "B": "9ee57cac-193c-41e6-86c6-a8db507b0d68",
@@ -16,7 +16,7 @@
       "email": "dev.doctor@hms.local",
       "firstName": "Dev",
       "lastName": "Doctor",
-      "password": "DevDoctor#2026",
+      "password": "TODO_LOCAL_DEV_DOCTOR_PASSWORD",
       "roles": ["ROLE_DOCTOR", "ROLE_STAFF"],
       "hospital": "A",
       "roleAssignments": ["DOCTOR@{A}"]
@@ -26,7 +26,7 @@
       "email": "tchico1er@hms.local",
       "firstName": "Platform",
       "lastName": "SuperAdmin",
-      "password": "Password123!",
+      "password": "TODO_LOCAL_SUPER_ADMIN_PASSWORD",
       "roles": ["ROLE_SUPER_ADMIN", "ROLE_STAFF"],
       "clientRoles": {
         "hms-backend": ["audit.view"]

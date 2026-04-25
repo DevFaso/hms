@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.UUID;
 
@@ -37,11 +39,11 @@ public class AuthBootstrapServiceImpl implements AuthBootstrapService {
     @Transactional
     public SessionBootstrapResponseDTO resolveCurrentSession(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
+                .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByUsername", username));
 
         // Side-effect: track most-recent OIDC login timestamp
         if (KEYCLOAK_AUTH_SOURCE.equals(user.getAuthSource())) {
-            user.setLastOidcLoginAt(java.time.LocalDateTime.now());
+            user.setLastOidcLoginAt(OffsetDateTime.now(ZoneOffset.UTC));
             userRepository.save(user);
         }
 
@@ -114,7 +116,7 @@ public class AuthBootstrapServiceImpl implements AuthBootstrapService {
         UUID patientId = patient != null ? patient.getId() : null;
 
         Instant lastOidcLoginAt = user.getLastOidcLoginAt() != null
-                ? user.getLastOidcLoginAt().toInstant(java.time.ZoneOffset.UTC)
+                ? user.getLastOidcLoginAt().toInstant()
                 : null;
 
         log.debug("[BOOTSTRAP] Resolved session for username='{}' roles={} primaryHospital={}",

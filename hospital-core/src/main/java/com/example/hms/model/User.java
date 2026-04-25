@@ -19,6 +19,7 @@ import lombok.Setter;
 import lombok.ToString;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -119,7 +120,7 @@ public class User extends BaseEntity {
 
     /** Timestamp of the user's most recent OIDC login, updated by the bootstrap endpoint. */
     @Column(name = "last_oidc_login_at")
-    private LocalDateTime lastOidcLoginAt;
+    private OffsetDateTime lastOidcLoginAt;
 
     /** Explicit user↔role join table */
     @Builder.Default

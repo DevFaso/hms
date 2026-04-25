@@ -438,9 +438,8 @@ export class AuthService {
    * decisions use DB data rather than stale JWT claims.
    */
   sessionBootstrap(): Observable<SessionBootstrapResponse> {
-    const baseUrl = this.isBrowser ? `${globalThis.location.origin}/api` : '/api';
-    return this.http.get<SessionBootstrapResponse>(`${baseUrl}/auth/session/bootstrap`);
-  }
+      return this.http.get<SessionBootstrapResponse>('auth/session/bootstrap');
+    }
 
   logout(): void {
     this.clearToken();

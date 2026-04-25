@@ -20,8 +20,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_users_keycloak_subject
     ON security.users (keycloak_subject)
     WHERE keycloak_subject IS NOT NULL;
 
--- Non-unique covering index for the bootstrap lookup path:
--- SELECT * FROM security.users WHERE keycloak_subject = $1
--- (index already covers the query; kept explicit for query-plan clarity)
+-- Non-unique index for lookups/filtering by authentication source:
+-- SELECT * FROM security.users WHERE auth_source = $1
+-- Supports queries that route users by trusted authentication path.
 CREATE INDEX IF NOT EXISTS idx_users_auth_source
     ON security.users (auth_source);
