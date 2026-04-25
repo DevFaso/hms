@@ -12,6 +12,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -630,6 +631,15 @@ public class JwtTokenProvider {
             .toList();
 
         HospitalUserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+        if (!userDetails.isEnabled()) {
+            // Reject every JWT-bearing request from an unverified or deactivated account.
+            // The login endpoint already blocks initial sign-in via DisabledException; this
+            // closes the gap for tokens issued through any other path or held across a
+            // post-issuance deactivation.
+            log.warn("JWT presented for disabled user '{}' — rejecting authentication.", username);
+            throw new DisabledException("User account '" + username + "' is disabled or unverified.");
+        }
 
         log.debug("JWT token for user {} contains authorities: {}", username, authorities);
 

@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.lang.NonNull;
+import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -111,6 +112,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         if (username != null) {
             try {
                 var userDetails = hospitalUserDetailsService.loadUserByUsername(username);
+                if (!userDetails.isEnabled()) {
+                    // Ticket-based handshake must respect the same email-verification
+                    // gate as JWT auth. A redeemed ticket for an unverified or disabled
+                    // account is not sufficient to attach role-based authorities.
+                    log.warn("[WS-TICKET] Refusing ticket for disabled/unverified user='{}' on path={}",
+                            username, path);
+                    respondUnauthorized(response, username);
+                    return true;
+                }
                 var auth = new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());
                 SecurityContextHolder.getContext().setAuthentication(auth);
@@ -221,6 +231,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return true;
         } catch (UsernameNotFoundException missingPrincipal) {
             handleMissingPrincipal(jwt, extractedSubject, missingPrincipal);
+            SecurityContextHolder.clearContext();
+            HospitalContextHolder.clear();
+            return false;
+        } catch (DisabledException disabled) {
+            // The JWT is signed and unexpired but belongs to a user whose account is
+            // disabled (most commonly: email not yet verified). Refuse the request rather
+            // than letting the generic catch-all in doFilterInternal pass it through
+            // unauthenticated.
+            log.warn("[JWT] Rejecting token for disabled/unverified principal '{}': {}",
+                extractedSubject, disabled.getMessage());
             SecurityContextHolder.clearContext();
             HospitalContextHolder.clear();
             return false;
