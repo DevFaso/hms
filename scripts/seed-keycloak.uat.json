@@ -1,0 +1,9 @@
+{
+  "_comment": "Seed data for UAT Keycloak. DO NOT commit real admin credentials — supply via env vars KC_ADMIN_USER / KC_ADMIN_PASSWORD or script params.",
+  "baseUrl": "TODO",
+  "realm": "hms",
+  "adminUser": "TODO",
+  "adminPassword": "TODO",
+  "hospitals": {},
+  "users": []
+}
