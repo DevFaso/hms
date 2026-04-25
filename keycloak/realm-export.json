@@ -226,17 +226,7 @@
       "defaultClientScopes": ["profile", "email", "roles", "hms-claims", "hms-profile"],
       "attributes": {
         "access.token.lifespan": "900"
-      },
-      "roles": [
-        { "name": "pharmacy.dispense",       "description": "Dispense a prescription line" },
-        { "name": "pharmacy.stock.adjust",   "description": "Record stock adjustment with reason" },
-        { "name": "pharmacy.goods.receive",  "description": "Receive a goods delivery" },
-        { "name": "pharmacy.route.partner",  "description": "Route stock to a partner pharmacy" },
-        { "name": "pharmacy.claim.submit",   "description": "Submit an insurance claim" },
-        { "name": "pharmacy.claim.reverse",  "description": "Reverse a submitted claim" },
-        { "name": "billing.refund",          "description": "Issue a billing refund" },
-        { "name": "audit.view",              "description": "View audit log" }
-      ]
+      }
     },
     {
       "clientId": "hms-portal",

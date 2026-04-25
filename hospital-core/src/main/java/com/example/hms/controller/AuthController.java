@@ -5,6 +5,7 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.BootstrapSignupRequest;
+import com.example.hms.payload.dto.SessionBootstrapResponseDTO;
 import com.example.hms.payload.dto.EmailVerificationRequestDTO;
 import com.example.hms.payload.dto.EmailVerificationResponseDTO;
 import com.example.hms.payload.dto.JwtResponse;
@@ -28,6 +29,7 @@ import com.example.hms.security.WsTicketService;
 import com.example.hms.security.RefreshTokenCookieService;
 import com.example.hms.security.TokenBlacklistService;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.AuthBootstrapService;
 import com.example.hms.service.UserCredentialLifecycleService;
 import com.example.hms.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -78,6 +80,7 @@ public class AuthController {
 
     private final UserRepository userRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final AuthBootstrapService authBootstrapService;
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
@@ -107,6 +110,7 @@ public class AuthController {
 
     public AuthController(UserRepository userRepository,
             UserRoleHospitalAssignmentRepository assignmentRepository,
+            AuthBootstrapService authBootstrapService,
             UserService userService,
             AuthenticationManager authenticationManager,
             JwtTokenProvider jwtTokenProvider,
@@ -124,6 +128,7 @@ public class AuthController {
             @Value("${app.auth.oidc.required:false}") boolean oidcRequired) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
+        this.authBootstrapService = authBootstrapService;
         this.userService = userService;
         this.authenticationManager = authenticationManager;
         this.jwtTokenProvider = jwtTokenProvider;
@@ -986,6 +991,38 @@ public class AuthController {
         String username = authentication.getName();
         String ticket = wsTicketService.issue(username);
         return ResponseEntity.ok(Map.of("ticket", ticket));
+    }
+
+    /**
+     * Session bootstrap — resolves authoritative hospital/permission context from the DB.
+     *
+     * <p>Replaces client-side JWT claim decoding for hospital_id. The frontend
+     * (and mobile apps) should call this once after receiving a valid token so
+     * all hospital-context decisions are based on the DB, not the token payload.
+     *
+     * <p>Side-effect: when {@code authSource == "keycloak"}, updates
+     * {@code lastOidcLoginAt} on the user record.
+     *
+     * @return {@link SessionBootstrapResponseDTO} with identity, roles, and hospital context
+     */
+    @Operation(
+        summary = "Session Bootstrap",
+        description = "Returns authoritative session context (roles, hospital, staff/patient profile) "
+                    + "from the DB for the currently authenticated principal. "
+                    + "Updates lastOidcLoginAt when authSource is 'keycloak'.")
+    @ApiResponse(responseCode = "200", description = "Session context resolved",
+        content = @Content(schema = @Schema(implementation = SessionBootstrapResponseDTO.class)))
+    @ApiResponse(responseCode = "401", description = "Not authenticated")
+    @GetMapping("/session/bootstrap")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
+    public ResponseEntity<SessionBootstrapResponseDTO> sessionBootstrap(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String username = authentication.getName();
+        log.debug("[SESSION-BOOTSTRAP] Resolving session context for user='{}'", username);
+        SessionBootstrapResponseDTO response = authBootstrapService.resolveCurrentSession(username);
+        return ResponseEntity.ok(response);
     }
 
     /* ── Hospital assignment context ── */

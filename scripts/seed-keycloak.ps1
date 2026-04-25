@@ -296,6 +296,9 @@ function Ensure-HmsUser {
 
   $lookupUrl = '{0}/admin/realms/{1}/users?username={2}&exact=true' -f $BASE, $REALM, $Username
   $u = Invoke-RestMethod -Uri $lookupUrl -Headers $H
+  if ($null -eq $u -or $u.Count -le 0) {
+    throw "Unable to resolve Keycloak user '$Username' after create attempt. User creation may have failed; check the earlier error output for details."
+  }
   $uid = $u[0].id
   Write-Host "$Username uid=$uid"
 

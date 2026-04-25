@@ -10,7 +10,7 @@
 > scripts/keycloak-migration 22/22, portal unit 579/579, Playwright offline 2/2,
 > Android `./gradlew test` SUCCESS). Live Playwright happy path green after
 > two realm fixes — see the "realm gotchas" note at the end of §0 and
-> [scripts/seed-keycloak-dev.ps1](../scripts/seed-keycloak-dev.ps1).
+> [scripts/seed-keycloak.ps1](../scripts/seed-keycloak.ps1).
 
 ---
 
@@ -52,18 +52,31 @@ docker compose --profile keycloak up -d keycloak-db keycloak
 >    `email`, `roles`, and `web-origins` scopes. Any client that
 >    requests them (the SPA does) gets `invalid_scope`. The fix ships
 >    as a one-shot bootstrap: run
->    [scripts/seed-keycloak-dev.ps1](../scripts/seed-keycloak-dev.ps1)
->    after `docker compose up`. It idempotently (a) creates the four
->    built-in scopes, (b) attaches them as default scopes on `hms-portal`,
->    and (c) seeds the `dev.doctor` user the Playwright spec expects.
+>    [scripts/seed-keycloak.ps1](../scripts/seed-keycloak.ps1)
+>    after `docker compose up`. It idempotently (a) enables
+>    `unmanagedAttributePolicy=ENABLED` so custom attrs like
+>    `hospital_id` are accepted, (b) creates the four built-in scopes,
+>    (c) attaches them as default scopes on `hms-portal`, and (d) seeds
+>    users from [scripts/seed-keycloak.local.json](../scripts/seed-keycloak.local.json).
+>    Drive dev/uat/prod with the matching `seed-keycloak.<env>.json`
+>    file plus `-Environment <env>` (and `-Confirm` for prod).
 
 ### 0.1 Seed the realm (one command)
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts/seed-keycloak-dev.ps1
+# local (default) — reads scripts/seed-keycloak.local.json
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/seed-keycloak.ps1
+
+# dev — reads scripts/seed-keycloak.dev.json; password via env var
+$env:KC_ADMIN_PASSWORD = '<dev-admin-pw>'
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/seed-keycloak.ps1 -Environment dev
+
+# prod — explicit -Confirm required
+$env:KC_ADMIN_PASSWORD = '<prod-admin-pw>'
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/seed-keycloak.ps1 -Environment prod -Confirm
 ```
 
-Expected last line: `Seed complete.`
+Expected last line: `Seed complete (<env>).`
 
 ### 0.2 (manual alternative) Create a test user from the admin console
 
