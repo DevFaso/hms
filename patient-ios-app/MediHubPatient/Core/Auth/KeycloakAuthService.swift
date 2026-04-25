@@ -1,0 +1,159 @@
+import AppAuth
+import Foundation
+import UIKit
+
+/// Keycloak / OIDC auth façade backed by AppAuth-iOS (KC-3).
+///
+/// Additive — does not replace `AuthManager`. While
+/// `FeatureFlags.keycloakSsoEnabled` is false (the default until prerequisite
+/// P-2 lands) nothing in the app uses this class.
+@MainActor
+final class KeycloakAuthService: ObservableObject {
+    static let shared = KeycloakAuthService()
+
+    /// Held during the in-flight authorization so AppAuth can forward the
+    /// redirect callback from `MediHubPatientApp.onOpenURL`.
+    private var currentAuthFlow: OIDExternalUserAgentSession?
+
+    /// Last successful auth state (also persisted to Keychain).
+    @Published private(set) var authState: OIDAuthState?
+
+    private init() {
+        authState = Self.loadAuthState()
+    }
+
+    // MARK: - Public API
+
+    var isConfigured: Bool { KeycloakConfig.isConfigured }
+
+    /// True when a Keycloak session is active (used by APIClient).
+    var hasActiveSession: Bool { authState?.isAuthorized == true }
+
+    /// Discover OIDC endpoints, then run the Authorization Code + PKCE flow
+    /// via `SFSafariViewController` / `ASWebAuthenticationSession`.
+    func login(presenting viewController: UIViewController) async throws {
+        guard isConfigured else { throw KeycloakError.notConfigured }
+        guard let issuerURL = URL(string: KeycloakConfig.issuer),
+              let redirectURL = URL(string: KeycloakConfig.redirectURI)
+        else { throw KeycloakError.invalidConfiguration }
+
+        let config = try await discoverConfiguration(issuer: issuerURL)
+        let request = OIDAuthorizationRequest(
+            configuration: config,
+            clientId: KeycloakConfig.clientID,
+            clientSecret: nil,
+            scopes: [OIDScopeOpenID, OIDScopeProfile, OIDScopeEmail, "offline_access"],
+            redirectURL: redirectURL,
+            responseType: OIDResponseTypeCode,
+            additionalParameters: nil
+        )
+
+        let state = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<OIDAuthState, Error>) in
+            currentAuthFlow = OIDAuthState.authState(
+                byPresenting: request,
+                presenting: viewController
+            ) { authState, error in
+                if let authState {
+                    continuation.resume(returning: authState)
+                } else {
+                    continuation.resume(throwing: error ?? KeycloakError.unknown)
+                }
+            }
+        }
+
+        currentAuthFlow = nil
+        authState = state
+        persist(state: state)
+    }
+
+    /// Forward a redirect URL from the app delegate / SwiftUI `onOpenURL`.
+    @discardableResult
+    func resume(url: URL) -> Bool {
+        guard let flow = currentAuthFlow else { return false }
+        let handled = flow.resumeExternalUserAgentFlow(with: url)
+        if handled { currentAuthFlow = nil }
+        return handled
+    }
+
+    /// Returns a non-expired access token (refreshing via the refresh token
+    /// when necessary). Returns `nil` when no OIDC session is active.
+    func freshAccessToken() async throws -> String? {
+        guard let state = authState else { return nil }
+        return try await withCheckedThrowingContinuation { continuation in
+            state.performAction { accessToken, _, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                } else {
+                    // Persist updated tokens (refresh may have rotated them).
+                    Task { @MainActor in self.persist(state: state) }
+                    continuation.resume(returning: accessToken)
+                }
+            }
+        }
+    }
+
+    /// Clear the persisted OIDC session (matches `AuthManager.logout`).
+    func clear() {
+        authState = nil
+        KeychainHelper.shared.clearOidc()
+    }
+
+    // MARK: - Private
+
+    private func discoverConfiguration(issuer: URL) async throws -> OIDServiceConfiguration {
+        try await withCheckedThrowingContinuation { continuation in
+            OIDAuthorizationService.discoverConfiguration(forIssuer: issuer) { config, error in
+                if let config {
+                    continuation.resume(returning: config)
+                } else {
+                    continuation.resume(throwing: error ?? KeycloakError.discoveryFailed)
+                }
+            }
+        }
+    }
+
+    private func persist(state: OIDAuthState) {
+        let data: Data
+        if #available(iOS 12.0, *) {
+            data = (try? NSKeyedArchiver.archivedData(
+                withRootObject: state,
+                requiringSecureCoding: true
+            )) ?? Data()
+        } else {
+            data = NSKeyedArchiver.archivedData(withRootObject: state)
+        }
+        KeychainHelper.shared.oidcAuthState = data
+        KeychainHelper.shared.oidcAccessToken = state.lastTokenResponse?.accessToken
+        KeychainHelper.shared.oidcIdToken = state.lastTokenResponse?.idToken
+    }
+
+    private static func loadAuthState() -> OIDAuthState? {
+        guard let data = KeychainHelper.shared.oidcAuthState else { return nil }
+        if #available(iOS 12.0, *) {
+            return try? NSKeyedUnarchiver.unarchivedObject(
+                ofClass: OIDAuthState.self,
+                from: data
+            )
+        } else {
+            return NSKeyedUnarchiver.unarchiveObject(with: data) as? OIDAuthState
+        }
+    }
+}
+
+// MARK: - Errors
+
+enum KeycloakError: LocalizedError {
+    case notConfigured
+    case invalidConfiguration
+    case discoveryFailed
+    case unknown
+
+    var errorDescription: String? {
+        switch self {
+        case .notConfigured: "Keycloak SSO is not configured for this build."
+        case .invalidConfiguration: "Keycloak issuer/redirect URI is invalid."
+        case .discoveryFailed: "Unable to reach the Keycloak discovery endpoint."
+        case .unknown: "SSO login failed."
+        }
+    }
+}

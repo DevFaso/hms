@@ -14,6 +14,7 @@
     <string name="sign_in">Se connecter</string>
     <string name="forgot_password">Mot de passe oublié ?</string>
     <string name="biometric_sign_in">Connexion biométrique</string>
+    <string name="sso_sign_in">Connexion SSO</string>
     <string name="biometric_prompt_title">Vérifiez votre identité</string>
     <string name="biometric_prompt_subtitle">Utilisez votre empreinte ou visage pour vous connecter</string>
     <string name="biometric_prompt_cancel">Annuler</string>

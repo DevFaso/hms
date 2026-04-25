@@ -5,6 +5,7 @@ import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.BootstrapSignupRequest;
+import com.example.hms.payload.dto.SessionBootstrapResponseDTO;
 import com.example.hms.payload.dto.EmailVerificationRequestDTO;
 import com.example.hms.payload.dto.EmailVerificationResponseDTO;
 import com.example.hms.payload.dto.JwtResponse;
@@ -28,6 +29,7 @@ import com.example.hms.security.WsTicketService;
 import com.example.hms.security.RefreshTokenCookieService;
 import com.example.hms.security.TokenBlacklistService;
 import com.example.hms.service.AuditEventLogService;
+import com.example.hms.service.AuthBootstrapService;
 import com.example.hms.service.UserCredentialLifecycleService;
 import com.example.hms.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -78,6 +80,7 @@ public class AuthController {
 
     private final UserRepository userRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final AuthBootstrapService authBootstrapService;
 
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider jwtTokenProvider;
@@ -94,9 +97,20 @@ public class AuthController {
     private final RefreshTokenCookieService refreshTokenCookieService;
     private final String frontendBaseUrl;
     private final List<String> mfaRequiredRoles;
+    /**
+     * KC-5 prep — when true, the legacy internal token issuer is sealed
+     * off: POST /auth/login and POST /auth/token/refresh return 410 Gone
+     * so clients migrate to Keycloak (Auth Code + PKCE). Already-issued
+     * tokens continue to validate through {@code JwtAuthenticationFilter}
+     * until they expire naturally, so this is a soft cutover. Default
+     * false preserves today's behaviour; flip via {@code OIDC_REQUIRED=true}
+     * during the Phase 2.6 soak.
+     */
+    private final boolean oidcRequired;
 
     public AuthController(UserRepository userRepository,
             UserRoleHospitalAssignmentRepository assignmentRepository,
+            AuthBootstrapService authBootstrapService,
             UserService userService,
             AuthenticationManager authenticationManager,
             JwtTokenProvider jwtTokenProvider,
@@ -110,9 +124,11 @@ public class AuthController {
             WsTicketService wsTicketService,
             RefreshTokenCookieService refreshTokenCookieService,
             @Value("${app.frontend.base-url}") String frontendBaseUrl,
-            @Value("${app.mfa.required-roles:}") List<String> mfaRequiredRoles) {
+            @Value("${app.mfa.required-roles:}") List<String> mfaRequiredRoles,
+            @Value("${app.auth.oidc.required:false}") boolean oidcRequired) {
         this.userRepository = userRepository;
         this.assignmentRepository = assignmentRepository;
+        this.authBootstrapService = authBootstrapService;
         this.userService = userService;
         this.authenticationManager = authenticationManager;
         this.jwtTokenProvider = jwtTokenProvider;
@@ -127,6 +143,7 @@ public class AuthController {
         this.refreshTokenCookieService = refreshTokenCookieService;
         this.frontendBaseUrl = frontendBaseUrl;
         this.mfaRequiredRoles = mfaRequiredRoles;
+        this.oidcRequired = oidcRequired;
     }
 
     /**
@@ -171,6 +188,15 @@ public class AuthController {
     public ResponseEntity<Object> authenticateUser(
             @Parameter(description = "Login request payload", required = true) @Valid @RequestBody LoginRequest loginRequest,
             HttpServletResponse httpResponse) {
+        // KC-5 prep: short-circuit the legacy issuer when the soak flag is on.
+        // Callers must migrate to the Keycloak Auth Code + PKCE flow.
+        if (oidcRequired) {
+            log.warn("🔐 [LOGIN] Rejected — legacy issuer disabled (app.auth.oidc.required=true). user='{}'",
+                    loginRequest.getUsername());
+            return ResponseEntity.status(HttpStatus.GONE)
+                    .body(new MessageResponse(
+                            "Legacy username/password login is disabled. Sign in via Single Sign-On."));
+        }
         long start = System.nanoTime();
         log.info("🔐 [LOGIN] Attempting login for user='{}' at {}", loginRequest.getUsername(),
                 java.time.Instant.now());
@@ -498,6 +524,17 @@ public class AuthController {
             @RequestBody(required = false) java.util.Map<String, String> body,
             HttpServletRequest request,
             HttpServletResponse response) {
+
+        // KC-5 prep: once the soak flag is on, no new access tokens are
+        // minted from refresh tokens either. Existing access tokens keep
+        // working until they expire; after that clients must re-authenticate
+        // via Keycloak.
+        if (oidcRequired) {
+            log.warn("🔄 [REFRESH] Rejected — legacy issuer disabled (app.auth.oidc.required=true)");
+            return ResponseEntity.status(HttpStatus.GONE)
+                    .body(new MessageResponse(
+                            "Legacy token refresh is disabled. Sign in via Single Sign-On."));
+        }
 
         // S-01: prefer the HttpOnly refresh cookie over a body-borne refresh token.
         // Body-based refresh remains supported as a legacy fallback during rollout.
@@ -954,6 +991,38 @@ public class AuthController {
         String username = authentication.getName();
         String ticket = wsTicketService.issue(username);
         return ResponseEntity.ok(Map.of("ticket", ticket));
+    }
+
+    /**
+     * Session bootstrap — resolves authoritative hospital/permission context from the DB.
+     *
+     * <p>Replaces client-side JWT claim decoding for hospital_id. The frontend
+     * (and mobile apps) should call this once after receiving a valid token so
+     * all hospital-context decisions are based on the DB, not the token payload.
+     *
+     * <p>Side-effect: when {@code authSource == "keycloak"}, updates
+     * {@code lastOidcLoginAt} on the user record.
+     *
+     * @return {@link SessionBootstrapResponseDTO} with identity, roles, and hospital context
+     */
+    @Operation(
+        summary = "Session Bootstrap",
+        description = "Returns authoritative session context (roles, hospital, staff/patient profile) "
+                    + "from the DB for the currently authenticated principal. "
+                    + "Updates lastOidcLoginAt when authSource is 'keycloak'.")
+    @ApiResponse(responseCode = "200", description = "Session context resolved",
+        content = @Content(schema = @Schema(implementation = SessionBootstrapResponseDTO.class)))
+    @ApiResponse(responseCode = "401", description = "Not authenticated")
+    @GetMapping("/session/bootstrap")
+    @org.springframework.security.access.prepost.PreAuthorize("isAuthenticated()")
+    public ResponseEntity<SessionBootstrapResponseDTO> sessionBootstrap(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        String username = authentication.getName();
+        log.debug("[SESSION-BOOTSTRAP] Resolving session context for user='{}'", username);
+        SessionBootstrapResponseDTO response = authBootstrapService.resolveCurrentSession(username);
+        return ResponseEntity.ok(response);
     }
 
     /* ── Hospital assignment context ── */

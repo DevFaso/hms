@@ -7,6 +7,11 @@ options:
   generateEmptyDirectories: true
   groupSortPosition: top
 
+packages:
+  AppAuth:
+    url: https://github.com/openid/AppAuth-iOS.git
+    from: "1.7.5"
+
 settings:
   base:
     MARKETING_VERSION: "1.0.3"
@@ -25,6 +30,9 @@ targets:
       - path: MediHubPatient
         excludes:
           - "**/.DS_Store"
+    dependencies:
+      - package: AppAuth
+        product: AppAuth
     settings:
       base:
         INFOPLIST_FILE: MediHubPatient/Resources/Info.plist
@@ -39,5 +47,26 @@ targets:
     info:
       path: MediHubPatient/Resources/Info.plist
     scheme:
-      testTargets: []
-      gatherCoverageData: false
+      testTargets:
+        - MediHubPatientTests
+      gatherCoverageData: true
+      environmentVariables:
+        # KC-3: populate to enable live Keycloak SSO in dev builds.
+        # Leave blank by default — SSO button stays hidden (default OFF).
+        MEDIHUB_KEYCLOAK_ISSUER: ""
+        MEDIHUB_KEYCLOAK_CLIENT_ID: "hms-patient-ios"
+        MEDIHUB_KEYCLOAK_REDIRECT_URI: "com.bitnesttechs.hms.patient.native:/oauth2redirect"
+        MEDIHUB_KEYCLOAK_SSO_ENABLED: "0"
+
+  MediHubPatientTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: MediHubPatientTests
+    dependencies:
+      - target: MediHubPatient
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.bitnesttechs.hms.patient.native.tests
+        GENERATE_INFOPLIST_FILE: true

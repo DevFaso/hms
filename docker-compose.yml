@@ -72,6 +72,71 @@ services:
       timeout: 5s
       retries: 5
 
+  # ── Keycloak DB (profile: keycloak) ────────────────────────
+  # Dedicated Postgres for Keycloak so its schema stays isolated from
+  # the HMS application schema. Only reachable from the keycloak service
+  # on the docker network (no host port published).
+  keycloak-db:
+    image: postgres:16-alpine
+    container_name: hms-keycloak-db
+    profiles: ["keycloak"]
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak
+    volumes:
+      - keycloak_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Keycloak (profile: keycloak) ───────────────────────────
+  # Local-dev Identity Provider for S-03 (see docs/tasks-keycloak.md).
+  #   docker compose --profile keycloak up -d keycloak
+  # Admin console: http://localhost:8081/  (admin / admin)
+  # Issuer URI for the backend: http://localhost:8081/realms/hms
+  # Realm is imported from keycloak/realm-export.json on first boot.
+  # Production deployment is a managed Railway service, NOT this container.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.7
+    container_name: hms-keycloak
+    profiles: ["keycloak"]
+    command: ["start-dev", "--import-realm"]
+    environment:
+      # Override these locally via a (gitignored) `.env` file at the repo root
+      # before running `docker compose --profile keycloak up`. The defaults are
+      # only safe on a single-developer machine that is NOT exposed on a shared
+      # network. See keycloak/README.md.
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      KC_DB: postgres
+      KC_DB_URL_HOST: keycloak-db
+      KC_DB_URL_DATABASE: keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HTTP_PORT: "8080"
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8081:8080"
+      - "9000:9000"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    depends_on:
+      keycloak-db:
+        condition: service_healthy
+    healthcheck:
+      # Keycloak's UBI image ships bash; pin to it explicitly because the
+      # /dev/tcp redirection used below is bash-specific.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && cat <&3 | grep -q '\"status\": \"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
   # ── Prometheus ──────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:v2.53.0
@@ -108,6 +173,7 @@ volumes:
   prometheus_data:
   grafana_data:
   redis_data:
+  keycloak_pgdata:
   # Named volume for backend uploaded files (profile images, attachments, etc.).
   # To use this locally, mount it in your backend service:
   #   volumes:

@@ -674,4 +674,23 @@
                  stripComments="true"/>
     </changeSet>
 
+    <!-- =================================================================
+         V56: Keycloak identity link columns on security.users
+         - keycloak_subject VARCHAR(128) NULL — the KC JWT 'sub' claim.
+           Partial unique index (WHERE keycloak_subject IS NOT NULL) so
+           legacy/unlinked users do not conflict.
+         - keycloak_realm VARCHAR(100) NULL — KC realm name (e.g. 'hms').
+         - auth_source VARCHAR(32) NOT NULL DEFAULT 'internal' — drives
+           which auth path the resource server trusts: 'internal' |
+           'keycloak' | 'saml'.
+         - last_oidc_login_at TIMESTAMPTZ NULL — updated by
+           /auth/session/bootstrap on each OIDC login.
+         ================================================================= -->
+    <changeSet id="V56-keycloak-identity-link" author="hms-team" runOnChange="false">
+        <sqlFile path="V56__keycloak_identity_link.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

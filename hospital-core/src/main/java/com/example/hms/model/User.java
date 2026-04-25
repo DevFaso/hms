@@ -19,6 +19,7 @@ import lombok.Setter;
 import lombok.ToString;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
@@ -101,6 +102,26 @@ public class User extends BaseEntity {
     @Column(name = "password_rotation_forced_at")
     private LocalDateTime passwordRotationForcedAt;
 
+    /** Keycloak subject claim ('sub') linking this user to an OIDC identity. */
+    @Column(name = "keycloak_subject", unique = true, length = 128)
+    private String keycloakSubject;
+
+    /** Keycloak realm name, e.g. 'hms' or 'hms-dev'. */
+    @Column(name = "keycloak_realm", length = 100)
+    private String keycloakRealm;
+
+    /**
+     * Authentication source: 'internal' (legacy password auth), 'keycloak', or 'saml'.
+     * Determines which auth path the resource server trusts for this user.
+     */
+    @Builder.Default
+    @Column(name = "auth_source", nullable = false, length = 32)
+    private String authSource = "internal";
+
+    /** Timestamp of the user's most recent OIDC login, updated by the bootstrap endpoint. */
+    @Column(name = "last_oidc_login_at")
+    private OffsetDateTime lastOidcLoginAt;
+
     /** Explicit user↔role join table */
     @Builder.Default
     @OneToMany(mappedBy = "user", fetch = FetchType.EAGER, cascade = CascadeType.ALL, orphanRemoval = true)
@@ -119,6 +140,11 @@ public class User extends BaseEntity {
     // NOTE: @NotFound is incompatible with orphanRemoval; orphan deletion is handled by
     // the owning side (Staff.user / Patient.user). ALL cascade operations except orphanRemoval
     // are kept so test fixtures that build User → Patient/Staff graphs still work.
+    // FETCH: LAZY is declared for parity with the rest of the model even though
+    // @NotFound forces EAGER at runtime (Hibernate logs HHH000491 on boot). Do NOT change
+    // to EAGER: Patient.user and Staff.user are @ManyToOne EAGER on the owning side, so
+    // switching this side to EAGER creates a bidirectional EAGER cycle that prevents the
+    // EntityManagerFactory from building (prod boot failure — see commit history).
     @OneToOne(mappedBy = "user", fetch = FetchType.LAZY,
               cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REFRESH, CascadeType.DETACH, CascadeType.REMOVE})
     @NotFound(action = NotFoundAction.IGNORE)

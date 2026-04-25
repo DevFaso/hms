@@ -62,23 +62,22 @@ app:
   security:
     totp-encryption-key: ${TOTP_ENCRYPTION_KEY}
   # Frontend base URL used in emails, activation links, and onboarding flows.
-  # The three environments are distinct:
+  # The three environments follow a symmetric naming pattern:
   #   prod : https://hms.bitnesttechs.com
-  #   uat  : https://hms-uat.bitnesttechs.com
+  #   uat  : https://hms.uat.bitnesttechs.com
   #   dev  : https://hms.dev.bitnesttechs.com
-  # The Railway UAT service MUST set FRONTEND_BASE_URL explicitly, and the DNS
-  # record for hms-uat.bitnesttechs.com MUST resolve to that service. The fallback
-  # below is the documented UAT host — if requests to it fail with NXDOMAIN, the
-  # DNS record is missing or the Railway service is not deployed.
+  # Set FRONTEND_BASE_URL=https://hms.uat.bitnesttechs.com in Railway env vars.
+  # The Railway UAT service MUST also have a DNS record for hms.uat.bitnesttechs.com
+  # pointing at it — if requests fail with NXDOMAIN, the DNS record is missing or
+  # the Railway custom domain is not attached.
   frontend:
-    base-url: ${FRONTEND_BASE_URL:https://hms-uat.bitnesttechs.com}
+    base-url: ${FRONTEND_BASE_URL:https://hms.uat.bitnesttechs.com}
   # CORS allowed origins: must include the public frontend domain and patient app.
-  # Set CORS_ALLOWED_ORIGINS=https://hms-uat.bitnesttechs.com,https://patient.uat.bitnesttechs.com in Railway env vars.
+  # Set CORS_ALLOWED_ORIGINS=https://hms.uat.bitnesttechs.com,https://patient.uat.bitnesttechs.com in Railway env vars.
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:4200,http://localhost:5173}
   # Public base URL for uploaded file links returned to the browser.
-  # Set PUBLIC_BASE_URL=https://api.hms-uat.bitnesttechs.com (or the equivalent
-  # api host for the UAT environment) in Railway env vars.
+  # Set PUBLIC_BASE_URL=https://hms.uat.bitnesttechs.com in Railway env vars.
   public-base-url: ${PUBLIC_BASE_URL:}
   # Directory where uploaded files are stored.
   # On Railway, set APP_UPLOAD_DIR to the persistent-volume mount path

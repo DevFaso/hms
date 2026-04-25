@@ -591,3 +591,27 @@
     cursor: not-allowed;
   }
 }
+
+// KC-2b: SSO button + divider above legacy login form.
+.btn-sso {
+  background: #1f2937;
+  color: #fff;
+  margin-bottom: 1rem;
+}
+.sso-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: #6b7280;
+  font-size: 0.85rem;
+  margin: 1rem 0;
+  &::before,
+  &::after {
+    content: '';
+    flex: 1;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  span {
+    padding: 0 0.75rem;
+  }
+}

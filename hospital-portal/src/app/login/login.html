@@ -260,6 +260,27 @@
       </div>
     } @else {
       <!-- ==================== LOGIN FORM ==================== -->
+      @if (oidcLoginEnabled) {
+        <!-- KC-2b: Keycloak / OIDC PKCE entry point. The legacy form below
+             stays visible during the rollout so admins can still log in
+             with internal credentials if Keycloak is unreachable. -->
+        <button
+          type="button"
+          class="btn-login btn-sso"
+          (click)="loginWithKeycloak()"
+          [disabled]="loading"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path
+              d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"
+            />
+          </svg>
+          <span>Continue with Single Sign-On</span>
+        </button>
+        <div class="sso-divider" aria-hidden="true">
+          <span>or sign in with username</span>
+        </div>
+      }
       <form (ngSubmit)="submit()" class="login-form">
         <div class="form-group">
           <label for="username">{{ 'LOGIN.USERNAME' | translate }}</label>

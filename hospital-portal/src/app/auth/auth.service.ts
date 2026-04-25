@@ -9,6 +9,35 @@ const ACCESS_TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'auth_refresh_token';
 const USER_PROFILE_KEY = 'user_profile';
 
+/**
+ * Authoritative session context returned by GET /api/auth/session/bootstrap.
+ * Replaces client-side JWT claim decoding for hospital/permission resolution.
+ */
+export interface SessionBootstrapResponse {
+  userId: string;
+  username: string;
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  profileImageUrl?: string;
+  /** 'internal' | 'keycloak' | 'saml' */
+  authSource: string;
+  roles: string[];
+  superAdmin: boolean;
+  hospitalAdmin: boolean;
+  primaryHospitalId?: string;
+  primaryHospitalName?: string;
+  permittedHospitalIds?: string[];
+  /** Null when the user has no staff record */
+  staffId?: string;
+  staffRoleCode?: string;
+  departmentId?: string;
+  departmentName?: string;
+  /** Null when the user has no patient record */
+  patientId?: string;
+  lastOidcLoginAt?: string;
+}
+
 export interface LoginUserProfile {
   id: string;
   username: string;
@@ -287,6 +316,14 @@ export class AuthService {
     if (!p) return [];
     if (Array.isArray(p.roles)) return p.roles;
     if (Array.isArray(p.authorities)) return p.authorities;
+    // Keycloak shape: realm-level roles live under `realm_access.roles`.
+    // Normalise to the `ROLE_*` convention the rest of the portal expects.
+    const realmAccess = p['realm_access'] as { roles?: unknown } | undefined;
+    if (Array.isArray(realmAccess?.roles)) {
+      return realmAccess.roles
+        .filter((r): r is string => typeof r === 'string')
+        .map((r) => (r.startsWith('ROLE_') ? r : `ROLE_${r}`));
+    }
     if (typeof p.scope === 'string') return p.scope.split(/\s+/);
     return [];
   }
@@ -341,7 +378,13 @@ export class AuthService {
     const ctx = this.roleContext.activeHospitalId;
     if (ctx) return ctx;
     const p = this.decodePayload();
-    return (p?.['primaryHospitalId'] as string) ?? (p?.hospitalId as string) ?? null;
+    return (
+      (p?.['primaryHospitalId'] as string) ??
+      (p?.hospitalId as string) ??
+      // Keycloak custom claim (snake_case via the hms-claims scope mapper).
+      (p?.['hospital_id'] as string) ??
+      null
+    );
   }
 
   /**
@@ -357,7 +400,12 @@ export class AuthService {
     const p = this.decodePayload();
     if (!p) return [];
 
-    const primary = (p['primaryHospitalId'] as string) ?? (p.hospitalId as string) ?? null;
+    const primary =
+      (p['primaryHospitalId'] as string) ??
+      (p.hospitalId as string) ??
+      // Keycloak custom claim from the hms-claims scope.
+      (p['hospital_id'] as string) ??
+      null;
 
     // Non-admin staff are always locked to exactly one hospital — their primary.
     if (!this.isAdminRole()) {
@@ -380,6 +428,17 @@ export class AuthService {
 
   resolveLandingPath(): string {
     return '/dashboard';
+  }
+
+  /**
+   * Calls GET /api/auth/session/bootstrap to retrieve authoritative session
+   * context (roles, hospital, staff/patient profile) from the DB.
+   *
+   * Should be called once after a successful login so all hospital-context
+   * decisions use DB data rather than stale JWT claims.
+   */
+  sessionBootstrap(): Observable<SessionBootstrapResponse> {
+    return this.http.get<SessionBootstrapResponse>('auth/session/bootstrap');
   }
 
   logout(): void {

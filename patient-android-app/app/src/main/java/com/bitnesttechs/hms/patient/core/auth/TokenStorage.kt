@@ -46,13 +46,38 @@ class TokenStorage @Inject constructor(
         get() = prefs.getString(KEY_USER_ID, null)
         set(value) = prefs.edit().putString(KEY_USER_ID, value).apply()
 
-    val isLoggedIn: Boolean get() = accessToken != null
+    // ------------------------------------------------------------------
+    // Keycloak / OIDC (KC-3) — additive. Stored alongside legacy fields
+    // so the app can migrate without breaking existing sessions.
+    // ------------------------------------------------------------------
+
+    /** Serialized `net.openid.appauth.AuthState` JSON blob. */
+    var oidcAuthStateJson: String?
+        get() = prefs.getString(KEY_OIDC_AUTH_STATE, null)
+        set(value) = prefs.edit().putString(KEY_OIDC_AUTH_STATE, value).apply()
+
+    /** Cached OIDC access token (mirrors AuthState.accessToken for interceptors). */
+    var oidcAccessToken: String?
+        get() = prefs.getString(KEY_OIDC_ACCESS_TOKEN, null)
+        set(value) = prefs.edit().putString(KEY_OIDC_ACCESS_TOKEN, value).apply()
+
+    /** Cached OIDC ID token (for end-session / logout requests). */
+    var oidcIdToken: String?
+        get() = prefs.getString(KEY_OIDC_ID_TOKEN, null)
+        set(value) = prefs.edit().putString(KEY_OIDC_ID_TOKEN, value).apply()
+
+    val hasOidcSession: Boolean get() = oidcAuthStateJson != null
+
+    val isLoggedIn: Boolean get() = accessToken != null || oidcAccessToken != null
 
     fun clearAll() {
         prefs.edit()
             .remove(KEY_ACCESS_TOKEN)
             .remove(KEY_REFRESH_TOKEN)
             .remove(KEY_USER_ID)
+            .remove(KEY_OIDC_AUTH_STATE)
+            .remove(KEY_OIDC_ACCESS_TOKEN)
+            .remove(KEY_OIDC_ID_TOKEN)
             .apply()
     }
 
@@ -63,11 +88,22 @@ class TokenStorage @Inject constructor(
             .apply()
     }
 
+    fun clearOidc() {
+        prefs.edit()
+            .remove(KEY_OIDC_AUTH_STATE)
+            .remove(KEY_OIDC_ACCESS_TOKEN)
+            .remove(KEY_OIDC_ID_TOKEN)
+            .apply()
+    }
+
     companion object {
         private const val KEY_ACCESS_TOKEN = "access_token"
         private const val KEY_REFRESH_TOKEN = "refresh_token"
         private const val KEY_SAVED_USERNAME = "saved_username"
         private const val KEY_SAVED_PASSWORD = "saved_password"
         private const val KEY_USER_ID = "user_id"
+        private const val KEY_OIDC_AUTH_STATE = "oidc_auth_state"
+        private const val KEY_OIDC_ACCESS_TOKEN = "oidc_access_token"
+        private const val KEY_OIDC_ID_TOKEN = "oidc_id_token"
     }
 }
