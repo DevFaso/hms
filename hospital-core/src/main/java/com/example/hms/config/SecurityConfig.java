@@ -3,6 +3,7 @@ package com.example.hms.config;
 import com.example.hms.security.JwtAuthenticationEntryPoint;
 import com.example.hms.security.JwtAuthenticationFilter;
 import com.example.hms.security.HospitalUserDetailsService;
+import com.example.hms.security.oidc.KeycloakHospitalContextFilter;
 import com.example.hms.security.oidc.KeycloakJwtAuthenticationConverter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -29,6 +30,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenResolver;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
@@ -131,6 +133,7 @@ public class SecurityConfig {
     private final ObjectProvider<JwtDecoder> oidcJwtDecoderProvider;
     private final ObjectProvider<BearerTokenResolver> oidcBearerTokenResolverProvider;
     private final KeycloakJwtAuthenticationConverter oidcJwtAuthenticationConverter;
+    private final ObjectProvider<KeycloakHospitalContextFilter> oidcHospitalContextFilterProvider;
 
     @Value("${app.cors.allowed-origins:http://localhost:4200}")
     private String allowedOrigins;
@@ -597,25 +600,43 @@ public class SecurityConfig {
             )
         );
 
-        // ── Optional Keycloak resource-server stack (S-03 phase 1) ──────────
-        // Activated only when app.auth.oidc.issuer-uri is configured. The
-        // IssuerAwareBearerTokenResolver routes only Keycloak-issued tokens
-        // (matched by `iss` claim) to this filter, so the existing custom
-        // JwtAuthenticationFilter continues to handle internal HMAC/RSA tokens
-        // unchanged.
-        JwtDecoder oidcDecoder = oidcJwtDecoderProvider.getIfAvailable();
-        BearerTokenResolver oidcResolver = oidcBearerTokenResolverProvider.getIfAvailable();
-        if (oidcDecoder != null && oidcResolver != null) {
-            SEC_LOG.info("[OIDC] Keycloak resource-server is enabled — accepting JWTs alongside internal tokens");
-            http.oauth2ResourceServer(oauth -> oauth
-                .bearerTokenResolver(oidcResolver)
-                .jwt(jwt -> jwt
-                    .decoder(oidcDecoder)
-                    .jwtAuthenticationConverter(oidcJwtAuthenticationConverter)
-                )
-            );
-        }
+        configureOidcResourceServer(http);
 
         return http.build();
+    }
+
+    /**
+     * Optional Keycloak resource-server stack (S-03 phase 1+).
+     * Activated only when {@code app.auth.oidc.issuer-uri} is configured. The
+     * {@code IssuerAwareBearerTokenResolver} routes only Keycloak-issued
+     * tokens (matched by {@code iss} claim) to this filter, so the existing
+     * custom {@code JwtAuthenticationFilter} continues to handle internal
+     * HMAC/RSA tokens unchanged.
+     */
+    private void configureOidcResourceServer(HttpSecurity http) throws Exception {
+        JwtDecoder oidcDecoder = oidcJwtDecoderProvider.getIfAvailable();
+        BearerTokenResolver oidcResolver = oidcBearerTokenResolverProvider.getIfAvailable();
+        if (oidcDecoder == null || oidcResolver == null) {
+            return;
+        }
+
+        SEC_LOG.info("[OIDC] Keycloak resource-server is enabled — accepting JWTs alongside internal tokens");
+        http.oauth2ResourceServer(oauth -> oauth
+            .bearerTokenResolver(oidcResolver)
+            .jwt(jwt -> jwt
+                .decoder(oidcDecoder)
+                .jwtAuthenticationConverter(oidcJwtAuthenticationConverter)
+            )
+        );
+
+        // Populate HospitalContextHolder from Keycloak custom claims
+        // (hospital_id, role_assignments) so tenant-scoped specifications
+        // and @PreAuthorize rules see the same data they get from the
+        // legacy JwtAuthenticationFilter path.
+        KeycloakHospitalContextFilter hospitalContextFilter =
+                oidcHospitalContextFilterProvider.getIfAvailable();
+        if (hospitalContextFilter != null) {
+            http.addFilterAfter(hospitalContextFilter, BearerTokenAuthenticationFilter.class);
+        }
     }
 }

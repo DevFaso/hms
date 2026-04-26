@@ -99,6 +99,10 @@ public final class KeycloakJwtFixture {
             claims.claim("hospital_id", spec.hospitalId());
         }
 
+        if (!spec.roleAssignments().isEmpty()) {
+            claims.claim("role_assignments", spec.roleAssignments());
+        }
+
         JWSHeader header = new JWSHeader.Builder(JWSAlgorithm.RS256)
                 .keyID(keyId)
                 .build();
@@ -126,6 +130,7 @@ public final class KeycloakJwtFixture {
             List<String> realmRoles,
             Map<String, List<String>> clientRoles,
             String hospitalId,
+            List<String> roleAssignments,
             Duration ttl
     ) {
         public TokenSpec {
@@ -137,6 +142,9 @@ public final class KeycloakJwtFixture {
             }
             if (clientRoles == null) {
                 clientRoles = Map.of();
+            }
+            if (roleAssignments == null) {
+                roleAssignments = List.of();
             }
             if (ttl == null) {
                 ttl = Duration.ofMinutes(15);
@@ -157,32 +165,38 @@ public final class KeycloakJwtFixture {
                     List.of("DOCTOR", "STAFF"),
                     Map.of(),
                     null,
+                    List.of(),
                     Duration.ofMinutes(15));
         }
 
         public TokenSpec withRealmRoles(List<String> roles) {
             return new TokenSpec(issuer, subject, preferredUsername, email, audiences,
-                    authorizedParty, roles, clientRoles, hospitalId, ttl);
+                    authorizedParty, roles, clientRoles, hospitalId, roleAssignments, ttl);
         }
 
         public TokenSpec withIssuer(String newIssuer) {
             return new TokenSpec(newIssuer, subject, preferredUsername, email, audiences,
-                    authorizedParty, realmRoles, clientRoles, hospitalId, ttl);
+                    authorizedParty, realmRoles, clientRoles, hospitalId, roleAssignments, ttl);
         }
 
         public TokenSpec withAudiences(List<String> newAudiences) {
             return new TokenSpec(issuer, subject, preferredUsername, email, newAudiences,
-                    authorizedParty, realmRoles, clientRoles, hospitalId, ttl);
+                    authorizedParty, realmRoles, clientRoles, hospitalId, roleAssignments, ttl);
         }
 
         public TokenSpec withHospitalId(String newHospitalId) {
             return new TokenSpec(issuer, subject, preferredUsername, email, audiences,
-                    authorizedParty, realmRoles, clientRoles, newHospitalId, ttl);
+                    authorizedParty, realmRoles, clientRoles, newHospitalId, roleAssignments, ttl);
+        }
+
+        public TokenSpec withRoleAssignments(List<String> newRoleAssignments) {
+            return new TokenSpec(issuer, subject, preferredUsername, email, audiences,
+                    authorizedParty, realmRoles, clientRoles, hospitalId, newRoleAssignments, ttl);
         }
 
         public TokenSpec withTtl(Duration newTtl) {
             return new TokenSpec(issuer, subject, preferredUsername, email, audiences,
-                    authorizedParty, realmRoles, clientRoles, hospitalId, newTtl);
+                    authorizedParty, realmRoles, clientRoles, hospitalId, roleAssignments, newTtl);
         }
     }
 }

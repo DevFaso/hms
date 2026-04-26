@@ -257,7 +257,7 @@
       "defaultClientScopes": ["profile", "email", "roles", "web-origins", "hms-claims", "hms-profile"]
     },
     {
-      "clientId": "hms-android",
+      "clientId": "hms-patient-android",
       "name": "HMS Patient (Android)",
       "description": "Public mobile client, Auth Code + PKCE via Chrome Custom Tabs.",
       "enabled": true,
@@ -269,17 +269,17 @@
       "serviceAccountsEnabled": false,
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "com.example.hms.patient://logout",
+        "post.logout.redirect.uris": "com.bitnesttechs.hms.patient:/oauth2redirect",
         "access.token.lifespan": "900"
       },
       "redirectUris": [
-        "com.example.hms.patient://oauth/callback"
+        "com.bitnesttechs.hms.patient:/oauth2redirect"
       ],
       "webOrigins": [],
       "defaultClientScopes": ["profile", "email", "roles", "hms-claims", "hms-profile"]
     },
     {
-      "clientId": "hms-ios",
+      "clientId": "hms-patient-ios",
       "name": "HMS Patient (iOS)",
       "description": "Public mobile client, Auth Code + PKCE via SFSafariViewController.",
       "enabled": true,
@@ -291,11 +291,11 @@
       "serviceAccountsEnabled": false,
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "com.example.hms.patient://logout",
+        "post.logout.redirect.uris": "com.bitnesttechs.hms.patient.native:/oauth2redirect",
         "access.token.lifespan": "900"
       },
       "redirectUris": [
-        "com.example.hms.patient://oauth/callback"
+        "com.bitnesttechs.hms.patient.native:/oauth2redirect"
       ],
       "webOrigins": [],
       "defaultClientScopes": ["profile", "email", "roles", "hms-claims", "hms-profile"]
