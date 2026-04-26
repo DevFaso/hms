@@ -12,6 +12,11 @@ discovery.relabel "metrics_integrations_integrations_spring_boot" {
 		target_label = "instance"
 		replacement  = constants.hostname
 	}
+
+	rule {
+		target_label = "application"
+		replacement  = "hms"
+	}
 }
 
 // ── Prometheus scrape for Spring Boot actuator ─────────────────────────────
@@ -45,5 +50,72 @@ prometheus.remote_write "metrics_service" {
 			username = env("GRAFANA_METRICS_USER")
 			password = env("GRAFANA_METRICS_TOKEN")
 		}
+	}
+}
+
+// ── Container log discovery ────────────────────────────────────────────────
+// Tails docker container stdout/stderr from the docker socket so the HMS
+// backend logs land in Loki without any application-side changes.
+discovery.docker "containers" {
+	host             = "unix:///var/run/docker.sock"
+	refresh_interval = "10s"
+}
+
+discovery.relabel "container_logs" {
+	targets = discovery.docker.containers.targets
+
+	// Drop Docker's leading slash from the container name so the label is clean.
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/?(.*)"
+		target_label  = "container"
+	}
+
+	rule {
+		source_labels = ["__meta_docker_container_log_stream"]
+		target_label  = "stream"
+	}
+
+	// Promote the compose service name when present so dashboards can filter by it.
+	rule {
+		source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+		regex         = "(.+)"
+		target_label  = "service"
+	}
+
+	// Tag application=hms on the backend container so it joins the metrics labels.
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/?hms-backend.*"
+		target_label  = "application"
+		replacement   = "hms"
+	}
+}
+
+loki.source.docker "containers" {
+	host       = "unix:///var/run/docker.sock"
+	targets    = discovery.relabel.container_logs.output
+	forward_to = [loki.process.spring_boot.receiver]
+}
+
+// Tag log levels off the Spring Boot log line so panels can filter on `level`.
+// Spring's default pattern starts with the timestamp, then the level token.
+loki.process "spring_boot" {
+	stage.regex {
+		expression = "(?P<level>TRACE|DEBUG|INFO|WARN|ERROR)"
+	}
+
+	stage.labels {
+		values = {
+			level = "level",
+		}
+	}
+
+	forward_to = [loki.write.loki.receiver]
+}
+
+loki.write "loki" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
 	}
 }
